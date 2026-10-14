@@ -1,7 +1,7 @@
 // Whether a created-Flow run may build at all, decided by the authoring mode
 // the run's Core was started in (`../../live-llm/authoring-mode-env.ts`, Core's
-// `FLUXIQ_AUTHORING_MODE`) and, in candidate mode, by what that Core says about
-// candidate trials.
+// `FLUXIQ_AUTHORING_MODE`) and, in candidate and project mode, by what that Core
+// says about candidate trials.
 //
 // In `legacy` mode Core proposes an adaptation that the lane applies, runs and
 // judges, as at the baseline (downstream `92d790d7`, Core `e9b7d691`).
@@ -34,6 +34,15 @@
 // run did not do. The fixture is
 // still seeded when the run starts, and the lane resets it before playback.
 //
+// In `project` mode (automation-project-agents-plan, W4) a project supervisor
+// plans the Flow's subflows, a builder authors each, and the assembled whole is
+// submitted as one candidate through the same trial runner and promotion owner
+// (Core `model/authoring-mode/`). The Lab therefore admits it on exactly the
+// candidate terms -- the trial runner, and the start hook unless the run proves
+// the model's own reset -- with the same refusal codes, worded for a project
+// build. `createdFlowTrialsCandidates` is the one test of "a mode whose builds
+// are tested candidates"; callers ask it rather than spelling `candidate`.
+//
 // Both are refused before any provider call. Before Core starts, the Lab asks
 // what it will start (`labCandidateTrialReadiness`); once Core runs, the lane
 // asks Core itself (`readCreatedFlowCandidateTrialReadiness`). A caller's
@@ -65,10 +74,30 @@ export function labCandidateTrialFixtureReset(run: { modelResetOnly: boolean }):
   return !run.modelResetOnly;
 }
 
-/** Whether a run whose Core authors in `authoringMode`, with `candidateTrial` in candidate mode, may build a Flow to qualify. */
+/**
+ * Refuses `--model-reset-only` for a run whose Core builds no tested candidate:
+ * the flag only says how a candidate's trials start, so it applies to a
+ * `candidate` and a `project` build alike, and to nothing else.
+ */
+export function assertLabModelResetOnlyApplies(run: { modelResetOnly: boolean; authoringMode: AutomationStudioAuthoringMode | undefined }): void {
+  if (run.modelResetOnly && !createdFlowTrialsCandidates(run.authoringMode)) throw new Error("--model-reset-only applies to the trials of a candidate or project build: pass --authoring-mode candidate or --authoring-mode project");
+}
+
+/** The authoring modes whose builds Core test-runs as a candidate before proposing: `candidate`, and `project`, whose assembled candidate takes the same trial and promotion. */
+export const CREATED_FLOW_TRIAL_AUTHORING_MODES = Object.freeze(["candidate", "project"] as const);
+
+/** A mode in `CREATED_FLOW_TRIAL_AUTHORING_MODES`. */
+export type CreatedFlowTrialAuthoringMode = (typeof CREATED_FLOW_TRIAL_AUTHORING_MODES)[number];
+
+/** Whether builds in `authoringMode` are tested candidates (`candidate`, `project`): only Core's exact spellings say so. */
+export function createdFlowTrialsCandidates(authoringMode: unknown): authoringMode is CreatedFlowTrialAuthoringMode {
+  return authoringMode === "candidate" || authoringMode === "project";
+}
+
+/** Whether a run whose Core authors in `authoringMode`, with `candidateTrial` in a trial mode (`candidate`, `project`), may build a Flow to qualify. */
 export function createdFlowVerificationReady(authoringMode: AutomationStudioAuthoringMode, candidateTrial?: CreatedFlowCandidateTrialReadiness): boolean {
   if (authoringMode === "legacy") return true;
-  return authoringMode === "candidate" && candidateTrial?.trialRunner === true && typeof candidateTrial.fixtureResetBetweenTrials === "boolean" && candidateTrial.startReset === candidateTrial.fixtureResetBetweenTrials;
+  return createdFlowTrialsCandidates(authoringMode) && candidateTrial?.trialRunner === true && typeof candidateTrial.fixtureResetBetweenTrials === "boolean" && candidateTrial.startReset === candidateTrial.fixtureResetBetweenTrials;
 }
 
 /** Refuses, before any provider call, a run whose Core cannot produce a Flow the lane may run. */
@@ -76,16 +105,32 @@ export function assertCreatedFlowVerificationReady(authoringMode: AutomationStud
   if (createdFlowVerificationReady(authoringMode, candidateTrial)) return;
   const mode = typeof authoringMode === "string" ? authoringMode : "unrecognized";
   const common = { stage: "before_provider", authoringMode: mode, providerInvocation: "not_attempted_by_this_entry", priorProviderCost: "unknown", ...(candidateTrial ? { candidateTrial: { trialRunner: candidateTrial.trialRunner, startReset: candidateTrial.startReset, fixtureResetBetweenTrials: candidateTrial.fixtureResetBetweenTrials, source: candidateTrial.source } } : {}) };
-  if (authoringMode === "candidate" && candidateTrial?.trialRunner === true && !candidateTrial.fixtureResetBetweenTrials) {
-    throw new RunnerFailure("facility.contract", "A --model-reset-only candidate build runs each trial from what the model's own reset left, but the Core under test resets the fixture before each trial; it must be started without the candidate start hook.", { details: { code: "lab.candidate_start_hook_set", ...common } });
+  if (!createdFlowTrialsCandidates(authoringMode)) {
+    throw new RunnerFailure("facility.contract", "Created-Flow qualification is unavailable: the run's Core authoring mode is not one the Lab recognizes.", { details: { code: "lab.candidate_verification_unavailable", ...common } });
   }
-  if (authoringMode === "candidate" && candidateTrial?.trialRunner === true) {
-    throw new RunnerFailure("facility.contract", "Created-Flow qualification in candidate authoring mode needs the Core under test started with the candidate start hook pointed at the Lab's fixture reset, so every trial starts from the seeded fixture; it was not.", { details: { code: "lab.candidate_start_hook_unset", ...common } });
+  const words = REFUSAL_WORDS[authoringMode];
+  if (candidateTrial?.trialRunner === true && !candidateTrial.fixtureResetBetweenTrials) {
+    throw new RunnerFailure("facility.contract", words.hookSet, { details: { code: "lab.candidate_start_hook_set", ...common } });
   }
-  throw new RunnerFailure("facility.contract", authoringMode === "candidate"
-    ? "Created-Flow qualification in candidate authoring mode needs a Core that test-runs and judges each candidate before proposing it; the Core under test does not say it does."
-    : "Created-Flow qualification is unavailable: the run's Core authoring mode is not one the Lab recognizes.", { details: { code: "lab.candidate_verification_unavailable", ...common } });
+  if (candidateTrial?.trialRunner === true) {
+    throw new RunnerFailure("facility.contract", words.hookUnset, { details: { code: "lab.candidate_start_hook_unset", ...common } });
+  }
+  throw new RunnerFailure("facility.contract", words.noTrialRunner, { details: { code: "lab.candidate_verification_unavailable", ...common } });
 }
+
+/** Each trial mode's refusals, in its own words; the codes are shared, so a reader of one reads the other. */
+const REFUSAL_WORDS: Readonly<Record<CreatedFlowTrialAuthoringMode, Readonly<{ hookSet: string; hookUnset: string; noTrialRunner: string }>>> = Object.freeze({
+  candidate: Object.freeze({
+    hookSet: "A --model-reset-only candidate build runs each trial from what the model's own reset left, but the Core under test resets the fixture before each trial; it must be started without the candidate start hook.",
+    hookUnset: "Created-Flow qualification in candidate authoring mode needs the Core under test started with the candidate start hook pointed at the Lab's fixture reset, so every trial starts from the seeded fixture; it was not.",
+    noTrialRunner: "Created-Flow qualification in candidate authoring mode needs a Core that test-runs and judges each candidate before proposing it; the Core under test does not say it does.",
+  }),
+  project: Object.freeze({
+    hookSet: "A --model-reset-only project build runs each trial of its assembled Flow and of its subflows from what the model's own reset left, but the Core under test resets the fixture before each trial; it must be started without the candidate start hook.",
+    hookUnset: "Created-Flow qualification in project authoring mode needs the Core under test started with the candidate start hook pointed at the Lab's fixture reset, so the assembled Flow's trials start from the seeded fixture; it was not.",
+    noTrialRunner: "Created-Flow qualification in project authoring mode needs a Core that test-runs and judges the assembled candidate before proposing it; the Core under test does not say it does.",
+  }),
+});
 
 /**
  * What the Lab will start, asked before anything starts: whether the linked

@@ -343,3 +343,27 @@ test("a candidate build that failed in the chat is recorded with its candidate, 
   const legacy = fakeChat({ answer: "build", ending: "failed", kept });
   assert.equal((await buildCreatedFlowFromChat(legacy.control, legacy.chat, SCOPE, legacy.wait)).build.candidateOutcome, undefined);
 });
+
+// W4 (automation-project-agents-plan): a project build's assembled candidate is tested, promoted and kept as a candidate's,
+// so the chat path reads it the same way -- the late draft wait, the draft, the promotion, the failure -- recorded as `project`.
+test("a project build in the chat is read as a candidate build on every ending, and recorded as the project's", async () => {
+  const PROJECT_SCOPE = { ...CANDIDATE_SCOPE, authoringMode: "project" as const };
+  const late = fakeChat({ answer: "build", candidate: { kind: "draft", verdict: "no", draftTurnLate: 6 } });
+  const draft = await buildCreatedFlowFromChat(late.control, late.chat, PROJECT_SCOPE, late.wait);
+  assert.equal(draft.build.outcome, "draft", "the draft turn is waited for in project mode too");
+  assert.equal(draft.build.candidateOutcome?.authoringMode, "project");
+  assert.equal(draft.build.candidateOutcome?.verdict, "no");
+  const promoted = fakeChat({ answer: "build", ending: "created", candidate: { kind: "promoted" }, runtimeSessions: [trialSession("trial.two", 20, { revision: 2, execution: "succeeded" })] });
+  const made = await buildCreatedFlowFromChat(promoted.control, promoted.chat, PROJECT_SCOPE, promoted.wait);
+  assert.equal(made.build.candidateOutcome?.authoringMode, "project");
+  assert.equal(made.build.candidateOutcome?.outcome, "promoted");
+  const kept = { code: "flow_bootstrap.evidence_unusable_decision", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received",
+    accounting: { requestId: "project.request", estimatedInputTokens: 10, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 1_000, outputTokens: 100, totalTokens: 1_100, estimatedCostUsd: 0.001 },
+    issueCodes: ["llm_output.invalid_evidence_decision"], candidate: { candidateId: CANDIDATE_ID, draft: "none", trialCount: 0, trials: [] } };
+  const failed = fakeChat({ answer: "build", ending: "failed", kept, runtimeSessions: [] });
+  const failedMade = await buildCreatedFlowFromChat(failed.control, failed.chat, PROJECT_SCOPE, failed.wait);
+  assert.equal(failedMade.build.candidateOutcome?.authoringMode, "project");
+  assert.equal(failedMade.build.candidateOutcome?.outcome, "failed");
+  const unready = fakeChat({ answer: "build", ending: "created" });
+  await assert.rejects(buildCreatedFlowFromChat(unready.control, unready.chat, { ...PROJECT_SCOPE, candidateTrial: { ...PROJECT_SCOPE.candidateTrial, startReset: false } }, unready.wait), (error: unknown) => error instanceof RunnerFailure && error.details?.code === "lab.candidate_start_hook_unset" && error.details?.authoringMode === "project");
+});

@@ -47,7 +47,7 @@
 
 import type { LiveLlmObservedUsage } from "./observed-usage.js";
 import type { LiveLlmReauthorRecord } from "./reauthor-record.js";
-import type { LiveLlmStepLogSpend } from "./step-log-spend.js";
+import type { LiveLlmStepLogRoleSpend, LiveLlmStepLogSpend } from "./step-log-spend.js";
 
 /** One phase's share: Core's call count where it gave one, and its cost. */
 export type LiveLlmSpendPhase = { calls: number | null; estimatedCostUsd: number };
@@ -94,6 +94,10 @@ export type LiveLlmStepLogReconciliation = {
    * build figure did not hold them.
    */
   fromBuild: LiveLlmCreationBuildSplit;
+  /** The largest input, in tokens, of any one call the log holds; `null` when no call reported its usage (`step-log-spend.ts`). */
+  largestInputTokens: number | null;
+  /** A project build's calls by the agent role and brief its steps name; empty for a build whose steps name none (`step-log-spend.ts`). */
+  byRole: Record<string, LiveLlmStepLogRoleSpend>;
 };
 
 type LiveLlmStepLogShare = LiveLlmSpendPhase & { calls: number };
@@ -164,6 +168,8 @@ export function liveLlmRunSpend(input: {
       // A cost beyond the phases below a hundredth of a micro-dollar is rounding between two records, not a call.
       unattributed: { calls: Math.max(0, beyond), estimatedCostUsd: costBeyond > 1e-8 ? costBeyond : 0 },
       fromBuild: split ?? { judge: { calls: 0, estimatedCostUsd: 0 }, read: { calls: 0, estimatedCostUsd: 0 }, calls: 0, estimatedCostUsd: 0 },
+      largestInputTokens: input.stepLog.largestInputTokens ?? null,
+      byRole: input.stepLog.byRole ?? {},
     };
   }
   const phases = [build, runtime, judge, reauthor, chat, read];

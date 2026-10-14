@@ -21,7 +21,7 @@ const KINDS = ["form", "navigate", "extract", "navigate-and-extract", "repair"];
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CAMPAIGN_OWNED_OPTIONS = new Set(["--live-llm", "--llm-task", "--llm-profile", "--llm-provider", "--llm-model", "--instruction-task", "--variant", "--workflow", "--flow", "--authoring-mode"]);
 
-export const CAMPAIGN_USAGE = `Usage: pnpm lab:campaign [task-id ...] [--kind form|navigate|extract|navigate-and-extract|repair[,...]] [--all] [--limit N] [--dry-run] [--no-build] [--max-attempts N] [--llm-profile ID (default lab-create-flow, or lab-adapt-repair for repair tasks)] [--llm-provider NAME] [--llm-model NAME (default ${DEFAULT_LLM_MODEL})] [--authoring-mode legacy|candidate (default ${DEFAULT_AUTHORING_MODE})] [--output DIR] [-- LAB-OPTIONS]`;
+export const CAMPAIGN_USAGE = `Usage: pnpm lab:campaign [task-id ...] [--kind form|navigate|extract|navigate-and-extract|repair[,...]] [--all] [--limit N] [--dry-run] [--no-build] [--max-attempts N] [--llm-profile ID (default lab-create-flow, or lab-adapt-repair for repair tasks)] [--llm-provider NAME] [--llm-model NAME (default ${DEFAULT_LLM_MODEL})] [--authoring-mode legacy|candidate|project (default ${DEFAULT_AUTHORING_MODE})] [--output DIR] [-- LAB-OPTIONS]`;
 
 /** @param {string[]} argv */
 export function parseCampaignArgs(argv) {

@@ -29,7 +29,7 @@ import { assertCreatedFlowOracles, createdFlowOraclesHold, judgeCreatedFlowOracl
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
 import { judgeCreatedFlowPermissionStop, readCreatedFlowPermissionAsks, type CreatedFlowPermissionStop } from "./permission-point.js";
 import { createdFlowCandidateDraftFailure } from "./candidate-outcome.js";
-import { assertCreatedFlowVerificationReady, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
+import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { describeCreatedFlowRequest, type CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
@@ -358,8 +358,8 @@ type CreatedFlowLaneProgress = {
  * run's record rather than taken out of its verdict.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
-  // In candidate mode the running Core is asked first -- a read, no provider -- whether it test-runs candidates and starts each trial from the Lab's reset.
-  const candidateTrial = input.authoringMode === "candidate" ? await readCreatedFlowCandidateTrialReadiness(input.control, input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, input.bounds ?? {}, input.candidateTrialFixtureReset ?? true) : undefined;
+  // In candidate and project mode the running Core is asked first -- a read, no provider -- whether it test-runs candidates and starts each trial from the Lab's reset.
+  const candidateTrial = createdFlowTrialsCandidates(input.authoringMode) ? await readCreatedFlowCandidateTrialReadiness(input.control, input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, input.bounds ?? {}, input.candidateTrialFixtureReset ?? true) : undefined;
   assertCreatedFlowVerificationReady(input.authoringMode, candidateTrial);
   const progress: CreatedFlowLaneProgress = { stage: "blank-flow", published: false };
   try {
@@ -410,9 +410,9 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   if (build.outcome === "draft") {
     throw build.candidateOutcome ? createdFlowCandidateDraftFailure(build.candidateOutcome, said) : new RunnerFailure("runtime.behavior", "FluxIQ kept a candidate draft and built no Flow, and said nothing the Lab could read its verdict from", { details: { code: "lab.candidate_not_promoted", stage: "verification", authoringMode: input.authoringMode, candidateId: build.candidate?.candidateId ?? build.candidateReference?.candidateId ?? null, verdict: "unknown", providerInvocation: build.providerInvocation } });
   }
-  // In candidate mode only a tested candidate is proposed, and its proposal names it; one that does not is not a candidate's and is never run.
-  if (input.authoringMode === "candidate" && build.outcome === "proposed" && build.candidateOutcome?.outcome !== "promoted") {
-    throw new RunnerFailure("runtime.behavior", "FluxIQ proposed a Flow in candidate mode without naming the tested candidate behind it", { details: { code: "lab.candidate_proposal_unattributed", stage: "verification", adaptationId: build.adaptationId } });
+  // In candidate and project mode only a tested candidate is proposed, and its proposal names it; one that does not is not a candidate's and is never run.
+  if (createdFlowTrialsCandidates(input.authoringMode) && build.outcome === "proposed" && build.candidateOutcome?.outcome !== "promoted") {
+    throw new RunnerFailure("runtime.behavior", `FluxIQ proposed a Flow in ${input.authoringMode} mode without naming the tested candidate behind it`, { details: { code: "lab.candidate_proposal_unattributed", stage: "verification", authoringMode: input.authoringMode, adaptationId: build.adaptationId } });
   }
   if (build.outcome !== "proposed" || build.adaptationId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {

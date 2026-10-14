@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RunnerFailure } from "../../../failure.js";
 import { createdFlowCandidateDraft } from "../candidate-draft.js";
-import { createdFlowCandidateDraftFailure, createdFlowCandidateDraftOutcome, readCreatedFlowCandidatePromotion } from "../candidate-outcome.js";
+import { createdFlowCandidateDraftFailure, createdFlowCandidateDraftOutcome, createdFlowChatCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion } from "../candidate-outcome.js";
 const candidate = { status: "draft", projectId: "project", flowId: "flow", candidateId: "candidate", revision: 1, digest: "a".repeat(64), sourceInstructionIds: ["instruction"], baseDependencyDigest: "base", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "request", estimatedInputTokens: 10 } };
 test("actual draft wire is retained as unverified authoring for its original Lab subject", () => {
   const read = createdFlowCandidateDraft({ candidate }, { projectId: "project", flowId: "flow" });
@@ -48,4 +48,77 @@ test("a proposal without Core's candidateTrial audit is not a candidate's (t348)
   const { control, reads } = candidateCore({ adaptation: { adaptation: { metadata: { phase9: { auditEvents: [{ eventType: "created", detail: { buildJudged: { verdict: "yes" } } }] } } } } });
   assert.equal(await readCreatedFlowCandidatePromotion(control, { projectId: "project", flowId: "flow" }, "adaptation.one"), null);
   assert.deepEqual(reads, ["get-flow-adaptation"]);
+});
+
+// W4 (automation-project-agents-plan): a project build's outcome is read as a candidate's. Its supervisor assembles the
+// builders' subflows into one candidate that Core submits, test-runs and promotes through the same trial runner and
+// promotion owner, and keeps as the same draft. Only the recorded mode differs.
+const projectSubject = { projectId: "project", flowId: "flow" };
+
+/** A Core answering the two reads an outcome makes: the proposal and the runtime sessions. */
+function projectCore(answers: { adaptation?: unknown; sessions?: unknown }) {
+  const reads: string[] = [];
+  return { reads, control: { automationStudioCall: async (endpoint: string) => {
+    reads.push(endpoint);
+    if (endpoint === "get-flow-adaptation") return answers.adaptation;
+    if (endpoint === "list-runtime-sessions") return answers.sessions;
+    throw new Error(`unexpected ${endpoint}`);
+  } } };
+}
+
+// The assembled candidate's whole trials, and one builder's partial subflow trial of another candidate, which is not this one's.
+const sessions = { runtimeSessions: [
+  { runId: "trial.whole.2", flowId: "flow", queuedAt: 30, metadata: { candidateTrial: { candidateId: "project.candidate", revision: 2, digest: "d2", start: "reset", execution: "succeeded" } } },
+  { runId: "trial.whole.1", flowId: "flow", queuedAt: 20, metadata: { candidateTrial: { candidateId: "project.candidate", revision: 1, digest: "d1", start: "reset", execution: "failed", code: "web.action.timeout" } } },
+  { runId: "trial.subflow.brief-1", flowId: "flow", queuedAt: 10, metadata: { candidateTrial: { candidateId: "builder.brief-1", revision: 1, start: "reset", execution: "succeeded" } } },
+  { runId: "playback", flowId: "flow", queuedAt: 40, metadata: {} },
+] };
+
+const promotedProposal = { adaptation: { metadata: { phase9: { auditEvents: [
+  { eventType: "created", detail: { candidateTrial: { candidateId: "project.candidate", revision: 2, digest: "d2", trials: 2, trial: { verdict: "yes", runId: "trial.whole.2", calls: 2 } } } },
+] } } } };
+
+test("a promoted project build is read from the proposal's candidateTrial audit, its trials from the sessions, and says it was a project build", async () => {
+  const { control, reads } = projectCore({ adaptation: promotedProposal, sessions });
+  const outcome = await readCreatedFlowCandidatePromotion(control, projectSubject, "adaptation.project", "project");
+  assert.deepEqual(outcome, {
+    authoringMode: "project", outcome: "promoted", draft: null, candidateId: "project.candidate",
+    revision: 2, digest: "d2", verdict: "yes", trialRunId: "trial.whole.2", codes: [], judgeCalls: 2, trialCount: 2,
+    trials: [
+      { runId: "trial.whole.1", revision: 1, digest: "d1", start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
+      { runId: "trial.whole.2", revision: 2, digest: "d2", start: "reset", execution: "succeeded", code: null, verdict: "yes", reason: null },
+    ],
+    promotedAdaptationId: "adaptation.project",
+  });
+  assert.deepEqual(reads, ["get-flow-adaptation", "list-runtime-sessions"]);
+  // A candidate run reads the same proposal as before, and names its own mode when none is passed.
+  assert.equal((await readCreatedFlowCandidatePromotion(projectCore({ adaptation: promotedProposal, sessions }).control, projectSubject, "adaptation.project"))?.authoringMode, "candidate");
+});
+
+test("a project draft, from the direct build, the chat or a failed build, is read as a candidate draft and recorded as the project's", async () => {
+  const candidate = { status: "draft", projectId: "project", flowId: "flow", candidateId: "project.candidate", revision: 2, digest: "d".repeat(64), sourceInstructionIds: ["instruction"], baseDependencyDigest: "base", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "request", estimatedInputTokens: 10 }, trial: { verdict: "no", runId: "trial.whole.2", codes: ["candidate.trial_no"] } };
+  const direct = await createdFlowCandidateDraftOutcome(projectCore({ sessions }).control, createdFlowCandidateDraft({ candidate }, projectSubject)!, "project");
+  assert.equal(direct.authoringMode, "project");
+  assert.equal(direct.outcome, "draft");
+  assert.equal(direct.verdict, "no");
+  assert.deepEqual(direct.trials?.map((trial) => trial.runId), ["trial.whole.1", "trial.whole.2"], "a builder's subflow trial of its own candidate is not the assembled candidate's");
+
+  const chat = await createdFlowChatCandidateDraftOutcome(projectCore({ sessions }).control, projectSubject, "project.candidate", null, "project");
+  assert.equal(chat.authoringMode, "project");
+  assert.equal(chat.trialRunId, "trial.whole.2");
+  assert.equal(chat.trialCount, 2);
+
+  const failed = await createdFlowFailedCandidateOutcome(projectCore({ sessions }).control, projectSubject, { candidateId: "project.candidate", draft: "saved", revision: 2, digest: "d2", trialCount: 2, trials: [{ revision: 1, verdict: "execution_failed", trialRunId: "trial.whole.1", code: "web.action.timeout" }, { revision: 2, verdict: "unsure", trialRunId: "trial.whole.2", code: "candidate.trial_unsure" }] }, "project");
+  assert.equal(failed.authoringMode, "project");
+  assert.equal(failed.outcome, "failed");
+  assert.equal(failed.draft, "saved");
+  assert.equal(failed.verdict, "unsure");
+  assert.deepEqual(failed.trials?.map((trial) => [trial.runId, trial.verdict]), [["trial.whole.1", "execution_failed"], ["trial.whole.2", "unsure"]]);
+
+  const failure = createdFlowCandidateDraftFailure(direct, "It was judged not to do what you asked.");
+  assert.ok(failure instanceof RunnerFailure);
+  assert.equal(failure.category, "runtime.behavior");
+  assert.match(failure.message, /kept its assembled project candidate as a draft/u);
+  assert.equal(failure.details?.code, "lab.candidate_not_promoted");
+  assert.equal(failure.details?.authoringMode, "project");
 });

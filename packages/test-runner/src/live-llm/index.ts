@@ -18,7 +18,7 @@ export { liveLlmObservedUsage, type LiveLlmObservedCall, type LiveLlmObservedUsa
 export { readLiveLlmReauthor, type LiveLlmReauthorAttempt, type LiveLlmReauthorCallsSource, type LiveLlmReauthorEnding, type LiveLlmReauthorRecord } from "./reauthor-record.js";
 export { liveLlmRunSpend, type LiveLlmBuildSpend, type LiveLlmFlowSpendPart, type LiveLlmJudgeCalls, type LiveLlmPerBuildSpend, type LiveLlmRunSpend, type LiveLlmSpendPhase, type LiveLlmStepLogReconciliation } from "./run-spend.js";
 export { readLiveLlmStepLogInstructed, type LiveLlmStepLogInstructed } from "./step-log-instructed.js";
-export { readLiveLlmStepLogSpend, type LiveLlmStepLogKind, type LiveLlmStepLogSpend } from "./step-log-spend.js";
+export { readLiveLlmStepLogSpend, type LiveLlmStepLogAgentSpend, type LiveLlmStepLogKind, type LiveLlmStepLogRoleSpend, type LiveLlmStepLogSpend } from "./step-log-spend.js";
 export { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 export { ensureLiveLlmSecretKey, LAB_LIVE_LLM_KEY_NAME, type LiveLlmSecretKeyControl, type LiveLlmSecretKeyReference } from "./secret-key.js";
 export * from "./cost-ceiling-env.js";

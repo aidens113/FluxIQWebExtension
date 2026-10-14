@@ -152,6 +152,11 @@ test("a candidate-mode Core gets the start hook on this run's own Scenario Lab r
   assert.equal(candidate.FLUXIQ_AUTHORING_MODE, "candidate");
   assert.equal(candidate.FLUXIQ_CANDIDATE_START_URL, `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`, "the same reset the lane runs before playback");
   assert.equal(candidate.FLUXIQ_CANDIDATE_START_TOKEN, allocation.controllerToken);
+  // A project build's assembled Flow is one candidate, tried the same way (W4).
+  const project = buildFluxIQEnvironment(allocation, paths, inherited, ["--authoring-mode", "project"]);
+  assert.equal(project.FLUXIQ_AUTHORING_MODE, "project");
+  assert.equal(project.FLUXIQ_CANDIDATE_START_URL, candidate.FLUXIQ_CANDIDATE_START_URL);
+  assert.equal(project.FLUXIQ_CANDIDATE_START_TOKEN, allocation.controllerToken);
   for (const args of [[], ["--authoring-mode", "legacy"]]) {
     const legacy = buildFluxIQEnvironment(allocation, paths, inherited, args);
     assert.equal(legacy.FLUXIQ_AUTHORING_MODE, "legacy");
@@ -168,6 +173,8 @@ test("a --model-reset-only candidate build's Core gets no start hook, inherited 
   assert.equal(modelResetOnly.FLUXIQ_AUTHORING_MODE, "candidate");
   assert.equal("FLUXIQ_CANDIDATE_START_URL" in modelResetOnly, false);
   assert.equal("FLUXIQ_CANDIDATE_START_TOKEN" in modelResetOnly, false);
+  const projectResetOnly = buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", candidateTrialFixtureReset: false }, inherited, ["--authoring-mode", "project"]);
+  assert.equal("FLUXIQ_CANDIDATE_START_URL" in projectResetOnly, false, "a --model-reset-only project build's Core has no hook either");
   const kept = buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", candidateTrialFixtureReset: true }, inherited, ["--authoring-mode", "candidate"]);
   assert.equal(kept.FLUXIQ_CANDIDATE_START_URL, `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`);
   const byDefault = buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" }, inherited, ["--authoring-mode", "candidate"]);

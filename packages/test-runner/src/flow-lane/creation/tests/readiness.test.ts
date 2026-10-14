@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../../failure.js";
-import { assertCreatedFlowVerificationReady, createdFlowVerificationReady, labCandidateTrialFixtureReset, labCandidateTrialReadiness, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
+import { assertCreatedFlowVerificationReady, assertLabModelResetOnlyApplies, createdFlowTrialsCandidates, createdFlowVerificationReady, labCandidateTrialFixtureReset, labCandidateTrialReadiness, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
 
 const refusedBeforeProvider = (mode: unknown, code = "lab.candidate_verification_unavailable") => (error: unknown) => error instanceof RunnerFailure && error.category === "facility.contract"
   && error.details?.code === code
@@ -36,8 +36,29 @@ test("candidate mode without the start hook is refused before any provider call,
   assert.equal(createdFlowVerificationReady("candidate", { trialRunner: true, startReset: false, fixtureResetBetweenTrials: true, source: "lab-plan" }), false);
 });
 
+// W4 (automation-project-agents-plan): a project build submits its assembled Flow as one candidate through the same
+// trial runner and promotion owner, so the Lab admits it on the candidate terms, with the same codes and its own words.
+test("project mode is admitted on the candidate terms: the trial runner and the start hook, or a --model-reset-only Core with none", () => {
+  assert.equal(createdFlowTrialsCandidates("project"), true);
+  assert.equal(createdFlowTrialsCandidates("candidate"), true);
+  for (const other of ["legacy", "Project", " project", undefined, null]) assert.equal(createdFlowTrialsCandidates(other), false);
+  assert.doesNotThrow(() => assertCreatedFlowVerificationReady("project", HOOKED));
+  assert.equal(createdFlowVerificationReady("project", { ...HOOKED, source: "lab-plan" }), true);
+  assert.equal(createdFlowVerificationReady("project", { trialRunner: true, startReset: false, fixtureResetBetweenTrials: false, source: "core" }), true);
+});
+
+test("project mode without the trial runner or the start hook is refused before any provider call, in a project build's words", () => {
+  const worded = (code: string, words: RegExp) => (error: unknown) => refusedBeforeProvider("project", code)(error) && /project authoring mode|project build/u.test((error as Error).message) && words.test((error as Error).message);
+  assert.throws(() => assertCreatedFlowVerificationReady("project"), worded("lab.candidate_verification_unavailable", /assembled candidate/u));
+  assert.throws(() => assertCreatedFlowVerificationReady("project", { ...HOOKED, trialRunner: false }), worded("lab.candidate_verification_unavailable", /assembled candidate/u));
+  assert.throws(() => assertCreatedFlowVerificationReady("project", { ...HOOKED, startReset: false }), worded("lab.candidate_start_hook_unset", /start hook/u));
+  assert.throws(() => assertCreatedFlowVerificationReady("project", { trialRunner: true, startReset: true, fixtureResetBetweenTrials: false, source: "core" }), worded("lab.candidate_start_hook_set", /model-reset-only/u));
+  assert.equal(createdFlowVerificationReady("project"), false);
+  assert.equal(createdFlowVerificationReady("project", labCandidateTrialReadiness({ startsCore: false, fixtureResetBetweenTrials: true })), false);
+});
+
 test("readiness cannot be changed by a caller or model verdict: only Core's exact modes, with Core's trial answer, admit", () => {
-  for (const ignored of [undefined, true, "Legacy", " legacy", "Candidate", { ready: true, verified: true }, { consumed: true }]) {
+  for (const ignored of [undefined, true, "Legacy", " legacy", "Candidate", "Project", " project", { ready: true, verified: true }, { consumed: true }]) {
     assert.throws(() => Reflect.apply(assertCreatedFlowVerificationReady, null, [ignored, HOOKED]), refusedBeforeProvider(ignored));
   }
   for (const verdict of [{ trialRunner: "yes", startReset: true }, { trialRunner: true, startReset: "true" }, { trialRunner: true }, { trialRunner: true, startReset: false, fixtureResetBetweenTrials: "false" }, { ready: true }, null]) {
@@ -119,4 +140,12 @@ test("the readiness read is retried like every safe read: first try plus 3 on a 
   const refused = fake([refusal]);
   await assert.rejects(readCreatedFlowCandidateTrialReadiness(refused.control, "web-automation"), (error: unknown) => error === refusal);
   assert.equal(refused.calls(), 1);
+});
+
+test("--model-reset-only applies to a candidate and a project build's trials, and is refused for any other mode before anything starts (cli)", () => {
+  for (const authoringMode of ["candidate", "project"] as const) assert.doesNotThrow(() => assertLabModelResetOnlyApplies({ modelResetOnly: true, authoringMode }));
+  for (const authoringMode of ["legacy", undefined] as const) {
+    assert.throws(() => assertLabModelResetOnlyApplies({ modelResetOnly: true, authoringMode }), /--model-reset-only applies to the trials of a candidate or project build/u);
+    assert.doesNotThrow(() => assertLabModelResetOnlyApplies({ modelResetOnly: false, authoringMode }));
+  }
 });

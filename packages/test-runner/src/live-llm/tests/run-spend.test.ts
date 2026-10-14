@@ -130,7 +130,7 @@ test("the run's step log fills the calls Core did not count, and adds the chat c
   assert.deepEqual(spend.phases.chat, { calls: 1, estimatedCostUsd: 0.000305376 });
   assert.deepEqual(spend.phases.reauthor, { calls: 17, estimatedCostUsd: 0.061567476 });
   assert.deepEqual(spend.uncountedPhases, []);
-  assert.deepEqual(spend.stepLog, { calls: 35, estimatedCostUsd: 0.121156656, filledReauthorCalls: 17, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: NOTHING_FROM_BUILD });
+  assert.deepEqual(spend.stepLog, { calls: 35, estimatedCostUsd: 0.121156656, filledReauthorCalls: 17, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: NOTHING_FROM_BUILD, largestInputTokens: null, byRole: {} });
   // The chat call and the calls only the log saw are the Flow's too: its figure is the run's whole spend.
   assert.equal(spend.perBuild.maxBuildCostUsd, 0.121156656);
   assert.equal(withoutLog.perBuild.maxBuildCostUsd, withoutLog.totalEstimatedCostUsd);
@@ -199,4 +199,18 @@ test("a build figure that never held the judge or the read loses nothing, and on
   const checked = liveLlmRunSpend({ build: usage({ calls: 30, totalEstimatedCostUsd: 0.088570608 }), judge: { interventions: [{ requestId: "check-1", estimatedCostUsd: 0.001 }] }, stepLog: { ...MURZLN6G_STEP_LOG, calls: 35, estimatedCostUsd: 0.089887084 }, ceilingUsd: CEILING });
   assert.deepEqual(checked.phases.judge, { calls: 3, estimatedCostUsd: 0.002935936 });
   assert.deepEqual(checked.stepLog?.unattributed, { calls: 0, estimatedCostUsd: 0 });
+});
+
+test("the run's spend carries the step log's largest single input and a project build's calls by role and brief into runSpend.stepLog (W4)", () => {
+  const byRole = {
+    supervisor: { calls: 1, estimatedCostUsd: 0.002, largestInputTokens: 14_700, byBrief: {} },
+    builder: { calls: 2, estimatedCostUsd: 0.003, largestInputTokens: 21_000, byBrief: { "brief-1": { calls: 1, estimatedCostUsd: 0.001, largestInputTokens: 9_000 }, "brief-2": { calls: 1, estimatedCostUsd: 0.002, largestInputTokens: 21_000 } } },
+  };
+  const spend = liveLlmRunSpend({ build: usage({ calls: 3, totalEstimatedCostUsd: 0.005 }), stepLog: { calls: 3, estimatedCostUsd: 0.005, byKind: { decide: { calls: 3, estimatedCostUsd: 0.005 } }, largestInputTokens: 21_000, byRole }, ceilingUsd: CEILING });
+  assert.equal(spend.stepLog?.largestInputTokens, 21_000);
+  assert.deepEqual(spend.stepLog?.byRole, byRole);
+  // A log read before W4 carries neither, and the run says so rather than inventing figures.
+  const older = liveLlmRunSpend({ build: usage({ calls: 1, totalEstimatedCostUsd: 0.001 }), stepLog: { calls: 1, estimatedCostUsd: 0.001, byKind: { decide: { calls: 1, estimatedCostUsd: 0.001 } } }, ceilingUsd: CEILING });
+  assert.equal(older.stepLog?.largestInputTokens, null);
+  assert.deepEqual(older.stepLog?.byRole, {});
 });

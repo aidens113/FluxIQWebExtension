@@ -42,6 +42,8 @@ test("every provider call in the step log is counted once, by kind, and tool and
       judge: { calls: 1, estimatedCostUsd: 0.00176142 },
     },
     byPart: {},
+    largestInputTokens: null,
+    byRole: {},
   });
 });
 
@@ -68,4 +70,33 @@ test("a build's calls are tallied by the build and phase Core's scope wrote on t
     reauthor: { explore: { calls: 1, estimatedCostUsd: 0.001 } },
   });
   assert.deepEqual(spend?.byKind.decide, { calls: 3, estimatedCostUsd: 0.00480766 });
+});
+
+test("a project build's calls are tallied by role and brief, with the largest single call input in tokens beside each (W4)", async (t) => {
+  // A project build in miniature: the chat, the supervisor's plan, two builders each under its own brief, the supervisor's
+  // judged whole run and a repair. Usage is Core's `meta.usage`; a tool step names an agent but is not a call.
+  const usage = (inputTokens: unknown) => ({ usage: { inputTokens, outputTokens: 100, cacheHitInputTokens: 0, cacheMissInputTokens: inputTokens } });
+  const directory = await stepLog(t, {
+    "0001-chat": { ...provider("chat", 0.0003), ...usage(1_200), part: null, role: null, briefId: null },
+    "0002-decide": { ...provider("decide", 0.002), ...usage(14_700), part: "creation", phase: "explore", role: "supervisor", briefId: null },
+    "0003-decide": { ...provider("decide", 0.001), ...usage(9_000), part: "creation", phase: "explore", role: "builder", briefId: "brief-1" },
+    "0004-tool-core.run_node": { kind: "tool", phase: "explore", role: "builder", briefId: "brief-1" },
+    "0005-decide": { ...provider("decide", 0.0015), ...usage(21_000), part: "creation", phase: "explore", role: "builder", briefId: "brief-1" },
+    "0006-decide": { ...provider("decide", 0.0025), ...usage(12_000), part: "creation", phase: "explore", role: "builder", briefId: "brief-2" },
+    "0007-judge": { ...provider("judge", 0.0005), ...usage("lots"), part: "creation", phase: "judge", role: "supervisor", briefId: null },
+    "0008-decide": { ...provider("decide", 0.001), usage: null, part: "creation", phase: "repair", role: "repair", briefId: "not a brief id" },
+  });
+  const spend = await readLiveLlmStepLogSpend(directory);
+  assert.equal(spend?.calls, 7);
+  assert.equal(spend?.largestInputTokens, 21_000);
+  assert.deepEqual(spend?.byRole, {
+    supervisor: { calls: 2, estimatedCostUsd: 0.0025, largestInputTokens: 14_700, byBrief: {} },
+    builder: { calls: 3, estimatedCostUsd: 0.005, largestInputTokens: 21_000, byBrief: {
+      "brief-1": { calls: 2, estimatedCostUsd: 0.0025, largestInputTokens: 21_000 },
+      "brief-2": { calls: 1, estimatedCostUsd: 0.0025, largestInputTokens: 12_000 },
+    } },
+    repair: { calls: 1, estimatedCostUsd: 0.001, largestInputTokens: null, byBrief: {} },
+  });
+  // The figures by part are unchanged by the agents: every build call is still the creation's.
+  assert.equal(Object.values(spend?.byPart?.creation ?? {}).reduce((total, phase) => total + phase.calls, 0), 6);
 });
