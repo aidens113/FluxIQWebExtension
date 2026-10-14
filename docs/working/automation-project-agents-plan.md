@@ -40,7 +40,15 @@ document owns the roles and contracts.
 
 **Done (2026-10-13, supervisor-verified, pushed):** discovery and this plan with its Core pair; W1 web host-resource port at capacity 1 with lease enforcement and the leased tab (t536, with Core A3b); W2 chat attribution and W3 Lab index columns (t539, with Core A6). Core A1-A4 and the shared contracts are delivered (Core document's ledger). Nothing is wired into a build yet, so builds behave as before.
 
-**Next, in order:** A8 Lab comparison is ready (the A8 Run Plan below; nine paid runs, at most $2.25) and waits for the user's go-ahead. Delivered since: W4 Lab support for mode `project`, W5 live diagnose/repair/adapt retired, W6 key scope (`FLUXIQ_PROVIDER_KEY_FILES=none`, a test fence on env files), W7 the bench's recorded-Flow code; Core A5, the pre-A8 hardening, A9 and A12. Still open here: W8 (orphaned identity-drift repair, dead `declaredRepair`, stale comments), the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a stale holder, and live rendering of the new chat cards (A8 reviews them).
+**Now (2026-10-14): A8 is running** (user: "Yes go to live tests"). Round one in mode `project` has been
+launched four times; each launch was debugged and fixed before the next (the A8 Run Plan's Attempts table): one
+shared lane tree (a setup error), the Lab chat unavailable on long paths (t568), then the supervisor explored instead of planning and could not write Core's
+raw plan (t569). After t569 the supervisor plans and dispatches and builders act, but three of four builds ran out
+of calls at $0.07-0.08 of $0.25 and the fourth's subflow trials were judged no; t570 (Core: per-brief call shares,
+Core-sized allowances, permitted acts from parts, interface lines in the brief) is in flight, and round one
+relaunches once it merges and the lanes are synced. Held until A8 ends: W8 here; A21, A10b, A7, A14 in Core.
+Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
+stale holder, and live rendering of the new chat cards (A8 reviews them).
 
 **Blocked:** nothing. Three decisions are the user's (Open Questions); each
 has a recommendation the plan already follows.
@@ -264,7 +272,7 @@ at most $0.25 per Flow, every run fully debugged before any rerun.
 - **Logs.** `steps/NNNN-*/meta.json` and `steps/index.md` gain `role` and
   `briefId` so a debug can read one builder's steps on their own.
 
-## A8 Run Plan (drafted 2026-10-13; launch needs the user's go-ahead)
+## A8 Run Plan (drafted 2026-10-13; running since 2026-10-14 on the user's go-ahead)
 
 On one frozen source pair after A5c and W4 merge, every run started from the extension chat, headed, under
 `--llm-max-cost-usd 0.25`, one attempt per launch, each run fully debugged before any rerun, lane trees synced to
@@ -272,7 +280,7 @@ dev and rebuilt, at most four lanes at once (one `lab-slots/slot-N` each). Commo
 gate uses, `mvp-final-month-plan/reports/codex-continuation-live-readiness.md`):
 
 ```powershell
-pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 64 --llm-max-run-tokens 48000000
+pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 120 --llm-max-run-tokens 48000000
 ```
 
 | Site | Task | Modes |
@@ -287,6 +295,20 @@ Nine paid runs, at most $2.25 in billed dollars. Recorded per run: the exact ora
 the largest single decision input (W4 `runSpend.stepLog.largestInputTokens`), per-role spend, whether the reserve
 paid the judged run, and a UI review of the chat's plan, brief, return and receipt cards. A pass for `project` is
 P1-P7 conduct plus the oracle, and the flip of the default needs two consecutive passes per site on one frozen pair.
+
+**Call cap (supervisor, 2026-10-14):** 120 for both modes from the relaunch after t570, up from 64. The dollar
+ceiling is the user's limit; the call cap is a Lab safeguard, and at 64 it ended three `project` builds at about a
+third of their dollars, because a supervisor and its builders make many small calls. Both modes get the same cap,
+so the comparison stays fair.
+
+**Attempts** (each debugged in `language-driven-flow-loop-plan/debugs/<runId>.md` before the next launch):
+
+| Launch | Pair (Core) | Runs | Outcome | Fix |
+| --- | --- | --- | --- | --- |
+| 1, `project` | after A18 | four runs (run-mv7rkmen, -rm0qo, -rmobk, -rnc14) | none started, $0: all four launched from one lane tree (supervisor setup error) | one lane tree per run |
+| 2, `project` | after A18 | three runs (run-mv7rvqfz, -rx3mk, -ryk3v), own trees | none started, $0: the Lab chat was unavailable | t568 SQLite long-path open |
+| 3, `project` | after t568 | run-mv7t07hx (crossborder $0.006), run-mv7t19hg (bigbox), run-mv7t2xxc (social $0.024), run-mv7t4ozn (everything-store $0.005) | the supervisor searched like a builder, then every raw plan was refused | t569 planning format, look budget |
+| 4, `project` | `e56fec59` | run-mv7vk3ol (crossborder $0.072), run-mv7vl89u (bigbox $0.078), run-mv7vmvhd (social $0.078), run-mv7vor5f (everything-store $0.171) | plans and dispatches work; three ran out of calls, everything-store's subflow trials judged no 4x, unsure 1x (judge reliability, cross-mode) | t570 call shares and brief defaults; the call cap above |
 
 ## Units (this repository)
 
@@ -599,6 +621,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: test-runner -> 1182 passed; test-contracts -> 169 passed; checks passed; structure audit passed (three baseline entries removed); merged `148262f1`
 - Outcome: Accepted
 - Follow-up: W8
+
+### 2026-10-14 — A8 round one, four launches in mode `project`
+- Agent: supervisor (launch, supervision, debugs); Core fixes t568, t569 by workers, supervisor-verified
+- Changed: launches 1-4 of round one (A8 Run Plan, Attempts); 15 debug notes under `language-driven-flow-loop-plan/debugs/`; call cap 64 -> 120 for both modes
+- Why: each launch failed on a different defect, each fixed before the next; no run reached a judged whole run
+- Validation: `C:/Users/osrs_/FluxStuff/lab-slots/spend-ledger.jsonl`, today's sum -> $0.4502 billed, every run under its $0.25 ceiling; launch 4's results read from `lab-runs/2026-10-14/<runId>/steps/` (crossborder, bigbox, social ended `flow_bootstrap.run_budget_calls_exhausted`; everything-store `flow_bootstrap.post_provider_validation_failed`)
+- Outcome: Partial. Round one relaunches after t570 merges and the four lanes are synced
+- Follow-up: judge reliability on filtered list reads (everything-store, both modes)
 
 ## Open Questions
 
