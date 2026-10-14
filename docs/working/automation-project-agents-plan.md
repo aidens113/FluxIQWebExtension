@@ -293,6 +293,12 @@ Partitioned by file; Core units A1-A7 are in the Core paired document.
   `project` on the same terms as `candidate` (a trial runner and the start reset), read a project build's
   outcome and draft the way `candidate-outcome.ts` reads a candidate's, and record spend, calls and the
   largest decision input per role and brief (`live-llm/step-log-spend.ts`) for A8. Tests beside each file.
+- **W5 Live diagnose, repair and adapt reachable again** (found by the 2026-10-13 sweep, t548; after W4,
+  which shares `cli.ts`). t519 (`4ee4e65c`) retired bare `--flow`, but `packages/test-runner/src/live-llm/live-llm-plan.ts:240`
+  still tells a live `diagnose`, `repair` or `adapt` run to pass it, so those runs have no reachable launch on `lab run`;
+  the adaptation gate depends on them. Give them an instruction-led launch, remove the dead "drop --flow" checks
+  (`commands.ts:274`, `live-llm-plan.ts:237`), `flowLaneExclusion` and the never-assigned `discardWindowUntil`, stop
+  `bench/run-bench.ts:505,591` passing `flow: true`, and correct `docs/architecture/testing-facility.md:2521`.
 - **A8 Lab comparison.** The qualification in `Lab Qualification` above,
   on a frozen source pair after A5, W1 and W2. Paid: one attempt per launch,
   a live supervisor, a full debug before any rerun.
@@ -475,6 +481,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: see the Core entries; downstream observed domain tests 29 passed, extension 79 passed (W1), extension 536 passed and Lab index 2 passed (W2), all package checks and the structure audit passed
 - Outcome: Accepted
 - Follow-up: the Next list above
+
+### 2026-10-13 — Downstream sweep fix-forward (t547, t548)
+- Agent: workers t547-domain-sweep, t548-test-runner-sweep; supervisor verified and integrated
+- Changed: four domain test files (fixtures for Core t519); six test-runner and scenario-lab test files
+- Why: downstream sweep on `7a93c624`: domain 17 failed of 2019, test-runner 13, scenario-lab 1; extension 3004 of 3004 passed
+- Validation: domain group -> 100 passed; test-runner group -> 83 passed; crossborder browser paths -> 17 passed; domain and test-runner checks and the structure audit passed; merged `775d685e`, `f7acb9cf` (full entry in the Core document's ledger)
+- Outcome: Accepted
+- Follow-up: W5
 
 ## Open Questions
 
