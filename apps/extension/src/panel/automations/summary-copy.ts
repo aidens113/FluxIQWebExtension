@@ -1,8 +1,7 @@
 // Summary copy (plan 3.9): a run's facts as the short plain lines a person
 // reads under an automation -- "Completed in 14.2s", "AI activated once",
-// "Learned 1 new page variation", "Future runs updated". Never an id, a
-// selector or a trace (plan 3.1, "Do Not Expose"); a fact that is unknown
-// gets no line rather than a guess.
+// whether the run kept a change. Never an id, selector, guessed change kind or
+// exact kept count: current adaptation statuses do not prove run attribution.
 
 import type { RunFacts } from "./types";
 
@@ -16,15 +15,10 @@ export function runSummaryLines(facts: RunFacts): string[] {
   else if (facts.outcome === "stopped") lines.push("Stopped");
 
   if (facts.aiActivations !== undefined) lines.push(activations(facts.aiActivations));
-  // "Learned" is only what was applied; a change the run tried and has not kept
-  // is still being checked, or did not hold.
-  if (facts.learned !== undefined && facts.learned > 0) {
-    lines.push(`Learned ${facts.learned} new page variation${facts.learned === 1 ? "" : "s"}`);
-    if (facts.futureRunsUpdated === true) lines.push("Future runs updated");
-  } else if (facts.changesTried !== undefined && facts.changesTried > 0 && facts.futureRunsUpdated !== true) {
-    lines.push(facts.validated === false ? "The change didn't hold up, so future runs stay the same" : "Checking the change...");
-  } else if (facts.futureRunsUpdated === true) {
-    lines.push("Future runs updated");
+  if (facts.outcome !== "running") {
+    if (facts.futureRunsUpdated === true) lines.push("This run kept a change for future runs");
+    else if (facts.futureRunsUpdated === false) lines.push("This run did not keep a change for future runs");
+    else if (facts.outcome !== undefined || facts.changesTried !== undefined) lines.push("Whether this run kept a change is not available");
   }
   return lines;
 }

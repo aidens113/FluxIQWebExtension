@@ -206,6 +206,13 @@ Reordering preserves row focus; removing a focused row selects a surviving
 neighbour or a visible named fallback. Background refresh does not claim focus
 from other controls, hidden panels or a hidden document.
 
+Automation completion copy uses the run's authoritative durable-behavior
+flag: kept, not kept, or unknown. Current adaptation statuses cannot override
+that historical result, including after reopening detail. Positive exact
+learning counts and page-variation kinds are omitted because those current
+records do not establish same-run attribution. An ended unknown run is not
+described as still checking a change.
+
 A failed request's sentence stays where it was sent until the person acts
 again; a status update never wipes it. Earlier, a refused command's error was
 hidden in the same tick it was shown, because the re-render after every command

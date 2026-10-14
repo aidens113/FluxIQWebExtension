@@ -17,6 +17,21 @@ const oldRun = { runId: "r0", flowId: "f1", status: "succeeded", startedAt: 0, f
 const newRun = { runId: "r1", flowId: "f1", status: "succeeded", startedAt: 10_000, finishedAt: 24_200, updatedAt: 24_200, interventionCount: 1, adaptationCount: 1 };
 const list = (runs: unknown[]) => ok({ flows: [{ flowId: "f1", name: "Weekly orders", updatedAt: 1, nodeCount: 4 }], runs });
 
+test("reopened detail cannot turn explicit false or missing run proof into kept learning", async () => {
+  for (const durable of [false, undefined]) {
+    const run = { ...newRun, ...(durable === undefined ? {} : { durableBehaviorChanged: durable }) };
+    const detail = ok({ runDetail: { summary: run, adaptationIds: ["a1"], datasets: [] }, adaptations: [{ adaptationId: "a1", status: "applied" }] });
+    const { controller } = setup(message => message.type === M.runDetail ? detail : list([run]));
+    controller.observe(connected);
+    await controller.refresh();
+    await controller.focus("f1");
+    await controller.refresh();
+    const lines = controller.state().rows[0]?.lines ?? [];
+    assert.ok(lines.some(line => line.includes(durable === false ? "did not keep" : "not available")));
+    assert.ok(!lines.some(line => /Learned|page variation|This run kept/.test(line)));
+  }
+});
+
 test("failed browser export delivery gives local recovery and releases the lock", async () => {
   let fail = true, deliveries = 0, changes = 0;
   const request = (async (message: PanelMessage) => message.type === M.exportDataset
@@ -66,7 +81,7 @@ test("a list read gives rows with plain summary lines; the last run's detail is 
   await controller.refresh();
   const state = controller.state();
   assert.equal(state.mode, "list");
-  assert.deepEqual(state.rows[0]?.lines, ["Completed in 2.0s", "No AI needed"]);
+  assert.deepEqual(state.rows[0]?.lines, ["Completed in 2.0s", "No AI needed", "Whether this run kept a change is not available"]);
   assert.deepEqual(types(), [M.listAutomations], "no detail for a row nobody opened");
   await controller.focus("f1");
   assert.deepEqual(types(), [M.listAutomations, M.runDetail]);
@@ -143,7 +158,7 @@ test("Run sends runAutomation, shows Running..., then the reply's summary, re-re
 
   assert.deepEqual(sent.find((message) => message.type === M.runAutomation), { type: M.runAutomation, flowId: "f1" });
   const row = controller.state().rows[0];
-  assert.deepEqual(row?.lines, ["Completed in 14.2s", "AI activated once", "Learned 1 new page variation", "Future runs updated"]);
+  assert.deepEqual(row?.lines, ["Completed in 14.2s", "AI activated once", "Whether this run kept a change is not available"]);
   assert.equal(row?.runId, "r1");
   assert.deepEqual(row?.datasets.map((dataset) => dataset.label), ["Orders"]);
   assert.equal(sent.filter((message) => message.type === M.listAutomations).length, 2, "re-read after the run");
@@ -218,11 +233,11 @@ test("export: inline saves the file, too large points to FluxIQ, a failure says 
 test("a listed run that changed later runs says so in its row, without a reply from this panel", async () => {
   const { controller } = setup(() => list([{ ...newRun, durableBehaviorChanged: true }]));
   controller.observe(connected); await controller.refresh();
-  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once", "Learned 1 new page variation", "Future runs updated"]);
+  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once", "This run kept a change for future runs"]);
 });
 
 test("a listed run that changed nothing durable is not read as learned", async () => {
   const { controller } = setup(() => list([{ ...newRun, adaptationCount: 0, durableBehaviorChanged: false }]));
   controller.observe(connected); await controller.refresh();
-  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once"]);
+  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once", "This run did not keep a change for future runs"]);
 });
