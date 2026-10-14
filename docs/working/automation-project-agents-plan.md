@@ -324,6 +324,15 @@ launch 8 above; round two runs `candidate` on the same lanes before any further 
 | social-network-feed-confirm-requests | failed, $0.103 | Flow created, oracle passed; run failed on missing replay call accounting, $0.048 |
 | everything-store-plus-earbuds-under-50 | failed, $0.130 | failed, $0.069 (the same judge defect) |
 
+**Pair 2** (downstream `4084cb98`, Core `30dceb9e`, after t598-t602; docs-only commits after):
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | passed, $0.029 | passed, $0.015 |
+| bigbox-retail-pickup-cart | passed, $0.044 | passed, $0.033 |
+| social-network-feed-confirm-requests | failed, $0.034: whole test passed; the rate-limit repair was refused (t603) | running |
+| everything-store-plus-earbuds-under-50 | built and applied, whole test passed; the Lab's session listing crashed Core (t604) | running |
+
 **Reading of rounds one and two (supervisor, 2026-10-14):** on this pair `project` matches `candidate` where both
 work (crossborder, bigbox) at a higher cost (about 1.1-1.9x), fails social where `candidate` built a correct Flow, and
 both fail everything-store on one shared judge defect. `project` does not yet beat `candidate`, so the default stays
