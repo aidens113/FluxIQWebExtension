@@ -44,11 +44,12 @@ document owns the roles and contracts.
 launched four times; each launch was debugged and fixed before the next (the A8 Run Plan's Attempts table): one
 shared lane tree (a setup error), the Lab chat unavailable on long paths (t568), then the supervisor explored instead of planning and could not write Core's
 raw plan (t569). After t569 the supervisor plans and dispatches and builders act, but three of four builds ran out
-of calls at $0.07-0.08 of $0.25 and the fourth's subflow trials were judged no; t570 (Core: per-brief call shares,
-Core-sized allowances, permitted acts from parts, interface lines in the brief) is in flight, and round one
-relaunches once it merges and the lanes are synced. Merged beside it, so every A8 round runs on one frozen pair:
-W8 here (t573), A21 (t571) and A10b (t572) in Core. Still in flight: Core t574, the judge's evidence in subflow
-trials (an audit found 3 of 5 everything-store verdicts wrong). After A8: A7 and A14 in Core.
+of calls at $0.07-0.08 of $0.25 and the fourth's subflow trials were judged no. Fixed and merged before the fifth
+launch, so every A8 round runs on one frozen pair: Core t570 (builders had no budget at all; per-brief call shares,
+Core-sized briefs, permitted acts from parts, exact interface lines), t574 (the judge now sees a called part's read
+with its wording and tested values; an audit found 3 of 5 everything-store verdicts wrong without them), t575 (an
+acting brief may make any act the task asks for, so two models' class labels need not agree), A21 (t571), A10b
+(t572), and W8 here (t573). After A8: A7 and A14 in Core; audit point 5 (re-ask a refuted no).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
