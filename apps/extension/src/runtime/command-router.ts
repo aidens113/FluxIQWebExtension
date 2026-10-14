@@ -35,7 +35,12 @@ export class ExtensionRuntimeCommandRouter {
     await runSnapshotCapture({ captureActiveSnapshot: (label) => this.options.captureActiveSnapshot(label) });
   }
 
-  async executeAction(action: BrowserActionCommand): Promise<void> {
+  /**
+   * `leased`: the command came under a host lease (automation-project-agents
+   * plan), so one that names no tab runs on the automation tab the lease
+   * grants rather than the tab in front (`action-runner.ts`).
+   */
+  async executeAction(action: BrowserActionCommand, options: { leased?: boolean } = {}): Promise<void> {
     const request: Parameters<typeof runBrowserActionCommand>[0] = {
       action,
       // Every command FluxIQ sends shares the worker's one page-load pace, so
@@ -51,6 +56,7 @@ export class ExtensionRuntimeCommandRouter {
     const ownOrigins = this.options.ownOrigins?.();
     if (ownOrigins?.length) request.ownOrigins = ownOrigins;
     if (this.options.mergeFrameSnapshots) request.mergeFrameSnapshots = this.options.mergeFrameSnapshots;
+    if (options.leased === true) request.leased = true;
     const noteDispatch = this.options.noteDispatch;
     if (noteDispatch) request.noteDispatch = async (tabId, frameId) => await noteDispatch(action.commandId, tabId, frameId);
     try {
