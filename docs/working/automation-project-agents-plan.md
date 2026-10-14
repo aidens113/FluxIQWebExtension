@@ -52,7 +52,7 @@ acting brief may make any act the task asks for, so two models' class labels nee
 (t572), W8 here (t573), and the Lab's call backstop raised to Core's 250 (t576). After A8: A7 and A14 in Core; audit point 5 (re-ask a refuted no).
 Launch 5 (`048a1d91`, 250 calls) found two more: briefs sized past the builder loop's 64 turns (t577, merged), and,
 where bigbox's builders did run, subflow trials that could never pass (the bigbox debug,
-`reports/a8-bigbox-run-mv8186yr-debug.md`): Core t578-t582 are in flight, and round one relaunches when they merge.
+`reports/a8-bigbox-run-mv8186yr-debug.md`): Core t578-t582 fixed it and are merged (Core ledger); round one relaunches as launch 6.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
