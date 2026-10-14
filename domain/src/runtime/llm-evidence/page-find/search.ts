@@ -16,6 +16,10 @@
 // that did is printed beside them, a window of about sixty characters around
 // the match, so the model can see why it matched without the whole value.
 //
+// A control in a fieldset prints its group as its view line does,
+// `group="Size"` (t605), and an element's group is searched right after its
+// own words: asking for "Size" finds the legend and every option under it.
+//
 // A search that found nothing says what it searched (F32). On
 // `run-muqc07fh-eeffbc86` the model searched the home page twelve times for a
 // product name, each answered only `0 matches`, while the page held the site's
@@ -26,7 +30,7 @@
 import { present } from "../present";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
-import { quotedWords, undoubledWords, webLlmElementKind, webLlmElementWhere, webLlmElementWords } from "../page-view";
+import { quotedWords, undoubledWords, webLlmElementKind, webLlmElementWhere, webLlmElementWords, webLlmGroupToken, webLlmViewTraits } from "../page-view";
 import { webLlmNearMatches } from "./near";
 import { WEB_LLM_FIND_SCHEMA_VERSION } from "./schema-version";
 
@@ -88,6 +92,7 @@ function matchOf(element: WebLlmEvidenceElement, needle: string): Match | undefi
   const words = [element.name, element.text, element.ownText, element.label];
   if (words.some((value) => found(value, needle) >= 0)) return { inWords: true };
   const fields: Array<[string, string | undefined]> = [
+    ["group", element.group],
     ["value", element.value],
     ["selected", element.selectedValue],
     ...(element.options ?? []).map((option): [string, string] => ["option", option.label]),
@@ -119,7 +124,11 @@ function matchLine(element: WebLlmEvidenceElement, match: Match, evidence: WebLl
   const parts = [element.target, webLlmElementKind(element) ?? element.tag];
   const words = wordsOf(element);
   if (words !== undefined) parts.push(quotedWords(cut(words)));
-  if (!match.inWords) parts.push(`(${match.field}=${quotedWords(windowAround(collapsed(match.value), match.at))})`);
+  const group = groupToken(element);
+  if (group !== undefined) parts.push(group);
+  // A control's group token already says the words a group match found.
+  const shownByGroup = group !== undefined && !match.inWords && match.field === "group";
+  if (!match.inWords && !shownByGroup) parts.push(`(${match.field}=${quotedWords(windowAround(collapsed(match.value), match.at))})`);
   parts.push(webLlmElementWhere(element, evidence.viewport));
   return parts.join(" ");
 }
@@ -129,9 +138,16 @@ function nearLine(element: WebLlmEvidenceElement, lacking: string[], evidence: W
   const parts = [element.target, webLlmElementKind(element) ?? element.tag];
   const words = wordsOf(element);
   if (words !== undefined) parts.push(quotedWords(cut(words)));
+  const group = groupToken(element);
+  if (group !== undefined) parts.push(group);
   parts.push(lacking.length === 0 ? "near, holds every word" : `near, lacks ${quotedWords(lacking.join(" "))}`);
   parts.push(webLlmElementWhere(element, evidence.viewport));
   return parts.join(" ");
+}
+
+/** The group a control's view line ends with (`group="Size"`); any other element shows its group only as the field a search matched. */
+function groupToken(element: WebLlmEvidenceElement): string | undefined {
+  return webLlmViewTraits(element).control ? webLlmGroupToken(element) : undefined;
 }
 
 /** The words the view would print, or for an element the view gives no line, the first words it has. */

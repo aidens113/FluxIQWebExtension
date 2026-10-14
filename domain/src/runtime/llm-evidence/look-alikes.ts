@@ -167,6 +167,8 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     form: element.form,
     landmark: element.landmark,
     heading: element.heading,
+    // The fieldset an option sits in: two "Large" boxes, one under Size and one under Fit (t605).
+    group: element.group,
     item: element.item,
     cell: element.cell,
     dialog: element.dialog,

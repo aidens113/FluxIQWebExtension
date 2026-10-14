@@ -312,27 +312,41 @@ Every page leaves the domain as `web-llm-page.v3`
   Words already printed by the control or semantic element a text sits in, a
   label repeating its control, and a line repeating the one before are folded;
   letterless fragments of one value (`$`, `39.`, `99`) are joined. No element
-  that qualifies is capped, ranked or cut.
-- **A line** is `<handle> [<heading>] [<kind>] ["<words>"] <state>`: the `tN`
-  handle, the kind (`link`, `button`, `field[:type]`, `field[search]`,
-  `select`, `checkbox`, `radio`, `toggle`, `tab`, `img`, `h1`-`h6`,
-  `clickable`, `dialog`, `layer`, ...), the words in quotes, and states
-  (`="value"`, a select's options, `checked`, `open`, `disabled`, `selected`,
-  `pressed`, `current`, `marked`, `placeholder "…"`, a table cell's column, a
-  link's address, `covered-by tA`, `focused`). Links are written on the page's `~` base, and a
-  repeated address is written `same href`.
+  that qualifies is capped, ranked or cut. A `<legend>`, a `<caption>`, a
+  `<label>` naming no control beside it, an `<a>` with no address and an
+  element whose role is `heading`, `tooltip`, `cell`, `row` or `listitem` take
+  their words from `text` alone, so the sanitizer keeps their `text` even
+  where it equals the name (`elements.ts`, `wordsOnlyInText`, t605); it used
+  to drop it, and a filter sidebar's group headings never reached the model.
+- **A line** is `<handle> [<heading>] [<kind>] ["<words>"] <state> [group]`:
+  the `tN` handle, the kind (`link`, `button`, `field[:type]`,
+  `field[search]`, `select`, `checkbox`, `radio`, `toggle`, `tab`, `img`,
+  `h1`-`h6`, `clickable`, `dialog`, `layer`, ...), the words in quotes, and
+  states (`="value"`, a select's options, `checked`, `open`, `disabled`,
+  `selected`, `pressed`, `current`, `marked`, `placeholder "…"`, a table cell's
+  column, a link's address, `covered-by tA`, `focused`). Links are written on
+  the page's `~` base, and a repeated address is written `same href`. A
+  control inside a `<fieldset>` ends with its legend, `group="Size"`
+  (`page-view/element/group-token.ts`, t605): the extension collects
+  `context.fieldsetLegend` for every element, and the sanitizer publishes it
+  as the element's `group` where it says something the element's name and
+  text do not (a legend's own group is left out). A bare option says what it
+  filters by only through it.
 - **Structure markers** on lines of their own: `[landmark]` (with frame, modal
   dialog and form), `- i/n` for a list item, `- row r`, and
   `--- below the fold ---` and its kin where the screen zone changes.
 - **Search and detail.** `web.find_on_page` (`llm-evidence/page-find/`) takes a
   fresh capture that also lists what is not rendered (`includeHidden`) and
   matches a query, case-insensitively, against every element's words, label,
-  value, options and address and every attribute's name and value, hidden,
-  off-page and text-less elements included; matches come in page order, fifty
-  to a page, each printed as the view prints it plus the attribute that
-  matched and where the element is (`web-llm-find.v1`).
+  group, value, options and address and every attribute's name and value,
+  hidden, off-page and text-less elements included; matches come in page
+  order, fifty to a page, each printed as the view prints it (a control's
+  `group="…"` included) plus the field or attribute that matched and where the
+  element is (`web-llm-find.v1`). Asking for a group's words finds its legend
+  and every element in the group.
   `web.describe_element` prints one element whole: its line, every attribute,
-  its box and where it is, and every other field (`web-llm-describe.v1`). Both
+  its box and where it is, and every other field, `group` among them
+  (`web-llm-describe.v1`). Both
   are authoring tools and recovery options (`web.recovery.find_on_page`,
   `web.recovery.describe_element`); a hidden element never moves a visible
   element's handle, and the state digest leaves hidden elements out.
@@ -398,7 +412,7 @@ Every page leaves the domain as `web-llm-page.v3`
   text and a control can look the same.
 - **The model is told how to read it.** The domain binds
   `systemInstructions` (`llm-evidence/system-instructions/`, version
-  `web-1`, about 2,000 characters) on its evidence runtime, and Core places the
+  `web-9`, under 3,600 characters) on its evidence runtime, and Core places the
   text in the system message of every model request made for this domain's
   work (evidence decisions, bootstrap, runtime patch, result checks and the
   chat), after Core's JSON and injection rules and before Core's task prose
@@ -622,7 +636,7 @@ What still never reaches a model:
 - **An address.** No selector, xpath or record key is published; the opaque
   `tN` handle is the only way to name an element.
 
-The state digest (`state-digest/state-digest.ts`, `web-state.v3`) and the
+The state digest (`state-digest/state-digest.ts`, `web-state.v5`) and the
 route state (`route-state/project.ts`) are read off the same whole packet, with
 a search capture's hidden elements left out, so a call's own capture answers
 for them exactly as `captureStateDigest` and `observeRouteState` would, and a
