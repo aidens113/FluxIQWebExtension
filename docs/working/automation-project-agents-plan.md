@@ -524,6 +524,23 @@ build does today until A5 lands and the mode is chosen.
 - Definition of done: tests beside each changed file and every test reading the changed sources; test-runner
   check; `pnpm structure:check`. No live run, and no CLI probe that could reach a provider.
 
+### Brief: W7-bench-dead-flow-lane
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: remove the recorded-Flow code t553 left unreachable (`reports/t553-w6-key-scope.md`, decisions): the bench's
+  Flow-lane evaluation in `packages/test-runner/src/bench/run-bench.ts` (`assertRunnableLane`, the `evaluateFlowRun`
+  branch, `flowSources`, the `reconstructBenchEvaluation` Flow branch); the `week2` corpus that now runs nothing
+  (retire it with a refusal that says why); `flowLaneExclusion` in `packages/test-contracts` (no consumer left);
+  and the declared-repair module that `proposesRepairOnly` (always false for a launchable run) can no longer reach.
+  A campaign saved before t553 is already refused on resume; keep that refusal and its message. Never
+  extract-and-drop; keep every refusal a person can still meet.
+- Owns: `packages/test-runner/src/bench/**`, the corpus definitions, `packages/test-contracts/**` for
+  `flowLaneExclusion`, the declared-repair module and its callers, their tests; `docs/architecture/testing-facility.md`;
+  report.
+- Must not touch: Core files; `apps/extension/**`; `domain/**`.
+- Definition of done: tests beside each change and every test reading the changed sources; test-runner and
+  test-contracts checks; `pnpm structure:check` (lower the baseline if entries go). No live run, and no CLI probe that
+  could reach a provider.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
