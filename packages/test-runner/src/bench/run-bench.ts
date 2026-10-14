@@ -6,6 +6,7 @@ import type { EvidenceMode } from "../commands.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../run-scenario.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "../facility-failure/index.js";
+import { refuseRecordingOnlyFlow } from "../flow-lane/recording-only/index.js";
 import { PERMISSION_STOP_INVARIANT } from "../run-evaluation/permission-stop/index.js";
 import { parseBenchReceiptJson } from "./bench-receipt.js";
 import { actionsExecuted, aggregateBenchReport, benchResultsByLane, groupBenchResults } from "./aggregate-report.js";
@@ -493,16 +494,13 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   const started = Date.now();
   let result: RunScenarioResult;
   try {
+    assertRunnableLane(entry);
     result = await options.runScenario({
       repositoryRoot: options.repositoryRoot,
       fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
       runsDirectory: options.runsDirectory,
       scenarioId: entry.scenarioId,
       ...(entry.workflowId === null ? {} : { workflowId: entry.workflowId }),
-      // The Flow lane builds a Flow from the run's own recording and runs it,
-      // with the variant armed when the result names one; the recording lane
-      // cannot arm one, so a variant reaches the runner only here.
-      ...(entry.lane === "flow" ? { flow: true, ...(entry.variantId === null ? {} : { variantId: entry.variantId }) } : {}),
       ...(options.evidence ? { evidence: options.evidence } : {}),
       environment: options.environment,
       target: options.target,
@@ -584,11 +582,18 @@ function entryForCell(entries: readonly BenchPlanEntry[], cell: CampaignPlanCell
 function evaluationIdentity(cell: CampaignPlanCell): RunEvaluationIdentity { return { scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, repeatIndex: cell.repeatIndex, expectedFailure: cell.expectedFailure }; }
 function cellIdentity(cell: CampaignPlanCell) { return { corpusRowId: cell.corpusRowId, scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, lane: cell.lane, repeatIndex: cell.repeatIndex }; }
 
+/**
+ * Only the recording lane runs. The Flow lane built its Flow from the run's own recording, which t519 retired, so a Flow-lane
+ * result is refused before the runner is asked and recorded as that refusal; it is never run as a recording and then judged as
+ * a Flow. The recording lane arms no variant, so no variant reaches the runner.
+ */
+function assertRunnableLane(entry: Pick<BenchPlanEntry, "lane">): void { if (entry.lane === "flow") refuseRecordingOnlyFlow(); }
+
 function scenarioOptions(options: ResumableRunBenchOptions, manifest: CampaignManifest, cell: CampaignPlanCell, entry: BenchPlanEntry, active: ActiveCampaignAttempt): RunScenarioOptions {
+  assertRunnableLane(entry);
   return {
     repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: options.runsDirectory,
     scenarioId: entry.scenarioId, ...(entry.workflowId === null ? {} : { workflowId: entry.workflowId }),
-    ...(entry.lane === "flow" ? { flow: true, ...(entry.variantId === null ? {} : { variantId: entry.variantId }) } : {}),
     ...(options.evidence ? { evidence: options.evidence } : {}), environment: options.environment, target: options.target, runId: active.runId,
     benchReceipt: { campaignId: manifest.benchId, planSha256: manifest.planSha256, cellKey: cell.cellKey, cellIdentity: cellIdentity(cell), attempt: active.attempt },
   };

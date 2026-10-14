@@ -14,7 +14,6 @@ import { acquireCampaignLease, BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION,
 import { expandCorpus, VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
 import type { BenchRunsFile } from "../report-store.js";
 import { createResumableBench, executePrecreatedBenchCampaign, publishPrecreatedBenchParentProjections, resumeBench, runBench, type AuthenticatedBenchCampaignEvaluation, type BenchCampaignCrashPoint, type PrecreatedBenchCampaignOptions, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";
-import { honestRunVerdict, permissionStopInvariant } from "../../run-evaluation/permission-stop/index.js";
 
 // Only the fields resolveScenarioWorkflow reads.
 const scenario = (id: string, extra: Partial<WebScenario> = {}): WebScenario => ({ id, recordingScript: [], expected: {}, ...extra }) as WebScenario;
@@ -247,27 +246,18 @@ test("a resumable campaign recovers all five persistence crash boundaries withou
   });
 });
 
-test("a finalized permission stop survives reconciliation and another resume without rerunning or losing its label", async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-permission-"));
+// A permission stop is a build's, and only the Flow lane built in a bench. That lane built its Flow from the run's recording,
+// which is retired (t519), so a campaign's Flow-lane cell is refused before the runner is asked, on creation and on resume.
+test("a campaign's Flow-lane cell is refused as the retired lane before the runner is asked, and a resume neither reruns nor relabels it", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-retired-flow-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const benchId = "bench-permission-0123abcd", calls: string[] = [];
+  const benchId = "bench-retired-0123abcd", calls: string[] = [];
   const configured = { ...resumableOptions(root, benchId, calls), benchId, corpus: { ...oneCellCorpus, lanes: ["flow"] as const }, repeatCount: 1 };
-  const stop = permissionStopInvariant({ consequence: "move_money", control: "matched" }, [2]);
-  configured.runScenario = async (input) => {
-    const result = await campaignRunner(calls)(input);
-    const evaluation = { ...result.evaluation!, verdict: "failed" as const, failureCategory: "runtime.behavior" as const, flowCreated: false, oracleVerdict: null, reportedVerdict: null, actions: [], invariants: [stop] };
-    await writeFile(path.join(result.path, "evaluation.json"), JSON.stringify(evaluation));
-    await writeFile(path.join(result.path, "run.json"), JSON.stringify(runManifest(result.runId, input.scenarioId, "failed")));
-    await writeFile(path.join(result.path, "summary.json"), JSON.stringify({ verdict: "failed", metrics: { steps: 3 } }));
-    return { ...result, verdict: "failed", evaluation };
-  };
-  await assert.rejects(createResumableBench({ ...configured, crashHook: async (point) => { if (point === "after-bundle-finalized") throw new Error("crash after permission bundle"); } }), /crash after permission bundle/u);
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const outcome = await resumeBench(configured);
+  const created = await createResumableBench(configured);
+  for (const outcome of [created, await resumeBench(configured)]) {
     const [record] = (await readRuns(outcome.directory)).runs;
     const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, record?.evaluation ?? "missing"), "utf8"));
-    assert.deepEqual([outcome.status, honestRunVerdict(evaluation), calls.length], ["failed", "stopped_for_permission", 1]);
-    assert.deepEqual(evaluation.invariants.find((invariant) => invariant.id === stop.id), stop);
+    assert.deepEqual([outcome.status, record?.lane, evaluation.verdict, evaluation.failureCategory, evaluation.flowCreated, calls.length], ["failed", "flow", "inconclusive", "recording.contract", false, 0]);
   }
 });
 
@@ -554,11 +544,12 @@ test("a failing run fails the bench; a runner that throws is an inconclusive run
 });
 
 /**
- * An unarmed row runs on both lanes, so one row, scenario, workflow and
- * variant is two results. Before the lane was part of a result's identity,
- * this bench ran every run and then threw building its report.
+ * The Flow lane built its Flow from the run's own recording, which t519
+ * retired. A corpus that still plans it runs its recording lane as before, and
+ * each Flow-lane result is refused before the runner is asked, recorded as that
+ * refusal: never run as a recording and then judged as a Flow, and never a pass.
  */
-test("a corpus that runs the Flow lane runs every unarmed row there as well as on the recording lane, and its variants there, armed", async () => {
+test("a corpus that plans the Flow lane runs only its recording lane, and records every Flow-lane result as the retired lane's refusal", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
   try {
     const lanes: string[] = [];
@@ -567,42 +558,19 @@ test("a corpus that runs the Flow lane runs every unarmed row there as well as o
       corpus: bothLanes, repeatCount: 1,
       runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.workflowId ?? "primary"}/${run.variantId ?? "unarmed"}/${run.flow ? "flow" : "recording"}`); return runner(run); },
     }));
-    // Each unarmed row records, then runs a Flow built from its own recording; the variant runs only as a Flow, armed.
-    assert.deepEqual(lanes, [
-      "basic-form/primary/unarmed/recording", "basic-form/primary/unarmed/flow",
-      "basic-form/combo/unarmed/recording", "basic-form/combo/unarmed/flow",
-      "iframe-checkout/primary/unarmed/recording", "iframe-checkout/primary/unarmed/flow",
-      "iframe-checkout/primary/drift/flow",
-    ]);
-    // W99 does not resolve, and is skipped on both of its lanes.
-    assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.skipped], ["passed", 7, 7, 2]);
+    // The runner is asked for the recording lane alone, and never given a variant or the retired lane flag.
+    assert.deepEqual(lanes, ["basic-form/primary/unarmed/recording", "basic-form/combo/unarmed/recording", "iframe-checkout/primary/unarmed/recording"]);
+    // W99 does not resolve, and is skipped on both of its lanes; the four Flow-lane results are attempts the bench refused.
+    assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.skipped, outcome.passed], ["failed", 7, 7, 2, 3]);
     const runs = await readRuns(outcome.directory);
     assert.deepEqual(runs.lanes, ["recording", "flow"]);
-    const identities = [["W01", null, "recording"], ["W01", null, "flow"], ["W02", null, "recording"], ["W02", null, "flow"], ["W28", null, "recording"], ["W28", null, "flow"], ["W28", "drift", "flow"]];
-    assert.deepEqual(runs.runs.filter((run) => run.status === "evaluated").map((run) => [run.corpusRowId, run.variantId, run.lane]), identities);
     assert.deepEqual(runs.runs.filter((run) => run.status === "skipped").map((run) => [run.corpusRowId, run.lane]), [["W99", "recording"], ["W99", "flow"]]);
-    const flow = runs.runs.find((run) => run.variantId === "drift");
-    assert.deepEqual([flow?.status, flow?.actionsExecuted], ["evaluated", 2]);
-    const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, flow?.evaluation ?? "missing"), "utf8"));
-    assert.deepEqual([evaluation.lane, evaluation.flowCreated, evaluation.reportedVerdict], ["flow", true, "passed"]);
-    // report.json validates with the same row, scenario, workflow and variant on two lanes, and counts no rate over both.
-    const report = parseBenchReportJson(await readFile(path.join(outcome.directory, "report.json"), "utf8"));
-    assert.deepEqual(report.workflows.map((workflow) => [workflow.corpusRowId, workflow.variantId, workflow.lane]), identities);
-    assert.equal(report.metrics.rates, undefined);
-    const [recording, onFlow] = [report.metrics.ratesByLane?.recording, report.metrics.ratesByLane?.flow];
-    // The Flow lane is what gives flow creation and fuzzy recovery a population at all; each unarmed row counts once on each lane.
-    assert.deepEqual(onFlow?.flowCreationSuccess, { count: 4, total: 4, workflows: 4, rate: 1 });
-    assert.deepEqual(onFlow?.fuzzyRecovery, { count: 1, total: 1, workflows: 1, rate: 1 });
-    assert.deepEqual(onFlow?.initialExecutionSuccess, { count: 4, total: 4, workflows: 4, rate: 1 });
-    assert.deepEqual(recording?.initialExecutionSuccess, { count: 3, total: 3, workflows: 3, rate: 1 });
-    assert.deepEqual(recording?.flowCreationSuccess, { count: 0, total: 0, workflows: 0, rate: null });
-    const markdown = await readFile(outcome.markdown, "utf8");
-    assert.match(markdown, /\| recording, flow \|/);
-    assert.match(markdown, /### Flow lane/);
-    assert.match(markdown, /\| Row \| Scenario \| Workflow \| Variant \| Lane \| Runs \| Pass rate \| Flake class \|/);
-    assert.match(markdown, /\| W01 \| basic-form \| primary \| unarmed \| flow \| 1 \| 1\.000 \| stable-pass \|/);
-    assert.match(markdown, /\| recording \| initialExecutionSuccess \| workflows \| 3 \| 3 \| 0 \| 3 \|/);
-    assert.match(markdown, /\| flow \| initialExecutionSuccess \| workflows \| 4 \| 4 \| 0 \| 4 \|/);
+    const refused = runs.runs.filter((run) => run.status === "evaluated" && run.lane === "flow");
+    assert.deepEqual(refused.map((run) => [run.corpusRowId, run.variantId]), [["W01", null], ["W02", null], ["W28", null], ["W28", "drift"]]);
+    for (const run of refused) {
+      const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, run.evaluation ?? "missing"), "utf8"));
+      assert.deepEqual([evaluation.lane, evaluation.verdict, evaluation.failureCategory, evaluation.flowCreated, evaluation.actions.length], ["flow", "inconclusive", "recording.contract", false, 0], `${run.corpusRowId}/${run.variantId ?? "unarmed"}`);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

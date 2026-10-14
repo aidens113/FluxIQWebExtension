@@ -21,7 +21,7 @@ import { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
 import { liveLlmCoreDefaultModel } from "./core-default-model.js";
 import { labAuthoringModeValue } from "./authoring-mode-env.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
-import { assertLiveLlmLaneFlag, planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
+import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
@@ -50,9 +50,9 @@ type LiveLlmPublish = (details: Record<string, unknown>) => Promise<unknown>;
  * credential, are refusals before a topology starts -- never a quiet fall back
  * to a deterministic run that would then report a green result no model saw.
  *
- * `create-flow` builds its Flow from an instruction, so it runs without the
- * recorded Flow lane; every other task authorizes the Flow that lane builds
- * from the run's recording, so it needs it.
+ * A live run launches `create-flow` only, which builds its Flow from an
+ * instruction task; the retired recording-built lane and the tasks that ran
+ * on it are refused with the path that replaced them (`assertLiveLlmLaunchable`).
  */
 export async function beginLiveLlmRun(input: {
   profile: LlmExecutionProfile;
@@ -69,7 +69,7 @@ export async function beginLiveLlmRun(input: {
 }): Promise<LiveLlmRun> {
   const sources = input.costCeilingSources ?? { args: process.argv, environment: process.env };
   const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment), liveLlmCoreDefaultModel(sources.args), labAuthoringModeValue(sources.args));
-  assertLiveLlmLaneFlag(plan, input.flowLane);
+  assertLiveLlmLaunchable(plan, input.flowLane);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);
   }
@@ -337,14 +337,13 @@ export class LiveLlmRun {
   }
 
   /**
-   * Refuses a scenario run whose lanes do not fit this task: a `create-flow`
-   * run needs an instruction task and no recorded Flow lane, and every other
-   * task needs the recorded Flow lane and no instruction task.
+   * Refuses a scenario run whose lanes do not fit this task: a live run is a
+   * `create-flow` run, which needs an instruction task and never the retired
+   * recording-built Flow lane (`assertLiveLlmLaunchable`).
    */
   assertLane(lane: { flowLane: boolean; creation: boolean }): void {
-    assertLiveLlmLaneFlag(this.plan, lane.flowLane);
-    if (this.createsFlow && !lane.creation) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow needs an instruction task to build from, and this run carries none");
-    if (!this.createsFlow && lane.creation) throw new RunnerFailure("fixture.invalid", `An instruction task is built only by --llm-task create-flow, not ${this.plan.task}`);
+    assertLiveLlmLaunchable(this.plan, lane.flowLane);
+    if (!lane.creation) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow needs an instruction task to build from, and this run carries none");
   }
 
   /**

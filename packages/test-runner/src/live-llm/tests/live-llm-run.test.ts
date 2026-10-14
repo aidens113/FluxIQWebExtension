@@ -130,11 +130,16 @@ async function noKeyRepository(t: test.TestContext): Promise<string> {
   return root;
 }
 
-test("a live run refuses before a credential is read when its lane or target does not fit the task", async (t) => {
+test("a live run refuses before a credential is read when its lane, task or target does not fit", async (t) => {
   const repositoryRoot = await noKeyRepository(t);
   const begin = (task: LlmExecutionProfile["task"], flowLane: boolean, targetMode: string) => beginLiveLlmRun({ profile: { ...profile({}), task }, repositoryRoot, environment: {}, flowLane, targetMode });
-  await assert.rejects(begin("create-flow", true, "isolated"), /--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow/u);
-  await assert.rejects(begin("adapt", false, "isolated"), /A live LLM run needs the Flow lane: pass --flow/u);
+  const retired = (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && error.details?.code === "automation.instruction_led_authoring_required";
+  // The recording-built Flow lane is retired for every task, and the tasks that ran only on it are refused by name with the path that replaced them.
+  await assert.rejects(begin("create-flow", true, "isolated"), (error: unknown) => retired(error) && /Recording-only Flow creation is retired/u.test((error as Error).message));
+  for (const task of ["diagnose", "adapt", "repair"] as const) {
+    for (const flowLane of [false, true]) await assert.rejects(begin(task, flowLane, "isolated"), retired, `${task}, flowLane ${flowLane}`);
+    await assert.rejects(begin(task, false, "isolated"), new RegExp(`--llm-task ${task} ran against a Flow built from the run's recording[^]*--llm-task create-flow --instruction-task <task>[^]*pnpm lab replay`, "u"));
+  }
   for (const targetMode of ["existing", "clone"]) {
     await assert.rejects(begin("create-flow", false, targetMode), new RegExp(`the ${targetMode} target's is not; use --target isolated or persistent-isolated`, "u"));
   }
@@ -142,16 +147,15 @@ test("a live run refuses before a credential is read when its lane or target doe
   await assert.rejects(begin("create-flow", false, "isolated"), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /DEEPSEEK_API_KEY is not set/u.test(error.message));
 });
 
-test("a create-flow run fits only a scenario run that carries an instruction task and no recorded Flow lane", () => {
+test("a create-flow run fits only a scenario run that carries an instruction task and no recorded Flow lane, and no other task fits any", () => {
   const create = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   assert.equal(create.createsFlow, true);
   create.assertLane({ flowLane: false, creation: true });
   assert.throws(() => create.assertLane({ flowLane: false, creation: false }), /needs an instruction task to build from/u);
-  assert.throws(() => create.assertLane({ flowLane: true, creation: true }), /drop --flow/u);
+  assert.throws(() => create.assertLane({ flowLane: true, creation: true }), /Recording-only Flow creation is retired/u);
   const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   assert.equal(adapt.createsFlow, false);
-  adapt.assertLane({ flowLane: true, creation: false });
-  assert.throws(() => adapt.assertLane({ flowLane: true, creation: true }), /An instruction task is built only by --llm-task create-flow, not adapt/u);
+  for (const lane of [{ flowLane: false, creation: false }, { flowLane: false, creation: true }]) assert.throws(() => adapt.assertLane(lane), /--llm-task adapt ran against a Flow built from the run's recording/u);
   // A dry run's description names where the key was found, never the key.
   const described = create.describe();
   assert.equal(described.purpose, "build_and_adapt");

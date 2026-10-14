@@ -15,8 +15,9 @@ const source = (relative: string) => readFile(path.join(sourceRoot, relative), "
 /**
  * Live LLM execution is no longer gated off; it is gated *closed*. These pin
  * the three refusals that stand between a command line and a provider call,
- * each of which happens before a topology or a browser starts: a live run that
- * did not ask for the Flow lane, and a live run with no credential to use.
+ * each of which happens before a topology or a browser starts: a live task that
+ * ran only on the retired recording-built Flow lane, a live run with no
+ * credential to use, and a budget that could not authorize a call.
  *
  * The second one deliberately names `DEEPSEEK_API_KEY`. Naming the variable is
  * how an operator learns what to set; the refusal carries no value, because at
@@ -31,10 +32,12 @@ const source = (relative: string) => readFile(path.join(sourceRoot, relative), "
 const DIAGNOSE_TASK = ["--llm-profile", "deepseek-lab", "--llm-task", "diagnose"] as const;
 const CREATE_FLOW_TASK = ["--llm-profile", "lab-create-flow", "--llm-task", "create-flow", "--instruction-task", "catalog-first-page"] as const;
 
-test("runCli refuses a live LLM run that did not ask for the Flow lane, before anything starts", async () => {
+test("runCli refuses a live diagnose run, which ran only on the retired recording-built Flow lane, before anything starts", async () => {
   const result = await liveRun(["run", "company-website"], DIAGNOSE_TASK);
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /A live LLM run needs the Flow lane: pass --flow/u);
+  assert.match(result.stderr, /"category":"recording\.contract"/u);
+  assert.match(result.stderr, /--llm-task diagnose ran against a Flow built from the run's recording[^"]*--llm-task create-flow --instruction-task <task>/u);
+  assert.doesNotMatch(result.stderr, /pass --flow/u);
   assert.equal(result.stderr.includes("DEEPSEEK_API_KEY"), false);
 });
 
@@ -135,7 +138,7 @@ test("a create-flow run fails closed before anything starts: no credential, or a
   assert.equal(noKey.stdout, "");
   const withFlow = await captureCli(["run", "everything-store", "--flow", ...CREATE_FLOW], { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY });
   assert.equal(withFlow.code, 1);
-  // t519 (4ee4e65c): `--flow` is refused as retired while the command is parsed, before the create-flow plan's own "drop --flow".
+  // t519 (4ee4e65c): `--flow` is refused as retired while the command is parsed; the create-flow plan's own "drop --flow", which nothing reached, is gone (t552).
   assert.match(withFlow.stderr, /"category":"recording\.contract".*Recording-only Flow creation is retired\./u);
   // Neither refusal reached a run: nothing was written where runs go.
   await assert.rejects(access(path.join(lab.root, "test-runs")));
