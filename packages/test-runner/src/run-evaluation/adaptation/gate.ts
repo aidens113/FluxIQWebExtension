@@ -21,7 +21,6 @@ export const ADAPTATION_GATE_REASONS = [
   "counted",
   "oracle_failed",
   "reauthor_not_kept",
-  "declared_repair_not_made",
   "no_recovery_attempted",
   "no_proposal",
   "not_applied",
@@ -43,8 +42,6 @@ export type AdaptationGateInput = Readonly<{
   recovery: Readonly<{ attempted: boolean; resultReauthor?: Readonly<{ applied?: boolean | null }> | null }>;
   /** A re-author the run made and did not keep. */
   unkeptReauthor: boolean;
-  /** The declared repair's verdict, where one was judged. */
-  declaredRepair?: string;
   /** The application outcome and what it did to the Flow's steps; `null` when nothing was applied by rule. */
   application: Readonly<{ outcome: string; flow?: Readonly<{ change: string }> }> | null;
   replays: readonly Readonly<{
@@ -66,7 +63,6 @@ export function classifyAdaptationGate(input: AdaptationGateInput): AdaptationGa
   const notCounted = (reason: AdaptationGateReason): AdaptationGateClassification => ({ counted: false, reason });
   if (input.laneFailed) return notCounted("oracle_failed");
   if (input.unkeptReauthor) return notCounted("reauthor_not_kept");
-  if (input.declaredRepair !== undefined && input.declaredRepair !== "repaired") return notCounted("declared_repair_not_made");
   // A re-author Core applied inside the run is recovery too, though it is not the patch ladder's `attempted`.
   const attempted = input.recovery.attempted || input.recovery.resultReauthor?.applied === true;
   const application = input.application;
