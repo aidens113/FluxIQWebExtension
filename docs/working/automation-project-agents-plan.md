@@ -502,6 +502,28 @@ build does today until A5 lands and the mode is chosen.
   merged; report if a change there is needed).
 - Definition of done: tests beside each changed file; test-runner check; `pnpm structure:check`. No live run.
 
+### Brief: W6-lab-key-scope-and-dead-flow-lane
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: unit W6. (1) Key scope: t552's worker found that a `lab run` probe with `FLUXIQ_TEST_ENV_FILES=none` still
+  read the real provider key from the worktree's `.env.local` and got past the credential check (it stopped only
+  at a bad variant; nothing was spent). Find what `FLUXIQ_TEST_ENV_FILES` is meant to govern (grep its readers and
+  docs) and where the key resolver reads `.env.local`; make it so a run or probe that says no env files reads no
+  key from any env file, and so no unit test or CLI test can ever obtain a real key. If the variable was never
+  meant to cover `.env.local`, add the explicit way to say so and document it. Tests that pin both. (2) Dead
+  recorded-Flow code left by t519 and t552 (see `reports/t552-w5-live-adapt-launch.md`): `cli.ts` passing
+  `flowLane` and building a live matrix that can only be refused; `run-scenario.ts` remaining `options.flow`
+  branches; `LiveLlmRun`'s recorded-Flow code (`authorizer`, `settle`, `lane-settlement`) unreachable from the CLI;
+  `flow-lane/recording-discards.ts` `until` nothing sets; `bench/expand-corpus.ts` planning Flow-lane results that
+  are always refused (`week1`, `week2`). Remove it, never extract-and-drop; keep every refusal a person can still
+  meet, with its message.
+- Required reads: the t552 report; the files named; `docs/architecture/testing-facility.md` (env files, Lab CLI).
+- Owns: `packages/test-runner/src/**` files named above, the key resolver and env-file reader wherever they live in
+  `packages/test-runner/` or `scripts/`, their tests; `docs/architecture/testing-facility.md`;
+  `docs/working/automation-project-agents-plan/reports/<your label>.md`.
+- Must not touch: Core files; `apps/extension/**`; `domain/**`.
+- Definition of done: tests beside each changed file and every test reading the changed sources; test-runner
+  check; `pnpm structure:check`. No live run, and no CLI probe that could reach a provider.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
@@ -535,6 +557,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: domain group -> 100 passed; test-runner group -> 83 passed; crossborder browser paths -> 17 passed; domain and test-runner checks and the structure audit passed; merged `775d685e`, `f7acb9cf` (full entry in the Core document's ledger)
 - Outcome: Accepted
 - Follow-up: W5
+
+### 2026-10-13 — W5 retire live diagnose, repair and adapt (t552)
+- Agent: worker t552-w5-live-adapt-launch; supervisor verified and integrated
+- Changed: `packages/test-runner/src/{commands,run-scenario,bench/run-bench,live-llm/live-llm-plan,live-llm/live-llm-run}.ts` and tests; `docs/architecture/testing-facility.md`
+- Why: t519 retired bare `--flow`, leaving these tasks unlaunchable; the adaptation gate repairs inside its create-flow `--replays` run and proves reuse with `lab replay`, so the tasks refuse and name those commands
+- Validation: test-runner check passed; live-llm plan/run/ceiling, commands, cli-llm, runner-wiring, run-bench tests -> 154 passed; structure audit passed; merged `06daa2c9`
+- Outcome: Accepted
+- Follow-up: W6 (a probe read the real key from `.env.local` under `FLUXIQ_TEST_ENV_FILES=none`; dead recorded-Flow code outside W5's files)
 
 ## Open Questions
 
