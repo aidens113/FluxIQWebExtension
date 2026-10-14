@@ -1,7 +1,7 @@
 # Automation Project Agents Plan
 
 Status: Active
-Status detail: Planned 2026-10-13; nothing implemented. Core unit A1 is ready to dispatch; downstream units W1-W3 and A8 follow the Core units.
+Status detail: Core units A1-A3 in progress (t533-t535); downstream W1 waits on A3. User decision 2026-10-13: concurrent in Core, the web domain declares one at a time.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent
@@ -26,9 +26,13 @@ document owns the roles and contracts.
 - New authoring mode `project` beside today's default `candidate`; the
   default flips only after the Lab comparison passes. One-part tasks are a
   one-subflow plan, so there is one path, not two.
-- **Builders share the browser one at a time** under a host lease that names
-  the tab; two tabs of one profile are not isolation (shared cookies, cart,
-  session). Parallel builders wait for a separate browser context (post-MVP).
+- **Concurrent in Core, one at a time in the extension** (user, 2026-10-13:
+  "make it possible in core, but have extension set it to only 1 at a
+  time"). Core schedules builders up to a host capacity the domain declares;
+  the web domain declares 1, so builders share the browser one at a time
+  under a lease that names the tab. Two tabs of one profile are not
+  isolation (shared cookies, cart, session); raising the web capacity needs
+  separate browser contexts first.
 - One Flow purse; the supervisor carves allowances and keeps a reserve for the
   judged whole run and one repair round.
 - Creation still ends only on one judged whole-Flow run from the start;
@@ -132,9 +136,10 @@ from that entry and returns a claim; a **repair agent** does the same for the
 smallest failing unit; the **validator** (trial port, detached execution,
 judge) writes receipts; the **promotion owner** (existing) is the only writer
 of accepted topology and needs one judged whole-Flow run from the start.
-One purse per Flow; builders run one at a time under a host lease.
+One purse per Flow; Core runs builders concurrently up to the host capacity
+the domain declares, and the web domain declares 1.
 
-## Host Actions: Serialize Now, Isolate Later
+## Host Actions: Concurrent In Core, One At A Time In The Extension
 
 Two builders on two tabs of the same browser profile are not isolated: they
 share cookies, the session, the cart and every other server-side state, so
@@ -166,16 +171,23 @@ The code today assumes one actor (discovery report, 2026-10-13):
 - Core's state-aware contract C3 already says "one execution owner per browser
   resource" (Core `state-aware-recovery-plan.md:139-140`).
 
-Decision (supervisor recommendation): **one host lease per browser context;
-builders run one at a time, in dependency order.** The lease holder is the
-only role allowed to issue browser actions; the validator takes the lease for
-its runs. This costs no real parallelism, because subflow N's entry state is
-usually subflow N-1's exit state anyway. The gain from this plan is bounded
-context and judged structure, not speed.
+Decision (user, 2026-10-13): **make concurrent agents possible in Core, and
+have the extension set it to one at a time.** Core's host-resource scheduler
+(Core paired document, `Host resources and concurrency`) asks the domain for
+its capacity and grants at most that many leases; the web domain's
+host-resource port declares **capacity 1** and hands out the one automation
+tab. The lease holder is the only role allowed to issue browser actions; the
+validator takes the lease for its runs. With capacity 1 builders run in
+dependency order, which costs little, because subflow N's entry state is
+usually subflow N-1's exit state anyway. The gain in the extension is
+bounded context and judged structure, not speed.
 
-The lease is per browser context, not global, so genuine isolation can be
-added later (for example read-only subflows in a separate signed-out context)
-by issuing a second lease, without changing the roles.
+Raising the web capacity above 1 is a one-line change in the port, but it is
+only correct once each lease gets its own browser context and the extension
+stops assuming one actor: per-lease tab ids on every command, per-lease
+handle scopes, an overlay and runtime status per lease, per-lease page
+pacing, and a reset scoped to the lease's own tabs (the list above). Until
+then the port's capacity stays 1, and a test pins it.
 
 The lasting-act ledger is project-scoped. Resetting before a trial restores
 the *case's entry state*: return to the build's starting state through the
@@ -201,7 +213,7 @@ standing rules). What changes is that steps now have an author.
   that builder's steps as ordinary per-step messages under its subflow
   header; its return as a card (outcome, spend, what it tested); each
   validator receipt as a card; assembly; the judged whole run; the ending.
-- **Paced display.** Because builders run one at a time, the single headline
+- **Paced display.** Because the web capacity is 1, builders run one at a time, so the single headline
   and the 1.6 s detail pacing (`extension-client.md:486-594`) still fit: the
   headline changes at brief boundaries. The overlay stays on the one leased
   tab.
@@ -234,8 +246,8 @@ standing rules). What changes is that steps now have an author.
 4. **Handles.** Handles stay Flow-scoped. A builder starts with a fresh look
    at its prepared entry; a brief never passes the supervisor's handles,
    because those packets may no longer be retained.
-5. **No parallel host actions** until a second, isolated browser context
-   exists (post-MVP, see Host Actions).
+5. **Capacity 1.** The web host-resource port declares one lease at a time
+   (user, 2026-10-13); Core itself is built for more (see Host Actions).
 
 ## Lab Qualification (this repository owns)
 
@@ -263,7 +275,10 @@ at most $0.25 per Flow, every run fully debugged before any rerun.
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
 
-- **W1 Lease enforcement and leased tab.** `apps/extension/src/background/connection/`
+- **W1 Web host-resource port, lease enforcement and leased tab.** New
+  `domain/src/runtime/host-resources/` implementing Core's port with
+  capacity 1 (a test pins it) and handing out the automation tab;
+  `apps/extension/src/background/connection/`
   (`server-command-channel.ts`: refuse a command whose lease holder or epoch
   is not current, typed refusal), `background/.../action-runner.ts` (use the
   lease's `browserTabId`), `domain/src/client/gateway-action-parameters.ts`
@@ -305,6 +320,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: not validated by tests (planning only); discovery claims spot-checked in Core source (`service.ts:1495` child-build signature, `:2512` re-author call, `authoring-loop.ts:145` tool filter, purse `carriedUsd` and judging reserve)
 - Outcome: Accepted
 - Follow-up: dispatch Core A1
+
+### 2026-10-13 — Concurrency decision recorded; Core A1-A3 started
+- Agent: supervisor
+- Changed: this document (Current State, Host Actions, W1, wiring item 5); Core paired document (owning entry of the same date)
+- Why: user: "make it possible in core, but have extension set it to only 1 at a time"
+- Validation: not validated by tests (planning)
+- Outcome: Accepted
+- Follow-up: W1 after Core A3
 
 ## Open Questions
 
