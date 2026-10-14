@@ -21,6 +21,7 @@ import { RunnerFailure } from "../../../failure.js";
 import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, type CreatedFlowCandidateTrialReadiness, type CreatedFlowTrialAuthoringMode } from "../readiness.js";
 import { createdFlowChatCandidateDraftOutcome, createdFlowFailedCandidateOutcome } from "../candidate-outcome.js";
 import { createdFlowBuildFromDiagnostic, failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
+import { createdFlowChatBuildDeadlineMs } from "./build-deadline.js";
 import type { CreatedFlowChatRecord } from "./chat-record.js";
 import { chatConversationIds, chatThreadTurns, projectFlowIds, type CreatedFlowChatScope, type CreatedFlowChatTurn } from "./chat-thread.js";
 
@@ -44,7 +45,8 @@ export type CreatedFlowChatControl = Pick<CreatedFlowBuildControl, "automationSt
  * 24 s reading deadline. `startMs`: from the answer to the first sign of a
  * build -- a new Flow, which `create-here` makes before anything else, or the
  * command's result. `deadlineMs`: from Send to the build's result, the build's
- * own deadline (`GENERATION_DEADLINE_MS`) plus the chat's steps around it.
+ * own bound plus the chat's steps around it, by authoring mode
+ * (`./build-deadline.ts`): a project build's is Core's.
  */
 export type CreatedFlowChatWait = { now?: () => number; sleep?: (ms: number) => Promise<void>; pollMs?: number; sendMs?: number; answerMs?: number; startMs?: number; deadlineMs?: number };
 
@@ -77,7 +79,6 @@ const ANSWER_MS = 60_000;
 const START_MS = 30_000;
 /** How long a candidate-mode build that left no proposal is given for Core's draft turn, written just after its result. */
 const DRAFT_TURN_MS = 5_000;
-const DEADLINE_MS = 60_000 + 600_000 + 15_000 + 120_000;
 
 /**
  * Types the instruction into the chat, sends it, and follows what FluxIQ made
@@ -156,7 +157,7 @@ export async function buildCreatedFlowFromChat(
     return Object.freeze({ build: Object.freeze({ ...build, chat: chatRecord }), flowId: null, applied: null, said });
   }
 
-  const ended = started.result ?? await until(Math.max(0, (wait.deadlineMs ?? DEADLINE_MS) - (now() - sentAt)), async () => after(await thread()).find((turn) => isResult(turn) && turn.attachment!.ref === CREATE_HERE));
+  const ended = started.result ?? await until(Math.max(0, (wait.deadlineMs ?? createdFlowChatBuildDeadlineMs(input.authoringMode)) - (now() - sentAt)), async () => after(await thread()).find((turn) => isResult(turn) && turn.attachment!.ref === CREATE_HERE));
   const durationMs = now() - sentAt;
   const turns = await thread();
   await chat.picture?.("ended");

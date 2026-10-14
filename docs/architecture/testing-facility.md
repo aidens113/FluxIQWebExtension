@@ -1598,6 +1598,23 @@ arrived). A created ending used to keep its kind and timing but not the words
 (`run-musp8nz1-dbd3905a`, cause R1). `snapshots/flow-lane.json` names
 `buildEntry: "chat"`.
 
+How long the chat waits for the result, from Send, depends on the authoring
+mode (`createdFlowChatBuildDeadlineMs`, `flow-lane/creation/chat/build-deadline.ts`).
+A candidate or legacy build is waited 60 s + 600 s + 15 s, the web panel's
+wait for the same request, plus 120 s for the chat's steps: 795 s, as before.
+A project build runs a supervisor and several builders, trials and resets, and
+Core bounds it whole: `AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS`, thirty
+minutes from the start of the supervisor's run, everything it does counted,
+and the last five minutes kept for its reset and recorded ending (Core
+`loop-limits/project-build-duration.ts`). The Lab waits that bound in place of
+the 600 s, with the same steps around it (1,995 s), read from Core and pinned
+to it by `chat/tests/build-deadline.test.ts`, so it keeps no copy. A build
+whose result has not arrived by then ends `no_result` with
+`lab.chat_build_unfinished`; A8 launch 7 lost three of four project builds to
+the candidate deadline while they still worked (t592). A project build that
+reaches Core's bound ends on Core's side, honestly, with
+`project.build_time_limit` among its issue codes.
+
 A build that left a proposal also carries `judged` (`CreatedFlowBuildJudged`):
 the judged `yes` the build finished on, as Core records it on the proposal's
 `created` audit event (`buildJudged`, Core's

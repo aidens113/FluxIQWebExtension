@@ -4,6 +4,7 @@ import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
 import type { ExistingFlowAdaptation } from "../../../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../../../failure.js";
+import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS } from "fluxiq/automation-studio";
 import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatControl } from "../build-from-chat.js";
 
 /**
@@ -194,6 +195,20 @@ test("a build whose result never arrives is recorded as unfinished once its dead
   assert.equal(made.build.failure?.code, "lab.chat_build_unfinished");
   assert.equal(made.build.chat?.ending, "no_result");
   assert.equal(made.build.chat?.resultTurn, null);
+});
+
+// A8 launch 7 (t592): project builds were waited a candidate build's deadline
+// and recorded unfinished while still working. A project build is waited
+// Core's bound on it plus the chat's steps; a candidate one exactly as before.
+test("a project build is waited Core's project build bound plus the chat's steps, and a candidate one exactly as before", async () => {
+  const waited = async (authoringMode: "candidate" | "project") => {
+    const { control, chat, wait } = fakeChat({ answer: "build", ending: "never" });
+    const made = await buildCreatedFlowFromChat(control, chat, { ...CANDIDATE_SCOPE, authoringMode }, wait);
+    assert.equal(made.build.failure?.code, "lab.chat_build_unfinished");
+    return made.build.durationMs;
+  };
+  assert.equal(await waited("project"), 60_000 + AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS + 15_000 + 120_000);
+  assert.equal(await waited("candidate"), 60_000 + 600_000 + 15_000 + 120_000);
 });
 
 test("a message the chat never carried to FluxIQ fails the stage with what the chat showed", async () => {
