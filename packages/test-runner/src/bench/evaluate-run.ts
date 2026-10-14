@@ -1,8 +1,7 @@
-import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { failureCategories, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { classifyRunnerFailure } from "../failure.js";
 import type { RunLaneObservation } from "../flow-lane/index.js";
-import type { FlowLanePermissionStop } from "../lane-rules/index.js";
-import { evaluateObservedRun, flowLaneAdaptationMeasurements, flowLaneEvidenceSizes, personHandOffEvidence, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
+import { evaluateObservedRun, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
 
 /**
  * Where each recording-lane measurement comes from. The bench writes these
@@ -19,28 +18,6 @@ export const RECORDING_LANE_SOURCES = {
   evidenceSizes: "none: the recording lane runs no Flow, so Core captures no sanitized packet for it; sanitizedPacketBytes is empty and truncationCount is 0. rawSnapshotBytes is empty on every lane: no producer measures raw snapshots, and they are not a Week 1 metric",
   extraction: "unmeasured: the lane asserts each extract step as it runs and publishes no per-step measurement, so the report states no extraction block for this lane. It is not a measurement of zero",
   llm: "disabled: Week 1 benches run provider-free",
-} as const;
-
-/**
- * Where each Flow-lane measurement comes from. Unlike the recording lane, this
- * lane does not re-derive anything: `runScenario` publishes a
- * `RunLaneObservation` from the Flow it built and ran, and the bench reports
- * that. An attempt that failed before the Flow lane was reached publishes a
- * recording-lane observation or none, and is reported as `flowCreated: false`
- * with nothing executed.
- */
-export const FLOW_LANE_SOURCES = {
-  verdict: "the runner's verdict from runScenario",
-  oracleVerdict: "the Flow lane's own observation: whether the workflow's expected final state held after the generated Flow ran; null when no Flow ran, so the oracle was not consulted",
-  reportedVerdict: "the persisted Core run's status and its actions[].status; null when recording, proposal, or approval produced no runnable Flow, so FluxIQ executed nothing",
-  flowCreated: "whether recording, proposal, and approval produced a runnable Flow; false when the run failed before the Flow lane was reached",
-  harnessActivations: "the persisted Core run's harness activations",
-  durationMs: "run.json finishedAt minus startedAt; the bench's wall clock when run.json is unreadable",
-  actionLatency: "the persisted Core run's actions[].durationMs; an unfinished action has none and is left out",
-  extraction: "the lane's own judgement of the workflow's expected.extracted against the datasets Core stored for the run (K5 runDetail.datasets, K8 get-run-dataset-page), one measurement per recorded extract step, paired with the steps by the recording's candidate order. A processed dataset serves the answer Core's run-end processing kept from what the read collected, and the measurement states both (observedRecords, collectedRecords). Records are compared in full; the pages a read covered and whether it hit the page's item cap are not observable from Core's run detail or its datasets, so those members are reported as unjudged and enter no rate. A step's duration is the sum of its extract node's attempt durations, so a node Core retried reports the retries too: extractionDurationMs is time spent on the node, not the time one read took. extractionMsPerPage needs a page count and has no samples on this lane at all",
-  evidenceSizes: "the run bundle's snapshots/flow-lane.json actions[].evidencePackets: sanitizedPacketBytes holds the UTF-8 size of each state-snapshot packet Core captured before and after a web action attempt, one entry per measured packet, and truncationCount counts those the domain trimmed. The failure packet is not in Core's run detail and is not measured. Both are empty and 0 when that file is absent, which is a run in which no Flow ran, and also when it is unreadable. rawSnapshotBytes is empty: no producer measures raw snapshots, and they are not a Week 1 metric. No byte budget judges a packet: the domain's evidence budgets were removed, so the sizes are recorded, not judged",
-  llm: "disabled: Week 1 benches run provider-free",
-  adaptation: "the run bundle's snapshots/adaptation.json, which the lane writes from Core's run detail, the Flow and Subflow graphs the run executed, and each adaptation's stored record, read before Core deletes the run's workspace (run-evaluation/adaptation). Reuse names the applied adaptations stamped on nodes the run attempted that it did not create; validation is Core's own confidence rule over each adaptation's stored results; persistence is each adaptation's stored status and revisions; cost is Core's metadata.llmGate.costAccounting. All four are null -- unmeasured -- when the file is absent or no Flow was created",
 } as const;
 
 const RUNNER_VERDICT = "runner-verdict";
@@ -63,22 +40,6 @@ export type RecordingRunInput = RunEvaluationIdentity & {
 };
 
 /**
- * A Flow-lane run, whose runner result carries the lane's own observation of
- * what the Flow did and the path of the bundle it finalized, from which the
- * evidence sizes are read.
- *
- * `permissionStop` is the runner's report that the created-Flow build stopped
- * to ask the person at the task's declared permission point
- * (`RunScenarioResult.permissionStop`). The bench carries it into the
- * evaluation, which then holds the same failed `stopped-for-permission`
- * invariant a single `lab run` holds, so a benchmark row can never count a
- * stop as a pass: no Flow was built, so nothing did the task.
- */
-export type FlowRunInput = Omit<RecordingRunInput, "result"> & {
-  result: RecordingRunInput["result"] & { path: string; observation?: RunLaneObservation; permissionStop?: FlowLanePermissionStop | undefined };
-};
-
-/**
  * A recording-lane run's `RunEvaluation`, validated, from its runner result and bundle.
  *
  * It contributes no evidence sizes: the recording lane runs no Flow, so Core
@@ -90,49 +51,10 @@ export function evaluateRecordingRun(input: RecordingRunInput): RunEvaluation {
 }
 
 /**
- * A Flow-lane run's `RunEvaluation`, from the lane's own observation rather
- * than from an inference over the run manifest: only the lane knows whether a
- * Flow was created, what the persisted Core run reported, and whether the
- * fixture oracle was consulted after it.
- *
- * A run planned on this lane that failed before the Flow lane was reached
- * publishes a recording-lane observation, or none at all. It is still reported
- * as a Flow-lane run -- `flowCreated: false`, nothing executed -- because that
- * is what happened: Flow creation is precisely what did not occur, and
- * `flowCreationSuccess` must count it as a miss rather than lose it.
+ * An attempt whose runner threw before finalizing a bundle: inconclusive, since nothing about the automation was observed.
+ * Every attempt the bench runs is on the recording lane (`run-bench.ts`), so the evaluation is a recording-lane one.
  */
-export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
-  const observed = input.result.observation?.lane === "flow" ? input.result.observation : undefined;
-  return evaluateObservedRun({
-    identity: input,
-    facilityFailure: input.facilityFailure,
-    outcome: outcomeOf(input),
-    observation: {
-      lane: "flow",
-      flowCreated: observed?.flowCreated ?? false,
-      oracleVerdict: observed?.oracleVerdict ?? null,
-      reportedVerdict: observed?.reportedVerdict ?? null,
-      automationFailureReported: observed?.automationFailureReported ?? null,
-      automationFailureExpected: input.expectedFailure,
-      harnessActivations: observed?.harnessActivations ?? 0,
-      // What the recovery produced, or null when the lane measured none: a run
-      // that never reached the Flow lane is unmeasured, not recovery-free.
-      harnessRecovery: observed?.harnessRecovery ?? null,
-      actions: observed ? [...observed.actions] : [],
-      // The lane's own per-step extraction measurements, or null when it
-      // published none: a run that never reached the Flow lane measured no
-      // extraction, which is not the same as measuring none.
-      extraction: observed?.extraction ?? null,
-    },
-    evidence: flowLaneEvidenceSizes(input.result.path),
-    adaptation: flowLaneAdaptationMeasurements(input.result.path),
-    personHandOffs: personHandOffEvidence(input.result.path),
-    ...(input.result.permissionStop ? { permissionStop: { consequence: input.result.permissionStop.consequence, control: input.result.permissionStop.control } } : {}),
-  });
-}
-
-/** An attempt whose runner threw before finalizing a bundle: inconclusive, since nothing about the automation was observed. */
-export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: EvaluationLane; attemptId: string; error: unknown; facilityFailure: NonNullable<RunEvaluation["facilityFailure"]>; wallClockMs: number }): RunEvaluation {
+export function evaluateFailedAttempt(input: RunEvaluationIdentity & { attemptId: string; error: unknown; facilityFailure: NonNullable<RunEvaluation["facilityFailure"]>; wallClockMs: number }): RunEvaluation {
   const category = classifyRunnerFailure(input.error);
   return evaluateObservedRun({
     identity: input,
@@ -146,8 +68,8 @@ export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: Eva
       durationMs: input.wallClockMs,
     },
     observation: {
-      lane: input.lane,
-      flowCreated: input.lane === "flow" ? false : null,
+      lane: "recording",
+      flowCreated: null,
       oracleVerdict: null,
       reportedVerdict: null,
       automationFailureReported: null,

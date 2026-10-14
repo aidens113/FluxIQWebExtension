@@ -156,17 +156,17 @@ test("a create-flow run's Flow repairs with the exploring intent, so its repair 
   // `explore_and_adapt` tries its repair rather than only proposing one, which
   // is what the wrong-answer route requires: under the narrow intent a run that
   // answered wrongly was refused.
-  assert.deepEqual([create.repairsFlow, create.proposesRepairOnly], [true, false]);
+  assert.equal(create.repairsFlow, true);
   // The repair lane names the playback's intent; the dry run still describes the build's.
   assert.deepEqual(create.describeRepair(), { task: "create-flow", purpose: "explore_and_adapt" });
   assert.equal(create.describe().purpose, "build_and_adapt");
   const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
-  assert.deepEqual([adapt.repairsFlow, adapt.proposesRepairOnly, adapt.describeRepair()], [true, true, { task: "adapt", purpose: "diagnose_and_adapt" }]);
+  assert.deepEqual([adapt.repairsFlow, adapt.describeRepair()], [true, { task: "adapt", purpose: "diagnose_and_adapt" }]);
   const repair = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "repair" }), CREDENTIAL);
-  assert.deepEqual([repair.repairsFlow, repair.proposesRepairOnly, repair.describeRepair().purpose], [true, false, "explore_and_adapt"]);
+  assert.deepEqual([repair.repairsFlow, repair.describeRepair().purpose], [true, "explore_and_adapt"]);
   // A diagnosis changes nothing, so it has no repair to apply.
   const diagnose = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "diagnose" }), CREDENTIAL);
-  assert.deepEqual([diagnose.repairsFlow, diagnose.proposesRepairOnly], [false, false]);
+  assert.equal(diagnose.repairsFlow, false);
 });
 
 test("only a build run readies a build", async () => {

@@ -79,7 +79,6 @@
       "packages/test-runner/src/extension-chat-check/tests/approval-flow.test.ts": 1,
       "packages/test-runner/src/flow-lane/creation/tests/build-proposal.test.ts": 1,
       "packages/test-runner/src/flow-lane/creation/tests/lane.test.ts": 1,
-      "packages/test-runner/src/flow-lane/repair/declared-repair.ts": 1,
       "packages/test-runner/src/run-scenario/decision-trace/tests/read-decision-trace.test.ts": 1,
       "packages/test-runner/src/tests/browser-evidence.test.ts": 1,
       "packages/test-runner/src/ui-e2e/assertions/tests/adaptation-facts.test.ts": 1
@@ -135,8 +134,6 @@
       "packages/test-runner/src/demo-llm-create-ui/explore-proposal-ui.ts": 1,
       "packages/test-runner/src/existing-fluxiq-control.ts": 1,
       "packages/test-runner/src/failure.ts": 1,
-      "packages/test-runner/src/flow-lane/repair/declared-repair.ts": 1,
-      "packages/test-runner/src/flow-lane/repair/judge-repair.ts": 1,
       "packages/test-runner/src/lab-control/frame-origin-proof.ts": 1,
       "packages/test-runner/src/network-guard.ts": 1,
       "packages/test-runner/src/run-evaluation/flow-lane-evidence-sizes.ts": 1,

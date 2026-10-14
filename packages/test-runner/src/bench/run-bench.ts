@@ -6,14 +6,12 @@ import type { EvidenceMode } from "../commands.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../run-scenario.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "../facility-failure/index.js";
-import { refuseRecordingOnlyFlow } from "../flow-lane/recording-only/index.js";
-import { PERMISSION_STOP_INVARIANT } from "../run-evaluation/permission-stop/index.js";
 import { parseBenchReceiptJson } from "./bench-receipt.js";
 import { actionsExecuted, aggregateBenchReport, benchResultsByLane, groupBenchResults } from "./aggregate-report.js";
 import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, acquireCampaignLease, assertCampaignCompatibility, campaignPlanSha256, canonicalJson, createCampaignPlan, createCampaignPlanShards, loadCampaignCheckpointChain, loadCampaignManifest, preserveInterruptedStaging, writeCampaignCheckpoint, writeCampaignManifest, type ActiveCampaignAttempt, type CampaignCheckpoint, type CampaignCompatibility, type CampaignLease, type CampaignLeaseOptions, type CampaignManifest, type CampaignPlanCell, type CampaignRequest, type CompletedCampaignCell } from "./campaign/index.js";
 import type { BenchCorpus } from "./corpus/index.js";
 import { describeError } from "./describe-error.js";
-import { FLOW_LANE_SOURCES, RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
+import { RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
 import { benchExecutionCoverage } from "./execution-coverage.js";
 import { benchFailureCauses, describeBenchFailureCause } from "./failure-cause.js";
 import { expandCorpus, type BenchPlanEntry } from "./expand-corpus.js";
@@ -27,7 +25,7 @@ const MAX_REPEAT = 100;
 export type RunBenchOptions = {
   corpus: BenchCorpus;
   repeatCount: number;
-  /** The resolved target. Both lanes run on `isolated` and `persistent-isolated`. */
+  /** The resolved target. The recording lane runs on `isolated` and `persistent-isolated`. */
   target: FluxIQTargetConfiguration;
   /** The Scenario Lab registry the corpus resolves against. */
   manifests: readonly WebScenario[];
@@ -121,28 +119,27 @@ export type PrecreatedBenchParentProjectionOptions = Readonly<{
  * and unresolved rows, are recorded as skipped with their reason, never as
  * passes.
  *
- * A result runs on every lane the corpus declares that can run it. An unarmed
- * workflow can run on both: it records, and it also builds a Flow from its
- * recording and runs it, the only lane on which FluxIQ executes the workflow.
- * A variant runs a Flow armed, which is the only way a variant is exercised at
- * all. Which lanes a corpus runs is the corpus's own declaration
- * (`BenchCorpus.lanes`), so `smoke` stays the recording-lane bench every
- * historical report was measured on. Each lane's runs of a result are a result
- * of their own in the report, and every rate is counted per lane.
+ * Only the recording lane runs. The Flow lane built a Flow from the run's own
+ * recording, which t519 retired, so every result a corpus plans on it -- an
+ * unarmed workflow's second lane, and every variant -- is planned skipped with
+ * `FLOW_LANE_RETIRED` (`expand-corpus.ts`) and never reaches the runner. Which
+ * lanes a corpus names is still its own declaration (`BenchCorpus.lanes`), so
+ * a corpus that names the Flow lane says what happened to those results. Each
+ * lane's runs of a result are a result of their own in the report, and every
+ * rate is counted per lane.
  */
 export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcome> {
   const { target, repeatCount } = options;
-  if (target.mode !== "isolated" && target.mode !== "persistent-isolated") throw new Error(`bench runs the recording and Flow lanes on isolated or persistent-isolated targets; a ${target.mode} target runs a pre-existing Flow instead of one built from the run's own recording`);
+  if (target.mode !== "isolated" && target.mode !== "persistent-isolated") throw new Error(`bench runs the recording lane on isolated or persistent-isolated targets; a ${target.mode} target runs a pre-existing Flow on no evaluation lane`);
   if (!Number.isSafeInteger(repeatCount) || repeatCount < 1 || repeatCount > MAX_REPEAT) throw new Error(`--repeat must be between 1 and ${MAX_REPEAT}`);
   const benchId = `bench-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const directory = benchDirectory(options.runsDirectory, benchId);
   await mkdir(directory, { recursive: true });
   const plan = expandCorpus(options.corpus, options.manifests);
   const repeats = Array.from({ length: repeatCount }, (_, index) => index);
-  const flowPlanned = plan.some((entry) => entry.skipReason === undefined && entry.lane === "flow");
   const file: BenchRunsFile = {
     schemaVersion: "0.1", benchId, corpusId: options.corpus.id, repeatCount, target: target.mode, lanes: options.corpus.lanes,
-    startedAt: new Date().toISOString(), sources: RECORDING_LANE_SOURCES, ...(flowPlanned ? { flowSources: FLOW_LANE_SOURCES } : {}),
+    startedAt: new Date().toISOString(), sources: RECORDING_LANE_SOURCES,
     runs: plan.flatMap((entry) => {
       const reason = entry.skipReason;
       return reason === undefined ? [] : repeats.map((repeatIndex): BenchRunRecord => ({ ...identityOf(entry), repeatIndex, status: "skipped", skipReason: reason }));
@@ -351,7 +348,7 @@ async function executeCampaign(options: ResumableRunBenchOptions, manifest: Camp
     } catch (error) {
       if (await isDirectory(pathForRun(options.runsDirectory, active.runId))) throw error;
       const facilityFailure = caughtFacilityFailure(error);
-      const evaluation = evaluateFailedAttempt({ ...evaluationIdentity(cell), lane: cell.lane, attemptId: active.runId, error, facilityFailure, wallClockMs: Date.now() - Date.parse(active.startedAt) });
+      const evaluation = evaluateFailedAttempt({ ...evaluationIdentity(cell), attemptId: active.runId, error, facilityFailure, wallClockMs: Date.now() - Date.parse(active.startedAt) });
       const recorded = await persistEvaluation(directory, cell, evaluation, { problems: [] });
       accepted = { ...recorded, bundle: undefined };
     }
@@ -420,7 +417,7 @@ async function assertNoAmbiguousCampaignBundles(runsDirectory: string, manifest:
 
 async function acceptFinalizedAttempt(options: ResumableRunBenchOptions, manifest: CampaignManifest, cell: CampaignPlanCell, active: ActiveCampaignAttempt, directory: string): Promise<AcceptedCell> {
   const bundle = await validatedBundle(options, manifest, cell, active.runId, active);
-  const evaluation = reconstructBenchEvaluation(cell, active, bundle, pathForRun(options.runsDirectory, active.runId));
+  const evaluation = reconstructBenchEvaluation(cell, active, bundle);
   const observed = { problems: bundle.problems, ...(bundle.recordedFailure ? { cause: bundle.recordedFailure.message } : {}) };
   const persisted = await persistEvaluation(directory, cell, evaluation, observed);
   return { ...persisted, bundle };
@@ -439,19 +436,16 @@ async function validatedBundle(options: ResumableRunBenchOptions, manifest: Camp
   return bundle;
 }
 
-function reconstructBenchEvaluation(cell: CampaignPlanCell, active: ActiveCampaignAttempt, bundle: Awaited<ReturnType<typeof readRunBundle>>, bundlePath: string): RunEvaluation {
+/**
+ * The evaluation a finalized bundle reconstructs. Every executable cell is on the recording lane: a new plan skips each Flow-lane
+ * cell as retired, and a campaign saved before t553 planned some as executable, so its resume is refused at the plan comparison
+ * ("Campaign plan does not match the current corpus and manifests") before any of its cells is reconciled here.
+ */
+function reconstructBenchEvaluation(cell: CampaignPlanCell, active: ActiveCampaignAttempt, bundle: Awaited<ReturnType<typeof readRunBundle>>): RunEvaluation {
   const source = bundle.evaluation;
   if (!source || !bundle.manifest) throw new Error("Cannot reconstruct an evaluation from an incomplete finalized bundle");
-  const identity = evaluationIdentity(cell);
   const result = { runId: active.runId, verdict: source.verdict === "passed" ? "passed" as const : "failed" as const, ...(source.failureCategory ? { failureCategory: source.failureCategory } : {}) };
-  const observed = { ...identity, facilityFailure: source.facilityFailure, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs: source.durationMs };
-  if (cell.lane === "recording") return evaluateRecordingRun(observed);
-  const evaluation = evaluateFlowRun({ ...observed, result: { ...result, path: bundlePath, observation: { lane: "flow", flowCreated: source.flowCreated === true, oracleVerdict: source.oracleVerdict, reportedVerdict: source.reportedVerdict, automationFailureReported: source.automationFailureReported, automationFailureExpected: source.automationFailureExpected, harnessActivations: source.harnessActivations, actions: source.actions, extraction: source.extraction } } });
-  // The finalized bundle records this hand-off as an invariant, not a
-  // RunScenarioResult field. Preserve its validated evidence when rebuilding
-  // the benchmark evaluation rather than parsing the invariant's sentence.
-  const stop = source.invariants.find((invariant) => invariant.id === PERMISSION_STOP_INVARIANT && !invariant.passed);
-  return stop ? { ...evaluation, verdict: "failed", failureCategory: evaluation.failureCategory ?? "runtime.behavior", invariants: [...evaluation.invariants.filter((invariant) => invariant.id !== PERMISSION_STOP_INVARIANT), structuredClone(stop)] } : evaluation;
+  return evaluateRecordingRun({ ...evaluationIdentity(cell), facilityFailure: source.facilityFailure, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs: source.durationMs });
 }
 
 async function persistEvaluation(directory: string, cell: CampaignPlanCell, evaluation: RunEvaluation, observed: { problems: string[]; cause?: string }): Promise<Omit<AcceptedCell, "bundle">> {
@@ -474,7 +468,7 @@ async function publishCampaignProjections(manifest: CampaignManifest, directory:
   const finishedAt = new Date().toISOString();
   const file: BenchRunsFile = {
     schemaVersion: "0.1", benchId: manifest.benchId, corpusId: manifest.request.corpusId, repeatCount: manifest.request.repeatCount, target: manifest.request.target.mode, lanes: uniqueLanes(manifest.plan),
-    startedAt: manifest.createdAt, finishedAt, sources: RECORDING_LANE_SOURCES, ...(manifest.plan.some((cell) => cell.skipReason === null && cell.lane === "flow") ? { flowSources: FLOW_LANE_SOURCES } : {}),
+    startedAt: manifest.createdAt, finishedAt, sources: RECORDING_LANE_SOURCES,
     runs: manifest.plan.map((cell): BenchRunRecord => cell.skipReason === null ? requireAccepted(accepted, cell).record : { ...identityOf(cell), repeatIndex: cell.repeatIndex, status: "skipped", skipReason: cell.skipReason }),
   };
   const results = groupBenchResults(evaluated);
@@ -494,7 +488,6 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   const started = Date.now();
   let result: RunScenarioResult;
   try {
-    assertRunnableLane(entry);
     result = await options.runScenario({
       repositoryRoot: options.repositoryRoot,
       fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
@@ -507,7 +500,7 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
     });
   } catch (error) {
     const facilityFailure = caughtFacilityFailure(error);
-    const evaluation = evaluateFailedAttempt({ ...identity, lane: entry.lane, attemptId: attempt.attemptId, error, facilityFailure, wallClockMs: Date.now() - started });
+    const evaluation = evaluateFailedAttempt({ ...identity, attemptId: attempt.attemptId, error, facilityFailure, wallClockMs: Date.now() - started });
     return recordRun(attempt, evaluation, { problems: [] });
   }
   const wallClockMs = Date.now() - started;
@@ -517,7 +510,7 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   const bundle = await readRunBundle(result.path, result.failureCategory);
   problems.push(...bundle.problems);
   const observed = { ...identity, facilityFailure: bundle.evaluation?.facilityFailure ?? null, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs };
-  const evaluation = entry.lane === "flow" ? evaluateFlowRun(observed) : evaluateRecordingRun(observed);
+  const evaluation = evaluateRecordingRun(observed);
   // The run's own `error` event is the only place the message behind a failed
   // run exists; the runner's result carries a category and no text.
   return recordRun(attempt, evaluation, { problems, ...(bundle.recordedFailure ? { cause: bundle.recordedFailure.message } : {}) });
@@ -540,7 +533,7 @@ async function recordRun(attempt: Attempt, evaluation: RunEvaluation, observed: 
 }
 
 function validateBenchRequest(options: Pick<RunBenchOptions, "target" | "repeatCount">): void {
-  if (options.target.mode !== "isolated" && options.target.mode !== "persistent-isolated") throw new Error(`bench runs the recording and Flow lanes on isolated or persistent-isolated targets; a ${options.target.mode} target runs a pre-existing Flow instead of one built from the run's own recording`);
+  if (options.target.mode !== "isolated" && options.target.mode !== "persistent-isolated") throw new Error(`bench runs the recording lane on isolated or persistent-isolated targets; a ${options.target.mode} target runs a pre-existing Flow on no evaluation lane`);
   if (!Number.isSafeInteger(options.repeatCount) || options.repeatCount < 1 || options.repeatCount > MAX_REPEAT) throw new Error(`--repeat must be between 1 and ${MAX_REPEAT}`);
 }
 
@@ -582,15 +575,8 @@ function entryForCell(entries: readonly BenchPlanEntry[], cell: CampaignPlanCell
 function evaluationIdentity(cell: CampaignPlanCell): RunEvaluationIdentity { return { scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, repeatIndex: cell.repeatIndex, expectedFailure: cell.expectedFailure }; }
 function cellIdentity(cell: CampaignPlanCell) { return { corpusRowId: cell.corpusRowId, scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, lane: cell.lane, repeatIndex: cell.repeatIndex }; }
 
-/**
- * Only the recording lane runs. The Flow lane built its Flow from the run's own recording, which t519 retired, so a Flow-lane
- * result is refused before the runner is asked and recorded as that refusal; it is never run as a recording and then judged as
- * a Flow. The recording lane arms no variant, so no variant reaches the runner.
- */
-function assertRunnableLane(entry: Pick<BenchPlanEntry, "lane">): void { if (entry.lane === "flow") refuseRecordingOnlyFlow(); }
-
+/** The recording lane arms no variant, so a cell's runner options name its scenario and workflow and never a variant. */
 function scenarioOptions(options: ResumableRunBenchOptions, manifest: CampaignManifest, cell: CampaignPlanCell, entry: BenchPlanEntry, active: ActiveCampaignAttempt): RunScenarioOptions {
-  assertRunnableLane(entry);
   return {
     repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: options.runsDirectory,
     scenarioId: entry.scenarioId, ...(entry.workflowId === null ? {} : { workflowId: entry.workflowId }),

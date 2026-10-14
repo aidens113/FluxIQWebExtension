@@ -10,13 +10,12 @@ import type { ScenarioStep } from "../scenario.js";
  * extraction definition is one read, and the Lab's `extract` step is one
  * step. So a step that declares `pagination` can no longer be recorded as
  * what it is. Recording it anyway stores a one-page read where the workflow
- * reads every page, which is the mis-recording this check exists to refuse:
- *
- * - the recording lane does not run such a workflow, and its extraction intent
- *   refuses the step rather than send a one-page definition
- *   (`packages/test-runner/src/scenario-steps/extract-intent.ts`);
- * - the Flow lane, which builds its Flow from that recording, does not run it
- *   either (`flowLaneExclusion`).
+ * reads every page, which is the mis-recording this check exists to refuse.
+ * The recording lane does not run such a workflow: the bench plans it skipped
+ * with this reason (`packages/test-runner/src/bench/expand-corpus.ts`), and
+ * the step's extraction intent refuses it rather than send a one-page
+ * definition (`packages/test-runner/src/scenario-steps/extract-intent.ts`).
+ * The Flow lane that built its Flow from that recording is retired (t519).
  *
  * The created-Flow lane is not affected: there the model builds the loop from
  * the task's words, and the step's `pagination` stays as the reference

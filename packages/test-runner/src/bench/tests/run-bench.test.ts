@@ -555,7 +555,7 @@ test("a corpus that declares the Flow lane runs only its recording lane, and lis
     assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.skipped, outcome.passed], ["passed", 3, 3, 6, 3]);
     const runs = await readRuns(outcome.directory);
     assert.deepEqual(runs.lanes, ["recording", "flow"]);
-    assert.equal(runs.flowSources, undefined, "no Flow-lane run is planned, so no Flow-lane sources are claimed");
+    assert.equal("flowSources" in runs, false, "no Flow-lane run is planned, so no Flow-lane sources are claimed");
     assert.deepEqual(runs.runs.filter((run) => run.status === "skipped").map((run) => [run.corpusRowId, run.lane, run.variantId, run.skipReason === FLOW_LANE_RETIRED ? "retired" : run.skipReason?.slice(0, 11)]), [
       ["W01", "flow", null, "retired"], ["W02", "flow", null, "retired"], ["W28", "flow", null, "retired"], ["W28", "flow", "drift", "retired"], ["W99", "recording", null, "unresolved:"], ["W99", "flow", null, "unresolved:"],
     ]);
@@ -578,7 +578,7 @@ test("the same corpus without the Flow lane skips its variants, and smoke's plan
     assert.deepEqual([outcome.results, outcome.runs, outcome.skipped], [3, 3, 2]);
     const runs = await readRuns(outcome.directory);
     assert.deepEqual(runs.lanes, ["recording"]);
-    assert.equal(runs.flowSources, undefined);
+    assert.equal("flowSources" in runs, false);
     assert.equal(runs.runs.find((run) => run.variantId === "drift")?.skipReason, FLOW_LANE_RETIRED);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -628,7 +628,7 @@ test("refuses a target that runs a pre-existing Flow before running anything", a
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
   try {
     const calls: string[] = [];
-    await assert.rejects(runBench(options(root, { target: { mode: "existing" } as unknown as RunBenchOptions["target"], runScenario: fakeRunner(calls) })), /recording and Flow lanes on isolated or persistent-isolated targets/);
+    await assert.rejects(runBench(options(root, { target: { mode: "existing" } as unknown as RunBenchOptions["target"], runScenario: fakeRunner(calls) })), /bench runs the recording lane on isolated or persistent-isolated targets/);
     assert.deepEqual(calls, []);
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadScenarioManifests } from "../../scenarios.js";
-import { benchCorpora, findBenchCorpus, smokeCorpus, week1Corpus } from "../corpus/index.js";
+import { RunnerFailure } from "../../failure.js";
+import { benchCorpora, findBenchCorpus, RETIRED_BENCH_CORPORA, smokeCorpus, week1Corpus } from "../corpus/index.js";
 import { expandCorpus, FLOW_LANE_RETIRED, type BenchPlanEntry } from "../expand-corpus.js";
 
 // dist/bench/tests -> repository root, independent of the working directory.
@@ -51,9 +52,22 @@ test("week1 lists W01 to W29 once each, in order; smoke is basic-form and one mo
     assert.deepEqual(row, week1Corpus.rows.find((candidate) => candidate.id === row.id));
     assert.deepEqual([row.unarmed, row.variantIds], [true, []]);
   }
-  assert.deepEqual(benchCorpora.map((corpus) => corpus.id), ["week1", "smoke", "week2"]);
+  assert.deepEqual(benchCorpora.map((corpus) => corpus.id), ["week1", "smoke"]);
   assert.equal(findBenchCorpus("smoke"), smokeCorpus);
-  assert.throws(() => findBenchCorpus("week3"), /Unknown bench corpus: week3\. Known corpora: week1, smoke, week2/);
+  assert.throws(() => findBenchCorpus("week3"), /Unknown bench corpus: week3\. Known corpora: week1, smoke$/);
+});
+
+// week2 ran only on the retired Flow lane, so from t553 it ran nothing, and t559 retired it. A command line or a saved
+// campaign that still names it is told why, not that the corpus is unknown.
+test("the retired week2 corpus is refused with why, as fixture.invalid, and is never offered as a known corpus", () => {
+  assert.deepEqual(Object.keys(RETIRED_BENCH_CORPORA), ["week2"]);
+  assert.throws(() => findBenchCorpus("week2"), (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid"
+    && /^Bench corpus week2 is retired: it measured adaptation drifts on the Flow lane alone, which ran a Flow built from the run's own recording; recording-only Flow creation is retired, so it could run nothing\./u.test(error.message)
+    && /--llm-task create-flow --instruction-task <task>/u.test(error.message)
+    && /Known corpora: week1, smoke$/u.test(error.message)
+    && error.details?.retiredCorpus === "week2");
+  // An inherited property name is an unknown corpus, never a retired one.
+  assert.throws(() => findBenchCorpus("toString"), /Unknown bench corpus: toString\./u);
 });
 
 test("every week1 row resolves through resolveScenarioWorkflow against the built registry, apart from the named pending variants", async (t) => {

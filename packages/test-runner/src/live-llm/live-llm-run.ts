@@ -238,17 +238,6 @@ export class LiveLlmRun {
   }
 
   /**
-   * Whether the intent this run's Flow runs with lets Core propose a repair
-   * and never apply it: `diagnose_and_adapt`, whose target override is a
-   * proposal and whose failed action is not retried. Such a run cannot end the
-   * way a repaired one would, so a scenario may hold it to what it declares
-   * instead.
-   */
-  get proposesRepairOnly(): boolean {
-    return this.repairPurpose === "diagnose_and_adapt";
-  }
-
-  /**
    * Whether this run repairs a Flow that failed, and so whether the repair it
    * produced can be approved, applied and replayed: `adapt`, which proposes one
    * target override, `repair`, which explores first and whose patch Core may

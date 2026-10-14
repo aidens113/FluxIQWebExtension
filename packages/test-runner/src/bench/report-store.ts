@@ -57,10 +57,11 @@ export type BenchRunsFile = {
   lanes: readonly EvaluationLane[];
   startedAt: string;
   finishedAt?: string;
-  /** Recording-lane measurement sources. */
+  /**
+   * Recording-lane measurement sources, the only lane a bench runs. A `runs.json` written before the Flow lane was retired
+   * may also hold `flowSources`; nothing reads it now.
+   */
   sources: Readonly<Record<string, string>>;
-  /** Flow-lane measurement sources; present exactly when the bench planned a Flow-lane run. */
-  flowSources?: Readonly<Record<string, string>>;
   runs: BenchRunRecord[];
 };
 

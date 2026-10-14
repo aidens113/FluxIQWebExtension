@@ -4,8 +4,7 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import { parseRunEvaluationJson, type RunEvaluation, type RunHarnessRecovery, type RunManifest } from "@fluxiq-web-extension/test-contracts";
-import { evaluateFlowRun } from "../../bench/index.js";
+import { parseRunEvaluationJson, type RunHarnessRecovery, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { flowLaneObservation, recordingLaneObservation } from "../../flow-lane/index.js";
 import { singleRunEvaluation, type SingleRunInput } from "../single-run-evaluation.js";
 
@@ -147,15 +146,6 @@ const createdFlow = flowLaneObservation({
   run: { runId: "core-run.1", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, resultVerification: "confirmed", extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(), route: null, actions: [{ actionType: "web.dom.click", nodeId: "node-1", attemptIndex: 0, status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }] },
 });
 
-/** The same run as the bench's Flow lane evaluates it, from the finalized bundle at `bundlePath`. `input()` closes on its `final` event, sequence 17. */
-function benchRowOf(run: SingleRunInput, bundlePath: string): RunEvaluation {
-  return evaluateFlowRun({
-    scenarioId: run.scenarioId, workflowId: run.workflowId ?? null, variantId: run.variantId ?? null, repeatIndex: run.repeatIndex ?? 0, expectedFailure: run.observation.automationFailureExpected,
-    result: { runId: run.runId, verdict: run.verdict, ...(run.failureCategory === undefined ? {} : { failureCategory: run.failureCategory }), path: bundlePath, observation: run.observation },
-    facilityFailure: run.facilityFailure, manifest: run.manifest, metrics: run.metrics, finalSequence: 17, errorSequence: undefined, wallClockMs: run.wallClockMs,
-  });
-}
-
 test("a finalized facility diagnostic survives serialization, while invalid pass pairing is rejected", () => {
   const facilityFailure = {
     boundary: "finalized-bundle", stage: "scenario.execute", reason: "readiness.timeout",
@@ -171,19 +161,14 @@ test("a finalized facility diagnostic survives serialization, while invalid pass
   assert.throws(() => singleRunEvaluation(input({ facilityFailure })), /facilityFailure/u);
 });
 
-test("a Flow-lane single run records the packets its bundle measured, and agrees with its bench row field for field", (t) => {
+// The bench's Flow-lane row, which this once had to agree with field for field, is retired with the recorded-Flow bench
+// lane (t559); a created Flow's single run is the only Flow-lane evaluation left.
+test("a Flow-lane single run records the packets its bundle measured, and the recovery its lane observed", (t) => {
   const bundlePath = bundleWith(t, TWO_PACKETS);
-  const run = input({ observation: createdFlow, bundlePath });
-  const evaluation = singleRunEvaluation(run);
+  const evaluation = singleRunEvaluation(input({ observation: createdFlow, bundlePath }));
   assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
   assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
-  // Until this read existed, `evaluation.json` recorded no packets for the run
-  // whose bench row recorded two. One file, one judgement.
-  const benchRow = benchRowOf(run, bundlePath);
-  // Whole evaluations, recovery included: the bench's Flow lane copies
-  // `harnessRecovery` like every other observed member.
   assert.deepEqual(evaluation.harnessRecovery, NO_RECOVERY);
-  assert.deepEqual(evaluation, benchRow);
 });
 
 test("a recording-lane single run reads no evidence sizes, even from a directory holding Flow-lane packets", (t) => {
