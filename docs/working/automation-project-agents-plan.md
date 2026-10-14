@@ -541,6 +541,15 @@ build does today until A5 lands and the mode is chosen.
   test-contracts checks; `pnpm structure:check` (lower the baseline if entries go). No live run, and no CLI probe that
   could reach a provider.
 
+### Brief: W8-lab-orphaned-repair-code
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: remove what t559 left orphaned (`reports/t559-w7-bench.md`): `apps/scenario-lab` identity-drift `repair.ts`
+  with no caller, the dead `declaredRepair` input of `gate.ts`, and the six stale comments the report lists. Never
+  extract-and-drop; keep every refusal a person can still meet.
+- Owns: those files and their tests; report. Must not touch: Core files; `apps/extension/**`; `domain/**`.
+- Definition of done: tests beside each change and every test reading the changed sources; scenario-lab and
+  test-runner checks; `pnpm structure:check` (lower the baseline if entries go). No live run or provider probe.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
