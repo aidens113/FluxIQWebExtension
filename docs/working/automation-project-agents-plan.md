@@ -314,6 +314,16 @@ dollar ceiling is the user's limit; the call cap only stops a runaway loop, and 
 builds at about a third of their dollars, because a supervisor and its builders make many small calls. Both modes
 get the same cap, so the comparison stays fair.
 
+**Comparison on one frozen pair** (downstream `24dacba5`, Core `9b4c5a38`; docs-only commits after): round one is
+launch 8 above; round two runs `candidate` on the same lanes before any further code merges.
+
+| Task | `project` (launch 8) | `candidate` (round two) |
+| --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | passed, $0.029 | running |
+| bigbox-retail-pickup-cart | passed, $0.037 | running |
+| social-network-feed-confirm-requests | failed, $0.103 | after its debug |
+| everything-store-plus-earbuds-under-50 | failed, $0.130 | after its debug |
+
 **Attempts** (each debugged in `language-driven-flow-loop-plan/debugs/<runId>.md` before the next launch):
 
 | Launch | Pair (Core) | Runs | Outcome | Fix |
@@ -325,6 +335,7 @@ get the same cap, so the comparison stays fair.
 | 5, `project` | `048a1d91`, 250 calls | run-mv816jbn (crossborder $0.003), run-mv8186yr (bigbox $0.094), run-mv819so1 (social $0.003), run-mv81b25e (everything-store $0.003) | first try refused before any call (the Lab took at most 64 calls; t576); then three builds' briefs were sized 77-117 turns and every builder refused its own configuration (loop takes 64); bigbox's builders ran, but no subflow trial could pass (stale trial tab, dependents started early, no honest builder ending) | t577 turns capped at the loop's 64; Core t578-t582 from the bigbox debug |
 | 6, `project` | `2db229e9`, 250 calls | run-mv85un8j (crossborder $0.028), run-mv85vjqo (bigbox $0.031), run-mv85xmgq (social $0.040), run-mv85zf4i (everything-store $0.004) | crossborder built a Flow that passed its judged whole run (the first in mode `project`), then Core refused its settings (a 64-call cap); bigbox passed two of three subflows (prepared entry not "arrived"); social could not reset a confirmed request (whole test skips the start hook); everything-store's submit tool description overran its limit | t583, t584 merged; t585-t589 |
 | 7, `project` | `6a81a391`, 250 calls | run-mv8c76i3 (crossborder $0.036), run-mv8c7unr (bigbox $0.112), run-mv8cam5t (social $0.056), run-mv8cbm4y (everything-store $0.074) | social's whole test passed and it was adding the rate-limit branch when the Lab's 795 s chat deadline ended it, as it ended bigbox and everything-store; bigbox's whole test ran on a stale page (no shared phase start) and eight repairs changed nothing; crossborder's first builder did the second part's act unrecorded | t592-t596 |
+| 8, `project` | `9b4c5a38`, 250 calls | run-mv8i8r0u (crossborder $0.029), run-mv8i94yu (bigbox $0.037), run-mv8ic6mk (social $0.103), run-mv8id5vg (everything-store $0.130) | **crossborder and bigbox passed end to end** (Flow created, oracle passed); social's second subflow never built; everything-store's builder came back partial and its repair was stopped by the build bound | debugs in flight; t598 held to keep the pair frozen |
 
 ## Units (this repository)
 
