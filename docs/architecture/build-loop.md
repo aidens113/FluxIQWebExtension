@@ -41,6 +41,13 @@ runner and start reset. Raw Core API requests that omit authoring mode retain
 legacy compatibility. The domain capabilities below serve both paths; draft
 retention details apply to legacy builds.
 
+Candidate trial helper execution uses Core's exact unapplied candidate-owned
+sibling graphs and normal child frames. Repeated/nested helper inputs and
+results remain scoped; child lasting acts, reads and step feedback are counted
+once for reset and judgement. A helper's authored failure alternatives keep
+that helper's own budget. A successful selected entry does not prove every
+alternative start or automatic decomposition quality.
+
 Candidate checks distinguish a wrong result from an affirmative judge whose
 exclusion explanation lacks required evidence. Core can re-ask that judge for
 precise row-local name/quotation proof under the existing ask and spend bounds,
