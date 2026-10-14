@@ -18,8 +18,8 @@ import { runLane } from "./lane-harness.js";
 
 const DIGEST = "c".repeat(64);
 const SESSIONS = [
-  { runId: "trial.one", flowId: FLOW_ID, queuedAt: 10, status: "failed", metadata: { candidateTrial: { candidateId: "candidate.lab", revision: 1, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout" } } },
-  { runId: "trial.two", flowId: FLOW_ID, queuedAt: 20, status: "succeeded", metadata: { candidateTrial: { candidateId: "candidate.lab", revision: 2, digest: DIGEST, start: "reset", execution: "succeeded" } } },
+  { runId: "trial.one", flowId: FLOW_ID, queuedAt: 10, status: "failed", candidateTrial: { candidateId: "candidate.lab", revision: 1, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout" } },
+  { runId: "trial.two", flowId: FLOW_ID, queuedAt: 20, status: "succeeded", candidateTrial: { candidateId: "candidate.lab", revision: 2, digest: DIGEST, start: "reset", execution: "succeeded" } },
 ];
 const draft = (trial: Record<string, unknown>) => ({ status: "draft", projectId: PROJECT_ID, flowId: FLOW_ID, candidateId: "candidate.lab", revision: 2, digest: DIGEST, sourceInstructionIds: ["instruction.one"], baseDependencyDigest: "base", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "request.one", estimatedInputTokens: 10, provider: "deepseek", estimatedCostUsd: 0.03 }, trial });
 const candidateCore = (options: FakeCreationCoreOptions = {}) => fakeCreationCore({ candidateReadiness: { startReset: true }, runtimeSessions: SESSIONS, ...options });
@@ -87,7 +87,7 @@ test("a candidate-mode proposal that names no tested candidate is never applied 
 // checked against the oracle.
 const ROUND_6_SESSIONS = [1, 2, 3, 4].map((trial) => ({
   runId: `trial.${trial}`, flowId: FLOW_ID, queuedAt: trial * 10, status: trial === 4 ? "succeeded" : "failed",
-  metadata: { candidateTrial: { candidateId: "candidate.round6", revision: Math.max(2, trial), digest: DIGEST, start: "reset", execution: trial === 4 ? "succeeded" : "failed", ...(trial === 4 ? {} : { code: "web.action.timeout" }) } },
+  candidateTrial: { candidateId: "candidate.round6", revision: Math.max(2, trial), digest: DIGEST, start: "reset", execution: trial === 4 ? "succeeded" : "failed", ...(trial === 4 ? {} : { code: "web.action.timeout" }) },
 }));
 const ROUND_6_PROMOTION = { candidateId: "candidate.round6", revision: 4, digest: DIGEST, trial: { runId: "trial.4", verdict: "yes", calls: 2, start: "reset" }, trials: 4 };
 const round6Core = (options: FakeCreationCoreOptions = {}) => chatCore({ candidateReadiness: { startReset: true }, evidenceLoop: null, candidateTrial: ROUND_6_PROMOTION, runtimeSessions: ROUND_6_SESSIONS, ...options });
@@ -135,9 +135,9 @@ test("a promoted candidate the Lab built directly, with its trial audit and no e
 // Every trial of a promoted candidate other than the one that promoted it was rejected, and says so.
 test("a promoted candidate records every trial it did not promote with a definite verdict and its reason", async () => {
   const sessions = [
-    { runId: "trial.ran", flowId: FLOW_ID, queuedAt: 10, status: "succeeded", metadata: { candidateTrial: { candidateId: "candidate.round6", revision: 2, digest: DIGEST, start: "reset", execution: "succeeded" } } },
-    { runId: "trial.cancelled", flowId: FLOW_ID, queuedAt: 20, status: "cancelled", metadata: { candidateTrial: { candidateId: "candidate.round6", revision: 3, digest: DIGEST, start: "reset", execution: "cancelled" } } },
-    { runId: "trial.unwritten", flowId: FLOW_ID, queuedAt: 30, status: "running", metadata: { candidateTrial: { candidateId: "candidate.round6", revision: 3, digest: DIGEST, start: "reset" } } },
+    { runId: "trial.ran", flowId: FLOW_ID, queuedAt: 10, status: "succeeded", candidateTrial: { candidateId: "candidate.round6", revision: 2, digest: DIGEST, start: "reset", execution: "succeeded" } },
+    { runId: "trial.cancelled", flowId: FLOW_ID, queuedAt: 20, status: "cancelled", candidateTrial: { candidateId: "candidate.round6", revision: 3, digest: DIGEST, start: "reset", execution: "cancelled" } },
+    { runId: "trial.unwritten", flowId: FLOW_ID, queuedAt: 30, status: "running", candidateTrial: { candidateId: "candidate.round6", revision: 3, digest: DIGEST, start: "reset" } },
     ROUND_6_SESSIONS[3]!,
   ];
   const { core, entry } = round6Core({ runtimeSessions: sessions });

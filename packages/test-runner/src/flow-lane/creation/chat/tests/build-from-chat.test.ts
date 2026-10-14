@@ -47,7 +47,7 @@ type FakeChatOptions = {
 const CANDIDATE_ID = "candidate.chat";
 const DRAFT_TEMPLATE: AutomationStudioCandidateAuthoringResult = { status: "draft", projectId: PROJECT, flowId: FLOW, candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), sourceInstructionIds: ["instruction.one"], baseDependencyDigest: "base", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "request.one", estimatedInputTokens: 10 } };
 const CANDIDATE_SCOPE = { ...SCOPE, authoringMode: "candidate" as const, candidateTrial: { trialRunner: true, startReset: true, fixtureResetBetweenTrials: true, source: "core" as const } };
-const trialSession = (runId: string, queuedAt: number, trial: Record<string, unknown>, flowId = FLOW) => ({ runId, flowId, queuedAt, status: "succeeded", flow: { nodes: [{ text: "page words never kept" }] }, metadata: { candidateTrial: { candidateId: CANDIDATE_ID, digest: "d".repeat(64), start: "reset", ...trial } } });
+const trialSession = (runId: string, queuedAt: number, trial: Record<string, unknown>, flowId = FLOW) => ({ runId, flowId, queuedAt, status: "succeeded", flow: { nodes: [{ text: "page words never kept" }] }, candidateTrial: { candidateId: CANDIDATE_ID, digest: "d".repeat(64), start: "reset", ...trial } });
 
 function fakeChat(options: FakeChatOptions) {
   const turns: Turn[] = [];

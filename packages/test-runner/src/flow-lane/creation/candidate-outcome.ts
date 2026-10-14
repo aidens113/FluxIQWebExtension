@@ -10,8 +10,12 @@
 // (`service/candidate-trial/promotion.ts`); anything else stays a draft that is
 // never applied, with the verdict and Core's codes.
 //
-// Everything here is identifiers, counts and closed codes. A trial session's
-// Flow document, trace and page evidence are read past, never kept.
+// Everything here is identifiers, counts and closed codes. The trials are read
+// from Core's runtime session listing, asked for this Flow and this candidate
+// only and followed page by page: since t604 a listing answers bounded
+// summaries, whose `candidateTrial` carries the trial's closed fields, and a
+// session's Flow document, trace and page evidence are never sent. Listing a
+// whole project once outgrew what Core could send (`run-mv8mf0x5-95071c06`).
 //
 // A draft is a product outcome, not a facility one: the build ran, the model's
 // candidate was tested and was not good enough, so the lane fails it as
@@ -89,6 +93,9 @@ export type CreatedFlowCandidateOutcome = Readonly<{
 
 type CandidateControl = { automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> };
 
+/** Core's most summaries per page, and how many pages one candidate's trials are followed through. */
+const TRIAL_PAGE_LIMIT = 100;
+const TRIAL_PAGES = 20;
 const VERDICTS: readonly AutomationStudioCandidateTrialOutcomeVerdict[] = ["yes", "no", "unsure", "not_judged", "execution_failed", "not_tested"];
 const CODE = /^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/u;
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/u;
@@ -207,13 +214,25 @@ function chatDraftVerdict(said: string | null): { verdict: CreatedFlowCandidateO
   return { verdict: "unknown", codes: [] };
 }
 
-/** Every trial session of `candidateId` on this Flow, from Core's runtime sessions; `null` when Core answered no list. A read that fails, fails. */
+/**
+ * Every trial session of `candidateId` on this Flow, from Core's runtime session summaries; `null` when Core answered
+ * no list. Core filters by Flow and candidate and pages by cursor; each summary is checked here again, so a Core that
+ * ignored a filter adds nothing. A read that fails, fails.
+ */
 async function readCandidateTrials(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string): Promise<readonly CreatedFlowCandidateTrialRun[] | null> {
-  const answer = await control.automationStudioCall("list-runtime-sessions", { projectId: subject.projectId });
-  const sessions = field(answer, "runtimeSessions");
-  if (!Array.isArray(sessions)) return null;
+  const sessions: unknown[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < TRIAL_PAGES; page += 1) {
+    const answer = await control.automationStudioCall("list-runtime-sessions", { projectId: subject.projectId, flowId: subject.flowId, candidateId, limit: TRIAL_PAGE_LIMIT, ...(cursor ? { cursor } : {}) });
+    const listed = field(answer, "runtimeSessions");
+    if (!Array.isArray(listed)) return null;
+    sessions.push(...listed);
+    const next = field(field(answer, "page"), "nextCursor");
+    if (typeof next !== "string" || next.length === 0 || next === cursor) break;
+    cursor = next;
+  }
   const trials = sessions.flatMap((session) => {
-    const trial = field(field(session, "metadata"), "candidateTrial"), runId = identifier(field(session, "runId"));
+    const trial = field(session, "candidateTrial"), runId = identifier(field(session, "runId"));
     if (runId === null || field(session, "flowId") !== subject.flowId || field(trial, "candidateId") !== candidateId) return [];
     const queuedAt = field(session, "queuedAt");
     return [{ queuedAt: typeof queuedAt === "number" ? queuedAt : 0, trial: Object.freeze({ runId, revision: whole(field(trial, "revision")), digest: identifier(field(trial, "digest")), start: code(field(trial, "start")), execution: code(field(trial, "execution")), code: code(field(trial, "code")), verdict: null, reason: null }) }];

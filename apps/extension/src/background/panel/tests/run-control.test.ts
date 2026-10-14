@@ -54,7 +54,7 @@ test("with no run named, every run of the project that has not ended is stopped,
   const reply = await stopRun({}, c.value);
 
   assert.deepEqual(c.calls, [
-    { endpoint: "list-runtime-sessions", payload: { projectId: "project-1", summaries: true, limit: 25 } },
+    { endpoint: "list-runtime-sessions", payload: { projectId: "project-1", summaries: true, statuses: ["queued", "running", "waiting", "interrupted"], limit: 25 } },
     { endpoint: "cancel-runtime-session", payload: { projectId: "project-1", runId: "run-a", reason } },
     { endpoint: "cancel-runtime-session", payload: { projectId: "project-1", runId: "run-c", reason } },
     { endpoint: "cancel-runtime-session", payload: { projectId: "project-1", runId: "run-e", reason } }
