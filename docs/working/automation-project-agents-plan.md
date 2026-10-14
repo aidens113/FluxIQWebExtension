@@ -480,6 +480,28 @@ build does today until A5 lands and the mode is chosen.
   of a project build fixture, per-role spend from a step-log fixture with two briefs, the CLI flag; test-runner
   check and the tests beside each file; `pnpm structure:check`. No live run.
 
+### Brief: W5-live-adapt-launch
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: unit W5. t519 (`4ee4e65c`) retired bare `--flow`, but `packages/test-runner/src/live-llm/live-llm-plan.ts:240`
+  still tells a live `diagnose`, `repair` or `adapt` run to pass it, so those runs have no reachable launch on
+  `lab run` (found by t548; see `reports/t548-test-runner-sweep.md`). First establish what the adaptation gate
+  actually runs today (`docs/working/adaptation-and-breadth-plan.md` Current State; the instruction-created gate
+  command in `mvp-final-month-plan/reports/codex-continuation-live-readiness.md:99-110`): if the gate creates the
+  Flow in the same run (`--llm-task create-flow` with an `-after-creation` task) and repairs it in-run, say so and
+  whether a separate diagnose/repair/adapt launch is still needed. Then either give `diagnose`, `repair` and `adapt`
+  an instruction-led launch (a saved Flow named by the run's workspace and its written instructions, never a
+  recording-only Flow), or retire them cleanly with a refusal that names the supported path. Remove the dead
+  "drop --flow" checks (`commands.ts:274`, `live-llm-plan.ts:237`), `flowLaneExclusion` and the never-assigned
+  `discardWindowUntil`; stop `bench/run-bench.ts:505,591` passing `flow: true`; correct
+  `docs/architecture/testing-facility.md:2521`.
+- Required reads: the files named above; `docs/architecture/testing-facility.md` (live-run and lane sections).
+- Owns: `packages/test-runner/src/live-llm/`, `packages/test-runner/src/commands.ts`, `packages/test-runner/src/bench/run-bench.ts`,
+  the files holding `flowLaneExclusion` and `discardWindowUntil`, their tests; `docs/architecture/testing-facility.md`;
+  `docs/working/automation-project-agents-plan/reports/<your label>.md`.
+- Must not touch: Core files; `apps/extension/**`; `domain/**`; `packages/test-runner/src/flow-lane/**` (W4's,
+  merged; report if a change there is needed).
+- Definition of done: tests beside each changed file; test-runner check; `pnpm structure:check`. No live run.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
