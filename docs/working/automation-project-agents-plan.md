@@ -675,6 +675,13 @@ build does today until A5 lands and the mode is chosen.
 - Validation: t592: test-runner check -> 0 errors; chat tests + live-llm-plan -> pass 51, fail 0; audit passed; merged `60d4629e`. t596: domain llm-evidence -> tests 1105, pass 1105; element-fingerprint -> pass 13; domain tsc exit 0; audit passed; merged `889effd2`
 - Outcome: Accepted
 
+### 2026-10-14 — First full sweep of the day, both repositories
+- Agent: supervisor (background sweep in a throwaway task worktree, t598, abandoned after)
+- Changed: `domain/src/tests/domain.test.ts`: its recording carries a description (Core requires one since `18ee3f60`, 2026-10-13; the entry failed to load); `4142a836`
+- Why: about thirty merges today across both repositories; the twice-a-day sweep rule
+- Validation: Core `npx vitest run` (packages/fluxiq, dev `5ef45408`) -> Test Files 1253 passed, 3 skipped; Tests 11508 passed, 7 skipped. Downstream `pnpm -r --no-bail test` (dev `4142a836`) -> boundary-audit 6, real-site-policy 7, test-matrix 17, test-contracts 170, domain 2027, agent-orchestrator 16, test-evidence 19, scenario-lab 702, extension 3004, test-runner 2294 tests, fail 0 in each, none failed to load (the first run stopped at the domain entry above)
+- Outcome: Accepted; both repositories' full suites pass
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
