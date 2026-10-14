@@ -1,7 +1,7 @@
 # Automation Project Agents Plan
 
 Status: Active
-Status detail: Core units A1-A3 in progress (t533-t535); downstream W1 waits on A3. User decision 2026-10-13: concurrent in Core, the web domain declares one at a time.
+Status detail: W1, W2 and W3 delivered and pushed 2026-10-13 with Core A1-A4, A3b and A6; Core A5 in progress; A8 Lab comparison follows. User decision 2026-10-13: concurrent in Core, the web domain declares one at a time.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent
@@ -38,16 +38,9 @@ document owns the roles and contracts.
 - Creation still ends only on one judged whole-Flow run from the start;
   builder subflow trials are partial tests.
 
-**Done:** discovery (three read-only reports, 2026-10-13: Core build engine,
-extension build path and live evidence, prior plans); this plan and its Core
-pair. **Not done:** every unit. No source changed.
+**Done (2026-10-13, supervisor-verified, pushed):** discovery and this plan with its Core pair; W1 web host-resource port at capacity 1 with lease enforcement and the leased tab (t536, with Core A3b); W2 chat attribution and W3 Lab index columns (t539, with Core A6). Core A1-A4 and the shared contracts are delivered (Core document's ledger). Nothing is wired into a build yet, so builds behave as before.
 
-**Next, in order:** Core A1 (contracts and build record, ready now) with
-downstream W1 design in parallel; then Core A2/A3/A4 with W1 (lease and tab
-id) and W2 (chat attribution); then Core A5 (supervisor wiring, the single
-`service.ts` owner); then W3 (step log) and A8 (Lab comparison, paid, needs a
-live supervisor and a frozen pair). Interleaving with the Codex entry-case
-and held-topology units is in the Core document's `Units`.
+**Next, in order:** Core A5a supervisor loop and A5b dispatcher (in progress), Core A5c wiring with authoring mode `project`, then A8 Lab comparison (paid: a live supervisor and a frozen pair). Follow-ups recorded here: merge W1's copy of the session-picking rule with `domain/src/runtime/llm-evidence/tools.ts` `eligibleWebSessionIds`; the chat's fold modules (card-repeats, retried, done-again) group by unit, not brief, which only matters above capacity 1; a stand-in-gateway e2e spec for a stale holder's command (the content harness has no background worker); live side panel and popup rendering of the new cards.
 
 **Blocked:** nothing. Three decisions are the user's (Open Questions); each
 has a recommendation the plan already follows.
@@ -404,6 +397,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: not validated by tests (planning)
 - Outcome: Accepted
 - Follow-up: W1 after Core A3
+
+### 2026-10-13 — W1 web lease (t536) and W2/W3 chat attribution (t539)
+- Agent: workers t536-w1-web-lease, t539-w2-chat-attribution; supervisor verified and integrated
+- Changed: `domain/src/runtime/host-resources/`, `domain/src/client/host-lease.ts`, extension `background/connection/host-lease/`, leased tab; chat `shared/activity/project/`, `unit-history.ts`, `project-message.ts`, lanes by brief; `packages/test-runner/src/lab-runs/rewrite-steps-index.ts`
+- Why: units W1, W2, W3; full entries in the Core document's ledger (2026-10-13, t536 and t539)
+- Validation: see the Core entries; downstream observed domain tests 29 passed, extension 79 passed (W1), extension 536 passed and Lab index 2 passed (W2), all package checks and the structure audit passed
+- Outcome: Accepted
+- Follow-up: the Next list above
 
 ## Open Questions
 
