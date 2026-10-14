@@ -86,8 +86,8 @@ test("live LLM CLI lets an adaptation iterate: any call count up to Core's backs
     const command = parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", calls]);
     assert.equal(command.command === "run" ? command.llm?.budget.maxCallsPerRun : undefined, Number(calls));
   }
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "65"]), /maxCallsPerRun.*from 1 to 64/su);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "0"]), /maxCallsPerRun.*from 1 to 64/su);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "251"]), /maxCallsPerRun.*from 1 to 250/su);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "0"]), /maxCallsPerRun.*from 1 to 250/su);
 });
 
 test("live LLM CLI takes a run token budget only when one is typed", () => {
@@ -111,7 +111,7 @@ test("--llm-task repair is a live task with the same budget options as adapt", (
   assert.equal(command.command === "run" ? command.llm?.budget.maxTotalTokensPerRun : undefined, 600_000);
   // Not a small fixed cap: an iterating repair takes the operator's number, up to Core's backstop.
   assert.equal(parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "64"]).command === "run" ? 64 : 0, 64);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "65"]), /from 1 to 64/u);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "251"]), /from 1 to 250/u);
 });
 
 test("--replays applies and replays the repair, and only for the tasks whose Flow the model repairs", () => { const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
@@ -138,7 +138,7 @@ test("live LLM CLI rejects unsafe budgets, and every live matrix", () => {
   // were fixed numbers that the contract quietly grew past.
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-total-tokens", String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1)]), new RegExp(String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST)));
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-input-tokens", String(DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1)]), /must cover/);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "65"]), /from 1 to 64/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "251"]), /from 1 to 250/);
   // The contract bounds a declared cost by Core's largest configurable ceiling ($10); the plan then holds it to the ceiling Core resolved.
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", String(LLM_LAB_MAX_ESTIMATED_COST_USD + 0.01)]), new RegExp(`maxEstimatedCostUsd: must be a finite number from 0 to ${LLM_LAB_MAX_ESTIMATED_COST_USD}`, "u"));
   const lowerCost = parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.10"]);

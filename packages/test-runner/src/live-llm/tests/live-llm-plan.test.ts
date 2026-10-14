@@ -62,8 +62,8 @@ test("a diagnose profile plans exactly one authorized provider call, whatever ca
 });
 
 test("a diagnose profile still needs a cap of at least one, and no more than Core's backstop", () => {
-  assert.throws(() => planAtLabCeiling(profile({}, { maxCallsPerRun: 0 })), /--llm-max-calls 0 must be a whole number between 1 and 64/u);
-  assert.throws(() => planAtLabCeiling(profile({}, { maxCallsPerRun: 65 })), /--llm-max-calls 65 must be a whole number between 1 and 64/u);
+  assert.throws(() => planAtLabCeiling(profile({}, { maxCallsPerRun: 0 })), /--llm-max-calls 0 must be a whole number between 1 and 250/u);
+  assert.throws(() => planAtLabCeiling(profile({}, { maxCallsPerRun: 251 })), /--llm-max-calls 251 must be a whole number between 1 and 250/u);
 });
 
 test("an adapt profile iterates for the operator's call count, defaulting to Core's twenty-six", () => {
@@ -84,8 +84,8 @@ test("an adapt profile is never refused for asking for more than two calls", () 
 });
 
 test("an adapt call limit above Core's backstop or below one is refused, naming the option", () => {
-  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 65 })), /Live LLM execution refused: --llm-max-calls 65 must be a whole number between 1 and 64/u);
-  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 0 })), /--llm-max-calls 0 must be a whole number between 1 and 64/u);
+  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 251 })), /Live LLM execution refused: --llm-max-calls 251 must be a whole number between 1 and 250/u);
+  assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 0 })), /--llm-max-calls 0 must be a whole number between 1 and 250/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "adapt" }, { maxCallsPerRun: 2.5 })), /--llm-max-calls 2\.5 must be a whole number/u);
 });
 
@@ -101,7 +101,7 @@ test("repair plans the iterating explore_and_adapt intent, and adapt stays the n
   // It iterates, so the operator's own call count stands, as it does for adapt.
   assert.equal(repair.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
   assert.equal(planAtLabCeiling(profile({ task: "repair" }, { maxCallsPerRun: 40 })).maxCalls, 40);
-  assert.throws(() => planAtLabCeiling(profile({ task: "repair" }, { maxCallsPerRun: 65 })), /--llm-max-calls 65 must be a whole number between 1 and 64/u);
+  assert.throws(() => planAtLabCeiling(profile({ task: "repair" }, { maxCallsPerRun: 251 })), /--llm-max-calls 251 must be a whole number between 1 and 250/u);
   // The narrow intent is unchanged: `repair` is a new task, not a redefinition of `adapt`.
   assert.equal(planAtLabCeiling(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });

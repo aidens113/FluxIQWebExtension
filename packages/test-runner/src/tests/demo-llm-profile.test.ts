@@ -11,9 +11,9 @@ test("creation profiles default to the lab's iterating call count, not a fixed t
 
 test("creation profiles accept any call count up to the lab ceiling and reject one above it", () => {
   assert.equal(resolveDemoLlmCreationProfile(["--llm-max-calls", "3"]).budget.maxCallsPerRun, 3);
-  assert.equal(resolveDemoLlmCreationProfile(["--llm-max-calls", String(LLM_LAB_MAX_CALLS_PER_RUN)]).budget.maxCallsPerRun, 64);
+  assert.equal(resolveDemoLlmCreationProfile(["--llm-max-calls", String(LLM_LAB_MAX_CALLS_PER_RUN)]).budget.maxCallsPerRun, LLM_LAB_MAX_CALLS_PER_RUN);
   assert.throws(
-    () => resolveDemoLlmCreationProfile(["--llm-max-calls", "65"]),
+    () => resolveDemoLlmCreationProfile(["--llm-max-calls", String(LLM_LAB_MAX_CALLS_PER_RUN + 1)]),
     (error: unknown) => error instanceof Error && error.name === "ContractValidationError",
   );
 });
