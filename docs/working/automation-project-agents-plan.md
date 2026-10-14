@@ -698,6 +698,13 @@ build does today until A5 lands and the mode is chosen.
 - Validation: Core `npx vitest run` (packages/fluxiq, dev `5ef45408`) -> Test Files 1253 passed, 3 skipped; Tests 11508 passed, 7 skipped. Downstream `pnpm -r --no-bail test` (dev `4142a836`) -> boundary-audit 6, real-site-policy 7, test-matrix 17, test-contracts 170, domain 2027, agent-orchestrator 16, test-evidence 19, scenario-lab 702, extension 3004, test-runner 2294 tests, fail 0 in each, none failed to load (the first run stopped at the domain entry above)
 - Outcome: Accepted; both repositories' full suites pass
 
+### 2026-10-14 — A8 rounds one and two on one pair; the guard knows the mode (t600); replays wait for the verdict (t602)
+- Agent: supervisor (launch 8, round two, debugs); workers t600-guard-knows-authoring-mode, t602-replay-call-accounting, read-only debugs; supervisor verified and integrated
+- Changed: the A8 Run Plan's comparison table (launch 8 `project`, round two `candidate`, one pair); t600 ledger entries record the authoring mode and `unchanged` compares only same-mode runs; t602 both replay paths wait for Core's verdict through `packages/test-runner/src/flow-lane/replay/provider-free-replay-run.ts` before reading the call accounting
+- Why: round two's candidate social run was refused as an unchanged rerun of a project run; candidate social's correct Flow was failed because the Lab read the replay's accounting 0.4 s too early
+- Validation: launch 8 `project`: crossborder and bigbox passed (oracle passed), social and everything-store failed; round two `candidate`: crossborder and bigbox passed, social's Flow passed the oracle (accounting race), everything-store failed (shared judge defect); spend ledger. t600: live-guards tests -> pass 47; `pnpm lab:test` -> pass 212, fail 0; audit passed; merged `a14204a0`. t602: test-runner replay, saved-flow-replay, repair, flow-lane tests -> pass 494, fail 0; check clean; audit passed; merged `d665f3db`
+- Outcome: Accepted. `project` does not yet beat `candidate` on this pair; a fresh pair for both modes follows the fixes
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
