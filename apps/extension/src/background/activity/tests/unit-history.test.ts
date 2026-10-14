@@ -86,3 +86,58 @@ test("what the person asked the work is kept, though it is no row: the chat show
   assert.equal(history.accept(event("q", undefined, { phase: "building", label: "Building the Flow", request: "Switch my store to Millbrook." })), true);
   assert.equal(history.accept(event("q", undefined, { phase: "building", label: "Building the Flow", request: "   " })), false);
 });
+
+// A build with a project supervisor (automation-project-agents-plan, unit W2):
+// the build still working is kept whole and never dropped for newer units, and
+// the cards of the supervisor's work outlive a trim.
+
+const PLAN: Detail = {
+  kind: "note",
+  title: "Planned the work",
+  project: { kind: "plan", parts: [{ id: "p1", words: "Find the cheapest kettle" }], subflows: [{ key: "search", name: "Search", purpose: "Find the kettle", parts: ["p1"] }] }
+};
+const run = (unit: string, title: string): ClientGatewayActivity =>
+  event(unit, { kind: "step", title, status: "succeeded" }, { activityId: `run:${unit}`, subject: { kind: "run", id: unit, projectId: "p" } });
+
+test("a 1,500-event build in progress keeps every event and its plan card; once it ends it keeps the plan and the request past the bound", () => {
+  const history = new UnitHistory({ units: 10, eventsPerUnit: 500, buildEventsCeiling: 5_000 });
+  history.accept(event("big", undefined, { request: "Find me the cheapest kettle." }));
+  history.accept(event("big", PLAN));
+  for (let index = 1; index <= 1_500; index += 1) history.accept(event("big", { kind: "note", title: `n${index}` }, { agent: { role: "builder", briefId: "b1" } }));
+  let kept = history.events();
+  assert.equal(kept.length, 1_502, "every event of the build in progress");
+  assert.equal(kept[1]!.detail?.project?.kind, "plan");
+  history.accept(event("big", undefined, { phase: "done", final: true }));
+  kept = history.events();
+  assert.equal(kept.length, 500);
+  assert.equal(kept[0]!.request, "Find me the cheapest kettle.", "the person's words are pinned");
+  assert.equal(kept[1]!.detail?.project?.kind, "plan", "the plan card is pinned");
+  assert.equal(kept[2]!.detail?.title, "n1004", "the oldest unpinned rows went first");
+  assert.equal(kept.at(-1)?.final, true);
+});
+
+test("ten other units never evict the current build; once another build is current, the old one is an ordinary unit", () => {
+  const history = new UnitHistory({ units: 10, eventsPerUnit: 500 });
+  history.accept(event("current", PLAN));
+  for (let index = 1; index <= 12; index += 1) history.accept(run(`r${index}`, `run ${index}`));
+  let shown = titles(history);
+  assert.equal(shown[0], "Planned the work", "the build still working is kept");
+  assert.equal(shown.length, 10);
+  assert.deepEqual(shown.slice(1), ["run 4", "run 5", "run 6", "run 7", "run 8", "run 9", "run 10", "run 11", "run 12"]);
+  history.accept(event("next", { kind: "note", title: "next build" }));
+  shown = titles(history);
+  assert.equal(shown.includes("Planned the work"), false, "a build Core never ended is dropped once another build is current");
+});
+
+test("a build heard through several units is held whole across them until every one has ended", () => {
+  const history = new UnitHistory({ units: 2, eventsPerUnit: 2, buildEventsCeiling: 100 });
+  const supervisor = (title: string, fields: Partial<ClientGatewayActivity> = {}) => event("b", { kind: "note", title }, { activityId: "build:b:supervisor", ...fields });
+  const builder = (title: string, fields: Partial<ClientGatewayActivity> = {}) => event("b", { kind: "note", title }, { activityId: "build:b:builder", ...fields });
+  for (const title of ["s1", "s2", "s3"]) history.accept(supervisor(title));
+  for (const title of ["b1", "b2", "b3"]) history.accept(builder(title));
+  history.accept(builder("b4", { final: true }));
+  history.accept(run("x", "run x"));
+  assert.deepEqual(titles(history), ["s1", "s2", "s3", "b1", "b2", "b3", "b4"], "the supervisor still works, so the whole build is held and the run is the unit dropped");
+  history.accept(supervisor("s4", { phase: "done", final: true }));
+  assert.deepEqual(titles(history), ["s3", "b3", "b4", "s4"], "ended: two units of two events each, in the order they came");
+});

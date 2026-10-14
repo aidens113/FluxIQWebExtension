@@ -5,15 +5,24 @@ import { writeFileAtomically } from "./write-atomically.js";
 /** A step folder: four digits or more, a dash, then the kind (Core's step-log contract). */
 const STEP_FOLDER = /^\d{4,}-/u;
 
-/** Core's `index.md` header, word for word (`!FluxIQ` `runtime/llm/step-log/listing.ts`), so a reader meets one format. */
-const HEADER = [
+/** Core's `index.md` preamble, word for word (`!FluxIQ` `runtime/llm/step-log/listing.ts`), so a reader meets one format. */
+const PREAMBLE = [
   "# Run steps",
   "",
   "One row per completed step folder, in step order. A folder is complete once it holds `meta.json`.",
-  "",
-  "| Step | Kind | Tool | Summary | Cost |",
-  "| --- | --- | --- | --- | --- |",
 ];
+
+/**
+ * The table's head, as Core writes it: a run any project agent wrote a step
+ * to also has `Role` and `Brief` after `Kind` (the agent that made the step,
+ * from its `meta.json`'s `role` and `briefId`); one no agent wrote to keeps
+ * the table of a build with one agent exactly.
+ */
+function header(agents: boolean): string[] {
+  return agents
+    ? ["", "| Step | Kind | Role | Brief | Tool | Summary | Cost |", "| --- | --- | --- | --- | --- | --- | --- |"]
+    : ["", "| Step | Kind | Tool | Summary | Cost |", "| --- | --- | --- | --- | --- |"];
+}
 
 /**
  * Rewrites `steps/index.md` from every completed folder's `meta.json`, in step
@@ -22,14 +31,15 @@ const HEADER = [
  * A folder whose `meta.json` is missing or cut short is not complete and is left out, as Core does.
  */
 export async function rewriteStepsIndex(stepsDirectory: string): Promise<number> {
-  const rows: { step: number; line: string }[] = [];
+  const rows: { step: number; meta: Record<string, unknown> }[] = [];
   for (const entry of await readdir(stepsDirectory, { withFileTypes: true })) {
     if (!entry.isDirectory() || !STEP_FOLDER.test(entry.name)) continue;
     const meta = await readMeta(path.join(stepsDirectory, entry.name, "meta.json"));
-    if (meta && typeof meta.step === "number") rows.push({ step: meta.step, line: line(meta) });
+    if (meta && typeof meta.step === "number") rows.push({ step: meta.step, meta });
   }
   rows.sort((a, b) => a.step - b.step);
-  await writeFileAtomically(path.join(stepsDirectory, "index.md"), `${[...HEADER, ...rows.map(row => row.line)].join("\n")}\n`);
+  const agents = rows.some(row => typeof row.meta.role === "string");
+  await writeFileAtomically(path.join(stepsDirectory, "index.md"), `${[...PREAMBLE, ...header(agents), ...rows.map(row => line(row.meta, agents))].join("\n")}\n`);
   return rows.length;
 }
 
@@ -51,9 +61,10 @@ async function readMeta(file: string): Promise<Record<string, unknown> | undefin
   }
 }
 
-function line(meta: Record<string, unknown>): string {
+function line(meta: Record<string, unknown>, agents: boolean): string {
   const cell = (value: string) => value.replace(/[\r\n]+/gu, " ").replace(/\|/gu, "\\|");
   const text = (value: unknown) => typeof value === "string" ? value : undefined;
   const cost = typeof meta.costUsd === "number" ? `$${meta.costUsd.toFixed(6)}` : "-";
-  return `| ${String(meta.step).padStart(4, "0")} | ${cell(text(meta.kind) ?? "-")} | ${cell(text(meta.toolId) ?? "-")} | ${cell(text(meta.summary) ?? "") || "-"} | ${cost} |`;
+  const agent = agents ? ` ${cell(text(meta.role) ?? "-")} | ${cell(text(meta.briefId) ?? "-")} |` : "";
+  return `| ${String(meta.step).padStart(4, "0")} | ${cell(text(meta.kind) ?? "-")} |${agent} ${cell(text(meta.toolId) ?? "-")} | ${cell(text(meta.summary) ?? "") || "-"} | ${cost} |`;
 }

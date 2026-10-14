@@ -416,7 +416,17 @@ relay:
   `ACTIVITY_HISTORY_LIMITS` (the last 10 units, at most 500 events each, the
   newest kept). A decision still being made ("Deciding the next step", no
   text), a pure status change and Core's bookkeeping (`isInternalStep`) are
-  left out. The pacer and the overlay are untouched by it;
+  left out. The current build -- the build (by subject id) in progress heard
+  from last, in progress while any unit of it has not sent its final event --
+  is kept whole up to `buildEventsCeiling` (5,000) and is never the unit
+  dropped for a newer one, because a build with a project supervisor,
+  several builders, the validator and a repair passes 500 events, and can
+  pass ten units, on its own (automation-project-agents-plan, since t539).
+  Once it ends, or another build becomes current, it is one more unit,
+  trimmed to 500. A trim takes the oldest unpinned events first: the
+  person's `request` and every `note` row carrying a project card stay, the
+  plan card last of all, so a 1,500-event build still shows the plan it was
+  built from. The pacer and the overlay are untouched by it;
 - folds the events into one paced **display** (`ActivityPacer`, below), which
   is what the overlay and the chat's live line draw;
 - puts up a **starting status** the moment the person sends a message
@@ -758,6 +768,38 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   note with Core's sentence, headed in the present tense, never a decision of the model's, and the actions
   after it start their own message (since t378, `isModelThought`). There are no folds, disclosures or step counts,
   and no raw tool or node id is shown (`stream/step/words.ts`).
+- **A build with several agents** (automation-project-agents-plan, since
+  t539). Core stamps each event of a build with a project supervisor with its
+  author, `agent: { role, briefId?, subflowName? }` (`supervisor`, `builder`,
+  `repair`, `validator`; absent on a build with one agent), and carries each
+  card of the supervisor's work on a `note` row as `detail.project` (`plan`,
+  `brief`, `return`, `receipt`). `shared/activity/project/` reads both in the
+  contract's shape only (`activityAgent`, `projectCard`). Each card is a
+  `project` message of its own (`stream/step/project-message.ts`, words in
+  `project-words.ts`): the plan as "Planned 2 subflows" with a card
+  "Plan · 3 parts, 2 subflows / Budget $0.18, $0.07 kept back" and its parts
+  and each subflow with its purpose, allowance and starting cases listed
+  under it; a brief as "Building Search: Find the kettle" (or "Surveying",
+  "Repairing", "Resetting the site") with a card "Build · Search / Allowance
+  $0.06" that works until that brief's return arrives and then shows how the
+  builder came back; the return as "Built Search" (or "Partly built",
+  "Couldn't build") with the builder's reason and a card "Return · Search /
+  Spent $0.04 · 12 calls · 3 trials"; each receipt as "Tested Search" or
+  "Tested the whole Flow" with "Passed", "Didn't pass" or "Not confirmed".
+  Names come from the cards before (a brief's subflow, the plan's), never an
+  id. Each card's icon is one Core already pins for an action kind (plan
+  `git-branch`, build `pencil`, survey `scan-search`, repair `wrench`, reset
+  `repeat`, return `git-merge`, receipt `flask-conical`), so the panel draws
+  no icon Core does not pin. What a unit of work remembers for its next
+  action (its open decision, run step and asks) is kept per brief,
+  `activityId#briefId`, so a builder's action is a card of its own decision
+  even when another lane spoke between. Every other message keeps its
+  author; a step of an agent working on a brief sits indented under that
+  brief (`data-brief`), and a message whose lane is not the one before it in
+  its unit names it ("Builder · Search", "Validator · Search",
+  "Supervisor"), except right after a brief, which just did. The project
+  cards carry no `actions`, so no repeat, retry or done-again fold ever
+  merges two of them.
 - **Every action is a card** (`stream/step/action-card.ts`,
   `view/action-card-view.ts`). The actions Core took for a decision (the
   `tool` events after its `thought`, until something else opens a message)
