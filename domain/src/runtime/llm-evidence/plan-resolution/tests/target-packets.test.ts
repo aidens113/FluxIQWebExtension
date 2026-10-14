@@ -135,11 +135,13 @@ test("a resolution names a control by its readable words beside an identity that
 // Lane A round 4 (`run-muyrpbnk-fef374e7`, t356 C1): exploration pressed the store coupon's "Get coupons", the page
 // relabelled it "Collected", and the newer view replaced the handle's identity, so the candidate script's `t925` was
 // bound to "Collected" and the trial's freshly reset page, which says "Get coupons", had no such control (0032,
-// `web.target.not_found`). A re-viewed handle keeps only what its views agree on: never the label its act put there.
+// `web.target.not_found`). A re-viewed handle keeps only what its views agree on -- while that still names it as
+// many ways as the thinner view did (t596). A label alone is the button's second signal, so the newest view's label
+// is kept, and exploration's own press saves the label the act found (`acted`, below), never the one it put there.
 
 const COUPON = (label: string): JsonObject => ({ tagName: "button", selector: "#coupon", visibleText: label });
 
-test("a handle whose control an act relabelled keeps no label from after the act, on this page or a reloaded one", () => {
+test("a handle whose control a newer view relabelled keeps the newest label rather than its tag alone, on this page or a reloaded one", () => {
   const targets = createWebLlmTargetPackets();
   const scope = { projectId: "project.one", flowId: "flow.coupon" };
   targets.remember(scope, view(undefined, [COUPON("Get coupons")]));
@@ -151,14 +153,12 @@ test("a handle whose control an act relabelled keeps no label from after the act
   if (!after.ok) return;
   assert.equal(after.selector, "#coupon");
   assert.equal(after.element.tagName, "button");
-  assert.equal(after.element.visibleText, undefined, "the label the press put there is not the control's identity");
-  assert.equal(after.element.accessibleName, undefined);
-  assert.ok(!JSON.stringify(after).includes("Collected"));
-  // The trial's reset page shows "Get coupons" again: still the same control, still no label either view disagreed on.
+  assert.equal(after.element.visibleText, "Collected", "a button named no way but by its tag is no identity (t596)");
+  // The trial's reset page shows "Get coupons" again: still the same control, as that view names it.
   targets.rememberLook(scope, view("reload", [COUPON("Get coupons")]));
   const reset = targets.resolve(scope, "t1", ITEM);
   assert.equal(reset.ok && reset.selector, "#coupon");
-  assert.equal(reset.ok ? reset.element.visibleText : "refused", undefined, "once dropped, a disputed label stays dropped");
+  assert.equal(reset.ok ? reset.element.visibleText : "refused", "Get coupons");
 });
 
 test("a re-viewed handle keeps every field its views agree on, and a handle that now names another element takes the newer view whole", () => {
@@ -183,18 +183,19 @@ test("a look the capture cut short merges its re-viewed handles the same way, an
   targets.rememberLook(scope, cut);
   const coupon = targets.resolve(scope, "t1", ITEM);
   assert.equal(coupon.ok && coupon.selector, "#coupon");
-  assert.equal(coupon.ok ? coupon.element.visibleText : "refused", undefined);
+  assert.equal(coupon.ok ? coupon.element.visibleText : "refused", "Collected", "merged as a whole view is (t596)");
   assert.equal(targets.resolve(scope, "t2", ITEM).ok, true, "a cut-short look forgets nothing");
 });
 
 // R4a and R4b (t442, F1): the same coupon, saved by a candidate as `{div, class b}` -- the agreement above kept no
 // words -- and a wordless identity matches the collected coupon as well as the uncollected one. A handle exploration
 // acted on is now saved, for a candidate submission (`view_history`), as the view the act was made from showed it;
-// what the act changed is its effect. Exploration keeps the agreed identity, so t356's reason still holds there.
+// what the act changed is its effect. Exploration keeps the agreed identity, and where that names the control fewer
+// ways than either view did, the newest view's words (t596): the page as it now is.
 
 const STORE_COUPON = (label: string, classes: string): JsonObject => ({ tagName: "div", selector: "#coupons > div:nth-of-type(2)", visibleText: label, hasClickHandler: true, classNames: classes.split(" "), attributes: { class: classes } });
 
-test("a handle exploration acted on is saved as the act found it, and exploration keeps the identity its views agree on", () => {
+test("a handle exploration acted on is saved as the act found it, and exploration names it as the page now shows it", () => {
   const targets = createWebLlmTargetPackets();
   const scope = { projectId: "project.one", flowId: "flow.acted" };
   const before = view(undefined, [STORE_COUPON("Get coupons", "b")]);
@@ -211,11 +212,11 @@ test("a handle exploration acted on is saved as the act found it, and exploratio
   assert.deepEqual(saved.element.classNames, ["b"]);
   assert.ok(!JSON.stringify(saved).includes("Collected"), "the words the act put there are its effect, never the identity");
   const exploring = targets.resolve(scope, "t1", undefined);
-  assert.equal(exploring.ok && exploring.element.visibleText, undefined, "exploration on the page as it now is asks for no words the act took away");
-  assert.deepEqual(exploring.ok && exploring.element.classNames, ["b"]);
+  assert.equal(exploring.ok && exploring.element.visibleText, "Collected", "exploration on the page as it now is asks for no words the act took away");
+  assert.deepEqual(exploring.ok && exploring.element.classNames, ["b"], "and not for the class the act toggled");
 });
 
-test("an acted-on identity is not lent to another element under the handle, and a handle nothing acted on keeps the agreed identity", () => {
+test("an acted-on identity is not lent to another element under the handle, and a handle nothing acted on is named as its newest view names it", () => {
   const targets = createWebLlmTargetPackets();
   const scope = { projectId: "project.one", flowId: "flow.acted-moved" };
   const before = view(undefined, [STORE_COUPON("Get coupons", "b"), SPEC("Space Grey", "#grey")]);
@@ -225,7 +226,8 @@ test("an acted-on identity is not lent to another element under the handle, and 
   const moved = targets.resolve(scope, "t1", ITEM, "view_history");
   assert.equal(moved.ok && moved.element.visibleText, "Coupon centre", "another address is another control");
   const untouched = targets.resolve(scope, "t2", ITEM, "view_history");
-  assert.equal(untouched.ok && untouched.element.visibleText, undefined, "a label two views disagree on stays dropped where nothing acted");
+  // Its words are all that names it beside its tag, so the agreement alone would leave it found by its tag (t596).
+  assert.equal(untouched.ok && untouched.element.visibleText, "Space Blue", "a label two views disagree on is the newest view's where nothing acted");
 });
 
 // A handle from another page, named for an act on the page the caller is on (t486).

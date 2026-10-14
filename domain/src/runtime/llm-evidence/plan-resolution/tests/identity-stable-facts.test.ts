@@ -22,7 +22,8 @@
 //   test id), and nothing that is the element's state or contents: not its
 //   value, its `type`, its `inputmode`, its `autocomplete`;
 // - a control whose `autocomplete` says it holds a secret keeps no words at all;
-// - a label two views of one handle disagree on is dropped, as a name is.
+// - a label two views of one handle disagree on is dropped, as a name is,
+//   unless dropping it leaves the box thinner than either view of it (t596).
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -173,7 +174,7 @@ test("a control whose autocomplete says it holds a secret keeps the author's des
   assert.equal(JSON.stringify(resolution).includes("cc-number"), false, "a secret's kind of contents is not one of the identifying attributes");
 });
 
-test("a label a newer view of the same handle changed is dropped, and one both views show is kept", async () => {
+test("a label a newer view of the same handle changed is the newest view's, and one both views show is kept", async () => {
   let label = "Quantity";
   const runtime = runtimeOver(() => [searchBox, quantityBox("fb1l6ufkg", label, "q7k2-qty qty-input")]);
   await look(runtime);
@@ -181,19 +182,23 @@ test("a label a newer view of the same handle changed is dropped, and one both v
   assert.equal(((await typedElement(runtime, "t2")).element as JsonObject).label, "Quantity");
   label = "Quantity (max 5)";
   await look(runtime);
-  assert.equal(((await typedElement(runtime, "t2")).element as JsonObject).label, undefined);
+  // Dropped, the box would be its kind and its classes where each view named it three ways (t596).
+  const element = (await typedElement(runtime, "t2")).element as JsonObject;
+  assert.equal(element.label, "Quantity (max 5)");
+  assert.deepEqual(element.classNames, ["q7k2-qty", "qty-input"]);
 });
 
-// The cost of the F5 floor (t442), measured: a box nothing acted on, whose label two looks disagree on, is left with
-// its tag and one class, and a step naming it is refused at its line rather than saved that thin.
-test("a box left with its tag and one class once its label is dropped is refused, not saved", async () => {
+// Until t596 this was the measured cost of the F5 floor (t442): a box nothing acted on, whose label two looks disagree
+// on, was left with its tag and one class and refused. The agreement no longer leaves it thinner than either view.
+test("a box whose label two looks disagree on keeps the newest label, not its tag and one class, and is saved", async () => {
   let label = "Quantity";
   const runtime = runtimeOver(() => [searchBox, quantityBox("fb1l6ufkg", label)]);
   await look(runtime);
   label = "Quantity (max 5)";
   await look(runtime);
-  const answer = await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "t2" }, text: "3" }, declaredConsequences: NOTHING_LASTING });
-  assert.deepEqual(answer, { status: "refused", issueCodes: ["web.handle.unidentifiable", "web.handle.unidentifiable:selector"] });
+  const element = (await typedElement(runtime, "t2")).element as JsonObject;
+  assert.equal(element.label, "Quantity (max 5)");
+  assert.deepEqual(element.classNames, ["q7k2-qty"]);
 });
 
 test("a class an act toggles is dropped across views, and the tokens both views carry are kept", async () => {

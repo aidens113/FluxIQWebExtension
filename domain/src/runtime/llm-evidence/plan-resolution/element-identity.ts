@@ -108,6 +108,7 @@
 // link target: those are contents.
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
+import { webElementIdentitySignals } from "../../../element-fingerprint";
 import type { WebLlmEvidenceElement } from "../elements";
 import { webPacketElementFingerprint } from "../packet-fingerprint";
 import { webLlmReadableWords } from "../page-view";
@@ -177,7 +178,8 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
  * page's identity veto for contradicting it
  * (`apps/extension/src/content/identity/veto.ts`), while an identity that names
  * no label asks nothing the page contradicts, on the reset page or this one.
- * Once a field is dropped it stays dropped. A newer view whose handle names
+ * Once a field is dropped it stays dropped, unless that would leave the
+ * control thinner than a view of it was (below). A newer view whose handle names
  * another element (tag, role or address changed) replaces it whole.
  *
  * **This is the identity exploration acts with, not the one a step saves
@@ -188,11 +190,70 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
  * made from (`target-packets.ts` `acted`), and the fields the act changed are
  * the step's effect. The two uses no longer share one identity, so the veto
  * concern above still holds for exploration and costs the saved step nothing.
+ *
+ * **The agreement never leaves a control thinner than any one view of it was
+ * (t596).** A handle's views outlive the brief that took them, so the act that
+ * changed a control need not be this Flow's own, and then nothing kept the view
+ * before it. A8 (`run-mv8c76i3-61b9ca89`, brief-2): brief-1 saw crossborder's
+ * coupon as `<div>` "Get coupons" with class `b`; the next brief's entry
+ * preparation pressed it, and the builder was shown "Collected" with `b x`. The
+ * agreement kept `div` and class `b`, which `element-fingerprint/signals.ts`
+ * counts as one signal, and every submission naming it was refused
+ * `web.handle.unidentifiable` although each view alone named it three ways. So
+ * where the agreement carries fewer signals than the thinner view did, the
+ * newest view -- the one the builder acting now was shown -- lends what it
+ * says, a group at a time and only until that count is met: first the facts an
+ * act does not change (the implied role, input type, label, id, test id and
+ * `name`), then its words, then its class tokens. What both views agreed on is
+ * always kept; the place it sat and its attributes stay the agreement, being no
+ * signal. A control every view describes thinly is still thin, and the
+ * save-time guard still refuses it.
  */
 export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElementIdentity): WebPlanElementIdentity {
   const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
   if (!same(earlier.tagName, newer.tagName) || !same(earlier.role, newer.role) || !same(earlier.selector, newer.selector)
     || !same(earlier.context?.shadowHosts, newer.context?.shadowHosts)) return newer;
+  const agreement = agreedAcrossViews(earlier, newer, same);
+  const owed = Math.min(signalCount(earlier), signalCount(newer));
+  let identity = agreement;
+  for (const fields of LENT_BY_THE_NEWEST_VIEW) {
+    if (signalCount(identity) >= owed) break;
+    identity = lent(identity, newer, fields);
+  }
+  return identity;
+}
+
+/**
+ * The fields the newest view lends a thinned agreement, a group at a time
+ * (header): the facts an act does not change, then the words, then the class
+ * tokens. The tag, role and selector already agree, or the views are two
+ * controls.
+ */
+const LENT_BY_THE_NEWEST_VIEW: readonly (readonly LendableField[])[] = [
+  ["implicitRole", "inputType", "label", "id", "testId", "name"],
+  ["accessibleName", "visibleText"],
+  ["classNames"]
+];
+
+type LendableField = "implicitRole" | "inputType" | "label" | "id" | "testId" | "name" | "accessibleName" | "visibleText" | "classNames";
+
+/** `identity` with `fields` as the newest view gave them, where it gave them. */
+function lent(identity: WebPlanElementIdentity, newer: WebPlanElementIdentity, fields: readonly LendableField[]): WebPlanElementIdentity {
+  const copy: WebPlanElementIdentity = { ...identity };
+  for (const field of fields) {
+    const value = newer[field];
+    if (value !== undefined) Object.assign(copy, { [field]: structuredClone(value) });
+  }
+  return copy;
+}
+
+/** How many independent signals `identity` carries besides its address (`element-fingerprint/signals.ts`). */
+function signalCount(identity: WebPlanElementIdentity): number {
+  return webElementIdentitySignals(identity).length;
+}
+
+/** The fields two views of one control agree on (t356, C1). */
+function agreedAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElementIdentity, same: (a: unknown, b: unknown) => boolean): WebPlanElementIdentity {
   const agreed = <T>(a: T, b: T): T | undefined => (same(a, b) ? a : undefined);
   const context = present<WebPlanElementContext>({
     formId: agreed(earlier.context?.formId, newer.context?.formId),
