@@ -372,6 +372,20 @@ ticked, in both modes); what failed is downstream of building: pagination that l
 cannot confirm a correct text-filtered list, and a completion path that throws away a standing pass. All three are
 being fixed; the next wave reruns all three failing runs and `project` everything-store for a consecutive pass.
 
+**Wave 6** (downstream `0638d45f`, Core `95cc9a7d`, after t622-t624):
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| everything-store-plus-earbuds-under-50 | failed, $0.066: a two-subflow plan; the first builder's allowance ran short ($0.018 left) while the purse held $0.184 (Core t627); its repair was refused before its first turn (t625) | not run |
+| social-network-feed-confirm-requests | **passed**, $0.063: whole test yes, the repair refused before its first turn, the rescued pass kept (t622 live) | not run |
+| bigbox-retail-pickup-towels | failed, $0.138: the subflow passed, the whole test said no, four repairs refused before their first turn (t625); debug in flight | **passed**, $0.086: the first towels pass; Next took the filter-keeping page number (t623 live), judges saw text-settled rows (t624 live) |
+
+**Reading of wave 6 (supervisor, 2026-10-15):** t622, t623 and t624 each worked live where they applied. Two of
+them carried regressions found here: t622's repair context carried the web domain's denied `selector` keys, so every
+repair was refused before its first turn (Core t625), and t623 counted a search form's default "All" option as an
+applied filter, so a Next on an unfiltered search faulted (downstream t626). A brief's share of the purse could not
+grow while the purse had room (Core t627).
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
