@@ -35,6 +35,7 @@
 
 import type { ClientGatewayActivity, ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocket";
 import { activityActionFailureReason, activityActionOf } from "fluxiq/ui";
+import { declinedSubmission } from "./declined-submission";
 import { notTriedOutcome } from "./not-tried";
 
 export type ActivityWording = {
@@ -146,7 +147,7 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const action = toolAction(toolId, event, code);
     // A call FluxIQ declined to send was not tried, whatever its code's last words say of the page (R2-U-6).
     const declined = code === undefined ? undefined : notTriedOutcome(code, detail?.text, action);
-    return [action, ended ? testedOutcome(event, code) ?? declined ?? wayOutOutcome(code) ?? refusedOutcome(event, action) ?? toolOutcome(event, detail?.status, code) : null];
+    return [action, ended ? testedOutcome(event, code) ?? declined ?? wayOutOutcome(code) ?? refusedOutcome(event, action) ?? submissionOutcome(event, action) ?? toolOutcome(event, detail?.status, code) : null];
   }
   if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
@@ -274,6 +275,17 @@ function refusedOutcome(event: ClientGatewayActivity, action: string): string | 
   const because = refused.because.trim();
   if (SAID_NOT_DONE.test(action)) return because || undefined;
   return because ? `not done: ${because}` : "not done";
+}
+
+/**
+ * A submission of steps Core refused without saying so in words
+ * (`declined-submission.ts`): "not done: ...", as its card says it, never
+ * "done" or "that didn't work" (t649).
+ */
+function submissionOutcome(event: ClientGatewayActivity, action: string): string | undefined {
+  const because = declinedSubmission(event);
+  if (because === undefined) return undefined;
+  return SAID_NOT_DONE.test(action) ? because : `not done: ${because}`;
 }
 
 /** The outcome of a Flow sent back for pressing a popup's offer, said without its code; undefined for any other code. */
