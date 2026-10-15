@@ -62,11 +62,10 @@ cheaper; wave 3 `project` social passed, everything-store failed on false no's (
 modes on page-view legends (t605). `candidate` stays the default. t597-t608 are merged and pushed (2026-10-14).
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
-In flight (2026-10-14): wave 4 on the t607/t605 pair (`project` everything-store, towels in both modes,
-`project` social), and workers t609 (the web domain writes `spot` and `items`; candidate trials carry them; a wait
-no longer meets an asked act), t610 (ARIA groups name their options), t611 (a structured judges-yes field; dispatch
-returns done on a standing yes), t612 (only a slow-down notice admits an interruption repair; dead
-`wholeTrialLeftActs` removed).
+Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
+Merged since: t609 (the state diff names spots and items), t610 (ARIA groups), t611 (done on a standing yes), t612
+(slow-down repairs only). In flight: Core t613 (a chat turn ends within its bound when the provider stalls), t615 (a
+deterministic time-limit test). Wave 5 relaunches on the pair after t613, once DeepSeek answers again.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -745,6 +744,14 @@ build does today until A5 lands and the mode is chosen.
 - Why: towels failed in both modes because the view dropped the legends that say which option set a choice belongs to; everything-store's correct Flow was refuted by false no's (Core t607)
 - Validation: wave 3 `project`: social passed, everything-store failed (judged no on a Flow that stored exactly the rows asked); round three towels failed in both modes; spend ledger; debug notes for every run. t605: domain `runtime/llm-evidence` -> 1114 tests, pass 1114, fail 0; the legends test against the old `elements.ts` -> pass 1, fail 3 (defect proven); `tests/domain.test tests/page-evidence-joinery` -> pass 16; domain tsc exit 0; `check-extension.mjs` exit 0; audit passed; merged `c8604d60`, pushed
 - Outcome: Accepted. Next: sync lanes, re-run project everything-store, towels in both modes, project social for a consecutive pass
+
+### 2026-10-14 — A8 wave 4 (provider incident); the state diff names spots and items (t609); ARIA groups (t610)
+- Agent: supervisor (wave 4 launches and debugs); workers t609-trial-acts-name-their-items (domain side), t610-aria-groups-in-page-view; supervisor gave t610 the packet sanitizer so one group rule covers every reader, verified and integrated
+- Changed: t609 `inspectStateDiff` writes `spot` and `items` (new `domain/src/runtime/state-diff/places/`), items only for lists present on both pages with every earlier item still there, kept in memory for the last 16 snapshots and never on the summary recovery models read; t610 one module (`page-view/group-names.ts`) names the nearest named group, fieldset or `role="group"`/`radiogroup` with `aria-labelledby`/`aria-label`, for the view, find, describe, the packet's `group`, look-alikes and the digest (`web-state.v6`)
+- Why: wave 4 found nothing new in the product's build path (DeepSeek's API incident ended all four runs at the first chat call, $0) but showed the chat turn outliving its bound (Core t613); t609 makes Core t598 live; t610 extends t605 to option sets built without fieldsets
+- Validation: wave 4: four runs, $0, debug notes. t610 after merging dev: `node scripts/test-domain.mjs runtime/llm-evidence` -> tests 1124, pass 1124, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; merged `d3b2f7c1`. t609 after merging dev: domain state-diff, host-runtime, llm-evidence, runtime tests -> tests 1249, pass 1249, fail 0; domain tsc exit 0; `check-extension.mjs` exit 0; audit passed; merged `1d787ddc`; both pushed
+- Outcome: Accepted
+- Follow-up: a first item added to an empty list, or a list that grew from one item, is not credited as created (named under `cannotUndo`, never a wrong undo); no live check yet that the capture resolves ARIA group names
 
 ## Open Questions
 
