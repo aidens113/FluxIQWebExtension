@@ -63,11 +63,10 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609 (the state diff names spots and items), t610 (ARIA groups), t611 (done on a standing yes), t612
-(slow-down repairs only), t613 and t617 (a stalled provider no longer holds a call; the panel's send limit), t615 and
-t618 (a deterministic test; task ids never reused). The wave 5 canary (`run-mv8zw5l2`) found DeepSeek still down and
-an outage ending that blamed the model. In flight: Core t619 (an outage ending names the provider), t616 (two sweep
-flakes made deterministic). Wave 5 relaunches after t619, canary first.
+Merged since: t609-t613 and t615-t621 (spots and items, ARIA groups, done on a standing yes, slow-down repairs, a
+stalled provider no longer holds a call, an outage ends as an outage, the Lab's startup builds, deterministic tests,
+task ids never reused). DeepSeek's incident closed about 23:20 local on 2026-10-14. Next: wave 5 on the pair after
+t621, all four runs; then the four remaining load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -767,6 +766,13 @@ build does today until A5 lands and the mode is chosen.
 - Validation: t613 after merging dev: `check-extension.mjs` exit 0; `test-extension.mjs background/connection/tests panel/chat background/panel/tests` -> tests 668, pass 668, fail 0; audit passed; merged `d922a2f8`. t618: `node --test scripts/task/tests` -> 62 passed; audit passed. Sweep (dev `8652b403`, `pnpm -r --no-bail test`): test-runner failed one test under load, then `node --test "dist/**/*.test.js"` -> tests 2301, pass 2296, fail 0 (5 skipped) twice, once under Core's suite; every other package passed. Canary `run-mv8zw5l2-98064abf` (`project` social, slot 3): failed, $0, DeepSeek still down; debug note written
 - Outcome: Accepted
 - Follow-up: wave 5 after t619 (an outage ending that names the provider), with a canary first while DeepSeek's state is unknown
+
+### 2026-10-15 — The Lab's startup builds (t620); the browser-worker test (t616); wave 5 canaries
+- Agent: supervisor (canaries, debugs); workers t620-lab-gateway-build-reused (two rounds), t616 (downstream side); supervisor verified and integrated
+- Changed: t620 `packages/test-runner/src/core-web-build/server-adapter.ts` skips the gateway server build when Core's strict identity receipt already matches its sources, and every startup build (gateway server, `next build`, `host-build`, the demo's host build and domain setup, defined once in new `startup-build/`) runs through `runBoundedBuildStep`: a quiet bound output restarts plus a ceiling, a timeout named as a Lab startup failure with step, bound, limit and elapsed time; `docs/architecture/testing-facility.md`; t616 `launch-browser-worker.test.ts` reads the worker's build from Chrome's target list over CDP (its `context.close()` took 50-125 s loaded, past a 120 s budget)
+- Why: canary 2 `run-mv93ywox` failed `process.startup` when esbuild was stopped at a fixed 60 s; test 1540 failed the sweep under load
+- Validation: t620 after merging dev: test-runner check, no tsc errors; core-web-build, startup-build, server-adapter-identity tests -> tests 75, pass 73, fail 0, skipped 2 (opt-in real-Next probes); audit passed; merged `00e1e50b`. t616: browser test 6/6 loaded; after merging dev: `launch-browser-worker.test.js` -> pass 1, fail 0; audit passed; merged; both pushed. Canaries: debug notes for `run-mv8zw5l2-98064abf` and `run-mv93ywox-9b5aa220`
+- Outcome: Accepted
 
 ## Open Questions
 
