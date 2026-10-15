@@ -70,7 +70,8 @@ and pushed after it (2026-10-15): Core t641 (partly refuted advice labelled, vin
 (handles never re-bind without a load; hidden-only ties are not found), t643 (a bypassed optional step is not the
 run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sensitive test files). Frozen pair 3
 stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan); t645-t649 fix
-it and are merged and pushed. Now: frozen pair 4 (waves 22-26, bigbox cart and towels first) decides the flip.
+it and are merged and pushed. Frozen pair 4 stopped after wave 22 (`project` 2 of 2; `candidate` towels failed on two
+general t641-path defects). In flight: Core t650, t651. Next: frozen pair 5.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -376,6 +377,12 @@ bigbox cart and towels first, the five A8 tasks in both modes, twice, no product
 | crossborder-marketplace-hub-to-cart | (w23) | (w25) | (w23) | (w25) |
 | everything-store-plus-earbuds-under-50 | (w23) | (w26) | (w23) | (w26) |
 | social-network-feed-confirm-requests | (w24) | (w26) | (w24) | (w26) |
+
+**Frozen pair 4 stopped after wave 22 (supervisor, 2026-10-15).** `project` passed both runs (bigbox cart with three
+subflows, the task it failed in wave 17; towels). `candidate` towels failed on two general Core defects from t641's
+path (debug `reports/a8-towels-run-mva446jf-debug.md`): the invited resend of a kept-condition refusal is refused by
+the repeat guard, and a condition testing a row's own name was vindicated. Either can end a build in either mode, so
+later waves would fail predictably. t650 and t651 fix them; frozen pair 5 starts once they are merged.
 
 ## Units (this repository)
 
