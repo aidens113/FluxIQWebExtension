@@ -62,6 +62,11 @@ cheaper; wave 3 `project` social passed, everything-store failed on false no's (
 modes on page-view legends (t605). `candidate` stays the default. t597-t608 are merged and pushed (2026-10-14).
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
+In flight (2026-10-14): wave 4 on the t607/t605 pair (`project` everything-store, towels in both modes,
+`project` social), and workers t609 (the web domain writes `spot` and `items`; candidate trials carry them; a wait
+no longer meets an asked act), t610 (ARIA groups name their options), t611 (a structured judges-yes field; dispatch
+returns done on a standing yes), t612 (only a slow-down notice admits an interruption repair; dead
+`wholeTrialLeftActs` removed).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -341,6 +346,13 @@ launch 8 above; round two runs `candidate` on the same lanes before any further 
 trial accepted; debug in flight); round three `bigbox-retail-pickup-towels` failed in both modes (`project` $0.074,
 `candidate` $0.066) on one web-domain defect: the page view drops filter-group legends, so the seller filter was never
 recognised (t605, t606 in flight).
+
+**Wave 4** (downstream `b837e4a3`, Core `ef68a8a6`, after t605-t608): `project` everything-store, `project` towels,
+`candidate` towels and `project` social all failed at the chat's first model call, $0 each: DeepSeek's API was in an
+open incident ("Web/API Partially Unavailable", V4.1 Flash), so no call completed. The first try was refused before
+any call (the instruction tasks were named without their scenario prefix, a supervisor error). It exposed one product
+defect: the chat's turn stayed open well past its own 24 s bound and the panel showed "Sending your message" (Core
+t613). Rerun on the same pair once the incident is resolved.
 
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
