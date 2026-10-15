@@ -141,14 +141,25 @@ const extractListSchema = webAutomationExtractListSchema(elementFingerprintSchem
 /** `WebAutomationNextPageRequest` (C1), owned by `./next-page` and built from this file's fingerprint schema as the list's is. */
 const nextPageSchema = webAutomationNextPageSchema(elementFingerprintSchema);
 
-/** `WebAutomationExtractRead` (C3): which value of the target `web.dom.extract` reads. */
+/**
+ * `WebAutomationExtractRead` (C3): which value of the target `web.dom.extract`
+ * reads. The descriptions are the schema's own; what a model building a Flow
+ * reads about the parameter, which Core does not take from this schema, is
+ * `output-nodes/extract/catalog-text.ts` (t646).
+ */
 const extractReadSchema = {
   type: "object",
   label: "Read",
+  description: "Which value of the element to read; the node hands it on as its value output.",
   required: ["mode"],
   properties: {
-    mode: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_READ_MODES] },
-    attribute: { type: "string", label: "Attribute" }
+    mode: {
+      type: "string",
+      label: "Reads",
+      description: "text: the visible text; value: a field's current value; attribute: the attribute named by attribute; html: the inner HTML.",
+      enum: [...WEB_AUTOMATION_EXTRACT_READ_MODES]
+    },
+    attribute: { type: "string", label: "Attribute", description: "The attribute to read, with mode attribute only." }
   }
 } satisfies JsonObject;
 

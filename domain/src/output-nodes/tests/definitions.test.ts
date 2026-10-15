@@ -12,7 +12,9 @@ import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio
 import {
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
-  webAutomationExtractListRequestValue
+  WEB_AUTOMATION_EXTRACT_READ_MODES,
+  webAutomationExtractListRequestValue,
+  webAutomationExtractReadValue
 } from "../../actions/extraction";
 import { webAutomationActionDefinitions } from "../../actions/schemas";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
@@ -20,6 +22,9 @@ import { webPlanStepMustDeclare } from "../../runtime/llm-evidence/plan-resoluti
 import { createWebAutomationOutputNodeDefinition, webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../definitions";
 
 const nodes = webAutomationOutputNodeDefinitions;
+
+/** The outputs with catalog text of their own (`../definitions.ts`, `catalogTextByOutput`). */
+const CATALOG_TEXT_OUTPUTS: readonly WebAutomationActionType[] = ["web.dom.extract_list", "web.dom.next_page", "web.dom.extract"];
 
 // t439: Core reads which saved steps must declare off each node's definition,
 // and must read the same rule the domain's own gate applies.
@@ -269,13 +274,13 @@ test("the nodes that return records declare a records port for a later node to r
   }
 });
 
-test("the list extraction carries the words of a scraping request, and no other node but the next page carries catalog words", () => {
+test("the list extraction carries the words of a scraping request, and no other node but the next page and the single read carries catalog words", () => {
   const tags = nodeFor("web.dom.extract_list").tags ?? [];
   for (const tag of ["web-automation", "output", "scrape", "collect", "extract", "list", "table", "rows"]) {
     assert.equal(tags.includes(tag), true, `web.dom.extract_list is missing tag ${tag}`);
   }
-  // The next page carries its own paging words (`./next-page-node.test.ts`).
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list" && candidate !== "web.dom.next_page")) {
+  // The next page carries its own paging words (`./next-page-node.test.ts`), the single read its own (t646, below).
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => !CATALOG_TEXT_OUTPUTS.includes(candidate))) {
     assert.deepEqual(nodeFor(outputId).tags, ["web-automation", "output"], `${outputId} tags`);
   }
 });
@@ -322,8 +327,8 @@ test("the list extraction describes its request for a model to write one", () =>
   // Every definition gets its own copy, so no caller can change another's.
   const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract_list")!);
   assert.notEqual(again.parameters.find((candidate) => candidate.id === "extractList")?.example, extractList?.example);
-  // Every other node but the next page, which has catalog text of its own, keeps its action's own description.
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list" && candidate !== "web.dom.next_page")) {
+  // Every other node but the next page and the single read, which have catalog text of their own, keeps its action's own description.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => !CATALOG_TEXT_OUTPUTS.includes(candidate))) {
     const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId);
     assert.equal(nodeFor(outputId).description, definition?.description, `${outputId} description`);
   }
@@ -342,4 +347,53 @@ test("a node that acts on one element takes a loop's current row on an optional 
   for (const outputId of ["web.browser.navigate", "web.dom.extract_list", "web.dom.dialog", "web.browser.tab", "web.dom.capture_snapshot"] as WebAutomationActionType[]) {
     assert.deepEqual(nodeFor(outputId).inputs.map((port) => port.id), ["in"], `${outputId} has no element to scope to a row`);
   }
+});
+
+// -- One value a model reads and hands on (t646) -------------------------------
+
+test("the single read declares a value data port that Core fills from where its answer keeps the value", () => {
+  const node = nodeFor("web.dom.extract");
+  assert.deepEqual(node.outputs.map((port) => port.id), ["success", "failed", "value"]);
+  // Core copies the value at `resultPath` in the dispatched answer (`outputs.result`) to `outputs.value`, so a later
+  // step reads `$step.<label>.value`; the client answers on `extracted`, under the dispatch's own `result`.
+  assert.deepEqual(node.outputs[2], { id: "value", label: "Value", valueType: "any", role: "data", resultPath: "result.extracted" });
+  const validation = validateAutomationStudioNodeDefinition(node);
+  assert.equal(validation.ok, true, validation.issues.map((issue) => issue.code).join(", "));
+  // It is a value, not rows: it declares no records path, so Core's record capture never reads it.
+  assert.equal(node.metadata?.recordsPath, undefined);
+  // No other node declares a port Core fills from its answer.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract")) {
+    assert.equal(nodeFor(outputId).outputs.some((port) => port.resultPath !== undefined), false, `${outputId} declares a result path`);
+  }
+  // Every definition gets its own port, so no caller can change another's.
+  const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract")!);
+  assert.notEqual(again.outputs[2], node.outputs[2]);
+});
+
+test("the single read's extract parameter is described with every mode, and its example is a read the page runs", () => {
+  const node = nodeFor("web.dom.extract");
+  // Core's catalog keeps 240 characters of a node description and 80 of its first sentence.
+  assert.equal(node.description.length <= 240, true, `${node.description.length} characters`);
+  const firstSentence = node.description.slice(0, node.description.indexOf(".") + 1);
+  assert.equal(firstSentence.length > 0 && firstSentence.length <= 80, true, firstSentence);
+  assert.match(node.description, /\$step\.<label>\.value/u, "the description says how a later step reads the value");
+  const extract = node.parameters.find((candidate) => candidate.id === "extract");
+  assert.ok(extract, "web.dom.extract offers no extract parameter");
+  const grammar = extract.description ?? "";
+  // Core keeps 700 characters of a parameter description.
+  assert.equal(grammar.length > 0 && grammar.length <= 700, true, `${grammar.length} characters`);
+  for (const mode of WEB_AUTOMATION_EXTRACT_READ_MODES) {
+    assert.equal(grammar.includes(`"${mode}"`), true, `the extract description does not name the mode ${mode}`);
+  }
+  assert.equal(grammar.includes("$step.<label>.value"), true);
+  assert.equal(grammar.includes("\"attribute\": \"href\""), true, "the attribute mode shows the attribute it names");
+  // The example is a read the domain takes as it is, and the model is shown it on refusal (`accepted.example`).
+  assert.deepEqual(extract.example, { mode: "text" });
+  assert.deepEqual(webAutomationExtractReadValue(extract.example), { mode: "text" });
+  assert.equal(extract.valueType, "object");
+  assert.equal(extract.allowStateBinding, true);
+  // Every definition gets its own copy of the example.
+  const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract")!);
+  assert.notEqual(again.parameters.find((candidate) => candidate.id === "extract")?.example, extract.example);
+  for (const tag of ["read", "value"]) assert.equal(node.tags?.includes(tag), true, `web.dom.extract is missing tag ${tag}`);
 });

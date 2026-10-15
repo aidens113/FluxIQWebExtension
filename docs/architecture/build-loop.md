@@ -298,6 +298,17 @@ schema that refuses every row gives no `outputs`, and Core's walker then runs
 the loop once on the explored row. These are whole rows, page text and all:
 Core carries `outputs` and never shows it to the model or the judge.
 
+A replayed single-value read, `web.dom.extract`, answers the value it read on
+`outputs.value` (t646, `replayedReadOutputs` in
+`runtime/llm-evidence/node-run/replay.ts`): the client's `extracted`, which is
+what the Flow's run copies to the node's `value` port from the dispatched answer
+at the port's `resultPath`, `result.extracted`
+(`output-nodes/extract/value-port.ts`; Core
+`runtime/executor/node-execution/result-path-outputs.ts`). A later step of the
+test that reads `$step.<label>.value` therefore resolves as it will when the
+Flow runs. An answer with no `extracted` -- a sensitive control, whose value the
+gateway mapping drops -- gives no `outputs`, as the Flow's port stays empty.
+
 ## Lasting Acts Are Checked Per Row
 
 Core sends a step with a declared lasting consequence, or one claiming a
