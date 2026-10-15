@@ -366,6 +366,17 @@ debug `reports/a8-bigbox-cart-run-mv9zn5ob-debug.md`), so further `project` runs
 defect, and this pair can no longer meet the two-consecutive-passes rule. t645-t649 fix the chain and the chat cards
 it showed; frozen pair 4 starts once they are merged.
 
+**Frozen pair 4** (downstream `9c1e164d`, Core `0df06e34`, after t645-t649; docs-only commits after), waves 22-26,
+bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
+
+| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
+| --- | --- | --- | --- | --- |
+| bigbox-retail-pickup-cart | passed $0.036 (3 subflows) | (w24) | passed $0.031 | (w24) |
+| bigbox-retail-pickup-towels | passed $0.030 | (w25) | failed $0.036: a kept-condition refusal's invited resend was refused by the repeat guard (debug `a8-towels-run-mva446jf-debug.md`) | (w25) |
+| crossborder-marketplace-hub-to-cart | (w23) | (w25) | (w23) | (w25) |
+| everything-store-plus-earbuds-under-50 | (w23) | (w26) | (w23) | (w26) |
+| social-network-feed-confirm-requests | (w24) | (w26) | (w24) | (w26) |
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
