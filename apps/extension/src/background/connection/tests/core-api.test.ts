@@ -1,7 +1,8 @@
 // Coverage of callCoreProgram in core-api.ts: the one request the panel's
 // relays make. It must carry the pairing token as the bearer credential and no
-// cookie, return Core's payload untouched, and never put the token in anything
-// it answers with.
+// cookie, return Core's payload untouched, never put the token in anything it
+// answers with, and give the person's message forty seconds rather than two
+// minutes (t613).
 //
 // Also covers ProjectContext (project-context.ts), whose only outside call is
 // core-api.ts's snapshot lookup: which project a read that names none belongs
@@ -9,6 +10,8 @@
 // the fallback for when Core names none or cannot be asked.
 
 import assert from "node:assert/strict";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import test, { type TestContext } from "node:test";
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
@@ -104,6 +107,71 @@ test("a call that runs out of time says so, rather than that FluxIQ could not be
   assert.equal(!reply.ok && reply.code, "timed_out");
   assert.match(!reply.ok ? reply.error : "", /may still be working/);
   assert.ok(!JSON.stringify(reply).includes(TOKEN));
+});
+
+// ---- The person's message has a deadline of its own (t613) ----
+//
+// A local HTTP server stands in for Core and holds each request until the test
+// answers it; the clock is node:test's, so forty seconds pass at once.
+
+async function heldCore(t: TestContext) {
+  const held: http.ServerResponse[] = [];
+  let arrived: () => void = () => undefined;
+  const server = http.createServer((request, response) => {
+    request.resume();
+    held.push(response);
+    arrived();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>((resolve) => {
+    server.closeAllConnections();
+    server.close(() => resolve());
+  }));
+  const next = () => new Promise<void>((resolve) => { arrived = resolve; });
+  return { credentials: { coreApiUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, token: TOKEN }, held, next };
+}
+
+function answer(response: http.ServerResponse | undefined, body: unknown): void {
+  response!.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
+}
+
+test("a message FluxIQ does not answer within forty seconds says so, and that it may still be answered", async (t) => {
+  const core = await heldCore(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const arrived = core.next();
+  const sending = callCoreProgram(core.credentials, "append-turn", { text: "hello" });
+  await arrived;
+  t.mock.timers.tick(39_999);
+  let settled = false;
+  void sending.then(() => { settled = true; });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  t.mock.timers.tick(1);
+  const reply = await sending;
+  assert.deepEqual(reply, { ok: false, code: "timed_out", error: "FluxIQ did not answer your message within 40 seconds. It may still be working on it, so wait for its answer here before sending it again." });
+  assert.ok(!JSON.stringify(reply).includes(TOKEN));
+});
+
+test("a message FluxIQ answers after its own 24 s reading reaches the panel", async (t) => {
+  const core = await heldCore(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const arrived = core.next();
+  const sending = callCoreProgram(core.credentials, "append-turn", { text: "hello" });
+  await arrived;
+  t.mock.timers.tick(25_000);
+  answer(core.held[0], { ok: true, payload: { turn: { turnId: "turn.1" }, response: { modelProblem: "the model did not answer in time" } } });
+  assert.deepEqual(await sending, { ok: true, payload: { turn: { turnId: "turn.1" }, response: { modelProblem: "the model did not answer in time" } } });
+});
+
+test("every other call keeps its two minutes", async (t) => {
+  const core = await heldCore(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const arrived = core.next();
+  const reading = callCoreProgram(core.credentials, "get-conversation", { projectId: "p-1", conversationId: "c-1" });
+  await arrived;
+  t.mock.timers.tick(60_000);
+  answer(core.held[0], { ok: true, payload: { conversation: null } });
+  assert.deepEqual(await reading, { ok: true, payload: { conversation: null } });
 });
 
 // ---- ProjectContext: Core's current project is authoritative ----

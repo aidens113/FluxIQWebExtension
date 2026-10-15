@@ -103,8 +103,28 @@ export async function uploadStateAsset(
   return contentRef;
 }
 
-/** How long a program call may take. `append-turn` waits for FluxIQ to read and answer the message, which is a model call. */
+/** How long a program call may take, unless its endpoint has a limit of its own below. */
 const CORE_PROGRAM_CALL_TIMEOUT_MS = 120_000;
+
+/**
+ * How long the person's message may take (`append-turn`): FluxIQ reads it with
+ * the model in three attempts and 24 s in all, then answers from the words
+ * alone (`conversations/instructions/interpret.ts` in FluxIQ Core), stores its
+ * answer and starts what it chose. Forty seconds covers that with room to
+ * spare. Until t613 the send waited the two minutes every call gets, so a Core
+ * still waiting on a stalled model left the chat on "Sending your message"
+ * past the Lab's 60 s.
+ */
+const CORE_CHAT_TURN_TIMEOUT_MS = 40_000;
+
+/** Each limit with what the panel says when it runs out. FluxIQ was reached, or may have been, and may still be working on the request. */
+const CALL_LIMITS: Readonly<Record<string, { ms: number; sentence: string }>> = {
+  "append-turn": {
+    ms: CORE_CHAT_TURN_TIMEOUT_MS,
+    sentence: "FluxIQ did not answer your message within 40 seconds. It may still be working on it, so wait for its answer here before sending it again."
+  }
+};
+const DEFAULT_LIMIT = { ms: CORE_PROGRAM_CALL_TIMEOUT_MS, sentence: "FluxIQ did not answer within two minutes. It may still be working on this, so check FluxIQ before trying again." };
 
 /** The code Core's program route puts on a call naming a project outside the paired domain. */
 const PROJECT_DOMAIN_ERROR_CODE = "authorization.project_domain";
@@ -130,6 +150,11 @@ export async function callCoreProgram(
   if (!credentials.token) return { ok: false, code: "not_paired", error: "This browser is not paired with FluxIQ yet." };
   let status: number;
   let bodyText: string;
+  const limit = CALL_LIMITS[endpoint] ?? DEFAULT_LIMIT;
+  // The limit is this call's own timer, and it ends the body read as well as
+  // the wait for headers: the answer is read under the same signal.
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new DOMException("FluxIQ did not answer in time.", "TimeoutError")), limit.ms);
   try {
     const url = new URL(`/api/programs/${encodeURIComponent(programId)}/${encodeURIComponent(endpoint)}`, credentials.coreApiUrl || DEFAULT_CORE_API_URL);
     const response = await fetch(url.toString(), {
@@ -141,7 +166,7 @@ export async function callCoreProgram(
         authorization: `Bearer ${credentials.token}`
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(CORE_PROGRAM_CALL_TIMEOUT_MS)
+      signal: deadline.signal
     });
     status = response.status;
     bodyText = await response.text();
@@ -149,12 +174,12 @@ export async function callCoreProgram(
     // The time limit ran out: FluxIQ was reached, or may have been, and may
     // still be working on the request -- a conversation turn waits on a model.
     // Saying "could not be reached" would invite a retry that does it twice.
-    if (isTimeout(error)) {
-      return { ok: false, code: "timed_out", error: "FluxIQ did not answer within two minutes. It may still be working on this, so check FluxIQ before trying again." };
-    }
+    if (deadline.signal.aborted || isTimeout(error)) return { ok: false, code: "timed_out", error: limit.sentence };
     // No answer, or an answer cut off before its body arrived: either way
     // FluxIQ said nothing the panel can act on.
     return { ok: false, code: "unreachable", error: "FluxIQ could not be reached." };
+  } finally {
+    clearTimeout(timer);
   }
   const body = objectValue(parseJsonBody(bodyText));
   // A project outside the domain this browser was paired for is refused with

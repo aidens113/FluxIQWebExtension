@@ -314,9 +314,21 @@ is replaced by its default (a malformed token is dropped, and the browser pairs
 again), the repair is written back and noted, by field name only, in the problem
 log.
 
-**A panel relay that runs out of time** (two minutes; a conversation turn waits
-on a model) answers `timed_out`, "FluxIQ may still be working on this", rather
-than `unreachable`, so the panel does not invite a retry that does it twice.
+**A panel relay that runs out of time** answers `timed_out`, "FluxIQ may still
+be working on this", rather than `unreachable`, so the panel does not invite a
+retry that does it twice (`background/connection/core-api.ts`). A program call
+waits two minutes, except the person's message (`append-turn`), which waits
+40 s (t613). Core reads a message with the model for at most 24 s, then answers
+from the words alone, and the 40 s also covers storing the answer and starting
+what it chose. The limit is the call's own timer and ends the body read as
+well. When it runs out, the chat stops showing "Sending your message", and the
+person's turn says "FluxIQ did not answer your message within 40 seconds. It
+may still be working on it, so wait for its answer here before sending it
+again." in place of "Couldn't send that. Try again." The thread is then read,
+and once Core's own record of the message shows, it replaces the panel's turn
+and the sentence goes with it (`panel/chat/conversation/controller.ts`). Before
+t613 the send waited the full two minutes, so a Core waiting on a stalled
+model left the chat on "Sending your message" past the Lab's 60 s.
 
 ## Problem Reports
 

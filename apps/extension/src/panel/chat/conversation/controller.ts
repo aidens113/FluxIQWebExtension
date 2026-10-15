@@ -34,6 +34,11 @@
 // and `retry()` reads again at once. The poll keeps
 // reading meanwhile, and the next good read clears the notice.
 //
+// A send FluxIQ did not answer in time (`timed_out`) is different: FluxIQ may
+// well have the message, so the turn shows the background's sentence saying
+// so, the thread is read, and a read that holds a person turn it had not held
+// replaces the panel's turn as for a send that went.
+//
 // Errors end with their cause. A send error clears when the person sends
 // again; the read notice, the send error and every answer error when the
 // connection drops, because the composer is disabled then and "Try again"
@@ -120,13 +125,17 @@ const UNREADABLE_LIST: Extract<PanelResult<unknown>, { ok: false }> = {
 };
 
 const SEND_FAILED = "Couldn't send that. Try again.";
+/** The background's code for a call FluxIQ did not answer in time (`background/connection/core-api.ts`). */
+const TIMED_OUT = "timed_out";
 const ANSWER_FAILED = "Couldn't send your answer. Try again.";
 
 /**
  * The person's message on its way or not sent, the turns Core held when it was
  * sent, and, once Core took it, how many reads had started by then.
+ * `unanswered` marks a send FluxIQ did not answer in time: it may still have
+ * the message, so a read that holds it replaces the panel's turn.
  */
-type Outgoing = { turn: CoreTurn; known: ReadonlySet<string>; deliveredAfterRead?: number };
+type Outgoing = { turn: CoreTurn; known: ReadonlySet<string>; deliveredAfterRead?: number; unanswered?: true };
 
 type Shown = { conversationId: string; projectId: string; revision: number | undefined };
 
@@ -238,10 +247,14 @@ export function createConversationController(request: PanelStore["request"], onC
     // Core's own record of the message replaces the panel's, once a read holds
     // it; and any good read begun after Core took the message replaces it even
     // when Core's turn was not recognised, so it can never linger.
-    if (outgoing !== undefined && outgoing.turn.sendError === undefined) {
+    if (outgoing !== undefined && (outgoing.turn.sendError === undefined || outgoing.unanswered)) {
       const known = outgoing.known;
       const delivered = outgoing.deliveredAfterRead;
-      if ((delivered !== undefined && readsStarted > delivered) || nextTurns.some((turn) => turn.author === "person" && !known.has(turn.turnId))) outgoing = undefined;
+      if ((delivered !== undefined && readsStarted > delivered) || nextTurns.some((turn) => turn.author === "person" && !known.has(turn.turnId))) {
+        // A send that ran out of time turned out to have gone: its sentence goes with it.
+        if (outgoing.unanswered) sendError = undefined;
+        outgoing = undefined;
+      }
     }
     clearReadFailure();
     const pending = new Set(nextTurns.flatMap((turn) => (turn.ask?.status === "pending" ? [turn.ask.askId] : [])));
@@ -358,6 +371,21 @@ export function createConversationController(request: PanelStore["request"], onC
         if (outgoing === mine) outgoing = undefined;
         onChange();
         return result.ok;
+      }
+      if (!result.ok && result.code === TIMED_OUT) {
+        // FluxIQ stores a message before it reads it, so one it did not answer
+        // in time (t613: a model provider that stalled) is probably in the
+        // thread already, with its answer to come. The turn says what
+        // happened, in the background's words, instead of "Sending your
+        // message" for as long as the send was waiting, and the thread is
+        // read: once it holds the message, Core's turn replaces this one.
+        sending = false;
+        sendError = result.sentence;
+        if (outgoing === mine) outgoing = { ...mine, unanswered: true, turn: { ...mine.turn, sendError: result.sentence } };
+        if (shown) shown = { ...shown, revision: undefined };
+        onChange();
+        await controller.refresh();
+        return false;
       }
       if (!result.ok) {
         sending = false;
