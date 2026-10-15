@@ -71,7 +71,8 @@ and pushed after it (2026-10-15): Core t641 (partly refuted advice labelled, vin
 run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sensitive test files). Frozen pair 3
 stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan); t645-t649 fix
 it and are merged and pushed. Frozen pair 4 stopped after wave 22 (`project` 2 of 2; `candidate` towels failed on two
-general t641-path defects). In flight: Core t650, t651. Next: frozen pair 5.
+general t641-path defects); Core t650 (an invited resend is admitted once) and t651 (a row's own name is never the
+request's words) fix them and are merged. Now: frozen pair 5 (waves 27-31, bigbox cart and towels first).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -706,6 +707,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: wave 17 `project` bigbox cart's chat (debug section 8)
 - Validation: after merging dev: `test-extension.mjs background/activity/tests shared/activity panel/chat` -> tests 536, pass 536, fail 0; `check-extension.mjs` exit 0; test-runner check exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream and Core `eca33297`; both pushed. No browser run yet: frozen pair 4's UI review covers the cards
 - Outcome: Accepted. t645-t649 all merged; frozen pair 4 next
+
+### 2026-10-15 — A8 frozen pair 4 wave 22; stopped on two t641-path defects; Core t650, t651
+- Agent: supervisor (wave 22, the stop); read-only debug `reports/a8-towels-run-mva446jf-debug.md`; Core workers t650, t651 (Core ledger)
+- Changed: the A8 Run Plan's frozen pair 4 table and stop note; Core t650 (the repeat guard admits a refusal's invited resend once), t651 (a condition testing a row's own name is never the request's words, nor a reason to refute "Missing rows")
+- Why: wave 22 `candidate` towels: t641's invited resend was refused by the repeat guard, and the condition t641 held tested the product name
+- Validation: wave 22: `project` bigbox cart passed $0.036 (three subflows), towels passed $0.030; `candidate` bigbox cart passed $0.031, towels failed $0.036. Core t650 and t651 each `pnpm check` -> passed; merged and pushed
+- Outcome: Accepted. Frozen pair 5 next
 
 ## Open Questions
 
