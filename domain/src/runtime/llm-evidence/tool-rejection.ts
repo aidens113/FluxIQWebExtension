@@ -310,6 +310,14 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  * - `parameter_not_readable`: a parameter arrived in a shape the client could
  *   not read, so the command was refused before it was dispatched. Write the
  *   node's own parameter shape.
+ * - `parameter_has_no_value`: a parameter the step needs had no value when the
+ *   step ran -- the Flow input or earlier step's output it reads was empty --
+ *   so nothing was sent (t640). `missing` names the parameter, never a value.
+ *   The step's shape is right and rewriting it cannot help: make whatever
+ *   should produce that value produce it, or end naming the input that is
+ *   empty. Until t640 an empty bound `url` reached the page as a navigate with
+ *   nothing to go to and was told as a policy refusal
+ *   (`run-mv9q50ui`, RC3).
  *
  * What a lasting act left unknown (any code the failure had):
  * - `outcome_uncertain`: the act -- a press, a key press, an entry, a move --
@@ -400,6 +408,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_not_scriptable",
   "channel_to_page_failed",
   "parameter_not_readable",
+  "parameter_has_no_value",
   "outcome_uncertain",
   "page_needs_something_first",
   "page_busy_try_later",
