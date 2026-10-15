@@ -675,6 +675,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Validation: wave 17: crossborder passed in both modes ($0.020 `project`, $0.014 `candidate`), bigbox cart `candidate` passed $0.029, `project` failed $0.120. t648 after merging dev: domain tsc (both) exit 0; `test-domain.mjs runtime/llm-evidence` -> tests 1134, pass 1134, fail 0 (the 4 new tests fail on HEAD's arrival.ts and run.ts); audit passed; Core tsc exit 0; vitest llm and project-agents/dispatch -> 216 files, 2083 passed; Core `pnpm check` -> passed; merged downstream `b61d6b37`, Core `5c504b16`; both pushed
 - Outcome: Accepted. Frozen pair 4 waits for t645, t646, t647, t649
 
+### 2026-10-15 — One read value is expressible (t646); t645 and t647 merged in Core
+- Agent: worker t646-read-one-value (two rounds); supervisor verified and integrated; Core t645 and t647 (Core ledger)
+- Changed: `domain/src/output-nodes/definitions.ts` and `output-nodes/extract/` (new): `web.dom.extract` declares a data output `value`, filled from its read by Core's `resultPath` copy; `domain/src/actions/schemas.ts` and the extract catalog text describe the `extract` parameter with every mode; `node-run/replay.ts` carries a replayed read's value on the port; `docs/architecture/web-capabilities.md`, `build-loop.md`
+- Why: wave 17 `project` bigbox cart: one read value could not be handed on, so the builder copied a list extraction
+- Validation: after merging dev: `test-domain.mjs output-nodes actions runtime/llm-evidence/node-run runtime/tests/adapter` -> tests 787, pass 787, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream `340aa8cf`, Core `7a3838ce`; both pushed
+- Outcome: Accepted. Frozen pair 4 waits for t649
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
