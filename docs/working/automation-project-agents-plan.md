@@ -64,8 +64,10 @@ Next: sync the lanes, re-run `project` everything-store, towels in both modes, a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
 Merged since: t609 (the state diff names spots and items), t610 (ARIA groups), t611 (done on a standing yes), t612
-(slow-down repairs only). In flight: Core t613 (a chat turn ends within its bound when the provider stalls), t615 (a
-deterministic time-limit test). Wave 5 relaunches on the pair after t613, once DeepSeek answers again.
+(slow-down repairs only), t613 and t617 (a stalled provider no longer holds a call; the panel's send limit), t615 and
+t618 (a deterministic test; task ids never reused). The wave 5 canary (`run-mv8zw5l2`) found DeepSeek still down and
+an outage ending that blamed the model. In flight: Core t619 (an outage ending names the provider), t616 (two sweep
+flakes made deterministic). Wave 5 relaunches after t619, canary first.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -752,6 +754,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: wave 4: four runs, $0, debug notes. t610 after merging dev: `node scripts/test-domain.mjs runtime/llm-evidence` -> tests 1124, pass 1124, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; merged `d3b2f7c1`. t609 after merging dev: domain state-diff, host-runtime, llm-evidence, runtime tests -> tests 1249, pass 1249, fail 0; domain tsc exit 0; `check-extension.mjs` exit 0; audit passed; merged `1d787ddc`; both pushed
 - Outcome: Accepted
 - Follow-up: a first item added to an empty list, or a list that grew from one item, is not credited as created (named under `cannotUndo`, never a wrong undo); no live check yet that the capture resolves ARIA group names
+
+### 2026-10-14 — The panel's send limit (t613); task ids never reused (t618); second sweep; wave 5 canary
+- Agent: supervisor (sweep, canary, debugs); workers t613 (extension side), t618 (downstream side); supervisor verified and integrated
+- Changed: t613 `apps/extension/src/background/connection/core-api.ts` gives a chat message 40 s (was 120 s) and `panel/chat/conversation/controller.ts` shows the timeout sentence on the turn, stops sending and reads the thread again; `docs/architecture/extension-client.md`; t618 `scripts/task/` records each allocated id as a local ref and counts it, `docs/architecture/repository-layout.md`
+- Why: wave 4's panel sat on "Sending your message" while DeepSeek stalled; the allocator reused abandoned ids
+- Validation: t613 after merging dev: `check-extension.mjs` exit 0; `test-extension.mjs background/connection/tests panel/chat background/panel/tests` -> tests 668, pass 668, fail 0; audit passed; merged `d922a2f8`. t618: `node --test scripts/task/tests` -> 62 passed; audit passed. Sweep (dev `8652b403`, `pnpm -r --no-bail test`): test-runner failed one test under load, then `node --test "dist/**/*.test.js"` -> tests 2301, pass 2296, fail 0 (5 skipped) twice, once under Core's suite; every other package passed. Canary `run-mv8zw5l2-98064abf` (`project` social, slot 3): failed, $0, DeepSeek still down; debug note written
+- Outcome: Accepted
+- Follow-up: wave 5 after t619 (an outage ending that names the provider), with a canary first while DeepSeek's state is unknown
 
 ## Open Questions
 
