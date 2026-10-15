@@ -648,7 +648,7 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: frozen pair 2 `project` bigbox cart: a handle moved to a later panel's close button without a page load, three hidden look-alikes tied at playback, and the Lab read the optional step Core went past as the run's failure though the product and the oracle passed
 - Validation: frozen pair 2 (downstream `805f7cbd`, Core `797452c1`): `project` 9 of 10 by the Lab, 10 of 10 by product and oracle; `candidate` 8 of 9 (towels failed, then refused as unchanged). t642 after merging dev: domain tsc (both) exit 0; `test-domain.mjs runtime/llm-evidence` -> tests 1130, pass 1130, fail 0; `check-extension.mjs` exit 0; `test-extension.mjs content/action-runtime content/identity` -> 483 pass, 0 fail; audit passed; merged `c5830221`. t643 after merging dev and rebuilding Core: Core tsc exit 0; vitest executor -> 101 files, 875 passed (the new ladder test fails without the mark); test-runner check and build exit 0; flow-lane, optional-bypass, repair, creation, adaptation dist tests -> tests 493, pass 493, fail 0; audit passed (both repos)
 - Outcome: Accepted. Not live-tested yet; frozen pair 3 exercises both
-- Follow-up: a child frame that reloads while the top page does not now gets new handle numbers (safe, less helpful); a step the dispatcher fails with no outputs is recorded as succeeded on its failed route and never reaches the ladder (seen in a Core unit test; real web failures carry outputs)
+- Follow-up: a child frame that reloads while the top page does not now gets new handle numbers (safe, less helpful)
 
 ## Open Questions
 
