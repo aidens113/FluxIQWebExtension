@@ -82,6 +82,39 @@ test("U5: a send that fails says so on the person's turn, and the next send repl
   assert.equal(controller.state().turns.filter((turn) => turn.text === "hello").length, 1);
 });
 
+// t613: FluxIQ took the message but did not answer the send in time (a model
+// provider that stalled). The turn says what happened, not "Sending your
+// message" for as long as the send waited, and once a read holds Core's own
+// record of the message it replaces the panel's turn.
+const TIMED_OUT_SENTENCE = "FluxIQ did not answer your message within 40 seconds. It may still be working on it, so wait for its answer here before sending it again.";
+const TIMED_OUT: PanelResult<unknown> = { ok: false, code: "timed_out", sentence: TIMED_OUT_SENTENCE };
+
+test("t613: a send FluxIQ did not answer in time says so on the turn, and Core's record replaces it once read", async () => {
+  const core = fakeCore(1);
+  let storedButSilent = true;
+  const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> => {
+    if (message.type !== RUNTIME_MESSAGES.panelConversationSend) return core.request<T>(message);
+    // Core stores the message, then its answer does not reach the panel in time.
+    await core.request<T>(message);
+    const kept = core.turns.splice(core.turns.length - 2, 2);
+    if (!storedButSilent) core.turns.push(...kept);
+    return TIMED_OUT as PanelResult<T>;
+  };
+  const controller = createConversationController(request, () => undefined, manualClock().clock);
+  controller.setConnected(true);
+  await controller.refresh();
+
+  assert.equal(await controller.send("Find a desk lamp"), false);
+  const state = controller.state();
+  assert.equal(state.sending, false, "no longer \"Sending your message\"");
+  assert.deepEqual([state.turns.at(-1)!.text, state.turns.at(-1)!.sendError], ["Find a desk lamp", TIMED_OUT_SENTENCE], "the turn says what happened, in the background's words");
+
+  storedButSilent = false;
+  assert.equal(await controller.send("Find a desk lamp"), false);
+  assert.deepEqual(controller.state().turns.map((turn) => [turn.text, turn.sendError]), [["message 1", undefined], ["Find a desk lamp", undefined], ["Working on: Find a desk lamp", undefined]], "Core's record of the message and its answer replace the panel's turn");
+  assert.equal(controller.state().sendError, undefined);
+});
+
 const ready: ConversationState = { mode: "thread", turns: [], reading: false, sending: false, answering: new Set(), answerErrors: new Map() };
 
 test("U5: the composer is empty the moment the message is sent, and gets the words back if the send fails", async () => {
