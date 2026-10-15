@@ -65,3 +65,34 @@ test("a Core-paired id still clears this repository when Core is behind", async 
 
   assert.equal(await nextTaskId(here, { coreRepositoryRoot: core }), "t051");
 });
+
+// An abandoned task leaves no branch and no merge, so before ids were recorded
+// as refs its number was handed out again (t574, t598, t616).
+test("an id recorded as a ref stays spent after its branch is gone", async (t) => {
+  const root = await repository({ merged: ["t003"] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await run("git", ["-C", root, "update-ref", "refs/fluxiq/task-ids/t009", "HEAD"]);
+
+  assert.equal(await nextTaskId(root), "t010");
+});
+
+test("a Task trailer on any local branch spends its id, even with no branch, merge or ref naming it", async (t) => {
+  const root = await repository({ merged: ["t003"] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) => run("git", ["-C", root, ...args]);
+  await git("checkout", "--quiet", "-b", "side-work");
+  await git("commit", "--quiet", "--no-gpg-sign", "--allow-empty", "-m", "fix: something\n\nTask: t012\nWorker: test");
+  await git("checkout", "--quiet", "dev");
+
+  assert.equal(await nextTaskId(root), "t013");
+});
+
+test("a Core-paired id clears ids recorded only in Core", async (t) => {
+  const here = await repository({ merged: ["t004"] });
+  const core = await repository({ merged: ["t004"] });
+  t.after(() => Promise.all([rm(here, { recursive: true, force: true }), rm(core, { recursive: true, force: true })]));
+  await run("git", ["-C", core, "update-ref", "refs/fluxiq/task-ids/t020", "HEAD"]);
+
+  assert.equal(await nextTaskId(here), "t005", "unpaired allocation does not read Core");
+  assert.equal(await nextTaskId(here, { coreRepositoryRoot: core }), "t021");
+});

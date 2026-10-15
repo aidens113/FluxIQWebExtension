@@ -732,6 +732,31 @@ the extension suite report two false failures, and `scripts/check/core-build.mjs
 only proves the build matches the checked-out source, not that the source is
 current.
 
+### Task Ids Are Never Reused
+
+`pnpm task start` takes the next number above every id already spent, and an
+id stays spent once it is allocated, whatever happens to the task afterwards.
+Spent means any of:
+
+- an open `task/t<NNN>-` branch;
+- a `Merge task t<NNN>:` subject on the integration branch's first-parent
+  history;
+- a local ref `refs/fluxiq/task-ids/t<NNN>`, which every start writes the
+  moment it commits to an id (not on `--dry-run`), pointing at the commit the
+  task started from;
+- a `Task: t<NNN>` trailer on any local branch.
+
+A Core-paired start scans both repositories and writes the ref in both, at each
+side's start point. Abandon and prune never delete these refs, so an abandoned
+task's number is never handed out again; before them it was, three times (t574,
+t598, and t616, abandoned and re-allocated seconds apart), and a reused id names
+two units of work in trailers, ledgers and reports. The ref is created only if
+it does not exist, so two starts racing for one number cannot both take it: the
+second is refused before it creates anything. A fresh clone has no refs and
+still clears every merged id from history. Core's own `pnpm task start` applies
+the same rule (`scripts/task/task-id.mjs` and `record-task-id.mjs` in each
+repository); keep the two in step.
+
 ## Panel Commands
 
 `pnpm dev` builds the web panel host, runs repository-local FluxIQ setup, and

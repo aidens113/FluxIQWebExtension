@@ -13,11 +13,27 @@
 // disambiguate. On 2026-09-24 this repository's next free id was t122 while
 // Core had already merged its own t122 and t123, so the next paired task would
 // have collided. Both roots are scanned and the higher wins.
+//
+// Branches and merges alone forget an abandoned task: its branch is deleted
+// and it never merged, so its number was handed out again. t574, t598 and t616
+// (abandoned at 19:10 on 2026-10-14 and re-allocated seconds later) each came
+// to name two units of work while trailers, ledgers and reports still pointed
+// at the first. So every allocation is recorded as a local ref,
+// `refs/fluxiq/task-ids/t<NNN>`, at the commit the task started from, in each
+// repository it was allocated against (`record-task-id.mjs`), and those refs
+// count as used. A ref cannot conflict between two tasks, survives branch
+// deletion, abandon and prune (none of which touch it), and costs nothing.
+// `Task: t<NNN>` trailers on any local branch count as well, which covers ids
+// spent before the refs existed. A fresh clone has neither, and still clears
+// every merged id from history exactly as before.
 
 import { runGit } from "../worktree/index.mjs";
+import { TASK_ID_REF_PREFIX } from "./task-id-ref-prefix.mjs";
 
 const OPEN = /^task\/t(\d+)-/u;
 const MERGED = /^Merge task t(\d+):/u;
+const RECORDED = /^refs\/fluxiq\/task-ids\/t(\d+)$/u;
+const TRAILER = /^t(\d+)$/u;
 
 export async function nextTaskId(repositoryRoot, { integrationBranch = "dev", coreRepositoryRoot = null, coreIntegrationBranch = "dev" } = {}) {
   const roots = [[repositoryRoot, integrationBranch]];
@@ -32,9 +48,13 @@ export async function nextTaskId(repositoryRoot, { integrationBranch = "dev", co
 async function usedIds(root, integrationBranch) {
   const branches = await runGit(root, ["branch", "--list", "--format=%(refname:short)", "task/*"]);
   const subjects = await runGit(root, ["log", "--first-parent", "--format=%s", integrationBranch]);
+  const recorded = await runGit(root, ["for-each-ref", "--format=%(refname)", TASK_ID_REF_PREFIX]);
+  const trailers = await runGit(root, ["log", "--branches", "--format=%(trailers:key=Task,valueonly)"]);
 
   return [
     ...branches.split("\n").map((line) => OPEN.exec(line.trim())?.[1]),
-    ...subjects.split("\n").map((line) => MERGED.exec(line.trim())?.[1])
+    ...subjects.split("\n").map((line) => MERGED.exec(line.trim())?.[1]),
+    ...recorded.split("\n").map((line) => RECORDED.exec(line.trim())?.[1]),
+    ...trailers.split("\n").map((line) => TRAILER.exec(line.trim())?.[1])
   ].filter(Boolean).map(Number);
 }
