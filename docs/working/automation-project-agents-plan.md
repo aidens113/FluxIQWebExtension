@@ -63,10 +63,10 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t635. Waves 7 and 8 (2026-10-15): `project` passed everything-store twice and social three
-times in a row; towels failed in both modes on the judge in wave 8, fixed structurally (t631 weighs a no by what it
-references, t633 and t634 hold an upheld exclusion across trials and briefs). Next: wave 9 on the pair after t635, the
-same four runs; then the four remaining load-sensitive test files.
+Merged since: t609-t637. Waves 7-9 (2026-10-15): `project` passed everything-store three times in a row, social
+three of four, towels two of three; wave 9's social failure was fixed by t636 and t637. Next: the frozen-pair
+comparison on the pair after t637 (the five A8 tasks in both modes, twice, no fixes between), starting with
+crossborder hub-to-cart and bigbox pickup-cart in both modes; then the four remaining load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -753,6 +753,13 @@ Entries for 2026-10-14 (A8 rounds one to wave 4, t573-t613 downstream sides, the
 - Why: wave 8 on the pair after t629 and t630
 - Validation: `project` everything-store passed ($0.048, its second in a row), `project` social passed ($0.068, its third in a row; a slow-down repair added the branch); `project` towels failed ($0.082: the exact rows four times, judges wrong) and `candidate` towels failed ($0.020: a site filter admitting delivery, judged yes); spend ledger
 - Outcome: Accepted. Towels in both modes is a judge problem (Core t631, t632, t633); wave 9 after t633
+
+### 2026-10-15 — A8 wave 9
+- Agent: supervisor (wave 9, four runs); read-only debug `a8-social-run-mv9ml775-debug.md`
+- Changed: the A8 Run Plan's wave 9 table, the tally of waves 5-9; debug notes for all four runs
+- Why: wave 9 on the pair after t631-t635
+- Validation: `project` everything-store passed ($0.037, third in a row), `project` towels passed ($0.096), `candidate` towels passed ($0.030, Core reported `unverified`, the oracle passed), `project` social failed ($0.088, fixed by Core t636 and t637); spend ledger
+- Outcome: Accepted. From wave 10 the pair is frozen for the default-flip comparison: the five A8 tasks in both modes, twice, with no fixes in between; wave 10 starts with crossborder hub-to-cart and bigbox pickup-cart in both modes as a regression check
 
 ## Open Questions
 
