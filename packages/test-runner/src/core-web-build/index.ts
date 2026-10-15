@@ -4,6 +4,7 @@
 // served read-only by every run that shares that Core -- including runs in
 // other worktrees, which is what stops several of them building it at once.
 
+export { runBoundedBuildStep, type BuildStepBound } from "./build-step.js";
 export { coreWebBuildCacheRoot } from "./cache-root.js";
 export { inspectCoreWebBuild, type CoreWebBuildDecision } from "./decision.js";
 export { collectCoreWebBuildInputs, type CollectedCoreWebBuildInputs } from "./inputs.js";

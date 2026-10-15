@@ -5,6 +5,7 @@ import { RunnerFailure } from "../failure.js";
 import type { ProcessSpec, ProcessSupervisor } from "../process-supervisor.js";
 import { acquireWorkspaceOperationLock, type WorkspaceOperationLock, type WorkspaceOperationLockOptions } from "../workspace-lock.js";
 import { coreWebBuildEnvironment } from "./build-environment.js";
+import { runBoundedBuildStep, type BuildStepBound } from "./build-step.js";
 import { coreWebBuildCacheRoot } from "./cache-root.js";
 import { collectCoreWebBuildInputs } from "./inputs.js";
 import { coreWebBuildKey } from "./key.js";
@@ -16,10 +17,16 @@ import { assertStampedRuntimeIdentity } from "./stamped-identity.js";
 import { prepareWebWorkspace } from "./workspace.js";
 
 const BUILD_PROCESS_NAME = "core-web-build";
-/** The one-off build's own bound. No earlier bound is widened: the build step did not exist before. */
-const BUILD_TIMEOUT_MS = 600_000;
+/**
+ * `next build`'s bound. It prints as it moves through its phases, but its
+ * compile phase can be silent for minutes on a loaded machine, so a build is
+ * hung only after ten silent minutes; thirty minutes in all is the backstop.
+ * It was a fixed ten minutes, which a slow machine could exceed while the
+ * build still worked (t620).
+ */
+const BUILD_BOUND: BuildStepBound = Object.freeze({ quietMs: 10 * 60_000, ceilingMs: 30 * 60_000 });
 /** A waiter outlasts one whole build by the lock holder, plus the holder's staging copy. */
-const WAIT_TIMEOUT_MS = BUILD_TIMEOUT_MS + 120_000;
+const WAIT_TIMEOUT_MS = BUILD_BOUND.ceilingMs + 120_000;
 const LOCK_POLL_INTERVAL_MS = 1_000;
 /**
  * `workspace-lock.ts` creates its file and then writes the owner record, so a
@@ -44,11 +51,12 @@ export type CoreWebBuildOptions = {
 };
 
 export type CoreWebBuildDependencies = {
-  prepareAdapter: typeof serverAdapterBuild.prepare;
+  /** Leaves Core's gateway server artifact current; what it did (reused or generated) is its own log line. */
+  prepareAdapter: (options: CoreWebBuildOptions) => Promise<unknown>;
   validateAdapterCopy: typeof serverAdapterBuild.validateCopy;
   collectInputs: (fluxiqRepositoryRoot: string) => Promise<{ inputs: CoreWebBuildInputs; nextExecutable: string }>;
   stageWorkspace: (fluxiqRepositoryRoot: string, webDirectory: string) => Promise<unknown>;
-  runBuild: (supervisor: ProcessSupervisor, spec: ProcessSpec, timeoutMs: number) => Promise<void>;
+  runBuild: (supervisor: ProcessSupervisor, spec: ProcessSpec, bound: BuildStepBound) => Promise<void>;
   lock: WorkspaceOperationLockOptions;
   /**
    * Whether the cache root leaves room for the build. A collaborator because
@@ -58,20 +66,20 @@ export type CoreWebBuildDependencies = {
    * budget rightly refuses. Path length has tests of its own.
    */
   pathBudget: (cacheRoot: string) => CoreWebBuildPathBudget;
-  buildTimeoutMs: number;
+  buildBound: BuildStepBound;
   waitTimeoutMs: number;
   lockSettleMs: number;
   pollIntervalMs: number;
 };
 
 const defaultDependencies: CoreWebBuildDependencies = {
-  prepareAdapter: serverAdapterBuild.prepare, validateAdapterCopy: serverAdapterBuild.validateCopy,
+  prepareAdapter: options => serverAdapterBuild.prepare(options), validateAdapterCopy: serverAdapterBuild.validateCopy,
   collectInputs: root => collectCoreWebBuildInputs(root),
   stageWorkspace: prepareWebWorkspace,
-  runBuild: (supervisor, spec, timeoutMs) => supervisor.run(spec, timeoutMs),
+  runBuild: (supervisor, spec, bound) => runBoundedBuildStep(supervisor, spec, bound),
   lock: {},
   pathBudget: cacheRoot => coreWebBuildPathBudget(cacheRoot),
-  buildTimeoutMs: BUILD_TIMEOUT_MS,
+  buildBound: BUILD_BOUND,
   waitTimeoutMs: WAIT_TIMEOUT_MS,
   lockSettleMs: LOCK_SETTLE_MS,
   pollIntervalMs: LOCK_POLL_INTERVAL_MS,
@@ -167,9 +175,12 @@ async function buildAndPublish(options: CoreWebBuildOptions, dependencies: CoreW
       shell: process.platform === "win32",
       env: coreWebBuildEnvironment(fluxiqRoot),
       logPath: options.logPath,
-    }, dependencies.buildTimeoutMs);
+    }, dependencies.buildBound);
   } catch (cause) {
-    throw new RunnerFailure("process.startup", "Core web panel production build did not succeed", { cause, details: { process: BUILD_PROCESS_NAME } });
+    // A timeout keeps its own sentence -- the step, the bound it hit, the
+    // limit and the elapsed time -- rather than only the generic one.
+    const timeout = cause instanceof RunnerFailure && cause.details?.bound !== undefined ? cause : undefined;
+    throw new RunnerFailure("process.startup", timeout ? `Core web panel production build did not succeed. ${timeout.message}` : "Core web panel production build did not succeed", { cause, details: { ...timeout?.details, process: BUILD_PROCESS_NAME } });
   }
   const buildId = await readBuildId(webDirectory);
   if (!buildId) throw new RunnerFailure("process.startup", "Core web panel production build left no build id", { details: { process: BUILD_PROCESS_NAME } });

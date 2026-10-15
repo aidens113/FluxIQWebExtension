@@ -58,7 +58,7 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
     pollIntervalMs: 5,
     waitTimeoutMs: 10_000,
     lockSettleMs: 2_000,
-    buildTimeoutMs: 1_000,
+    buildBound: { quietMs: 1_000, ceilingMs: 1_000 },
   };
   const fakeBuild: CoreWebBuildDependencies["runBuild"] = async (_supervisor, spec) => {
     builds.push(spec);
@@ -389,5 +389,23 @@ test("native canonical preparation precedes input collection and source-copy rej
     const order: string[] = [];
     await assert.rejects(() => prepare({ prepareAdapter: async () => { order.push("native"); }, collectInputs: async () => { order.push("collect"); return { inputs, nextExecutable: "owned-next" }; }, validateAdapterCopy: async () => { order.push("copy"); throw new Error("wrong native copy"); } }), /Core web panel production build could not be prepared/);
     assert.deepEqual(order, ["native", "collect", "copy"]); assert.equal(builds.length, 0);
+  });
+});
+
+test("a silent, hung `next build` fails naming the step, the bound it hit, its limit and the elapsed time, and is not published", async () => {
+  await withHarness(async ({ keyDirectory, prepareWithDefaultBuild }) => {
+    const hung = new ProcessSupervisor(() => fakeChild(), async () => undefined);
+    await assert.rejects(prepareWithDefaultBuild({ buildBound: { quietMs: 50, ceilingMs: 5_000 } }, hung), (error: unknown) => {
+      assert.ok(error instanceof RunnerFailure);
+      assert.equal(error.category, "process.startup");
+      assert.match(error.message, /^Core web panel production build did not succeed\. Lab startup failure: build step core-web-build printed nothing for 0 s/u);
+      assert.equal(error.details?.step, "core-web-build");
+      assert.equal(error.details?.bound, "quiet");
+      assert.equal(error.details?.limitMs, 50);
+      assert.equal(typeof error.details?.elapsedMs, "number");
+      return true;
+    });
+    await hung.cleanup().catch(() => undefined);
+    assert.equal(await exists(path.join(keyDirectory, "published.json")), false);
   });
 });
