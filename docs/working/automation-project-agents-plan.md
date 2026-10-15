@@ -425,6 +425,19 @@ account, and t632 holds an upheld exclusion across a subflow's trials.
 towels F F P F P. The default-flip rule wants two consecutive passes per site on one frozen pair for both modes; no
 wave has yet been repeated on an unchanged pair.
 
+**Frozen pair** (downstream `112ad66e`, Core `cf928307`, after t636 and t637), waves 10 and 11:
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | failed, $0.070: overlapping plan parts, an output on an undeclared port, a url-less navigate reported as a policy refusal (Core t638, t639; downstream t640) | **passed**, $0.016 |
+| bigbox-retail-pickup-cart | **passed**, $0.042 | **passed**, $0.035 |
+| everything-store-plus-earbuds-under-50 | **passed**, $0.036 | **passed**, $0.067 |
+| social-network-feed-confirm-requests | **passed**, $0.048 | not run yet |
+| bigbox-retail-pickup-towels | not run yet | not run yet |
+
+The crossborder failure is pre-existing (not a regression of t625-t637); its fixes end this frozen pair, so the
+comparison restarts on the pair after t638-t640.
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
