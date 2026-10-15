@@ -668,6 +668,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Outcome: Accepted. Not live-tested yet; frozen pair 3 exercises both
 - Follow-up: a child frame that reloads while the top page does not now gets new handle numbers (safe, less helpful)
 
+### 2026-10-15 — A8 frozen pair 3 wave 17; stopped on a general `project` defect; a repair may revisit its own addresses (t648)
+- Agent: supervisor (wave 17, the stop); read-only debug `reports/a8-bigbox-cart-run-mv9zn5ob-debug.md`; workers t645-t649 (one per fix, partitioned by file); t648 two rounds (round 1 blocked: Core never passed the repaired proposal); supervisor reserved the opening call-id prefix in Core, verified and integrated
+- Changed: the A8 Run Plan's frozen pair 3 table and stop note; t648 `domain/src/runtime/llm-evidence/node-run/arrival.ts` reads `repairs` on Core's opening call (the repaired proposal's calls) and `run.ts` counts their navigation addresses as held; Core's opening id is recognised scoped (`initial.<toolId>.<scope>`) as well as unscoped, so a scoped builder's `held`, `arrived` and `repairs` are no longer refused as unexpected keys; Core `project-agents/dispatch/run-brief.ts` sends `repairs`, and `llm/evidence-loop/call-id.ts` files a model-written `initial.` id under `model.`
+- Why: frozen pair 3 `project` bigbox cart failed on a general chain (an invented hand-off value, code-only returns, an amendment dropping the person's first request, a false "cannot be done"); its repair builder was refused its own proposal's address six times
+- Validation: wave 17: crossborder passed in both modes ($0.020 `project`, $0.014 `candidate`), bigbox cart `candidate` passed $0.029, `project` failed $0.120. t648 after merging dev: domain tsc (both) exit 0; `test-domain.mjs runtime/llm-evidence` -> tests 1134, pass 1134, fail 0 (the 4 new tests fail on HEAD's arrival.ts and run.ts); audit passed; Core tsc exit 0; vitest llm and project-agents/dispatch -> 216 files, 2083 passed; Core `pnpm check` -> passed; merged downstream `b61d6b37`, Core `5c504b16`; both pushed
+- Outcome: Accepted. Frozen pair 4 waits for t645, t646, t647, t649
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
