@@ -359,6 +359,19 @@ DeepSeek still down; its chat turn now ended inside its bound, but the build's e
 supervisor (Core t619). Canary 2 (`run-mv93ywox`, after t619) failed at Lab startup, $0: the gateway server build was
 stopped at a fixed 60 s on a loaded machine (downstream t620). DeepSeek's incident closed about 23:20 local.
 
+**Wave 5** (downstream `9f362856`, Core `72487d26`, after t605-t621; all four at once):
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| everything-store-plus-earbuds-under-50 | **passed**, $0.085 (first `project` pass here; one builder, whole test yes first time) | not run |
+| social-network-feed-confirm-requests | failed, $0.063: the whole test passed after a slow-down recovery, the repair came back with the pass standing, and the supervisor's completions were refused for their shape until a guard stall lost the pass (Core t622) | not run |
+| bigbox-retail-pickup-towels | failed, $0.176: the oracle's exact 9 rows at step 0051 and three more times, never confirmed: rows a text condition left out are not settled, sponsored copies read as dropped (Core t624) | failed, $0.048: a Flow of 17 rows judged yes; its Next followed an arrow that drops every filter (downstream t623) and the judges missed it |
+
+**Reading of wave 5 (supervisor, 2026-10-15):** the page-view group fixes worked (every facet named, the right ones
+ticked, in both modes); what failed is downstream of building: pagination that loses the list's scope, a judge that
+cannot confirm a correct text-filtered list, and a completion path that throws away a standing pass. All three are
+being fixed; the next wave reruns all three failing runs and `project` everything-store for a consecutive pass.
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
