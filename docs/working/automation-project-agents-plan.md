@@ -355,6 +355,11 @@ any call (the instruction tasks were named without their scenario prefix, a supe
 defect: the chat's turn stayed open well past its own 24 s bound and the panel showed "Sending your message" (Core
 t613). Rerun on the same pair once the incident is resolved.
 
+**Wave 5 canaries** (one run first while DeepSeek's state was unknown): canary 1 (`run-mv8zw5l2`, after t613) found
+DeepSeek still down; its chat turn now ended inside its bound, but the build's ending blamed the model and the
+supervisor (Core t619). Canary 2 (`run-mv93ywox`, after t619) failed at Lab startup, $0: the gateway server build was
+stopped at a fixed 60 s on a loaded machine (downstream t620). DeepSeek's incident closed about 23:20 local.
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
