@@ -64,8 +64,12 @@ Next: sync the lanes, re-run `project` everything-store, towels in both modes, a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
 Merged since: t609-t640. The first frozen pair (after t637) passed six of seven runs; `project` crossborder failed on
-pre-existing defects fixed in t638-t640. Next: the comparison restarts on the pair after t640, the five A8 tasks in
-both modes, twice, no fixes between; then the four remaining load-sensitive test files.
+pre-existing defects fixed in t638-t640. Frozen pair 2 (after t640, A8 Run Plan) is done: `project` 9 of 10 by the
+Lab (10 of 10 by product and oracle), `candidate` 8 of 9; the default is not flipped on it (one Lab misread). In
+flight (2026-10-15): Core t641 (partly refuted advice labelled, vindicated conditions kept), downstream t642 (handles
+never re-bind without a load; hidden-only ties are not found), t643 (Lab: a bypassed optional step is not the run's
+failure), Core t644 (the four remaining load-sensitive test files). Next: merge them, sync the lanes, frozen pair 3
+(the five tasks, both modes, twice, no fixes between) decides the flip.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
