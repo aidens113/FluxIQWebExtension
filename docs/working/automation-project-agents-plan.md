@@ -63,10 +63,9 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t628. Wave 5 (2026-10-15): `project` everything-store passed. Wave 6: `candidate` towels and
-`project` social passed; everything-store and `project` towels failed on two regressions (t622's repair context, t623's
-default select) and on a brief's fixed share and two judge defects, all fixed (t625-t628). Next: wave 7, the same four
-runs; then the four remaining load-sensitive test files.
+Merged since: t609-t630. Wave 7 (2026-10-15): `project` passed everything-store, social and towels on one pair;
+`candidate` towels failed on a judge defect fixed in t629. Next: wave 8 on the pair after t630, the same four runs,
+then wave 9 on the same pair if nothing new is found; then the four remaining load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -689,79 +688,8 @@ build does today until A5 lands and the mode is chosen.
 Entries for 2026-10-13 (plan, concurrency decision, W1-W3, the sweep fix-forward, W5, W7) are archived in
 [archive/2026-10-15-ledger-2026-10-13.md](automation-project-agents-plan/archive/2026-10-15-ledger-2026-10-13.md).
 
-### 2026-10-14 — A8 round one, four launches in mode `project`
-- Agent: supervisor (launch, supervision, debugs); Core fixes t568, t569 by workers, supervisor-verified
-- Changed: launches 1-4 of round one (A8 Run Plan, Attempts); 15 debug notes under `language-driven-flow-loop-plan/debugs/`; call cap 64 -> 120 for both modes
-- Why: each launch failed on a different defect, each fixed before the next; no run reached a judged whole run
-- Validation: `C:/Users/osrs_/FluxStuff/lab-slots/spend-ledger.jsonl`, today's sum -> $0.4502 billed, every run under its $0.25 ceiling; launch 4's results read from `lab-runs/2026-10-14/<runId>/steps/` (crossborder, bigbox, social ended `flow_bootstrap.run_budget_calls_exhausted`; everything-store `flow_bootstrap.post_provider_validation_failed`)
-- Outcome: Partial. Round one relaunches after t570 merges and the four lanes are synced
-- Follow-up: judge reliability on filtered list reads (everything-store, both modes)
-
-### 2026-10-14 — W8 orphaned Lab repair code (t573); everything-store judge audit
-- Agent: workers t573-w8-lab-orphaned-repair-code and a8-everything-store-judge-audit (read-only); supervisor verified and integrated
-- Changed: W8 removed identity-drift's callerless `repair.ts`, the adaptation gate's dead `declaredRepair` input and its `declared_repair_not_made` reason, six stale comments; the audit `reports/a8-everything-store-judge-audit.md`
-- Why: W8 was left open by t559; the audit settles whether run-mv7vor5f-ea4d08b4's "no" verdicts were right
-- Validation: in the t573 worktree: `node --test` gate and flow-lane-evidence-sizes tests -> pass 10, fail 0; identity-drift scenario tests -> pass 14, fail 0; test-runner and scenario-lab checks -> reuse (no errors); `pnpm structure:check` -> passed (194 warnings, 639 baselined); merged `ebde456e`. Audit: 3 of 5 subflow-trial verdicts wrong (two on exactly the oracle's 13 rows); cause in Core `result-verification/read-account/accounts.ts:108`
-- Outcome: Accepted. Core t574 fixes the judge's evidence before round one relaunches
-- Follow-up: the builder's accessory exclusion dropped three real items in revisions 1 and 3 (a builder-reasoning miss, not mirrored into guidance)
-
-### 2026-10-14 — Lab call backstop at Core's 250 (t576); A8 launch five
-- Agent: supervisor (t576, launch, debugs); bigbox debug by worker a8-bigbox-run-mv8186yr-debug (read-only)
-- Changed: `packages/test-contracts/src/llm.ts` `LLM_LAB_MAX_CALLS_PER_RUN` 64 -> 250 (Core's own backstop), tests that meant "one past the cap" now say so by the constant, `testing-facility.md`; launch 5 debugs (4) and `reports/a8-bigbox-run-mv8186yr-debug.md`
-- Why: the first launch-5 try declared 120 calls and the Lab refused it before any call ($0); a 64-call cap ended project builds at a third of their dollars
-- Validation: test-contracts `pnpm run test` -> pass 169, fail 0; test-runner `node --test dist/tests/*.test.js dist/live-llm/tests/*.test.js` -> pass 508, fail 0; existing-fluxiq-control tests -> pass 32, fail 0; test-runner check -> 0 errors; audit passed; merged `06142697`. Launch 5 spend -> $0.104 over four runs (ledger)
-- Outcome: Accepted; launch 5 failed on Core defects fixed by t577 and t578-t582
-
-### 2026-10-14 — The Lab names Core's refusals (t589); downstream side of t583 and t585
-- Agent: worker t589-lab-core-refusal-reason (two rounds); supervisor (t583 pin test); t585's domain arrival rule; supervisor verified and integrated
-- Changed: a 4xx from Core on a Lab control request is the closed reason `core.refused` with endpoint, HTTP status and Core's sentence (kept only if it passes redaction and `isScreenedFacilityRefusal`), printed by the campaign row, attempt and run-outcome lines; the Lab's call cap is pinned to Core's backstop by a plan test; the domain counts an opening on a prepared entry as arriving (`domain/src/runtime/llm-evidence/node-run/{run,arrival}.ts`)
-- Why: launch 6 reported a passing build's Core refusal as `unclassified`; three 64s had drifted from Core's 250; a prepared builder was never "arrived"
-- Validation: t589: test-contracts `pnpm run test` -> pass 170, fail 0; test-runner facility-failure + run-evaluation -> pass 86, fail 0; lab scripts row, lab-run, live-guards -> pass 98, fail 0; test-runner check -> 0 errors; audit passed. t583 pin: live-llm-plan tests -> pass 26, fail 0. t585 domain: node-run -> pass 356; domain tsc exit 0. Merged `bad7ade1` (t589), `6400924e` (t583), `5e9ec9c2` (t585)
-- Outcome: Accepted
-
-### 2026-10-14 — The Lab waits Core's project build bound (t592); domain handle identity (t596)
-- Agent: workers t592-project-build-deadline (downstream side), t596-domain-handle-identity; supervisor verified and integrated
-- Changed: `packages/test-runner/src/flow-lane/creation/chat/build-deadline.ts`: a project-mode chat build waits Core's `AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS` plus the chat's steps (1_995_000 ms), candidate and legacy unchanged (795_000 ms), pinned to Core's export; `domain/src/runtime/llm-evidence/plan-resolution/element-identity.ts`: where views of one control disagree, the newest view fills the gap one signal group at a time, the floor of two unchanged
-- Why: A8 launch 7 lost three project builds to the 795 s deadline; a builder's submission was refused `web.handle.unidentifiable` after an earlier brief's press changed a control
-- Validation: t592: test-runner check -> 0 errors; chat tests + live-llm-plan -> pass 51, fail 0; audit passed; merged `60d4629e`. t596: domain llm-evidence -> tests 1105, pass 1105; element-fingerprint -> pass 13; domain tsc exit 0; audit passed; merged `889effd2`
-- Outcome: Accepted
-
-### 2026-10-14 — First full sweep of the day, both repositories
-- Agent: supervisor (background sweep in a throwaway task worktree, abandoned after; its id was reused by the next task)
-- Changed: `domain/src/tests/domain.test.ts`: its recording carries a description (Core requires one since `18ee3f60`, 2026-10-13; the entry failed to load); `4142a836`
-- Why: about thirty merges today across both repositories; the twice-a-day sweep rule
-- Validation: Core `npx vitest run` (packages/fluxiq, dev `5ef45408`) -> Test Files 1253 passed, 3 skipped; Tests 11508 passed, 7 skipped. Downstream `pnpm -r --no-bail test` (dev `4142a836`) -> boundary-audit 6, real-site-policy 7, test-matrix 17, test-contracts 170, domain 2027, agent-orchestrator 16, test-evidence 19, scenario-lab 702, extension 3004, test-runner 2294 tests, fail 0 in each, none failed to load (the first run stopped at the domain entry above)
-- Outcome: Accepted; both repositories' full suites pass
-
-### 2026-10-14 — A8 rounds one and two on one pair; the guard knows the mode (t600); replays wait for the verdict (t602)
-- Agent: supervisor (launch 8, round two, debugs); workers t600-guard-knows-authoring-mode, t602-replay-call-accounting, read-only debugs; supervisor verified and integrated
-- Changed: the A8 Run Plan's comparison table (launch 8 `project`, round two `candidate`, one pair); t600 ledger entries record the authoring mode and `unchanged` compares only same-mode runs; t602 both replay paths wait for Core's verdict through `packages/test-runner/src/flow-lane/replay/provider-free-replay-run.ts` before reading the call accounting
-- Why: round two's candidate social run was refused as an unchanged rerun of a project run; candidate social's correct Flow was failed because the Lab read the replay's accounting 0.4 s too early
-- Validation: launch 8 `project`: crossborder and bigbox passed (oracle passed), social and everything-store failed; round two `candidate`: crossborder and bigbox passed, social's Flow passed the oracle (accounting race), everything-store failed (shared judge defect); spend ledger. t600: live-guards tests -> pass 47; `pnpm lab:test` -> pass 212, fail 0; audit passed; merged `a14204a0`. t602: test-runner replay, saved-flow-replay, repair, flow-lane tests -> pass 494, fail 0; check clean; audit passed; merged `d665f3db`
-- Outcome: Accepted. `project` does not yet beat `candidate` on this pair; a fresh pair for both modes follows the fixes
-
-### 2026-10-14 — A8 wave 3 and round three; the page view shows legends (t605)
-- Agent: supervisor (wave 3 `project` social and everything-store, round three towels in both modes, debugs); worker t605-page-view-legends; supervisor verified and integrated
-- Changed: the A8 Run Plan's wave 3 and round three tables; t605 `domain` page view shows a fieldset's legend and a table's caption, and view, describe and find name the group a control sits in (`group="<legend>"`); the instruction text moves web-8 -> web-9 with one sentence on what `group=` means; state digest `web-state.v5`
-- Why: towels failed in both modes because the view dropped the legends that say which option set a choice belongs to; everything-store's correct Flow was refuted by false no's (Core t607)
-- Validation: wave 3 `project`: social passed, everything-store failed (judged no on a Flow that stored exactly the rows asked); round three towels failed in both modes; spend ledger; debug notes for every run. t605: domain `runtime/llm-evidence` -> 1114 tests, pass 1114, fail 0; the legends test against the old `elements.ts` -> pass 1, fail 3 (defect proven); `tests/domain.test tests/page-evidence-joinery` -> pass 16; domain tsc exit 0; `check-extension.mjs` exit 0; audit passed; merged `c8604d60`, pushed
-- Outcome: Accepted. Next: sync lanes, re-run project everything-store, towels in both modes, project social for a consecutive pass
-
-### 2026-10-14 — A8 wave 4 (provider incident); the state diff names spots and items (t609); ARIA groups (t610)
-- Agent: supervisor (wave 4 launches and debugs); workers t609-trial-acts-name-their-items (domain side), t610-aria-groups-in-page-view; supervisor gave t610 the packet sanitizer so one group rule covers every reader, verified and integrated
-- Changed: t609 `inspectStateDiff` writes `spot` and `items` (new `domain/src/runtime/state-diff/places/`), items only for lists present on both pages with every earlier item still there, kept in memory for the last 16 snapshots and never on the summary recovery models read; t610 one module (`page-view/group-names.ts`) names the nearest named group, fieldset or `role="group"`/`radiogroup` with `aria-labelledby`/`aria-label`, for the view, find, describe, the packet's `group`, look-alikes and the digest (`web-state.v6`)
-- Why: wave 4 found nothing new in the product's build path (DeepSeek's API incident ended all four runs at the first chat call, $0) but showed the chat turn outliving its bound (Core t613); t609 makes Core t598 live; t610 extends t605 to option sets built without fieldsets
-- Validation: wave 4: four runs, $0, debug notes. t610 after merging dev: `node scripts/test-domain.mjs runtime/llm-evidence` -> tests 1124, pass 1124, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; merged `d3b2f7c1`. t609 after merging dev: domain state-diff, host-runtime, llm-evidence, runtime tests -> tests 1249, pass 1249, fail 0; domain tsc exit 0; `check-extension.mjs` exit 0; audit passed; merged `1d787ddc`; both pushed
-- Outcome: Accepted
-- Follow-up: a first item added to an empty list, or a list that grew from one item, is not credited as created (named under `cannotUndo`, never a wrong undo); no live check yet that the capture resolves ARIA group names
-
-### 2026-10-14 — The panel's send limit (t613); task ids never reused (t618); second sweep; wave 5 canary
-- Agent: supervisor (sweep, canary, debugs); workers t613 (extension side), t618 (downstream side); supervisor verified and integrated
-- Changed: t613 `apps/extension/src/background/connection/core-api.ts` gives a chat message 40 s (was 120 s) and `panel/chat/conversation/controller.ts` shows the timeout sentence on the turn, stops sending and reads the thread again; `docs/architecture/extension-client.md`; t618 `scripts/task/` records each allocated id as a local ref and counts it, `docs/architecture/repository-layout.md`
-- Why: wave 4's panel sat on "Sending your message" while DeepSeek stalled; the allocator reused abandoned ids
-- Validation: t613 after merging dev: `check-extension.mjs` exit 0; `test-extension.mjs background/connection/tests panel/chat background/panel/tests` -> tests 668, pass 668, fail 0; audit passed; merged `d922a2f8`. t618: `node --test scripts/task/tests` -> 62 passed; audit passed. Sweep (dev `8652b403`, `pnpm -r --no-bail test`): test-runner failed one test under load, then `node --test "dist/**/*.test.js"` -> tests 2301, pass 2296, fail 0 (5 skipped) twice, once under Core's suite; every other package passed. Canary `run-mv8zw5l2-98064abf` (`project` social, slot 3): failed, $0, DeepSeek still down; debug note written
-- Outcome: Accepted
-- Follow-up: wave 5 after t619 (an outage ending that names the provider), with a canary first while DeepSeek's state is unknown
+Entries for 2026-10-14 (A8 rounds one to wave 4, t573-t613 downstream sides, the two sweeps) are archived in
+[archive/2026-10-15-ledger-2026-10-14.md](automation-project-agents-plan/archive/2026-10-15-ledger-2026-10-14.md).
 
 ### 2026-10-15 — The Lab's startup builds (t620); the browser-worker test (t616); wave 5 canaries
 - Agent: supervisor (canaries, debugs); workers t620-lab-gateway-build-reused (two rounds), t616 (downstream side); supervisor verified and integrated
@@ -785,6 +713,13 @@ Entries for 2026-10-13 (plan, concurrency decision, W1-W3, the sweep fix-forward
 - Validation: wave 6: `candidate` towels passed ($0.086, the first towels pass; t623 and t624 live), `project` social passed ($0.063, t622 kept the rescued pass), `project` everything-store failed ($0.066), `project` towels failed ($0.138); debug notes for all four. t626 after merging dev: `test-extension.mjs content/extraction content/actions/tests/next-page` -> tests 305, pass 305, fail 0; `test-domain.mjs runtime/llm-evidence actions/next-page` -> tests 1136, pass 1136, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; merged `e9c2b5f5`; pushed
 - Outcome: Accepted. Wave 7 reruns the same four on the pair after t625-t628
 - Follow-up: a first radio or option that really narrows is not seen as applied (Next followed as before t623)
+
+### 2026-10-15 — A8 wave 7: `project` passes all three tasks
+- Agent: supervisor (wave 7, four runs; the first slot-2 launch refused by the debug guard because a note was committed after the lane sync); read-only debugs `a8-towels-run-mv9dcztz-debug.md`, `a8-everything-store-run-mv9dd0fk-second-subflow.md`
+- Changed: the A8 Run Plan's wave 7 table and reading; debug notes for all four runs
+- Why: wave 7 on the pair after t625-t628
+- Validation: `project` everything-store passed ($0.121), `project` social passed ($0.027, its second consecutive pass), `project` towels passed ($0.096, the first `project` towels pass; two repairs ran and returned done); `candidate` towels failed ($0.058, the exact rows held by unrefuted nos: Core t629); spend ledger
+- Outcome: Accepted. Wave 8 runs all four on the pair after t629 and t630; wave 9 repeats it on the same pair if wave 8 finds nothing new
 
 ## Open Questions
 
