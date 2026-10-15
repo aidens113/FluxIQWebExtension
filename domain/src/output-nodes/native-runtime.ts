@@ -9,6 +9,7 @@ import type { AutomationNodeExecutionResult } from "fluxiq/automation-studio/nod
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationCheckWaitParameters } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
 import { webAutomationExtractListDispatch } from "./extract-list";
@@ -84,6 +85,10 @@ function createOutputNodeImplementation(outputId: WebAutomationActionType): Auto
         const move = webAutomationNextPageDispatch(parameters);
         return move.ok ? dispatching({ outputId, ...move.payload }) : move.result;
       }
+      if (outputId === "web.browser.navigate") {
+        const refused = navigateWithoutValue(parameters.url);
+        if (refused !== undefined) return refused;
+      }
       if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters: webAutomationCheckWaitParameters(outputId, parameters) });
       const extraction = webAutomationExtractListDispatch(parameters);
       return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
@@ -135,6 +140,66 @@ function implementationThrew(outputId: WebAutomationActionType, error: unknown):
     effects: [],
     outputs: { error: { code, outputId } },
     message: `${outputId} could not be prepared, so nothing was sent to the browser.`,
+    failure
+  };
+}
+
+/**
+ * The issue a navigate whose `url` had no value is listed under in the trial
+ * feedback (Core's `candidate-trial/step-issues.ts` reads `outputs.error.issues`):
+ * the failure's code, then the closed reason `parameter_has_no_value`
+ * (`runtime/llm-evidence/tool-rejection.ts`), with the parameter as its field.
+ */
+const NAVIGATE_NO_VALUE_ISSUE = `${WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER}.parameter_has_no_value`;
+
+/**
+ * A navigate refused before anything is sent, because its `url` had no value
+ * when the step ran, or nothing else (t640).
+ *
+ * A step's `url` is usually bound -- `$input.<name>` or an earlier step's
+ * output -- and Core resolves the binding before this implementation runs, so
+ * a binding onto a value that exists and is empty arrives here as `""`, or as
+ * no key at all. Until t640 that navigate was dispatched anyway: the extension
+ * read a url-less navigate as no navigation, sent it to the content script,
+ * and the content script answered `web.action.unsupported_type`, which the
+ * trial feedback says as "A permission or policy refused the step"
+ * (`run-mv9q50ui`, RC3). Every builder then rewrote a step that was right,
+ * because nothing said the value it read was empty.
+ *
+ * The record is the closed set's INVALID_PARAMETER -- the node's own
+ * parameters, refused before dispatch, not retryable -- with `actual` led by
+ * the closed words `no value:` and the parameter's name, which
+ * `runtime/llm-evidence/action-failure/refusal.ts` reads into the reason
+ * `parameter_has_no_value`. The extension's runner answers a url-less
+ * navigate with the same record (`apps/extension/src/runtime/action-runner.ts`).
+ * No value is quoted, because there is none, and no address.
+ *
+ * Which binding the step read cannot be named here: Core hands a native
+ * implementation the resolved parameters only (`AutomationStudioNativeNodeContext`),
+ * so the authored `$input.<name>` is gone by now. The trial feedback lists the
+ * step by its label beside this issue, and the step's own script says what its
+ * `url` reads.
+ *
+ * A `url` that is present and is not text is not "no value"; it is refused as
+ * a parameter the client could not read, which the same code without the
+ * leading words already means.
+ */
+function navigateWithoutValue(url: JsonValue | undefined): AutomationNodeExecutionResult | undefined {
+  if (typeof url === "string" && url.trim() !== "") return undefined;
+  const empty = url === undefined || url === null || typeof url === "string";
+  const expected = "url to hold where to go when the step runs";
+  const actual = empty
+    ? "no value: url had no value when the step ran; the value it reads was empty, so nothing was sent to the browser"
+    : "url is not text, so nothing was sent to the browser";
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected, actual });
+  return {
+    status: "failed",
+    route: "failed",
+    effects: [],
+    outputs: { error: { code: failure.code, outputId: "web.browser.navigate", ...(empty ? { issues: [{ code: NAVIGATE_NO_VALUE_ISSUE, field: "url" }] } : {}) } },
+    message: empty
+      ? "The navigate step had no value for its url when it ran, so nothing was sent to the browser."
+      : "The navigate step's url is not text, so nothing was sent to the browser.",
     failure
   };
 }

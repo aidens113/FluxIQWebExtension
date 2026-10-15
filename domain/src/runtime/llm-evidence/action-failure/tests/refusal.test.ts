@@ -272,3 +272,18 @@ test("a page fault with no count, a count beside another word, or a count in the
   const other = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED }, payload: { nextPage: { outcome: "failed", stop: "page_fault", filtersDropped: 2 } } });
   assert.notEqual(other.detail?.reason, "next_leaves_filtered_list");
 });
+
+// t640: a step whose parameter had no value when it ran is told so by the
+// closed words leading INVALID_PARAMETER's `actual`, and only by them.
+test("a parameter with no value is named by its closed words on INVALID_PARAMETER alone, and no other sentence becomes one", () => {
+  const refused = (code: string, actual: unknown, status = "failed") => webActionFailureRefusal({ status, failure: { code, actual } });
+  const invalid = WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER;
+  assert.deepEqual(refused(invalid, "no value: url had no value when the step ran"), { code: "invalid_input", detail: { reason: "parameter_has_no_value", missing: ["url"] } });
+  assert.equal(WEB_LLM_TOOL_REJECTION_REASONS.includes("parameter_has_no_value"), true);
+  // Another code with the same words, a sentence without them, or a name that is no identifier keeps the old answer.
+  assert.equal(refused(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "no value: url").detail, undefined);
+  assert.equal(refused(invalid, "url is not text").detail?.reason, "parameter_not_readable");
+  assert.equal(refused(invalid, "no value: https://shop.test/").detail?.reason, "parameter_not_readable");
+  assert.equal(refused(invalid, "no value: url-x").detail?.reason, "parameter_not_readable");
+  assert.equal(refused(invalid, undefined).detail?.reason, "parameter_not_readable");
+});

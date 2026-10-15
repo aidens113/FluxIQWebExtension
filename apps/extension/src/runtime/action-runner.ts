@@ -100,6 +100,9 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   }
 
   const startedAt = Date.now();
+  if (action.actionType === "web.browser.navigate" && !hasNavigationValue(action.url)) {
+    return withTarget(navigateWithoutValueFailure(action, startedAt), currentAutomationTabId(), undefined);
+  }
   const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
   // Booked and waited out before the tab is driven, since driving it is the load.
   const navigationPace = isNavigation && action.url && request.pace ? await paceNavigation(request.pace, action.url) : undefined;
@@ -271,6 +274,37 @@ async function unsupportedPageReasonFor(
  * the code `web.page.unsupported` used to carry it and no consumer could name
  * it, because it was in no set.
  */
+/** Whether a navigate has somewhere to go: a `url` that is text with something in it. */
+function hasNavigationValue(url: unknown): boolean {
+  return typeof url === "string" && url.trim() !== "";
+}
+
+/**
+ * A navigate that arrived with no `url` value, answered here and never sent
+ * to the page (t640).
+ *
+ * It used to fall through: with no url it was not a navigation, so it was sent
+ * to the content script, which has no navigate verb and answered
+ * `web.action.unsupported_type` -- said in a trial as "A permission or policy
+ * refused the step" (`run-mv9q50ui`, RC3). The domain's navigate node refuses
+ * the same step before dispatch (`domain/src/output-nodes/native-runtime.ts`);
+ * this is the same record for a command that reaches the runner another way:
+ * INVALID_PARAMETER with `actual` led by the closed words `no value: url`,
+ * which the domain reads into the reason `parameter_has_no_value`
+ * (`domain/src/runtime/llm-evidence/action-failure/refusal.ts`). No value and
+ * no page is quoted. Chrome/Edge and Firefox share this path.
+ */
+function navigateWithoutValueFailure(action: BrowserActionCommand, startedAt: number): BrowserActionResult {
+  const expected = "url to hold where to go when the step runs";
+  const actual = "no value: url had no value when the step ran; the value it reads was empty, so nothing was sent to the browser";
+  return workerActionResult(action, startedAt, {
+    status: "failed",
+    message: "The navigate step had no value for its url when it ran, so nothing was sent to the browser.",
+    validation: { status: "failed", expected, actual },
+    failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected, actual })
+  });
+}
+
 function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number, reason: string): BrowserActionResult {
   const expected = "a page the extension can automate";
   return workerActionResult(action, startedAt, {

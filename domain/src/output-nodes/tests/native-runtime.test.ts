@@ -9,13 +9,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord, parseAutomationStudioRecordOutput } from "fluxiq/automation-studio";
 import type { AutomationNodeExecutionResult, AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
 import type { JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "../extract-list";
 import { createWebAutomationOutputNodeImplementationBundle } from "../native-runtime";
 import { WEB_AUTOMATION_CHECK_WAIT_MS } from "../../actions/check-wait";
+import { webActionFailureRefusal } from "../../runtime/llm-evidence/action-failure";
 
 const bundle = createWebAutomationOutputNodeImplementationBundle();
 
@@ -327,4 +328,47 @@ test("a typed value in a row's field is scoped the same way as a click", async (
   const field = { selector: "li.result input.qty", text: "2", element: { tagName: "INPUT", context: { record: { keyAttribute: "data-id", key: "p1" } } } };
   const parameters = await executeOnRow("web.dom.type", field, { id: "p7", title: "Red Toaster" });
   assert.deepEqual(parameters, { ...field, element: { tagName: "INPUT", context: { record: { values: ["p7", "Red Toaster"] } } } });
+});
+
+// t640 (`run-mv9q50ui`, RC3): a navigate whose `url` was bound to a value that
+// was empty went to the browser anyway and came back as a policy refusal. Core
+// resolves the binding before the node runs, so an empty bound value arrives
+// here as `""` or as no key; it is refused before anything is sent, with the
+// closed words the refusal reader turns into `parameter_has_no_value`.
+test("a navigate whose bound url is empty is refused before dispatch, saying url had no value", async () => {
+  for (const parameters of [{ url: "" }, { url: "   " }, { url: null }, {}] as Array<Record<string, JsonValue>>) {
+    const result = await execute("web.browser.navigate", parameters);
+    assert.equal(result.status, "failed", JSON.stringify(parameters));
+    assert.equal(result.route, "failed");
+    assert.deepEqual(result.effects, [], "nothing is sent to the browser");
+    assert.deepEqual(result.failure, {
+      category: "graph_validation_or_unknown_node",
+      code: "web.action.invalid_parameter",
+      retryable: false,
+      stage: "dispatch",
+      expected: "url to hold where to go when the step runs",
+      actual: "no value: url had no value when the step ran; the value it reads was empty, so nothing was sent to the browser"
+    });
+    assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure, "Core's parser keeps the record");
+    // What the trial feedback lists under the step (`candidate-trial/step-issues.ts`): a dotted code and the parameter.
+    assert.deepEqual(result.outputs, { error: { code: "web.action.invalid_parameter", outputId: "web.browser.navigate", issues: [{ code: "web.action.invalid_parameter.parameter_has_no_value", field: "url" }] } });
+    // The record reaches the model with the closed reason and the parameter's name, and no value.
+    const refusal = webActionFailureRefusal({ status: "failed", failure: result.failure });
+    assert.equal(refusal.code, "invalid_input");
+    assert.deepEqual(refusal.detail, { reason: "parameter_has_no_value", missing: ["url"] });
+  }
+});
+
+test("a navigate whose url is present and not text is refused as unreadable, not as missing", async () => {
+  const result = await execute("web.browser.navigate", { url: 42 });
+  assert.deepEqual(result.effects, []);
+  assert.equal(result.failure?.code, "web.action.invalid_parameter");
+  assert.equal((result.outputs?.error as Record<string, JsonValue>).issues, undefined);
+  assert.equal(webActionFailureRefusal({ status: "failed", failure: result.failure }).detail?.reason, "parameter_not_readable");
+});
+
+test("a navigate with a url still dispatches it unchanged", async () => {
+  const result = await execute("web.browser.navigate", { url: "https://shop.test/item", newTab: false });
+  assert.equal(result.status, "success");
+  assert.deepEqual(dispatchedPayload(result), { outputId: "web.browser.navigate", parameters: { url: "https://shop.test/item", newTab: false, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } });
 });

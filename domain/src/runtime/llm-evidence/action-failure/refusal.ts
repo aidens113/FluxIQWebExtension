@@ -146,10 +146,13 @@ export function webActionFailureRefusal(result: WebFailedActionResult): WebActio
   const shortfall = webActionReadShortfall(result.payload);
   const reason = typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
   const filtersDropped = droppedFilters(result);
+  const withoutValue = parameterWithoutValue(result);
   const refusal: WebActionRefusal = {
     code,
     detail: shortfall !== undefined
       ? readDetail(shortfall)
+      : withoutValue !== undefined
+        ? rejectionDetail({ reason: "parameter_has_no_value", target: undefined, instead: undefined, missing: [withoutValue], requestId: undefined })
       : filtersDropped !== undefined
         ? rejectionDetail({ reason: "next_leaves_filtered_list", target: undefined, instead: undefined, missing: undefined, requestId: undefined, paginationStop: "page_fault", filtersDropped })
         : reason === undefined
@@ -192,6 +195,24 @@ function droppedFilters(result: WebFailedActionResult): number | undefined {
   const answer = webAutomationNextPageAnswerValue(result.payload?.nextPage);
   return answer?.outcome === "failed" ? answer.filtersDropped : undefined;
 }
+
+/**
+ * The parameter a step had no value for when it ran (t640), or nothing: read
+ * off INVALID_PARAMETER alone, from the closed words `no value:` that lead its
+ * `actual` and the parameter name after them, as `covered:` is read above. The
+ * producers are the navigate node (`output-nodes/native-runtime.ts`) and the
+ * extension's runner; both write the name of a parameter of the node's own
+ * schema, never a value. A name that is not an identifier is not passed on.
+ */
+function parameterWithoutValue(result: WebFailedActionResult): string | undefined {
+  if (result.status === "timed_out" || result.failure?.code !== WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER) return undefined;
+  const actual = result.failure.actual;
+  if (typeof actual !== "string") return undefined;
+  return NO_VALUE.exec(actual)?.[1];
+}
+
+/** The closed words a missing-value refusal's `actual` starts with, and the parameter it names. */
+const NO_VALUE = /^no value: ([A-Za-z][A-Za-z0-9_]{0,63})(?=\s|$)/u;
 
 /** The read's account as a refusal may carry it: counts, one closed word, and the call's own field keys. */
 function readDetail(shortfall: WebActionReadShortfall): WebLlmToolRejectionDetail {

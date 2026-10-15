@@ -654,3 +654,28 @@ test("a click whose tab lands on a page served 404 fails as navigation_unexpecte
   assert.equal(run.tabId, TAB_ID);
   assert.equal(run.frameId, 0);
 });
+
+// t640 (`run-mv9q50ui`, RC3): a navigate with no url was not a navigation, so it
+// went to the content script, which has no navigate verb and answered
+// `web.action.unsupported_type` -- told to a build as a policy refusal. It is
+// answered here with the domain navigate node's own missing-value record.
+test("a navigate with no url value is answered as a parameter with no value, and nothing is sent or driven", async () => {
+  for (const url of [undefined, "", "  "]) {
+    const action: BrowserActionCommand = { commandId: "c-nav-empty", actionType: "web.browser.navigate", ...(url !== undefined ? { url } : {}) };
+    const { run, sent, pinged, injected } = await runAgainstStub(action, [0]);
+    assert.deepEqual(sent, [], "nothing reaches the content script");
+    assert.deepEqual(pinged, []);
+    assert.deepEqual(injected, []);
+    assert.equal(run.result.status, "failed");
+    assert.deepEqual(run.result.failure, {
+      category: "graph_validation_or_unknown_node",
+      code: "web.action.invalid_parameter",
+      retryable: false,
+      stage: "dispatch",
+      expected: "url to hold where to go when the step runs",
+      actual: "no value: url had no value when the step ran; the value it reads was empty, so nothing was sent to the browser"
+    });
+    assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
+    assert.doesNotMatch(JSON.stringify(run.result), /permission|policy|unsupported/u);
+  }
+});
