@@ -343,7 +343,7 @@ five A8 tasks in both modes, twice, no product change between:
 
 **Reading of frozen pair 2 (supervisor, 2026-10-15):** `project` passed 9 of 10 by the Lab's verdict and 10 of 10 by
 the product and the oracle; `candidate` passed 8 of 9 and cannot pass towels twice on this pair. `project` is at least
-as reliable on every task and more reliable on towels, at a higher mean cost ($0.054 against $0.033). The strict rule
+as reliable on every task and more reliable on towels, at a higher mean cost ($0.053 against $0.036 a build; $0.85 for the 19 runs). The strict rule
 (two consecutive Lab passes per site, both modes, one frozen pair) is not met for `project` bigbox cart because of the
 Lab misread, so the default is not flipped on this pair: t641-t643 fix the three defects it found, and frozen pair 3
 repeats the comparison to decide the flip.
