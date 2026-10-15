@@ -11,6 +11,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import type { ExistingTargetConfiguration, FluxIQTargetConfiguration } from "./target-config.js";
 import { acquireWorkspaceOperationLock, type WorkspaceOperationLock } from "./workspace-lock.js";
 import { loadOrCreatePersistentIdentity } from "./persistent-identity.js";
+import { hostBuildStep } from "./startup-build/index.js";
 
 export type TopologyOptions = {
   /** Host construction admission, disabled only by explicit provider-free replay. */
@@ -113,10 +114,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
     const webPackage = path.join(fluxiqRepositoryRoot, "apps", "web", "package.json");
     await requirePaths([scenarioEntrypoint, webPackage], options.prepareHost === false ? [hostModulePath] : []);
     if (options.prepareHost !== false) {
-      await supervisor.run({
-        name: "host-build", command: executable("node"), args: [path.join(repositoryRoot, "domain", "scripts", "build-web-panel-host.mjs")],
-        cwd: repositoryRoot, env: process.env, logPath: processLogPath(allocation.logsDir, "host-build"),
-      });
+      await hostBuildStep.run(supervisor, { name: "host-build", repositoryRoot, logPath: processLogPath(allocation.logsDir, "host-build") });
     }
     await requirePaths([hostModulePath]);
     // Core serves a production build shared by every run and every mode that

@@ -10,7 +10,8 @@ import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { buildFluxIQEnvironment, webPanelHostModulePath } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
 import { waitForHttp } from "../http-control/index.js";
-import { executable, processLogPath, ProcessSupervisor } from "../process-supervisor.js";
+import { processLogPath, ProcessSupervisor } from "../process-supervisor.js";
+import { domainSetupStep, hostBuildStep } from "../startup-build/index.js";
 import { requireSecureGatewayUrl } from "../target-config.js";
 import { hardenWindowsPrivatePath } from "../windows-acl.js";
 import { type DemoWorkspaceConfiguration, explicitPort } from "./configuration.js";
@@ -83,20 +84,15 @@ export async function startPersistentDemoCore(config: DemoWorkspaceConfiguration
   const stop = () => stopping ??= runThenCleanUp(() => supervisor.cleanup(), () => removeDemoSession(sessionsDirectory, sessionDirectoryName), "Demo session removal also failed");
   try {
     if (!options.reusePreparedWorkspace) {
-      await supervisor.run({
+      await hostBuildStep.run(supervisor, {
         name: "demo-host-build",
-        command: executable("node"),
-        args: [path.join(config.repositoryRoot, "domain", "scripts", "build-web-panel-host.mjs")],
-        cwd: config.repositoryRoot,
-        env: process.env,
+        repositoryRoot: config.repositoryRoot,
         logPath: processLogPath(logsDirectory, `${sessionId}-host-build`),
       });
-      await supervisor.run({
+      await domainSetupStep.run(supervisor, {
         name: "demo-domain-setup",
-        command: executable("node"),
-        args: [path.join(config.repositoryRoot, "domain", "scripts", "setup-fluxiq.mjs")],
-        cwd: config.repositoryRoot,
-        env: { ...process.env, FLUXIQ_WEB_AUTOMATION_ROOT: config.fluxiqRoot },
+        repositoryRoot: config.repositoryRoot,
+        fluxiqRoot: config.fluxiqRoot,
         logPath: processLogPath(logsDirectory, `${sessionId}-domain-setup`),
       });
       await ensureDemoIdentity(config);
