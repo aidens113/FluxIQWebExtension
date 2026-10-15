@@ -399,6 +399,19 @@ settled are missing is not refuted); wave 6's `candidate` pass had survived the 
 then wave 8 on its pair, then wave 9 on the same pair if wave 8 finds nothing new, for two consecutive passes per site
 on one frozen pair.
 
+**Wave 8** (downstream `003c3353`, Core `be766f29`, after t629 and t630):
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| everything-store-plus-earbuds-under-50 | **passed**, $0.048 (one subflow, whole test yes first time) | not run |
+| social-network-feed-confirm-requests | **passed**, $0.068 (a slow-down repair added the branch, whole test yes again) | not run |
+| bigbox-retail-pickup-towels | failed, $0.082: the exact rows four times, 6 of 8 judge calls wrong (Core t631, t632) | failed, $0.020: a Flow of 11 judged yes; the site's "Today" filter also admits delivery and no judge or check caught it (Core t631) |
+
+**Reading of wave 8 (supervisor, 2026-10-15):** `project` passed everything-store and social again (social three in a
+row, everything-store two). Towels fails in both modes on the judge: refuting a no by its wording keeps missing new
+phrasings, a recurring failure, so t631 refutes a no by the conditions and rows it references against Core's read
+account, and t632 holds an upheld exclusion across a subflow's trials.
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
