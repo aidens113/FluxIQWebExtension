@@ -314,3 +314,113 @@ function page(url: string, extraLinks = 0): JsonObject {
     ]
   };
 }
+
+// A8 `run-mv9zn5ob` (t648): a project repair builder was shown the proposal it
+// repairs, and its navigation to that proposal's own item address was refused
+// `address_not_shown` six times. Core's opening call of a repair carries the
+// repaired proposal's calls under `repairs`: each navigation's address counts
+// as shown, and nothing else. The stub below is a library catalogue, not a
+// store: a home page with a search box, and item pages read by id.
+const LIBRARY = "https://library.test";
+const LIBRARY_START = `${LIBRARY}/catalogue/`;
+/** The repaired proposal's item step: an address no page of this stub links to. */
+const REPAIRED_ITEM = `${LIBRARY}/catalogue/item/7731?format=audiobook`;
+const LIBRARY_BUILD = { projectId: "project.library", flowId: "flow.library" };
+const REPAIRED: Call[] = [
+  { node: NAVIGATE, parameters: { url: LIBRARY_START } },
+  { node: CLICK, parameters: { target: { handle: "t1" }, url: `${LIBRARY}/catalogue/item/9999` } },
+  { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }
+];
+
+test("a repair may go to the repaired proposal's own navigation address, and only with its query as written (t648)", async () => {
+  const site = library();
+
+  const opened = await repairOpening(site, "initial.core.run_node", REPAIRED);
+  assert.equal(opened.resultCode, "web.action.succeeded");
+  // The opening is still the build's arrival: it navigated to the start location.
+  assert.deepEqual(site.navigations(), [LIBRARY_START]);
+
+  const went = await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } });
+  assert.equal(went.resultCode, "web.action.succeeded");
+  // The same item with an edited query value is an address the repair composed.
+  const edited = await libraryCall(site, "call.edited", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM.replace("audiobook", "ebook") } });
+  assert.equal(edited.resultCode, "web.action.rejected.address_not_shown");
+  // Only a navigation's own address counts: a URL another step carries does not.
+  const carried = await libraryCall(site, "call.carried", { node: NAVIGATE, parameters: { url: `${LIBRARY}/catalogue/item/9999` } });
+  assert.equal(carried.resultCode, "web.action.rejected.address_not_shown");
+  assert.deepEqual(site.navigations(), [LIBRARY_START, REPAIRED_ITEM]);
+});
+
+test("a repair opening still forgets the last build of the flow (t648)", async () => {
+  const site = library();
+  await repairOpening(site, "initial.core.run_node", REPAIRED);
+  assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } })).resultCode, "web.action.succeeded");
+
+  // The next build opens with no repairs: the last build's held address is gone.
+  await repairOpening(site, "initial.core.run_node", undefined);
+  const again = await libraryCall(site, "call.again", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } });
+  assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
+});
+
+test("repairs count on Core's scoped opening id too, never on a call the model names (t648)", async () => {
+  const site = library();
+  // A brief run beside others opens with `initial.<toolId>.<scope>` (Core `llm/evidence-loop/call-id.ts`).
+  assert.equal((await repairOpening(site, "initial.core.run_node.brief-6", REPAIRED)).resultCode, "web.action.succeeded");
+  assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } })).resultCode, "web.action.succeeded");
+
+  const other = library();
+  await repairOpening(other, "initial.core.run_node", undefined);
+  for (const callId of ["call.repairs", "initial.model.1", "initial.core.run_node.has.dots"]) {
+    const sent = await other.runtime.executeTool({ ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [], repairs: REPAIRED } });
+    assert.equal(sent.resultCode, "web.action.rejected.invalid_input", callId);
+  }
+  const went = await libraryCall(other, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } });
+  assert.equal(went.resultCode, "web.action.rejected.address_not_shown");
+});
+
+test("a scoped opening look marked arrived is the builder's arrival, as the unscoped one is (t585, t648)", async () => {
+  const site = library();
+  site.at(LIBRARY_START);
+  const looked = await site.runtime.executeTool({ ...LIBRARY_BUILD, callId: "initial.core.run_node.brief-3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true } });
+  assert.equal(looked.resultCode, "web.inspect.succeeded");
+  const typed = await libraryCall(site, "call.type", { node: TYPE, parameters: { target: { handle: handleOf(looked, "Search the catalogue") }, text: "river atlas" } });
+  assert.equal(typed.resultCode, "web.action.succeeded");
+});
+
+/** Core's opening call of a repair brief: the arrival navigation, the repaired proposal's calls beside it (Core `run-brief.ts`, `shownAtOpening`). */
+function repairOpening(site: ReturnType<typeof library>, callId: string, repairs: Call[] | undefined) {
+  const value: JsonObject = { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [] };
+  if (repairs) value.repairs = repairs;
+  return site.runtime.executeTool({ ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value });
+}
+
+function libraryCall(site: ReturnType<typeof library>, callId: string, value: Call) {
+  return site.runtime.executeTool({ ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { ...value, consequences: [] } });
+}
+
+/** The catalogue: a blank tab until a navigation, then a page with a search box and no item links. */
+function library() {
+  let location: string | undefined;
+  const navigated: string[] = [];
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.library"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.browser.navigate") {
+        location = String(command.parameters.url);
+        navigated.push(location);
+        return { status: "succeeded", payload: { url: location } };
+      }
+      if (command.actionType === "web.dom.capture_snapshot") {
+        return location === undefined
+          ? { status: "failed", error: "Browser and extension pages cannot be automated." }
+          : { status: "succeeded", payload: { snapshot: { url: location, title: "Catalogue", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: [{ tagName: "input", selector: "#find", inputType: "search", accessibleName: "Search the catalogue", bounds: { x: 1, y: 1, width: 10, height: 10 } }] } } };
+      }
+      return { status: "succeeded" };
+    }
+  };
+  return {
+    runtime: createWebAutomationLlmEvidenceRuntime(gateway),
+    navigations: () => [...navigated],
+    at: (url: string) => { location = url; }
+  };
+}

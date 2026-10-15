@@ -73,7 +73,7 @@ import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
 import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
-import { webNodeHeldFlow, webNodePreparedEntry } from "./arrival";
+import { webNodeHeldFlow, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webNodeCallWithDeclarationBeside } from "./nested-consequences";
 import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRefusal } from "./start-location";
@@ -149,11 +149,14 @@ type WebNodeCallRecord = {
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
+  // A repair's opening call carries the repaired proposal's calls, and runs without them (`./arrival.ts`, t648).
+  const repaired = webNodeRepairedFlow(run.request);
+  const opened = repaired ? { ...run.request, value: repaired.look } : run.request;
   // The opening look of a round that continues a Flow carries the Flow's calls, and runs without them (`./arrival.ts`).
-  const continuing = webNodeHeldFlow(run.request);
+  const continuing = webNodeHeldFlow(opened);
   // A builder's opening look on the entry Core prepared for it is marked so, and runs without the mark (`./arrival.ts`).
-  const entered = continuing ? undefined : webNodePreparedEntry(run.request);
-  let value = continuing?.look ?? entered?.look ?? run.request.value;
+  const entered = continuing ? undefined : webNodePreparedEntry(opened);
+  let value = continuing?.look ?? entered?.look ?? opened.value;
   // A call Core made rather than the model: the draft being run again before it
   // may be proposed (`./replay.ts`). It goes to the same executor so it passes
   // the same permission gate, and it is answered in Core's closed replay
@@ -188,6 +191,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     run.addresses.held(buildOf(run), address, run.request.startLocation);
     if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
   }
+  // A repaired proposal's addresses are shown, after the opening forgot the last build; it arrives nowhere (t648).
+  for (const address of repaired?.addresses ?? []) run.addresses.held(buildOf(run), address, run.request.startLocation);
   // Re-armed above like any fresh build, then arrived: the steps that reached its entry began at the start location.
   if (entered && run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
   const node = webRunnableNode(value.node);

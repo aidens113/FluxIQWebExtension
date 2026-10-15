@@ -43,6 +43,24 @@
 // own opening id carries it, as with `held`; anywhere else it is an unexpected
 // key and refused as one, so no call the model writes can claim arrival.
 //
+// **And a repair of a proposal** (t648, A8 `run-mv9zn5ob`, brief-6). A
+// project repair opens with a fresh arrival, but its builder is shown the
+// proposal it repairs, and that proposal's navigation to its own product page
+// was refused `address_not_shown` six times. Core's opening call of a repair
+// carries the repaired proposal's calls under `repairs`
+// (`webNodeRepairedFlow`): each navigation's address counts as shown, as a
+// held one does, and nothing else changes -- the opening still re-arms, still
+// forgets the last build, and arrives only by navigating.
+//
+// **Core's opening id, scoped or not.** A loop run beside others for one Flow
+// (a project brief, when the host runs several agents) opens with
+// `initial.<toolId>.<scope>` rather than `initial.<toolId>` (Core
+// `llm/evidence-loop/call-id.ts`, t537). Every key Core sets on its opening
+// call is read on both shapes (`coreOpening`); before t648 only the unscoped
+// one was, so a scoped builder's `arrived` mark was refused as an unexpected
+// key. A model may write an id of that shape itself; Core does not reserve the
+// `initial.` prefix for its own calls, which is Core's to close.
+//
 // **What it holds back.** Every node that acts or reads for the Flow. A look
 // (the observation node) is not held: it reads the page as it stands, because
 // it runs nothing and is never a step of the Flow (`./run.ts`).
@@ -73,6 +91,30 @@ export function webNodeOpensBuild(callId: string): boolean {
   return callId.startsWith(OPENING_CALL_PREFIX);
 }
 
+/** A call scope as Core writes it into a scoped opening id (Core `llm/evidence-loop/call-id.ts`): no dot, at most 40 characters. */
+const CALL_SCOPE = /^[A-Za-z0-9_-]{1,40}$/u;
+
+/**
+ * Whether this call is Core's own opening call of this tool: `initial.<toolId>`,
+ * or `initial.<toolId>.<scope>` for a loop run beside others (header). Core makes
+ * that call before the round's first decision and files a model's later call of
+ * the same id under another.
+ */
+function coreOpening(request: { callId: string; toolId: string }): boolean {
+  const own = `${OPENING_CALL_PREFIX}${request.toolId}`;
+  if (request.callId === own) return true;
+  return request.callId.startsWith(`${own}.`) && CALL_SCOPE.test(request.callId.slice(own.length + 1));
+}
+
+/** The address of each call that navigates, as written; nothing else a call carries. */
+function navigationAddresses(calls: readonly JsonValue[]): string[] {
+  return calls.flatMap((call) => {
+    const node = isJsonRecord(call) ? webRunnableNode(call.node) : undefined;
+    const url = isJsonRecord(call) && isJsonRecord(call.parameters) ? call.parameters.url : undefined;
+    return node && webMovesThePage(node) && typeof url === "string" ? [url] : [];
+  });
+}
+
 /**
  * The key under which Core's opening look of a round whose draft already holds
  * the Flow carries that Flow's calls, as written (`AS/runtime/llm/evidence-loop.ts`).
@@ -88,22 +130,39 @@ const HELD_KEY = "held";
  * every step of a Flow ran after the Flow arrived, and each navigation passed
  * the address rule when it first ran (run 38, C3 and C8).
  *
- * Read only on Core's own opening id, `initial.<this tool>`: Core makes that
- * call before the round's first decision and files a model's later call of the
- * same id under another, so no call the model writes can say what the Flow
- * holds. Anywhere else `held` is an unexpected key and refused as one.
+ * Read only on Core's own opening id, `initial.<this tool>` or its scoped form
+ * (`coreOpening`). Anywhere else `held` is an unexpected key and refused as one.
  */
 export function webNodeHeldFlow(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject; addresses: string[]; calls: JsonValue[] } | undefined {
   const held = request.value[HELD_KEY];
-  if (request.callId !== `${OPENING_CALL_PREFIX}${request.toolId}` || !Array.isArray(held)) return undefined;
+  if (!coreOpening(request) || !Array.isArray(held)) return undefined;
   const { [HELD_KEY]: _held, ...look } = request.value;
-  const addresses = held.flatMap((call) => {
-    const node = isJsonRecord(call) ? webRunnableNode(call.node) : undefined;
-    const url = isJsonRecord(call) && isJsonRecord(call.parameters) ? call.parameters.url : undefined;
-    return node && webMovesThePage(node) && typeof url === "string" ? [url] : [];
-  });
   // The calls themselves, for what the Flow holds that the model never wrote (`./held-literals/`, t432).
-  return { look, addresses, calls: held as JsonValue[] };
+  return { look, addresses: navigationAddresses(held as JsonValue[]), calls: held as JsonValue[] };
+}
+
+/**
+ * The key under which Core's opening call of a repair brief carries the calls
+ * of the proposal it repairs, as `{node, parameters}` (Core
+ * `project-agents/dispatch/run-brief.ts`, `shownAtOpening`, t648).
+ */
+const REPAIRS_KEY = "repairs";
+
+/**
+ * When this call is Core's opening call of a repair: the call without the
+ * repaired proposal's calls, and the address each of its navigations goes to.
+ * Otherwise nothing.
+ *
+ * Only a navigation's own address is read (header): it passed the address rule
+ * when the proposal's builder ran it. Unlike `held`, this continues nothing --
+ * the repair still opens afresh. Read only on Core's own opening id; anywhere
+ * else `repairs` is an unexpected key and refused as one.
+ */
+export function webNodeRepairedFlow(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject; addresses: string[] } | undefined {
+  const repairs = request.value[REPAIRS_KEY];
+  if (!coreOpening(request) || !Array.isArray(repairs)) return undefined;
+  const { [REPAIRS_KEY]: _repairs, ...look } = request.value;
+  return { look, addresses: navigationAddresses(repairs as JsonValue[]) };
 }
 
 /**
@@ -115,10 +174,10 @@ const ARRIVED_KEY = "arrived";
 /**
  * When this call is Core's opening look of a builder on its prepared entry:
  * the look without the mark (header). Otherwise nothing. Read only on Core's
- * own opening id, `initial.<this tool>`, as `webNodeHeldFlow` is.
+ * own opening id, scoped or not, as `webNodeHeldFlow` is.
  */
 export function webNodePreparedEntry(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject } | undefined {
-  if (request.callId !== `${OPENING_CALL_PREFIX}${request.toolId}` || request.value[ARRIVED_KEY] !== true) return undefined;
+  if (!coreOpening(request) || request.value[ARRIVED_KEY] !== true) return undefined;
   const { [ARRIVED_KEY]: _arrived, ...look } = request.value;
   return { look };
 }
