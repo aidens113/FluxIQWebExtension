@@ -734,6 +734,13 @@ Entries for 2026-10-14 (A8 rounds one to wave 4, t573-t613 downstream sides, the
 - Validation: `project` everything-store passed ($0.121), `project` social passed ($0.027, its second consecutive pass), `project` towels passed ($0.096, the first `project` towels pass; two repairs ran and returned done); `candidate` towels failed ($0.058, the exact rows held by unrefuted nos: Core t629); spend ledger
 - Outcome: Accepted. Wave 8 runs all four on the pair after t629 and t630; wave 9 repeats it on the same pair if wave 8 finds nothing new
 
+### 2026-10-15 — A8 wave 8
+- Agent: supervisor (wave 8, four runs); read-only debugs `a8-towels-run-mv9gbsea-debug.md`, `a8-towels-run-mv9gbsm5-debug.md`
+- Changed: the A8 Run Plan's wave 8 table and reading; debug notes for all four runs
+- Why: wave 8 on the pair after t629 and t630
+- Validation: `project` everything-store passed ($0.048, its second in a row), `project` social passed ($0.068, its third in a row; a slow-down repair added the branch); `project` towels failed ($0.082: the exact rows four times, judges wrong) and `candidate` towels failed ($0.020: a site filter admitting delivery, judged yes); spend ledger
+- Outcome: Accepted. Towels in both modes is a judge problem (Core t631, t632, t633); wave 9 after t633
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
