@@ -77,6 +77,19 @@
 // family scoring calls tied fails TARGET_AMBIGUOUS, as the fingerprint
 // strategy's text match already did on the same page.
 //
+// A tie needs something to tie *on the page*. Several matches none of which is
+// visible are not several candidates for a click: they are copies of the
+// control the page has not shown, or other widgets' hidden look-alikes, and the
+// recorded control is not there yet. An optional "close the pop-up" step met a
+// product page 1 s after load, before any pop-up opened; its saved words, "×",
+// matched three hidden close glyphs in three widgets' shadow roots, they scored
+// a tie at 0.54, and the step failed `web.target.ambiguous` where it should have
+// been skipped as absent (`run-mv9v3u68-6efbd7ae`, t642). So a strategy whose
+// several matches are all hidden is a miss, and a scored tie whose every
+// contender above the floor is hidden is not found; a tie among visible
+// elements is still TARGET_AMBIGUOUS, and a *lone* hidden match still resolves,
+// which is what an assertion about a hidden element needs.
+//
 // A failure carries Core's structured record rather than only a sentence:
 // TARGET_AMBIGUOUS naming the candidates that tied, TARGET_NOT_FOUND naming the
 // strategies that were attempted. The codes come from the domain's closed set,
@@ -157,6 +170,7 @@ import {
   type TargetCandidatePool,
   type TargetMeasurement
 } from "../identity";
+import { isHiddenTie, isVisibleForResolution, passesResolutionGate } from "./resolution-gate";
 import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, DomElementContext, RectDescriptor } from "../types";
 
 /** The element an action will act on, with the measurement that chose it. */
@@ -309,6 +323,12 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       misses.push(`${attempt.description} (${attempt.matches.length} matched, each in another record)`);
       continue;
     }
+    // Several matches, none of them shown: not a tie between controls on the
+    // page, but a control the page does not show (see the header).
+    if (inRecord.length > 1 && !inRecord.some(isVisibleForResolution)) {
+      misses.push(`${attempt.description} (${inRecord.length} matched, none of them visible)`);
+      continue;
+    }
     const pool = gatedPool(inRecord, target);
     const only = pool.length === 1 ? pool[0] : undefined;
     if (only) {
@@ -366,7 +386,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
   // enumeration is what a not-found failure reports either way.
   const { nearby, decided } = target ? scoredFamily(target) : NO_FAMILY;
   if (decided?.outcome === "resolved") return { outcome: "resolved", target: scoredTarget(decided, nearby.candidates.length) };
-  if (decided?.outcome === "ambiguous") return { outcome: "ambiguous", error: scoredAmbiguous(decided, misses) };
+  if (decided?.outcome === "ambiguous" && !isHiddenTie(decided)) return { outcome: "ambiguous", error: scoredAmbiguous(decided, misses) };
   return { outcome: "not_found", error: notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided), misses, nearby, decided };
 }
 
@@ -524,9 +544,11 @@ function scanMatches(target: RecordedTarget, roots: readonly LookupRoot[], match
  * are the pool, because a strategy that found exactly one element has resolved
  * it -- a hidden or disabled target is what an assertion asks about and what an
  * actionability refusal reports, and neither is this module's decision to make.
+ * Several matches none of which is visible never reach here: `resolveIn` takes
+ * them for a miss, not a tie.
  */
 function gatedPool(matches: Element[], target: RecordedTarget | undefined): Element[] {
-  const preferred = matches.filter((element) => passesGate(element, target));
+  const preferred = matches.filter((element) => passesResolutionGate(element, target?.tagName));
   return preferred.length ? preferred : matches;
 }
 
@@ -557,38 +579,8 @@ function stableNameMatch(target: RecordedTarget, element: Element, scope: Shadow
   if (verdict.refusedBecause || !verdict.measurement) return undefined;
   const family = collectTargetCandidates(candidateFamily(target), scope.roots);
   if (family.truncated) return undefined;
-  const alike = family.candidates.filter((candidate) => passesGate(candidate.element, target) && stableNameReading(target, candidate.element)?.stable === reading.stable);
+  const alike = family.candidates.filter((candidate) => passesResolutionGate(candidate.element, target.tagName) && stableNameReading(target, candidate.element)?.stable === reading.stable);
   return alike.length === 1 && alike[0]?.element === element ? verdict.measurement : undefined;
-}
-
-function passesGate(element: Element, target: RecordedTarget | undefined): boolean {
-  if (target?.tagName && element.tagName.toLowerCase() !== target.tagName.toLowerCase()) return false;
-  return isVisibleForResolution(element) && isEnabledForResolution(element);
-}
-
-/**
- * Visible enough to be the element a command meant: in the document, with a
- * box, and not hidden by a style that collapses it.
- *
- * This is deliberately weaker than `actionability.ts`, which scrolls the
- * element into view and hit-tests it. Resolution answers "which element is
- * this?" and must not move the page to do it; whether the answer can then be
- * clicked is the actionability gate's question, asked after.
- */
-function isVisibleForResolution(element: Element): boolean {
-  if (!element.isConnected) return false;
-  const view = element.ownerDocument.defaultView;
-  if (!view) return false;
-  const style = view.getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
-  const rect = element.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
-}
-
-/** Enabled by the platform's rule, which covers a disabled `<fieldset>`'s descendants, plus the ARIA claim. */
-function isEnabledForResolution(element: Element): boolean {
-  if (element.matches(":disabled")) return false;
-  return !element.closest('[aria-disabled="true"]');
 }
 
 /**
