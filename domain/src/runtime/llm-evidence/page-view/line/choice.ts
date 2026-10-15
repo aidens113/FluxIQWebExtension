@@ -21,7 +21,11 @@
 //     follows is printed as a link, without the title a second time, and a
 //     profile picture's "lena.moss's profile picture" stays beside the
 //     "lena.moss" link, since it says more.
-//  6. F4 joins a run of letterless fragments (`$`, `39.`, `99`) into one line
+//  6. A visible named ARIA group with no line of its own gets a text line of
+//     its name, as a legend does, unless a line already says it
+//     (`../group-names.ts`, t610). F1 does not fold it: no ancestor's words
+//     hold an `aria-label`.
+//  7. F4 joins a run of letterless fragments (`$`, `39.`, `99`) into one line
 //     for the element that holds them (`./fragment-merge.ts`).
 //
 // An element that is a control only because the page listens for presses on
@@ -39,30 +43,33 @@
 import type { WebLlmEvidenceElement } from "../../elements";
 import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmViewTraits } from "../element";
 import { mergedWebLlmFragments } from "../fragment-merge";
+import { webLlmGroupNames, type WebLlmGroupNames } from "../group-names";
 import type { WebLlmPageTree } from "../page-tree";
 import type { WebLlmViewLine } from "../view-line";
 import { webLlmControlHolders } from "./control-holders";
 
 /** The page view's element lines, in document order. */
-export function chosenWebLlmLines(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmViewLine[] {
-  const lines = withoutEchoedLabels(firstPass(elements, tree));
+export function chosenWebLlmLines(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree, groups: WebLlmGroupNames = webLlmGroupNames(elements, tree)): WebLlmViewLine[] {
+  const lines = withoutEchoedLabels(firstPass(elements, tree, groups));
   return mergedWebLlmFragments(withoutRepeatedImages(lines), elements, tree);
 }
 
-/** Rules 1 to 5 with F1 and F3, which look only backwards. */
-function firstPass(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmViewLine[] {
+/** Rules 1 to 6 with F1 and F3, which look only backwards. */
+function firstPass(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree, groups: WebLlmGroupNames): WebLlmViewLine[] {
   const lines: WebLlmViewLine[] = [];
   const lined = new Map<WebLlmEvidenceElement, WebLlmViewLine>();
   const delegates = webLlmControlHolders(elements, tree);
   for (const [index, element] of elements.entries()) {
     const delegate = delegates.has(element);
     const traits = webLlmViewTraits(element, delegate);
-    if (!traits.visible || traits.lineRole === undefined) continue;
-    const role = traits.lineRole;
-    const own = webLlmElementWords(element, delegate);
+    if (!traits.visible) continue;
+    const groupName = traits.lineRole === undefined ? groups.lineOf(element) : undefined;
+    if (traits.lineRole === undefined && groupName === undefined) continue;
+    const role = traits.lineRole ?? "text";
+    const own = groupName ?? webLlmElementWords(element, delegate);
     const held = own === undefined && role === "control" ? heldImageWords(elements, index, tree) : undefined;
     const words = own ?? held;
-    if ((role === "text" || role === "image") && foldedIntoAncestor(element, tree, lined)) continue;
+    if (groupName === undefined && (role === "text" || role === "image") && foldedIntoAncestor(element, tree, lined)) continue;
     if (role === "text" && sameWords(lines.at(-1)?.words, words)) continue;
     const line: WebLlmViewLine = held === undefined ? { element, role, words } : { element, role, words, imageWords: true };
     lines.push(line);

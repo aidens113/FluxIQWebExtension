@@ -132,6 +132,10 @@ export type WebLlmEvidenceElement = {
    * The group it sits in: the `<legend>` of its nearest `<fieldset>`, where it
    * says something the element's name and text do not (t605). It is what a
    * bare option filters by: `checkbox "Large (4)"` is a size only under "Size".
+   * Written here from the capture's legend, then replaced by the packet
+   * (`./sanitize.ts`, t610) with the nearest named fieldset or ARIA group
+   * (`role="group"`/`"radiogroup"` named by `aria-labelledby` or
+   * `aria-label`), as `./page-view/group-names.ts` resolves it.
    */
   group?: string;
   /** Position inside a repeating list, which is also how many items there are. */
