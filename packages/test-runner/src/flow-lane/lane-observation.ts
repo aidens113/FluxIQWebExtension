@@ -1,6 +1,7 @@
 import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunActionTiming, RunAutomationFailure, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { absorbedEveryFailure } from "./recovery-attribution.js";
+import { bypassedByNode } from "./optional-bypass/index.js";
 
 /**
  * The `RunEvaluation` fields a run can only be observed to have, published by
@@ -185,6 +186,13 @@ export function selectLaneObservation(input: {
  * judgement was skipped, which is a different fact from Core saying so, and
  * reading it as unverified would relabel every run against a Core that records
  * none.
+ *
+ * A failed optional step Core went on past by its own rule (`optional-bypass/`)
+ * is the Flow's path, not a fault: Core's trial gate reads it that way, and the
+ * Lab read it as the run's failure (`run-mv9v3u68-6efbd7ae`, A8 wave 15). Its
+ * attempts are left out of this reading and kept in the evidence as a note. A
+ * required step's failure, or an optional step's Core did not go past, still
+ * fails the run.
  */
 function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedVerdict"] {
   // A run the recovery ladder rescued carries both a failed attempt and Core's
@@ -193,7 +201,9 @@ function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedV
   // run -- which is what this lane exists to measure, so it would have
   // measured the opposite of the truth.
   if (run.status !== "succeeded") return "failed";
-  if (!((run.actions.every((action) => action.status === "succeeded" || action.status === "skipped") && !run.failure) || absorbedEveryFailure(run.actions))) return "failed";
+  const bypassed = bypassedByNode(run.actions);
+  const counted = run.actions.filter((_, index) => bypassed[index] !== true);
+  if (!((counted.every((action) => action.status === "succeeded" || action.status === "skipped") && !run.failure) || absorbedEveryFailure(counted))) return "failed";
   if (run.resultVerification === "refuted") return "failed";
   return run.resultVerification === "unverified" ? "unverified" : "passed";
 }

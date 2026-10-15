@@ -20,6 +20,8 @@
 export const ADAPTATION_GATE_REASONS = [
   "counted",
   "oracle_failed",
+  "flow_reported_failure",
+  "judgement_failed",
   "reauthor_not_kept",
   "no_recovery_attempted",
   "no_proposal",
@@ -34,10 +36,29 @@ export type AdaptationGateReason = (typeof ADAPTATION_GATE_REASONS)[number];
 
 export type AdaptationGateClassification = Readonly<{ counted: boolean; reason: AdaptationGateReason }>;
 
+/**
+ * Which of the created Flow's own judgements failed, named for what failed:
+ * `oracle_failed` only when the oracle did; `flow_reported_failure` when the
+ * oracle did not fail and FluxIQ reported the run failed; `judgement_failed`
+ * for a judgement before both (the Flow's own page, an early stop) or when
+ * neither verdict is known.
+ *
+ * Every failed judgement read `oracle_failed` until t643, so A8 wave 15's
+ * `run-mv9v3u68-6efbd7ae`, whose oracle passed and whose run the Lab read as
+ * failed, said "judgement failed ... (oracle_failed)".
+ */
+export type AdaptationGateLaneFailure = Extract<AdaptationGateReason, "oracle_failed" | "flow_reported_failure" | "judgement_failed">;
+
+/** The lane failure's reason, from the verdicts the lane observed; structural, so this module depends on nothing in the lane. */
+export function adaptationGateLaneFailure(observation: Readonly<{ oracleVerdict?: string | null; reportedVerdict?: string | null }> | undefined): AdaptationGateLaneFailure {
+  if (observation?.oracleVerdict === "failed") return "oracle_failed";
+  return observation?.reportedVerdict === "failed" ? "flow_reported_failure" : "judgement_failed";
+}
+
 /** What the repair lane knows of the run, by shape alone. */
 export type AdaptationGateInput = Readonly<{
-  /** The created Flow's own judgement failed (its oracle, or a judgement before it). */
-  laneFailed: boolean;
+  /** Which of the created Flow's own judgements failed (`adaptationGateLaneFailure`), or `null` when none did. */
+  laneFailure: AdaptationGateLaneFailure | null;
   /** The run's recovery record: whether it engaged, and whether Core applied a re-author inside the run. */
   recovery: Readonly<{ attempted: boolean; resultReauthor?: Readonly<{ applied?: boolean | null }> | null }>;
   /** A re-author the run made and did not keep. */
@@ -61,7 +82,7 @@ const STEPS_MOVED = new Set(["changed", "changed_in_run"]);
 /** Classifies one `--replays` run; the first unmet criterion is the reason. */
 export function classifyAdaptationGate(input: AdaptationGateInput): AdaptationGateClassification {
   const notCounted = (reason: AdaptationGateReason): AdaptationGateClassification => ({ counted: false, reason });
-  if (input.laneFailed) return notCounted("oracle_failed");
+  if (input.laneFailure !== null) return notCounted(input.laneFailure);
   if (input.unkeptReauthor) return notCounted("reauthor_not_kept");
   // A re-author Core applied inside the run is recovery too, though it is not the patch ladder's `attempted`.
   const attempted = input.recovery.attempted || input.recovery.resultReauthor?.applied === true;

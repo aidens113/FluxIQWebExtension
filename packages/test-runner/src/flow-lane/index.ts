@@ -12,6 +12,7 @@ export * from "./harness-recovery.js";
 export * from "./lab-project-domain.js";
 export * from "./lane-observation.js";
 export * from "./node-recovery.js";
+export * from "./optional-bypass/index.js";
 export * from "./persisted-attempt.js";
 export * from "./persisted-flow-run.js";
 export * from "./replay/index.js";

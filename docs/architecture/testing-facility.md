@@ -1820,6 +1820,47 @@ whether rejected or still held and unsettled, changed nothing. The lane writes
 `snapshots/repair-lane.json` saying so, replays nothing and fails the run. It
 never reads that outcome as `no_proposal`, which passes.
 
+When the created Flow's own judgement fails, `snapshots/repair-lane.json`'s
+`adaptationGate.reason` names the judgement that failed
+(`run-evaluation/adaptation/gate.ts`, `adaptationGateLaneFailure`):
+`oracle_failed` only when the oracle failed, `flow_reported_failure` when the
+oracle did not fail and the lane read FluxIQ's run as failed, and
+`judgement_failed` for a judgement before both (the Flow's own page, an early
+stop) or when neither verdict is known. Every failed judgement read
+`oracle_failed` until t643, so `run-mv9v3u68-6efbd7ae`, whose oracle passed,
+said "judgement failed ... (oracle_failed)".
+
+### A failed optional step Core went on past
+
+An optional step (a popup, a banner or a consent prompt written `optional: yes`,
+or a node marked sometimes-present) is only sometimes there to be done. When
+one fails, Core's ladder takes the step's way on, normally to the Merge a build
+joins it at. This is "what the Flow says to do, not a recovery" (Core
+`executor/step-skip/optional-step.ts`), and Core's trial gate reads it that way.
+The Flow lane reads it the same way (`flow-lane/optional-bypass/`). An attempt
+counts as bypassed only when two things hold. Core's selected ladder candidate
+on that attempt (`metadata.recoverySelected`) must carry the mark Core's ladder
+sets on the optional way-on alone (`optionalStepWayOn: true`; the label is
+display text and is never read), and the run's next attempt must be on that
+way-on's target. Such an attempt
+carries `optionalBypass: { toNodeId }`. Every failure on its node goes to
+`bypassedOptionalFailures` in the run outcome and the Flow-lane snapshot, as a
+note, and none of them becomes the run's `failure`. The reported verdict then
+follows Core's own playback status and its result check, and the oracle decides
+the run as usual.
+
+The Lab still reports every real failure. A required step's failure fails the
+run even when Core followed the step's own failed route to a Merge (a `Follow
+failed route` candidate, which carries no mark). An optional step Core did
+not go past fails it too: there was no selection, or the run went somewhere
+other than the way-on's target. A run Core failed is reported failed whatever
+it bypassed. The rule is read from Core's record of applying it, not copied
+from Core's graph predicate, so the two cannot drift. Measured on A8 wave 15 pair 2
+(`run-mv9v3u68-6efbd7ae`): Core's playback succeeded, its result was confirmed
+and the oracle passed, but the Lab reported the run failed for the
+`web.target.ambiguous` on a "close the chat popup if it shows" step that Core
+had gone past.
+
 ### What a list read says about itself
 
 A read of zero records is the same record, everywhere else in the bundle,
