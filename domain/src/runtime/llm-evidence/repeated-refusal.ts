@@ -137,6 +137,7 @@ export function repeatedRejectionDetail(detail: WebLlmToolRejectionDetail | unde
     missingFields: detail?.missingFields,
     waitStoppedOn: detail?.waitStoppedOn,
     paginationStop: detail?.paginationStop,
+    filtersDropped: detail?.filtersDropped,
     repeatedAnswer
   });
 }

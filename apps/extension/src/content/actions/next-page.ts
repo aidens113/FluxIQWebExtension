@@ -10,12 +10,14 @@
 // - `failed` fails with the word and the closed set's code for it:
 //   `list_unchanged` and `list_vanished` are OUTPUT_NOT_OBSERVED, `rate_limited`
 //   RATE_LIMITED, `control_not_clickable` TARGET_NOT_ACTIONABLE, and
-//   `page_fault` ACTION_FAILED. None is retried by the page's recovery loop:
+//   `page_fault` ACTION_FAILED; a page fault that is a Next dropping the
+//   filters the page shows applied also carries how many, as `filtersDropped`
+//   on the answer (t626), which the domain names to the model. None is retried by the page's recovery loop:
 //   this verb moves the page, and none of them is decided before the press.
 // - A move out of time is `timed_out`, with no answer, as every verb's is.
 //
 // Nothing read off the page is in the result: the words, how the list moved,
-// and the number its pager marks current.
+// the number its pager marks current, and a count of filters a Next would drop.
 
 import {
   WEB_AUTOMATION_FAILURE_CODES,
@@ -66,7 +68,7 @@ export async function nextPageAction(action: BrowserActionCommand, deps: Content
         return { ...result, nextPage: { outcome: "ended", stop: answer.stop }, route: "ended" };
       }
       case "failed":
-        return failed(action, deps, startedAt, answer.stop, answer.reason);
+        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped);
       default:
         return deps.timedOut(action, startedAt, answer.reason, { status: "failed", expected: EXPECTED, actual: "the time ran out before the move finished" });
     }
@@ -75,6 +77,7 @@ export async function nextPageAction(action: BrowserActionCommand, deps: Content
   }
 }
 
-function failed(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, stop: WebAutomationNextPageFault, reason: string): BrowserActionResult {
-  return { ...deps.failure(action, new NextPageFault(stop, reason), startedAt), nextPage: { outcome: "failed", stop } };
+function failed(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number): BrowserActionResult {
+  const nextPage = stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed" as const, stop, filtersDropped } : { outcome: "failed" as const, stop };
+  return { ...deps.failure(action, new NextPageFault(stop, reason), startedAt), nextPage };
 }

@@ -53,3 +53,11 @@ test("a word outside its outcome's set, or a page that is not a page number, is 
     assert.equal(webAutomationNextPageAnswerValue(answer), undefined, JSON.stringify(answer));
   }
 });
+
+test("a page fault carries how many applied filters its Next would drop, and no other answer does (t626)", () => {
+  assert.deepEqual(webAutomationNextPageAnswerValue({ outcome: "failed", stop: "page_fault", filtersDropped: 2 }), { outcome: "failed", stop: "page_fault", filtersDropped: 2 });
+  assert.deepEqual(webAutomationNextPageAnswerValue({ outcome: "failed", stop: "list_unchanged", filtersDropped: 2 }), { outcome: "failed", stop: "list_unchanged" });
+  for (const filtersDropped of [0, -1, 1.5, "2", Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(webAutomationNextPageAnswerValue({ outcome: "failed", stop: "page_fault", filtersDropped }), { outcome: "failed", stop: "page_fault" }, String(filtersDropped));
+  }
+});

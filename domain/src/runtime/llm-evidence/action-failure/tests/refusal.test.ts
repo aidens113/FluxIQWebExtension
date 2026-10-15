@@ -18,6 +18,7 @@ import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../../failure";
 import { WEB_LLM_TOOL_REJECTION_REASONS } from "../../tool-rejection";
+import { repeatedRejectionDetail } from "../../repeated-refusal";
 import { webActionFailureRefusal } from "../refusal";
 
 /** The words the page put in its own comparison text, none of which may reach a refusal. */
@@ -239,4 +240,35 @@ test("a target the page has and does not show is still refused to the model as t
   // Disabled and covered keep their code and their words.
   assert.equal(webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, actual: "disabled: the element is disabled" } }).code, "target_not_actionable");
   assert.equal(webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, actual: "covered: the point 1,2 landed on div.scrim" } }).code, "target_covered");
+});
+
+// t626: a Next page step that pressed nothing because its Next would leave the
+// filters the page shows applied says so, with the count the extension wrote
+// as a field of its answer, and a repeat of the refusal says it again.
+
+test("a page fault whose Next would drop applied filters names it and the count, and nothing else", () => {
+  const failure = { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, actual: "page_fault: The pager's Next leads to an address that leaves out 2 query parameters this page shows applied, Brightaisle" };
+  const refused = webActionFailureRefusal({ status: "failed", failure, payload: { nextPage: { outcome: "failed", stop: "page_fault", filtersDropped: 2 } } });
+  assert.equal(refused.code, "action_failed");
+  assert.equal(refused.detail?.reason, "next_leaves_filtered_list");
+  assert.equal(WEB_LLM_TOOL_REJECTION_REASONS.includes("next_leaves_filtered_list"), true);
+  assert.equal(refused.detail?.filtersDropped, 2);
+  assert.equal(refused.detail?.paginationStop, "page_fault");
+  assert.match(refused.detail?.next ?? "", /filtersDropped/u);
+  for (const privateText of PAGE_WORDS) assert.equal(JSON.stringify(refused).includes(privateText), false);
+  const repeated = repeatedRejectionDetail(refused.detail, 2);
+  assert.equal(repeated.reason, "next_leaves_filtered_list");
+  assert.equal(repeated.filtersDropped, 2);
+  assert.equal(repeated.next, refused.detail?.next);
+});
+
+test("a page fault with no count, a count beside another word, or a count in the sentence alone stays bare action_failed", () => {
+  const failure = { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, actual: "page_fault: leaves out 2 query parameters" };
+  for (const nextPage of [{ outcome: "failed", stop: "page_fault" }, { outcome: "failed", stop: "list_unchanged", filtersDropped: 2 }, { outcome: "failed", stop: "page_fault", filtersDropped: 0 }, undefined]) {
+    const result = nextPage === undefined ? { status: "failed", failure } : { status: "failed", failure, payload: { nextPage } };
+    assert.deepEqual(webActionFailureRefusal(result), { code: "action_failed", detail: undefined }, JSON.stringify(nextPage));
+  }
+  // The count is read only beside the code its word maps to.
+  const other = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED }, payload: { nextPage: { outcome: "failed", stop: "page_fault", filtersDropped: 2 } } });
+  assert.notEqual(other.detail?.reason, "next_leaves_filtered_list");
 });

@@ -115,7 +115,7 @@ function keepingFollowing(next: HTMLElement, pager: PagerReading | undefined): H
   const kept = following === undefined ? undefined : linkAddress(following);
   if (following !== undefined && kept !== undefined && droppedQueryState(kept, here, pager?.current, applied) === 0) return following;
   const plural = dropped === 1 ? "parameter" : "parameters";
-  throw new PaginationFault("page_fault", `The pager's Next leads to an address that leaves out ${dropped} query ${plural} this page shows applied, and no following page control keeps them, so following it would leave the narrowed list rather than reach its next page.`);
+  throw new PaginationFault("page_fault", `The pager's Next leads to an address that leaves out ${dropped} query ${plural} this page shows applied, and no following page control keeps them, so following it would leave the narrowed list rather than reach its next page.`, dropped);
 }
 
 /**

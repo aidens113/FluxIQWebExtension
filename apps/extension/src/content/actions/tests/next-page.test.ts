@@ -125,3 +125,10 @@ test("a command without nextPage parameters fails without touching the page", as
   assert.equal(result.status, "failed");
   assert.deepEqual(asked, []);
 });
+
+test("a page fault whose Next would drop applied filters carries the count onto the wire, and only that (t626)", async () => {
+  const { result } = await run({ outcome: "failed", stop: "page_fault", reason: "leaves out 2 query parameters", filtersDropped: 2 });
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
+  assert.deepEqual(result.nextPage, { outcome: "failed", stop: "page_fault", filtersDropped: 2 });
+  assert.deepEqual(wire(result).nextPage, { outcome: "failed", stop: "page_fault", filtersDropped: 2 });
+});

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { movePage, type PageMoveOptions } from "..";
 import type { PageMoveMark } from "../../../../shared/extraction-continuation";
-import { CATALOG_HIT, CATALOG_NEXT, catalogAddress, catalogPage, type CatalogPage, type CatalogPagerStyle } from "./catalog-pager";
+import { CATALOG_HIT, CATALOG_NEXT, catalogAddress, catalogPage, withSearchIn, type CatalogPage, type CatalogPagerStyle } from "./catalog-pager";
 
 async function onCatalog<T>(page: number, style: CatalogPagerStyle, body: (shown: CatalogPage, marks: PageMoveMark[]) => Promise<T>): Promise<T> {
   const shown = catalogPage(page, style);
@@ -52,6 +52,7 @@ for (const numbers of ["none", "drop"] as const) {
       assert.equal(answer.outcome, "failed", "not moved: the page Next leads to is not this list's next page");
       assert.equal(answer.outcome === "failed" ? answer.stop : undefined, "page_fault");
       assert.match(answer.outcome === "failed" ? answer.reason : "", /leaves out 2 query parameters/u);
+      assert.equal(answer.outcome === "failed" ? answer.filtersDropped : undefined, 2, "the count travels as a field of the answer");
       assert.doesNotMatch(answer.outcome === "failed" ? answer.reason : "", /format|lang|ebook/u, "no word of the address leaves the page");
       assert.deepEqual(shown.followed, []);
       assert.deepEqual(marks, [], "nothing was about to be pressed");
@@ -97,5 +98,39 @@ test("a Next that drops parameters no control shows applied is followed as befor
     assert.equal(answer.outcome, "moved");
     assert.equal(answer.outcome === "moved" ? answer.by : undefined, "next");
     assert.deepEqual(shown.followed, [catalogAddress(2, false)]);
+  });
+});
+
+// A search box's select on its first option is no narrowing (t626): a Next
+// that leaves it out of the address is the list's Next.
+
+for (const numbers of ["drop", "none"] as const) {
+  test(`a Next that drops the search box's select on its first option is followed as it is (numbers: ${numbers})`, async () => {
+    await onCatalog(1, { next: "keeps", numbers, searchIn: "everything" }, async (shown, marks) => {
+      const answer = await movePage({ item: CATALOG_HIT, pagination: { next: CATALOG_NEXT } }, { timeoutMs: 20_000, mark: marking(marks) });
+      // A pager with no numbers marks no page current, so the answer names none.
+      assert.deepEqual(answer, { outcome: "moved", by: "next", ...(numbers === "none" ? {} : { page: 2 }) });
+      assert.deepEqual(shown.followed, [catalogAddress(2, true)]);
+      assert.deepEqual(marks, [{ by: "next" }]);
+    });
+  });
+}
+
+test("a Next that drops the search box's chosen later option is swapped for the following number that keeps it", async () => {
+  await onCatalog(1, { next: "keeps", numbers: "keep", searchIn: "titles" }, async (shown) => {
+    const answer = await movePage({ item: CATALOG_HIT, pagination: { next: CATALOG_NEXT } }, { timeoutMs: 20_000 });
+    assert.deepEqual(answer, { outcome: "moved", by: "following", page: 2 });
+    assert.deepEqual(shown.followed, [withSearchIn(catalogAddress(2, true), "titles")]);
+  });
+});
+
+test("a Next that drops the search box's chosen later option with nothing that keeps it fails page_fault", async () => {
+  await onCatalog(1, { next: "keeps", numbers: "none", searchIn: "titles" }, async (shown) => {
+    const answer = await movePage({ item: CATALOG_HIT, pagination: { next: CATALOG_NEXT } }, { timeoutMs: 20_000 });
+    assert.equal(answer.outcome === "failed" ? answer.stop : answer.outcome, "page_fault");
+    assert.match(answer.outcome === "failed" ? answer.reason : "", /leaves out 1 query parameter /u);
+    assert.equal(answer.outcome === "failed" ? answer.filtersDropped : undefined, 1);
+    assert.doesNotMatch(answer.outcome === "failed" ? answer.reason : "", /titles|in=/u);
+    assert.deepEqual(shown.followed, []);
   });
 });

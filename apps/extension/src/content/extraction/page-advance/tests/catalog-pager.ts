@@ -20,6 +20,10 @@
 // - `arrivedWith` -- a parameter the first page's address carries that no link
 //   keeps and nothing on the page shows, as a tracking tag a page is opened
 //   with.
+// - `searchIn` -- the catalog's search box has a "Search in" select (Everything,
+//   Titles, Authors, Subjects; Everything first) whose choice the address
+//   carries as `in`, as a search form submits it. Next never carries it; the
+//   page numbers carry it when they keep the narrowing (`numbers: "keep"`).
 // Pressing a link replaces the results and the pager with those of the address
 // it leads to, and the document's address becomes it, as a new document's does.
 
@@ -37,7 +41,16 @@ export const CATALOG_HIT = "li[data-hit]";
 /** The Next a `next` way names on the catalog's pager. */
 export const CATALOG_NEXT = 'a[rel="next"]';
 
-export type CatalogPagerStyle = { next: "keeps" | "drops"; numbers: "keep" | "drop" | "none"; shown?: "applied" | "nothing"; arrivedWith?: string };
+export type CatalogPagerStyle = { next: "keeps" | "drops"; numbers: "keep" | "drop" | "none"; shown?: "applied" | "nothing"; arrivedWith?: string; searchIn?: CatalogSearchIn };
+
+/** The search box's "Search in" choices, in the order its select lists them: the first narrows nothing. */
+export const CATALOG_SEARCH_IN = ["everything", "titles", "authors", "subjects"] as const;
+export type CatalogSearchIn = (typeof CATALOG_SEARCH_IN)[number];
+
+/** `address` with the search box's choice, as a control that keeps it carries it. */
+export function withSearchIn(address: string, searchIn: CatalogSearchIn | undefined): string {
+  return searchIn === undefined ? address : `${address}&in=${searchIn}`;
+}
 
 /** The address of page `page` of the search, narrowed or not; page one carries no page number. */
 export function catalogAddress(page: number, narrowed: boolean): string {
@@ -65,7 +78,7 @@ export function catalogPage(page: number, style: CatalogPagerStyle): CatalogPage
     input: (globalThis as Record<string, unknown>).HTMLInputElement
   };
   const followed: string[] = [];
-  let href = `${catalogAddress(page, true)}${style.arrivedWith === undefined ? "" : `&${style.arrivedWith}`}`;
+  let href = `${withSearchIn(catalogAddress(page, true), style.searchIn)}${style.arrivedWith === undefined ? "" : `&${style.arrivedWith}`}`;
   const results = new FakeElement("ol", { role: "list" });
   const rail = new FakeElement("form", { role: "search" });
   const column = new FakeElement("div", {}, "", [results]);
@@ -75,8 +88,9 @@ export function catalogPage(page: number, style: CatalogPagerStyle): CatalogPage
     const shown = Number(url.searchParams.get("p") ?? "1");
     const narrowed = url.searchParams.get("format") !== null;
     results.replaceChildren(...hitsOf(shown, narrowed));
-    rail.replaceChildren(...railOf(narrowed && style.shown !== "nothing"));
-    const redrawn = pagerOf(shown, narrowed, style, (target) => {
+    const searchIn = style.searchIn === undefined ? undefined : CATALOG_SEARCH_IN.find((choice) => choice === url.searchParams.get("in")) ?? CATALOG_SEARCH_IN[0];
+    rail.replaceChildren(...railOf(narrowed && style.shown !== "nothing"), ...searchBoxOf(searchIn));
+    const redrawn = pagerOf(shown, narrowed, url.searchParams.get("in") === null ? undefined : searchIn, style, (target) => {
       followed.push(target);
       href = target;
       draw();
@@ -135,6 +149,16 @@ function railOf(applied: boolean): FakeElement[] {
   ];
 }
 
+/**
+ * The search box's "Search in" select, on `searchIn` -- marked selected even
+ * on its first option, as a server that draws the form from the address marks
+ * it -- or nothing when the catalog has no such select.
+ */
+function searchBoxOf(searchIn: CatalogSearchIn | undefined): FakeElement[] {
+  if (searchIn === undefined) return [];
+  return [new FakeElement("select", { name: "in" }, "", CATALOG_SEARCH_IN.map((choice) => new FakeElement("option", { value: choice, ...(choice === searchIn ? { selected: "" } : {}) }, choice)))];
+}
+
 function link(target: string, attributes: Record<string, string>, text: string, follow: (target: string) => void): FakeElement {
   const element = new FakeElement("a", { href: target, ...attributes }, text);
   element.onClick = () => follow(target);
@@ -142,7 +166,7 @@ function link(target: string, attributes: Record<string, string>, text: string, 
 }
 
 /** The pager of page `page`; `follow` is what pressing one of its links does. */
-function pagerOf(page: number, narrowed: boolean, style: CatalogPagerStyle, follow: (target: string) => void): FakeElement {
+function pagerOf(page: number, narrowed: boolean, searchIn: CatalogSearchIn | undefined, style: CatalogPagerStyle, follow: (target: string) => void): FakeElement {
   const pages = NARROWED_PAGES;
   const controls: FakeElement[] = [];
   if (page > 1) controls.push(link(catalogAddress(page - 1, narrowed), { "aria-label": "Previous page" }, "Previous", follow));
@@ -150,7 +174,7 @@ function pagerOf(page: number, narrowed: boolean, style: CatalogPagerStyle, foll
     for (let number = 1; number <= pages; number += 1) {
       controls.push(number === page
         ? new FakeElement("span", { "aria-current": "page" }, String(number))
-        : link(catalogAddress(number, narrowed && style.numbers === "keep"), {}, String(number), follow));
+        : link(style.numbers === "keep" ? withSearchIn(catalogAddress(number, narrowed), searchIn) : catalogAddress(number, false), {}, String(number), follow));
     }
   }
   controls.push(page < pages

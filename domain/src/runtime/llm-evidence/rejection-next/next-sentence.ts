@@ -21,6 +21,7 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
     : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
     : reason === "option_not_offered" ? OPTION_NOT_OFFERED_NEXT
+    : reason === "next_leaves_filtered_list" ? FILTERED_LIST_NEXT
     // Read off the kind code in `instead`, so a repeat that passes it back says it again.
     : reason === "handle_not_a_field" ? notAFieldNext(instead) : reason === "handle_wrong_kind_of_control" ? webPlanScriptedChoiceMove(instead)
     // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
@@ -50,6 +51,14 @@ function notAFieldNext(instead: readonly string[] | undefined): string {
 const OPTION_NOT_OFFERED_NEXT = "Nothing was chosen: no option of this select has the value or the visible words sent. "
   + "The page view lists its options by their visible words after the select's own line, in [ | ]; send one of those exactly as value, "
   + "or the option's value as describe_element shows it for the select. The same value sent again is answered the same way.";
+
+/**
+ * What to do about a Next page step whose Next would leave the filtered list
+ * (t626). Generic: it names no site, control or filter, only where to look.
+ */
+const FILTERED_LIST_NEXT = "Nothing was pressed. This page's Next leads to the list without filters the page shows applied (filtersDropped says how many), "
+  + "and no page number beside it keeps them, so the same step is answered the same way here. Find another control on the page that reaches the next page of this same filtered list, "
+  + "or read this page and end the list here, saying in the answer that the later pages could not be reached with the filters kept.";
 
 /** What to do about a control a layer covers, when the layer's own close control is known (`closeWith`). */
 const COVERED_NEXT_CLOSE = "Nothing was done. The layer in instead covers the target: press one of closeWith to close it, then make this same call again, unchanged.";
