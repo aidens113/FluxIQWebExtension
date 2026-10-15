@@ -55,10 +55,13 @@ where bigbox's builders did run, subflow trials that could never pass (the bigbo
 `reports/a8-bigbox-run-mv8186yr-debug.md`): Core t578-t582 fixed it and are merged (Core ledger); launch 6 then produced the first `project` Flow
 to pass its judged whole run (crossborder, $0.028) and four new defects: t583 and t584 are merged, t585-t589 in
 merged; launch 7 then
-lost three builds to the Lab's chat deadline (sized for one candidate loop) and showed the start-state class of failure
-a fifth time, so t593 builds one shared phase start for every phase; t592 (a Core-owned 30-minute project build bound,
-the Lab's deadline derived from it), t594 (builder scope and the subflow judge), t595 (repairs carry their failure;
-no repair loop on nothing), t596 (domain handle identity across briefs) are in flight; launch 8 follows them.
+lost three builds to the Lab's chat deadline and showed the start-state class of failure a fifth time, so t593 built
+one shared phase start for every phase (with t592, t594-t596; all merged). The comparison so far (A8 Run Plan tables):
+pair 1 `project` 2 of 4, `candidate` 2 of 4; pair 2 `project` 2 of 4 (two near misses), `candidate` 4 of 4 and
+cheaper; wave 3 `project` social passed, everything-store failed on false no's (Core t607), towels failed in both
+modes on page-view legends (t605). `candidate` stays the default. t597-t608 are merged and pushed (2026-10-14).
+Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
+consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -723,6 +726,13 @@ build does today until A5 lands and the mode is chosen.
 - Why: round two's candidate social run was refused as an unchanged rerun of a project run; candidate social's correct Flow was failed because the Lab read the replay's accounting 0.4 s too early
 - Validation: launch 8 `project`: crossborder and bigbox passed (oracle passed), social and everything-store failed; round two `candidate`: crossborder and bigbox passed, social's Flow passed the oracle (accounting race), everything-store failed (shared judge defect); spend ledger. t600: live-guards tests -> pass 47; `pnpm lab:test` -> pass 212, fail 0; audit passed; merged `a14204a0`. t602: test-runner replay, saved-flow-replay, repair, flow-lane tests -> pass 494, fail 0; check clean; audit passed; merged `d665f3db`
 - Outcome: Accepted. `project` does not yet beat `candidate` on this pair; a fresh pair for both modes follows the fixes
+
+### 2026-10-14 — A8 wave 3 and round three; the page view shows legends (t605)
+- Agent: supervisor (wave 3 `project` social and everything-store, round three towels in both modes, debugs); worker t605-page-view-legends; supervisor verified and integrated
+- Changed: the A8 Run Plan's wave 3 and round three tables; t605 `domain` page view shows a fieldset's legend and a table's caption, and view, describe and find name the group a control sits in (`group="<legend>"`); the instruction text moves web-8 -> web-9 with one sentence on what `group=` means; state digest `web-state.v5`
+- Why: towels failed in both modes because the view dropped the legends that say which option set a choice belongs to; everything-store's correct Flow was refuted by false no's (Core t607)
+- Validation: wave 3 `project`: social passed, everything-store failed (judged no on a Flow that stored exactly the rows asked); round three towels failed in both modes; spend ledger; debug notes for every run. t605: domain `runtime/llm-evidence` -> 1114 tests, pass 1114, fail 0; the legends test against the old `elements.ts` -> pass 1, fail 3 (defect proven); `tests/domain.test tests/page-evidence-joinery` -> pass 16; domain tsc exit 0; `check-extension.mjs` exit 0; audit passed; merged `c8604d60`, pushed
+- Outcome: Accepted. Next: sync lanes, re-run project everything-store, towels in both modes, project social for a consecutive pass
 
 ## Open Questions
 
