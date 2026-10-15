@@ -63,10 +63,10 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t624. Wave 5 (2026-10-15): `project` everything-store passed; social, towels (both modes) failed
-on a lost rescued pass, a judge that could not confirm text-filtered rows, and a Next that dropped the filters, all
-fixed (t622, t623, t624). Next: wave 6 on the pair after t624, the same four runs; then the four remaining
-load-sensitive test files.
+Merged since: t609-t628. Wave 5 (2026-10-15): `project` everything-store passed. Wave 6: `candidate` towels and
+`project` social passed; everything-store and `project` towels failed on two regressions (t622's repair context, t623's
+default select) and on a brief's fixed share and two judge defects, all fixed (t625-t628). Next: wave 7, the same four
+runs; then the four remaining load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -763,6 +763,14 @@ Entries for 2026-10-13 (plan, concurrency decision, W1-W3, the sweep fix-forward
 - Validation: wave 5: `project` everything-store passed ($0.085, oracle passed; the first `project` pass there); `project` social failed ($0.063), `project` towels failed ($0.176), `candidate` towels failed ($0.048); debug notes for all four. t623 after merging dev: `test-extension.mjs content/extraction` -> tests 291, pass 291, fail 0 (5 of 8 move tests fail with the call site reverted); `check-extension.mjs` exit 0; audit passed; merged `0638d45f`; pushed
 - Outcome: Accepted. Wave 6 reruns all four on the pair after t622-t624
 - Follow-up: a filter shown only as a link or chip, with no checked or pressed state, is not seen, so a Next that drops it is followed as before
+
+### 2026-10-15 — A8 wave 6; a default choice is not a filter (t626)
+- Agent: supervisor (wave 6, four runs at once, debugs); read-only debugs `a8-everything-store-run-mv9a48cs-debug.md`, `a8-towels-run-mv9a4aj0-debug.md`; worker t626-default-select-not-a-filter (two rounds); supervisor reworded its fallback sentence, verified and integrated
+- Changed: the A8 Run Plan's wave 6 table and reading; t626 `apps/extension/src/content/extraction/page-advance/applied-controls.ts`: a single select's first option and a named radio group's first radio are unchosen defaults, not applied filters (a t623 regression faulted Next on an unfiltered search); the fault carries `nextPage.filtersDropped` to a new domain reason `next_leaves_filtered_list` (`domain/src/runtime/llm-evidence/{tool-rejection,repeated-refusal}.ts`, `action-failure/refusal.ts`) with a generic next sentence ending "saying in the answer that the later pages could not be reached with the filters kept" (supervisor's wording)
+- Why: wave 6 everything-store's Next faulted twice on a default "All" select and the model saw only `action_failed`
+- Validation: wave 6: `candidate` towels passed ($0.086, the first towels pass; t623 and t624 live), `project` social passed ($0.063, t622 kept the rescued pass), `project` everything-store failed ($0.066), `project` towels failed ($0.138); debug notes for all four. t626 after merging dev: `test-extension.mjs content/extraction content/actions/tests/next-page` -> tests 305, pass 305, fail 0; `test-domain.mjs runtime/llm-evidence actions/next-page` -> tests 1136, pass 1136, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; merged `e9c2b5f5`; pushed
+- Outcome: Accepted. Wave 7 reruns the same four on the pair after t625-t628
+- Follow-up: a first radio or option that really narrows is not seen as applied (Next followed as before t623)
 
 ## Open Questions
 
