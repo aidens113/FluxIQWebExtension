@@ -413,6 +413,18 @@ row, everything-store two). Towels fails in both modes on the judge: refuting a 
 phrasings, a recurring failure, so t631 refutes a no by the conditions and rows it references against Core's read
 account, and t632 holds an upheld exclusion across a subflow's trials.
 
+**Wave 9** (downstream `1ef54cd1`, Core `658d95ff`, after t631-t635):
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| everything-store-plus-earbuds-under-50 | **passed**, $0.037 (third in a row) | not run |
+| social-network-feed-confirm-requests | failed, $0.088: the whole test yes, then repairs and three unsure whole tests; debug in flight | not run |
+| bigbox-retail-pickup-towels | **passed**, $0.096 (three repairs, the fourth whole test yes) | **passed**, $0.030 (Core reported `unverified`; the oracle passed) |
+
+**Tally of `project` across waves 5-9 (each wave on its own pair):** everything-store P F P P P, social F P P P F,
+towels F F P F P. The default-flip rule wants two consecutive passes per site on one frozen pair for both modes; no
+wave has yet been repeated on an unchanged pair.
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
