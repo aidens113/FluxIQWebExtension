@@ -1,0 +1,151 @@
+// What a step's state diff says of its places (t609): where its control sat
+// (`spot`) and the items of the lists both of its pages show (`items`), from
+// which FluxIQ Core counts the items a trial's step created (t598). The site
+// is a public library's catalogue: cards a reader adds to a reading list, and
+// a loans drawer that opens over loans the reader already had.
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { JsonObject } from "fluxiq/core";
+import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, type WebLlmSnapshotBinding } from "../../../llm-evidence";
+import { createWebStatePlacesMemo, webStateDiffPlaces, webStateSnapshotPlaces } from "..";
+
+type Spec = { tag: string; selector: string; text?: string; cls?: string; record?: JsonObject; dialog?: string; children?: Spec[] };
+
+/** The capture's flat element list for a tree, each element's `parent` its ancestor's index, a record's context on every element in it. */
+function capture(url: string, tree: Spec[]): JsonObject {
+  const elements: JsonObject[] = [];
+  const walk = (spec: Spec, parent: number | undefined, record: JsonObject | undefined, dialog: string | undefined) => {
+    const index = elements.length;
+    const inRecord = spec.record ?? record, inDialog = spec.dialog ?? dialog;
+    elements.push({
+      tagName: spec.tag, selector: spec.selector,
+      ...(spec.text === undefined ? {} : { text: spec.text, name: spec.text }),
+      ...(spec.cls === undefined ? {} : { attributes: { class: spec.cls } }),
+      ...(parent === undefined ? {} : { parent }),
+      ...(inRecord || inDialog ? { context: { ...(inRecord ? { record: inRecord } : {}), ...(inDialog ? { dialog: inDialog } : {}) } } : {})
+    });
+    for (const child of spec.children ?? []) walk(child, index, inRecord, inDialog);
+  };
+  for (const spec of tree) walk(spec, undefined, undefined, undefined);
+  return { url, title: "Library", interactiveElements: elements };
+}
+
+const card = (n: number, title: string): Spec => ({
+  tag: "li", selector: `#catalogue > li:nth-of-type(${n})`, cls: "card", record: { keyAttribute: "data-title-id", key: `title-${n}` },
+  children: [{ tag: "h3", selector: `#catalogue > li:nth-of-type(${n}) > h3`, text: title }, { tag: "button", selector: `#catalogue > li:nth-of-type(${n}) > button`, text: "Add to list" }]
+});
+/** A reading-list line, named by its words as an unkeyed record is. */
+const line = (n: number, words: string, cls = "line"): Spec => ({
+  tag: "li", selector: `#reading > ul > li:nth-of-type(${n})`, cls, record: { text: words },
+  children: [{ tag: "button", selector: `#reading > ul > li:nth-of-type(${n}) > button`, text: "Remove" }]
+});
+const loan = (n: number, title: string): Spec => ({
+  tag: "li", selector: `#loans > ul > li:nth-of-type(${n})`, cls: "loan", record: { keyAttribute: "data-loan-id", key: `loan-${n}` },
+  children: [{ tag: "button", selector: `#loans > ul > li:nth-of-type(${n}) > button`, text: `Renew ${title}` }]
+});
+const CARDS = [card(1, "Dune"), card(2, "Emma"), card(3, "Ivanhoe")];
+
+function libraryPage(lines: Spec[], extra: Spec[] = []): WebLlmSnapshotBinding {
+  return sanitizeWebLlmSnapshotWithBindings(capture("https://library.test/catalogue", [{
+    tag: "main", selector: "main", children: [
+      { tag: "ul", selector: "#catalogue", cls: "catalogue", children: CARDS },
+      { tag: "aside", selector: "#reading", cls: "reading-list", children: [{ tag: "h2", selector: "#reading > h2", text: "Reading list" }, { tag: "ul", selector: "#reading > ul", cls: "lines", children: lines }] },
+      ...extra
+    ]
+  }]));
+}
+
+/** The token of the item the element `selector` sits in on `page`. */
+function tokenAt(page: WebLlmSnapshotBinding, selector: string): string {
+  const handle = [...page.selectors].find(([, written]) => written === selector)?.[0];
+  const record = handle === undefined ? undefined : page.records.get(handle);
+  assert.ok(record, `no record at ${selector}`);
+  return webControlSpotToken("item", record);
+}
+
+const press = (selector: string) => ({ definitionId: "web.output.dom-click", parameterValues: { selector } });
+/** What Core counts created: in `after`, not in `before` (`landed-acts.ts`). */
+function created(diff: JsonObject): string[] {
+  const items = diff.items as { before: string[]; after: string[] } | undefined;
+  if (!items) return [];
+  const before = new Set(items.before);
+  return items.after.filter((item) => !before.has(item));
+}
+function step(before: WebLlmSnapshotBinding, after: WebLlmSnapshotBinding, node: ReturnType<typeof press>, documentChanged = false): JsonObject {
+  return webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(after), node, documentChanged);
+}
+
+const DUNE = "Dune Frank Herbert", EMMA = "Emma Jane Austen", IVANHOE = "Ivanhoe Walter Scott";
+
+test("an add to a list the page shows: the control's card is the spot, and the new line is the one item created", () => {
+  const before = libraryPage([line(1, DUNE), line(2, EMMA)]);
+  const after = libraryPage([line(1, DUNE), line(2, EMMA), line(3, IVANHOE)]);
+  const diff = step(before, after, press("#catalogue > li:nth-of-type(3) > button"));
+  assert.deepEqual(diff.spot, { item: tokenAt(before, "#catalogue > li:nth-of-type(3)") });
+  assert.deepEqual(created(diff), [tokenAt(after, "#reading > ul > li:nth-of-type(3)")]);
+  // Opaque tokens only: no words, no selector.
+  assert.doesNotMatch(JSON.stringify(diff), /Ivanhoe|Herbert|catalogue|nth-of-type/u);
+});
+
+test("a drawer the step opened lists loans the reader already had: none of them is created", () => {
+  const before = libraryPage([line(1, DUNE), line(2, EMMA)]);
+  const drawer: Spec = { tag: "aside", selector: "#loans", cls: "loans-drawer", dialog: "Your loans", children: [{ tag: "ul", selector: "#loans > ul", cls: "loans", children: [loan(1, "Dune"), loan(2, "Emma")] }] };
+  const after = libraryPage([line(1, DUNE), line(2, EMMA)], [drawer]);
+  const diff = step(before, after, press("#open-loans"));
+  assert.deepEqual(created(diff), []);
+  const listed = diff.items as { before: string[]; after: string[] };
+  for (const loanLine of ["#loans > ul > li:nth-of-type(1)", "#loans > ul > li:nth-of-type(2)"]) assert.ok(!listed.after.includes(tokenAt(after, loanLine)));
+  // A control in no item has no spot.
+  assert.equal(diff.spot, undefined);
+});
+
+test("a drawer with one loan, beside a single card the page held before under the same container, is still not a list the page showed", () => {
+  const recent: Spec = { tag: "aside", selector: "#recent", cls: "recently-viewed", children: [{ tag: "article", selector: "#recent > article", record: { keyAttribute: "data-title-id", key: "title-9" }, children: [{ tag: "h3", selector: "#recent h3", text: "Middlemarch" }] }] };
+  const drawer: Spec = { tag: "aside", selector: "#loans", cls: "loans-drawer", children: [{ tag: "ul", selector: "#loans > ul", cls: "loans", children: [loan(1, "Dune")] }] };
+  const before = libraryPage([line(1, DUNE), line(2, EMMA)], [recent]);
+  const after = libraryPage([line(1, DUNE), line(2, EMMA)], [recent, drawer]);
+  assert.deepEqual(created(step(before, after, press("#open-loans"))), []);
+});
+
+test("a step that moved to another document names its spot and vouches for no list", () => {
+  const before = libraryPage([line(1, DUNE), line(2, EMMA)]);
+  const after = sanitizeWebLlmSnapshotWithBindings(capture("https://library.test/titles/ivanhoe", [{ tag: "main", selector: "main", children: [{ tag: "ul", selector: "#reading > ul", cls: "lines", children: [line(1, DUNE), line(2, EMMA), line(3, IVANHOE)] }] }]));
+  const diff = step(before, after, press("#catalogue > li:nth-of-type(3) > h3"), true);
+  assert.deepEqual(diff.spot, { item: tokenAt(before, "#catalogue > li:nth-of-type(3)") });
+  assert.equal(diff.items, undefined);
+});
+
+test("a line added, removed and added again is created both times, by the same token", () => {
+  const two = libraryPage([line(1, DUNE), line(2, EMMA)]);
+  const three = libraryPage([line(1, DUNE), line(2, EMMA), line(3, IVANHOE)]);
+  const add = press("#catalogue > li:nth-of-type(3) > button");
+  const first = created(step(two, three, add));
+  assert.deepEqual(created(step(three, two, press("#reading > ul > li:nth-of-type(3) > button"))), []);
+  const again = created(step(two, three, add));
+  assert.equal(first.length, 1);
+  assert.deepEqual(again, first);
+});
+
+test("a list that lost or changed an item at the same time, or whose one line the page named by nothing, vouches for nothing", () => {
+  const before = libraryPage([line(1, DUNE), line(2, `${EMMA} 1 copy`)]);
+  // Emma's line changed its words (another copy) while Ivanhoe arrived: which line is new cannot be told.
+  const changed = libraryPage([line(1, DUNE), line(2, `${EMMA} 2 copies`), line(3, IVANHOE)]);
+  assert.deepEqual(created(step(before, changed, press("#catalogue > li:nth-of-type(3) > button"))), []);
+  // One unkeyed line is named by nothing; beside a new one both gain names, and neither is vouched new.
+  const single = libraryPage([{ tag: "li", selector: "#reading > ul > li:nth-of-type(1)", cls: "line", children: [{ tag: "button", selector: "#reading > ul > li:nth-of-type(1) > button", text: "Remove" }] }]);
+  assert.deepEqual(created(step(single, libraryPage([line(1, DUNE), line(2, IVANHOE)]), press("#catalogue > li:nth-of-type(3) > button"))), []);
+  // A line the site marks as just added is still one of the list's.
+  assert.equal(created(step(libraryPage([line(1, DUNE), line(2, EMMA)]), libraryPage([line(1, DUNE), line(2, EMMA), line(3, IVANHOE, "line is-new")]), press("#catalogue > li:nth-of-type(3) > button"))).length, 1);
+});
+
+test("the memory keeps the latest snapshots' places only", () => {
+  const memo = createWebStatePlacesMemo(2);
+  const places = webStateSnapshotPlaces(libraryPage([line(1, DUNE), line(2, EMMA)]));
+  memo.keep("web.state.1@a:before_action", places);
+  memo.keep("web.state.2@a:after_action", places);
+  memo.keep("web.state.3@b:after_action", places);
+  assert.equal(memo.of("web.state.1@a:before_action"), undefined);
+  assert.equal(memo.of("web.state.3@b:after_action"), places);
+  assert.equal(memo.of(undefined), undefined);
+});

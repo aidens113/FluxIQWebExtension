@@ -286,6 +286,23 @@ as a dialog's Close, is dispatched unchanged on every pass.
   back where a node started in the run it repairs (t194 cause C-D). It is
   written only when that address is exactly what the packet publishes, nothing
   in it withheld, so it carries no secret; otherwise the snapshot has no `from`.
+  The diff also carries two keys Core ties a trial's lasting act to its own
+  item by (t609, Core t598), both opaque tokens of the kind a permission
+  declaration's `control.item` and a start-state read's `items` take
+  (`llm-evidence/control-spot/`): `spot`, `{ item?, dialog? }`, where the
+  element the node's selector addresses sat on the page before the step; and
+  `items`, `{ before, after }`, the items of the lists both pages show. A list
+  is a container with the shape of the way down to its items
+  (`state-diff/places/snapshot.ts`), and it counts only when the page before
+  showed it with at least one item and every one of those is still in it, so a
+  drawer the step merely opened over lines that existed before the build, or a
+  line whose words changed, never reads as an item the step created; a move to
+  another document names no items. Both are read from the capture's records and
+  selectors, which a summary must not carry, so the host runtime keeps each
+  capture's places in memory by `stateRef` for its last few snapshots
+  (`state-diff/places/memo.ts`) and a diff of refs it no longer holds names
+  neither key. Like the rest of the diff, both stay under Core's withholding of
+  `stateDiff` in a saved trace.
 
 ## What A Model Reads: The Compact Page View
 
