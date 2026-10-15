@@ -63,9 +63,10 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t630. Wave 7 (2026-10-15): `project` passed everything-store, social and towels on one pair;
-`candidate` towels failed on a judge defect fixed in t629. Next: wave 8 on the pair after t630, the same four runs,
-then wave 9 on the same pair if nothing new is found; then the four remaining load-sensitive test files.
+Merged since: t609-t635. Waves 7 and 8 (2026-10-15): `project` passed everything-store twice and social three
+times in a row; towels failed in both modes on the judge in wave 8, fixed structurally (t631 weighs a no by what it
+references, t633 and t634 hold an upheld exclusion across trials and briefs). Next: wave 9 on the pair after t635, the
+same four runs; then the four remaining load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
