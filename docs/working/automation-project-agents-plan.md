@@ -63,10 +63,9 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t637. Waves 7-9 (2026-10-15): `project` passed everything-store three times in a row, social
-three of four, towels two of three; wave 9's social failure was fixed by t636 and t637. Next: the frozen-pair
-comparison on the pair after t637 (the five A8 tasks in both modes, twice, no fixes between), starting with
-crossborder hub-to-cart and bigbox pickup-cart in both modes; then the four remaining load-sensitive test files.
+Merged since: t609-t640. The first frozen pair (after t637) passed six of seven runs; `project` crossborder failed on
+pre-existing defects fixed in t638-t640. Next: the comparison restarts on the pair after t640, the five A8 tasks in
+both modes, twice, no fixes between; then the four remaining load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -773,6 +772,13 @@ Entries for 2026-10-14 (A8 rounds one to wave 4, t573-t613 downstream sides, the
 - Why: wave 9 on the pair after t631-t635
 - Validation: `project` everything-store passed ($0.037, third in a row), `project` towels passed ($0.096), `candidate` towels passed ($0.030, Core reported `unverified`, the oracle passed), `project` social failed ($0.088, fixed by Core t636 and t637); spend ledger
 - Outcome: Accepted. From wave 10 the pair is frozen for the default-flip comparison: the five A8 tasks in both modes, twice, with no fixes in between; wave 10 starts with crossborder hub-to-cart and bigbox pickup-cart in both modes as a regression check
+
+### 2026-10-15 — A8 waves 10 and 11 on a frozen pair; a navigate needs an address (t640)
+- Agent: supervisor (waves 10 and 11, the first frozen-pair rounds); read-only debug `a8-crossborder-run-mv9q50ui-debug.md`; worker t640-navigate-needs-address
+- Changed: the A8 Run Plan's frozen-pair table; t640 `domain/src/output-nodes/native-runtime.ts` and `apps/extension/src/runtime/action-runner.ts` refuse a navigate whose url has no value before dispatch, with the invalid-parameter code and a new closed reason `parameter_has_no_value` naming `url` (`domain/src/runtime/llm-evidence/tool-rejection.ts`, `action-failure/refusal.ts`)
+- Why: on the frozen pair `project` crossborder failed (pre-existing defects: Core t638, t639, and a url-less navigate reported as a policy refusal); the other six runs passed
+- Validation: frozen pair (downstream `112ad66e`, Core `cf928307`): crossborder `project` failed $0.070, `candidate` passed $0.016; bigbox cart passed in both ($0.042, $0.035); everything-store passed in both ($0.036, $0.067); social `project` passed $0.048. t640 after merging dev: `test-domain.mjs output-nodes runtime/llm-evidence` -> tests 1367, pass 1367, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; `test-extension.mjs src/runtime/tests` -> pass 266, fail 0; audit passed; merged `a07d00f6`; pushed
+- Outcome: Accepted. The comparison restarts on the pair after t638-t640
 
 ## Open Questions
 
