@@ -20,6 +20,7 @@ import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
 const EXTRACT_LIST = "web.output.dom-extract_list";
+const READ = "web.output.dom-extract";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const NAVIGATE = "web.output.browser-navigate";
 const START = "https://example.test/start";
@@ -211,6 +212,27 @@ test("a replayed list read answers the rows the Flow's extract_list would produc
   assert.deepEqual(read.outputs, { records: [{ name: "Amara Osei", mutual: "23 mutual friends" }, { name: "Jon Park", mutual: "4 mutual friends" }] });
 });
 
+// t646: the single-value read hands what it read on through its `value` port
+// when the Flow runs (Core fills it from the dispatched answer), so a later step
+// of the build's test that reads `$step.<label>.value` resolves only if the
+// replayed read carries the same value on `outputs.value`.
+test("a replayed single-value read answers the value it read on outputs.value, and an answer with none carries nothing", async () => {
+  const read = { replay: "step", node: READ, parameters: { selector: "#status", extract: { mode: "text" } }, consequences: [] };
+  const stubbed = stub({ payload: { extracted: "Order 4471" } });
+  const answered = await createWebAutomationLlmEvidenceRuntime(stubbed.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: read
+  });
+  assert.equal(answered.resultCode, "core.replay.replayed");
+  assert.deepEqual(answered.outputs, { value: "Order 4471" });
+  assert.deepEqual(stubbed.commands.find((command) => command.actionType === "web.dom.extract")?.parameters.extract, { mode: "text" });
+  // A value read off a sensitive control never reaches the payload (the gateway mapping drops it), so nothing is carried.
+  const withheld = await createWebAutomationLlmEvidenceRuntime(stub({ payload: { element: { selector: "#status" } } }).gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: read
+  });
+  assert.equal(withheld.resultCode, "core.replay.replayed");
+  assert.equal(Object.hasOwn(withheld, "outputs"), false);
+});
+
 // S4 of the read-list redesign (contract C3): the Flow's read answers only the
 // rows it kept, and the build's test replays the Flow, so a replayed read asks
 // the page for `answer: "kept"` as the Flow's dispatch does. Exploration is the
@@ -309,7 +331,7 @@ test("a replayed Next page the page could not move fails, with no route", async 
   assert.equal(Object.hasOwn(failed.evidence as JsonObject, "route"), false);
 });
 
-test("a replayed step that is not a list read, or a read that did not replay, answers no outputs", async () => {
+test("a replayed step that is not a read, or a read that did not replay, answers no outputs", async () => {
   const stubbed = stub({ payload: { extracted: [{ name: "Amara Osei" }] } });
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const pressed = await runtime.executeTool({

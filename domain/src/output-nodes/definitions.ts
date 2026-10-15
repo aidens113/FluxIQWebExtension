@@ -6,6 +6,12 @@ import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionDefinition } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
 import {
+  WEB_AUTOMATION_EXTRACT_DESCRIPTION,
+  WEB_AUTOMATION_EXTRACT_TAGS,
+  WEB_AUTOMATION_EXTRACT_VALUE_PORT,
+  webAutomationExtractReadParameter
+} from "./extract";
+import {
   WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION,
   WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH,
   WEB_AUTOMATION_EXTRACT_LIST_TAGS,
@@ -57,10 +63,12 @@ const recordsPathByOutput: Partial<Record<WebAutomationActionType, string>> = {
 /**
  * What a model building a Flow reads about an output beyond the action's own
  * label and description (`./extract-list/catalog-text.ts`,
- * `./next-page/catalog-text.ts`). Only the list extraction and the next page
- * have a request whose shape the catalog cannot otherwise show.
+ * `./next-page/catalog-text.ts`, `./extract/catalog-text.ts`). Only the list
+ * extraction, the next page and the single-value read have a request whose
+ * shape the catalog cannot otherwise show, or an output a later step reads.
  */
 const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description: string; tags: readonly string[] }>> = {
+  "web.dom.extract": { description: WEB_AUTOMATION_EXTRACT_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_TAGS },
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS },
   "web.dom.next_page": { description: WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION, tags: WEB_AUTOMATION_NEXT_PAGE_TAGS }
 };
@@ -72,6 +80,16 @@ const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description
  */
 const branchPortsByOutput: Partial<Record<WebAutomationActionType, readonly AutomationNodePort[]>> = {
   "web.dom.next_page": [WEB_AUTOMATION_NEXT_PAGE_ENDED_PORT]
+};
+
+/**
+ * The data outputs an action hands a value on through, besides the rows a list
+ * saves (`recordsPort`). Only the single-value read has one: `value`, what it
+ * read, which Core fills from the port's `resultPath` in the dispatched answer
+ * (`./extract/value-port.ts`, t646).
+ */
+const valuePortsByOutput: Partial<Record<WebAutomationActionType, readonly AutomationNodePort[]>> = {
+  "web.dom.extract": [WEB_AUTOMATION_EXTRACT_VALUE_PORT]
 };
 
 /**
@@ -251,7 +269,12 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     // (a navigation, a list extraction, a dialog answer) have no element to
     // scope, so they declare no port a loop could wire.
     inputs: requiredParameters.has("selector") ? [controlInput, itemInput] : [controlInput],
-    outputs: [...outputPorts, ...(branchPortsByOutput[definition.actionType] ?? []), ...(recordsPath ? [recordsPort] : [])],
+    outputs: [
+      ...outputPorts,
+      ...(branchPortsByOutput[definition.actionType] ?? []),
+      ...(valuePortsByOutput[definition.actionType] ?? []).map((port) => ({ ...port })),
+      ...(recordsPath ? [recordsPort] : [])
+    ],
     // Every web parameter may be filled from state unless it says otherwise.
     // Only `recordOutput` does, for the reason Core gives its own: a binding
     // could replace the dataset schema, and with it the excluded fields.
@@ -315,7 +338,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
     structured("scroll", "Scroll Mode")
   ];
-  if (outputId === "web.dom.extract") return [...selectorParameters, structured("extract", "Read")];
+  if (outputId === "web.dom.extract") return [...selectorParameters, webAutomationExtractReadParameter()];
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },

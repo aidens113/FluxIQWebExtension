@@ -69,7 +69,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER } from "../../../client";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
-import { webAutomationExtractListAloneRowsAsked, webAutomationScopedToRow } from "../../../output-nodes";
+import { WEB_AUTOMATION_EXTRACT_VALUE_PORT, webAutomationExtractListAloneRowsAsked, webAutomationScopedToRow } from "../../../output-nodes";
 import { webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withNodeOutputs, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
@@ -105,6 +105,9 @@ export const WEB_LLM_REPLAY_KEY = "replay";
 
 /** The one verb whose replay asks for the rows its conditions removed by themselves. */
 const EXTRACT_LIST_ACTION = "web.dom.extract_list";
+
+/** The single-value read, whose replay carries what it read on its `value` port (t646). */
+const EXTRACT_ACTION = "web.dom.extract";
 
 /** The verb that moves a list to its next page, whose end is a route rather than a failure. */
 const NEXT_PAGE_ACTION = "web.dom.next_page";
@@ -439,8 +442,28 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // What it changed on the page it stayed on, as an exploration press says it (`./press-effect/page-changes.ts`).
   const after = before === undefined ? undefined : await replayPage(run, false);
   const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
-  // A list read's rows, as the Flow's own read saves them, for the test to loop over (D6).
-  return withNodeOutputs(replayed, node.actionType === EXTRACT_LIST_ACTION ? flowRows(resolvedParameters, payload) : undefined);
+  // A read's outputs, on the ports the Flow's own node fills, for the test's later steps to read (D6, t646).
+  return withNodeOutputs(replayed, replayedReadOutputs(node.actionType, resolvedParameters, payload));
+}
+
+/**
+ * What a replayed read carries on its node's ports, as the Flow's run fills
+ * them: a list read's rows on `records`, as its capture saves them (D6), and the
+ * single-value read's value on `value` (t646), so a later step of the build's
+ * test that reads `$step.<label>.value` resolves as it will when the Flow runs.
+ *
+ * The Flow's run copies that value from the dispatched answer at the port's
+ * `resultPath`, `result.extracted` (`../../../output-nodes/extract/value-port.ts`);
+ * the dispatch's `result` is the client's own answer, which is what a replay
+ * holds here, so the value is its `extracted`. An answer with none -- a
+ * sensitive control, whose value the gateway mapping drops -- carries nothing,
+ * as the Flow's port is left empty. Every other step carries no outputs.
+ */
+function replayedReadOutputs(actionType: string, parameters: JsonObject, payload: JsonValue | undefined): JsonObject | undefined {
+  if (actionType === EXTRACT_LIST_ACTION) return flowRows(parameters, payload);
+  if (actionType !== EXTRACT_ACTION || !isJsonRecord(payload) || !Object.hasOwn(payload, "extracted")) return undefined;
+  const value = payload.extracted;
+  return value === undefined ? undefined : { [WEB_AUTOMATION_EXTRACT_VALUE_PORT.id]: value };
 }
 
 /**
