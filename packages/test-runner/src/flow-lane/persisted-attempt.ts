@@ -17,6 +17,10 @@
 // recognises. A record Core would not have written is read as absent rather
 // than half-read, and an identifier that is not identifier-shaped is dropped:
 // a rung loses its attribution, and no unbounded string reaches the bundle.
+//
+// The evidence packets measured around an attempt are read here too: like the
+// members above they are rebuilt from Core's attempt metadata into sizes and
+// closed words, and nothing of the page travels.
 
 /**
  * The ladder rungs the executor runs itself, in ladder order, as Core names
@@ -116,4 +120,42 @@ function isRatio(value: unknown): value is number {
 
 function optionalRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+/**
+ * One sanitized page-evidence packet, measured rather than kept: its size and
+ * whether the domain had to trim it. Nothing of the packet's content travels.
+ *
+ * The packet is the `web-llm-evidence.v1` summary the domain's host runtime
+ * builds from the client's snapshot (`sanitizeWebLlmSnapshot`,
+ * `domain/src/runtime/host-runtime.ts`). Core captures one before and one after
+ * each web action attempt and stores them at `stateRefs.beforeAction` and
+ * `stateRefs.afterAction` (Core `executor/host-state.ts`), and the run detail
+ * copies `stateRefs` into the attempt's `metadata` (Core
+ * `service/summaries/conversions.ts`). It is the one packet a passing run
+ * produces as well as a failing one, which is what makes it the measure of
+ * evidence size.
+ *
+ * `bytes` is the UTF-8 length of the packet's JSON. It is a measurement only:
+ * the domain's evidence byte budgets were removed on 2026-09-30.
+ */
+export type PersistedEvidencePacket = { point: (typeof EVIDENCE_PACKET_POINTS)[number]; bytes: number; truncated: boolean };
+
+const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
+
+/**
+ * Each packet under the attempt's `metadata.stateRefs`, measured in capture
+ * order. A summary without a boolean `truncated` is not a packet the domain
+ * writes, and is left unmeasured rather than counted as untrimmed.
+ */
+export function evidencePacketsOf(attempt: Record<string, unknown>): PersistedEvidencePacket[] {
+  const stateRefs = optionalRecord(optionalRecord(attempt.metadata)?.stateRefs);
+  return EVIDENCE_PACKET_POINTS.flatMap((point) => {
+    const summary = optionalRecord(optionalRecord(stateRefs?.[point])?.summary);
+    return summary && typeof summary.truncated === "boolean" ? [{ point, bytes: serializedBytes(summary), truncated: summary.truncated }] : [];
+  });
+}
+
+function serializedBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }

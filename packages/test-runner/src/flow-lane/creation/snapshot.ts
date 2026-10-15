@@ -75,6 +75,8 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     // transient miss cannot become the run's headline.
     failure: evidence.run.failure,
     recoveredFailures: evidence.run.recoveredFailures ?? [],
+    // Failures on optional steps Core went on past by its own rule: a note, never the run's failure.
+    bypassedOptionalFailures: evidence.run.bypassedOptionalFailures ?? [],
     stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
     // Which route the Router took, and each rule's verdict and reason. Ids and
     // Core's matcher reasons only: a reason names the path and the test, never

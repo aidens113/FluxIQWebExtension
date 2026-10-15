@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyAdaptationGate, type AdaptationGateInput } from "../gate.js";
+import { adaptationGateLaneFailure, classifyAdaptationGate, type AdaptationGateInput } from "../gate.js";
 
 /**
  * Whether a `--replays` run counts toward the adaptation gate (plan, "Gate
@@ -12,7 +12,7 @@ import { classifyAdaptationGate, type AdaptationGateInput } from "../gate.js";
 
 const replay = { outcome: "ran" as const, providerCalls: 0 as number | null, harnessActivations: 0, modelCalled: false, goalPassed: true, flowSucceeded: true, datasetsReproduced: null as boolean | null };
 const counted: AdaptationGateInput = {
-  laneFailed: false,
+  laneFailure: null,
   recovery: { attempted: true },
   unkeptReauthor: false,
   application: { outcome: "applied", flow: { change: "changed" } },
@@ -30,8 +30,17 @@ test("a drift absorbed or never met -- nothing proposed and no recovery attempte
 });
 
 test("a failed oracle does not count, whatever else the run did", () => {
-  assert.deepEqual(classifyAdaptationGate({ ...counted, laneFailed: true }), { counted: false, reason: "oracle_failed" });
-  assert.deepEqual(classifyAdaptationGate({ ...counted, laneFailed: true, application: null, replays: [] }), { counted: false, reason: "oracle_failed" });
+  assert.deepEqual(classifyAdaptationGate({ ...counted, laneFailure: "oracle_failed" }), { counted: false, reason: "oracle_failed" });
+  assert.deepEqual(classifyAdaptationGate({ ...counted, laneFailure: "oracle_failed", application: null, replays: [] }), { counted: false, reason: "oracle_failed" });
+});
+
+// run-mv9v3u68-6efbd7ae (A8 wave 15): the oracle passed and the record still said `oracle_failed`.
+test("a failed judgement is named for what failed, and oracle_failed only when the oracle did", () => {
+  assert.equal(adaptationGateLaneFailure({ oracleVerdict: "failed", reportedVerdict: "failed" }), "oracle_failed");
+  assert.equal(adaptationGateLaneFailure({ oracleVerdict: "passed", reportedVerdict: "failed" }), "flow_reported_failure");
+  assert.equal(adaptationGateLaneFailure({ oracleVerdict: "passed", reportedVerdict: "passed" }), "judgement_failed");
+  assert.equal(adaptationGateLaneFailure(undefined), "judgement_failed", "nothing observed is never read as a failed oracle");
+  assert.deepEqual(classifyAdaptationGate({ ...counted, laneFailure: "flow_reported_failure", application: null, replays: [] }), { counted: false, reason: "flow_reported_failure" });
 });
 
 test("a repair that was not kept, not applied, or did not move the steps does not count", () => {

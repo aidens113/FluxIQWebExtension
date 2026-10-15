@@ -55,11 +55,12 @@
 import type { RunAdaptationMeasurements, RunHarnessResultReauthor, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
-import { classifyAdaptationGate, measureRepairedRunAdaptations, readRunAdaptationFacts, RUN_ADAPTATION_SNAPSHOT, type AdaptationGateInput } from "../../run-evaluation/adaptation/index.js";
+import { adaptationGateLaneFailure, classifyAdaptationGate, measureRepairedRunAdaptations, readRunAdaptationFacts, RUN_ADAPTATION_SNAPSHOT, type AdaptationGateInput } from "../../run-evaluation/adaptation/index.js";
 import { writeFlowLaneAdaptationSnapshot } from "../adaptation-snapshot.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "../declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "../declared-uploads.js";
 import { readFlowNodes, type FlowNodeRecord } from "../flow-action-types.js";
+import type { RunLaneObservation } from "../lane-observation.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import { resetScenarioLab } from "../reset-scenario-lab.js";
 import { assertRepairPersisted } from "./apply-repair.js";
@@ -92,7 +93,7 @@ export type LiveRepairLaneInput = {
    * `runId` is Core's id for that run, from which the adaptation
    * measurements are read; absent, none are written.
    */
-  lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> & Partial<Pick<PersistedFlowRunOutcome, "extracted" | "runId">> };
+  lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> & Partial<Pick<PersistedFlowRunOutcome, "extracted" | "runId">>; observation?: Pick<RunLaneObservation, "oracleVerdict" | "reportedVerdict"> };
   /**
    * The rule of the lane that built the Flow, for rebuilding the run's inputs
    * from its nodes: a created Flow's (`createdFlowSecretInputs`), whose nodes
@@ -142,7 +143,7 @@ export async function runLiveRepairLane(
     return undefined;
   }
   const gate = (facts: Pick<AdaptationGateInput, "application" | "replays"> & { unkeptReauthor?: boolean }) =>
-    classifyAdaptationGate({ laneFailed: false, recovery: input.lane.run.harnessRecovery, unkeptReauthor: false, ...facts });
+    classifyAdaptationGate({ laneFailure: null, recovery: input.lane.run.harnessRecovery, unkeptReauthor: false, ...facts });
   const unkept = unkeptReauthorOf(input.lane.run);
   if (unkept) {
     // Checked before anything else: a proposal or an approval beside it would be judged against a Flow the run's own repair
@@ -219,7 +220,7 @@ async function recordFailedLane(
   const recovery = input.lane.run.harnessRecovery;
   const reauthored = resultRepairOf(input.lane.run)?.adaptationId;
   const adaptationIds = [...new Set([...recovery.adaptationIds, ...(reauthored ? [reauthored] : [])])];
-  const adaptationGate = classifyAdaptationGate({ laneFailed: true, recovery, unkeptReauthor: unkeptReauthorOf(input.lane.run) !== undefined, application: null, replays: [] });
+  const adaptationGate = classifyAdaptationGate({ laneFailure: adaptationGateLaneFailure(input.lane.observation), recovery, unkeptReauthor: unkeptReauthorOf(input.lane.run) !== undefined, application: null, replays: [] });
   await input.bundle.writeStructured("snapshots/repair-lane.json", {
     task: described.task, purpose: described.purpose, laneFailure: input.laneFailure,
     recoveryAttempted: recovery.attempted, adaptationIds, changeProposalIds: [...recovery.changeProposalIds],

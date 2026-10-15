@@ -456,7 +456,7 @@ test("a created Flow whose oracle failed still has its repair lane recorded, bes
   const fake = lane({ replays: 1 });
   t.after(fake.restore);
   const laneFailure = { category: "runtime.behavior", code: "lab.extraction_mismatch" };
-  const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RECOVERED, runId: "run.lane" } }, laneFailure } as LiveRepairLaneInput);
+  const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RECOVERED, runId: "run.lane" }, observation: { oracleVerdict: "failed", reportedVerdict: "passed" } }, laneFailure } as LiveRepairLaneInput);
   assert.equal(proof, undefined);
   assert.equal(fake.endpoints.filter((endpoint) => endpoint.startsWith("review-flow-adaptation")).length, 0, "a repair from a run judged wrong is never approved onto the Flow");
   assert.deepEqual(fake.reset, []);
@@ -471,4 +471,15 @@ test("a created Flow whose oracle failed still has its repair lane recorded, bes
   assert.deepEqual(fake.published[0]?.adaptationGate, { counted: false, reason: "oracle_failed" });
   assert.equal(fake.written[1]?.path, RUN_ADAPTATION_SNAPSHOT, "the lane run's own adaptations are still measured");
   assert.equal(fake.written[1]?.value.adaptationReuse, null, "no replay ran, so reuse is unmeasured");
+});
+
+// run-mv9v3u68-6efbd7ae (A8 wave 15): the oracle passed, the Lab read the run as failed, and the record said `oracle_failed`.
+test("a created Flow whose oracle passed and whose run was reported failed names the product's failure, never oracle_failed", async (t) => {
+  const fake = lane({ replays: 1 });
+  t.after(fake.restore);
+  const laneFailure = { category: "runtime.behavior", code: null };
+  const observation = { oracleVerdict: "passed" as const, reportedVerdict: "failed" as const };
+  await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RECOVERED, runId: "run.lane" }, observation }, laneFailure } as LiveRepairLaneInput);
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: false, reason: "flow_reported_failure" });
+  assert.deepEqual(fake.published[0]?.adaptationGate, { counted: false, reason: "flow_reported_failure" });
 });

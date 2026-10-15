@@ -309,7 +309,7 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     // The failure that decided the run, and beside it every fault the ladder
     // absorbed -- so a recovered miss is readable as recovered rather than
     // disappearing from the record along with the run's headline.
-    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, recoveredFailures: evidence.run.recoveredFailures ?? [], stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
+    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, recoveredFailures: evidence.run.recoveredFailures ?? [], bypassedOptionalFailures: evidence.run.bypassedOptionalFailures ?? [], stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
     harnessRecovery: evidence.run.harnessRecovery,
     // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
     startCandidateIndex: evidence.startCandidateIndex ?? null,
@@ -356,6 +356,8 @@ export function flowActionsSnapshot(run: PersistedFlowRunOutcome) {
     ...(action.retry ? { retry: action.retry } : {}),
     ...(action.readiness ? { readiness: action.readiness } : {}),
     ...(action.failure ? { failure: action.failure } : {}),
+    // A failed optional step Core went on past: its failure stays beside the mark, a note rather than the run's failure.
+    ...(action.optionalBypass ? { optionalBypass: action.optionalBypass } : {}),
     ...(action.comparisonStatus ? { comparisonStatus: action.comparisonStatus } : {}),
     ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
     ...(action.hostTargetResolution ? { hostTargetResolution: action.hostTargetResolution } : {}),

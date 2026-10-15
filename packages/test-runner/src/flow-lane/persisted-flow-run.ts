@@ -4,12 +4,13 @@ import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/no
 import { RunnerFailure } from "../failure.js";
 import { comparisonStatusOf } from "./comparison-status.js";
 import { extractionReadOf } from "./extraction-read.js";
-import { attemptNodeId, hostTargetResolutionOf, readinessOf, retryOf, type PersistedFlowActionReadiness, type PersistedFlowActionRetry, type PersistedHostTargetResolution } from "./persisted-attempt.js";
+import { attemptNodeId, evidencePacketsOf, hostTargetResolutionOf, readinessOf, retryOf, type PersistedEvidencePacket, type PersistedFlowActionReadiness, type PersistedFlowActionRetry, type PersistedHostTargetResolution } from "./persisted-attempt.js";
 import { FLUXIQ_HTTP_MAX_TIMEOUT_MS, isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
 import { isResultCheckIntervention, readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
+import { bypassedByNode, optionalBypassesOf, type PersistedOptionalBypass } from "./optional-bypass/index.js";
 import { terminalRunEvidenceOf, stopWithoutFailedAttempt } from "./terminal/index.js";
 import { onSkipRoute, skippedAttemptOf, stateRoutedOf, type PersistedFlowActionSkip, type PersistedStateRouted } from "./skipped-attempt.js";
 import { stateRoutingAttemptOf, type PersistedStateRouting } from "./state-routing-attempt.js";
@@ -158,6 +159,8 @@ export type PersistedFlowAction = {
    * never the run's (`node-recovery.ts`). Absent otherwise.
    */
   clearedByPerson?: true;
+  /** Set on a failed optional step Core went on past by its own rule, to the node it went on at (`optional-bypass/`). Never the run's failure. */
+  optionalBypass?: PersistedOptionalBypass;
   /**
    * Rows the attempt captured, from Core's `metadata.recordCount` (K5). Core
    * replaces a stored attempt's captured rows with a `$dataset` marker holding
@@ -195,27 +198,6 @@ export type PersistedFlowAction = {
   /** The sanitized evidence packets Core captured around the attempt, measured; absent when it captured none. */
   evidencePackets?: PersistedEvidencePacket[];
 };
-
-/**
- * One sanitized page-evidence packet, measured rather than kept: its size and
- * whether the domain had to trim it. Nothing of the packet's content travels.
- *
- * The packet is the `web-llm-evidence.v1` summary the domain's host runtime
- * builds from the client's snapshot (`sanitizeWebLlmSnapshot`,
- * `domain/src/runtime/host-runtime.ts`). Core captures one before and one after
- * each web action attempt and stores them at `stateRefs.beforeAction` and
- * `stateRefs.afterAction` (Core `executor/host-state.ts`), and the run detail
- * copies `stateRefs` into the attempt's `metadata` (Core
- * `service/summaries/conversions.ts`). It is the one packet a passing run
- * produces as well as a failing one, which is what makes it the measure of
- * evidence size.
- *
- * `bytes` is the UTF-8 length of the packet's JSON. It is a measurement only:
- * the domain's evidence byte budgets were removed on 2026-09-30.
- */
-export type PersistedEvidencePacket = { point: (typeof EVIDENCE_PACKET_POINTS)[number]; bytes: number; truncated: boolean };
-
-const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
 
 /**
  * Core's own record of how it resolved an action's element target before
@@ -314,6 +296,8 @@ export type PersistedFlowRunOutcome = {
    * them" rather than a silence.
    */
   recoveredFailures?: AutomationStudioFailureRecord[];
+  /** Each failure on an optional step Core went on past (`PersistedFlowAction.optionalBypass`), in attempt order: a note, not the run's failure. Absent when none. */
+  bypassedOptionalFailures?: { nodeId: string | null; failure: AutomationStudioFailureRecord }[];
   /** LLM interventions Core recorded for the run. Week 1 runs provider-free, so this must stay 0. */
   harnessActivations: number;
   /**
@@ -552,7 +536,10 @@ function outcomeFromDetail(
   // Which attempts belong to a node that recovered, so the run's failure is the
   // one that decided it and a recovered one is legible as recovered.
   const recovered = recoveredByNode(actions);
-  const failure = actions.find((action, index) => action.failure !== null && recovered[index] !== true)?.failure ?? null;
+  // A node Core went on past by its optional way-on did not fail the run either; its failures are kept as a note.
+  const bypassed = bypassedByNode(actions);
+  const failure = actions.find((action, index) => action.failure !== null && recovered[index] !== true && bypassed[index] !== true)?.failure ?? null;
+  const bypassedOptionalFailures = actions.flatMap(({ nodeId, failure: record }, index) => (record !== null && recovered[index] !== true && bypassed[index] === true ? [{ nodeId, failure: record }] : []));
   const recoveredFailures = actions.flatMap((action, index) => (action.failure !== null && recovered[index] === true ? [action.failure] : []));
   const status = runStatus(detail.summaryStatus ?? sessionStatus);
   const stop = stopWithoutFailedAttempt(status, actions, new Set(detail.attemptNodeIds), actionTypes);
@@ -567,6 +554,7 @@ function outcomeFromDetail(
     resultVerification: detail.resultVerification,
     failure,
     ...(recoveredFailures.length === 0 ? {} : { recoveredFailures }),
+    ...(bypassedOptionalFailures.length === 0 ? {} : { bypassedOptionalFailures }),
     harnessActivations: detail.harnessActivations,
     harnessRecovery,
     extracted: datasets,
@@ -607,7 +595,8 @@ async function readRunDetail(
     .map((value, index) => asRecord(value, `runDetail.actionAttempts[${index}]`))
     .sort((left, right) => numberOf(left.order) - numberOf(right.order));
   const interventions = Array.isArray(detail.interventions) ? detail.interventions : [];
-  const actions = attempts.map((attempt, index) => flowAction(attempt, actionTypes, index));
+  const bypasses = optionalBypassesOf(attempts);
+  const actions = attempts.map((attempt, index) => flowAction(attempt, actionTypes, index, bypasses[index]));
   // A refuted result's attempt ran no node, so it names none here and adds no time to one.
   const nodeAttempts = attempts.filter((attempt) => !isResultVerificationAttempt(attempt));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
@@ -663,7 +652,7 @@ function resultVerificationOf(detail: Record<string, unknown>): PersistedResultV
  * through the Flow's own nodes can. The definition id remains the fallback,
  * which is what a node outside the recorded set reports.
  */
-function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<string, string>, attemptIndex: number): PersistedFlowAction {
+function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<string, string>, attemptIndex: number, optionalBypass: PersistedOptionalBypass | undefined): PersistedFlowAction {
   const startedAt = numberOf(attempt.startedAt);
   // The result's verification: no node, and no action latency, because no action ran.
   const verification = isResultVerificationAttempt(attempt);
@@ -692,6 +681,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     ...(skipped ? { skipped } : {}),
     ...(stateRouting ? { stateRouting } : {}),
     ...(clearedByPerson(attempt) ? { clearedByPerson: true as const } : {}),
+    ...(optionalBypass ? { optionalBypass } : {}),
     ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
     ...(extraction ? { extraction } : {}),
     ...(comparisonStatus ? { comparisonStatus } : {}),
@@ -711,23 +701,6 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
 function clearedByPerson(attempt: Record<string, unknown>): boolean {
   const ask = optionalRecord(optionalRecord(attempt.metadata)?.ask);
   return ask?.personNeeded === true && ask.status === "answered" && ask.route === "success";
-}
-
-/**
- * Each packet under the attempt's `metadata.stateRefs`, measured in capture
- * order. A summary without a boolean `truncated` is not a packet the domain
- * writes, and is left unmeasured rather than counted as untrimmed.
- */
-function evidencePacketsOf(attempt: Record<string, unknown>): PersistedEvidencePacket[] {
-  const stateRefs = optionalRecord(optionalRecord(attempt.metadata)?.stateRefs);
-  return EVIDENCE_PACKET_POINTS.flatMap((point) => {
-    const summary = optionalRecord(optionalRecord(stateRefs?.[point])?.summary);
-    return summary && typeof summary.truncated === "boolean" ? [{ point, bytes: serializedBytes(summary), truncated: summary.truncated }] : [];
-  });
-}
-
-function serializedBytes(value: unknown): number {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
 function optionalRecord(value: unknown): Record<string, unknown> | undefined {
