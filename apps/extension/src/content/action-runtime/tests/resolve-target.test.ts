@@ -283,9 +283,10 @@ class TwinButton {
   readonly classList = ["ui-button"];
   readonly textContent = "Continue";
   readonly isConnected = true;
-  readonly ownerDocument = { defaultView: { getComputedStyle: () => ({ display: "block", visibility: "visible" }) } };
+  readonly ownerDocument = { defaultView: { getComputedStyle: () => ({ display: this.shown ? "block" : "none", visibility: "visible" }) } };
 
-  constructor(readonly top: number) {}
+  /** `shown` false is a twin the page has not shown: `display: none`, and no box. */
+  constructor(readonly top: number, readonly shown = true) {}
 
   getAttribute(name: string): string | null {
     return name === "class" ? "ui-button" : null;
@@ -296,7 +297,7 @@ class TwinButton {
   }
 
   getBoundingClientRect(): { x: number; y: number; top: number; bottom: number; width: number; height: number } {
-    return { x: 100, y: this.top, top: this.top, bottom: this.top + 32, width: 120, height: 32 };
+    return this.shown ? { x: 100, y: this.top, top: this.top, bottom: this.top + 32, width: 120, height: 32 } : { x: 0, y: 0, top: 0, bottom: 0, width: 0, height: 0 };
   }
 
   /** Asked only `:disabled`, and a twin is not. */
@@ -315,14 +316,21 @@ class TwinButton {
   }
 }
 
-/** A page of `count` identical Continue buttons with the first under every point, its globals restored when the test ends. */
-function installTwinPage(t: TestContext, count: number): Element[] {
-  const buttons = Array.from({ length: count }, (_, index) => new TwinButton(100 + index * 40) as unknown as Element);
+/**
+ * A page of `count` identical Continue buttons with the first under every point,
+ * its globals restored when the test ends. `shown` false hides every twin;
+ * `inShadowRoot` puts them in one open shadow root rather than the document.
+ */
+function installTwinPage(t: TestContext, count: number, options: { shown?: boolean; inShadowRoot?: boolean } = {}): Element[] {
+  const buttons = Array.from({ length: count }, (_, index) => new TwinButton(100 + index * 40, options.shown ?? true) as unknown as Element);
+  const twinsFor = (selector: string): Element[] => (selector === "button" || selector.includes("[contenteditable]") ? buttons : []);
+  const shadowRoot = { querySelector: (): Element | null => null, querySelectorAll: twinsFor, getElementById: (): Element | null => null };
+  const host = { tagName: "WIDGET-HOST", shadowRoot, querySelectorAll: (): Element[] => [] };
   const installed: Record<string, unknown> = {
     document: {
-      elementFromPoint: (): Element | null => buttons[0] ?? null,
+      elementFromPoint: (): Element | null => (options.inShadowRoot ? null : buttons[0] ?? null),
       querySelector: (): Element | null => null,
-      querySelectorAll: (selector: string): Element[] => (selector === "button" || selector.includes("[contenteditable]") ? buttons : []),
+      querySelectorAll: (selector: string): Element[] => (options.inShadowRoot ? (selector === "*" ? [host as unknown as Element] : []) : twinsFor(selector)),
       getElementById: (): Element | null => null,
       addEventListener: (): void => {},
       removeEventListener: (): void => {},
@@ -544,4 +552,43 @@ test("a pass whose card holds no such control resolves nothing, never the record
     assert.match(String(error), /in another record/u, "the selector's answer was refused by the record rule");
     return true;
   });
+});
+
+// t642: a tie needs something to tie on the page.
+//
+// An optional "close the pop-up" step met its page before any pop-up opened,
+// and its saved words matched three hidden close glyphs in widgets' shadow
+// roots. Each was a copy of the control the page had not shown, they scored a
+// tie, and the step failed TARGET_AMBIGUOUS where it should have been skipped
+// as absent (`run-mv9v3u68-6efbd7ae`). Several matches none of which is visible
+// are not found; a tie among visible ones stays ambiguous.
+
+/** The recorded Continue reached by its words alone: its selector and test id are on no element here. */
+const WORDS_ONLY_CONTINUE = clickCommand({ selector: RECORDED_CONTINUE.selector, element: RECORDED_CONTINUE } as Partial<BrowserActionCommand>);
+
+for (const inShadowRoot of [false, true]) {
+  const where = inShadowRoot ? "in an open shadow root" : "in the document";
+  test(`several hidden look-alikes and nothing shown are not found, not a tie: ${where}`, (t) => {
+    installTwinPage(t, 3, { shown: false, inShadowRoot });
+
+    const failure = failureOf(WORDS_ONLY_CONTINUE);
+
+    assert.equal(failure.code, "web.target.not_found", "an optional step whose control is absent is skipped, not failed");
+  });
+
+  test(`several visible look-alikes are still ambiguous: ${where}`, (t) => {
+    installTwinPage(t, 3, { inShadowRoot });
+
+    const failure = failureOf(WORDS_ONLY_CONTINUE);
+
+    assert.equal(failure.code, "web.target.ambiguous");
+  });
+}
+
+test("a lone hidden match still resolves, as an assertion about a hidden control needs", (t) => {
+  const [only] = installTwinPage(t, 1, { shown: false });
+
+  const resolved = resolveTarget(WORDS_ONLY_CONTINUE);
+
+  assert.equal(resolved.element, only);
 });

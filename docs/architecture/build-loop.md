@@ -255,12 +255,20 @@ rather than from the model's label (`AS/runtime/flow-draft/step.ts`,
 a new argument clears it with `toggle` and `reads`.
 
 `stable-handles.ts` preserves an unambiguous control's handle across a reload
-that rewrites its selector shape by matching page, frame, record, tag and
-identity words after the existing address tiers. Both capture and remembered
-candidate must be unique. Wordless controls, duplicate labels and a candidate
-still standing at another old address do not use this fallback. This prevents
-a rerun from losing an otherwise identifiable control while keeping
-ambiguous targets distinct.
+that rewrites its selector shape by matching page, frame, shadow-root depth,
+record, tag and identity words after the existing address tiers. Both capture
+and remembered candidate must be unique. Wordless controls, duplicate labels
+and a candidate still standing at another old address do not use this
+fallback, and neither does a number last seen in the same document
+(`navigation.timeOrigin`): without a load, a control that vanished is gone and
+one that appeared is new, so a handle never moves to a control that a later
+step opens (t642, `run-mv9v3u68-6efbd7ae`). This prevents a rerun from losing
+an otherwise identifiable control while keeping ambiguous targets distinct.
+
+At replay, a saved target whose several matches are all hidden is not found
+rather than ambiguous (`resolve-target.ts`), so an optional step whose control
+the page has not shown yet is skipped as absent; a tie among visible matches is
+still `web.target.ambiguous`, and a lone hidden match still resolves.
 
 ## Replay With A Row
 

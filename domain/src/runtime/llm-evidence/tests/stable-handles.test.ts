@@ -41,7 +41,7 @@ const search: JsonObject = { tagName: "button", selector: "#search", visibleText
  * press, so no press here is taken for one that changed nothing (t511) and
  * pressed once more.
  */
-function runtimeOver(page: () => { url: string; elements: JsonObject[] }): WebAutomationLlmEvidenceRuntime {
+function runtimeOver(page: () => { url: string; elements: JsonObject[]; document?: number }): WebAutomationLlmEvidenceRuntime {
   let presses = 0;
   return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
@@ -51,7 +51,9 @@ function runtimeOver(page: () => { url: string; elements: JsonObject[] }): WebAu
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
       const current = page();
       const status: JsonObject[] = presses === 0 ? [] : [{ tagName: "span", selector: "#press-status", visibleText: `Pressed ${presses} times` }];
-      return { status: "succeeded", payload: { snapshot: { url: current.url, title: "Fixture", interactiveElements: [...current.elements, ...status] } } };
+      // A page that says which document it is (`navigation.timeOrigin`), as the extension's captures do.
+      const evidence: JsonObject = current.document === undefined ? {} : { evidence: { navigation: { timeOrigin: current.document } } };
+      return { status: "succeeded", payload: { snapshot: { url: current.url, title: "Fixture", interactiveElements: [...current.elements, ...status], ...evidence } } };
     }
   });
 }
@@ -541,4 +543,53 @@ test("a number whose control is still at its own address is never handed to a lo
   const after = await inspect(runtime);
   assert.deepEqual(handlesOf(after, ["Added"]), [add], "the pressed button keeps its number under its new label");
   assert.notEqual(handlesOf(after, ["Add to cart"])[0], add, "the look-alike on the rewritten selector is another control");
+});
+
+// Tier 4 moved a number within one document (t642, `run-mv9v3u68-6efbd7ae`).
+// The model clicked a pop-up's close `div "×"` inside a widget's shadow root;
+// the click hid it, and the panel the next step opened had a close `div "×"`
+// of its own in the light document. Nothing had loaded, yet the panel's close
+// was the one element with that place and those words, so it inherited the
+// clicked close's number, and the saved step named a control that appears only
+// after a later step. A reload is what tier 4 is for; one document has none.
+
+const RECIPE_URL = "https://recipes.example/dish/42";
+const RECIPE_DOCUMENT = 1_700_000_000_000;
+
+const recipeColumn: JsonObject[] = [
+  { tagName: "h1", selector: "main > h1", visibleText: "Lentil soup" },
+  { tagName: "button", selector: "main > button", visibleText: "Save recipe" }
+];
+const widgetClose: JsonObject = { tagName: "div", selector: "div > div", visibleText: "×", hasClickHandler: true, context: { shadowHosts: ["body > ask-cook"] } };
+const panelClose = (selector: string): JsonObject => ({ tagName: "div", selector, visibleText: "×", hasClickHandler: true });
+
+test("a closed pop-up's handle is never given to a close button a later panel adds without a load", async () => {
+  let elements: JsonObject[] = [...recipeColumn, widgetClose];
+  const runtime = runtimeOver(() => ({ url: RECIPE_URL, elements, document: RECIPE_DOCUMENT }));
+  const [close] = handlesOf(await inspect(runtime), ["×"]);
+  // The click hid the widget's close; saving opened a panel with a close of its own.
+  elements = [...recipeColumn, { tagName: "p", selector: "body > aside > p", visibleText: "Saved to your box" }, panelClose("body > aside > div > div")];
+  const after = await inspect(runtime);
+  const [panel] = handlesOf(after, ["×"]);
+  assert.notEqual(panel, close, "the panel's close is a new control with a new number");
+  assert.equal(await selectorFor(runtime, close!), undefined, "and the clicked close's handle names nothing on the page now");
+});
+
+test("within one document a vanished control's handle is not passed to a look-alike, even at the same shadow depth", async () => {
+  let elements: JsonObject[] = [...recipeColumn, panelClose("body > section > div > div")];
+  const runtime = runtimeOver(() => ({ url: RECIPE_URL, elements, document: RECIPE_DOCUMENT }));
+  const [first] = handlesOf(await inspect(runtime), ["×"]);
+  elements = [...recipeColumn, panelClose("body > aside > div > div")];
+  const [second] = handlesOf(await inspect(runtime), ["×"]);
+  assert.notEqual(second, first);
+});
+
+test("a reload that rewrites a control's selector still keeps its handle when both documents are known", async () => {
+  let elements: JsonObject[] = [...recipeColumn, panelClose("body > section > div > div")];
+  let document = RECIPE_DOCUMENT;
+  const runtime = runtimeOver(() => ({ url: RECIPE_URL, elements, document }));
+  const [first] = handlesOf(await inspect(runtime), ["×"]);
+  elements = [...recipeColumn, panelClose("#k3x9qv > div")];
+  document = RECIPE_DOCUMENT + 5_000;
+  assert.deepEqual(handlesOf(await inspect(runtime), ["×"]), [first], "a new document is a reload, and tier 4 finds the control again");
 });

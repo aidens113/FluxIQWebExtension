@@ -70,6 +70,20 @@
 // have them, and that number's control is not still standing at its own
 // address (`rebound`, tier 4).
 //
+// **Never within one document.** Tier 4 is for a reload, and only a reload.
+// While the page has not loaded anew, a control that vanished is gone and a
+// control that appeared is new, however alike their tag and words. Live, the
+// model clicked a pop-up's close `div "×"` inside a widget's shadow root as
+// `t1841`; the panel the next step opened had a close `div "×"` of its own in
+// the light document. The clicked close had dropped out of the capture, the
+// panel's was the one element with that place and those words, and `t1841`
+// moved to it -- so the saved step named a control that appears only after a
+// later step, and at playback three hidden look-alikes tied for it
+// (`run-mv9v3u68-6efbd7ae`, t642).
+// So tier 4 never hands a number to an element of the document it was last
+// seen in (`navigation.timeOrigin`, `Seen.document`), and a control's place
+// says how deep in shadow roots it sits, which no reload changes (`placesOf`).
+//
 // Handles were spelled `target.N` until t223, which is how the runs above
 // recorded them.
 //
@@ -137,10 +151,12 @@ type FlowHandles = {
 /**
  * What a number's control last looked like where neither positions nor the
  * selector count: `loose` is its address without positions, `words` its words,
- * and `place` its page, frame, record and tag -- the address a reload that
- * rewrites the selector leaves alone (`placesOf`).
+ * and `place` its page, frame, shadow depth, record and tag -- the address a
+ * reload that rewrites the selector leaves alone (`placesOf`). `document` is
+ * which document it was last seen in (`navigation.timeOrigin`), where the
+ * capture said: tier 4 never moves a number within one document.
  */
-type Seen = { loose: string; words: string; place: string };
+type Seen = { loose: string; words: string; place: string; document?: number };
 
 function emptyFlow(): FlowHandles {
   return { byAddress: new Map<string, number>(), spent: 0, seen: new Map(), byLoose: new Map() };
@@ -179,7 +195,8 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
       const loose = looseAddressesOf(binding);
       const words = binding.evidence.elements.map(identityWords);
       const places = placesOf(binding);
-      const numbers = rebound(flow, order, addresses, loose, words, places);
+      const documentOrigin = binding.evidence.navigation?.timeOrigin;
+      const numbers = rebound(flow, order, addresses, loose, words, places, documentOrigin);
       const assigned: string[] = [];
       for (const index of order) {
         let number = numbers[index];
@@ -194,7 +211,9 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
         if (!given.includes(number)) given.push(number);
         flow.byLoose.set(loose[index] as string, given);
         flow.byAddress.set(addresses[index] as string, number);
-        flow.seen.set(number, { loose: loose[index] as string, words: words[index] as string, place: places[index] as string });
+        const seen: Seen = { loose: loose[index] as string, words: words[index] as string, place: places[index] as string };
+        if (documentOrigin !== undefined) seen.document = documentOrigin;
+        flow.seen.set(number, seen);
         assigned[index] = `t${number}`;
       }
       return rewrite(binding, assigned);
@@ -273,10 +292,12 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
  *    last seen with them, and that number's control is not standing at its own
  *    old address on some other element: a reload that rewrote the selector's
  *    shape (see the header). Words are required -- a wordless control is told
- *    apart only by where it is -- and two look-alikes are left unmatched.
+ *    apart only by where it is -- and two look-alikes are left unmatched. A
+ *    number last seen in this very document is never taken here: without a
+ *    load, a control that vanished is gone and one that appeared is new.
  * 5. Nothing: a control the page added, or one this cannot tell apart.
  */
-function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[], places: readonly string[]): Array<number | undefined> {
+function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[], places: readonly string[], documentOrigin: number | undefined): Array<number | undefined> {
   const numbers: Array<number | undefined> = [];
   const claimed = new Set<number>();
   const take = (index: number, number: number): void => {
@@ -296,13 +317,15 @@ function rebound(flow: FlowHandles, order: readonly number[], addresses: readonl
   pairInOrder(order.filter((index) => numbers[index] === undefined), (index) => loose[index] as string,
     (key) => (flow.byLoose.get(key) ?? []).filter((number) => !claimed.has(number)),
     true, take);
-  reboundByPlace(flow, order, addresses, words, places, numbers, claimed, take);
+  reboundByPlace(flow, order, addresses, words, places, documentOrigin, numbers, claimed, take);
   return numbers;
 }
 
 /**
  * Tier 4 of `rebound`: an element whose selector changed shape, found by its
- * place and words alone, only where nothing else could have them.
+ * place and words alone, only where nothing else could have them, and only for
+ * a number last seen in another document. Where either capture did not say
+ * which document it was, a reload is not ruled out and the tier stands.
  */
 function reboundByPlace(
   flow: FlowHandles,
@@ -310,6 +333,7 @@ function reboundByPlace(
   addresses: readonly string[],
   words: readonly string[],
   places: readonly string[],
+  documentOrigin: number | undefined,
   numbers: ReadonlyArray<number | undefined>,
   claimed: ReadonlySet<number>,
   take: (index: number, number: number) => void
@@ -332,6 +356,7 @@ function reboundByPlace(
   const lastSeen = new Map<string, number[]>();
   for (const [number, seen] of flow.seen) {
     if (claimed.has(number) || !seen.words) continue;
+    if (documentOrigin !== undefined && seen.document === documentOrigin) continue;
     const key = `${seen.place}\0${seen.words}`;
     lastSeen.set(key, [...(lastSeen.get(key) ?? []), number]);
   }
@@ -383,15 +408,19 @@ function looseAddressesOf(binding: WebLlmSnapshotBinding): string[] {
 }
 
 /**
- * Each element's place: the page, the frame, the record it sits in and its tag
- * -- its address with the selector left out, which a reload that rewrites the
- * selector does not touch. Matched only together with its words (tier 4).
+ * Each element's place: the page, the frame, how many shadow roots deep it
+ * sits, the record it sits in and its tag -- its address with the selector left
+ * out, which a reload that rewrites the selector does not touch. The depth, not
+ * the host chain: a reload may rewrite a host's selector as it does any other
+ * (a minted id), but it never moves a control between the light document and a
+ * widget's shadow root. Matched only together with its words (tier 4).
  */
 function placesOf(binding: WebLlmSnapshotBinding): string[] {
   const location = binding.evidence.location;
   return binding.evidence.elements.map((element) => {
     const record = binding.records.get(element.target) ?? "";
-    return createHash("sha256").update([location, String(element.frameId ?? 0), record, element.tag].join("\0")).digest("base64url");
+    const depth = String(binding.shadowHosts?.get(element.target)?.length ?? 0);
+    return createHash("sha256").update([location, String(element.frameId ?? 0), depth, record, element.tag].join("\0")).digest("base64url");
   });
 }
 
