@@ -18,6 +18,7 @@ import { applyMove, assertDisposable, buildCore, copyEnvLocal, coreDistPaths, cr
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 import { taskBranchName } from "./branch-name.mjs";
 import { checkCoreCurrent } from "./core-currency.mjs";
+import { recordTaskId } from "./record-task-id.mjs";
 import { resolveTaskRoots } from "./roots.mjs";
 import { nextTaskId } from "./task-id.mjs";
 
@@ -54,6 +55,12 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
   }
 
   if (dryRun) return { id, branch, from, worktree: roots?.extRoot ?? null, core: roots?.coreRoot ?? null, coreBranch: core ? branch : null, sharedCore: describeMove(sharedCore), applied: false };
+
+  // The id is spent from here on, whatever happens next: a start that fails
+  // half-way, or a task later abandoned, must not see its number handed out
+  // again (`task-id.mjs`). A paired task's id is spent in Core too.
+  await recordTaskId(repositoryRoot, id, from);
+  if (core) await recordTaskId(coreRepositoryRoot, id, coreFrom);
 
   if (worktree) {
     const env = { ...withoutProviderSecrets(process.env), npm_config_workspace_concurrency: "1" };
