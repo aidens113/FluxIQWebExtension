@@ -7,8 +7,10 @@
 // 2. The way forward is the request's `pagination`, or, where the list carried
 //    none, the pager's Next found by walking up from the first item
 //    (`../detect-pagination.ts`, `nextControlOnPage`): a Next, the following
-//    page where Next leads to this same page (`by: "following"`), a numbered
-//    page, Load more, or a scroll (`./step-page.ts`).
+//    page where Next leads to this same page or drops the list's narrowing
+//    (`by: "following"`, `./follow-next.ts`), a numbered page, Load more, or
+//    a scroll (`./step-page.ts`). A Next that drops the narrowing with no
+//    following page that keeps it fails `page_fault`, pressing nothing.
 // 3. A disabled or absent control is never pressed: the list has ended, and the
 //    answer says why (`control_absent`, `control_disabled`,
 //    `no_following_page`, `scrolled_to_end`).
