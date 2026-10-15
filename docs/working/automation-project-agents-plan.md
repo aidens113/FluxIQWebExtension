@@ -63,10 +63,10 @@ modes on page-view legends (t605). `candidate` stays the default. t597-t608 are 
 Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
 consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
 Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t613 and t615-t621 (spots and items, ARIA groups, done on a standing yes, slow-down repairs, a
-stalled provider no longer holds a call, an outage ends as an outage, the Lab's startup builds, deterministic tests,
-task ids never reused). DeepSeek's incident closed about 23:20 local on 2026-10-14. Next: wave 5 on the pair after
-t621, all four runs; then the four remaining load-sensitive test files.
+Merged since: t609-t624. Wave 5 (2026-10-15): `project` everything-store passed; social, towels (both modes) failed
+on a lost rescued pass, a judge that could not confirm text-filtered rows, and a Next that dropped the filters, all
+fixed (t622, t623, t624). Next: wave 6 on the pair after t624, the same four runs; then the four remaining
+load-sensitive test files.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -658,53 +658,8 @@ build does today until A5 lands and the mode is chosen.
 
 ## Work Ledger
 
-### 2026-10-13 — Plan written from three discovery reports
-- Agent: supervisor
-- Changed: this document (new); Core paired document (new); both `mvp-final-month-plan.md` Current States and indexes
-- Why: user direction for a supervisor/builder agent system, queued in the October 13 wrap
-- Validation: not validated by tests (planning only); discovery claims spot-checked in Core source (`service.ts:1495` child-build signature, `:2512` re-author call, `authoring-loop.ts:145` tool filter, purse `carriedUsd` and judging reserve)
-- Outcome: Accepted
-- Follow-up: dispatch Core A1
-
-### 2026-10-13 — Concurrency decision recorded; Core A1-A3 started
-- Agent: supervisor
-- Changed: this document (Current State, Host Actions, W1, wiring item 5); Core paired document (owning entry of the same date)
-- Why: user: "make it possible in core, but have extension set it to only 1 at a time"
-- Validation: not validated by tests (planning)
-- Outcome: Accepted
-- Follow-up: W1 after Core A3
-
-### 2026-10-13 — W1 web lease (t536) and W2/W3 chat attribution (t539)
-- Agent: workers t536-w1-web-lease, t539-w2-chat-attribution; supervisor verified and integrated
-- Changed: `domain/src/runtime/host-resources/`, `domain/src/client/host-lease.ts`, extension `background/connection/host-lease/`, leased tab; chat `shared/activity/project/`, `unit-history.ts`, `project-message.ts`, lanes by brief; `packages/test-runner/src/lab-runs/rewrite-steps-index.ts`
-- Why: units W1, W2, W3; full entries in the Core document's ledger (2026-10-13, t536 and t539)
-- Validation: see the Core entries; downstream observed domain tests 29 passed, extension 79 passed (W1), extension 536 passed and Lab index 2 passed (W2), all package checks and the structure audit passed
-- Outcome: Accepted
-- Follow-up: the Next list above
-
-### 2026-10-13 — Downstream sweep fix-forward (t547, t548)
-- Agent: workers t547-domain-sweep, t548-test-runner-sweep; supervisor verified and integrated
-- Changed: four domain test files (fixtures for Core t519); six test-runner and scenario-lab test files
-- Why: downstream sweep on `7a93c624`: domain 17 failed of 2019, test-runner 13, scenario-lab 1; extension 3004 of 3004 passed
-- Validation: domain group -> 100 passed; test-runner group -> 83 passed; crossborder browser paths -> 17 passed; domain and test-runner checks and the structure audit passed; merged `775d685e`, `f7acb9cf` (full entry in the Core document's ledger)
-- Outcome: Accepted
-- Follow-up: W5
-
-### 2026-10-13 — W5 retire live diagnose, repair and adapt (t552)
-- Agent: worker t552-w5-live-adapt-launch; supervisor verified and integrated
-- Changed: `packages/test-runner/src/{commands,run-scenario,bench/run-bench,live-llm/live-llm-plan,live-llm/live-llm-run}.ts` and tests; `docs/architecture/testing-facility.md`
-- Why: t519 retired bare `--flow`, leaving these tasks unlaunchable; the adaptation gate repairs inside its create-flow `--replays` run and proves reuse with `lab replay`, so the tasks refuse and name those commands
-- Validation: test-runner check passed; live-llm plan/run/ceiling, commands, cli-llm, runner-wiring, run-bench tests -> 154 passed; structure audit passed; merged `06daa2c9`
-- Outcome: Accepted
-- Follow-up: W6 (a probe read the real key from `.env.local` under `FLUXIQ_TEST_ENV_FILES=none`; dead recorded-Flow code outside W5's files)
-
-### 2026-10-13 — W7 bench dead recorded-Flow code (t559)
-- Agent: worker t559-w7-bench; supervisor verified and integrated
-- Changed: `packages/test-runner/src/bench/**`, corpus (`week2` retired with a refusal), `packages/test-contracts` (`flowLaneExclusion` removed), declared-repair modules removed; `docs/architecture/testing-facility.md`
-- Why: code t553 left unreachable
-- Validation: test-runner -> 1182 passed; test-contracts -> 169 passed; checks passed; structure audit passed (three baseline entries removed); merged `148262f1`
-- Outcome: Accepted
-- Follow-up: W8
+Entries for 2026-10-13 (plan, concurrency decision, W1-W3, the sweep fix-forward, W5, W7) are archived in
+[archive/2026-10-15-ledger-2026-10-13.md](automation-project-agents-plan/archive/2026-10-15-ledger-2026-10-13.md).
 
 ### 2026-10-14 — A8 round one, four launches in mode `project`
 - Agent: supervisor (launch, supervision, debugs); Core fixes t568, t569 by workers, supervisor-verified
@@ -786,6 +741,14 @@ build does today until A5 lands and the mode is chosen.
 - Why: canary 2 `run-mv93ywox` failed `process.startup` when esbuild was stopped at a fixed 60 s; test 1540 failed the sweep under load
 - Validation: t620 after merging dev: test-runner check, no tsc errors; core-web-build, startup-build, server-adapter-identity tests -> tests 75, pass 73, fail 0, skipped 2 (opt-in real-Next probes); audit passed; merged `00e1e50b`. t616: browser test 6/6 loaded; after merging dev: `launch-browser-worker.test.js` -> pass 1, fail 0; audit passed; merged; both pushed. Canaries: debug notes for `run-mv8zw5l2-98064abf` and `run-mv93ywox-9b5aa220`
 - Outcome: Accepted
+
+### 2026-10-15 — A8 wave 5; Next keeps the filters the page shows applied (t623)
+- Agent: supervisor (wave 5, four runs at once); read-only debugs `a8-towels-run-mv96rz68-debug.md`, `a8-towels-run-mv96rz6d-debug.md`, `a8-social-run-mv96rz6h-debug.md`; worker t623-next-page-keeps-list-scope (two rounds); supervisor verified and integrated
+- Changed: the A8 Run Plan's wave 5 table and reading; t623 `apps/extension/src/content/extraction/page-advance/{dropped-state,applied-controls,follow-next}.ts`: a next move whose Next drops query state the page shows applied (a checked, selected or pressed control) follows the pager's following number that keeps it, or fails `page_fault` and presses nothing; `docs/architecture/web-capabilities.md`
+- Why: in both towels runs the Flow's Next followed an arrow that dropped every filter, so later pages were read unfiltered while the step reported success
+- Validation: wave 5: `project` everything-store passed ($0.085, oracle passed; the first `project` pass there); `project` social failed ($0.063), `project` towels failed ($0.176), `candidate` towels failed ($0.048); debug notes for all four. t623 after merging dev: `test-extension.mjs content/extraction` -> tests 291, pass 291, fail 0 (5 of 8 move tests fail with the call site reverted); `check-extension.mjs` exit 0; audit passed; merged `0638d45f`; pushed
+- Outcome: Accepted. Wave 6 reruns all four on the pair after t622-t624
+- Follow-up: a filter shown only as a link or chip, with no checked or pressed state, is not seen, so a Next that drops it is followed as before
 
 ## Open Questions
 
