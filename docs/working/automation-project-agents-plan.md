@@ -68,8 +68,9 @@ pre-existing defects fixed in t638-t640. Frozen pair 2 (after t640, A8 Run Plan)
 Lab (10 of 10 by product and oracle), `candidate` 8 of 9; the default is not flipped on it (one Lab misread). Merged
 and pushed after it (2026-10-15): Core t641 (partly refuted advice labelled, vindicated conditions held once), t642
 (handles never re-bind without a load; hidden-only ties are not found), t643 (a bypassed optional step is not the
-run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sensitive test files). Now: frozen pair 3
-(the five tasks, both modes, twice, no fixes between; waves 17-21) decides the flip.
+run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sensitive test files). Frozen pair 3
+stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan). In flight:
+t645-t649. Next: merge them, sync the lanes, frozen pair 4 decides the flip.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -358,6 +359,12 @@ five A8 tasks in both modes, twice, no product change between:
 | everything-store-plus-earbuds-under-50 | (w18) | (w20) | (w18) | (w20) |
 | social-network-feed-confirm-requests | (w18) | (w21) | (w18) | (w21) |
 | bigbox-retail-pickup-towels | (w19) | (w21) | (w19) | (w21) |
+
+**Frozen pair 3 stopped after wave 17 (supervisor, 2026-10-15).** `project` bigbox cart failed on a cause general to
+`project` mode (a plan's invented hand-off value, then an amendment that dropped the person's first request; the
+debug `reports/a8-bigbox-cart-run-mv9zn5ob-debug.md`), so further `project` runs would fail predictably on a known
+defect, and this pair can no longer meet the two-consecutive-passes rule. t645-t649 fix the chain and the chat cards
+it showed; frozen pair 4 starts once they are merged.
 
 ## Units (this repository)
 
