@@ -69,8 +69,8 @@ Lab (10 of 10 by product and oracle), `candidate` 8 of 9; the default is not fli
 and pushed after it (2026-10-15): Core t641 (partly refuted advice labelled, vindicated conditions held once), t642
 (handles never re-bind without a load; hidden-only ties are not found), t643 (a bypassed optional step is not the
 run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sensitive test files). Frozen pair 3
-stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan). In flight:
-t645-t649. Next: merge them, sync the lanes, frozen pair 4 decides the flip.
+stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan); t645-t649 fix
+it and are merged and pushed. Now: frozen pair 4 (waves 22-26, bigbox cart and towels first) decides the flip.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -681,6 +681,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: wave 17 `project` bigbox cart: one read value could not be handed on, so the builder copied a list extraction
 - Validation: after merging dev: `test-domain.mjs output-nodes actions runtime/llm-evidence/node-run runtime/tests/adapter` -> tests 787, pass 787, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream `340aa8cf`, Core `7a3838ce`; both pushed
 - Outcome: Accepted. Frozen pair 4 waits for t649
+
+### 2026-10-15 — Project chat cards are honest (t649); every wave-17 fix merged
+- Agent: worker t649-project-chat-cards-honest (three rounds); supervisor verified and integrated
+- Changed: `apps/extension/src/shared/activity/declined-submission.ts` (a safety net now that Core declines refused subflow submissions itself), `panel/chat/stream/step/{return-reason,brief-wait,project-message,project-words,action-card,messages}.ts`: plain words on return cards, a waiting brief names the part it starts after (Core's `after`) and reads "Not started" if it never ran; `background/activity/supervisor-ending.ts` and `pacer.ts`: the failure toast carries the supervisor's reason from the build's last row; `docs/architecture/extension-client.md`
+- Why: wave 17 `project` bigbox cart's chat (debug section 8)
+- Validation: after merging dev: `test-extension.mjs background/activity/tests shared/activity panel/chat` -> tests 536, pass 536, fail 0; `check-extension.mjs` exit 0; test-runner check exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream and Core `eca33297`; both pushed. No browser run yet: frozen pair 4's UI review covers the cards
+- Outcome: Accepted. t645-t649 all merged; frozen pair 4 next
 
 ## Open Questions
 
