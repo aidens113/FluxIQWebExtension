@@ -16,9 +16,10 @@
 // that did is printed beside them, a window of about sixty characters around
 // the match, so the model can see why it matched without the whole value.
 //
-// A control in a fieldset prints its group as its view line does,
-// `group="Size"` (t605), and an element's group is searched right after its
-// own words: asking for "Size" finds the legend and every option under it.
+// A control in a fieldset or a named ARIA group prints its group as its view
+// line does, `group="Size"` (t605, t610: `../page-view/group-names.ts`), and an
+// element's group is searched right after its own words: asking for "Size"
+// finds the legend and every option under it.
 //
 // A search that found nothing says what it searched (F32). On
 // `run-muqc07fh-eeffbc86` the model searched the home page twelve times for a
@@ -30,7 +31,18 @@
 import { present } from "../present";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
-import { quotedWords, undoubledWords, webLlmElementKind, webLlmElementWhere, webLlmElementWords, webLlmGroupToken, webLlmViewTraits } from "../page-view";
+import {
+  quotedWords,
+  undoubledWords,
+  webLlmElementKind,
+  webLlmElementWhere,
+  webLlmElementWords,
+  webLlmGroupNames,
+  webLlmGroupToken,
+  webLlmPageTree,
+  webLlmViewTraits,
+  type WebLlmGroupNames
+} from "../page-view";
 import { webLlmNearMatches } from "./near";
 import { WEB_LLM_FIND_SCHEMA_VERSION } from "./schema-version";
 
@@ -53,8 +65,9 @@ export type WebLlmFindResult = {
 /** Every element matching `query`, in page order, from match `after`, as the model reads them. */
 export function webLlmFindOnPage(evidence: WebLlmPageEvidence, query: string, after: number): WebLlmFindResult {
   const needle = query.toLowerCase();
+  const groups = webLlmGroupNames(evidence.elements, webLlmPageTree(evidence.elements));
   const matches = evidence.elements.flatMap((element) => {
-    const match = matchOf(element, needle);
+    const match = matchOf(element, needle, groups);
     return match === undefined ? [] : [{ element, match }];
   });
   const shown = matches.slice(after, after + WEB_LLM_FIND_PAGE_SIZE);
@@ -64,11 +77,11 @@ export function webLlmFindOnPage(evidence: WebLlmPageEvidence, query: string, af
     : { shown: [], more: 0 };
   const lines = [`${matches.length} ${matches.length === 1 ? "match" : "matches"} for ${quotedWords(query)}`];
   if (matches.length === 0 && after === 0) lines.push(nothingHere(evidence, near.shown.length > 0));
-  for (const { element, match } of shown) lines.push(matchLine(element, match, evidence));
+  for (const { element, match } of shown) lines.push(matchLine(element, match, evidence, groups));
   if (left > 0) lines.push(`… ${left} more: web.find_on_page ${JSON.stringify({ query, after: after + shown.length })}`);
   const nearCount = near.shown.length + near.more;
   if (nearCount > 0) lines.push(`${nearCount} close ${nearCount === 1 ? "match" : "matches"}, holding most or part of those words but not as written:`);
-  for (const { element, lacking } of near.shown) lines.push(nearLine(element, lacking, evidence));
+  for (const { element, lacking } of near.shown) lines.push(nearLine(element, lacking, evidence, groups));
   if (near.more > 0) lines.push(`${near.more} more close ${near.more === 1 ? "match" : "matches"} not shown; search fewer words to narrow them.`);
   return present<WebLlmFindResult>({ schemaVersion: WEB_LLM_FIND_SCHEMA_VERSION, trust: evidence.trust, location: evidence.location, found: lines.join("\n") });
 }
@@ -88,11 +101,11 @@ function nothingHere(evidence: WebLlmPageEvidence, nearFollow: boolean): string 
 /** Where an element matched: in its words, or in a named field or attribute's value or name. */
 type Match = { inWords: true } | { inWords: false; field: string; value: string; at: number };
 
-function matchOf(element: WebLlmEvidenceElement, needle: string): Match | undefined {
+function matchOf(element: WebLlmEvidenceElement, needle: string, groups: WebLlmGroupNames): Match | undefined {
   const words = [element.name, element.text, element.ownText, element.label];
   if (words.some((value) => found(value, needle) >= 0)) return { inWords: true };
   const fields: Array<[string, string | undefined]> = [
-    ["group", element.group],
+    ["group", groups.groupOf(element)],
     ["value", element.value],
     ["selected", element.selectedValue],
     ...(element.options ?? []).map((option): [string, string] => ["option", option.label]),
@@ -120,11 +133,11 @@ function collapsed(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
 }
 
-function matchLine(element: WebLlmEvidenceElement, match: Match, evidence: WebLlmPageEvidence): string {
+function matchLine(element: WebLlmEvidenceElement, match: Match, evidence: WebLlmPageEvidence, groups: WebLlmGroupNames): string {
   const parts = [element.target, webLlmElementKind(element) ?? element.tag];
   const words = wordsOf(element);
   if (words !== undefined) parts.push(quotedWords(cut(words)));
-  const group = groupToken(element);
+  const group = groupToken(element, groups);
   if (group !== undefined) parts.push(group);
   // A control's group token already says the words a group match found.
   const shownByGroup = group !== undefined && !match.inWords && match.field === "group";
@@ -134,11 +147,11 @@ function matchLine(element: WebLlmEvidenceElement, match: Match, evidence: WebLl
 }
 
 /** A close match: as an exact one prints, marked `near` with the query words it lacks. */
-function nearLine(element: WebLlmEvidenceElement, lacking: string[], evidence: WebLlmPageEvidence): string {
+function nearLine(element: WebLlmEvidenceElement, lacking: string[], evidence: WebLlmPageEvidence, groups: WebLlmGroupNames): string {
   const parts = [element.target, webLlmElementKind(element) ?? element.tag];
   const words = wordsOf(element);
   if (words !== undefined) parts.push(quotedWords(cut(words)));
-  const group = groupToken(element);
+  const group = groupToken(element, groups);
   if (group !== undefined) parts.push(group);
   parts.push(lacking.length === 0 ? "near, holds every word" : `near, lacks ${quotedWords(lacking.join(" "))}`);
   parts.push(webLlmElementWhere(element, evidence.viewport));
@@ -146,8 +159,8 @@ function nearLine(element: WebLlmEvidenceElement, lacking: string[], evidence: W
 }
 
 /** The group a control's view line ends with (`group="Size"`); any other element shows its group only as the field a search matched. */
-function groupToken(element: WebLlmEvidenceElement): string | undefined {
-  return webLlmViewTraits(element).control ? webLlmGroupToken(element) : undefined;
+function groupToken(element: WebLlmEvidenceElement, groups: WebLlmGroupNames): string | undefined {
+  return webLlmViewTraits(element).control ? webLlmGroupToken(groups.groupOf(element)) : undefined;
 }
 
 /** The words the view would print, or for an element the view gives no line, the first words it has. */

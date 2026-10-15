@@ -12,7 +12,7 @@ import { present } from "../present";
 import type { WebLlmEvidenceElement } from "../elements";
 import { observedElement } from "../press";
 import type { WebLlmPageEvidence } from "../sanitize";
-import { quotedWords, undoubledWords, webLlmElementKind, webLlmElementWhere, webLlmElementWords } from "../page-view";
+import { quotedWords, undoubledWords, webLlmElementKind, webLlmElementWhere, webLlmElementWords, webLlmGroupNames, webLlmPageTree } from "../page-view";
 import { WEB_LLM_DESCRIBE_SCHEMA_VERSION } from "./description-schema-version";
 
 export type WebLlmDescribeResult = {
@@ -30,7 +30,8 @@ const OWN_LINES: ReadonlySet<string> = new Set(["target", "tag", "attributes", "
 /** Everything the page holds about the element `handle` names; a handle not on the page is refused as unobserved. */
 export function webLlmDescribeElement(evidence: WebLlmPageEvidence, handle: string): WebLlmDescribeResult {
   const element = observedElement(evidence, handle);
-  const lines = [headLine(element), attributesLine(element), boxLine(element, evidence), contextLine(element)];
+  const group = webLlmGroupNames(evidence.elements, webLlmPageTree(evidence.elements)).groupOf(element);
+  const lines = [headLine(element), attributesLine(element), boxLine(element, evidence), contextLine(element, group)];
   return present<WebLlmDescribeResult>({
     schemaVersion: WEB_LLM_DESCRIBE_SCHEMA_VERSION,
     trust: evidence.trust,
@@ -61,8 +62,13 @@ function boxLine(element: WebLlmEvidenceElement, evidence: WebLlmPageEvidence): 
   return box === undefined ? `box: none, ${where}` : `box: x=${box.x} y=${box.y} ${box.width}x${box.height}, ${where}`;
 }
 
-function contextLine(element: WebLlmEvidenceElement): string {
-  const fields = Object.entries(element).filter(([key, value]) => !OWN_LINES.has(key) && value !== undefined);
+/**
+ * Every other field. `group` is the group the view and a search name
+ * (`../page-view/group-names.ts`): a fieldset's legend as the packet carries
+ * it, or the nearest named ARIA group, which only the packet's tree says.
+ */
+function contextLine(element: WebLlmEvidenceElement, group: string | undefined): string {
+  const fields = Object.entries({ ...element, group }).filter(([key, value]) => !OWN_LINES.has(key) && value !== undefined);
   return fields.length === 0 ? "context: none" : `context: ${fields.map(([key, value]) => `${key}=${printed(value)}`).join(" ")}`;
 }
 

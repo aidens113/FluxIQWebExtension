@@ -331,7 +331,22 @@ Every page leaves the domain as `web-llm-page.v3`
   `context.fieldsetLegend` for every element, and the sanitizer publishes it
   as the element's `group` where it says something the element's name and
   text do not (a legend's own group is left out). A bare option says what it
-  filters by only through it.
+  filters by only through it. A control in an option set drawn without a
+  fieldset -- an element whose role is `group` or `radiogroup`, named by
+  `aria-labelledby` or `aria-label` -- ends the same way (t610,
+  `page-view/group-names.ts`): the view reads the group from the packet's tree,
+  the ARIA group's accessible name as the capture resolved it, else the words
+  of the packet elements its `aria-labelledby` points at. The nearest named
+  group around a control wins, a fieldset or an ARIA group; an unnamed one (a
+  fieldset with no legend, a group with neither attribute) names nothing and
+  the walk goes on up. A named ARIA group gets a text line of its name before
+  its options, as a legend does, unless the element its `aria-labelledby`
+  points at has a line, or a legend around it or inside it says the same
+  words. The sanitizer writes the same resolved group into the packet's
+  `group` field once every parent is known (`sanitize.ts`, `writeGroups`), so
+  the packet, the state digest (`web-state.v6`) and the look-alike
+  descriptions name the group the view prints: two "None" radios in two ARIA
+  groups are told apart by their group.
 - **Structure markers** on lines of their own: `[landmark]` (with frame, modal
   dialog and form), `- i/n` for a list item, `- row r`, and
   `--- below the fold ---` and its kin where the screen zone changes.
@@ -343,9 +358,10 @@ Every page leaves the domain as `web-llm-page.v3`
   order, fifty to a page, each printed as the view prints it (a control's
   `group="…"` included) plus the field or attribute that matched and where the
   element is (`web-llm-find.v1`). Asking for a group's words finds its legend
-  and every element in the group.
+  (or the ARIA group itself) and every element in the group.
   `web.describe_element` prints one element whole: its line, every attribute,
-  its box and where it is, and every other field, `group` among them
+  its box and where it is, and every other field, `group` among them, read
+  as the view reads it
   (`web-llm-describe.v1`). Both
   are authoring tools and recovery options (`web.recovery.find_on_page`,
   `web.recovery.describe_element`); a hidden element never moves a visible
@@ -636,7 +652,7 @@ What still never reaches a model:
 - **An address.** No selector, xpath or record key is published; the opaque
   `tN` handle is the only way to name an element.
 
-The state digest (`state-digest/state-digest.ts`, `web-state.v5`) and the
+The state digest (`state-digest/state-digest.ts`, `web-state.v6`) and the
 route state (`route-state/project.ts`) are read off the same whole packet, with
 a search capture's hidden elements left out, so a call's own capture answers
 for them exactly as `captureStateDigest` and `observeRouteState` would, and a

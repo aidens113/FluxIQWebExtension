@@ -42,6 +42,7 @@ import { joinWebLlmLayers, type WebLlmLayerSubject } from "./layers";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { tellWebLlmLookAlikesApart, type WebLlmLookAlikeCues } from "./look-alikes";
 import { capturedTruncated, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
+import { webLlmGroupNames, webLlmPageTree } from "./page-view";
 import { present } from "./present";
 import { countValue, isJsonRecord, jsonRecord } from "./untrusted-json";
 import { screenedPageText } from "./withheld";
@@ -205,6 +206,12 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     const parent = parentAt[index];
     if (parent !== undefined) described.element.parent = parent;
   });
+  // Each element's group, once every parent is written (t610): the nearest
+  // named fieldset or ARIA group around it, by the one rule the view, a search
+  // and a description read it by (`./page-view/group-names.ts`). Written
+  // before the look-alikes are told apart and before anything digests the
+  // packet, so all of them agree with the view.
+  writeGroups(describedAt.flatMap((described) => (described ? [described.element] : [])));
   for (const [index, described] of describedAt.entries()) {
     if (!described) continue;
     const raw = rawElements[index];
@@ -257,6 +264,23 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
   return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+}
+
+/**
+ * Every element's `group`, resolved over the packet's tree. The sanitizer
+ * wrote a fieldset's legend from the capture's `context.fieldsetLegend`
+ * (`./elements.ts`); this replaces it with the nearest named group, which may
+ * be an ARIA group nearer than any fieldset. All are resolved before any is
+ * written, so one element's new group never feeds another's walk.
+ */
+function writeGroups(elements: readonly WebLlmEvidenceElement[]): void {
+  const groups = webLlmGroupNames(elements, webLlmPageTree(elements));
+  const resolved = elements.map((element) => groups.groupOf(element));
+  elements.forEach((element, index) => {
+    const group = resolved[index];
+    if (group === undefined) delete element.group;
+    else element.group = group;
+  });
 }
 
 /**

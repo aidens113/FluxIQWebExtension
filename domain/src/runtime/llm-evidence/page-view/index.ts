@@ -3,6 +3,7 @@
 // search over the page describes an element exactly as the view does.
 
 export * from "./element";
+export { webLlmGroupNames, type WebLlmGroupNames } from "./group-names";
 export { webLlmHandleFreeViewLines } from "./handle-free-lines";
 export { webLlmPageHeader } from "./header";
 export { chosenWebLlmLines, renderedWebLlmLines, webLlmControlHolders, webLlmLineFacts, webLlmLineKind, type WebLlmLineFact } from "./line";
