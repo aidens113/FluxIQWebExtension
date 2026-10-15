@@ -12,8 +12,10 @@
 //            "Repairing", "Resetting the site") -- card "Build · Search /
 //            Allowance $0.06"
 //   return   "Built Search" (or "Partly built", "Couldn't build") with the
-//            builder's reason -- card "Return · Search / Spent $0.04 · 12
-//            calls · 3 trials"
+//            builder's reason in a person's words, never its codes or ids
+//            (`return-reason.ts`) -- card "Return · Search / Spent $0.04 · 12
+//            calls · 3 trials", or "Not started" for a brief that spent and
+//            tried nothing (t649)
 //   receipt  "Tested Search" or "Tested the whole Flow" -- card "Subflow
 //            trial · Search / Passed" ("Didn't pass", "Not confirmed")
 //
@@ -26,6 +28,7 @@
 
 import type { ActivityActionKind } from "fluxiq/ui";
 import type { ActivityAgent, ActivityProjectCard } from "../../../../shared/activity/index";
+import { returnReason } from "./return-reason";
 
 type Brief = Extract<ActivityProjectCard, { kind: "brief" }>;
 
@@ -59,6 +62,9 @@ const BRIEF_WORDS: Readonly<Record<Brief["brief"], { doing: string; name: string
   repair: { doing: "Repairing", name: "Repair", icon: "repair", done: "Repaired", partly: "Partly repaired", not: "Couldn't repair" },
   reset: { doing: "Resetting the site", name: "Reset the site", icon: "repeat", done: "Reset the site", partly: "Partly reset the site", not: "Couldn't reset the site" }
 };
+
+/** What the return of a brief whose builder never ran says in place of its spending. */
+const NOT_STARTED = "Not started";
 
 /** `card` in words; `agent` is the event's author, a last source for a subflow's name. */
 export function projectWords(card: ActivityProjectCard, names: ProjectNames, agent: ActivityAgent | undefined): ProjectWords {
@@ -103,10 +109,13 @@ export function projectWords(card: ActivityProjectCard, names: ProjectNames, age
       const words = BRIEF_WORDS[brief?.brief ?? "build"];
       const subflow = brief?.subflowName ?? names.subflows.get(card.subflowKey) ?? agent?.subflowName ?? null;
       const head = card.outcome === "done" ? words.done : card.outcome === "partial" ? words.partly : words.not;
-      const spent = [`Spent ${dollars(card.spentUsd)}`, counted(card.calls, "call"), counted(card.trials, "trial")].join(" · ");
+      // A brief that never started spent nothing and tried nothing: it says so, not "Spent $0.00 · 0 calls".
+      const started = card.calls > 0 || card.trials > 0 || card.spentUsd > 0;
+      const spent = started ? [`Spent ${dollars(card.spentUsd)}`, counted(card.calls, "call"), counted(card.trials, "trial")].join(" · ") : NOT_STARTED;
       return {
         title: brief?.brief === "reset" || subflow === null ? head : `${head} ${subflow}`,
-        text: card.reason || undefined,
+        // The builder's reason is written for the supervisor: said in a person's words, never its codes or ids (`return-reason.ts`).
+        text: returnReason(card.reason, names),
         card: { icon: "join", name: "Return", target: subflow, outcome: spent, state: card.outcome === "done" ? "done" : card.outcome === "partial" ? "unconfirmed" : "failed", rows: [] }
       };
     }

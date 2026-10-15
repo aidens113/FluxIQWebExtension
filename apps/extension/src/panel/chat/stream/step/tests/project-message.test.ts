@@ -146,3 +146,43 @@ test("a build with one agent reads as before: no author, no lane", () => {
   assert.equal(message!.lane, undefined);
   assert.equal(message!.actions.length, 1);
 });
+
+// t649 (A8 frozen pair 3, `run-mv9zn5ob-d929084d`, 00004): a brief dispatched beside one still being
+// built read "Building Cart ... / Allowance $0.05" though its builder never ran; it waited for the part
+// before it. It says it waits until its own builder speaks, and one that comes back still waiting
+// says it was never started.
+test("a brief dispatched while another is out waits for it by name, until its own builder starts", () => {
+  const first = note(SUPERVISOR, 1, { kind: "brief", briefId: "brief-1", brief: "build", subflowKey: "search", subflowName: "Search", purpose: "Find the kettle", allowanceUsd: 0.06 });
+  const second = note(SUPERVISOR, 2, { kind: "brief", briefId: "brief-2", brief: "build", subflowKey: "cart", subflowName: "Cart", purpose: "Add it to the cart", allowanceUsd: 0.05 });
+  const waits = stepMessages([first, second, thought(SEARCH, 3, TYPE, "The search box is the way to the kettles.")], 100);
+  assert.deepEqual([waits[1]!.title, waits[1]!.project!.card.outcome, waits[1]!.project!.card.state], ["Cart waits for Search: Add it to the cart", "Waits for Search", "settled"]);
+  assert.deepEqual([waits[0]!.title, waits[0]!.project!.card.outcome], ["Building Search: Find the kettle", "Allowance $0.06"], "the first brief started at once");
+
+  const started = stepMessages([first, second, thought(CART, 3, ADD, "The kettle is open, so it goes in the cart.")], 100);
+  assert.deepEqual([started[1]!.title, started[1]!.project!.card.outcome, started[1]!.project!.card.state], ["Building Cart: Add it to the cart", "Allowance $0.05", "working"]);
+
+  const blocked = "Brief brief-1 for subflow search, which this subflow starts after, ended blocked (The builder failed: Flow Bootstrap generation failed (flow_bootstrap.evidence_repeat_without_progress).), so this subflow's entry cannot be prepared and its trials could not run.";
+  const never = stepMessages([
+    first,
+    second,
+    note(SUPERVISOR, 3, { kind: "return", briefId: "brief-1", subflowKey: "search", outcome: "blocked", reason: "The builder failed: Flow Bootstrap generation failed (flow_bootstrap.evidence_repeat_without_progress).", spentUsd: 0.01, calls: 21, trials: 0 }),
+    note(SUPERVISOR, 4, { kind: "return", briefId: "brief-2", subflowKey: "cart", outcome: "blocked", reason: blocked, spentUsd: 0, calls: 0, trials: 0 })
+  ], 100);
+  assert.deepEqual([never[1]!.project!.card.outcome, never[1]!.project!.card.state], ["Not started", "failed"]);
+  assert.deepEqual([never[3]!.title, never[3]!.text, never[3]!.project!.card.outcome], ["Couldn't build Cart", "It starts after Search, which couldn't be built, so it was never started.", "Not started"]);
+  assert.equal(never[2]!.text, "The builder kept trying without getting any further, so it was stopped.");
+});
+
+// Round 2 of t649: Core's brief card names the parts it starts after (`after`), so the chat states the
+// wait from Core rather than guessing it: a brief beside one it does not start after runs at once.
+test("a brief waits only for a part Core names it starting after that is still out", () => {
+  const first = note(SUPERVISOR, 1, { kind: "brief", briefId: "brief-1", brief: "build", subflowKey: "search", subflowName: "Search", purpose: "Find the kettle", allowanceUsd: 0.06, after: [] });
+  const cart = (after: string[]) => note(SUPERVISOR, 2, { kind: "brief", briefId: "brief-2", brief: "build", subflowKey: "cart", subflowName: "Cart", purpose: "Add it to the cart", allowanceUsd: 0.05, after });
+  const read = (after: string[]) => {
+    const message = stepMessages([first, cart(after)], 100)[1]!;
+    return [message.title, message.project!.card.outcome, message.project!.card.state];
+  };
+  assert.deepEqual(read(["Search"]), ["Cart waits for Search: Add it to the cart", "Waits for Search", "settled"]);
+  assert.deepEqual(read([]), ["Building Cart: Add it to the cart", "Allowance $0.05", "working"], "it starts after none: both build at once");
+  assert.deepEqual(read(["Sign in"]), ["Building Cart: Add it to the cart", "Allowance $0.05", "working"], "the part it starts after was built earlier and is not out");
+});

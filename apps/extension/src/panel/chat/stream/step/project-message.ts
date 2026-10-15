@@ -6,7 +6,9 @@
 // its own, a `project` message: a heading and one card in words
 // (`project-words.ts`), keyed by the note row that carried it like any step
 // message. A brief's card works until the return for that brief arrives, and
-// then shows how the builder came back.
+// then shows how the builder came back. A brief dispatched while another is
+// still out waits (`brief-wait.ts`) until its own builder's first event, and
+// one that comes back still waiting says it was never started (t649).
 //
 // Every other message keeps its author (`agent`). A builder's steps follow
 // the brief that dispatched them, so the brief is their subflow header; a
@@ -18,7 +20,8 @@
 
 import { activityAgent, projectCard, type ActivityAgent, type ActivityProjectCard, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import type { StepMessage } from "./messages";
-import { laneWords, projectWords, type ProjectNames } from "./project-words";
+import { waitingBriefWords } from "./brief-wait";
+import { laneWords, projectWords, type ProjectNames, type ProjectWords } from "./project-words";
 
 type Brief = Extract<ActivityProjectCard, { kind: "brief" }>;
 
@@ -26,6 +29,8 @@ type Brief = Extract<ActivityProjectCard, { kind: "brief" }>;
 export type ProjectMessages = {
   /** The message for `card`, carried by `event`'s note row, opened at `at`. */
   message(event: ClientGatewayActivity, card: ActivityProjectCard, at: number): StepMessage;
+  /** Takes any event of the stream, in order: the first one from a waiting brief's builder starts that brief's card. */
+  seen(event: ClientGatewayActivity): void;
 };
 
 /** A fresh book of one stream's project cards. */
@@ -35,6 +40,10 @@ export function projectMessages(): ProjectMessages {
   const names: ProjectNames = { briefs, subflows };
   /** Each brief's message by the brief's id, so its return marks its card. */
   const dispatched = new Map<string, StepMessage>();
+  /** The briefs dispatched and not yet returned, by id: each one's part's name. */
+  const open = new Map<string, string>();
+  /** The briefs whose builder has not started, by id: what each one's card says once it does. */
+  const waiting = new Map<string, ProjectWords>();
 
   return {
     message(event, card, at) {
@@ -55,15 +64,40 @@ export function projectMessages(): ProjectMessages {
       if (card.kind === "brief") {
         briefs.set(card.briefId, { brief: card.brief, subflowName: card.subflowName });
         dispatched.set(card.briefId, message);
+        // Dispatched while a part it starts after is still out, it waits until its own builder starts (`brief-wait.ts`).
+        const out = [...open.entries()].filter(([id]) => id !== card.briefId).map(([, name]) => name);
+        open.set(card.briefId, card.subflowName);
+        const waitsFor = card.after === undefined ? undefined : [...new Set(out.filter((name) => card.after!.includes(name)))];
+        if (waitsFor === undefined ? out.length > 0 : waitsFor.length > 0) {
+          waiting.set(card.briefId, words);
+          // Core names the parts it starts after; an older Core does not, and only one brief out can be named then.
+          const held = waitingBriefWords(words, card, waitsFor ?? (out.length === 1 ? out : undefined));
+          message.title = held.title;
+          message.project = held;
+        }
       }
       if (card.kind === "return") {
         const brief = dispatched.get(card.briefId);
+        // A brief that came back while it still waited never started: its card says so, as its return does.
+        const neverStarted = waiting.delete(card.briefId);
+        open.delete(card.briefId);
         if (brief?.project !== undefined) {
-          brief.project = { ...brief.project, card: { ...brief.project.card, state: words.card.state } };
+          brief.project = { ...brief.project, card: { ...brief.project.card, state: words.card.state, ...(neverStarted ? { outcome: words.card.outcome } : {}) } };
           brief.sequence = Math.max(brief.sequence, event.sequence);
         }
       }
       return message;
+    },
+    seen(event) {
+      const agent = activityAgent(event);
+      if (agent?.briefId === undefined || agent.role === "supervisor") return;
+      const running = waiting.get(agent.briefId);
+      const brief = dispatched.get(agent.briefId);
+      if (running === undefined || brief === undefined) return;
+      waiting.delete(agent.briefId);
+      brief.title = running.title;
+      brief.project = running;
+      brief.sequence = Math.max(brief.sequence, event.sequence);
     }
   };
 }

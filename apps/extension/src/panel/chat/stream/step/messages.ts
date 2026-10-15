@@ -243,6 +243,8 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     const parsed = Date.parse(event.at);
     const at = Number.isFinite(parsed) ? parsed : lastAt;
     lastAt = at;
+    // A brief that waits starts once its builder speaks (`project-message.ts`).
+    project.seen(event);
     const briefId = activityAgent(event)?.briefId;
     const unitKey = briefId === undefined ? event.activityId : `${event.activityId}#${briefId}`;
     let unit = units.get(unitKey);

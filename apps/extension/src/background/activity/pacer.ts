@@ -83,6 +83,12 @@
 //   follows the newest stage, never the step that finished before it.
 // - The person's answer to a wait is not repeated as the detail: the thread
 //   already says it.
+// - A project build its supervisor ended says why (`supervisor-ending.ts`,
+//   t649): Core's last row says it itself, in full where its title was cut;
+//   from an older Core, its ending, then the words of Core's row saying the
+//   supervisor's ending, else the reason the supervisor gave as it decided to
+//   finish. The toast read "Build failed: the supervisor ended it because it
+//   could not finish the Flow" and nothing more.
 //
 // Pure apart from the injected clock: no browser API, no network.
 
@@ -92,6 +98,7 @@ import type { ActivityClock, ActivityTimer } from "./clock";
 import { endingKindOf } from "./ending-kind";
 import { activityHeadline } from "./headline";
 import { RunRetry, type RetryState } from "./run-retry";
+import { SupervisorEnding, type SupervisorEndingWords } from "./supervisor-ending";
 import { UnitSituation, type UnitState } from "./unit-situation";
 
 /**
@@ -104,6 +111,8 @@ export const ACTIVITY_DETAIL_INTERVAL_MS = 1_600;
 
 /** The most characters of Core's sentence kept, cut where a word ends (`cutAtWord`). Core already truncates; this bounds a misbehaving sender. */
 const MAX_DETAIL = 160;
+/** The most characters of a build's ending that carries its supervisor's reason (`supervisor-ending.ts`): Core's sentence, then why. */
+const MAX_ENDING_DETAIL = 360;
 
 /** The detail under "Waiting for you: finish the check on the page", in place of the page action's own outcome. */
 const CHECK_DETAIL = "Only a person can get past this page";
@@ -136,6 +145,7 @@ export class ActivityPacer {
   private readonly situation = new UnitSituation();
   private readonly retry = new RunRetry();
   private readonly trial = new CandidateTrial();
+  private readonly ending = new SupervisorEnding();
   /** The shown display came from a decision still being made, whatever line it holds. */
   private shownDeciding = false;
   private pendingDeciding = false;
@@ -162,6 +172,8 @@ export class ActivityPacer {
     const unit = this.situation.observe(event, trial.testing || trial.endedNow);
     // A build's test runs its Flow as a run does, so its retries are told as a run's are.
     const retry = this.retry.observe(event, trial.testing ? "run" : kind);
+    // Why the supervisor ended a project build, for the row that ends it (t649).
+    const because = this.ending.observe(event, () => statusSentence(event));
     const latest = this.pending ?? this.shown;
     // A unit that settled -- failed or done -- is over: a row Core says in it
     // afterwards, a late thought or a step's echo, does not reopen it as work
@@ -172,7 +184,7 @@ export class ActivityPacer {
       this.acceptThought(thoughtDisplayFor(event, latest, unit, retry, trial), now);
       return;
     }
-    const next = holdMeaningfulLine(event, displayFor(event, this.shown, unit, retry, trial), latest);
+    const next = holdMeaningfulLine(event, displayFor(event, this.shown, unit, retry, trial, because), latest);
     const atOnce = opensStage(event) || (this.shownDeciding && startsStep(event));
     this.offer(next, isDeciding(event), atOnce, now);
   }
@@ -241,7 +253,7 @@ export class ActivityPacer {
   }
 }
 
-function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState, retry: RetryState, trial: TrialState): ActivityDisplay {
+function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState, retry: RetryState, trial: TrialState, because?: SupervisorEndingWords): ActivityDisplay {
   // A settling row names the work it ends, which outweighs the subject
   // (`ending-kind.ts`), and the unit keeps that name for every row after it:
   // a thought after a build's ending took the run's headline again, "Couldn't
@@ -262,7 +274,9 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
   });
   // The person's own answer is said in the thread (the ask and its card); as
   // the status it would be the third telling of one press (D7).
-  const detail = personAnswered(event) || event.phase === "paused" ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : trial.line ?? retry.line ?? statusSentence(event));
+  const detail = personAnswered(event) || event.phase === "paused" ? null
+    : because !== undefined ? bounded(because.reason === undefined ? because.sentence ?? statusSentence(event) : withReason(because.sentence ?? statusSentence(event), because.reason), MAX_ENDING_DETAIL)
+      : bounded(unit.checkReportedNow ? CHECK_DETAIL : trial.line ?? retry.line ?? statusSentence(event));
   const sameUnit = previous !== null && previous.activityId === event.activityId;
   // A run's step events carry the step; the events between them ("Run
   // started", a note) keep the step last said, so the count does not blink out
@@ -392,10 +406,17 @@ function stepOf(step: ClientGatewayActivity["step"]): ActivityDisplay["step"] {
   return { index: Math.floor(step.index), count: Number.isFinite(step.count) && step.count >= 0 ? Math.floor(step.count) : 0 };
 }
 
-function bounded(text: string): string | null {
+function bounded(text: string, max = MAX_DETAIL): string | null {
   const collapsed = text.replace(/\s+/gu, " ").trim();
   if (!collapsed) return null;
-  return cutAtWord(collapsed, MAX_DETAIL);
+  return cutAtWord(collapsed, max);
+}
+
+/** An ending that says it ended, then why, as two sentences: "Build failed: the supervisor ended it .... The item can't be had this way." */
+function withReason(sentence: string, reason: string): string {
+  const said = sentence.trim().replace(/[.\s]+$/u, "");
+  const why = reason.trim();
+  return `${said}. ${why.charAt(0).toUpperCase()}${why.slice(1)}${/[.!?…]$/u.test(why) ? "" : "."}`;
 }
 
 function visiblyDiffers(a: ActivityDisplay, b: ActivityDisplay): boolean {

@@ -70,3 +70,11 @@ test("a plan keeps only its well-formed entries, at most 20 of each list", () =>
   assert.equal("reserveUsd" in card, false);
   assert.equal("cases" in card, false);
 });
+
+// t649: a brief card names the parts it starts after (`after`), empty for none; an older Core sends none.
+test("a brief card's parts it starts after are kept as names, an empty list too, and absent stays absent", () => {
+  const brief = { kind: "brief", briefId: "b1", brief: "build", subflowKey: "cart", subflowName: "Cart", purpose: "Add it", allowanceUsd: 0.05 };
+  assert.deepEqual(projectCard(event({ ...brief, after: ["Search", " ", 3, "Sign in"] })), { ...brief, after: ["Search", "Sign in"] });
+  assert.deepEqual(projectCard(event({ ...brief, after: [] })), { ...brief, after: [] });
+  assert.deepEqual(projectCard(event(brief)), brief);
+});

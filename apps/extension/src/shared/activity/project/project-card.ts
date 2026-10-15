@@ -98,7 +98,9 @@ function brief(raw: Fields): Brief | undefined {
   const allowanceUsd = amount(raw.allowanceUsd);
   if (!briefId || !subflowKey || !subflowName || allowanceUsd === undefined || !known(BRIEFS, raw.brief)) return undefined;
   const caseId = text(raw.caseId);
-  return { kind: "brief", briefId, brief: raw.brief, subflowKey, subflowName, purpose: text(raw.purpose) ?? "", ...(caseId ? { caseId } : {}), allowanceUsd };
+  // The parts it starts after, by name (since t649; empty for none): absent only from an older Core.
+  const after = Array.isArray(raw.after) ? raw.after.map(text).filter((name): name is string => name !== undefined).slice(0, MAX_ENTRIES) : undefined;
+  return { kind: "brief", briefId, brief: raw.brief, subflowKey, subflowName, purpose: text(raw.purpose) ?? "", ...(caseId ? { caseId } : {}), allowanceUsd, ...(after === undefined ? {} : { after }) };
 }
 
 function returned(raw: Fields): Return | undefined {

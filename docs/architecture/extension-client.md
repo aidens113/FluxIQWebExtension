@@ -561,6 +561,18 @@ pacer keeps what Core says and changes how often it is said:
   Build stopped: a budget ran out" (`run-mux74k5q-1c3c2127`). Core's activity does not say whether a
   build creates a Flow or extends one, so a creation build re-authoring its
   first Flow after its test was refuted also reads "Fixing your Flow".
+  A project build its supervisor ended says why (`background/activity/supervisor-ending.ts`,
+  t649); the toast said it ended and never why. Core's last row says it
+  itself: the failure carries the supervisor's screened reason
+  (`endedBecause`, set in Core's `service/project-build/run.ts`), and Core's
+  `progress.ts` says it after the ending ("Build failed: the supervisor ended
+  it because it could not finish the Flow: the item can't be had this way").
+  That row's title is cut at 160 characters, so its text, Core's whole
+  sentence, is said where it says more. From an older Core whose last row
+  has no why, the ending gets the words of Core's row saying the supervisor's
+  ending (its screened reason and what is left), else the reason the
+  supervisor gave as it decided to finish. An ending with its own why (a time
+  limit, a budget) is said as Core said it.
   Every `repairing` event of a build is a repair. A run's is one only once Core works out a fix ("Working out what
   went wrong", "Deciding how to repair the step"): its recovery ladder
   ("Recovering from a failed step", then "Trying the step again" and the
@@ -823,9 +835,25 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   under it; a brief as "Building Search: Find the kettle" (or "Surveying",
   "Repairing", "Resetting the site") with a card "Build · Search / Allowance
   $0.06" that works until that brief's return arrives and then shows how the
-  builder came back; the return as "Built Search" (or "Partly built",
-  "Couldn't build") with the builder's reason and a card "Return · Search /
-  Spent $0.04 · 12 calls · 3 trials"; each receipt as "Tested Search" or
+  builder came back. A brief dispatched while a part it starts after is still
+  out waits until its own builder's first event (`brief-wait.ts`, t649):
+  "Cart waits for Search: Add it to the cart" with a neutral card "Build ·
+  Cart / Waits for Search", never an allowance being spent, and one that
+  comes back still waiting reads "Not started". The parts it starts after are
+  the brief card's `after` (the plan's names, empty for none; Core's
+  `runtime/activity/project/brief-card.ts`), so a brief beside one it does
+  not start after builds at once; from an older Core with no `after`, a brief
+  dispatched while another is out waits for that one ("Waits for its turn"
+  when several are out). The return reads "Built Search" (or "Partly built",
+  "Couldn't build") with the builder's reason, which Core says in a person's
+  words (`runtime/activity/project/return-words.ts`): "It starts after
+  Search, which couldn't be built, so it was never started", "The builder
+  couldn't finish: it kept trying without getting any further, so it was
+  stopped", the builder's own words kept. The extension says an older Core's
+  supervisor-facing reason the same way (`return-reason.ts`), and leaves out
+  any sentence still naming a code, a key or a brief's id. Its card
+  reads "Return · Search / Spent $0.04 · 12 calls · 3 trials", or "Not
+  started" for a brief that spent and tried nothing; each receipt as "Tested Search" or
   "Tested the whole Flow" with "Passed", "Didn't pass" or "Not confirmed".
   Names come from the cards before (a brief's subflow, the plan's), never an
   id. Each card's icon is one Core already pins for an action kind (plan
@@ -891,7 +919,17 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     words added to the model's sentence: "Not done: <Core's reason>", or
     "Only partly done: ..." for an edit some of which landed, with a neutral
     mark, never "Didn't work", since nothing was tried and failed, and never
-    "Done" or "Working on it" whatever outcome the card carries. An edit done
+    "Done" or "Working on it" whatever outcome the card carries. A
+    submission of steps Core refused (`core.submit_*` answered with a result
+    code, and no words of Core's on how it went) is "Not done: some steps
+    weren't written in a way the Flow can run", on the card and the status
+    line alike (`shared/activity/declined-submission.ts`, t649): a project
+    builder's refusal under a code with no failing word read a green "Done".
+    Core now reads every `core.submit_*` and `core.test_*` answer itself and
+    says it in words ("Not done: some steps point at things that weren't seen
+    on the page"; `runtime/activity/candidate/result.ts`), so the extension's
+    reading is a safety net for a row with no such account.
+    An edit done
     in part says what landed first, then what did not and why: "Only partly
     done: added "Read list"; not done: that step is already in the Flow" (the
     refusal alone read as the work, `run-mux6naez-6c20f26e`). A step written

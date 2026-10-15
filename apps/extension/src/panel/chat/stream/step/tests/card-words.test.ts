@@ -249,3 +249,40 @@ test("a step that worked when tried again says on which try, and why the tries b
   assert.equal(words.outcome, "Done on the 2nd try. The first try didn't work: the site asked FluxIQ to slow down");
   assert.equal(cardWords(card({ retried: { tries: 3, why: null }, result: "8 rows" }), false).outcome, "Done on the 3rd try: 8 rows. The first 2 tries didn't work");
 });
+
+// t649 (A8 frozen pair 3, `run-mv9zn5ob-d929084d`, 00012): a builder's submission of its part's steps
+// that Core refused under a code with no failing word in it read a green "Action · Submit subflow /
+// Done", while the refusal just above it read "Didn't work". Nothing of either was saved: both are
+// "Not done", in words, and an accepted one is still "Done".
+test("a submission of steps Core refused is never drawn as done", () => {
+  const row = (seq: number, text?: string): ClientGatewayActivity => ({
+    activityId: "build:b", sequence: seq, subject: { kind: "build", id: "b", projectId: "p" }, at: "2026-10-15T20:33:06.000Z", phase: "exploring",
+    label: "Using “Submit subflow” — done", detail: { kind: "tool", title: "Using “Submit subflow”", status: "succeeded", ref: "core.submit_subflow", ...(text === undefined ? {} : { text }) }
+  });
+  const words = (event: ClientGatewayActivity) => cardWords(actionCard(event, `action:build:b#${event.sequence}`)!, false);
+  const unresolved = words(row(1, "Result: flow_bootstrap.evidence_completion_parameters_unresolved:c01a26f6"));
+  assert.deepEqual([unresolved.state, unresolved.outcome], ["refused", "Not done: some steps weren't written in a way the Flow can run"]);
+  const scope = words({ ...row(2, "Result: subflow.scope_refused:ba64ff77"), label: "Using “Submit subflow” — didn't work" });
+  assert.deepEqual([scope.state, scope.outcome], ["refused", "Not done: some steps weren't written in a way the Flow can run"]);
+  const again = words(row(3, "Result: candidate.unchanged_submission"));
+  assert.equal(again.outcome, "Not done: it was the same as the steps already sent, sent again unchanged");
+  const accepted = words(row(4));
+  assert.deepEqual([accepted.state, accepted.outcome], ["done", "Done"]);
+  // Core's own refusal, when it gave one, stands: a repeat refused says why it was not sent again.
+  const repeat = words({ ...row(5, "Result: llm_evidence_loop.repeat_refused · Reason: failed"), label: "Using “Submit subflow” — not done" });
+  assert.equal(repeat.outcome, "Not done: it was already tried exactly this way and did not work");
+  for (const said of [unresolved, scope, again]) assert.doesNotMatch(said.label, /Done(?!:)|flow_bootstrap|subflow\.|candidate\./u);
+});
+
+// Round 2 of t649: Core now reads a project builder's refused submission itself and says why in words
+// (`Declined: ...`, Core's `runtime/activity/candidate/result.ts`); the card says Core's words, and the
+// extension's own reading stands back.
+test("a refused submission Core says in words reads Core's reason", () => {
+  const row: ClientGatewayActivity = {
+    activityId: "build:b", sequence: 1, subject: { kind: "build", id: "b", projectId: "p" }, at: "2026-10-15T20:33:06.000Z", phase: "exploring",
+    label: "Using “Submit subflow” — not done",
+    detail: { kind: "tool", title: "Using “Submit subflow”", status: "failed", ref: "core.submit_subflow", text: "Result: flow_bootstrap.evidence_completion_parameters_unresolved:c01a26f6 · Declined: some steps point at things that weren't seen on the page; 2 things to fix" }
+  };
+  const words = cardWords(actionCard(row, "action:build:b#1")!, false);
+  assert.deepEqual([words.state, words.outcome], ["refused", "Not done: some steps point at things that weren't seen on the page; 2 things to fix"]);
+});
