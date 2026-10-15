@@ -386,6 +386,20 @@ repair was refused before its first turn (Core t625), and t623 counted a search 
 applied filter, so a Next on an unfiltered search faulted (downstream t626). A brief's share of the purse could not
 grow while the purse had room (Core t627).
 
+**Wave 7** (downstream `e9c2b5f5`, Core `48b45401`, after t625-t628):
+
+| Task | `project` | `candidate` |
+| --- | --- | --- |
+| everything-store-plus-earbuds-under-50 | **passed**, $0.121 (a second subflow never built; the plan was amended to one) | not run |
+| social-network-feed-confirm-requests | **passed**, $0.027 (no repair needed) | not run |
+| bigbox-retail-pickup-towels | **passed**, $0.096 (first `project` towels pass; two repairs ran and returned done, then the whole test yes) | failed, $0.058: the exact rows at revision 7, held by nos calling settled rows missing that Core could not refute (Core t629) |
+
+**Reading of wave 7 (supervisor, 2026-10-15):** `project` passed all three tasks on one pair, and the repair loop
+worked end to end for the first time. `candidate` towels failed on a shared judge defect (a no claiming rows Core
+settled are missing is not refuted); wave 6's `candidate` pass had survived the same misreading by luck. Next: t629,
+then wave 8 on its pair, then wave 9 on the same pair if wave 8 finds nothing new, for two consecutive passes per site
+on one frozen pair.
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
