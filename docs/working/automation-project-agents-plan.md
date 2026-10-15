@@ -348,6 +348,17 @@ as reliable on every task and more reliable on towels, at a higher mean cost ($0
 Lab misread, so the default is not flipped on this pair: t641-t643 fix the three defects it found, and frozen pair 3
 repeats the comparison to decide the flip.
 
+**Frozen pair 3** (downstream `8b770037`, Core `8b322a95`, after t641-t644; docs-only commits after), waves 17-21, the
+five A8 tasks in both modes, twice, no product change between:
+
+| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
+| --- | --- | --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | passed $0.020 | (w19) | passed $0.014 | (w19) |
+| bigbox-retail-pickup-cart | failed $0.120: the supervisor ended the build, no Flow (debug `a8-bigbox-cart-run-mv9zn5ob-debug.md`) | (w20) | passed $0.029 | (w20) |
+| everything-store-plus-earbuds-under-50 | (w18) | (w20) | (w18) | (w20) |
+| social-network-feed-confirm-requests | (w18) | (w21) | (w18) | (w21) |
+| bigbox-retail-pickup-towels | (w19) | (w21) | (w19) | (w21) |
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
