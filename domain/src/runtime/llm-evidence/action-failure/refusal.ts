@@ -25,6 +25,7 @@
 // -- it read the code and passed `detail: undefined` beside it -- and a
 // signature that hands back only a code is what made forgetting possible.
 
+import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { rejectionDetail, type WebLlmToolRejectionCode, type WebLlmToolRejectionDetail, type WebLlmToolRejectionReason } from "../tool-rejection";
 import { webActionReadShortfall, type WebActionReadShortfall } from "./read-shortfall";
@@ -144,13 +145,16 @@ export function webActionFailureRefusal(result: WebFailedActionResult): WebActio
   const code = webActionFailureRejectionCode(result);
   const shortfall = webActionReadShortfall(result.payload);
   const reason = typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
+  const filtersDropped = droppedFilters(result);
   const refusal: WebActionRefusal = {
     code,
     detail: shortfall !== undefined
       ? readDetail(shortfall)
-      : reason === undefined
-        ? undefined
-        : rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined })
+      : filtersDropped !== undefined
+        ? rejectionDetail({ reason: "next_leaves_filtered_list", target: undefined, instead: undefined, missing: undefined, requestId: undefined, paginationStop: "page_fault", filtersDropped })
+        : reason === undefined
+          ? undefined
+          : rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined })
   };
   if (webActionNeedsPerson(result)) refusal.personNeeded = true;
   return refusal;
@@ -173,6 +177,20 @@ export function webActionFailureRejectionCode(result: WebFailedActionResult): We
     return typeof result.failure?.actual === "string" && result.failure.actual.startsWith("covered:") ? "target_covered" : "target_not_actionable";
   }
   return typeof code === "string" && Object.prototype.hasOwnProperty.call(BY_FAILURE_CODE, code) ? BY_FAILURE_CODE[code]! : "action_failed";
+}
+
+/**
+ * How many filters the page shows applied that a Next page step's Next would
+ * have dropped (t626), or nothing: read off the step's own answer through its
+ * closed copy (`actions/next-page/answer-value.ts`), which keeps the count only
+ * beside `page_fault`, and only on `ACTION_FAILED`, the code that word maps
+ * to. A field the extension wrote, never a sentence. Bare `action_failed` stays
+ * bare for every other failure, as the table above says.
+ */
+function droppedFilters(result: WebFailedActionResult): number | undefined {
+  if (result.status === "timed_out" || result.failure?.code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED) return undefined;
+  const answer = webAutomationNextPageAnswerValue(result.payload?.nextPage);
+  return answer?.outcome === "failed" ? answer.filtersDropped : undefined;
 }
 
 /** The read's account as a refusal may carry it: counts, one closed word, and the call's own field keys. */

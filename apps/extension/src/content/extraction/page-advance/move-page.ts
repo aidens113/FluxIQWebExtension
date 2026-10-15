@@ -30,7 +30,7 @@ import type { WebAutomationNextPageRequest } from "../../../shared/protocol";
 import { arriveAfterMove, awaitListItems } from "./arrival";
 import { deadlineFor } from "./list-change";
 import { failedMove, stoppedMove, type PageMoveOptions, type PageMoveOutcome } from "./move-outcome";
-import { paginationStopOf } from "./pagination-fault";
+import { PaginationFault, paginationStopOf } from "./pagination-fault";
 import { pageShownNow } from "./shown-page";
 import { stepPage } from "./step-page";
 import type { PageStep, PaginationProgress } from "./types";
@@ -65,7 +65,7 @@ export async function movePage(request: WebAutomationNextPageRequest, options: P
   try {
     step = await stepPage(way, progress, undefined);
   } catch (error) {
-    return stoppedMove(paginationStopOf(error), error instanceof Error ? error.message : "Moving the list to its next page failed.");
+    return stoppedMove(paginationStopOf(error), error instanceof Error ? error.message : "Moving the list to its next page failed.", error instanceof PaginationFault ? error.filtersDropped : undefined);
   }
   switch (step.outcome) {
     case "advanced": {

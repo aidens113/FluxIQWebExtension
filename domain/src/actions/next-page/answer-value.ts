@@ -25,7 +25,10 @@ export function webAutomationNextPageAnswerValue(value: unknown): WebAutomationN
   }
   if (answer.outcome === "failed") {
     const stop = memberOf(answer.stop, WEB_AUTOMATION_NEXT_PAGE_WORDS.faults);
-    return stop === undefined ? undefined : { outcome: "failed", stop };
+    if (stop === undefined) return undefined;
+    // A count of filters a Next would drop, on a page fault only (`./answer.ts`).
+    const filtersDropped = stop === "page_fault" ? positiveInteger(answer.filtersDropped) : undefined;
+    return filtersDropped === undefined ? { outcome: "failed", stop } : { outcome: "failed", stop, filtersDropped };
   }
   return undefined;
 }

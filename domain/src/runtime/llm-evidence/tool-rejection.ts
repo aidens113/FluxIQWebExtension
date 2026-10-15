@@ -341,6 +341,10 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   identical, so nothing was learned. Try something else.
  * - `already_at_destination`: the page asked for is the page already loaded.
  * - `nothing_changed_while_waiting`: the wait ended with the page as it was.
+ * - `next_leaves_filtered_list`: Next page pressed nothing, because the page's
+ *   Next leads to an address without filters the page shows applied and no
+ *   page number beside it keeps them (t626). `filtersDropped` says how many;
+ *   the same call is answered the same way on the same page.
  *
  * Policy (`cross_origin`, `permission_required`):
  * - `another_origin`: the address is not on this page's origin.
@@ -404,6 +408,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_unchanged_after_action",
   "already_at_destination",
   "nothing_changed_while_waiting",
+  "next_leaves_filtered_list",
   "another_origin",
   "consequences_unreadable",
   "consequences_not_granted",
@@ -528,6 +533,13 @@ export type WebLlmToolRejectionDetail = {
    * when the Next selector named nothing.
    */
   paginationStop?: string;
+  /**
+   * On `next_leaves_filtered_list` only: how many query parameters the page
+   * shows applied that its Next would leave out (`actions/next-page/answer.ts`).
+   * A count the extension wrote as a field of its answer, never read off a
+   * sentence, and never which parameters.
+   */
+  filtersDropped?: number;
   /** How many times in a row this same answer has now been given, counting from 2 (`repeated-refusal.ts`). */
   repeatedAnswer?: number;
 };
@@ -696,6 +708,7 @@ export function rejectionDetail(fields: {
   missingFields?: readonly string[] | undefined;
   waitStoppedOn?: string | undefined;
   paginationStop?: string | undefined;
+  filtersDropped?: number | undefined;
   repeatedAnswer?: number | undefined;
   closeWith?: readonly string[] | undefined;
 }): WebLlmToolRejectionDetail {
@@ -731,6 +744,7 @@ export function rejectionDetail(fields: {
     missingFields: fields.missingFields === undefined || fields.missingFields.length === 0 ? undefined : [...fields.missingFields],
     waitStoppedOn: fields.waitStoppedOn,
     paginationStop: fields.paginationStop,
+    filtersDropped: wholeCount(fields.filtersDropped),
     repeatedAnswer: wholeCount(fields.repeatedAnswer)
   });
 }

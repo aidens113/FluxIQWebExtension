@@ -30,4 +30,15 @@ export type WebAutomationNextPageFault = Extract<WebAutomationExtractionPaginati
 export type WebAutomationNextPageAnswer =
   | { outcome: "moved"; by: WebAutomationNextPageBy; page?: number | undefined }
   | { outcome: "ended"; stop: WebAutomationNextPageEnd }
-  | { outcome: "failed"; stop: WebAutomationNextPageFault };
+  | {
+    outcome: "failed";
+    stop: WebAutomationNextPageFault;
+    /**
+     * On a `page_fault` only (t626): how many query parameters of the page's
+     * address, each shown applied by a control on the page, the move's Next
+     * would have left out with no following page control keeping them. A
+     * count, never which, so no word of the address leaves the page; it tells
+     * the model that the list's filters, not the pager, stood in the way.
+     */
+    filtersDropped?: number | undefined;
+  };

@@ -14,7 +14,7 @@ import type { PaginationStop } from "./types";
 export type PageMoveOutcome =
   | { outcome: "moved"; by: WebAutomationNextPageBy; page?: number | undefined }
   | { outcome: "ended"; stop: WebAutomationNextPageEnd }
-  | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string }
+  | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string; filtersDropped?: number | undefined }
   | { outcome: "timed_out"; reason: string };
 
 export type PageMoveOptions = {
@@ -31,8 +31,9 @@ export type PageMoveOptions = {
 /** The capability the verb is granted: one step of the list to its next page. */
 export type PageMove = (request: WebAutomationNextPageRequest, options?: PageMoveOptions) => Promise<PageMoveOutcome>;
 
-export function failedMove(stop: WebAutomationNextPageFault, reason: string): PageMoveOutcome {
-  return { outcome: "failed", stop, reason };
+/** A failed move; `filtersDropped`, on a `page_fault` only, is how many applied filters its Next would have dropped. */
+export function failedMove(stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number): PageMoveOutcome {
+  return stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed", stop, reason, filtersDropped } : { outcome: "failed", stop, reason };
 }
 
 /**
@@ -40,9 +41,9 @@ export function failedMove(stop: WebAutomationNextPageFault, reason: string): Pa
  * the word is a list's end, otherwise `failed` with the word when it is one of
  * C1's faults, or `page_fault` for any other.
  */
-export function stoppedMove(stop: PaginationStop, reason: string): PageMoveOutcome {
+export function stoppedMove(stop: PaginationStop, reason: string, filtersDropped?: number): PageMoveOutcome {
   const ended = webAutomationNextPageAnswerValue({ outcome: "ended", stop });
   if (ended?.outcome === "ended") return ended;
   const failed = webAutomationNextPageAnswerValue({ outcome: "failed", stop });
-  return failedMove(failed?.outcome === "failed" ? failed.stop : "page_fault", reason);
+  return failedMove(failed?.outcome === "failed" ? failed.stop : "page_fault", reason, filtersDropped);
 }
