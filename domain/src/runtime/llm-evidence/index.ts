@@ -55,6 +55,9 @@ export * from "./page-view";
 // Searching the whole page: hidden, off-screen and text-less elements, and any attribute (t223).
 export * from "./page-find";
 export { screenWebBuildRefusalDiagnostic, type WebBuildRefusalDiagnostic } from "./refusal-diagnostic";
+// Where a control sits and which items a page lists, as the opaque tokens Core's
+// declaration takes (Core t475): the host runtime's state diff names them too (t609).
+export { webControlSpotToken, webTargetSpot } from "./control-spot";
 export {
   sanitizeWebLlmSnapshot,
   sanitizeWebLlmSnapshotWithBindings,

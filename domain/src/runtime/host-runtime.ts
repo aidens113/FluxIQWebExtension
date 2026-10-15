@@ -53,6 +53,17 @@
 //  - **Snapshots are not stored here.** Core hands both refs back to
 //    `inspectStateDiff`, so the diff reads the summaries it was given. A cache
 //    keyed by `stateRef` would be a second copy of state Core already holds.
+//  - **Their places are, briefly (t609).** A diff also says where the step's
+//    control sat (`spot`) and which items each page listed (`items`), the
+//    opaque tokens Core ties a trial's act to its own item by (Core t598). Both
+//    are read from the capture's records and selectors, which a summary must
+//    not carry: it is returned to a recovery model. So each capture's places
+//    (`./state-diff/places/`) are remembered here by `stateRef`, for the last
+//    few snapshots only, and a diff of refs this memory no longer holds names
+//    neither key. `items` holds only the lists both pages show, so a list the
+//    step merely revealed (a mini-cart drawer over lines that were there before
+//    the build) never reads as lines the step made. Neither key is page data,
+//    and both stay under Core's withholding of `stateDiff` in a saved trace.
 
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQ } from "fluxiq";
@@ -66,7 +77,7 @@ import { webAutomationActLanded } from "./act-landing";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
 import { createWebAutomationHostResourcePort } from "./host-resources";
-import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl } from "./llm-evidence";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshot, sanitizeWebLlmSnapshotWithBindings, screenedEvidenceUrl } from "./llm-evidence";
 import {
   compareWebAutomationRouteSignatures,
   WEB_AUTOMATION_ROUTE_STATE_PATHS,
@@ -76,7 +87,7 @@ import {
   webAutomationRouteSignature,
   webAutomationRouteState
 } from "./route-state";
-import { webAutomationStateDiff } from "./state-diff";
+import { createWebStatePlacesMemo, webAutomationStateDiff, webStateDiffPlaces, webStateSnapshotPlaces } from "./state-diff";
 
 /**
  * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
@@ -152,6 +163,7 @@ const HOST_RUNTIME_CAPABILITIES = Object.freeze(["action-dispatch", "state-snaps
 export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway, sessions: () => readonly ClientGatewaySession[] = () => []): WebAutomationHostRuntime {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
   const factEvaluator = createWebAutomationFactEvaluator(gateway.dispatch);
+  const places = createWebStatePlacesMemo();
   let captures = 0;
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
@@ -188,7 +200,8 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // `run-muw5zv4m-52d83027`). Put here rather than in `publishedWebLlmPage`,
       // which is every page a model is shown.
       const snapshot = actionSnapshot(result.payload);
-      const packet = sanitizeWebLlmSnapshot(snapshot);
+      const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
+      const packet = binding.evidence;
       const documentTimeOrigin = packet.navigation?.timeOrigin;
       const summary = {
         ...publishedWebLlmPage(packet),
@@ -197,7 +210,10 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       captures += 1;
       const stateSnapshotId = `${STATE_SNAPSHOT_ID_PREFIX}${captures}`;
       const from = resetToken(snapshot);
-      return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
+      const stateRef = `${stateSnapshotId}@${input.attemptId}:${input.point}`;
+      // Beside the summary, never on it (header, t609).
+      places.keep(stateRef, webStateSnapshotPlaces(binding));
+      return { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
     },
     // What a Router's `state.*` conditions test, observed on the page the run
     // stands on before any step runs, and what a Flow build is shown so it can
@@ -231,7 +247,9 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       if (input.before?.summary === undefined || input.after?.summary === undefined) {
         throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
       }
-      return webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
+      const diff = webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
+      // Where the step's control sat and the items of the lists both pages show (header, t609).
+      return { ...diff, ...webStateDiffPlaces(places.of(input.before?.stateRef), places.of(input.after?.stateRef), input.node, diff.documentChanged === true) };
     },
     expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context),
     factEvaluator,
