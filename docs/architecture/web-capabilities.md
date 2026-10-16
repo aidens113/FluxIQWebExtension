@@ -127,6 +127,37 @@ and 500 ms. The whole loop is capped at five seconds and checks the command's
 own deadline again after every wait, so a backoff never grants time the command
 did not have.
 
+Between attempts the loop clears what stands over the page by pressing each
+layer's own way out (`content/action-runtime/interference/`), under guards that
+never press a challenge, an acting control, or a consequential label. Three
+kinds of layer are never pressed (`interference/clearable-layers.ts`):
+
+- **the step's own** layer, which holds its resolved target, matches its
+  selector, or offers a control by a name it was recorded with
+  (`clearing-target.ts`, t401);
+- **a layer the run opened** (`run-opened.ts`, t656). After a click succeeds,
+  every layer over the page that was not there before the press, or offered
+  another way out then, and is tied to the pressed control by the page's own
+  structure -- it holds the control, it sits inside the control's shadow host,
+  the control names it by `aria-controls`, or the control says
+  `aria-expanded="true"` and the layer is the one new layer sharing its
+  deepest container below `<body>` -- is the Flow's own menu, drawer or picker
+  until it, or the way out it offered, stops being painted. A promotion the page
+  appends to `<body>` on a timer is tied by none of these and stays clearable;
+- **anything that is not a wall, when the target is missing** rather than
+  covered (`presence.ts`, `page-wall.ts`, t656). A target can be waiting behind a
+  consent wall to be drawn (company-website, t174), never behind a header's
+  popover, so the loop clears for a missing target only when a painted modal, or
+  a layer on a scrim over the viewport's centre, carries a way out, and then
+  presses only walls.
+
+bigbox-retail's cart Flow (`run-mvac0ddx-f52ba929`) failed six trials of eight
+and its playback before t656: an optional "No thanks" step whose promotion was
+already gone had the clearing close the store picker the previous step opened,
+and the next step's "Set as my store" was left with no box. Classification of a
+refusal (`overlaysAt`) and the rate-limit reader still see every layer, the
+run's included.
+
 Around that loop, every node is also attempted again as a whole: the first
 attempt and three retries, at Core's 250 ms, 1 s and 2 s
 (`AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`, user rule 2026-10-07, t355).

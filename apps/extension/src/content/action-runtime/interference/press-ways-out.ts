@@ -38,10 +38,10 @@ import { describeElement, visibleText } from "../../describe-element";
 import { isTopFrame } from "../../frame-geometry";
 import { accessibleNameFor } from "../../identity";
 import { dispatchClickGesture } from "../click-gesture";
+import { clearableLayers, type ClearingScope } from "./clearable-layers";
 import type { ClearingTarget } from "./clearing-target";
 import { clearedControlWord } from "./control-word";
 import { layerKind } from "./layer-kind";
-import { overlaysOverPage } from "./overlays";
 import { pressableWayOut } from "./pressable-way-out";
 
 /**
@@ -56,13 +56,15 @@ const MAX_DISMISSALS_PER_ATTEMPT = 3;
 
 /**
  * Presses the way out of each layer in the way of `spare` and answers what was
- * pressed, one entry per layer dismissed. It never throws: a fault while
- * reading the page ends the intervention with what it had already done.
+ * pressed, one entry per layer dismissed. `scope` is `walls` for a target that
+ * is missing rather than covered, and a layer the run opened is never pressed
+ * (`clearable-layers.ts`). It never throws: a fault while reading the page ends
+ * the intervention with what it had already done.
  */
-export function pressWaysOut(spare: Element | ClearingTarget | undefined): WebAutomationClearedLayer[] {
+export function pressWaysOut(spare: Element | ClearingTarget | undefined, scope: ClearingScope = "any"): WebAutomationClearedLayer[] {
   const cleared: WebAutomationClearedLayer[] = [];
   try {
-    for (const overlay of overlaysOverPage(undefined, spare)) {
+    for (const overlay of clearableLayers(spare, scope)) {
       if (cleared.length >= MAX_DISMISSALS_PER_ATTEMPT) break;
       // Guard 1. A dialog that asks for what only a person can give is left
       // alone, way out or no way out (`pressable-way-out.ts`, which

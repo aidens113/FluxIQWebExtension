@@ -66,8 +66,19 @@
 // whose confirmation was lost is never pressed twice; `recovery/fault.ts` draws
 // that line and says why each side of it is where it is.
 
+// Two things more ride on that wrapping (t656). A click that succeeded tells
+// `interference/run-opened.ts` which layers it opened, so no later clearing
+// presses the way out of the Flow's own menu, drawer or picker; the layers over
+// the page are read before the press and again after it, and the control is the
+// one the verb resolved. And a result whose code says the target was found but
+// not shown says so on its resolution measurement too (`shown: false`, from the
+// code's definition in the domain), so a reader does not take a control hidden
+// inside a closed container for one the page does not have.
+
 import {
   WEB_AUTOMATION_FAILURE_CODES,
+  WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS,
+  isWebAutomationFailureCode,
   webAutomationFailureRecord,
   type WebAutomationClearedLayer,
   type WebAutomationFailureCarrier,
@@ -76,7 +87,7 @@ import {
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 import { TargetResolutionError } from "../action-runtime";
-import { clearableLayerOverPage, pressWaysOut, type ClearingTarget } from "../action-runtime/interference";
+import { clearableLayerOverPage, pressWaysOut, runOpenedLayers, type ClearingTarget } from "../action-runtime/interference";
 import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../action-runtime/recovery";
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { captureSnapshotAction } from "./capture-snapshot";
@@ -141,7 +152,12 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
     startedAt,
     async () => {
       const startedOn = observePageIdentity();
-      return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+      if (!pressesControl(action)) return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+      const before = runOpenedLayers.snapshot();
+      let pressed: Element | undefined;
+      const outcome = reportPageChange(await routeContentAction(action, resolvedNoted(deps, (element) => { pressed = element; }), startedAt), startedOn);
+      if (outcome.status === "succeeded") runOpenedLayers.note(pressed, before);
+      return outcome;
     },
     undefined,
     undefined,
@@ -153,15 +169,50 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
     // probe is asked for that fault alone -- and it is spared by its selector
     // and its recorded names instead. The wall that hides it holds neither, so
     // that wall is still cleared (`presence.ts`); the prompt a "Not now" step
-    // is aimed at is not.
+    // is aimed at is not. For that fault only a wall is pressed at all, and no
+    // clearing presses a layer an earlier press of the run opened (t656,
+    // `interference/clearable-layers.ts`).
     (fault) => {
-      const pressed = pressWaysOut(clearingTarget(action, deps, !faultMayHideBehindLayer(fault)));
+      const missing = faultMayHideBehindLayer(fault);
+      const pressed = pressWaysOut(clearingTarget(action, deps, !missing), missing ? "walls" : "any");
       cleared.push(...pressed);
       return pressed.length;
     },
     () => clearableLayerOverPage(clearingTarget(action, deps, false))
   );
-  return recordRecovery(result, account, cleared);
+  return measuredShown(recordRecovery(result, account, cleared));
+}
+
+/** A click is the press whose opened layers are the run's own (`interference/run-opened.ts`). */
+function pressesControl(action: BrowserActionCommand): boolean {
+  return action.actionType === "web.dom.click";
+}
+
+/**
+ * The dependencies, with each element the verb resolves handed to `noted`: the
+ * last one is the control it pressed. Every other capability is the caller's
+ * own, looked up through the prototype, so nothing else changes.
+ */
+function resolvedNoted(deps: ContentActionDependencies, noted: (element: Element) => void): ContentActionDependencies {
+  const resolveTarget: ContentActionDependencies["resolveTarget"] = (command) => {
+    const resolved = deps.resolveTarget(command);
+    noted(resolved.element);
+    return resolved;
+  };
+  return Object.create(deps, { resolveTarget: { value: resolveTarget } }) as ContentActionDependencies;
+}
+
+/**
+ * The result, its resolution measurement saying `shown: false` when its code's
+ * definition says the target was found and not shown (TARGET_NOT_SHOWN). Written
+ * in place, for the reason `recovery/record.ts` gives; a result with no
+ * measurement is left as it is.
+ */
+function measuredShown(result: BrowserActionResult): BrowserActionResult {
+  const code = result.failure?.code;
+  if (result.status === "succeeded" || !result.resolution || !isWebAutomationFailureCode(code)) return result;
+  if (WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code].shown === false) result.resolution = { ...result.resolution, shown: false };
+  return result;
 }
 
 /**

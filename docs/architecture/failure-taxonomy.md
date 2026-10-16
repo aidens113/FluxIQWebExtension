@@ -334,6 +334,17 @@ Everything else reads it as it read a hidden `TARGET_NOT_ACTIONABLE`:
   (`runtime/llm-evidence/node-run/replay.ts`), so a step whose target is hidden
   inside a container the Flow never opened keeps failing the build's test.
 
+Present but not shown is said apart from not found (t656). The two codes share
+a category, so a reader of the category alone took bigbox-retail's "Set as my
+store", resolved inside a closed store picker, for a control the page did not
+have, and a trial told the model to test the same revision again
+(`run-mvac0ddx-f52ba929`). The code's definition carries `shown: false`
+(`domain/src/runtime/failure/codes.ts`), and the extension puts the same on the
+result's resolution measurement (`WebAutomationTargetResolution.shown`,
+`domain/src/actions/types.ts`; written in `content/actions/execute.ts`), a
+boolean beside the scores, never on Core's record. Core's wording for it is a
+later task: until then Core reads the measurement as it did.
+
 ## A Robot Check Parks, It Does Not End
 
 `USER_INTERVENTION_REQUIRED` is never retryable, and it no longer ends the

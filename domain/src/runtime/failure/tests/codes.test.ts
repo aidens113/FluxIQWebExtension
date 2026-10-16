@@ -79,6 +79,9 @@ function effectOf(name: string): { effect?: "unacted"; certainNoEffect?: true } 
   return CERTAIN_NO_EFFECT.has(name) ? { effect: "unacted", certainNoEffect: true } : { effect: "unacted" };
 }
 
+/** The one row whose target was found and is not shown (t656), which says so as `shown: false`; every other row says nothing. */
+const NOT_SHOWN: ReadonlySet<string> = new Set(["TARGET_NOT_SHOWN"]);
+
 const CODES = Object.values(WEB_AUTOMATION_FAILURE_CODES) as WebAutomationFailureCode[];
 
 test("the closed set is exactly the table the briefs quote, by vocabulary name and wire code", () => {
@@ -93,7 +96,7 @@ test("the closed set is exactly the table the briefs quote, by vocabulary name a
 test("each code carries the category, retryable flag and stage its row names", () => {
   for (const [name, code, category, retryable, stage] of CODE_TABLE) {
     const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code as WebAutomationFailureCode];
-    assert.deepEqual(definition, { category, retryable, stage, ...effectOf(name) }, name);
+    assert.deepEqual(definition, { category, retryable, stage, ...effectOf(name), ...(NOT_SHOWN.has(name) ? { shown: false } : {}) }, name);
     assert.equal(AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES.includes(definition.category), true, `${name} names a Core category`);
   }
 });
@@ -286,4 +289,22 @@ test("a target the page has and does not show is Core's target_not_found, so the
   assert.deepEqual(parseAutomationStudioFailureRecord({ ...hidden, effect: "unacted" }), { ...hidden, effect: "unacted" }, "the gate's unacted statement survives Core's parser");
   const actionable = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE];
   assert.deepEqual(actionable, { category: "unexpected_state", retryable: false, stage: "execution" }, "disabled and covered are unchanged");
+});
+
+test("present but not shown is said apart from not found, on the definition and never on Core's record", () => {
+  // bigbox-retail's cart Flow (`run-mvac0ddx-f52ba929`, t656): "Set as my store"
+  // inside a closed store picker resolved, failed as not shown, and shared
+  // `target_not_found` with a control the page does not have, so the trial said
+  // "could not find its control ... test again". The definition says which it
+  // was; the producer carries it on the resolution measurement (`shown: false`).
+  const notShown = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN];
+  const notFound = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND];
+  assert.equal(notShown.shown, false);
+  assert.equal("shown" in notFound, false, "a target not found says nothing of being shown");
+  assert.equal(notShown.category, notFound.category, "the category is unchanged, so the run still routes by page state");
+  const shownRows = CODES.filter((code) => "shown" in WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code]);
+  assert.deepEqual(shownRows, [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]);
+  const record = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN, { actual: "hidden: inside a closed panel" });
+  assert.equal("shown" in record, false, "Core's record shape is Core's: the flag rides on the measurement, not the record");
+  assert.deepEqual(parseAutomationStudioFailureRecord(record), record);
 });

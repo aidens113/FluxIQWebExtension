@@ -40,7 +40,11 @@
 //
 // **A layer the step works in is never cleared** (t401, `clearing-target.ts`):
 // the step's resolved target, its selector and the names it was recorded by
-// each mark the layer that holds it as the step's own.
+// each mark the layer that holds it as the step's own. **Nor is a layer the run
+// opened** (t656, `run-opened.ts`): the menu, drawer or picker an earlier press
+// of the Flow opened is its state, kept until it leaves. And for a target that
+// is missing rather than covered only a wall is cleared (`page-wall.ts`): a
+// target may wait behind a consent wall to be drawn, never behind a popover.
 //
 // **It reports a count here, and words from closed sets beside it.** What the
 // dialog said stays on the page: the account this feeds (`recovery/account.ts`)
@@ -48,6 +52,7 @@
 // (`press-ways-out.ts`) carries the layer's kind and the dismissal's
 // allow-list word, so either can travel on any result without redaction.
 
+import type { ClearingScope } from "./clearable-layers";
 import type { ClearingTarget } from "./clearing-target";
 import { pressWaysOut } from "./press-ways-out";
 
@@ -69,7 +74,9 @@ import { pressWaysOut } from "./press-ways-out";
  * step says of it (`clearing-target.ts`): a layer that holds it -- the form
  * drawer or the consent wall the step is working in, the prompt whose "Not now"
  * it presses -- is never cleared, only the layers in its way (`overlays.ts`).
+ * `scope` is `walls` when the target is missing rather than covered
+ * (`clearable-layers.ts`).
  */
-export function clearInterference(spare?: Element | ClearingTarget): number {
-  return pressWaysOut(spare).length;
+export function clearInterference(spare?: Element | ClearingTarget, scope: ClearingScope = "any"): number {
+  return pressWaysOut(spare, scope).length;
 }

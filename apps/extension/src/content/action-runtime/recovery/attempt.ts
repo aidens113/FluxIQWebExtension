@@ -55,10 +55,11 @@ export type RecoveryPause = (ms: number) => Promise<void>;
 export type RecoveryIntervention = (fault: RecoveryFault) => number;
 
 /**
- * Whether a layer the intervention could clear stands over the page now. Asked
+ * Whether a wall the intervention could clear stands over the page now. Asked
  * only for a missing target (`faultMayHideBehindLayer`), which is usually late
- * rather than walled off, so the loop presses for it only on a yes. Injected
- * and defaulted for the reason `RecoveryIntervention` is.
+ * rather than walled off, so the loop presses for it only on a yes -- and the
+ * intervention for that fault presses walls alone (t656). Injected and
+ * defaulted for the reason `RecoveryIntervention` is.
  */
 export type RecoveryLayerProbe = () => boolean;
 
@@ -77,7 +78,7 @@ export async function runWithRecovery(
   attempt: () => Promise<BrowserActionResult>,
   pause: RecoveryPause = sleep,
   now: () => number = Date.now,
-  intervene: RecoveryIntervention = () => clearInterference(),
+  intervene: RecoveryIntervention = (fault) => clearInterference(undefined, faultMayHideBehindLayer(fault) ? "walls" : "any"),
   layerOverPage: RecoveryLayerProbe = () => clearableLayerOverPage()
 ): Promise<RecoveredExecution> {
   const absorbed: RecoveryFault[] = [];
@@ -133,9 +134,12 @@ export async function runWithRecovery(
     // press is what gives the layer time to finish leaving before the target is
     // hit-tested again.
     //
-    // A missing target is cleared for too, but only when a clearable layer is
-    // there: a page that draws the target once its consent wall is answered
-    // never draws it while the loop merely waits (`fault.ts`).
+    // A missing target is cleared for too, but only when a clearable wall is
+    // there, and then only walls are pressed: a page that draws the target once
+    // its consent wall is answered never draws it while the loop merely waits
+    // (`fault.ts`), and no target waits behind a popover -- least of all one an
+    // earlier step of the run opened, which no clearing presses (t656,
+    // `interference/clearable-layers.ts`).
     if (faultNeedsInterference(fault) || (faultMayHideBehindLayer(fault) && layerOverPage())) dismissed += intervene(fault);
     waitedMs += backoffMs;
     await pause(backoffMs);

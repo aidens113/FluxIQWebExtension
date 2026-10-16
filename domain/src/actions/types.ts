@@ -483,6 +483,18 @@ export type WebAutomationTargetResolution = {
   bestScore?: number | undefined;
   runnerUpScore?: number | undefined;
   confidence?: number | undefined;
+  /**
+   * `false` when the target was resolved -- it is in the document, measured as
+   * above -- and is not shown: the code is TARGET_NOT_SHOWN, whose definition
+   * says so (`runtime/failure/codes.ts`, t656). That code shares Core's
+   * `target_not_found` category with a target that matched nothing, so without
+   * this a reader of the measurement cannot tell "found, hidden inside a closed
+   * container" from "not found": bigbox-retail's "Set as my store" inside a
+   * closed store picker read as a near miss, and the model was told to test
+   * the same revision again (`run-mvac0ddx-f52ba929`). Absent everywhere else,
+   * never `true`: a shown target is the ordinary case and says nothing.
+   */
+  shown?: false | undefined;
 };
 
 /**
