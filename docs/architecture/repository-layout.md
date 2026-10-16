@@ -545,6 +545,10 @@ at the directory (the root `prepare` script sets `core.hooksPath`, and does
 nothing outside a git checkout); worktrees share the setting. Never bypass it
 with `--no-verify`.
 
+The mirrored `regexp-template-escapes` rule fails a `RegExp(...)` pattern
+string or template whose single-backslash escape (`\b`, `\d`, `\.`) the literal
+swallows before the regex sees it; double the backslash or use `String.raw`.
+
 ### Documentation Links
 
 `pnpm check` fails on a documentation link that no longer resolves, because a
