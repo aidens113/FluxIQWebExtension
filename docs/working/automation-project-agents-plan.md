@@ -73,7 +73,9 @@ stopped after wave 17: `project` bigbox cart failed on a general `project`-mode 
 it and are merged and pushed. Frozen pair 4 stopped after wave 22 (`project` 2 of 2; `candidate` towels failed on two
 general t641-path defects); Core t650 (an invited resend is admitted once) and t651 (a row's own name is never the
 request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (towels failed in both modes on
-general judging gaps). In flight: Core t652, t653, t654. Next: frozen pair 6.
+general judging gaps); Core t652 (a split's no labelled, conditions kept from any trial), t653 (a looping judge reply
+keeps its verdict) and t654 (a claim about a row the read never saw is refuted) are merged. In flight: t655 (paired:
+reads list rows several conditions left out, and the snapshot carries page groups). Next: frozen pair 6.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
