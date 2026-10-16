@@ -51,11 +51,11 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 
 **Not done / next:**
 - The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
-  one-part overhead. Round 1 of the Core fixes is in flight (P1-P3, P4 investigation); P5 (one-part plans test once)
-  follows; then a live round confirms.
-- Open follow-ups recorded in the ledgers: the exact re-asked-yes flag (the hold uses the call count), a structured
-  `extract` parameter check before a run, the reset-reason flag for a held ending, the supervisor's fallback kept only
-  in memory, `submission.ts` and `verdict.ts` past the 400-line advisory.
+  one-part overhead. Merged: P2 (Core t672), P3 (Core t673). In flight: P1 (Core t671), P4 fix (Core t676). Next: P5
+  (one-part plans test once), then a live round in `project` confirms.
+- Open follow-ups recorded in the ledgers: the exact re-asked-yes flag (in flight, Core t677), the reset-reason flag
+  for a held ending, the supervisor's fallback kept only in memory, `submission.ts` past the 400-line advisory. Done:
+  the `extract` check (t675), the `verdict.ts` split (Core t674).
 - W1's follow-ups are closed (t669 one session-picking rule, t670 stale lease holder e2e; merged 2026-10-16).
 - Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
   and about $0.22 around 02:17 and 06:49 UTC; compare costs only within one rate.
@@ -679,6 +679,29 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
   (supervisor, headed extension session); with the refusal disabled -> "1 failed" (worker). Both merged by
   `pnpm task finish` -> structure audit passed
 - Outcome: Accepted
+
+### 2026-10-16 — Cost gap round 1 merged: P2 (Core t672), P3 (Core t673); verdict split (Core t674); extract check (t675)
+- Agent: workers t672 (two rounds: blocked on ownership, then the seam it proposed), t673, t674, t675; supervisor
+  reviewed each diff, re-ran the checks, fixed two never-running word checks found by t673, integrated in order
+- Changed: Core t672 `dispatch/call-order.ts` (new: assembly's call-order and input-binding rule, now used by
+  assembly and `dispatch/scope.ts` `handedOn`); `callable-target.ts` accepts an unread handed-on input, noted
+  `unneeded` on the proposal, the builder's answer and the brief's return; an unread person's value is still refused,
+  told to read it. Core t673 `supervisor/guidance.ts`: a find that only serves an act is that act's part; asks done in
+  one pass on one page are one subflow; the page is the hand-off; examples from a library account and a community
+  garden; the look sentence says the supervisor holds the start's route state. Supervisor: `guidance.test.ts`'s
+  per-word scenario loop and `flow-draft/amendment/tests/apply.test.ts`'s pagination check never ran (`\b` in a
+  template literal is a backspace); the first is removed with a note, the second fixed and narrowed to "next page"
+  after it caught "as the page offers it". Core t674 `result-verification/verdict.ts` -> `verdict/` (18 files, the
+  15-file advisory accepted as `agreement/`). t675 `domain/src/output-nodes/extract/` parameter contract: a wrong
+  `extract` is refused at plan validation with `web.extract.*` codes
+- Why: the cost gap plan (P2, P3); t674 before the re-ask flag edits there; t675 open since Core t646
+- Validation (supervisor): t672 after merging Core dev: tsc exit 0; vitest subflow-candidate, project-agents,
+  project-build -> 83 files, 527 passed. t673: vitest guidance + amendment apply -> 2 files, 57 passed; fluxiq
+  check passed; audit passed. t674: tsc exit 0; vitest result-verification, candidate-trial, subflow-trial -> 141
+  files, 1174 passed. t675: `node scripts/test-domain.mjs output-nodes` -> pass 248, fail 0; domain tsc ok. Core
+  `pnpm task finish` -> `pnpm check` passed for t672, t673, t674, t675; Core dev pushed `f05a486c`
+- Outcome: Accepted. In flight: P1 round 2 (t671: carry on narrowing, merges, act/fact changes; carried script
+  rewritten to fit), P4 fix (t676), exact first-ask yes flag (t677). P5 after t671 and t676
 
 ## Open Questions
 
