@@ -78,7 +78,9 @@ keeps its verdict), t654 (a claim about a row the read never saw is refuted) and
 conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
 them and are merged, with Core t662 (a saved Flow remembers its judged trial). Frozen pair 7 stopped after wave 37
 (`project` 2 of 2; a false yes on kept rows in `candidate` towels); Core t663 (kept rows checked before a yes) and t664
-(the playback hold sets aside only nos Core refutes) are merged. Now: frozen pair 8 (bigbox cart and towels first).
+(the playback hold sets aside only nos Core refutes) are merged. **Frozen pair 8 met the flip rule** (`project` 10
+of 10, two consecutive passes on every task; A8 Run Plan): the default becomes `project` (Core t667) after the held
+fixes t665 and t666 merge.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -453,8 +455,8 @@ bigbox cart and towels first, the five A8 tasks in both modes, twice, no product
 | bigbox-retail-pickup-cart | passed $0.114 | passed $0.137 | passed $0.072 | passed $0.065 |
 | bigbox-retail-pickup-towels | passed $0.125 | passed $0.106 | failed $0.125: out of time after 8 trials (debug `a8-towels-run-mvam0lys-debug.md`) | skipped: would fail on the known cause |
 | crossborder-marketplace-hub-to-cart | passed $0.142 (five briefs, 68 builder decisions) | passed $0.081 | passed $0.028 | passed $0.029 |
-| everything-store-plus-earbuds-under-50 | passed $0.081 | (w46) | passed $0.082 | (w46) |
-| social-network-feed-confirm-requests | passed $0.084 | (w46) | passed $0.042 | (w46) |
+| everything-store-plus-earbuds-under-50 | passed $0.081 | passed $0.105 | passed $0.082 | passed $0.127 |
+| social-network-feed-confirm-requests | passed $0.084 | passed $0.109 | passed $0.042 | passed $0.036 |
 
 **Frozen pair 8 continues after wave 42 (supervisor, 2026-10-16).** `project` passed both runs; `candidate` towels
 failed on general judging gaps (debug `reports/a8-towels-run-mvam0lys-debug.md`: a step-blame sentence that also names
@@ -463,6 +465,16 @@ a condition stands; judge text weighed clipped at 500 characters), not on t663. 
 pair, so the pair runs on; only wave 45's `candidate` towels round 2, which would fail on this known cause, is skipped.
 The fixes are built in task worktrees during the pair and merged only after wave 46 (a merge would put the lanes
 behind dev and stop the launches).
+
+**Reading of frozen pair 8 (supervisor, 2026-10-16): the flip rule is met.** `project` passed all 10 runs, two
+consecutive passes on each of the five tasks on one frozen pair (downstream `2d32847e`, Core `f7a0c4d1`; docs-only
+commits after). `candidate` passed 9 of the 9 it ran and failed towels round 1, its round 2 skipped as a known failure;
+`candidate` has now failed towels in every pair since pair 2, while `project` passed it in pairs 7 and 8 (three in a
+row). Cost, all at the higher price rate: `project` $1.084 for 10 runs ($0.108 a build), `candidate` $0.606 for 9
+($0.067 a build), about 1.6 times; the gap is `project`'s supervisor and per-part briefs (crossborder round 1 ran five
+briefs and 68 builder decisions for a one-part task). Decision: the product default becomes `project`
+(`AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT`), `candidate` stays selectable, and "extend" stays `candidate` (Core t667).
+The held fixes t665 and t666 merge first. The one-part brief overhead is the next cost item.
 
 ## Units (this repository)
 
