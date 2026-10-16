@@ -76,7 +76,7 @@ request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (t
 general judging gaps); Core t652 (a split's no labelled, conditions kept from any trial), t653 (a looping judge reply
 keeps its verdict), t654 (a claim about a row the read never saw is refuted) and t655 (paired: reads list rows several
 conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
-them and are merged. In flight: Core t662. Next: frozen pair 7.
+them and are merged, with Core t662 (a saved Flow remembers its judged trial). Now: frozen pair 7 (bigbox cart and towels first).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
