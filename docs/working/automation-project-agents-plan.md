@@ -74,8 +74,9 @@ it and are merged and pushed. Frozen pair 4 stopped after wave 22 (`project` 2 o
 general t641-path defects); Core t650 (an invited resend is admitted once) and t651 (a row's own name is never the
 request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (towels failed in both modes on
 general judging gaps); Core t652 (a split's no labelled, conditions kept from any trial), t653 (a looping judge reply
-keeps its verdict) and t654 (a claim about a row the read never saw is refuted) are merged. In flight: t655 (paired:
-reads list rows several conditions left out, and the snapshot carries page groups). Next: frozen pair 6.
+keeps its verdict), t654 (a claim about a row the read never saw is refuted) and t655 (paired: reads list rows several
+conditions left out; the snapshot carries page groups) are merged and pushed. Now: frozen pair 6 (bigbox cart and
+towels first).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -735,6 +736,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: wave 22 `candidate` towels: t641's invited resend was refused by the repeat guard, and the condition t641 held tested the product name
 - Validation: wave 22: `project` bigbox cart passed $0.036 (three subflows), towels passed $0.030; `candidate` bigbox cart passed $0.031, towels failed $0.036. Core t650 and t651 each `pnpm check` -> passed; merged and pushed
 - Outcome: Accepted. Frozen pair 5 next
+
+### 2026-10-15 — A8 frozen pair 5 wave 27; stopped on judging gaps; Core t652-t654; reads say what they left out (t655)
+- Agent: supervisor (wave 27, the stop); read-only debug `reports/a8-towels-run-mva6mlo8-debug.md` (both towels runs and the passing pair-4 run); worker t655-reads-say-what-they-left-out (two rounds); Core t652-t654 (Core ledger); supervisor measured t654's rule on the real run (it could not fire), routed the gap to t655, corrected two stale comments, verified and integrated
+- Changed: `apps/extension/src/content/actions/extract-list.ts`: an alone-mode read keeps, after each condition's alone lead, the rows it removed together with another condition (observations withheld); `domain/src/runtime/llm-evidence/node-run/left-out-together/` (new) and `replay-answer.ts` list each such row once with its conditions; `domain/src/runtime/llm-evidence/page-groups/` (new) and `host-runtime.ts`: the snapshot summary carries the page's option groups and result count as data; `docs/architecture/build-loop.md`, `page-evidence.md`
+- Why: wave 27 towels failed in both modes on correct 9-row reads the judges disputed and Core could not answer; not a t650/t651 regression (pair 4's pass was a lucky judge draw)
+- Validation: wave 27: bigbox cart passed in both modes (`project` $0.052, two subflows; `candidate` $0.038), towels failed in both (`project` $0.067, `candidate` $0.083). t655 after merging dev: domain tests (runtime/llm-evidence, runtime, actions, output-nodes) -> 1791 pass, 0 fail; domain tsc (both) exit 0; extension `src/content/actions src/content/extraction` -> 468 pass; `check-extension.mjs` exit 0; test-runner check exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream `a2e1f6e5`, Core `299c722e`; both pushed
+- Outcome: Accepted. Frozen pair 6 next
 
 ## Open Questions
 
