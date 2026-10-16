@@ -51,10 +51,10 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 
 **Not done / next:**
 - The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
-  one-part overhead. Merged: P1 (Core t671), P2 (Core t672), P3 (Core t673). In flight: P4 fix (Core t676), P5 (Core t679).
+  one-part overhead. Merged: P1 (Core t671), P2 (Core t672), P3 (Core t673), P4 fix (Core t676). In flight: P5 (Core t679).
   Next: the builder-loop words for P5, then lane trees synced and a live round in `project` confirms.
 - Open follow-ups recorded in the ledgers: the reset-reason flag
-  for a held ending, the supervisor's fallback kept only in memory, `submission.ts` past the 400-line advisory. Done:
+  for a held ending, the supervisor's fallback kept only in memory. Done: `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
 - W1's follow-ups are closed (t669 one session-picking rule, t670 stale lease holder e2e; merged 2026-10-16).
 - Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
@@ -724,6 +724,30 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
   pushed `cb3d4ca9`. t678: `sh .githooks/pre-push` -> exit 0 on a clean tree, exit 1 naming the stale README when one
   is planted; the next `git push` ran it (54 s with the network)
 - Outcome: Accepted
+
+### 2026-10-16 — P4 fix merged (Core t676); RegExp escapes audited (t680, both repositories); submission.ts split (Core t681)
+- Agent: workers t676 (two rounds: the return's `doneBefore` needed the contract file; the honest-ending question),
+  t680, t681; supervisor reviewed, re-ran, integrated
+- Changed: Core t676 `flow-bootstrap/subflow-candidate/{builder-loop,done-before,brief-words}.ts`,
+  `contracts/builder-return.ts`, `dispatch/{scope,ending}.ts`, `service/project-build/{brief-ports,entry-note,
+  subflow-trials,task-checklist}.ts`, `service/subflow-trial/`, `result-verification/{build-test,contracts}/
+  task-checklist.ts`: a dependent builder's blocked ending before any submission names `doneBefore`, admitted only for
+  its own acting part and an act the preparation run landed (else `subflow.done_before_refused`, or
+  `subflow.ending_too_soon` with no claim: submit and test first); possible acts listed in the entry note; "end
+  blocked" words only for acting parts; `outOfScope` parts named in the brief; a possible act reaches the judge as
+  possibly lasting. Permission and person-needed stops end as before; an unreachable entry ends after one trial. t680
+  `scripts/structure-audit/rules/regexp-template-escapes.mjs` (Core, mirrored here): a RegExp literal whose string
+  swallows an escape fails the audit; four swallowed `\d` in `apps/extension/e2e/content/tests/extraction/tests/
+  extract-list-catalog.spec.ts` fixed (identical values). Core t681 `flow-bootstrap/candidate/submission.ts` 412 -> 292
+  lines, flat sibling files
+- Why: P4 of the cost gap (`cost-gap-cross-part-act.md`); t680 after two checks silently never ran; t681 advisory
+- Validation: t676 after merging Core dev (t671, t677 in): tsc exit 0; vitest subflow-candidate, project-agents,
+  project-build, subflow-trial, result-verification, candidate-trial -> 233 files, 1758 passed (supervisor). t680:
+  rule tests 10 pass in both trees; `node scripts/structure-audit.mjs` exit 0 in both (supervisor); a planted
+  `\b` fails it (worker). t681 after merging dev: tsc exit 0; vitest candidate, flow-bootstrap-commands, project-agents
+  -> 79 files, 557 passed (supervisor). `pnpm task finish` passed for each (Core `pnpm check`); both dev branches
+  pushed (Core `e9729b3d`, downstream `6b30cc82`)
+- Outcome: Accepted. Only P5 (Core t679) remains before the lane sync and the live round
 
 ## Open Questions
 
