@@ -426,6 +426,17 @@ never converged within its purse (`project`). Wave 32 ran at peak price (02:17 U
 the calls. t656 (clearing spares run-opened layers) and t657 (playback steps record routing and cleared layers) are in
 flight; the towels fixes follow their debugs.
 
+**Frozen pair 7** (downstream `813a3340`, Core `917ca845`, after t656-t662; docs-only commits after), waves 37-41,
+bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
+
+| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
+| --- | --- | --- | --- | --- |
+| bigbox-retail-pickup-cart | passed $0.043 (2 subflows) | (w39) | passed $0.033 | (w39) |
+| bigbox-retail-pickup-towels | passed $0.033 | (w40) | failed $0.123: a false build yes on wrong rows, refuted after playback (debug `a8-towels-run-mvahlxuu-debug.md`) | (w40) |
+| crossborder-marketplace-hub-to-cart | (w38) | (w40) | (w38) | (w40) |
+| everything-store-plus-earbuds-under-50 | (w38) | (w41) | (w38) | (w41) |
+| social-network-feed-confirm-requests | (w39) | (w41) | (w39) | (w41) |
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
