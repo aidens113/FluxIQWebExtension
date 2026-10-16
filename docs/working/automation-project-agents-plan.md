@@ -75,8 +75,8 @@ general t641-path defects); Core t650 (an invited resend is admitted once) and t
 request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (towels failed in both modes on
 general judging gaps); Core t652 (a split's no labelled, conditions kept from any trial), t653 (a looping judge reply
 keeps its verdict), t654 (a claim about a row the read never saw is refuted) and t655 (paired: reads list rows several
-conditions left out; the snapshot carries page groups) are merged and pushed. Now: frozen pair 6 (bigbox cart and
-towels first).
+conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
+them and are merged. In flight: Core t662. Next: frozen pair 7.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -557,6 +557,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: wave 27 towels failed in both modes on correct 9-row reads the judges disputed and Core could not answer; not a t650/t651 regression (pair 4's pass was a lucky judge draw)
 - Validation: wave 27: bigbox cart passed in both modes (`project` $0.052, two subflows; `candidate` $0.038), towels failed in both (`project` $0.067, `candidate` $0.083). t655 after merging dev: domain tests (runtime/llm-evidence, runtime, actions, output-nodes) -> 1791 pass, 0 fail; domain tsc (both) exit 0; extension `src/content/actions src/content/extraction` -> 468 pass; `check-extension.mjs` exit 0; test-runner check exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream `a2e1f6e5`, Core `299c722e`; both pushed
 - Outcome: Accepted. Frozen pair 6 next
+
+### 2026-10-16 — A8 frozen pair 6 wave 32; stopped; clearing spares run-opened layers (t656); playback records routing (t657); Core t658-t661
+- Agent: supervisor (wave 32, the stop, the peak-price finding); read-only debugs `reports/a8-bigbox-cart-run-mvac0ddx-debug.md`, `a8-towels-run-mvac0nmw-debug.md`, `a8-towels-run-mvac1av6-debug.md`; workers t656, t657 (three rounds: refused guards kept, unknown keys ignored); Core t658-t661 (Core ledger); supervisor verified and integrated
+- Changed: t656 `apps/extension/src/content/action-runtime/interference/{run-opened,page-wall,clearable-layers}.ts`, `presence.ts`, `recovery/attempt.ts`, `content/actions/execute.ts`: layers a successful press opened are spared by clearing until they leave, a missing target clears only a page-blocking wall, a present-but-hidden target says `shown: false` (`domain/src/actions/types.ts`, `runtime/failure/codes.ts`); a headed content spec on bigbox-retail reproduces the closed store picker and passes. t657 `packages/test-runner/src/lab-runs/write-playback-steps.ts` and `playback-step/`: playback steps record cleared layers and the state-routing record (refused guards, `noMatchCause`); `flow-lane/state-routing-attempt.ts` keeps records with unknown keys, copying only known fields
+- Why: wave 32 (2026-10-16 02:17 UTC, peak price): `project` bigbox cart passed $0.094; `candidate` cart failed $0.191 (playback closed the Flow's own store picker); `project` towels failed $0.190 (a judged-yes part dropped by an amend, then Core misreadings); `candidate` towels failed $0.242 with a correct Flow refuted after playback on a no-op filter claim. The same tokens cost twice wave 27's (23:46 UTC); failing builds also made two to three times the calls
+- Validation: t656 after merging dev: extension `src/content/action-runtime src/content/actions` -> 530 pass; `check-extension.mjs` exit 0; domain `runtime/failure client` -> 91 pass; domain tsc exit 0; audit passed; content specs headed (worker) 19 + 1 passed; merged `061f2845`. t657 after merging dev: test-runner check and build exit 0; flow-lane, lab-runs, playback-step, playback-skips dist tests -> 285 pass; audit passed; merged `06e5f4b9`. Pushed
+- Outcome: Accepted. Next: t662 (a saved Flow records its judged trial), then frozen pair 7
 
 ## Open Questions
 
