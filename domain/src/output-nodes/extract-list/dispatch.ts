@@ -60,7 +60,9 @@
 //
 // **The rows each condition removed by itself (t194 w49).** A read with `where`
 // conditions is sent asking the page for the rows each condition removed by
-// itself -- rows every other condition kept -- and only those
+// itself -- rows every other condition kept -- leading each list, then the rows
+// it removed together with another condition, without their observations, so a
+// read's labels can cover every row it saw (t655)
 // (`WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY`). On live run 15
 // (`run-muqj2bgb-d048ec37`) the Flow held 10 of 13 earbuds: the accessory rule
 // `name not contains ["charging case", ...]` removed by itself three earbuds sold

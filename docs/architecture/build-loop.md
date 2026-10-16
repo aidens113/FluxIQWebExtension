@@ -338,7 +338,17 @@ no historical execution proof; whole-Flow testing remains required.
   `leftOutOnlyByThis` the rows each condition left out by itself, each with the
   row's own cell for the column that condition tested (from `ranWhere`, the
   `where` the page actually ran), screened as a label is. These labels name
-  each pass's row in Core's per-pass lines.
+  each pass's row in Core's per-pass lines. Under `leftOutTogether` (t655) it
+  names once each row two or more conditions left out together, grouped by
+  the set of conditions it failed (`conditions` by name, `conditionIndexes`
+  0-based), by label alone and withheld as a label is
+  (`node-run/left-out-together.ts`), so a read's labels can name every row it
+  saw. A read asked only for each condition's alone rows (`rejectedSamples:
+  "alone"`, as a playback and the replay ask) gets, after each list's alone
+  lead, the rows it shares with another condition's list, each with a `null`
+  observation (`apps/extension/src/content/actions/extract-list.ts`); a row in
+  one list only is not sent. Core admits a playback's as
+  `conditions.togetherRows` (its `service/summaries/extraction-summary.ts`).
 - **`rowContextKeys`.** The domain declares to Core the keys under which a
   step's argument carries the row its control was found in, `["record"]`
   (`WEB_LLM_ROW_CONTEXT_KEYS`,
