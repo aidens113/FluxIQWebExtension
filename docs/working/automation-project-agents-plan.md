@@ -51,11 +51,11 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 
 **Not done / next:**
 - The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
-  one-part overhead. Merged: P2 (Core t672), P3 (Core t673). In flight: P1 (Core t671), P4 fix (Core t676). Next: P5
-  (one-part plans test once), then a live round in `project` confirms.
-- Open follow-ups recorded in the ledgers: the exact re-asked-yes flag (in flight, Core t677), the reset-reason flag
+  one-part overhead. Merged: P1 (Core t671), P2 (Core t672), P3 (Core t673). In flight: P4 fix (Core t676), P5 (Core t679).
+  Next: the builder-loop words for P5, then lane trees synced and a live round in `project` confirms.
+- Open follow-ups recorded in the ledgers: the reset-reason flag
   for a held ending, the supervisor's fallback kept only in memory, `submission.ts` past the 400-line advisory. Done:
-  the `extract` check (t675), the `verdict.ts` split (Core t674).
+  the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
 - W1's follow-ups are closed (t669 one session-picking rule, t670 stale lease holder e2e; merged 2026-10-16).
 - Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
   and about $0.22 around 02:17 and 06:49 UTC; compare costs only within one rate.
@@ -702,6 +702,28 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
   `pnpm task finish` -> `pnpm check` passed for t672, t673, t674, t675; Core dev pushed `f05a486c`
 - Outcome: Accepted. In flight: P1 round 2 (t671: carry on narrowing, merges, act/fact changes; carried script
   rewritten to fit), P4 fix (t676), exact first-ask yes flag (t677). P5 after t671 and t676
+
+### 2026-10-16 — P1 merged (Core t671); exact first-ask yes flag (Core t677); pushes run the audit (t678)
+- Agent: workers t671 (two rounds), t677; supervisor (t678, and the t677 project-build expectation)
+- Changed: Core t671 `project-agents/amendment/` (new): a done proposal is carried (not done) when an amend only
+  narrows its interface, changes its own parts' facts or lasting acts (reverses t595's drop), or merges other parts
+  into it, renamed or turned router-run; `carried-script.ts` rewrites the carried script to fit; `dispatch/run-brief.ts`
+  `carriedOf`, `supervisor/dispatch-tool.ts` `carriedOnto`, `contracts/subflow-brief.ts`, `guidance.ts` `AMEND_PLAN`.
+  Core t677 `result-verification/first-ask/` (new): `verify.ts` records `firstAskConfirmed`; judge, candidate trial
+  record, created audit event and the saved Flow's judged trial carry it; the playback hold reads it, old records
+  keep the call count. t678 `.githooks/pre-push` runs the structure audit and refuses a failing push; the root
+  `prepare` script sets `core.hooksPath`; `docs/architecture/repository-layout.md`
+- Why: P1 of the cost gap (crossborder steps 0055 and 0099 each dropped done work); t677 open since t664; t678
+  after two docs pushes from dev with a stale `docs/working/README.md` (`8af4695e`, `c3c4dd17`), each fixed within
+  minutes
+- Validation: t671 after merging Core dev: tsc exit 0; vitest project-agents, project-build, subflow-candidate -> 87
+  files, 546 passed (supervisor). t677 after merging dev (t671 in): tsc exit 0; vitest result-verification,
+  candidate-trial, flow-version, project-agents, project-build, subflow-trial, subflow-candidate -> 1 failed of 1761
+  (`project-build-judged-trial.test.ts` expected the old trial shape; updated to carry `firstAskConfirmed: true`), then
+  project-build -> 16 files, 71 passed (supervisor). Core `pnpm task finish` -> `pnpm check` passed for both; Core dev
+  pushed `cb3d4ca9`. t678: `sh .githooks/pre-push` -> exit 0 on a clean tree, exit 1 naming the stale README when one
+  is planted; the next `git push` ran it (54 s with the network)
+- Outcome: Accepted
 
 ## Open Questions
 
