@@ -534,6 +534,17 @@ file, when any file lies outside that step's fingerprinted roots and outside a
 registry or a project's import shape changes. A package read by relative path
 without a `package.json` dependency is declared in the step's `reads`.
 
+### Pushes Run The Structure Audit
+
+`.githooks/pre-push` runs `node scripts/structure-audit.mjs` and refuses the
+push when it fails, printing the failing rules. `pnpm task finish` already runs
+the audit before a task merges, but a commit made straight on `dev` — a ledger
+entry, a working document — has no such step, and a stale
+`docs/working/README.md` reached the remote that way. `pnpm install` points git
+at the directory (the root `prepare` script sets `core.hooksPath`, and does
+nothing outside a git checkout); worktrees share the setting. Never bypass it
+with `--no-verify`.
+
 ### Documentation Links
 
 `pnpm check` fails on a documentation link that no longer resolves, because a
