@@ -445,6 +445,17 @@ a yes is checked only against rows left out, never rows kept, so a re-ask after 
 turned them into a false yes on a wrong row; and t662's playback hold, had it fired, would have set aside two correct
 nos. Both are correctness risks in every list task in either mode, so the pair stops for t663 and t664.
 
+**Frozen pair 8** (downstream `2d32847e`, Core `f7a0c4d1`, after t663-t664; docs-only commits after), waves 42-46,
+bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
+
+| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
+| --- | --- | --- | --- | --- |
+| bigbox-retail-pickup-cart | passed $0.114 | (w44) | passed $0.072 | (w44) |
+| bigbox-retail-pickup-towels | passed $0.125 | (w45) | failed $0.125: out of time after 8 trials (debug `a8-towels-run-mvam0lys-debug.md`) | (w45) |
+| crossborder-marketplace-hub-to-cart | (w43) | (w45) | (w43) | (w45) |
+| everything-store-plus-earbuds-under-50 | (w43) | (w46) | (w43) | (w46) |
+| social-network-feed-confirm-requests | (w44) | (w46) | (w44) | (w46) |
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
@@ -587,7 +598,7 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 ### 2026-10-16 — A8 frozen pair 7 wave 37; stopped on a false yes over kept rows; Core t662-t664
 - Agent: supervisor (wave 37, the stop); read-only debug `reports/a8-towels-run-mvahlxuu-debug.md`; Core t662-t664 (Core ledger)
 - Changed: the A8 Run Plan's frozen pair 7 table and stop note; the wave's debug notes and UI review
-- Why: wave 37 (04:46 UTC, peak price): `project` bigbox cart passed $0.043 (two subflows), towels passed $0.033; `candidate` bigbox cart passed $0.033 (the t656 store-picker fix held), towels failed $0.123 on a false build yes over a kept row that is not the item asked for
+- Why: wave 37 (04:46 UTC; priced at the lower rate, about $0.11 per weighted million tokens, not peak as first noted): `project` bigbox cart passed $0.043 (two subflows), towels passed $0.033; `candidate` bigbox cart passed $0.033 (the t656 store-picker fix held), towels failed $0.123 on a false build yes over a kept row that is not the item asked for
 - Validation: wave 37's verdicts as above; Core t663 and t664 each `pnpm check` -> passed; merged and pushed
 - Outcome: Accepted. Frozen pair 8 next
 
