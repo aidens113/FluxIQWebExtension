@@ -72,7 +72,8 @@ run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sen
 stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan); t645-t649 fix
 it and are merged and pushed. Frozen pair 4 stopped after wave 22 (`project` 2 of 2; `candidate` towels failed on two
 general t641-path defects); Core t650 (an invited resend is admitted once) and t651 (a row's own name is never the
-request's words) fix them and are merged. Now: frozen pair 5 (waves 27-31, bigbox cart and towels first).
+request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (towels failed in both modes on
+general judging gaps). In flight: Core t652, t653, t654. Next: frozen pair 6.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -384,6 +385,24 @@ subflows, the task it failed in wave 17; towels). `candidate` towels failed on t
 path (debug `reports/a8-towels-run-mva446jf-debug.md`): the invited resend of a kept-condition refusal is refused by
 the repeat guard, and a condition testing a row's own name was vindicated. Either can end a build in either mode, so
 later waves would fail predictably. t650 and t651 fix them; frozen pair 5 starts once they are merged.
+
+**Frozen pair 5** (downstream `ee0723db`, Core `8c39a3f7`, after t650-t651; docs-only commits after), waves 27-31,
+bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
+
+| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
+| --- | --- | --- | --- | --- |
+| bigbox-retail-pickup-cart | passed $0.052 (2 subflows) | (w29) | passed $0.038 | (w29) |
+| bigbox-retail-pickup-towels | failed $0.067: whole-Flow trial unsure, judges disputed a 9-row read (debug `a8-towels-run-mva6mlo8-debug.md`) | (w30) | failed $0.083: out of time after 8 trials, same dispute | (w30) |
+| crossborder-marketplace-hub-to-cart | (w28) | (w30) | (w28) | (w30) |
+| everything-store-plus-earbuds-under-50 | (w28) | (w31) | (w28) | (w31) |
+| social-network-feed-confirm-requests | (w29) | (w31) | (w29) | (w31) |
+
+**Frozen pair 5 stopped after wave 27 (supervisor, 2026-10-15).** Bigbox cart passed in both modes; towels failed in
+both, on general judging gaps, not a t650/t651 regression (debug `reports/a8-towels-run-mva6mlo8-debug.md`): every
+9-row read matched the oracle, the judges disputed it with nothing real, and Core could not answer (an unlabelled
+split, kept conditions only from a double no, nothing recorded of what a site filter left out, unseen-row claims not
+refuted, looping judge replies lost at the output ceiling). Pair 4's project towels pass was a lucky judge draw. Core
+t652-t654 fix them; frozen pair 6 starts once they are merged.
 
 ## Units (this repository)
 
