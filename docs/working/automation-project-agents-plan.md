@@ -412,11 +412,19 @@ bigbox cart and towels first, the five A8 tasks in both modes, twice, no product
 
 | Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
 | --- | --- | --- | --- | --- |
-| bigbox-retail-pickup-cart | running (w32) | (w34) | running (w32) | (w34) |
-| bigbox-retail-pickup-towels | running (w32) | (w35) | running (w32) | (w35) |
+| bigbox-retail-pickup-cart | passed $0.094 (2 subflows; peak price) | (w34) | failed $0.191: playback closed the Flow's own store picker (debug `a8-bigbox-cart-run-mvac0ddx-debug.md`) | (w34) |
+| bigbox-retail-pickup-towels | failed $0.190: never converged, budget spent (debug `a8-towels-run-mvac0nmw-debug.md`) | (w35) | failed $0.242: Flow correct (oracle passed) but Core's post-playback check refuted it (debug `a8-towels-run-mvac1av6-debug.md`) | (w35) |
 | crossborder-marketplace-hub-to-cart | (w33) | (w35) | (w33) | (w35) |
 | everything-store-plus-earbuds-under-50 | (w33) | (w36) | (w33) | (w36) |
 | social-network-feed-confirm-requests | (w34) | (w36) | (w34) | (w36) |
+
+**Frozen pair 6 stopped after wave 32 (supervisor, 2026-10-16).** `project` bigbox cart passed; the other three failed
+on general causes: a playback recovery that closed a layer the Flow's own step opened (cart, `candidate`), a correct
+towels Flow refuted by Core's post-playback check though the oracle passed (`candidate`), and a towels build that
+never converged within its purse (`project`). Wave 32 ran at peak price (02:17 UTC): the same tokens cost twice wave
+27's (23:46 UTC), so costs are not comparable across the two waves; the failing builds also made two to three times
+the calls. t656 (clearing spares run-opened layers) and t657 (playback steps record routing and cleared layers) are in
+flight; the towels fixes follow their debugs.
 
 ## Units (this repository)
 
