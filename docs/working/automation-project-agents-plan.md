@@ -76,7 +76,8 @@ request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (t
 general judging gaps); Core t652 (a split's no labelled, conditions kept from any trial), t653 (a looping judge reply
 keeps its verdict), t654 (a claim about a row the read never saw is refuted) and t655 (paired: reads list rows several
 conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
-them and are merged, with Core t662 (a saved Flow remembers its judged trial). Now: frozen pair 7 (bigbox cart and towels first).
+them and are merged, with Core t662 (a saved Flow remembers its judged trial). Frozen pair 7 stopped after wave 37
+(`project` 2 of 2; a false yes on kept rows in `candidate` towels). In flight: Core t663, t664. Next: frozen pair 8.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -436,6 +437,12 @@ bigbox cart and towels first, the five A8 tasks in both modes, twice, no product
 | crossborder-marketplace-hub-to-cart | (w38) | (w40) | (w38) | (w40) |
 | everything-store-plus-earbuds-under-50 | (w38) | (w41) | (w38) | (w41) |
 | social-network-feed-confirm-requests | (w39) | (w41) | (w39) | (w41) |
+
+**Frozen pair 7 stopped after wave 37 (supervisor, 2026-10-16).** `project` passed both runs (bigbox cart, towels) and
+`candidate` bigbox cart passed; `candidate` towels failed on a general Core gap (debug `reports/a8-towels-run-mvahlxuu-debug.md`):
+a yes is checked only against rows left out, never rows kept, so a re-ask after Core refuted the nos' wrong reasons
+turned them into a false yes on a wrong row; and t662's playback hold, had it fired, would have set aside two correct
+nos. Both are correctness risks in every list task in either mode, so the pair stops for t663 and t664.
 
 ## Units (this repository)
 
