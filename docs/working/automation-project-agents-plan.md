@@ -37,7 +37,7 @@ social). `candidate` passed 9 of 9 run and failed towels round 1 (round 2 skippe
 towels in every pair since pair 2. Cost at the higher price rate: `project` $0.108 a build, `candidate` $0.067 (about
 1.6 times). Eight frozen pairs ran in all; every failed run has a debug note under
 `../language-driven-flow-loop-plan/debugs/` and every general cause was fixed structurally (Core t570-t668, downstream
-t568-t657; both ledgers). The pairs' tables are in the A8 Run Plan; pairs before frozen pair 2 are archived.
+t568-t657; both ledgers). Frozen pair 8's table is in the A8 Run Plan; earlier pairs are archived.
 
 **What the A8 loop changed, in short:** a plan keeps the person's request and a done part survives an additive amend
 (Core t645, t658); builders hand on only values a step makes and one read value is expressible (t645, t646); the judge
@@ -325,111 +325,8 @@ are archived in [archive/2026-10-15-a8-runs-to-frozen-pair-1.md](automation-proj
 In short: `project` went from no build starting (launches 1-4) to passing every task, each failure debugged and fixed
 structurally (Core t570-t639, downstream t605-t640).
 
-**Frozen pair 2** (downstream `805f7cbd`, Core `797452c1`, after t638-t640; docs-only commits after), waves 12-16, the
-five A8 tasks in both modes, twice, no product change between:
-
-| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
-| --- | --- | --- | --- | --- |
-| crossborder-marketplace-hub-to-cart | passed $0.081 | passed $0.022 | passed $0.014 | passed $0.015 |
-| bigbox-retail-pickup-cart | passed $0.030 | failed per the Lab $0.040: the product succeeded and the oracle passed; a bypassed optional step was read as the run's failure (t641-t643) | passed $0.037 | passed $0.034 |
-| everything-store-plus-earbuds-under-50 | passed $0.043 | passed $0.051 | passed $0.053 | passed $0.052 |
-| social-network-feed-confirm-requests | passed $0.065 | passed $0.054 | passed $0.035 | passed $0.016 |
-| bigbox-retail-pickup-towels | passed $0.080 | passed $0.060 | failed $0.066 (Core t641) | refused by the unchanged guard (round 1 failed on this source) |
-
-**Reading of frozen pair 2 (supervisor, 2026-10-15):** `project` passed 9 of 10 by the Lab's verdict and 10 of 10 by
-the product and the oracle; `candidate` passed 8 of 9 and cannot pass towels twice on this pair. `project` is at least
-as reliable on every task and more reliable on towels, at a higher mean cost ($0.053 against $0.036 a build; $0.85 for the 19 runs). The strict rule
-(two consecutive Lab passes per site, both modes, one frozen pair) is not met for `project` bigbox cart because of the
-Lab misread, so the default is not flipped on this pair: t641-t643 fix the three defects it found, and frozen pair 3
-repeats the comparison to decide the flip.
-
-**Frozen pair 3** (downstream `8b770037`, Core `8b322a95`, after t641-t644; docs-only commits after), waves 17-21, the
-five A8 tasks in both modes, twice, no product change between:
-
-| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
-| --- | --- | --- | --- | --- |
-| crossborder-marketplace-hub-to-cart | passed $0.020 | (w19) | passed $0.014 | (w19) |
-| bigbox-retail-pickup-cart | failed $0.120: the supervisor ended the build, no Flow (debug `a8-bigbox-cart-run-mv9zn5ob-debug.md`) | (w20) | passed $0.029 | (w20) |
-| everything-store-plus-earbuds-under-50 | (w18) | (w20) | (w18) | (w20) |
-| social-network-feed-confirm-requests | (w18) | (w21) | (w18) | (w21) |
-| bigbox-retail-pickup-towels | (w19) | (w21) | (w19) | (w21) |
-
-**Frozen pair 3 stopped after wave 17 (supervisor, 2026-10-15).** `project` bigbox cart failed on a cause general to
-`project` mode (a plan's invented hand-off value, then an amendment that dropped the person's first request; the
-debug `reports/a8-bigbox-cart-run-mv9zn5ob-debug.md`), so further `project` runs would fail predictably on a known
-defect, and this pair can no longer meet the two-consecutive-passes rule. t645-t649 fix the chain and the chat cards
-it showed; frozen pair 4 starts once they are merged.
-
-**Frozen pair 4** (downstream `9c1e164d`, Core `0df06e34`, after t645-t649; docs-only commits after), waves 22-26,
-bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
-
-| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
-| --- | --- | --- | --- | --- |
-| bigbox-retail-pickup-cart | passed $0.036 (3 subflows) | (w24) | passed $0.031 | (w24) |
-| bigbox-retail-pickup-towels | passed $0.030 | (w25) | failed $0.036: a kept-condition refusal's invited resend was refused by the repeat guard (debug `a8-towels-run-mva446jf-debug.md`) | (w25) |
-| crossborder-marketplace-hub-to-cart | (w23) | (w25) | (w23) | (w25) |
-| everything-store-plus-earbuds-under-50 | (w23) | (w26) | (w23) | (w26) |
-| social-network-feed-confirm-requests | (w24) | (w26) | (w24) | (w26) |
-
-**Frozen pair 4 stopped after wave 22 (supervisor, 2026-10-15).** `project` passed both runs (bigbox cart with three
-subflows, the task it failed in wave 17; towels). `candidate` towels failed on two general Core defects from t641's
-path (debug `reports/a8-towels-run-mva446jf-debug.md`): the invited resend of a kept-condition refusal is refused by
-the repeat guard, and a condition testing a row's own name was vindicated. Either can end a build in either mode, so
-later waves would fail predictably. t650 and t651 fix them; frozen pair 5 starts once they are merged.
-
-**Frozen pair 5** (downstream `ee0723db`, Core `8c39a3f7`, after t650-t651; docs-only commits after), waves 27-31,
-bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
-
-| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
-| --- | --- | --- | --- | --- |
-| bigbox-retail-pickup-cart | passed $0.052 (2 subflows) | (w29) | passed $0.038 | (w29) |
-| bigbox-retail-pickup-towels | failed $0.067: whole-Flow trial unsure, judges disputed a 9-row read (debug `a8-towels-run-mva6mlo8-debug.md`) | (w30) | failed $0.083: out of time after 8 trials, same dispute | (w30) |
-| crossborder-marketplace-hub-to-cart | (w28) | (w30) | (w28) | (w30) |
-| everything-store-plus-earbuds-under-50 | (w28) | (w31) | (w28) | (w31) |
-| social-network-feed-confirm-requests | (w29) | (w31) | (w29) | (w31) |
-
-**Frozen pair 5 stopped after wave 27 (supervisor, 2026-10-15).** Bigbox cart passed in both modes; towels failed in
-both, on general judging gaps, not a t650/t651 regression (debug `reports/a8-towels-run-mva6mlo8-debug.md`): every
-9-row read matched the oracle, the judges disputed it with nothing real, and Core could not answer (an unlabelled
-split, kept conditions only from a double no, nothing recorded of what a site filter left out, unseen-row claims not
-refuted, looping judge replies lost at the output ceiling). Pair 4's project towels pass was a lucky judge draw. Core
-t652-t654 fix them; frozen pair 6 starts once they are merged.
-
-**Frozen pair 6** (downstream `49b65bc9`, Core `4e51c1da`, after t652-t655; docs-only commits after), waves 32-36,
-bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
-
-| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
-| --- | --- | --- | --- | --- |
-| bigbox-retail-pickup-cart | passed $0.094 (2 subflows; peak price) | (w34) | failed $0.191: playback closed the Flow's own store picker (debug `a8-bigbox-cart-run-mvac0ddx-debug.md`) | (w34) |
-| bigbox-retail-pickup-towels | failed $0.190: never converged, budget spent (debug `a8-towels-run-mvac0nmw-debug.md`) | (w35) | failed $0.242: Flow correct (oracle passed) but Core's post-playback check refuted it (debug `a8-towels-run-mvac1av6-debug.md`) | (w35) |
-| crossborder-marketplace-hub-to-cart | (w33) | (w35) | (w33) | (w35) |
-| everything-store-plus-earbuds-under-50 | (w33) | (w36) | (w33) | (w36) |
-| social-network-feed-confirm-requests | (w34) | (w36) | (w34) | (w36) |
-
-**Frozen pair 6 stopped after wave 32 (supervisor, 2026-10-16).** `project` bigbox cart passed; the other three failed
-on general causes: a playback recovery that closed a layer the Flow's own step opened (cart, `candidate`), a correct
-towels Flow refuted by Core's post-playback check though the oracle passed (`candidate`), and a towels build that
-never converged within its purse (`project`). Wave 32 ran at peak price (02:17 UTC): the same tokens cost twice wave
-27's (23:46 UTC), so costs are not comparable across the two waves; the failing builds also made two to three times
-the calls. t656 (clearing spares run-opened layers) and t657 (playback steps record routing and cleared layers) are in
-flight; the towels fixes follow their debugs.
-
-**Frozen pair 7** (downstream `813a3340`, Core `917ca845`, after t656-t662; docs-only commits after), waves 37-41,
-bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
-
-| Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
-| --- | --- | --- | --- | --- |
-| bigbox-retail-pickup-cart | passed $0.043 (2 subflows) | (w39) | passed $0.033 | (w39) |
-| bigbox-retail-pickup-towels | passed $0.033 | (w40) | failed $0.123: a false build yes on wrong rows, refuted after playback (debug `a8-towels-run-mvahlxuu-debug.md`) | (w40) |
-| crossborder-marketplace-hub-to-cart | (w38) | (w40) | (w38) | (w40) |
-| everything-store-plus-earbuds-under-50 | (w38) | (w41) | (w38) | (w41) |
-| social-network-feed-confirm-requests | (w39) | (w41) | (w39) | (w41) |
-
-**Frozen pair 7 stopped after wave 37 (supervisor, 2026-10-16).** `project` passed both runs (bigbox cart, towels) and
-`candidate` bigbox cart passed; `candidate` towels failed on a general Core gap (debug `reports/a8-towels-run-mvahlxuu-debug.md`):
-a yes is checked only against rows left out, never rows kept, so a re-ask after Core refuted the nos' wrong reasons
-turned them into a false yes on a wrong row; and t662's playback hold, had it fired, would have set aside two correct
-nos. Both are correctness risks in every list task in either mode, so the pair stops for t663 and t664.
+**Frozen pairs 2-7** (waves 12-41) and their readings are archived in
+[archive/2026-10-16-a8-frozen-pairs-2-7.md](automation-project-agents-plan/archive/2026-10-16-a8-frozen-pairs-2-7.md); each pair stopped on a general cause that was fixed structurally (Core t641-t664, downstream t642-t657).
 
 **Frozen pair 8** (downstream `2d32847e`, Core `f7a0c4d1`, after t663-t664; docs-only commits after), waves 42-46,
 bigbox cart and towels first, the five A8 tasks in both modes, twice, no product change between:
@@ -600,69 +497,8 @@ Entries for 2026-10-14 (A8 rounds one to wave 4, t573-t613 downstream sides, the
 Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, the canaries) are archived in
 [archive/2026-10-15-ledger-waves-4-7.md](automation-project-agents-plan/archive/2026-10-15-ledger-waves-4-7.md).
 
-### 2026-10-15 — A8 wave 8
-- Agent: supervisor (wave 8, four runs); read-only debugs `a8-towels-run-mv9gbsea-debug.md`, `a8-towels-run-mv9gbsm5-debug.md`
-- Changed: the A8 Run Plan's wave 8 table and reading; debug notes for all four runs
-- Why: wave 8 on the pair after t629 and t630
-- Validation: `project` everything-store passed ($0.048, its second in a row), `project` social passed ($0.068, its third in a row; a slow-down repair added the branch); `project` towels failed ($0.082: the exact rows four times, judges wrong) and `candidate` towels failed ($0.020: a site filter admitting delivery, judged yes); spend ledger
-- Outcome: Accepted. Towels in both modes is a judge problem (Core t631, t632, t633); wave 9 after t633
-
-### 2026-10-15 — A8 wave 9
-- Agent: supervisor (wave 9, four runs); read-only debug `a8-social-run-mv9ml775-debug.md`
-- Changed: the A8 Run Plan's wave 9 table, the tally of waves 5-9; debug notes for all four runs
-- Why: wave 9 on the pair after t631-t635
-- Validation: `project` everything-store passed ($0.037, third in a row), `project` towels passed ($0.096), `candidate` towels passed ($0.030, Core reported `unverified`, the oracle passed), `project` social failed ($0.088, fixed by Core t636 and t637); spend ledger
-- Outcome: Accepted. From wave 10 the pair is frozen for the default-flip comparison: the five A8 tasks in both modes, twice, with no fixes in between; wave 10 starts with crossborder hub-to-cart and bigbox pickup-cart in both modes as a regression check
-
-### 2026-10-15 — A8 waves 10 and 11 on a frozen pair; a navigate needs an address (t640)
-- Agent: supervisor (waves 10 and 11, the first frozen-pair rounds); read-only debug `a8-crossborder-run-mv9q50ui-debug.md`; worker t640-navigate-needs-address
-- Changed: the A8 Run Plan's frozen-pair table; t640 `domain/src/output-nodes/native-runtime.ts` and `apps/extension/src/runtime/action-runner.ts` refuse a navigate whose url has no value before dispatch, with the invalid-parameter code and a new closed reason `parameter_has_no_value` naming `url` (`domain/src/runtime/llm-evidence/tool-rejection.ts`, `action-failure/refusal.ts`)
-- Why: on the frozen pair `project` crossborder failed (pre-existing defects: Core t638, t639, and a url-less navigate reported as a policy refusal); the other six runs passed
-- Validation: frozen pair (downstream `112ad66e`, Core `cf928307`): crossborder `project` failed $0.070, `candidate` passed $0.016; bigbox cart passed in both ($0.042, $0.035); everything-store passed in both ($0.036, $0.067); social `project` passed $0.048. t640 after merging dev: `test-domain.mjs output-nodes runtime/llm-evidence` -> tests 1367, pass 1367, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; `test-extension.mjs src/runtime/tests` -> pass 266, fail 0; audit passed; merged `a07d00f6`; pushed
-- Outcome: Accepted. The comparison restarts on the pair after t638-t640
-
-### 2026-10-15 — A8 frozen pair 2; handles stay put within a document (t642); a bypassed optional step is not the run's failure (t643)
-- Agent: supervisor (waves 12-16, frozen pair 2); read-only debugs `a8-bigbox-cart-run-mv9v3u68-debug.md`, `a8-towels-run-mv9ul5dy-debug.md`; workers t642-stable-handles-and-hidden-ties, t643-lab-bypassed-optional-not-failure; supervisor replaced t643's label match with a structured mark in Core, verified and integrated
-- Changed: the A8 Run Plan's frozen pair 2 table and reading (earlier tables archived); t642 `domain/src/runtime/llm-evidence/stable-handles.ts` refuses tier 4 rebinding for a number last seen in the same document (`navigation.timeOrigin`) and puts shadow depth in a place, `apps/extension/src/content/action-runtime/resolve-target.ts` answers not found when several matches are all hidden (per strategy and in the scored fallback; the gate moved to `resolution-gate/`); t643 `packages/test-runner/src/flow-lane/optional-bypass/` reads Core's `optionalStepWayOn` mark on the selected candidate plus the next attempt's node, bypassed failures become `bypassedOptionalFailures` notes, the repair-lane gate names `oracle_failed`, `flow_reported_failure` or `judgement_failed`; Core's ladder sets the mark (`executor/recovery-ladder.ts`, `contracts.ts`)
-- Why: frozen pair 2 `project` bigbox cart: a handle moved to a later panel's close button without a page load, three hidden look-alikes tied at playback, and the Lab read the optional step Core went past as the run's failure though the product and the oracle passed
-- Validation: frozen pair 2 (downstream `805f7cbd`, Core `797452c1`): `project` 9 of 10 by the Lab, 10 of 10 by product and oracle; `candidate` 8 of 9 (towels failed, then refused as unchanged). t642 after merging dev: domain tsc (both) exit 0; `test-domain.mjs runtime/llm-evidence` -> tests 1130, pass 1130, fail 0; `check-extension.mjs` exit 0; `test-extension.mjs content/action-runtime content/identity` -> 483 pass, 0 fail; audit passed; merged `c5830221`. t643 after merging dev and rebuilding Core: Core tsc exit 0; vitest executor -> 101 files, 875 passed (the new ladder test fails without the mark); test-runner check and build exit 0; flow-lane, optional-bypass, repair, creation, adaptation dist tests -> tests 493, pass 493, fail 0; audit passed (both repos)
-- Outcome: Accepted. Not live-tested yet; frozen pair 3 exercises both
-- Follow-up: a child frame that reloads while the top page does not now gets new handle numbers (safe, less helpful)
-
-### 2026-10-15 — A8 frozen pair 3 wave 17; stopped on a general `project` defect; a repair may revisit its own addresses (t648)
-- Agent: supervisor (wave 17, the stop); read-only debug `reports/a8-bigbox-cart-run-mv9zn5ob-debug.md`; workers t645-t649 (one per fix, partitioned by file); t648 two rounds (round 1 blocked: Core never passed the repaired proposal); supervisor reserved the opening call-id prefix in Core, verified and integrated
-- Changed: the A8 Run Plan's frozen pair 3 table and stop note; t648 `domain/src/runtime/llm-evidence/node-run/arrival.ts` reads `repairs` on Core's opening call (the repaired proposal's calls) and `run.ts` counts their navigation addresses as held; Core's opening id is recognised scoped (`initial.<toolId>.<scope>`) as well as unscoped, so a scoped builder's `held`, `arrived` and `repairs` are no longer refused as unexpected keys; Core `project-agents/dispatch/run-brief.ts` sends `repairs`, and `llm/evidence-loop/call-id.ts` files a model-written `initial.` id under `model.`
-- Why: frozen pair 3 `project` bigbox cart failed on a general chain (an invented hand-off value, code-only returns, an amendment dropping the person's first request, a false "cannot be done"); its repair builder was refused its own proposal's address six times
-- Validation: wave 17: crossborder passed in both modes ($0.020 `project`, $0.014 `candidate`), bigbox cart `candidate` passed $0.029, `project` failed $0.120. t648 after merging dev: domain tsc (both) exit 0; `test-domain.mjs runtime/llm-evidence` -> tests 1134, pass 1134, fail 0 (the 4 new tests fail on HEAD's arrival.ts and run.ts); audit passed; Core tsc exit 0; vitest llm and project-agents/dispatch -> 216 files, 2083 passed; Core `pnpm check` -> passed; merged downstream `b61d6b37`, Core `5c504b16`; both pushed
-- Outcome: Accepted. Frozen pair 4 waits for t645, t646, t647, t649
-
-### 2026-10-15 — One read value is expressible (t646); t645 and t647 merged in Core
-- Agent: worker t646-read-one-value (two rounds); supervisor verified and integrated; Core t645 and t647 (Core ledger)
-- Changed: `domain/src/output-nodes/definitions.ts` and `output-nodes/extract/` (new): `web.dom.extract` declares a data output `value`, filled from its read by Core's `resultPath` copy; `domain/src/actions/schemas.ts` and the extract catalog text describe the `extract` parameter with every mode; `node-run/replay.ts` carries a replayed read's value on the port; `docs/architecture/web-capabilities.md`, `build-loop.md`
-- Why: wave 17 `project` bigbox cart: one read value could not be handed on, so the builder copied a list extraction
-- Validation: after merging dev: `test-domain.mjs output-nodes actions runtime/llm-evidence/node-run runtime/tests/adapter` -> tests 787, pass 787, fail 0; domain tsc (both) exit 0; `check-extension.mjs` exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream `340aa8cf`, Core `7a3838ce`; both pushed
-- Outcome: Accepted. Frozen pair 4 waits for t649
-
-### 2026-10-15 — Project chat cards are honest (t649); every wave-17 fix merged
-- Agent: worker t649-project-chat-cards-honest (three rounds); supervisor verified and integrated
-- Changed: `apps/extension/src/shared/activity/declined-submission.ts` (a safety net now that Core declines refused subflow submissions itself), `panel/chat/stream/step/{return-reason,brief-wait,project-message,project-words,action-card,messages}.ts`: plain words on return cards, a waiting brief names the part it starts after (Core's `after`) and reads "Not started" if it never ran; `background/activity/supervisor-ending.ts` and `pacer.ts`: the failure toast carries the supervisor's reason from the build's last row; `docs/architecture/extension-client.md`
-- Why: wave 17 `project` bigbox cart's chat (debug section 8)
-- Validation: after merging dev: `test-extension.mjs background/activity/tests shared/activity panel/chat` -> tests 536, pass 536, fail 0; `check-extension.mjs` exit 0; test-runner check exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream and Core `eca33297`; both pushed. No browser run yet: frozen pair 4's UI review covers the cards
-- Outcome: Accepted. t645-t649 all merged; frozen pair 4 next
-
-### 2026-10-15 — A8 frozen pair 4 wave 22; stopped on two t641-path defects; Core t650, t651
-- Agent: supervisor (wave 22, the stop); read-only debug `reports/a8-towels-run-mva446jf-debug.md`; Core workers t650, t651 (Core ledger)
-- Changed: the A8 Run Plan's frozen pair 4 table and stop note; Core t650 (the repeat guard admits a refusal's invited resend once), t651 (a condition testing a row's own name is never the request's words, nor a reason to refute "Missing rows")
-- Why: wave 22 `candidate` towels: t641's invited resend was refused by the repeat guard, and the condition t641 held tested the product name
-- Validation: wave 22: `project` bigbox cart passed $0.036 (three subflows), towels passed $0.030; `candidate` bigbox cart passed $0.031, towels failed $0.036. Core t650 and t651 each `pnpm check` -> passed; merged and pushed
-- Outcome: Accepted. Frozen pair 5 next
-
-### 2026-10-15 — A8 frozen pair 5 wave 27; stopped on judging gaps; Core t652-t654; reads say what they left out (t655)
-- Agent: supervisor (wave 27, the stop); read-only debug `reports/a8-towels-run-mva6mlo8-debug.md` (both towels runs and the passing pair-4 run); worker t655-reads-say-what-they-left-out (two rounds); Core t652-t654 (Core ledger); supervisor measured t654's rule on the real run (it could not fire), routed the gap to t655, corrected two stale comments, verified and integrated
-- Changed: `apps/extension/src/content/actions/extract-list.ts`: an alone-mode read keeps, after each condition's alone lead, the rows it removed together with another condition (observations withheld); `domain/src/runtime/llm-evidence/node-run/left-out-together/` (new) and `replay-answer.ts` list each such row once with its conditions; `domain/src/runtime/llm-evidence/page-groups/` (new) and `host-runtime.ts`: the snapshot summary carries the page's option groups and result count as data; `docs/architecture/build-loop.md`, `page-evidence.md`
-- Why: wave 27 towels failed in both modes on correct 9-row reads the judges disputed and Core could not answer; not a t650/t651 regression (pair 4's pass was a lucky judge draw)
-- Validation: wave 27: bigbox cart passed in both modes (`project` $0.052, two subflows; `candidate` $0.038), towels failed in both (`project` $0.067, `candidate` $0.083). t655 after merging dev: domain tests (runtime/llm-evidence, runtime, actions, output-nodes) -> 1791 pass, 0 fail; domain tsc (both) exit 0; extension `src/content/actions src/content/extraction` -> 468 pass; `check-extension.mjs` exit 0; test-runner check exit 0; audit passed; Core half `pnpm check` -> passed; merged downstream `a2e1f6e5`, Core `299c722e`; both pushed
-- Outcome: Accepted. Frozen pair 6 next
+Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are archived in
+[archive/2026-10-16-ledger-2026-10-15-waves-8-27.md](automation-project-agents-plan/archive/2026-10-16-ledger-2026-10-15-waves-8-27.md).
 
 ### 2026-10-16 — A8 frozen pair 6 wave 32; stopped; clearing spares run-opened layers (t656); playback records routing (t657); Core t658-t661
 - Agent: supervisor (wave 32, the stop, the peak-price finding); read-only debugs `reports/a8-bigbox-cart-run-mvac0ddx-debug.md`, `a8-towels-run-mvac0nmw-debug.md`, `a8-towels-run-mvac1av6-debug.md`; workers t656, t657 (three rounds: refused guards kept, unknown keys ignored); Core t658-t661 (Core ledger); supervisor verified and integrated
