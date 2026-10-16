@@ -281,6 +281,16 @@ as a dialog's Close, is dispatched unchanged on every pass.
   and Core's finished-run check keeps its change lines; a single-page app's
   route change reads the same way. The page-state digest omits navigation, so
   the identity never changes a digest.
+  Beside the view too (t655), the snapshot carries `groups`: each named set of
+  options the view names (`group="…"`), as `{ name, options: [{ words, count?,
+  chosen }] }`, the option's words as its line prints them less a whole number
+  in parentheses ending them, which is its `count`, and `chosen` where its line
+  says checked, selected, pressed, current or marked; and `resultCount`, the one
+  number of results the page states in a text line ("40 results"), absent where
+  it states none or several (`domain/src/runtime/llm-evidence/page-groups/`).
+  Each key is absent when empty. They are read off the same screened packet as
+  the view and say nothing it does not; Core reads them to say what a narrowing
+  step chose and left out without parsing a line of the view.
   A snapshot also carries `from: { location }`, the page's real address as the
   reset token a step's `replay.from` is, so Core's re-author can put the page
   back where a node started in the run it repairs (t194 cause C-D). It is

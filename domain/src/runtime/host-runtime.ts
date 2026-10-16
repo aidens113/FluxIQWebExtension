@@ -64,6 +64,15 @@
 //    step merely revealed (a mini-cart drawer over lines that were there before
 //    the build) never reads as lines the step made. Neither key is page data,
 //    and both stay under Core's withholding of `stateDiff` in a saved trace.
+//  - **A snapshot says its option groups and result count as data (t655).**
+//    Beside the view, `groups` -- each named set of options with each option's
+//    words, the count the page shows beside it and whether it is chosen -- and
+//    `resultCount`, the one number of results the page states
+//    (`./llm-evidence/page-groups/`). Core says what a narrowing step chose and
+//    left out from them (its `result-verification/narrowed-before.ts`) without
+//    reading a line of the view (A8 frozen pair 5 towels,
+//    `run-mva6mlo8-f519063c`). Read off the same screened packet as the view,
+//    so they say nothing the view does not.
 
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQ } from "fluxiq";
@@ -78,6 +87,7 @@ import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationD
 import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
 import { createWebAutomationHostResourcePort } from "./host-resources";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot, sanitizeWebLlmSnapshotWithBindings, screenedEvidenceUrl } from "./llm-evidence";
+import { webLlmPageOptionGroups, webLlmPageResultCount } from "./llm-evidence/page-groups";
 import {
   compareWebAutomationRouteSignatures,
   WEB_AUTOMATION_ROUTE_STATE_PATHS,
@@ -203,9 +213,14 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
       const packet = binding.evidence;
       const documentTimeOrigin = packet.navigation?.timeOrigin;
+      // Its option groups and result count, as data beside the view (header, t655).
+      const groups = webLlmPageOptionGroups(packet);
+      const resultCount = webLlmPageResultCount(packet);
       const summary = {
         ...publishedWebLlmPage(packet),
-        ...(documentTimeOrigin === undefined ? {} : { documentTimeOrigin })
+        ...(documentTimeOrigin === undefined ? {} : { documentTimeOrigin }),
+        ...(groups.length ? { groups } : {}),
+        ...(resultCount === undefined ? {} : { resultCount })
       } as unknown as JsonObject;
       captures += 1;
       const stateSnapshotId = `${STATE_SNAPSHOT_ID_PREFIX}${captures}`;

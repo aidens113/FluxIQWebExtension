@@ -55,16 +55,19 @@ async function run(command: BrowserActionCommand, supplied?: ListExtractionOutco
   return { options, evidence };
 }
 
-test("alone-only verb and public action-result mapping slice passive observations with their rows", async () => {
+test("alone-only verb and public action-result mapping keep passive observations aligned with their rows, none for a row rejected together", async () => {
   const supplied: ListExtractionOutcome = { ...outcome(false), records: [], conditions: { applied: 2, kept: 0, rejected: [2, 1], alone: [1, 0], unfiltered: false }, rejectedSamples: [[{ name: "Record A" }, { name: "Record B" }], [{ name: "Record B" }]], rejectedSamplesAlone: [1, 0], rejectedObservations: [[
     { conditionIndex: 0, state: "absent", source: "read", readKind: "attribute", page: 1, item: 1 },
     { conditionIndex: 0, state: "present", value: "", source: "read", readKind: "attribute", page: 1, item: 2 }
   ], [{ conditionIndex: 1, state: "present", value: "17", source: "read", readKind: "attribute", page: 1, item: 2 }]] };
   const { evidence } = await run({ ...COMMAND, options: { extractList: {}, rejectedSamples: "alone" } }, supplied);
-  assert.deepEqual(evidence?.extraction?.rejectedObservations?.map((entries) => entries.length), [1, 0]);
+  // "Record B" both conditions rejected: it stays after each list's lead (t655), with no observation.
+  assert.deepEqual(evidence?.extraction?.rejectedSamples, [[{ name: "Record A" }, { name: "Record B" }], [{ name: "Record B" }]]);
+  assert.deepEqual(evidence?.extraction?.rejectedSamplesAlone, [1, 0]);
+  assert.deepEqual(evidence?.extraction?.rejectedObservations?.map((entries) => entries.length), [2, 1]);
   const payload = webAutomationActionResultPayload({ commandId: COMMAND.commandId, actionType: COMMAND.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" }, ...(evidence?.extraction ? { extraction: evidence.extraction } : {}), startedAt: 1, finishedAt: 2 });
   const extraction = payload.extraction as { rejectedObservations?: ListExtractionOutcome["rejectedObservations"] } | undefined;
-  assert.deepEqual(extraction?.rejectedObservations, [[supplied.rejectedObservations![0]![0]], []]);
+  assert.deepEqual(extraction?.rejectedObservations, [[supplied.rejectedObservations![0]![0], null], [null]]);
 });
 
 test("a command that asks for samples gets them on the summary, and they survive the wire copy whole", async () => {
@@ -172,4 +175,37 @@ test("a playback that asks for the alone rows gets each condition's alone lead a
   }).extraction as { rejectedSamples?: unknown; rejectedSamplesAlone?: unknown } | undefined;
   assert.deepEqual(wire?.rejectedSamples, [[earbud]]);
   assert.deepEqual(wire?.rejectedSamplesAlone, [1]);
+});
+
+// t655 (A8 frozen pair 5, `run-mva6mlm4-97fe42f9`: seen 23, kept 9, 12 alone, two rows named nowhere): a
+// playback's alone rows are followed, in each list, by the rows two or more conditions rejected together, so the
+// read's rows cover every row it saw. A library catalogue.
+test("a playback lists a row two conditions both rejected after each one's alone lead, with no observation, through the wire copy", async () => {
+  const twoConditions: BrowserActionCommand = {
+    ...COMMAND,
+    extractList: { item: ".row", fields: { name: ".name" }, where: [{ field: "name", contains: ["hardcover"] }, { field: "name", contains: ["river"] }] },
+    options: { extractList: {}, rejectedSamples: "alone" }
+  };
+  const paperback = { name: "River Walks, Paperback" };
+  const atlas = { name: "Mountain Atlas, Hardcover" };
+  const both = { name: "Desert Poems, Paperback" };
+  const witness = (conditionIndex: number, item: number) => ({ conditionIndex, state: "present" as const, value: "x", source: "field" as const, page: 1, item });
+  const supplied: ListExtractionOutcome = {
+    ...outcome(false),
+    records: [{ name: "River Maps, Hardcover" }],
+    conditions: { applied: 4, kept: 1, rejected: [2, 2], alone: [1, 1], unfiltered: false },
+    rejectedSamples: [[paperback, both], [atlas, both]],
+    rejectedSamplesAlone: [1, 1],
+    rejectedObservations: [[witness(0, 2), witness(0, 4)], [witness(1, 3), witness(1, 4)]]
+  };
+  const { evidence } = await run(twoConditions, supplied);
+  const wire = webAutomationActionResultPayload({
+    commandId: COMMAND.commandId, actionType: COMMAND.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" },
+    ...(evidence?.extraction ? { extraction: evidence.extraction } : {}), startedAt: 1, finishedAt: 2
+  }).extraction as { rejectedSamples?: unknown; rejectedSamplesAlone?: unknown; rejectedObservations?: unknown } | undefined;
+  // Listed with both conditions: after each list's alone lead.
+  assert.deepEqual(wire?.rejectedSamples, [[paperback, both], [atlas, both]]);
+  assert.deepEqual(wire?.rejectedSamplesAlone, [1, 1]);
+  // No value a condition read on it leaves the page.
+  assert.deepEqual(wire?.rejectedObservations, [[witness(0, 2), null], [witness(1, 3), null]]);
 });

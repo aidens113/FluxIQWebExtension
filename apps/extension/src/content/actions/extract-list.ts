@@ -66,6 +66,19 @@
 // them against the instruction: on live run 15 it was told the accessory rule
 // removed 5 rows by itself and could not see that 3 were true earbuds. The page
 // collects as it does for `true`, and the summary sends each list's alone lead.
+//
+// **And, after it, the rows two or more conditions rejected together (t655).**
+// A row two conditions both rejected was named nowhere, so a read's rows never
+// covered every row it saw, and Core could not tell whether they did (A8 frozen
+// pair 5 `run-mva6mlm4-97fe42f9`: seen 23, kept 9, 12 alone, two named
+// nowhere). So each list keeps, after its alone lead, the rows it shares with
+// another condition's list -- the same row records, declared fields only, as the
+// alone rows are -- and `rejectedSamplesAlone` still says how many lead. Core
+// groups them by the conditions each failed (its `service/summaries/
+// extraction-summary.ts`, `conditions.togetherRows`). Smaller than `true`: a
+// row found in one list only is not sent, and those rows carry no passive
+// observation (`null` in its place), so no value a condition read on them
+// leaves the page.
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation, WebAutomationExtractListRequest } from "../types";
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
@@ -182,9 +195,10 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
 
 /**
  * The rejected rows the read was asked for, copied: every one with the alone
- * lead of each list, or for a playback (`aloneOnly`) each list cut to its alone
- * lead, which is then the whole list. A playback read whose page did not say
- * the leads sends no rows, since it cannot tell which were alone.
+ * lead of each list, or for a playback (`aloneOnly`) each list's alone lead and
+ * then the rows it shares with another list, each such row's observation `null`
+ * (header, t655). A playback read whose page did not say the leads sends no
+ * rows, since it cannot tell which were alone.
  */
 function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSummary, "rejectedSamples" | "rejectedSamplesAlone" | "rejectedObservations"> {
   const samples = outcome.rejectedSamples;
@@ -193,8 +207,28 @@ function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSumma
   if (!samples) return {};
   if (!aloneOnly) return { rejectedSamples: samples.map((rows) => rows.map((row) => ({ ...row }))), ...(leads ? { rejectedSamplesAlone: [...leads] } : {}), ...(observations ? { rejectedObservations: observations.map((entries) => entries.map((entry) => entry ? { ...entry } : null)) } : {}) };
   if (!leads) return {};
-  const alone = samples.map((rows, index) => rows.slice(0, leads[index] ?? 0).map((row) => ({ ...row })));
-  return { rejectedSamples: alone, rejectedSamplesAlone: alone.map((rows) => rows.length), ...(observations ? { rejectedObservations: observations.map((entries, index) => entries.slice(0, leads[index] ?? 0).map((entry) => entry ? { ...entry } : null)) } : {}) };
+  const together = sharedRows(samples, leads);
+  const kept = samples.map((rows, index) => {
+    const lead = Math.min(leads[index] ?? 0, rows.length);
+    return { lead, rows: [...rows.slice(0, lead), ...rows.slice(lead).filter((row) => together.has(JSON.stringify(row)))] };
+  });
+  return {
+    rejectedSamples: kept.map(({ rows }) => rows.map((row) => ({ ...row }))),
+    rejectedSamplesAlone: kept.map(({ lead }) => lead),
+    ...(observations ? { rejectedObservations: kept.map(({ lead, rows }, index) => rows.map((_row, at) => {
+      const entry = at < lead ? observations[index]?.[at] : null;
+      return entry ? { ...entry } : null;
+    })) } : {})
+  };
+}
+
+/** The rows found after the alone lead of two or more conditions' lists, by their values: rows those conditions rejected together. */
+function sharedRows(samples: NonNullable<Outcome["rejectedSamples"]>, leads: readonly number[]): Set<string> {
+  const lists = new Map<string, number>();
+  samples.forEach((rows, index) => {
+    for (const key of new Set(rows.slice(leads[index] ?? 0).map((row) => JSON.stringify(row)))) lists.set(key, (lists.get(key) ?? 0) + 1);
+  });
+  return new Set([...lists].filter(([, count]) => count > 1).map(([key]) => key));
 }
 
 /** The condition report copied, each list its own array. */

@@ -356,7 +356,8 @@ test("a replayed read whose conditions removed nothing by themselves and kept ro
     }
   });
   assert.equal(readRows.note, undefined);
-  assert.deepEqual(readRows, { rows: [{ name: "Earbuds A" }] });
+  // The row both conditions rejected is named once under both (t655), and still adds no note.
+  assert.deepEqual(readRows, { rows: [{ name: "Earbuds A" }], leftOutTogether: [{ conditions: ["price", "name"], conditionIndexes: [0, 1], rows: [{ name: "X" }] }] });
 });
 
 /** Replay the read as `core.run_flow`'s dry run does, against a page that answers with `payload`; its `readRows`. */

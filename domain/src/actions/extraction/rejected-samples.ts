@@ -17,8 +17,10 @@
 //   command carries `rejectedSamples` beside `extractList`, and never on the
 //   parameters the Flow keeps. `true`, every rejected row, is what the exploring
 //   node run adds to the one command it dispatches
-//   (`runtime/llm-evidence/node-run/rejected-rows.ts`). `"alone"`, only the rows
-//   each condition removed by itself, is what a Flow's playback asks for
+//   (`runtime/llm-evidence/node-run/rejected-rows.ts`). `"alone"`, the rows
+//   each condition removed by itself, then the rows it removed together with
+//   another condition (their observations withheld, t655), is what a Flow's
+//   playback asks for
 //   (`output-nodes/extract-list/dispatch.ts`, t194 w49): on live run 15
 //   (`run-muqj2bgb-d048ec37`) the judge was told the accessory rule removed 5
 //   rows by itself and could not see that 3 were earbuds "with Wireless
@@ -49,9 +51,10 @@ import type { WebAutomationExtractionSummary } from "./summary";
 export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY = "rejectedSamples" satisfies keyof WebAutomationExtractionSummary;
 
 /**
- * The value of `rejectedSamples` that asks for only the rows each condition
- * removed by itself (every other condition kept them): each list is then its
- * alone rows and nothing else, and `rejectedSamplesAlone` is each list's length.
+ * The value of `rejectedSamples` that asks for the rows each condition removed
+ * by itself (every other condition kept them), leading each list, then the rows
+ * it removed together with another condition, with no observations (t655):
+ * `rejectedSamplesAlone` is the length of each list's alone lead, not of the list.
  * `true` asks for every rejected row.
  */
 export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY = "alone";
