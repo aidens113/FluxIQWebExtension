@@ -456,6 +456,14 @@ bigbox cart and towels first, the five A8 tasks in both modes, twice, no product
 | everything-store-plus-earbuds-under-50 | (w43) | (w46) | (w43) | (w46) |
 | social-network-feed-confirm-requests | (w44) | (w46) | (w44) | (w46) |
 
+**Frozen pair 8 continues after wave 42 (supervisor, 2026-10-16).** `project` passed both runs; `candidate` towels
+failed on general judging gaps (debug `reports/a8-towels-run-mvam0lys-debug.md`: a step-blame sentence that also names
+a condition stands; judge text weighed clipped at 500 characters), not on t663. These sink `candidate` towels, not the
+`project` runs the flip is decided on, and crossborder, everything-store and social have passed in both modes on every
+pair, so the pair runs on; only wave 45's `candidate` towels round 2, which would fail on this known cause, is skipped.
+The fixes are built in task worktrees during the pair and merged only after wave 46 (a merge would put the lanes
+behind dev and stop the launches).
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
