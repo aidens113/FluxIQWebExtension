@@ -52,6 +52,8 @@ import {
 import { executeContentAction } from "../execute";
 import type { ContentActionDependencies } from "../types";
 import type { BrowserActionCommand, BrowserActionResult } from "../../types";
+import { withPage } from "../../action-runtime/interference/tests/fake-layer";
+import { travelPage, type TravelPage } from "../../action-runtime/interference/tests/travel-page";
 
 const DETACHED = "the frame was detached while waiting";
 
@@ -395,3 +397,96 @@ async function settledOnMockClock<T>(t: TestContext, work: Promise<T>, limitMs =
   }
   return await work;
 }
+
+/**
+ * A layer an earlier click of the run opened is the Flow's own (t656,
+ * `interference/run-opened.ts`), through the real dispatcher and the real click.
+ *
+ * The case is bigbox-retail's cart Flow (`run-mvac0ddx-f52ba929`), on a travel
+ * site: a step opens the header's currency flyout, an optional step's target
+ * is missing, and the clearing for it must leave the flyout to the step after.
+ * The page is `interference/tests/travel-page.ts`; the click's watches answer
+ * nothing, so the press is reported as made.
+ */
+function travelClickDependencies(page: TravelPage, target: "chip" | "missing" | "hidden"): ContentActionDependencies {
+  return dependencies({
+    resolveTarget: (() => {
+      if (target === "missing") {
+        throw Object.assign(new Error("nothing matched #app-banner-dismiss"), {
+          failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, { expected: "one element matching the target", actual: "nothing matched" })
+        });
+      }
+      // The hidden target is one of the results, outside the header, so nothing spares the flyout as the step's own.
+      return { element: target === "hidden" ? page.results : page.chip, resolution: { strategy: "selector", candidateCount: 1, bestScore: 0.71 } };
+    }) as unknown as ContentActionDependencies["resolveTarget"],
+    checkActionability: (() => target === "hidden"
+      ? { actionable: false, code: "hidden", detail: "it has no box", point: undefined }
+      : { actionable: true, point: { x: 95, y: 40 }, detail: "hit at its centre" }) as unknown as ContentActionDependencies["checkActionability"],
+    rejected: ((action: BrowserActionCommand, startedAt: number, _code: string, expected: string, detail: string, evidence: { resolution?: BrowserActionResult["resolution"] }) => ({
+      ...classifiedFailure(action, new Error(detail), startedAt),
+      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN, { expected, actual: `hidden: ${detail}` }),
+      resolution: evidence.resolution
+    })) as unknown as ContentActionDependencies["rejected"],
+    describeElement: () => ({}) as ReturnType<ContentActionDependencies["describeElement"]>,
+    captureSnapshot: () => ({}) as ReturnType<ContentActionDependencies["captureSnapshot"]>,
+    watchRateLimitNotice: (() => undefined) as unknown as ContentActionDependencies["watchRateLimitNotice"],
+    watchRobotCheck: (() => undefined) as unknown as ContentActionDependencies["watchRobotCheck"],
+    watchIgnoredPress: (() => undefined) as unknown as ContentActionDependencies["watchIgnoredPress"],
+    success: succeeds
+  });
+}
+
+function travelClick(commandId: string, selector: string): BrowserActionCommand {
+  return { commandId, actionType: "web.dom.click", selector, timeoutMs: 400 };
+}
+
+test("an absent-target click after a click that opened a flyout dismisses nothing, and a wall the page puts up is still cleared", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
+  const page = travelPage();
+  const { opened, missing, walled } = await settledOnMockClock(t, withPage(page.body, async () => {
+    const opened = await executeContentAction(travelClick("cmd-currency", "tb-currency-picker"), travelClickDependencies(page, "chip"));
+    const missing = await executeContentAction(travelClick("cmd-app-banner", "#app-banner-dismiss"), travelClickDependencies(page, "missing"));
+    page.showOffer();
+    const walled = await executeContentAction(travelClick("cmd-app-banner-again", "#app-banner-dismiss"), travelClickDependencies(page, "missing"));
+    return { opened, missing, walled };
+  }, page.view));
+  assert.equal(opened.status, "succeeded", `the chip's click failed: ${opened.failure?.code ?? "no record"}`);
+  assert.equal(missing.status, "failed");
+  assert.equal(missing.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  assert.equal(missing.clearedLayers, undefined, "nothing was dismissed for the missing target");
+  assert.doesNotMatch(String(missing.failure?.actual), /closing/u);
+  assert.deepEqual(walled.clearedLayers?.map((layer) => layer.controlName), ["No thanks"], "the page's own offer, a wall, is still cleared");
+  assert.deepEqual(page.flyoutClose.events, [], "the flyout the run opened was never closed");
+  assert.equal(page.flyout.getClientRects().length > 0, true);
+});
+
+test("a click refused as not shown leaves the run's flyout, and its measurement says the target is present but not shown", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
+  const page = travelPage();
+  const { refused } = await settledOnMockClock(t, withPage(page.body, async () => {
+    await executeContentAction(travelClick("cmd-currency", "tb-currency-picker"), travelClickDependencies(page, "chip"));
+    const refused = await executeContentAction(travelClick("cmd-load-more", "main button.load-more"), travelClickDependencies(page, "hidden"));
+    return { refused };
+  }, page.view));
+  assert.equal(refused.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN);
+  assert.equal(refused.clearedLayers, undefined, "a covered or hidden target is cleared for, but never by closing the run's own layer");
+  assert.deepEqual(page.flyoutClose.events, []);
+  assert.deepEqual(refused.resolution, { strategy: "selector", candidateCount: 1, bestScore: 0.71, shown: false });
+});
+
+test("a target not found carries no shown flag: only a found target can be not shown", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
+  const result = await settledOnMockClock(t, executeContentAction(
+    { commandId: "cmd-extract", actionType: "web.dom.extract", selector: "#save", timeoutMs: 400 },
+    dependencies({
+      resolveTarget: (() => {
+        throw Object.assign(new Error("nothing matched #save"), {
+          failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, { actual: "nothing matched" })
+        });
+      }) as unknown as ContentActionDependencies["resolveTarget"],
+      failure: (action: BrowserActionCommand, error: unknown, startedAt: number) => ({ ...classifiedFailure(action, error, startedAt), resolution: { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.05 } })
+    })
+  ));
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  assert.deepEqual(result.resolution, { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.05 });
+});

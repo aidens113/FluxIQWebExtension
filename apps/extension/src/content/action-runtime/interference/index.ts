@@ -21,10 +21,15 @@
 // press as the layer's kind and the dismissal's word (`control-word.ts`) for
 // the action result. `press-guard/` refuses a way out whose press would
 // act, and `clearing-target.ts` says which layer is the step's own (t401).
+// `clearable-layers.ts` is the one list both the press loop and `presence.ts`
+// read: every layer less the step's own, less those `run-opened.ts` recorded a
+// press of the run opening (t656), and -- for a missing target -- less every
+// layer `page-wall.ts` does not call a wall.
 
 export { clearInterference } from "./clear";
 export { pressWaysOut } from "./press-ways-out";
 export { clearableLayerOverPage } from "./presence";
+export { runOpenedLayers } from "./run-opened";
 export { coveringLayerSentence } from "./covering-layer";
 export { overlaysAt, overlaysOverPage } from "./overlays";
 export { boundedLayerText } from "./layer-text";
@@ -34,3 +39,4 @@ export { isDismissalLabel, isPageRequirementText, isRateLimitLayerText, isTransi
 
 export type { Point } from "./overlays";
 export type { ClearingTarget } from "./clearing-target";
+export type { ClearingScope } from "./clearable-layers";

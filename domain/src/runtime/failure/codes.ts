@@ -62,6 +62,10 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    * "Set as my store" inside a closed flyout keeps failing it. The model is
    * told `target_not_actionable` for it, as before
    * (`runtime/llm-evidence/action-failure/refusal.ts`).
+   *
+   * Present but not shown, and said so (t656): its definition carries
+   * `shown: false`, and the result's resolution measurement carries the same,
+   * so a reader of the measurement does not take it for a control not found.
    */
   TARGET_NOT_SHOWN: "web.target.not_shown",
   /** No element matched the action's target with enough confidence. */
@@ -270,6 +274,15 @@ export type WebAutomationFailureCodeDefinition = {
   readonly effect?: NonNullable<AutomationStudioFailureRecord["effect"]>;
   /** Only beside `effect: "unacted"` on a retryable row: the producer saw the act certainly change nothing. */
   readonly certainNoEffect?: true;
+  /**
+   * Only on TARGET_NOT_SHOWN (t656): the target was found in the document and is
+   * not shown. The category cannot say it -- it is Core's `target_not_found`,
+   * so the run routes by page state -- and the record's shape is Core's, so the
+   * producer says it on the resolution measurement instead, as `shown: false`
+   * (`WebAutomationTargetResolution`, `actions/types.ts`). A reader then tells a
+   * control a step before must show from one the page does not have.
+   */
+  readonly shown?: false;
 };
 
 /**
@@ -303,7 +316,7 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   "web.target.not_actionable": { category: "unexpected_state", retryable: false, stage: "execution" },
   // A target the page has and does not show is a step that is not available:
   // Core finds the current step by state for it, as for one not found at all.
-  "web.target.not_shown": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.not_shown": { category: "target_not_found", retryable: true, stage: "target_resolution", shown: false },
   "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
   "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
   "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
