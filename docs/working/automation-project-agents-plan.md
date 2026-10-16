@@ -622,6 +622,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Validation: wave 37's verdicts as above; Core t663 and t664 each `pnpm check` -> passed; merged and pushed
 - Outcome: Accepted. Frozen pair 8 next
 
+### 2026-10-16 — A8 frozen pair 8: the flip rule is met; Core t665, t666 merged after it
+- Agent: supervisor (waves 42-46 on one frozen pair, the decision to run on past wave 42's `candidate` towels failure, the flip); read-only debug `reports/a8-towels-run-mvam0lys-debug.md`; Core t665, t666 (Core ledger), built during the pair and merged after it
+- Changed: the A8 Run Plan's frozen pair 8 table, run-on note and reading; every run's debug note; Core t667 (in flight) makes `project` the product default
+- Why: `project` passed 10 of 10 on one frozen pair (two consecutive passes on each task); `candidate` passed 9 of 9 run with towels round 1 failed (round 2 skipped as a known failure); `candidate` has failed towels in every pair since pair 2
+- Validation: frozen pair 8 (downstream `2d32847e`, Core `f7a0c4d1`): `project` cart $0.114, $0.137; towels $0.125, $0.106; crossborder $0.142, $0.081; everything-store $0.081, $0.105; social $0.084, $0.109 (total $1.084); `candidate` cart $0.072, $0.065; towels failed $0.125; crossborder $0.028, $0.029; everything-store $0.082, $0.127; social $0.042, $0.036 (total $0.606); all at the higher price rate
+- Outcome: Accepted. The default flips to `project` (Core t667); next cost item: a one-part task run as several briefs (crossborder round 1: five briefs)
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
