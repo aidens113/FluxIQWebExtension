@@ -51,8 +51,10 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 
 **Not done / next:**
 - The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
-  one-part overhead. Merged: P1-P5 (Core t671, t672, t673, t676, t679). In flight: Core t684 (a reset that cannot undo an
-  act made inside a part says so and is fixed). Next: lane trees synced, then the cost round in `project`.
+  one-part overhead. Merged: P1-P5 (Core t671, t672, t673, t676, t679) and Core t684 (a reset that cannot undo an
+  act made inside a part says so and is fixed; merged). Cost round 1 ran (`## Cost Gap Plan`): four of five passed,
+  crossborder and bigbox cart at 29 and 38 calls (pair 8: 93/56, 75/81); everything-store hit a P5 budget defect (Core
+  t685, in flight) and towels failed after a judged yes (debug in flight). Next: t685, the towels cause, then a rerun.
 - Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
   fallback stays in memory by design), `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
@@ -289,8 +291,15 @@ dev and rebuilt, at most four lanes at once (one `lab-slots/slot-N` each). Commo
 gate uses, `mvp-final-month-plan/reports/codex-continuation-live-readiness.md`):
 
 ```powershell
-pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
+pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8e-<mode>-<task> --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
 ```
+
+with the process environment the pairs ran with (recorded in each run's `run.json` `invocation.fluxiqEnvironment`):
+`FLUXIQ_TEST_TARGET=persistent-isolated` (the lanes' `.env.local` says `isolated`, which `--target` otherwise conflicts
+with and the run is refused before any call), `FLUXIQ_DEMO_HEADLESS=false` (visible browsers),
+`FLUXIQ_LAB_INSTANCE=a8-slot-N`, `FLUXIQ_LAB_CORE_BRANCH=<the lane's Core branch>`,
+`FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25`. The cost round's first launch omitted the first three and all four runs were
+refused at $0 (2026-10-16).
 
 | Site | Task | Modes |
 | --- | --- | --- |
@@ -507,6 +516,21 @@ billed dollars noted with the price rate, and a review of the extension chat (pl
 each run's screenshots. A pass of the round: every task passes, no brief is thrown away for the
 causes P1-P4 fixed, and one-part tasks run one brief with no reset brief. Each failure gets a debug note before any
 rerun.
+
+**Cost round 1 (2026-10-16, 23:13-23:50 UTC, off-peak price; downstream `a835db3b`, Core `8ac92ef1`).** The first
+launch omitted the pairs' process environment and all four were refused at $0 (the A8 Run Plan's command now records
+it). Calls are rate-independent; dollars are at about half pair 8's rate.
+
+| Task | Verdict | $ (off-peak) | Calls | Briefs | Pair 8 `project` calls | Pair 8 `candidate` calls | Note |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | passed | 0.022 | 29 | 1 | 93 / 56 | 18 / 18 | one subflow, both parts; one test, the judged run |
+| bigbox-retail-pickup-cart | passed | 0.034 | 38 | 1 | 75 / 81 | 38 / 35 | one test, the judged run |
+| social-network-feed-confirm-requests | passed | 0.041 | 53 | 2 | 62 / 78 | 30 / 28 | repair brief for the site's slow-down (user rule), one extra assemble |
+| everything-store-plus-earbuds-under-50 | passed | 0.049 | 41 | 2 | 31 / 35 | 26 / 35 | third test refused unaffordable: the judging reserve paid every single-path test (Core t679 defect; t685) |
+| bigbox-retail-pickup-towels | failed | 0.110 | 79 | 1 | 65 / 59 | 49 (failed) | judged yes, playback failed the oracle (`output_not_observed`); debug in flight |
+
+Debug notes: `../language-driven-flow-loop-plan/debugs/run-mvbl7oaa-de54f314.md`, `run-mvbl865c-97c1f8f7.md`,
+`run-mvbl9hrv-db5a120b.md`, `run-mvblai1v-a31e7593.md`, `run-mvblov2i-abb7d82e.md` (in the lane trees until merged).
 
 ## Units (this repository)
 
