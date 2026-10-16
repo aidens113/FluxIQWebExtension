@@ -50,13 +50,13 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 **Done since 2026-10-13 (all pushed):** W1-W8 here with Core A1-A6; A8 complete; the default flip.
 
 **Not done / next:**
-- The cost gap: `project` runs a one-part task as several briefs (frozen pair 8 crossborder round 1: five briefs, 68
-  builder decisions against `candidate`'s 14). Plan a one-brief path for a one-part plan, then confirm on a live round.
+- The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
+  one-part overhead. Round 1 of the Core fixes is in flight (P1-P3, P4 investigation); P5 (one-part plans test once)
+  follows; then a live round confirms.
 - Open follow-ups recorded in the ledgers: the exact re-asked-yes flag (the hold uses the call count), a structured
   `extract` parameter check before a run, the reset-reason flag for a held ending, the supervisor's fallback kept only
   in memory, `submission.ts` and `verdict.ts` past the 400-line advisory.
-- Still open here from W1: the merge of the session-picking rule with `eligibleWebSessionIds`, and a stand-in-gateway
-  e2e for a stale lease holder.
+- W1's follow-ups are closed (t669 one session-picking rule, t670 stale lease holder e2e; merged 2026-10-16).
 - Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
   and about $0.22 around 02:17 and 06:49 UTC; compare costs only within one rate.
 
@@ -451,6 +451,44 @@ briefs and 68 builder decisions for a one-part task). Decision: the product defa
 (`AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT`), `candidate` stays selectable, and "extend" stays `candidate` (Core t667).
 The held fixes t665 and t666 merge first. The one-part brief overhead is the next cost item.
 
+## Cost Gap Plan (2026-10-16)
+
+**Findings** (reports `cost-gap-run-evidence.md`, `cost-gap-core-code.md`; supervisor checked the crossborder round 1
+record, `lab-runs/2026-10-16/run-mvan7giv-4246aafb`, steps 0049-0055). On the nine paired frozen-pair-8 runs `project`
+cost $0.977 against `candidate`'s $0.606 (+$0.371). Builder decisions cost the same in both modes; the work kept was
+$0.069 cheaper in `project`. The gap is:
+- **Thrown-away briefs, +$0.248 (161 calls, 6 of 9 runs).** (a) A plan hands on a value no step reads (`itemPage`):
+  the builder's submission is refused `subflow.input_unread` three times, whose text says to end blocked; the
+  supervisor's amend removes the value and Core drops the producer's done proposal ("its inputs or outputs changed",
+  step 0055). (b) An earlier builder carries out a later part's lasting act while exploring; the later brief finds it
+  done and ends blocked; the supervisor merges the parts and Core drops the done work again. Every rebuilt brief
+  explores again from the start page.
+- **Subflow-trial judging, net +$0.089**; for a one-part plan the subflow trial and the whole trial are the same run
+  judged twice, with a reset brief between, and the only builder gets half the purse (`brief-sizing.ts:72-78`).
+- **The supervisor, +$0.085 (83 calls).** Its guidance teaches splitting: step 1 "split it into stretches that do not
+  overlap" and the only example turns one sentence into two subflows (`guidance.ts:116`, `:129-134`).
+- Crossborder is two asks (cart, coupon on the same item page), not one part; everything-store and towels already ran
+  as one brief at `candidate`'s cost or less.
+
+**Units (Core, partitioned by file; each a Core-paired task worktree):**
+- **P1 Keep finished work across a plan change.** An amend that only narrows a done subflow's interface, or changes
+  ordering, keeps its proposal; a merge whose new subflow holds a done subflow's parts carries that proposal as the
+  merged brief's start. Supervisor plan state and the amend comparison.
+- **P2 An unread input is not a blocker.** The subflow scope check accepts a declared input no line reads, and says
+  so on the submission and the builder's return, instead of refusing with "end the brief blocked".
+- **P3 Plan same-page asks together.** Guidance: a find or open that only serves an act is that act's part; asks done
+  in one pass on one page are one subflow; split only where a value is read and handed on. A one-part example from a
+  kind of site no realistic scenario uses. Fix the start-page sentence (`guidance.ts:115`) to match what the
+  supervisor is actually given.
+- **P4 Another part's act during exploration** (read-only investigation first, `cost-gap-cross-part-act.md`), then a
+  fix unit.
+- **P5 One-part plans test once** (after P1 and P3; the design in `cost-gap-core-code.md` (5)): the builder's test is
+  the judged whole run, the brief is sized near the whole purse, no scoped judge, no reset brief between runs.
+
+**Validation:** per unit, Core `tsc` and the tests in the changed directories, structure audit; then one live round of
+the five A8 tasks in `project` only, comparing calls and dollars by role within one price rate. Live runs only after
+every round-1 and P5 change is merged and the lane trees are synced.
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
@@ -610,6 +648,31 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: end of the A8 work unit
 - Validation: `pnpm structure:check` -> "structure-audit: passed (201 warning(s), 639 baselined)."; Core `node scripts/structure-audit.mjs` -> "structure-audit: passed (389 warning(s), 1156 baselined)."; every merge this session ran its narrow checks and Core's `pnpm check` (ledgers)
 - Outcome: Accepted. Next: the one-part cost gap
+
+### 2026-10-16 — Cost gap investigated: finished work thrown away, not a one-part overhead
+- Agent: workers cost-gap-run-evidence (the 19 frozen-pair-8 run records), cost-gap-core-code (Core read-only);
+  supervisor checked `run-mvan7giv-4246aafb` steps 0049-0055 (three `subflow.input_unread` refusals, then an amend
+  dropping the done `add_hub_to_cart` for "its inputs or outputs changed")
+- Changed: `## Cost Gap Plan` (findings, units P1-P5); reports `cost-gap-run-evidence.md`, `cost-gap-core-code.md`
+- Why: the next item after A8; the one-part premise was wrong (crossborder is two asks)
+- Validation: the evidence worker's per-step costs summed to each run's billed cost in all 19 runs; nine-pair gap
+  $0.371 (`project` $0.977, `candidate` $0.606), $0.248 of it thrown-away briefs
+- Outcome: Accepted. Core P1 (t671), P2 (t672), P3 (t673) and the P4 investigation dispatched
+
+### 2026-10-16 — W1 follow-ups closed: one session-picking rule (t669), stale lease holder e2e (t670)
+- Agent: workers t669-one-session-picking-rule, t670-stale-lease-holder-e2e; supervisor reviewed, re-ran, merged
+- Changed: t669 `domain/src/runtime/web-sessions/` (new, `isEligibleWebSession`), `host-resources/leasable-session.ts`
+  and `llm-evidence/tools.ts` use it. t670 `apps/extension/e2e/lease/tests/stale-holder.spec.ts` (new): a stand-in
+  gateway on the everything-store Lab page; the current lease runs on the automation tab with another tab in front,
+  an old epoch (`host_lease.stale`) and another holder (`host_lease.holder_mismatch`) change nothing, a higher epoch
+  is adopted
+- Why: open since W1 (the rule was restated in two places; no real-browser check of the refusal)
+- Validation: t669 `node scripts/test-domain.mjs runtime/web-sessions/tests runtime/host-resources/tests
+  runtime/llm-evidence/tests` -> pass 224, fail 0 (supervisor); domain tsc both configs exit 0 (worker). t670
+  `npx playwright test -c e2e/playwright.config.ts e2e/lease/tests/stale-holder.spec.ts` -> "1 passed (19.7s)"
+  (supervisor, headed extension session); with the refusal disabled -> "1 failed" (worker). Both merged by
+  `pnpm task finish` -> structure audit passed
+- Outcome: Accepted
 
 ## Open Questions
 
