@@ -77,7 +77,8 @@ general judging gaps); Core t652 (a split's no labelled, conditions kept from an
 keeps its verdict), t654 (a claim about a row the read never saw is refuted) and t655 (paired: reads list rows several
 conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
 them and are merged, with Core t662 (a saved Flow remembers its judged trial). Frozen pair 7 stopped after wave 37
-(`project` 2 of 2; a false yes on kept rows in `candidate` towels). In flight: Core t663, t664. Next: frozen pair 8.
+(`project` 2 of 2; a false yes on kept rows in `candidate` towels); Core t663 (kept rows checked before a yes) and t664
+(the playback hold sets aside only nos Core refutes) are merged. Now: frozen pair 8 (bigbox cart and towels first).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -582,6 +583,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: wave 32 (2026-10-16 02:17 UTC, peak price): `project` bigbox cart passed $0.094; `candidate` cart failed $0.191 (playback closed the Flow's own store picker); `project` towels failed $0.190 (a judged-yes part dropped by an amend, then Core misreadings); `candidate` towels failed $0.242 with a correct Flow refuted after playback on a no-op filter claim. The same tokens cost twice wave 27's (23:46 UTC); failing builds also made two to three times the calls
 - Validation: t656 after merging dev: extension `src/content/action-runtime src/content/actions` -> 530 pass; `check-extension.mjs` exit 0; domain `runtime/failure client` -> 91 pass; domain tsc exit 0; audit passed; content specs headed (worker) 19 + 1 passed; merged `061f2845`. t657 after merging dev: test-runner check and build exit 0; flow-lane, lab-runs, playback-step, playback-skips dist tests -> 285 pass; audit passed; merged `06e5f4b9`. Pushed
 - Outcome: Accepted. Next: t662 (a saved Flow records its judged trial), then frozen pair 7
+
+### 2026-10-16 — A8 frozen pair 7 wave 37; stopped on a false yes over kept rows; Core t662-t664
+- Agent: supervisor (wave 37, the stop); read-only debug `reports/a8-towels-run-mvahlxuu-debug.md`; Core t662-t664 (Core ledger)
+- Changed: the A8 Run Plan's frozen pair 7 table and stop note; the wave's debug notes and UI review
+- Why: wave 37 (04:46 UTC, peak price): `project` bigbox cart passed $0.043 (two subflows), towels passed $0.033; `candidate` bigbox cart passed $0.033 (the t656 store-picker fix held), towels failed $0.123 on a false build yes over a kept row that is not the item asked for
+- Validation: wave 37's verdicts as above; Core t663 and t664 each `pnpm check` -> passed; merged and pushed
+- Outcome: Accepted. Frozen pair 8 next
 
 ## Open Questions
 
