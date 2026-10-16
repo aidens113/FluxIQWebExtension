@@ -480,8 +480,14 @@ $0.069 cheaper in `project`. The gap is:
   in one pass on one page are one subflow; split only where a value is read and handed on. A one-part example from a
   kind of site no realistic scenario uses. Fix the start-page sentence (`guidance.ts:115`) to match what the
   supervisor is actually given.
-- **P4 Another part's act during exploration** (read-only investigation first, `cost-gap-cross-part-act.md`), then a
-  fix unit.
+- **P4 A predecessor did my part** (investigated, `cost-gap-cross-part-act.md`). The phase-start reset worked every
+  time; the later part's act was re-done by the predecessor's own passing proposal while Core prepared the entry
+  (its subflow trial judged yes despite holding another part's step), and a read part's builder claimed "already
+  done". No act is refused up front (the user's rule). Fix, after P2 (shared files): (A) Core checks a "done before"
+  ending, refusing it for a part that asks no lasting act or an act the preparation run did not land; (B) the entry
+  note lists possible acts too, and "end blocked" words go only to acting parts; (D) builders are told the other
+  parts' words; (E) a step whose trial act was possible is marked possibly lasting for the subflow judge. Fix C (a
+  merge carries the predecessor's proposal) is folded into P1.
 - **P5 One-part plans test once** (after P1 and P3; the design in `cost-gap-core-code.md` (5)): the builder's test is
   the judged whole run, the brief is sized near the whole purse, no scoped judge, no reset brief between runs.
 
