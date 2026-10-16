@@ -1,9 +1,9 @@
 # Automation Project Agents Plan
 
 Status: Active
-Status detail: W1, W2 and W3 delivered and pushed 2026-10-13 with Core A1-A4, A3b and A6; Core A5 in progress; A8 Lab comparison follows. User decision 2026-10-13: concurrent in Core, the web domain declares one at a time.
+Status detail: Built and qualified: A8 passed on frozen pair 8 (`project` 10 of 10), and `project` is the product default since 2026-10-16 (Core t667). Next: the one-part cost gap.
 Created: 2026-10-13
-Last updated: 2026-10-13
+Last updated: 2026-10-16
 Owner: Senior supervisor agent
 Scope: The browser side of FluxIQ's product-level agent system for building an automation project — a project supervisor agent that owns the task, structure, interfaces, case plan, budget and assembly, and spawns bounded subflow builders, validation and repair. This document owns host-action (tab) ownership, the chat presentation, Lab qualification and the extension wiring; the domain-neutral agent contracts are owned by the Core paired document.
 Paired document: `C:\Users\osrs_\FluxStuff\!FluxIQ\docs\working\automation-project-agents-plan.md`
@@ -13,82 +13,55 @@ Related: [MVP final month plan](./mvp-final-month-plan.md), [state-aware recover
 
 ## Current State
 
-**Planned, not built (2026-10-13).** The user asked for a system of agents
-for building an automation project: a supervisor that spawns the subflow
-builder we already have, the way this repository's supervisor spawns
-workers. This document holds the evidence for it, the browser side, the chat,
-the Lab qualification and the cross-repository order; the Core paired
-document owns the roles and contracts.
+**Built, qualified and the product default (2026-10-16).** The system of agents the user asked for (a project
+supervisor that plans a Flow's subflows and spawns bounded subflow builders, the way this repository's supervisor
+spawns workers) is built in Core with its browser side here, passed the Lab comparison A8, and `project` is now the
+product's default authoring mode (Core t667). The Core paired document owns the roles and contracts; this one owns the
+browser side, the chat, the Lab qualification and the cross-repository order.
 
 **Decided (supervisor recommendations; the user may overrule any):**
-- Five roles: project supervisor, subflow builder, repair agent; validator
-  and promotion owner stay the existing Core services.
-- New authoring mode `project` beside `candidate`; the default flipped to
-  `project` on 2026-10-16 after the Lab comparison (A8) passed. One-part tasks are a
-  one-subflow plan, so there is one path, not two.
-- **Concurrent in Core, one at a time in the extension** (user, 2026-10-13:
-  "make it possible in core, but have extension set it to only 1 at a
-  time"). Core schedules builders up to a host capacity the domain declares;
-  the web domain declares 1, so builders share the browser one at a time
-  under a lease that names the tab. Two tabs of one profile are not
-  isolation (shared cookies, cart, session); raising the web capacity needs
-  separate browser contexts first.
-- One Flow purse; the supervisor carves allowances and keeps a reserve for the
-  judged whole run and one repair round.
-- Creation still ends only on one judged whole-Flow run from the start;
-  builder subflow trials are partial tests.
+- Five roles: project supervisor, subflow builder, repair agent; validator and promotion owner stay the existing Core
+  services.
+- Authoring mode `project` beside `candidate`; the default flipped to `project` on 2026-10-16 after A8 passed (an
+  extend still builds `candidate`; `candidate` and `legacy` stay selectable with `FLUXIQ_AUTHORING_MODE`). One-part
+  tasks are a one-subflow plan, so there is one path.
+- **Concurrent in Core, one at a time in the extension** (user, 2026-10-13: "make it possible in core, but have
+  extension set it to only 1 at a time"). The web domain declares host capacity 1, so builders share the browser one at
+  a time under a lease that names the tab; raising it needs separate browser contexts first.
+- One Flow purse; the supervisor carves allowances and keeps a reserve for the judged whole run and one repair round.
+- Creation ends only on one judged whole-Flow run from the start; builder subflow trials are partial tests.
 
-**Done (2026-10-13, supervisor-verified, pushed):** discovery and this plan with its Core pair; W1 web host-resource port at capacity 1 with lease enforcement and the leased tab (t536, with Core A3b); W2 chat attribution and W3 Lab index columns (t539, with Core A6). Core A1-A4 and the shared contracts are delivered (Core document's ledger). Nothing is wired into a build yet, so builds behave as before.
+**A8 result (A8 Run Plan, frozen pair 8: downstream `2d32847e`, Core `f7a0c4d1`).** `project` passed 10 of 10: two
+consecutive passes on each of the five realistic tasks (bigbox cart, bigbox towels, crossborder, everything-store,
+social). `candidate` passed 9 of 9 run and failed towels round 1 (round 2 skipped as a known failure); it has failed
+towels in every pair since pair 2. Cost at the higher price rate: `project` $0.108 a build, `candidate` $0.067 (about
+1.6 times). Eight frozen pairs ran in all; every failed run has a debug note under
+`../language-driven-flow-loop-plan/debugs/` and every general cause was fixed structurally (Core t570-t668, downstream
+t568-t657; both ledgers). The pairs' tables are in the A8 Run Plan; pairs before frozen pair 2 are archived.
 
-**Now (2026-10-14): A8 is running** (user: "Yes go to live tests"). Round one in mode `project` has been
-launched four times; each launch was debugged and fixed before the next (the A8 Run Plan's Attempts table): one
-shared lane tree (a setup error), the Lab chat unavailable on long paths (t568), then the supervisor explored instead of planning and could not write Core's
-raw plan (t569). After t569 the supervisor plans and dispatches and builders act, but three of four builds ran out
-of calls at $0.07-0.08 of $0.25 and the fourth's subflow trials were judged no. Fixed and merged before the fifth
-launch, so every A8 round runs on one frozen pair: Core t570 (builders had no budget at all; per-brief call shares,
-Core-sized briefs, permitted acts from parts, exact interface lines), t574 (the judge now sees a called part's read
-with its wording and tested values; an audit found 3 of 5 everything-store verdicts wrong without them), t575 (an
-acting brief may make any act the task asks for, so two models' class labels need not agree), A21 (t571), A10b
-(t572), W8 here (t573), and the Lab's call backstop raised to Core's 250 (t576). After A8: A7 and A14 in Core; audit point 5 (re-ask a refuted no).
-Launch 5 (`048a1d91`, 250 calls) found two more: briefs sized past the builder loop's 64 turns (t577, merged), and,
-where bigbox's builders did run, subflow trials that could never pass (the bigbox debug,
-`reports/a8-bigbox-run-mv8186yr-debug.md`): Core t578-t582 fixed it and are merged (Core ledger); launch 6 then produced the first `project` Flow
-to pass its judged whole run (crossborder, $0.028) and four new defects: t583 and t584 are merged, t585-t589 in
-merged; launch 7 then
-lost three builds to the Lab's chat deadline and showed the start-state class of failure a fifth time, so t593 built
-one shared phase start for every phase (with t592, t594-t596; all merged). The comparison so far (A8 Run Plan tables):
-pair 1 `project` 2 of 4, `candidate` 2 of 4; pair 2 `project` 2 of 4 (two near misses), `candidate` 4 of 4 and
-cheaper; wave 3 `project` social passed, everything-store failed on false no's (Core t607), towels failed in both
-modes on page-view legends (t605). `candidate` stays the default. t597-t608 are merged and pushed (2026-10-14).
-Next: sync the lanes, re-run `project` everything-store, towels in both modes, and `project` social for a
-consecutive pass; the default flips only after two consecutive passes per site on one frozen pair.
-Wave 4 (2026-10-14) ended at the chat's first model call in all four runs during a DeepSeek API incident ($0).
-Merged since: t609-t640. The first frozen pair (after t637) passed six of seven runs; `project` crossborder failed on
-pre-existing defects fixed in t638-t640. Frozen pair 2 (after t640, A8 Run Plan) is done: `project` 9 of 10 by the
-Lab (10 of 10 by product and oracle), `candidate` 8 of 9; the default is not flipped on it (one Lab misread). Merged
-and pushed after it (2026-10-15): Core t641 (partly refuted advice labelled, vindicated conditions held once), t642
-(handles never re-bind without a load; hidden-only ties are not found), t643 (a bypassed optional step is not the
-run's failure, by Core's `optionalStepWayOn` mark), Core t644 (the four load-sensitive test files). Frozen pair 3
-stopped after wave 17: `project` bigbox cart failed on a general `project`-mode defect (A8 Run Plan); t645-t649 fix
-it and are merged and pushed. Frozen pair 4 stopped after wave 22 (`project` 2 of 2; `candidate` towels failed on two
-general t641-path defects); Core t650 (an invited resend is admitted once) and t651 (a row's own name is never the
-request's words) fix them and are merged. Frozen pair 5 stopped after wave 27 (towels failed in both modes on
-general judging gaps); Core t652 (a split's no labelled, conditions kept from any trial), t653 (a looping judge reply
-keeps its verdict), t654 (a claim about a row the read never saw is refuted) and t655 (paired: reads list rows several
-conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
-them and are merged, with Core t662 (a saved Flow remembers its judged trial). Frozen pair 7 stopped after wave 37
-(`project` 2 of 2; a false yes on kept rows in `candidate` towels); Core t663 (kept rows checked before a yes) and t664
-(the playback hold sets aside only nos Core refutes) are merged. **A8 is complete (2026-10-16): `project` is the product default.** Frozen pair 8 met the flip rule (`project` 10 of
-10, two consecutive passes on every task; `candidate` failed towels again; A8 Run Plan); Core t665 and t666 merged after
-the pair, then Core t667 made `project` the default (`AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT`; extend stays
-`candidate`; `candidate` and `legacy` stay selectable). Next: the cost gap (`project` about 1.6 times `candidate`; a
-one-part task run as several briefs), and Core t668 splits `result-verification/agreement.ts` (at the 800-line limit).
-Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
-stale holder, and live rendering of the new chat cards (A8 reviews them).
+**What the A8 loop changed, in short:** a plan keeps the person's request and a done part survives an additive amend
+(Core t645, t658); builders hand on only values a step makes and one read value is expressible (t645, t646); the judge
+is weighed only by what Core measured (t629-t636, t641, t651, t652, t654, t659, t660, t663, t665, t666), a yes is
+checked against kept rows (t663), a looping or long judge reply keeps its verdict and is read whole (t653, t665);
+playback holds only refuted nos and never rests on a re-asked yes (t660, t662, t664); clearing spares layers the run
+opened and a hidden control routes back to its opener (t656, t661); the chat cards are honest (t649); the Lab records
+routing and cleared layers and reads a bypassed optional step correctly (t643, t657).
 
-**Blocked:** nothing. Three decisions are the user's (Open Questions); each
-has a recommendation the plan already follows.
+**Done since 2026-10-13 (all pushed):** W1-W8 here with Core A1-A6; A8 complete; the default flip.
 
+**Not done / next:**
+- The cost gap: `project` runs a one-part task as several briefs (frozen pair 8 crossborder round 1: five briefs, 68
+  builder decisions against `candidate`'s 14). Plan a one-brief path for a one-part plan, then confirm on a live round.
+- Open follow-ups recorded in the ledgers: the exact re-asked-yes flag (the hold uses the call count), a structured
+  `extract` parameter check before a run, the reset-reason flag for a held ending, the supervisor's fallback kept only
+  in memory, `submission.ts` and `verdict.ts` past the 400-line advisory.
+- Still open here from W1: the merge of the session-picking rule with `eligibleWebSessionIds`, and a stand-in-gateway
+  e2e for a stale lease holder.
+- Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
+  and about $0.22 around 02:17 and 06:49 UTC; compare costs only within one rate.
+
+**Blocked:** nothing. Three decisions are the user's (Open Questions); each has a recommendation the plan already
+follows (the schedule one is now settled: the comparison passed before the freeze).
 ---
 
 ## User Direction
@@ -630,6 +603,13 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 - Why: `project` passed 10 of 10 on one frozen pair (two consecutive passes on each task); `candidate` passed 9 of 9 run with towels round 1 failed (round 2 skipped as a known failure); `candidate` has failed towels in every pair since pair 2
 - Validation: frozen pair 8 (downstream `2d32847e`, Core `f7a0c4d1`): `project` cart $0.114, $0.137; towels $0.125, $0.106; crossborder $0.142, $0.081; everything-store $0.081, $0.105; social $0.084, $0.109 (total $1.084); `candidate` cart $0.072, $0.065; towels failed $0.125; crossborder $0.028, $0.029; everything-store $0.082, $0.127; social $0.042, $0.036 (total $0.606); all at the higher price rate
 - Outcome: Accepted. The default flips to `project` (Core t667); next cost item: a one-part task run as several briefs (crossborder round 1: five briefs)
+
+### 2026-10-16 — Handoff: A8 complete, `project` the default
+- Agent: supervisor (handoff)
+- Changed: Current State rewritten for the finished A8 and the default flip; header status
+- Why: end of the A8 work unit
+- Validation: `pnpm structure:check` -> "structure-audit: passed (201 warning(s), 639 baselined)."; Core `node scripts/structure-audit.mjs` -> "structure-audit: passed (389 warning(s), 1156 baselined)."; every merge this session ran its narrow checks and Core's `pnpm check` (ledgers)
+- Outcome: Accepted. Next: the one-part cost gap
 
 ## Open Questions
 
