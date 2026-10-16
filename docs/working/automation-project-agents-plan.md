@@ -51,10 +51,10 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 
 **Not done / next:**
 - The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
-  one-part overhead. Merged: P1 (Core t671), P2 (Core t672), P3 (Core t673), P4 fix (Core t676). In flight: P5 (Core t679).
-  Next: the builder-loop words for P5, then lane trees synced and a live round in `project` confirms.
-- Open follow-ups recorded in the ledgers: the reset-reason flag
-  for a held ending, the supervisor's fallback kept only in memory. Done: `submission.ts` split (Core t681),
+  one-part overhead. Merged: P1-P5 (Core t671, t672, t673, t676, t679). In flight: Core t684 (a reset that cannot undo an
+  act made inside a part says so and is fixed). Next: lane trees synced, then the cost round in `project`.
+- Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
+  fallback stays in memory by design), `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
 - W1's follow-ups are closed (t669 one session-picking rule, t670 stale lease holder e2e; merged 2026-10-16).
 - Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
@@ -761,6 +761,29 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
   -> 79 files, 557 passed (supervisor). `pnpm task finish` passed for each (Core `pnpm check`); both dev branches
   pushed (Core `e9729b3d`, downstream `6b30cc82`)
 - Outcome: Accepted. Only P5 (Core t679) remains before the lane sync and the live round
+
+### 2026-10-16 — P5 merged (Core t679); reset reason recorded (Core t683)
+- Agent: workers t679 (two rounds: round 1 left 7 old one-part tests failing and the proposals store unfed, both in
+  files it did not own), t683; supervisor resolved the one merge conflict (`supervisor/dispatch-tool.ts`: P5's
+  `complete` and t683's `completeAgain` on the same answer, both kept; they follow different brief kinds), committed
+  the baseline entry t681 removed (`9313ee5c`), integrated
+- Changed: Core t679 `project-agents/single-subflow/` (new): on a plan of one router-run subflow, the builder's
+  `core.test_subflow` assembles the exact proposal with `project.assemble`'s code and runs the judged whole trial
+  under the supervisor's purse frame, a `candidate_trial` receipt the supervisor completes on in three decisions;
+  the brief is sized near the whole purse, keeps no judge calls back, and is told its test is the judged run; the
+  proposals store learns single-path trials; a whole test of an already-yes single-path revision runs nothing; old
+  one-part tests moved (one-part behaviour to the new path, multi-subflow mechanics to two-subflow plans). Core t683
+  `supervisor/{state,completion,dispatch-tool,supervisor-loop}.ts`: the state records why a reset was asked for
+  (`resetToEnd`) and the answer after it says end or `completeAgain`, never test; the t637 fallback stays in memory
+  because a supervisor is never restarted mid-build (fresh buildId per build), said in the header
+- Why: P5 of the cost gap; t683 open since t637/t638
+- Validation: (supervisor) t679 after merging Core dev (t683 in): tsc exit 0; vitest project-agents, project-build,
+  subflow-candidate, subflow-trial, flow-bootstrap/candidate, candidate-trial -> 150 files, 971 passed. t683: tsc exit
+  0; vitest project-agents, project-build -> 70 files, 465 passed. Core `pnpm task finish` -> `pnpm check` passed for
+  both; Core dev pushed `c30a1a32`
+- Outcome: Accepted. Found by t679: a reset cannot undo an act made inside a part subflow's trial (no item in its
+  state diff) yet says every act is undone; with t683's three small reset gaps it is Core t684, in flight. The live
+  round waits for it (no launch with a known fix in flight)
 
 ## Open Questions
 
