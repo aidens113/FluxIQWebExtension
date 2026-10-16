@@ -162,7 +162,7 @@ test.describe("on product-catalog", () => {
    * whole render window (`extraction/page-render.ts`) -- and which repair it wants.
    * The wait's length is the page's own timing, so it is matched as a number.
    */
-  const NEVER_APPEARED = "0 recor\ds from 1 page; the item selector name\d nothing on the page, so the list never appeare\d, after waiting \\d+ms for 1 item an\d stopping on the rea\d's own ren\der win\dow running out -- change the selector rather than the fiel\ds or the con\ditions";
+  const NEVER_APPEARED = "0 records from 1 page; the item selector named nothing on the page, so the list never appeared, after waiting \\d+ms for 1 item and stopping on the read's own render window running out -- change the selector rather than the fields or the conditions";
 
   test("an item selector matching nothing fails with output_not_observed", async ({ openHarness }) => {
     const harness = await openHarness("product-catalog");
@@ -178,7 +178,7 @@ test.describe("on product-catalog", () => {
         expected: "at least 1 record, each carrying name, price, rating, url",
         // The failure the read ends on is one the execution tried to absorb, so
         // the recovery account says it did not recover (`action-runtime/recovery/account.ts`).
-        actual: expect.stringMatching(new RegExp(`^${NEVER_APPEARED}; fewer than the 1 require\d; the execution \di\d not recover within its \\d+ attempts? after absorbing output_not_observe\d, waiting \\d+ ms$`, "u"))
+        actual: expect.stringMatching(new RegExp(`^${NEVER_APPEARED}; fewer than the 1 required; the execution did not recover within its \\d+ attempts? after absorbing output_not_observed, waiting \\d+ ms$`, "u"))
       },
       failure: { category: "output_not_observed", code: "web.validation.output_not_observed" }
     });
