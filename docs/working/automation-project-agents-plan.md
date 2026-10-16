@@ -23,8 +23,8 @@ document owns the roles and contracts.
 **Decided (supervisor recommendations; the user may overrule any):**
 - Five roles: project supervisor, subflow builder, repair agent; validator
   and promotion owner stay the existing Core services.
-- New authoring mode `project` beside today's default `candidate`; the
-  default flips only after the Lab comparison passes. One-part tasks are a
+- New authoring mode `project` beside `candidate`; the default flipped to
+  `project` on 2026-10-16 after the Lab comparison (A8) passed. One-part tasks are a
   one-subflow plan, so there is one path, not two.
 - **Concurrent in Core, one at a time in the extension** (user, 2026-10-13:
   "make it possible in core, but have extension set it to only 1 at a
@@ -78,9 +78,11 @@ keeps its verdict), t654 (a claim about a row the read never saw is refuted) and
 conditions left out; the snapshot carries page groups) are merged and pushed. Frozen pair 6 stopped after wave 32 (three general causes, A8 Run Plan); t656-t661 fix
 them and are merged, with Core t662 (a saved Flow remembers its judged trial). Frozen pair 7 stopped after wave 37
 (`project` 2 of 2; a false yes on kept rows in `candidate` towels); Core t663 (kept rows checked before a yes) and t664
-(the playback hold sets aside only nos Core refutes) are merged. **Frozen pair 8 met the flip rule** (`project` 10
-of 10, two consecutive passes on every task; A8 Run Plan): the default becomes `project` (Core t667) after the held
-fixes t665 and t666 merge.
+(the playback hold sets aside only nos Core refutes) are merged. **A8 is complete (2026-10-16): `project` is the product default.** Frozen pair 8 met the flip rule (`project` 10 of
+10, two consecutive passes on every task; `candidate` failed towels again; A8 Run Plan); Core t665 and t666 merged after
+the pair, then Core t667 made `project` the default (`AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT`; extend stays
+`candidate`; `candidate` and `legacy` stay selectable). Next: the cost gap (`project` about 1.6 times `candidate`; a
+one-part task run as several briefs), and Core t668 splits `result-verification/agreement.ts` (at the 800-line limit).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
