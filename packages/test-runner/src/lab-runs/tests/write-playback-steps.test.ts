@@ -281,3 +281,69 @@ test("a step that is not a list read carries no read record", async (t) => {
   const result = JSON.parse(await readFile(path.join(stepsDirectory, "0046-run-web.dom.click", "result.json"), "utf8"));
   assert.equal("read" in result, false);
 });
+
+// `run-mvac0ddx-f52ba929`: s5's clearing pressed the Flow's own store picker's
+// close, and its step folder said only that the step was skipped. A step whose
+// run closed layers names each one's kind and word; one that closed none says nothing.
+test("a step whose run cleared layers writes each layer's kind and word in its result, meta and summary; one without writes none", async (t) => {
+  const popup = attempt("popup", 1000, { status: "failed", failure: NOT_FOUND });
+  // The domain's gateway dispatcher lifts the layers to the dispatch payload's top, beside the client's payload under `result`.
+  Object.assign(popup.attempt.result.payload.result, { clearedLayers: [
+    { kind: "dialog", control: "  ×  ", name: "Choose your store", wayOut: "way.1" },
+    { kind: "promotion", control: "No thanks" },
+    { kind: "a newer kind", control: "Close" },
+    { kind: "consent", control: "A sentence of page text far longer than any control word on a layer" },
+  ] });
+  // The client's own payload, read one level down as a list read is.
+  const nested = attempt("nested", 2000);
+  Object.assign(nested.attempt.result.payload.result, { result: { clearedLayers: [{ kind: "rate_limit", control: "OK" }] } });
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { popup, nested, plain: attempt("plain", 3000) });
+  await writePlaybackSteps({
+    attemptsDirectory, stepsDirectory, since: 0, until: 9000, redactionLiterals: [],
+    skippedSteps: [{ nodeId: "node.popup", startedAt: 900, finishedAt: 1500, reason: "target_absent", code: "web.target.not_found" }],
+  });
+  const skipped = path.join(stepsDirectory, "0046-run-web.dom.click");
+  const layers = [{ kind: "dialog", control: "×" }, { kind: "promotion", control: "No thanks" }];
+  assert.deepEqual(JSON.parse(await readFile(path.join(skipped, "result.json"), "utf8")).clearedLayers, layers);
+  const meta = JSON.parse(await readFile(path.join(skipped, "meta.json"), "utf8"));
+  assert.deepEqual(meta.clearedLayers, layers);
+  assert.match(meta.summary, /^skipped .*; cleared 2 layers: dialog "×", promotion "No thanks"$/u);
+  for (const file of ["result.json", "meta.json"]) {
+    const content = await readFile(path.join(skipped, file), "utf8");
+    for (const dropped of ["Choose your store", "way.1", "a newer kind", "far longer"]) assert.equal(content.includes(dropped), false, `${file} holds ${dropped}`);
+  }
+  const one = JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-web.dom.click", "meta.json"), "utf8"));
+  assert.deepEqual(one.clearedLayers, [{ kind: "rate_limit", control: "OK" }]);
+  assert.equal(one.summary, `Element clicked.; cleared 1 layer: rate_limit "OK"`);
+  const plain = path.join(stepsDirectory, "0048-run-web.dom.click");
+  assert.equal("clearedLayers" in JSON.parse(await readFile(path.join(plain, "result.json"), "utf8")), false);
+  const plainMeta = JSON.parse(await readFile(path.join(plain, "meta.json"), "utf8"));
+  assert.equal("clearedLayers" in plainMeta, false);
+  assert.equal(plainMeta.summary, "Element clicked.");
+  assert.match(await readFile(path.join(stepsDirectory, "index.md"), "utf8"), /\| 0046 [^\n]*cleared 2 layers: dialog "×", promotion "No thanks"/u);
+});
+
+test("a no_match consultation writes why in closed words -- its cause and each refused way on -- beside the cleared layers; an older Core's writes neither", async (t) => {
+  const store = attempt("store", 1000, { status: "failed", failure: NOT_FOUND });
+  Object.assign(store.attempt.result.payload.result, { clearedLayers: [{ kind: "dialog", control: "×" }] });
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { store, older: attempt("older", 3000, { status: "failed", failure: NOT_FOUND }) });
+  await writePlaybackSteps({
+    attemptsDirectory, stepsDirectory, since: 0, until: 9000, redactionLiterals: [],
+    stateRoutingSteps: [
+      { nodeId: "node.s7", startedAt: 900, finishedAt: 1500, outcome: "no_match", code: "web.target.not_found", noMatchCause: "matching_steps_already_acted", refused: [{ guard: "repeats_lasting_act", toNodeId: "node.s4" }] },
+      { nodeId: "node.s8", startedAt: 2900, finishedAt: 3500, outcome: "no_match", code: "web.target.not_found" },
+    ],
+  });
+  const folder = path.join(stepsDirectory, "0046-run-web.dom.click");
+  const routing = { outcome: "no_match", code: "web.target.not_found", noMatchCause: "matching_steps_already_acted", refused: [{ guard: "repeats_lasting_act", toNodeId: "node.s4" }] };
+  const result = JSON.parse(await readFile(path.join(folder, "result.json"), "utf8"));
+  assert.deepEqual(result.stateRouting, routing);
+  assert.deepEqual(result.clearedLayers, [{ kind: "dialog", control: "×" }]);
+  const meta = JSON.parse(await readFile(path.join(folder, "meta.json"), "utf8"));
+  assert.deepEqual(meta.stateRouting, routing);
+  assert.match(meta.summary, /; cleared 1 layer: dialog "×"; the runtime consulted state: no_match \(matching_steps_already_acted; refused repeats_lasting_act at node\.s4\)$/u);
+  const older = JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-web.dom.click", "meta.json"), "utf8"));
+  assert.deepEqual(older.stateRouting, { outcome: "no_match", code: "web.target.not_found" });
+  assert.match(older.summary, /; the runtime consulted state: no_match$/u, "no cause and no refusal: nothing in brackets");
+  assert.equal("clearedLayers" in older, false);
+});

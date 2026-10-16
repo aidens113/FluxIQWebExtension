@@ -39,6 +39,22 @@
 // `flow-lane.json`. Counts and closed words only: no row, field value or field
 // name is copied.
 //
+// A step whose run closed layers over the page while it ran (the extension's
+// interference clearing, `clearedLayers` on the action result) says which: each
+// layer's closed kind and the word of the control pressed, as `result.clearedLayers`
+// and in the summary (`cleared 1 layer: promotion "No thanks"`). Run
+// `run-mvac0ddx-f52ba929`'s s5 closed the Flow's own store picker and its step
+// folder never said so. Only those two fields are copied, under Core's bound
+// (`executor/node-execution/cleared-layers.ts`, read in `playback-step/`): a kind outside Core's words, a
+// word longer than a short phrase, or anything beside them is dropped.
+//
+// Why state routing answered as it did is written in closed words only: the
+// cause Core gives a step that found no way on (t661, `noMatchCause`) and each
+// way on a safety guard refused, as guard and node ("no_match
+// (no_step_matches_page; refused repeats_lasting_act at node.s4)"). The
+// routing record's `reason` sentence is not: Core's run detail drops it by
+// design (`service/summaries/state-routing.ts`, it repeats the host's words).
+//
 // What is copied is bounded: the command's parameters, the outcome's status,
 // failure record and validation, never the page snapshot the result carries.
 // A typed value the extension marked redacted is not copied; every declared
@@ -47,8 +63,8 @@
 
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { RUN_EXTRACTION_PAGINATION_STOP } from "@fluxiq-web-extension/test-contracts";
 import { pathExists } from "./path-exists.js";
+import { playbackClearedLayers, playbackListRead } from "./playback-step/index.js";
 import { rewriteStepsIndex } from "./rewrite-steps-index.js";
 
 export type PlaybackStepsInput = Readonly<{
@@ -79,7 +95,13 @@ export type PlaybackStepsInput = Readonly<{
 }>;
 
 /** One attempt whose step could not run, and what the runtime made of the page: closed words, a Core code and a node id. */
-export type PlaybackStateRoutingStep = Readonly<{ nodeId: string | null; startedAt: number; finishedAt: number; outcome: string; code?: string; toNodeId?: string }>;
+export type PlaybackStateRoutingStep = Readonly<{
+  nodeId: string | null; startedAt: number; finishedAt: number; outcome: string; code?: string; toNodeId?: string;
+  /** The ways on a safety guard refused, as guard code and node id (Core t387). */
+  refused?: readonly Readonly<{ guard: string; toNodeId: string }>[];
+  /** Why routing found no way on, as Core's closed word (Core t661); absent from an older Core. */
+  noMatchCause?: string;
+}>;
 
 /** One attempt the run skipped rather than ran, as the run detail records it; a state-routed one also names where the run went, and which way. */
 export type PlaybackSkippedStep = Readonly<{ nodeId: string | null; startedAt: number; finishedAt: number; reason: string; code: string; toNodeId?: string; direction?: "forward" | "backward" }>;
@@ -200,8 +222,10 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
   const code = text(failure?.code) ?? null;
   const failureRecord = failure ? { category: failure.category, code, retryable: failure.retryable, stage: failure.stage, expected: failure.expected, actual: failure.actual, effect: failure.effect } : null;
   const skipped = skip ? skipMark(skip) : undefined;
-  const read = listRead(outcome);
+  const read = playbackListRead(outcome);
+  const cleared = playbackClearedLayers(outcome);
   const said = failed ? `${code ?? "failed"}: ${message ?? "no message"}` : (message ?? "succeeded");
+  const layersSaid = cleared ? `; ${cleared.said}` : "";
   return {
     segment: actionType.replace(/[^A-Za-z0-9._-]/gu, "_").slice(0, 120),
     valueWithheld,
@@ -212,7 +236,8 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
       ...(skipped ? { skipped, failure: null, observed: failureRecord } : { failure: failureRecord }),
       validation: validation ? { status: validation.status, ...(valueWithheld ? { redacted: true } : { expected: validation.expected, actual: validation.actual }) } : null,
       url: outcome?.url ?? null, title: outcome?.title ?? null,
-      ...(read ? { read } : {}),
+      ...(read ? { read: read.read } : {}),
+      ...(cleared ? { clearedLayers: cleared.layers } : {}),
     },
     page: text(record(record(result.metadata)?.failureEvidence)?.page),
     meta: {
@@ -221,49 +246,12 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
       finishedAt: finishedAt === undefined ? null : new Date(finishedAt).toISOString(),
       ms: startedAt !== undefined && finishedAt !== undefined ? finishedAt - startedAt : null,
       ...(skipped
-        ? { phase: "playback", status: "skipped", resultCode: code, failureCode: null, message, skipped, summary: skipSummary(skipped) }
-        : { phase: "playback", status: failed ? "failed" : "ok", resultCode: code, failureCode: code, message, summary: read ? `${said} ${readSummary(read)}` : said }),
+        ? { phase: "playback", status: "skipped", resultCode: code, failureCode: null, message, skipped, summary: `${skipSummary(skipped)}${layersSaid}` }
+        : { phase: "playback", status: failed ? "failed" : "ok", resultCode: code, failureCode: code, message, summary: `${read ? `${said} ${read.said}` : said}${layersSaid}` }),
+      ...(cleared ? { clearedLayers: cleared.layers } : {}),
     },
   };
 }
-
-/** What a list read said about itself: counts and closed words, never a row. */
-type ListRead = { records: number; pages: number; itemsSeen: number | null; emptyRecords: number | null; truncated: boolean | null; stop: string | null; conditionsKept: number | null; rowsReturned: number | null };
-
-const count = (value: unknown): number | null => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
-const STOPS: readonly string[] = RUN_EXTRACTION_PAGINATION_STOP;
-
-/**
- * The read's counts, from the action result's `extraction` summary beside its
- * `extracted` rows. Looked for at the two depths Core looks
- * (`service/summaries/extraction-summary.ts`): the client's payload as it is,
- * or wrapped by the domain's gateway dispatcher as `{ status, message, result }`.
- * A summary without its record and page counts is no read; a stop word this
- * package does not know is `unknown`, as the published contract has it.
- */
-function listRead(outcome: Json | undefined): ListRead | undefined {
-  const dispatched = record(outcome?.result) ?? outcome;
-  const summary = record(dispatched?.extraction);
-  const records = count(summary?.recordCount);
-  const pages = count(summary?.pagesRead);
-  if (!summary || records === null || pages === null) return undefined;
-  const stop = typeof summary.paginationStop === "string" ? (STOPS.includes(summary.paginationStop) ? summary.paginationStop : "unknown") : null;
-  return {
-    records,
-    pages,
-    itemsSeen: count(summary.itemsSeen),
-    emptyRecords: count(summary.emptyRecords),
-    truncated: typeof summary.truncated === "boolean" ? summary.truncated : null,
-    stop,
-    conditionsKept: count(record(summary.conditions)?.kept),
-    rowsReturned: Array.isArray(dispatched?.extracted) ? dispatched.extracted.length : null,
-  };
-}
-
-const readSummary = (read: ListRead): string => {
-  const detail = [read.itemsSeen === null ? undefined : `${read.itemsSeen} items seen`, read.stop === null ? undefined : `stopped on ${read.stop}`, read.truncated ? "cut short by a cap" : undefined].filter(Boolean).join(", ");
-  return `${read.records} records over ${read.pages} pages${detail ? ` (${detail})` : ""}${read.rowsReturned === null ? "" : `; ${read.rowsReturned} rows returned`}`;
-};
 
 /** A skip with no host attempt: Core judged the step's ready state not shown and dispatched nothing. */
 function undispatchedSkipFiles(skip: PlaybackSkippedStep, step: number): StepFiles {
@@ -301,8 +289,13 @@ function undispatchedRoutingFiles(routing: PlaybackStateRoutingStep, step: numbe
 
 /** A step's files with what the runtime made of the page added to its result and meta, and said in its summary. */
 function withStateRouting(files: StepFiles, routing: PlaybackStateRoutingStep): StepFiles {
-  const stateRouting = { outcome: routing.outcome, ...(routing.code === undefined ? {} : { code: routing.code }), ...(routing.toNodeId === undefined ? {} : { toNodeId: routing.toNodeId }) };
-  const said = `the runtime consulted state: ${routing.outcome}${routing.toNodeId ? ` (kept returning to ${routing.toNodeId})` : ""}`;
+  const refused = routing.refused?.length ? routing.refused.map(({ guard, toNodeId }) => ({ guard, toNodeId })) : undefined;
+  const stateRouting = {
+    outcome: routing.outcome, ...(routing.code === undefined ? {} : { code: routing.code }), ...(routing.toNodeId === undefined ? {} : { toNodeId: routing.toNodeId }),
+    ...(routing.noMatchCause === undefined ? {} : { noMatchCause: routing.noMatchCause }), ...(refused ? { refused } : {}),
+  };
+  const why = [routing.toNodeId ? `kept returning to ${routing.toNodeId}` : undefined, routing.noMatchCause, refused ? `refused ${refused.map(entry => `${entry.guard} at ${entry.toNodeId}`).join(", ")}` : undefined].filter(Boolean).join("; ");
+  const said = `the runtime consulted state: ${routing.outcome}${why ? ` (${why})` : ""}`;
   const summary = text(files.meta.summary);
   return { ...files, result: { ...files.result, stateRouting }, meta: { ...files.meta, stateRouting, summary: summary ? `${summary}; ${said}` : said } };
 }

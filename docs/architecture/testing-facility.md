@@ -3758,6 +3758,39 @@ the outcome to its skip. A routing that stopped before any command was
 dispatched gets its own `NNNN-run-state-consulted` folder. Only the Flow lane
 writes `steps/`, so the existing-Flow and clone targets do not carry it.
 
+Why routing answered as it did is written in closed words only. The reader
+also keeps two optional fields from Core's run detail:
+- `refused: [{ guard, toNodeId }]`: each way on a safety guard refused (Core
+  t387), on any outcome. Only Core's five guard codes and node ids are kept.
+- `noMatchCause`: the closed word Core t661 gives a step that found no way on,
+  for example `no_step_matches_page`. It is kept only in a closed word's shape,
+  and only on `no_match`, `unobserved` and `no_pre_states`.
+
+Before t657, a record with `refused` was rejected whole, so such a `no_match`
+read like a step that never consulted the page. A record from an older Core
+without either field still parses. Each outcome reads only the fields it
+takes. Any other key, such as one a newer Core adds, is ignored and never
+copied, so a new Core field no longer drops the whole record. A field that is
+read but is not in its shape, such as an unknown guard or a cause that is not
+a closed word, still rejects the record. The step writes both fields in `stateRouting`,
+and its summary reads, for example,
+`the runtime consulted state: no_match (matching_steps_already_acted; refused repeats_lasting_act at node.s4)`.
+
+The routing record's `reason` sentence is never written. Core's run detail
+drops it on purpose (`service/summaries/state-routing.ts`, because it repeats
+the host's words).
+
+A step whose action closed layers over the page while it ran (the extension's
+interference clearing) lists each layer's kind and control word as
+`clearedLayers: [{ kind, control }]` in `meta.json` and `result.json`. Its
+summary ends `cleared N layer(s): <kind> "<word>", …`. The writer reads them (`lab-runs/playback-step/`)
+from the command attempt's dispatch payload at the depths a list read uses.
+It keeps them only under Core's bound (`executor/node-execution/cleared-layers.ts`):
+Core's five kinds, a word of at most 40 characters and at most 12 layers. It
+never copies a layer's name or its way-out reference. A skipped step lists them
+as well: in `run-mvac0ddx-f52ba929`, s5 closed the Flow's own store picker
+before it was skipped.
+
 `index.md` is rebuilt from every `*/*/entry.json` each time a run starts or
 ends. Its columns are Started (local date and time), Lane
 (`FLUXIQ_LAB_LANE`, else `FLUXIQ_LAB_INSTANCE`, else `default`), Task (as the
