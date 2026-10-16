@@ -450,11 +450,11 @@ bigbox cart and towels first, the five A8 tasks in both modes, twice, no product
 
 | Task | `project` 1 | `project` 2 | `candidate` 1 | `candidate` 2 |
 | --- | --- | --- | --- | --- |
-| bigbox-retail-pickup-cart | passed $0.114 | (w44) | passed $0.072 | (w44) |
-| bigbox-retail-pickup-towels | passed $0.125 | (w45) | failed $0.125: out of time after 8 trials (debug `a8-towels-run-mvam0lys-debug.md`) | (w45) |
+| bigbox-retail-pickup-cart | passed $0.114 | passed $0.137 | passed $0.072 | passed $0.065 |
+| bigbox-retail-pickup-towels | passed $0.125 | (w45) | failed $0.125: out of time after 8 trials (debug `a8-towels-run-mvam0lys-debug.md`) | skipped: would fail on the known cause |
 | crossborder-marketplace-hub-to-cart | passed $0.142 (five briefs, 68 builder decisions) | (w45) | passed $0.028 | (w45) |
 | everything-store-plus-earbuds-under-50 | passed $0.081 | (w46) | passed $0.082 | (w46) |
-| social-network-feed-confirm-requests | (w44) | (w46) | (w44) | (w46) |
+| social-network-feed-confirm-requests | passed $0.084 | (w46) | passed $0.042 | (w46) |
 
 **Frozen pair 8 continues after wave 42 (supervisor, 2026-10-16).** `project` passed both runs; `candidate` towels
 failed on general judging gaps (debug `reports/a8-towels-run-mvam0lys-debug.md`: a step-blame sentence that also names
