@@ -495,6 +495,19 @@ $0.069 cheaper in `project`. The gap is:
 the five A8 tasks in `project` only, comparing calls and dollars by role within one price rate. Live runs only after
 every round-1 and P5 change is merged and the lane trees are synced.
 
+**Cost round (planned 2026-10-16).** After P5 merges: a worker merges both `dev` branches into the four A8 lanes'
+trees (`fxwork/t563`, `t565`, `t566`, `t567`, each downstream and Core) and rebuilds the Core libraries and the
+extension; the Lab's own guard refuses a stale tree. Then, from each lane's downstream tree, the A8 Run Plan's command
+with `--authoring-mode project` and workspaces `cost-project-<site>`: crossborder (slot 1), bigbox cart (slot 2),
+social (slot 3), everything-store (slot 4) at once, then bigbox towels on slot 2. Visible browsers, started from the
+extension chat, `--llm-max-cost-usd 0.25`, one attempt each, supervised throughout; stop at the first balance error.
+Measured per run against frozen pair 8's `project` run of the same task: verdict, calls and prompt/output tokens by
+role (supervisor, each brief, subflow judge, whole judge, reset), briefs dispatched and why, briefs thrown away, and
+billed dollars noted with the price rate, and a review of the extension chat (plan, brief, return and receipt cards) from
+each run's screenshots. A pass of the round: every task passes, no brief is thrown away for the
+causes P1-P4 fixed, and one-part tasks run one brief with no reset brief. Each failure gets a debug note before any
+rerun.
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
