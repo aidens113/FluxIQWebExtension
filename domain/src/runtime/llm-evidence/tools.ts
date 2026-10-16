@@ -45,6 +45,7 @@ import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_FLOW_CONDITION
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationCheckWaitParameters } from "../../actions/check-wait";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { isEligibleWebSession } from "../web-sessions";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
 import {
   assertActive,
@@ -711,16 +712,9 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
 
 /** The sessions every evidence tool may use, narrowed to those that also declare `alsoDeclaring` when it is named. */
 function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[] {
-  return fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
-    session.status === "ready" &&
-    session.clientType === "extension" &&
-    !session.activeRecordingId &&
-    session.capabilities.some((capability) =>
-      capability.id === "web.actions" &&
-      (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.includes("web.dom.capture_snapshot"))
-    ) &&
-    (alsoDeclaring === undefined || session.capabilities.some((capability) => capability.id === alsoDeclaring))
-  ).map((session) => session.sessionId);
+  return fluxiq.programs.clientGateway.snapshot().sessions
+    .filter((session) => isEligibleWebSession(session, alsoDeclaring))
+    .map((session) => session.sessionId);
 }
 
 /**
