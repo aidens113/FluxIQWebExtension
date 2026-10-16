@@ -695,7 +695,7 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
   15-file advisory accepted as `agreement/`). t675 `domain/src/output-nodes/extract/` parameter contract: a wrong
   `extract` is refused at plan validation with `web.extract.*` codes
 - Why: the cost gap plan (P2, P3); t674 before the re-ask flag edits there; t675 open since Core t646
-- Validation (supervisor): t672 after merging Core dev: tsc exit 0; vitest subflow-candidate, project-agents,
+- Validation: (supervisor) t672 after merging Core dev: tsc exit 0; vitest subflow-candidate, project-agents,
   project-build -> 83 files, 527 passed. t673: vitest guidance + amendment apply -> 2 files, 57 passed; fluxiq
   check passed; audit passed. t674: tsc exit 0; vitest result-verification, candidate-trial, subflow-trial -> 141
   files, 1174 passed. t675: `node scripts/test-domain.mjs output-nodes` -> pass 248, fail 0; domain tsc ok. Core
