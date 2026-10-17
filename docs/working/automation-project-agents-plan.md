@@ -447,7 +447,7 @@ Debug notes: `../language-driven-flow-loop-plan/debugs/run-mvbl7oaa-de54f314.md`
 Four passes average $0.031 a build against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Social failed after a
 judged yes (playback's result check and the oracle said it does not answer the request); debug in flight
 (`run-mvbr0w7e-6a01c05b.md`). Debug notes: `run-mvbr0acz-5ccd4d74.md`, `run-mvbr0aok-c6d28b9b.md`,
-`run-mvbr0tnr-49431979.md`, `run-mvbrhw4t-e440847e.md` (in the lane trees until merged).
+`run-mvbr0tnr-49431979.md`, `run-mvbrhw4t-e440847e.md`.
 
 ## Units (this repository)
 
