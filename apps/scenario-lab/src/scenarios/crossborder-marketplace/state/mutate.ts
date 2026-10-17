@@ -56,6 +56,7 @@ const OPERATIONS: Readonly<Record<string, Operation>> = {
   },
   region: (state, { region }) => (isRegionCode(region) && region !== state.region ? { ...state, region } : state),
   "claim-coupon": claimCoupon,
+  "follow-store": followStore,
   "add-to-cart": addToCart,
   "cart-quantity": (state, { lineId, quantity }) => {
     const line = state.cart.find((candidate) => candidate.id === lineId);
@@ -111,6 +112,14 @@ function claimCoupon(state: MarketState, { storeId }: Payload): MarketState {
     ...state,
     coupons: { ...state.coupons, attempts: { ...state.coupons.attempts, [storeId]: attempts }, stores: collected ? [...state.coupons.stores, storeId] : state.coupons.stores },
   };
+}
+
+/** Follows a store the buyer does not follow yet, or unfollows one they do; anything else leaves the list alone. */
+function followStore(state: MarketState, { storeId, follow }: Payload): MarketState {
+  if (typeof storeId !== "string" || !STORES.has(storeId) || typeof follow !== "boolean") return state;
+  const followed = state.following.includes(storeId);
+  if (follow === followed) return state;
+  return { ...state, following: follow ? [...state.following, storeId] : state.following.filter((candidate) => candidate !== storeId) };
 }
 
 /** Adds a line, or tops up the identical one already in the cart; refuses anything past the option set's stock. */
