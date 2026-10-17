@@ -11,7 +11,8 @@ import type { ScenarioPersonChecks } from "@fluxiq-web-extension/test-contracts"
  * site's own filters and meets it on the third results load
  * (`manifest/steps.ts`, `SPAIN_HUBS_SCRIPT`), so a hand-off there is expected.
  * It is not `required`: a Flow that reaches the filtered results in fewer
- * loads never meets it, and that is not a fault.
+ * loads never meets it, and that is not a fault. The same holds for
+ * `free-hubs-under-ten`, whose honest path meets it at the price ceiling.
  */
 export const PERSON_CHECKS: ScenarioPersonChecks = Object.freeze({
   scenarioId: "crossborder-marketplace",
@@ -28,5 +29,6 @@ export const PERSON_CHECKS: ScenarioPersonChecks = Object.freeze({
   handOffs: Object.freeze([
     Object.freeze({ workflowId: "spain-hubs", person: "completes" as const, required: false, because: "The filters the honest path narrows by are the third results load, which the traffic screen replaces." }),
     Object.freeze({ workflowId: "spain-hubs", variantId: "list-layout", person: "completes" as const, required: false, because: "The filters the honest path narrows by are the third results load, which the traffic screen replaces." }),
+    Object.freeze({ workflowId: "free-hubs-under-ten", person: "completes" as const, required: false, because: "Narrowing the search by free shipping and then a price ceiling makes the ceiling the third results load, which the traffic screen replaces." }),
   ]),
 });

@@ -3,15 +3,13 @@ import { createScenarioManifest } from "../../../types.js";
 import { MARKET_BUILDS } from "../styles/index.js";
 import { MARKET_SEED, orderRecord, spainHubRecords } from "./answers.js";
 import { buildIs, cartCount, couponsHeld, FIRST_VISIT, HUB_IN_CART, NOTHING_BOUGHT, ordersShipped, RECORDED_ADD_TO_CART_GONE } from "./facts.js";
+import { followOfficialStoreWorkflow } from "./follow-official-store.js";
+import { freeHubsUnderTenWorkflow } from "./free-hubs-under-ten.js";
 import { INTERRUPTIONS } from "./interruptions.js";
+import { mintHubFallbackWorkflow } from "./mint-hub-fallback.js";
+import { SITE_NOISE } from "./site-noise.js";
 import { CART_SCRIPT, ORDER_SCRIPT, SPAIN_HUBS_SCRIPT } from "./steps.js";
-
-/**
- * Console errors the live storefront logs on an ordinary visit, which a run
- * must not be failed for: the broken Next handler, the coupon service's cold
- * start, and the feed's rate limit as Chrome reports a 429.
- */
-const SITE_NOISE = ["reading 'current'", "[coupon] claim failed", "status of 429"];
+import { ukExpressQuoteWorkflow } from "./uk-express-quote.js";
 
 /**
  * Farbazaar, a cross-border marketplace: a signed-in buyer in Germany, a
@@ -30,6 +28,13 @@ const SITE_NOISE = ["reading 'current'", "[coupon] claim failed", "status of 429
  * - `place-order` buys two of the same option set and reads the
  *   confirmation. It is consequential: an unauthorised run must stop at a
  *   request for permission, never at a placed order.
+ *
+ * Four more, one of each kind a breadth round asks for: `free-hubs-under-ten`
+ * reads the free-shipping hubs at 10,00 € or less, cheapest first;
+ * `follow-official-store` follows one seller and reads the account's list;
+ * `mint-hub-fallback` meets a sold-out option set and adds the stated
+ * alternative; `uk-express-quote` ships to the United Kingdom and reads an
+ * express checkout without placing the order.
  *
  * `recordingEvents` name types without counts: no recording lane has run
  * this fixture yet, so an exact tally would be a guess.
@@ -143,5 +148,9 @@ export const crossborderMarketplaceManifest = createScenarioManifest({
       },
     },
     couponOnlyWorkflow,
+    freeHubsUnderTenWorkflow,
+    followOfficialStoreWorkflow,
+    mintHubFallbackWorkflow,
+    ukExpressQuoteWorkflow,
   ],
 });
