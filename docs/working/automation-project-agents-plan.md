@@ -52,12 +52,13 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
 **Not done / next:**
 - The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
   one-part overhead. Merged: P1-P5 (Core t671, t672, t673, t676, t679) and Core t684 (a reset that cannot undo an
-  act made inside a part says so and is fixed; merged). Cost round 1 ran (`## Cost Gap Plan`): four of five passed,
-  crossborder and bigbox cart at 29 and 38 calls (pair 8: 93/56, 75/81); everything-store hit a P5 budget defect (Core
-  t685, in flight) and towels failed on a false judged yes from a Core judging defect in both modes (debug
-  `run-mvblov2i-abb7d82e.md`: a correct no re-asked as a filter complaint and replaced; a condition in the request's own
-  exclusion words dropped on refuted advice; a result repair that spent 48 decisions and applied nothing). Core J1-J3
-  in flight. Next: those fixes, then a rerun of everything-store and towels.
+  act made inside a part says so and is fixed). Cost round 1 (off-peak) passed four of five and exposed a P5 budget
+  defect (Core t685) and a false judged yes on towels (Core t686-t690). Cost round 2 (full rate, after them) passed
+  four of five at $0.031 a build on average (pair 8: `project` $0.108, `candidate` $0.067); social failed on a false
+  judged yes: a final read with no condition stored all 8 rows where the answer holds 4, a Core note vouched for the
+  extra rows, and the confirming judge call is an identical repeat (`run-mvbr0w7e-6a01c05b.md`). In flight: Core t691
+  (extra rows must be justified; the second judge call becomes the converse question), Core t692 (a keep-everything
+  read after an act is a doubt), t693 paired (a repair is told what its condition kept). Next: those, then round 3.
 - Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
   fallback stays in memory by design), `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
@@ -445,8 +446,11 @@ Debug notes: `../language-driven-flow-loop-plan/debugs/run-mvbl7oaa-de54f314.md`
 | social-network-feed-confirm-requests | failed | 0.031 | 33 | 1 / 1 | 0.084, 0.109 | 0.042, 0.036 |
 
 Four passes average $0.031 a build against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Social failed after a
-judged yes (playback's result check and the oracle said it does not answer the request); debug in flight
-(`run-mvbr0w7e-6a01c05b.md`). Debug notes: `run-mvbr0acz-5ccd4d74.md`, `run-mvbr0aok-c6d28b9b.md`,
+judged yes (`run-mvbr0w7e-6a01c05b.md`): the final read had no condition and stored all 8 requests where the answer
+holds the 4 accepted; both judge calls saw 8 and said yes, because Core's t624 also-in-result note vouched for the 4
+extra rows and the confirming call is a byte-identical temperature-0 repeat. The builder wrote the same unfiltered read
+in round 1 and pair 8, whose judges caught it; t679's single judged run removed the second judging that sometimes did.
+Not caused by t686-t690 (no no was produced). Fixes: Core t691, t692, t693 (paired). Debug notes: `run-mvbr0acz-5ccd4d74.md`, `run-mvbr0aok-c6d28b9b.md`,
 `run-mvbr0tnr-49431979.md`, `run-mvbrhw4t-e440847e.md`.
 
 ## Units (this repository)
