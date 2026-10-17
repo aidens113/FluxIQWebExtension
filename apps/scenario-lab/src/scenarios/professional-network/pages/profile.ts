@@ -6,6 +6,9 @@ import type { Member } from "../types.js";
 
 const DEGREE: Record<Member["degree"], string> = { F: "1st", S: "2nd", O: "3rd+" };
 
+/** The address a first connection's contact info shows: the first name, lowercased, at example.com. */
+const emailOf = (member: Member) => `${member.name.split(" ")[0]!.toLowerCase()}@example.com`;
+
 /**
  * A member's profile. The Experience section is a component rendered into a
  * declarative shadow root, so its words are not in the light DOM. A member
@@ -39,7 +42,7 @@ export function renderProfilePage(kit: ShellKit, member: Member): string {
 <section class="${c.card}"><div class="${c.profileSection}">${experience}</div></section>`;
   const right = `<section class="${c.card}"><h2 class="${c.cardTitle}">People also viewed</h2><ul style="list-style:none;margin:0;padding:0 0 8px">${others}</ul></section>`;
   const contact = `<div id="${contactScrim}" class="${c.scrim}" hidden><div class="${c.modal}" role="dialog" aria-modal="true" aria-label="Contact info"><div class="${c.modalHead}"><h2>${escapeHtml(member.name)}</h2><button id="${contactClose}" class="${c.iconButton}" type="button">✕</button></div>
-<div class="${c.modalBody}"><p><strong>${escapeHtml(member.name)}’s Profile</strong><br>guildline.example${escapeHtml(profileHref(member).replace(ROOT, "/"))}</p>${member.degree === "F" ? `<p><strong>Email</strong><br>${escapeHtml(member.name.split(" ")[0]!.toLowerCase())}@example.com</p>` : `<p class="${c.muted}">Connect with ${escapeHtml(member.name.split(" ")[0] ?? member.name)} to see their contact info.</p>`}</div></div></div>`;
+<div class="${c.modalBody}"><p><strong>${escapeHtml(member.name)}’s Profile</strong><br>guildline.example${escapeHtml(profileHref(member).replace(ROOT, "/"))}</p>${member.degree === "F" ? `<p><strong>Email</strong><br><a class="${c.link}" href="mailto:${escapeHtml(emailOf(member))}">${escapeHtml(emailOf(member))}</a></p>` : `<p class="${c.muted}">Connect with ${escapeHtml(member.name.split(" ")[0] ?? member.name)} to see their contact info.</p>`}</div></div></div>`;
   const script = `const GL = window.GL;
 const byId = (id) => document.getElementById(id);
 const card = ${JSON.stringify(action)};

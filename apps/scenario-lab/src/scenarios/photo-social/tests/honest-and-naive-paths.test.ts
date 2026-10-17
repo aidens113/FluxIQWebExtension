@@ -1,14 +1,12 @@
 import { studioUnionWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, type Browser, type Page } from "@playwright/test";
 import { resolveScenarioWorkflow, type ExpectedFact, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
-import { closeLabSession } from "../../tests/close-lab-session.js";
 import { GIVEAWAY_POST, STUDIO_POSTS } from "../data/index.js";
 import { PRICE_QUESTION } from "../manifest.js";
 import { photoSocialScenario as scenario } from "../scenario.js";
+import { openPhotoSession, type PhotoSession } from "./photo-session.js";
 import { factValue, locate, runScript } from "./recording-driver.js";
 
 /**
@@ -21,35 +19,7 @@ const manifest = scenario.manifest;
 const ROOT = "/scenarios/photo-social/";
 let browser: Browser;
 
-type Session = { lab: RunningScenarioLab; context: BrowserContext; page: Page; problems: string[]; close(): Promise<void> };
-
-async function session(mode?: string): Promise<Session> {
-  const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed: manifest.seed });
-  let context: BrowserContext | undefined;
-  try {
-    if (mode) await arm(lab, "set-mode", { mode });
-    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
-    // The lab serves no favicon, and the browser's 404 for it is not the site's.
-    await context.route("**/favicon.ico", (route) => route.fulfill({ status: 204, body: "" }));
-    const page = await context.newPage();
-    const problems: string[] = [];
-    page.on("console", (message) => { if (message.type() === "error") problems.push(message.text()); });
-    page.on("pageerror", (error) => problems.push(error.message));
-    page.on("response", (response) => { if (response.status() >= 400 && !response.url().includes("/grid?")) problems.push(`${response.status()} ${response.url()}`); });
-    await page.goto(lab.origin + manifest.startPath);
-    const opened = context;
-    return { lab, context: opened, page, problems, close: () => closeLabSession(lab, opened) };
-  } catch (error) {
-    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
-    await closeLabSession(lab, context).catch(() => undefined);
-    throw error;
-  }
-}
-
-async function arm(lab: RunningScenarioLab, operation: string, payload: unknown): Promise<void> {
-  const response = await fetch(`${lab.origin}/api/photo-social/${operation}`, { method: "POST", headers: { authorization: `Bearer ${lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify(payload) });
-  assert.equal(response.status, 200);
-}
+const session = (mode?: string): Promise<PhotoSession> => openPhotoSession(browser, mode);
 
 async function assertFacts(page: Page, facts: readonly ExpectedFact[], label: string): Promise<void> {
   for (const fact of facts) assert.deepEqual(await factValue(page, fact), fact.value, `${label}: ${fact.id}`);

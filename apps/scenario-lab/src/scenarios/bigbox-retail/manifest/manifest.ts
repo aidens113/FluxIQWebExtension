@@ -1,4 +1,4 @@
-import { soapQuantityWorkflow } from "../qualification/index.js";
+import { CHECKOUT_QUOTE_WORKFLOW, NAPKINS_FOR_DELIVERY_WORKFLOW, NEW_STORE_CHEAPEST_TOWELS_WORKFLOW, RATED_DELIVERY_TOWELS_WORKFLOW, soapQuantityWorkflow } from "../qualification/index.js";
 import { createScenarioManifest } from "../../../types.js";
 import { PICKUP_ORDER_WORKFLOW } from "./pickup-order-workflow.js";
 import { PICKUP_TOWELS_WORKFLOW } from "./pickup-towels-workflow.js";
@@ -22,7 +22,10 @@ import { STORE_REMEMBERED } from "./store-remembered-variant.js";
  * mini cart); its `store-remembered` variant is a site that already has that
  * store chosen, so the store step has nothing left to do. `pickup-towels` reads qualifying listings across pages (judged
  * by the records). `pickup-order` places an order, the consequential job
- * (judged by the confirmation's records).
+ * (judged by the confirmation's records). The four breadth workflows in
+ * `qualification/` each answer one more live task: a filtered, re-sorted read
+ * across pages, a delivery add, a checkout read stopped before Place order,
+ * and a store switch followed by a search, an add and a cart read.
  */
 export const bigboxRetailManifest = createScenarioManifest({
   id: "bigbox-retail",
@@ -40,5 +43,5 @@ export const bigboxRetailManifest = createScenarioManifest({
   },
   expected: PRIMARY_EXPECTED,
   variants: [REDESIGNED_BUY_BOX, STORE_REMEMBERED],
-  workflows: [PICKUP_TOWELS_WORKFLOW, PICKUP_ORDER_WORKFLOW, soapQuantityWorkflow],
+  workflows: [PICKUP_TOWELS_WORKFLOW, PICKUP_ORDER_WORKFLOW, soapQuantityWorkflow, RATED_DELIVERY_TOWELS_WORKFLOW, NAPKINS_FOR_DELIVERY_WORKFLOW, CHECKOUT_QUOTE_WORKFLOW, NEW_STORE_CHEAPEST_TOWELS_WORKFLOW],
 });

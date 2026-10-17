@@ -20,10 +20,10 @@ test("the manifest is valid, loopback-only, and declares its workflows, variants
   assert.deepEqual(validateWebScenario(manifest), { valid: true, value: manifest });
   assert.equal(manifest.networkPolicy, "loopback-only");
   assert.deepEqual(manifest.variants?.map(({ id }) => id), ["redesigned-withdraw-dialog"]);
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["people-search", "audit-stale-requests"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["people-search", "audit-stale-requests", "netherlands-engineers", "connect-kade-senior", "accept-messaged-invitations", "kade-lead-contact"]);
   assert.deepEqual(manifest.workflows?.[0]?.variants?.map(({ id }) => id), ["premium-upsell"]);
   const tasks = LIVE_INSTRUCTION_TASKS.filter(({ scenarioId }) => scenarioId === "professional-network").map(({ id }) => id);
-  assert.deepEqual(tasks, ["professional-network-rotterdam-data-engineers", "professional-network-rotterdam-data-engineers-upsell", "professional-network-withdraw-stale-requests", "professional-network-invitation-allowance", "professional-network-audit-stale-requests"]);
+  assert.deepEqual(tasks, ["professional-network-rotterdam-data-engineers", "professional-network-rotterdam-data-engineers-upsell", "professional-network-withdraw-stale-requests", "professional-network-invitation-allowance", "professional-network-audit-stale-requests", "professional-network-netherlands-data-engineers", "professional-network-connect-kade-senior-engineer", "professional-network-accept-messaged-invitations", "professional-network-kade-lead-contact"]);
   assert.deepEqual(LIVE_REPAIR_TASKS.filter(({ scenarioId }) => scenarioId === "professional-network").map(({ id }) => id), ["professional-network-repair-redesigned-withdraw-dialog"]);
 });
 

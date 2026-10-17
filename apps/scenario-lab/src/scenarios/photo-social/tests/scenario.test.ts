@@ -20,10 +20,10 @@ const august = (day: string) => STUDIO_POSTS.find((post) => post.date === `2026-
 /** The document without its script, which quotes selectors and class names that are not markup. */
 const markupOf = (html: string) => html.slice(0, html.indexOf(`<script type="module">`));
 
-test("the manifest is valid, with the collection as its primary workflow and two further workflows, each variant arming one mode", () => {
+test("the manifest is valid, with the collection as its primary workflow and its further workflows, each variant arming one mode", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["giveaway-entries", "ask-price", "extend-studio-inspo"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["giveaway-entries", "ask-price", "extend-studio-inspo", "priya-tags", "newest-likes", "august-over-1300", "kiln-notes"]);
   assert.deepEqual(manifest.variants?.map(({ id, arm }) => ({ id, arm })), [{ id: "consent-redesign", arm: { operation: "set-mode", payload: { mode: "consent-redesign" } } }]);
   assert.deepEqual(manifest.workflows?.[0]?.variants?.map(({ id, arm }) => ({ id, arm })), [{ id: "verified-upsell", arm: { operation: "set-mode", payload: { mode: "verified-upsell" } } }]);
 });
@@ -185,7 +185,7 @@ test("a new message comes back as markup the page inserts as it is", () => {
   assert.equal(JSON.parse(route(state, "direct/t/saltmarsh.goods/messages", "from=2")!.body!).length, 0);
 });
 
-test("the catalog carries the three jobs, the upsell twin and the repair task, each pointing where the manifest says", () => {
+test("the catalog carries the three jobs, the upsell twin, the breadth tasks and the repair task, each pointing where the manifest says", () => {
   const tasks = LIVE_INSTRUCTION_TASKS.filter(({ scenarioId }) => scenarioId === "photo-social");
   assert.deepEqual(tasks.map(({ id, judgeBy, expectedDatasetId, variantId, variantArmedAfterBuild }) => ({ id, judgeBy, expectedDatasetId, variantId, variantArmedAfterBuild })), [
     { id: "photo-social-glaze-collection", judgeBy: "playback-goal", expectedDatasetId: undefined, variantId: undefined, variantArmedAfterBuild: undefined },
@@ -197,7 +197,13 @@ test("the catalog carries the three jobs, the upsell twin and the repair task, e
     { id: "photo-social-giveaway-entries-verified-upsell", judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries", variantId: "verified-upsell", variantArmedAfterBuild: true },
     { id: "photo-social-moon-jar-price", judgeBy: "expected-dataset", expectedDatasetId: "extract-moon-jar-price", variantId: undefined, variantArmedAfterBuild: undefined },
     { id: "photo-social-extend-studio-inspo", judgeBy: "expected-dataset", expectedDatasetId: "extract-studio-inspo", variantId: undefined, variantArmedAfterBuild: undefined },
+    // The breadth tasks (t702): none is a drift variant, and none sends, pays or deletes.
+    { id: "photo-social-priya-tags", judgeBy: "expected-dataset", expectedDatasetId: "extract-priya-tags", variantId: undefined, variantArmedAfterBuild: undefined },
+    { id: "photo-social-newest-likes", judgeBy: "expected-dataset", expectedDatasetId: "extract-newest-likes", variantId: undefined, variantArmedAfterBuild: undefined },
+    { id: "photo-social-august-over-1300", judgeBy: "expected-dataset", expectedDatasetId: "extract-august-over-1300", variantId: undefined, variantArmedAfterBuild: undefined },
+    { id: "photo-social-kiln-notes", judgeBy: "expected-dataset", expectedDatasetId: "extract-kiln-notes", variantId: undefined, variantArmedAfterBuild: undefined },
   ]);
+  assert.ok(tasks.slice(5).every(({ permissionPoint }) => permissionPoint === undefined));
   assert.ok(!/message|dm\b|send/iu.test(tasks[3]!.instruction), "the price task never asks for a message to be sent");
   assert.deepEqual(LIVE_REPAIR_TASKS.filter(({ scenarioId }) => scenarioId === "photo-social").map(({ id, variantId, expect }) => ({ id, variantId, expect })), [
     { id: "photo-social-repair-consent-redesign", variantId: "consent-redesign", expect: "repair" },
