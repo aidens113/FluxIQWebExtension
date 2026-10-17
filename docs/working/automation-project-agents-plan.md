@@ -431,7 +431,23 @@ it). Calls are rate-independent; dollars are at about half pair 8's rate.
 | bigbox-retail-pickup-towels | failed | 0.110 | 79 | 1 | 65 / 59 | 49 (failed) | a false judged yes: a correct no re-asked as a filter complaint (t666 path) and replaced; Core J1-J3 |
 
 Debug notes: `../language-driven-flow-loop-plan/debugs/run-mvbl7oaa-de54f314.md`, `run-mvbl865c-97c1f8f7.md`,
-`run-mvbl9hrv-db5a120b.md`, `run-mvblai1v-a31e7593.md`, `run-mvblov2i-abb7d82e.md` (in the lane trees until merged).
+`run-mvbl9hrv-db5a120b.md`, `run-mvblai1v-a31e7593.md`, `run-mvblov2i-abb7d82e.md`.
+
+**Cost round 2 (2026-10-17, 02:03-02:17 UTC, full price rate, the same rate as pair 8; downstream `40b5ee32`, Core
+`807e4ebe`, after Core t685-t690).** Dollars now compare directly with pair 8.
+
+| Task | Verdict | $ | Calls | Briefs / tests | Pair 8 `project` $ | Pair 8 `candidate` $ |
+| --- | --- | --- | --- | --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | passed | 0.027 | 28 | 1 / 1 | 0.142, 0.081 | 0.028, 0.029 |
+| bigbox-retail-pickup-cart | passed | 0.034 | 40 | 1 / 1 | 0.114, 0.137 | 0.072, 0.065 |
+| bigbox-retail-pickup-towels | passed | 0.033 | 33 | 1 / 2 | 0.125, 0.106 | failed 0.125 |
+| everything-store-plus-earbuds-under-50 | passed | 0.029 | 21 | 1 / 2 | 0.081, 0.105 | 0.082, 0.127 |
+| social-network-feed-confirm-requests | failed | 0.031 | 33 | 1 / 1 | 0.084, 0.109 | 0.042, 0.036 |
+
+Four passes average $0.031 a build against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Social failed after a
+judged yes (playback's result check and the oracle said it does not answer the request); debug in flight
+(`run-mvbr0w7e-6a01c05b.md`). Debug notes: `run-mvbr0acz-5ccd4d74.md`, `run-mvbr0aok-c6d28b9b.md`,
+`run-mvbr0tnr-49431979.md`, `run-mvbrhw4t-e440847e.md` (in the lane trees until merged).
 
 ## Units (this repository)
 
