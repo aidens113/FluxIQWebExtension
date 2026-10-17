@@ -49,7 +49,7 @@ escape).
 
 **Not done / next:**
 - The handoff sweep: downstream `pnpm check` passes after its fix; Core's whole vitest run failed 18 of 12,473 (host-lease,
-  two trial tests), fixed forward as Core t695 (in flight at handoff; see Core's ledger).
+  two trial tests), fixed forward as Core t695 (merged; Core's whole suite then passed 12,475 of 12,475).
 - Open from the cost rounds: a confirmed yes on the single path relies on t691/t692's naming rules; watch live builds
   for false holds from the stricter yes (none seen in rounds 3-4). `service/subflow-trial/` and the shallow copies in
   `completion-attempt.ts:59` drop scheduled candidates (t690 left them: no hand-over to the next round).
@@ -733,7 +733,7 @@ Entries for 2026-10-16 A8 frozen pairs 6-8, the default flip and the A8 handoff 
   authoring modes; fixing forward as Core t695. Downstream `pnpm check` -> first "# pass 667 # fail 3" (stale
   test-contracts dist), then after the fix and rebuilding the main Core checkout (4732 minutes behind its source)
   "# pass 671 # fail 0", "structure-audit: passed (202 warning(s), 639 baselined)", exit 0, 3m31s
-- Outcome: Accepted. Pushed downstream; Core t695 follows, then Core's ledger records the sweep fix
+- Outcome: Accepted. Core t695 merged and pushed (`57ea2d5e`): Core's whole suite -> 12475 passed, 0 failed
 
 ## Open Questions
 
