@@ -1,6 +1,6 @@
 import { escapeHtml } from "../../../html.js";
 import { currentPrice, LISTINGS, listingById, moneyText } from "../catalog/index.js";
-import { itemPath } from "../paths.js";
+import { itemPath, MARKET_ROOT } from "../paths.js";
 import type { AuctionState, Listing } from "../types.js";
 import type { AuctionClasses } from "./styles.js";
 
@@ -36,6 +36,16 @@ function bidEntry(state: AuctionState, itemId: string): string {
   return `${listing.title} · Your max bid ${moneyText(listing.currency, bid.maxBid)} · ${standing} at ${moneyText(listing.currency, bid.current)}`;
 }
 
+/**
+ * The sellers the person has saved, as the Saved sellers list shows them: in
+ * alphabetical order, whatever order they were saved in, as a real account
+ * page sorts them. The list is the account's state, so saving the same four
+ * sellers in any order leaves the same list.
+ */
+function savedSellers(state: AuctionState): string[] {
+  return [...state.followed].sort((left, right) => left.localeCompare(right, "en"));
+}
+
 function bidItems(state: AuctionState): string[] {
   return [...new Set(state.bids.map((bid) => bid.itemId))];
 }
@@ -46,7 +56,7 @@ export function flyoutTexts(state: AuctionState): { watch: string; bids: string;
     watch: watchedListings(state).map((listing) => watchEntry(listing, state)).join(""),
     bids: bidItems(state).map((itemId) => bidEntry(state, itemId)).join(""),
     purchases: state.purchases.map((id) => listingById(id)!).map((listing) => `${listing.title} · ${moneyText(listing.currency, listing.price)}`).join(""),
-    followed: state.followed.join(""),
+    followed: savedSellers(state).join(""),
   };
 }
 
@@ -59,7 +69,7 @@ export function flyoutListsMarkup(css: AuctionClasses, state: AuctionState): { w
     return linked(listing, bidEntry(state, itemId).slice(listing.title.length));
   }).join("");
   const purchases = state.purchases.map((id) => listingById(id)!).map((listing) => linked(listing, ` · ${moneyText(listing.currency, listing.price)}`)).join("");
-  const followed = state.followed.map((seller) => `<li>${escapeHtml(seller)}</li>`).join("");
+  const followed = savedSellers(state).map((seller) => `<li><a class="${css.topLink}" href="${MARKET_ROOT}str/${encodeURIComponent(seller)}">${escapeHtml(seller)}</a></li>`).join("");
   return {
     watch: `<ul class="${css.flyoutList}" data-testid="watch-flyout">${watch}</ul>`,
     bids: `<ul class="${css.flyoutList}" data-testid="bids-flyout">${bids}</ul>`,
