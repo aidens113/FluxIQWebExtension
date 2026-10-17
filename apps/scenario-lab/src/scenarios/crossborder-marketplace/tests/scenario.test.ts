@@ -57,11 +57,11 @@ const INTERRUPTION_VARIANTS: Readonly<Record<string, unknown>> = {
   "flash-deal-stuck": INTERRUPTIONS.stuck,
 };
 
-test("the manifest is valid, with four workflows and six variants, each arming one mode or one interruption, and only the stuck interruption judged on failing", () => {
+test("the manifest is valid, with eight workflows and six variants, each arming one mode or one interruption, and only the stuck interruption judged on failing", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["spain-hubs", "place-order", "collect-official-coupon-only"]);
-  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal", ...Object.keys(INTERRUPTION_VARIANTS)], ["list-layout"], [], []]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["spain-hubs", "place-order", "collect-official-coupon-only", "free-hubs-under-ten", "follow-official-store", "mint-hub-fallback", "uk-express-quote"]);
+  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal", ...Object.keys(INTERRUPTION_VARIANTS)], ["list-layout"], [], [], [], [], [], []]);
   for (const variant of [...(manifest.variants ?? []), ...(manifest.workflows ?? []).flatMap(({ variants }) => variants ?? [])]) {
     const interruption = INTERRUPTION_VARIANTS[variant.id];
     if (interruption !== undefined) {
@@ -238,7 +238,7 @@ test("ids are minted per page load, and the only test id on a control is the shi
   assert.ok(ids(first.body).length >= 4);
   assert.notDeepEqual(ids(first.body), ids(second.body));
   const testIds = new Set([...first.body.matchAll(/data-testid="([^"]+)"/gu)].map((match) => match[1]));
-  assert.deepEqual([...testIds].sort(), ["add-to-cart", "build-marker", "coupon-only-account", "mini-cart-count", "orders-summary", "store-coupons"]);
+  assert.deepEqual([...testIds].sort(), ["add-to-cart", "build-marker", "coupon-only-account", "followed-stores", "mini-cart-count", "orders-summary", "store-coupons"]);
   const redesigned = visit(armed("basket-redesign"), `item/${VOLTBAY_OFFICIAL_ID}`).body;
   assert.ok(!redesigned.includes('data-testid="add-to-cart"'));
   assert.ok(redesigned.indexOf("Add to basket") < redesigned.indexOf("Buy now"), "Buy now now sits where Add to cart did");

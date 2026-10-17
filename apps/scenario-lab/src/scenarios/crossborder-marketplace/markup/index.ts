@@ -1,7 +1,7 @@
 export { resultCard } from "./cards.js";
 export { renderCartPage } from "./cart.js";
 export { renderCheckoutPage } from "./checkout.js";
-export { accountFlyoutMarkup, miniCartLineText, miniCartMarkup, ordersSummaryText, storeCouponsText } from "./flyouts.js";
+export { accountFlyoutMarkup, followedStoresText, miniCartLineText, miniCartMarkup, ordersSummaryText, storeCouponsText } from "./flyouts.js";
 export { FEED_PAGE_SIZE, FEED_PAGES, feedPage, renderHomePage } from "./home.js";
 export { renderItemDescription } from "./item-frame.js";
 export { renderItemPage } from "./item.js";
