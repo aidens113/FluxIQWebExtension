@@ -128,6 +128,30 @@ point is declared there, so asking fails the run and is a product defect); an em
   was not exercised.
 - Report to: `docs/working/breadth-forty-tasks-plan/reports/package-lead.md` in the worktree.
 
+### Brief: install-core-lead (t707, dispatched as `lead`)
+- Repository: FluxIQ Core and this repository, in `C:/Users/osrs_/FluxStuff/fxwork/t707/` only (`!FluxIQ` on
+  branch `task/t707-install-core-fixes`, `!FluxIQWebExtension` beside it). Follow Core's AGENTS.md there.
+- Task: fix the five first-run defects the install proof found (`reports/package-lead.md`, "Core bugs"), each at
+  its cause, with a fail-first test beside it:
+  C1 `/get-started` always says "runtime did not answer" (`fluxiq.ts:58` returns null, which
+  `useOnboardingReadings.ts:85` rejects); C2 approving a pairing whose socket has closed still creates trust,
+  loses the token and marks the dead session ready (`pairing-flow.ts` `complete()`): it must fail honestly so
+  the browser pairs again; C3 `client-gateway-transport.ts` `selectSession` sends commands to that dead session;
+  C4 the Get started buttons create projects with no domain, which the extension refuses; C5 a provider key added
+  during a sign-in stays locked until the next sign-in. Confirm each from the code before fixing it; if one is
+  not real, say why.
+- Then repeat the install proof's first automation once (Chrome, the clean profile and isolated ports in
+  `reports/package-lead.md`, the release package built from this tree): one paid build under the $0.25 ceiling, on
+  a realistic scenario, supervised, run to a result and then rerun with no model calls.
+- Rules: isolated data and ports, never the user's panel, profiles or `.fluxiq`; never show tokens or keys; no Lab
+  slot; headed browsers; no model guidance that mirrors a scenario.
+- Owns (may edit): the t707 tree, both repositories; its report. Must not touch: the lane trees, main checkouts,
+  shared working documents.
+- Definition of done: per defect, the cause, the fix, the tests beside it and their observed output; Core
+  typecheck of each touched package and Core's structure audit; the extension tests beside any downstream change;
+  the first automation's result and its zero-call rerun, or exactly where it stopped and why.
+- Report to: `docs/working/breadth-forty-tasks-plan/reports/install-core-lead.md` in `fxwork/t707/!FluxIQWebExtension`.
+
 ### Brief: live-lane-<N> (four copies, dispatched as `lead-xhigh`, Phase 3)
 - Repository: this repository and Core, in the lane's tree only: lane 1 `fxwork/t563` (slot-1), lane 2
   `fxwork/t565` (slot-2), lane 3 `fxwork/t566` (slot-3), lane 4 `fxwork/t567` (slot-4); each holds both checkouts.
@@ -175,6 +199,18 @@ point is declared there, so asking fails the run and is a product defect); an em
   `pnpm task finish` x10 -> structure audit passed each
 - Outcome: Accepted
 - Follow-up: Phase 3 live lanes
+
+### 2026-10-17 — Install proof: Chrome and Edge install and pair; first automation stalled on Core (t706)
+- Agent: package-lead (verified by the supervisor)
+- Changed: `apps/extension/src/background/connection.ts`, `connection/gateway-session.ts` (+5 tests): a cheap
+  extension API call each heartbeat while pairing or connecting keeps the MV3 worker alive past 30 s; `docs/user/
+  install.md`, `quickstart.md`; `docs/architecture/extension-client.md` (supervisor)
+- Why: approval after about 30 s never paired (reproduced twice at about 108 s; after the fix Chrome paired at 80 s,
+  Edge at about 55 s, both through the real Load-unpacked steps)
+- Validation: `EXTENSION_TEST_BUILD_LABEL=t706-verify node scripts/test-extension.mjs background/connection/tests`
+  -> "# tests 254 # pass 254 # fail 0" (supervisor rerun); `pnpm task finish t706` -> structure audit passed, merged
+- Outcome: Partial. Firefox not installed here; the first automation stalled (likely Core C2/C3), about $0.01 spent
+- Follow-up: t707 fixes Core C1-C5 and reruns the first automation once
 
 ## Open Questions
 
