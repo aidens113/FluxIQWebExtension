@@ -11,7 +11,7 @@ import { followButton } from "./watch-controls.js";
 export function renderSeller(state: AuctionState, context: RenderContext, seller: Seller): string {
   const css = auctionClasses(context.seed);
   const live = LISTINGS.filter((listing) => listing.seller === seller.id && !listing.ended);
-  const rows = live.map((listing) => `<li><a class="${css.link}" href="${itemPath(listing.id)}">${escapeHtml(listing.title)}</a> · ${moneyText(listing.currency, currentPrice(listing, state.bids))}</li>`).join("");
+  const rows = live.map((listing) => `<li><a class="${css.link}" href="${itemPath(listing.id)}">${escapeHtml(listing.title)}</a> · <span>${moneyText(listing.currency, currentPrice(listing, state.bids))}</span></li>`).join("");
   const main = `<h1>${escapeHtml(seller.id)}</h1>
 <p>${escapeHtml(seller.location)} · ${seller.feedback.toLocaleString("en-GB")} feedback · ${seller.positive} positive · member since ${seller.since}</p>
 ${followButton(css, seller.id, state, "Save seller")}
