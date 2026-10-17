@@ -135,7 +135,10 @@ export class FluxIQConnection {
           void this.commands.handleSessionReady(message);
         },
         onCommand: (payload, messageId) => void this.commands.handleCommand(payload, messageId),
-        onHeartbeat: () => void this.page.sendBrowserState()
+        onHeartbeat: () => void this.page.sendBrowserState(),
+        // Any extension API call resets the MV3 idle timer (Chrome 110+), so the
+        // worker outlives a person's approval; reading lastError keeps it quiet.
+        keepAlive: () => chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError)
       }
     });
     this.projects = new ProjectContext({

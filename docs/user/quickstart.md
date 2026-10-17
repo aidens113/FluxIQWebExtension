@@ -12,10 +12,12 @@ In the `!FluxIQWebExtension` folder, run:
 pnpm dev
 ```
 
-Then open `http://127.0.0.1:3000`, and sign in or create the local account
-FluxIQ asks for.
+Then open `http://127.0.0.1:3000` and sign in. The first time, sign in with
+the username `admin` and the temporary password `admin`. FluxIQ then asks you
+to replace the temporary password with one of at least 12 characters. Keep
+that password: FluxIQ asks for it again before it stores an API key.
 
-**It worked if** the FluxIQ web app loads.
+**It worked if** the FluxIQ web app loads and shows **Programs**.
 
 Open `http://127.0.0.1:3000/get-started` for a live checklist of the next
 steps. It shows each step as done, current, or waiting on an earlier step, and
@@ -23,19 +25,23 @@ updates as you go.
 
 ## 2. Pair your browser (about 1 minute)
 
-1. Click the FluxIQ button in the browser toolbar. Chrome and Edge open the
-   FluxIQ side panel, and Firefox opens the FluxIQ popup.
-2. Choose **Connect**. The panel says **Approve this browser in FluxIQ** and
-   shows a short code.
+1. Click the FluxIQ button in the browser toolbar. If you have not pinned it,
+   it is in the **Extensions** menu (the puzzle-piece button). Chrome and Edge
+   open the FluxIQ side panel, and Firefox opens the FluxIQ popup.
+2. Under **Connect this browser**, choose **Connect**. The panel says
+   **Approve this browser in FluxIQ** and shows a six-digit code.
 3. Switch to the FluxIQ web app. A **Client pairing request** appears with the
-   same code. Check that the codes match, then approve it.
+   same code. Check that the codes match, then choose **Confirm pairing**. The
+   request lasts five minutes; you do not need to hurry.
 
-**It worked if** the panel's dot turns green and it says **Connected to
-FluxIQ**.
+**It worked if** the panel's dot turns green, and **Settings** (the gear
+button) says **Connected to FluxIQ** under **Connection**.
 
 If the panel says **Can't reach FluxIQ**, first check that `pnpm dev` is still
-running. If it is, open the panel's advanced connection settings. The address
-should be `ws://127.0.0.1:4777/client`.
+running. If it is, open **Settings** (the gear button) and look under
+**Connection**. **FluxIQ connection address** should be
+`ws://127.0.0.1:4777/client` and **FluxIQ web address** should be
+`http://127.0.0.1:3000`. Choose **Save** after changing either.
 
 ## 3. Add your DeepSeek API key (about 1 minute)
 
@@ -43,13 +49,20 @@ FluxIQ uses your own DeepSeek API key to create automations and adapt them.
 DeepSeek is the only provider in this release. FluxIQ adds no charge of its
 own: DeepSeek bills your account directly for the calls FluxIQ makes.
 
-1. In the FluxIQ web app, open **Secret Keys** (`/programs/secret-keys`).
-2. Add a key with these settings:
-   - kind: **LLM**
-   - provider: **DeepSeek**
-   - scope: **Global**
-   - value: your DeepSeek API key
-3. FluxIQ asks you to confirm your identity before it stores the key.
+1. In the FluxIQ web app, open **Secret Keys** (`/programs/secret-keys`) and
+   choose **Add Key**.
+2. Fill in the form:
+   - Name: any name, for example **DeepSeek**
+   - Secret value: your DeepSeek API key
+   - Type: **LLM**
+   - Provider: **DeepSeek** (the form starts on OpenAI, so change it)
+   - Scope: **Global**
+3. Choose **Continue**. Under **Authorize New Key**, enter your FluxIQ
+   password (and your PIN, if you set one), then choose **Save Key**.
+4. Open the **Administrator** menu, choose **Log out**, and sign in again.
+   FluxIQ unlocks your keys when you sign in, so a key added during this
+   sign-in stays locked until the next one. Until then the panel's chat says
+   "your model key is locked".
 
 **It worked if** the key is listed as enabled. The key's value is not shown
 again.
@@ -64,7 +77,25 @@ You can see which key and model a flow uses in that flow's **Settings**, under
 
 ## 4. Create an automation (about 2 minutes)
 
-Open the page you want to automate in a normal tab. Create an automation and
+Automations live in a web automation project, and the extension only works
+with that kind of project. Create one first:
+
+1. On the FluxIQ home page, under **Domains**, open **Web Automation**.
+2. Open **Automation Studio**, choose **Create project**, give it a name, and
+   choose **Create project**.
+
+A project created from the plain **Automation Studio** entry or from the
+**Get started** buttons is not a web automation project. With one of those
+open, the panel's chat says "this project is not one".
+
+Then open the page you want to automate in a normal tab, and keep that tab
+in front. The quickest way to build is the panel's **Chat**: describe what
+you want in your own words and send it. FluxIQ works the steps out on the
+page you have open, shows each one in the chat, test-runs the whole
+automation once from the start, and says when it is ready or why it is not.
+You can stop a build with **Stop build**.
+
+You can also create an automation in Automation Studio and
 write what you want it to do in **Instructions**. Every automation needs a
 written task, including a saved automation that has none before its next run.
 Then choose any support you need:

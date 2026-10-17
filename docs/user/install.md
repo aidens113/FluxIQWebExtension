@@ -63,8 +63,13 @@ To install in **Chrome or Edge**:
 
 1. Unzip the Chrome package into a folder you will keep.
 2. Open `chrome://extensions` (or `edge://extensions` in Edge).
-3. Turn on **Developer mode**.
-4. Choose **Load unpacked**, then select the unzipped folder.
+3. Turn on **Developer mode**. In Chrome the switch is at the top right; in
+   Edge it is at the bottom of the left-hand menu.
+4. Choose **Load unpacked**, then select the unzipped folder. The
+   **FluxIQ Web Automation Client** card appears with its version.
+5. Pin the FluxIQ button: open the **Extensions** menu (the puzzle-piece
+   button in the toolbar) and choose the pin beside FluxIQ. The quickstart
+   starts from that button.
 
 To install in **Firefox**, you need a signed package. Firefox's release build
 does not install unsigned add-ons permanently. To try an unsigned package:
@@ -113,7 +118,9 @@ schedule. You can also update them right away:
 **Unpacked installs** do not update themselves. To update one:
 
 1. Replace the folder's contents with the new version.
-2. Choose the reload button on the FluxIQ card in `chrome://extensions`.
+2. Choose the reload button on the FluxIQ card in `chrome://extensions`
+   (**Reload** in `edge://extensions`). This closes the FluxIQ panel; open it
+   again from the toolbar button.
 
 To update the **runtime**, pull both checkouts, then run `pnpm install` and
 `pnpm build` in `!FluxIQ`. Restart `pnpm dev`.

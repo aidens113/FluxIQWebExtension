@@ -239,6 +239,12 @@ since they last pressed Connect (remembered in `chrome.storage.session`).
   approval, `reconnect-watchdog.ts` holds a `chrome.alarms` alarm
   (`fluxiq.reconnect`, every 30 s) that wakes the worker; it is cleared once the
   connection is back. This is why the manifests ask for `alarms`.
+- **Waiting on an approval.** While the socket is open but not yet connected
+  (`pairing`, `connecting`), nothing crosses it, so Chrome would stop the worker
+  about 30 s in, long before a person has approved. Each heartbeat tick then
+  calls the session's `keepAlive` handler, a cheap extension API call
+  (`runtime.getPlatformInfo`) that resets the idle timer; it is not a gateway
+  message, since an unpaired session may not send client data (t706).
 - **A panel opening** still reconnects too (`getStatus` from a control page).
 
 `e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
