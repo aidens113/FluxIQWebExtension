@@ -58,8 +58,8 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
   judged yes: a final read with no condition stored all 8 rows where the answer holds 4, a Core note vouched for the
   extra rows, and the confirming judge call is an identical repeat (`run-mvbr0w7e-6a01c05b.md`). Merged: Core t691
   (extra rows must be justified; the second judge call becomes the converse question), t693 (a repair is told what
-  its condition kept). In flight: Core t692 part 2 (a keep-everything
-  read after an act is a doubt, wired end to end). Next: t692, then cost round 3.
+  its condition kept), Core t692 (a keep-everything read after an act is a doubt the judge must settle), Core t694
+  (a split). Cost round 3 running (all five, full rate).
 - Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
   fallback stays in memory by design), `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
@@ -733,6 +733,26 @@ Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are
   subflow-trial, flow-bootstrap, project-agents, project-build -> 421 files, 3997 passed, 2 skipped; Core `pnpm task
   finish` -> `pnpm check` passed; pushed `f909ce8c`
 - Outcome: Accepted. Follow-up: `llm/draft-amendment-feedback.ts` is at exactly 800 lines; split before its next change
+
+### 2026-10-17 — A keep-everything read is a doubt the judge must settle (Core t692); feedback file split (Core t694)
+- Agent: worker t692 (four rounds: part 1 inert until wired; wiring reusing t691's converse ask; the supervisor sent
+  back the gap that a confirmed yes was not held to naming each row; then the prompt pins the supervisor's whole-`llm`
+  run caught); worker t694; supervisor verified, integrated, synced the lanes, launched cost round 3
+- Changed: Core t692 `result-verification/read-account/kept-every-row.ts` (new: a read with no condition that kept every
+  row after an act over a narrower read of the same list, by graph lineage and equal read parameters), `contracts/
+  read-account.ts`, `result-summary.ts`, `request-rows/unquoted-rows.ts` (every row such a read stored must be named
+  beside it with the request's words), `verdict/{kept-rows-flagged,kept-line}.ts`, `refuted-no/recheck-words.ts`,
+  `llm/diagnosis-instructions.ts` (+ pins), `subflow-candidate/subflow-trial-gate.ts`, `service/subflow-trial/{run,
+  port}.ts`, `service/candidate-trial/{reads,feedback}.ts`, `project-agents/{dispatch/trial-port.ts,single-subflow/}`.
+  Core t694 `llm/draft-amendment-feedback.ts` -> `llm/draft-amendment-feedback/` (13 files, verbatim)
+- Why: cost round 2 social's false yes; t694 because the file sat at the 800-line hard limit
+- Validation: (supervisor) t694 after merging dev: tsc exit 0; vitest llm, flow-draft, flow-bootstrap -> 429 files,
+  4633 passed; pushed `93df47e9`. t692 after merging dev (t694 in): tsc exit 0; vitest result-verification,
+  flow-bootstrap, subflow-trial, candidate-trial, project-agents, project-build, llm -> 4 failures, all
+  `llm/deepseek/tests/system-prompt.test.ts` (the verification prompt pins); pins updated; `vitest run llm` -> 211
+  files, 2053 passed. Core `pnpm task finish` -> `pnpm check` passed for both; Core dev pushed `f406dcb4`. Lanes synced:
+  downstream `1866ee3e`, Core `f406dcb4`, both containing dev, Core builds current
+- Outcome: Accepted. Cost round 3 launched (all five, full rate)
 
 ## Open Questions
 
