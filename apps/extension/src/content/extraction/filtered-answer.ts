@@ -45,8 +45,9 @@
 //
 // ## Counts only
 //
-// Nothing here is read off the page but `seen`: one value per condition, cut to
-// 60 characters, which says what a condition's own read was about. The report
+// Nothing here is read off the page but `seen`, one value per condition, which
+// says what a condition's own read was about, and `keptValues`, a few values per
+// condition, which say what it read on the rows it kept. The report
 // travels on the wire beside the extraction summary
 // (`domain/src/actions/extraction/summary.ts`), whose contract is otherwise
 // counts, flags and declared field keys -- so no row's content rides out on a
@@ -74,8 +75,15 @@ export type ListExtractionConditionReport = {
   rejected: number[];
   /** Whether the read answered with rows its conditions rejected, because keeping only the survivors would have answered with none. */
   unfiltered: boolean;
-  /** One value each condition's own read found on an item it held of, or `null` (`item-filter.ts`); the one member read off the page. */
+  /** One value each condition's own read found on an item it held of, or `null` (`item-filter.ts`); read off the page, with `keptValues`. */
   seen?: (string | null)[] | undefined;
+  /**
+   * Per condition, the first few distinct values it read on rows every
+   * condition held of (`item-filter.ts`): what a condition that rejected
+   * nothing found on the rows it kept. Collected by this document only, so a
+   * continued read says what its own pages showed.
+   */
+  keptValues?: string[][] | undefined;
   /**
    * Per condition, the items it rejected that every other condition held of:
    * the rows it removed by itself, which are the ones that show whether it is

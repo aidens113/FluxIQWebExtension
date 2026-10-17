@@ -522,3 +522,32 @@ test("a handle from another page is refused as stale with the page as it is now,
   assert.match(String(evidence.detail?.next), /names nothing now/u);
   assert.equal(shownHandle(evidence, "Add to cart: napkins").startsWith("t"), true, "the refusal carries the napkins page as it is now");
 });
+
+// t693: a list read's draft statement tells Core what each `where` condition
+// kept (`conditions`, `../list-read/condition-account.ts`), with the values it
+// read on the kept rows shown in the read the model is given, which is where
+// Core checks them before carrying them. Run `run-mvbr0w7e-6a01c05b`'s repair
+// resent one condition every row met six times because nothing said so. A
+// library catalogue rather than a store.
+test("a list read's statement says what each condition kept and rejected, with the values it read on kept rows; a look says none", async () => {
+  const counted = { applied: 3, kept: 3, rejected: [0, 1], unfiltered: false, keptValues: [["On loan", "Available"], ["1998"]] };
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: Object.assign(page("Catalogue", 0), { url: "https://library.test/catalogue?q=tides" }), structure: structuredClone(ROWS) } };
+      const extracted = [{ name: "The Long Shore", status: "On loan" }, { name: "Tidewater", status: "Available" }, { name: "Salt Marsh", status: "On loan" }];
+      return { status: "succeeded", payload: { extracted, extraction: { recordCount: 3, pagesRead: 1, itemsSeen: 4, truncated: false, fieldNames: ["name", "status"], missingFields: [], conditions: counted } } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const detected = await runtime.executeTool({ ...PROJECT, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  const handle = (detected.evidence as WebLlmRepeatingStructure).extraction;
+  const result = await runtime.executeTool({ ...PROJECT, callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters: { extractList: { handle } }, consequences: [] } });
+  assert.equal(result.effectApplied, true, JSON.stringify(result.evidence).slice(0, 400));
+  assert.deepEqual(result.draft?.conditions, [{ kept: 3, rejected: 0, keptValues: ["On loan", "Available"] }, { kept: 2, rejected: 1, keptValues: ["1998"] }]);
+  const shown = JSON.stringify(result.evidence);
+  for (const value of ["On loan", "Available", "1998"]) assert.equal(shown.includes(JSON.stringify(value)), true, value);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  assert.equal(looked.draft !== undefined && "conditions" in looked.draft, false);
+});

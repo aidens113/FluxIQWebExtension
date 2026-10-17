@@ -185,3 +185,42 @@ test("a condition over a column keeps the value it tested on an item it held of,
   assert.deepEqual([...rejects!(ITEM, { name: "Article C", badge: "Verified later" }, seen)], []);
   assert.deepEqual(seen, ["Verified"]);
 });
+
+// What each condition read on the rows the read kept (`kept`, t693), so a
+// condition every row met can be told apart from one that narrowed the list.
+// Run `run-mvbr0w7e-6a01c05b`'s repair resent such a condition six times,
+// told only `rejected: 0`. A library catalogue: books that carry a status, under
+// a length bound.
+
+test("an item every condition held of adds each condition's value once, a few per condition, and a rejected item adds none", () => {
+  const rejects = itemFilterFor({ item: ".book", fields: { title: ".title", status: ".status", pages: ".pages" }, where: [{ field: "status", is: "present" }, { field: "pages", lessThan: 400 }] });
+  const kept: string[][] = [[], []];
+  for (const [title, status, pages] of [["The Long Shore", "On loan", "320"], ["Tidewater", "Available", "280"], ["Salt Marsh", "On loan", "210"], ["Driftwood", "Reserved", "190"], ["Estuary", "Lost", "150"]]) {
+    assert.deepEqual([...rejects!(ITEM, { title: title!, status: status!, pages: pages! }, undefined, undefined, kept)], []);
+  }
+  // A row the length bound rejected adds nothing, not even the status it had.
+  assert.deepEqual([...rejects!(ITEM, { title: "Atlas of Tides", status: "Withdrawn", pages: "610" }, undefined, undefined, kept)], [1]);
+  assert.deepEqual(kept, [["On loan", "Available", "Reserved"], ["320", "280", "210"]]);
+});
+
+test("a read reports per condition what it read on the rows it kept, beside its counts", async () => {
+  const STATUS: WebAutomationExtractListRequest = {
+    item: ".row",
+    fields: { title: { kind: "attribute", attribute: "data-name" }, pages: { kind: "attribute", attribute: "data-price" } },
+    where: [{ read: { kind: "attribute", attribute: "aria-label" }, is: "present" }, { field: "pages", lessThan: 400 }]
+  };
+  const page = fakePage([
+    { name: "The Long Shore", price: "320", label: "On loan" },
+    { name: "Tidewater", price: "280", label: "Available" },
+    { name: "Atlas of Tides", price: "610", label: "Withdrawn" }
+  ]);
+  try {
+    const outcome = await extractList(STATUS, { resume: START });
+    assert.deepEqual(outcome.conditions?.rejected, [0, 1]);
+    assert.equal(outcome.conditions?.applied, 3);
+    // The status condition rejected none; what it read on the kept rows is what says why.
+    assert.deepEqual(outcome.conditions?.keptValues, [["On loan", "Available"], ["320", "280"]]);
+  } finally {
+    page.restore();
+  }
+});

@@ -80,7 +80,7 @@ import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRe
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
-import { webListReadCode } from "./list-read";
+import { webListReadCode, webListReadConditionAccount } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
 
@@ -226,7 +226,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined, conditions: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -559,7 +559,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // What it changed on the page it stayed on, from the same walk as the outcome's
         // `changed` above: Core reads which step did an act from it, not from the
         // model's label (`./press-effect/change/statement.ts`, week report W1).
-        changed: webNodePageChangeStatement(node, current, after)
+        changed: webNodePageChangeStatement(node, current, after),
+        // What each `where` condition of a list read kept and rejected, with a few values it read on the kept rows
+        // (`./list-read/condition-account.ts`, t693): Core names a condition that left out no row when the model
+        // reruns the read unchanged. Absent on every other node.
+        conditions: webListReadConditionAccount(node.definitionId, recorded)
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -629,6 +633,7 @@ function refusal(
     toggle: undefined,
     reads: undefined,
     changed: undefined,
+    conditions: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -669,7 +674,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined, conditions: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -684,7 +689,8 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     toggle: undefined,
     reads: record.standing.reads,
     // The page after it was the robot check, compared with nothing: no line is said changed, as no toggle is.
-    changed: undefined
+    changed: undefined,
+    conditions: undefined
   });
 }
 

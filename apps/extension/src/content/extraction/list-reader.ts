@@ -380,6 +380,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const seenEach = [...carried.seen]; // what each condition's own read found (`item-filter.ts`), carried like the counts
   // Per condition, the items only it rejected, which say whether it is right (`rejected-samples.ts`); carried like the counts.
   const aloneEach = [...carried.alone];
+  // Per condition, a few values it read on rows every condition kept (`item-filter.ts`); this document's own, never carried.
+  const keptValuesEach: string[][] = carried.rejected.map(() => []);
   // Every row each condition rejected, its alone rows first, carried across documents like the counts.
   const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples, resume?.rejectedSamplesAlone, resume?.rejectedObservations);
 
@@ -425,7 +427,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(pageFault ? { pageFault: true } : {}),
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
-      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach], alone: [...aloneEach] } }),
+      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach], alone: [...aloneEach], keptValues: keptValuesEach.map((values) => [...values]) } }),
       ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone(), ...(samples.observations() === undefined ? {} : { rejectedObservations: samples.observations() }) }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
@@ -558,7 +560,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         // and a read that kept anything never returns it.
         if (rejects) {
           const observations: WebAutomationExtractionRejectionObservation[] = [];
-          const rejectedBy = rejects(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined);
+          const rejectedBy = rejects(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined, keptValuesEach);
           if (seen === undefined) applied += 1;
           if (rejectedBy.length > 0) {
             if (seen === undefined) {
