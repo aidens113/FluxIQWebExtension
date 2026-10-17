@@ -454,6 +454,21 @@ in round 1 and pair 8, whose judges caught it; t679's single judged run removed 
 Not caused by t686-t690 (no no was produced). Fixes: Core t691, t692, t693 (paired). Debug notes: `run-mvbr0acz-5ccd4d74.md`, `run-mvbr0aok-c6d28b9b.md`,
 `run-mvbr0tnr-49431979.md`, `run-mvbrhw4t-e440847e.md`.
 
+**Cost round 3 (2026-10-17, 05:10-05:30 UTC, full rate; downstream `1866ee3e`, Core `f406dcb4`, after Core
+t691-t694).** All five passed.
+
+| Task | $ | Calls | Briefs / tests | Pair 8 `project` $ | Pair 8 `candidate` $ |
+| --- | --- | --- | --- | --- | --- |
+| crossborder-marketplace-hub-to-cart | 0.019 | 21 | 1 / 1 | 0.142, 0.081 | 0.028, 0.029 |
+| bigbox-retail-pickup-cart | 0.039 | 50 | 1 / 2 | 0.114, 0.137 | 0.072, 0.065 |
+| bigbox-retail-pickup-towels | 0.025 | 26 | 1 / 2 | 0.125, 0.106 | failed 0.125 |
+| everything-store-plus-earbuds-under-50 | 0.027 | 19 | 1 / 2 | 0.081, 0.105 | 0.082, 0.127 |
+| social-network-feed-confirm-requests | 0.025 | 34 | 2 / 2 | 0.084, 0.109 | 0.042, 0.036 |
+
+$0.135 for five builds, $0.027 a build, against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Round 4 runs the
+same source (no change between) to make a frozen pair. Debug notes: `run-mvbxvhwm-a8e6113a.md`,
+`run-mvbxvhw6-eb018396.md`, `run-mvbxvwkw-4e052ea5.md`, `run-mvbxw85h-198fa7ec.md`, `run-mvbyc30x-e827a493.md`.
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
