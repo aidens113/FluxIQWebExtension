@@ -2,13 +2,14 @@ import type { RenderContext, ScenarioRouteRequest, ScenarioRouteResponse } from 
 import { BRANCHES } from "./data/index.js";
 import {
   BOOKING_WIDGET_PATH, bookingWidget, priceListFragment, renderBook, renderBookingConfirmed, renderBranches, renderDirections,
-  renderQuoteReceived, renderServices, renderTeam, teamBatch,
+  renderNewsletter, renderQuoteReceived, renderServices, renderTeam, teamBatch,
 } from "./pages/index.js";
 import { siteClasses } from "./styles.js";
 import type { CompanyWebsiteState } from "./types.js";
 
 /**
- * Every page under the start page. The site's pages, the two fragments its
+ * Every page under the start page. The site's pages (the newsletter's
+ * "Offers & reminders" page among them), the two fragments its
  * scripts fetch (a team batch, a price list), the booking widget's document,
  * and the two confirmations, which are rendered from what the server holds.
  * `now` is only for the team endpoint's rate limit.
@@ -24,6 +25,7 @@ export function routeCompanyWebsite(state: CompanyWebsiteState, request: Scenari
       return page(priceListFragment(siteClasses(context.seed), basis));
     }
     case "branches": return page(renderBranches(state, context));
+    case "newsletter": return page(renderNewsletter(state, context));
     case "directions": {
       const branchId = request.query.get("branch") ?? "";
       if (!BRANCHES.some(({ id }) => id === branchId)) return undefined;

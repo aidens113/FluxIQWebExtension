@@ -119,7 +119,7 @@ function footer(c: SiteClasses): string {
 <div class="${c.footerCols}">
   <div class="${c.footerCol}"><strong>Services</strong>${link(`${ROOT}services`, "Boiler servicing")}${link(`${ROOT}services`, "Repairs")}${link(`${ROOT}services`, "New boilers")}${link(`${ROOT}services`, "Heat pumps")}</div>
   <div class="${c.footerCol}"><strong>Company</strong>${link(`${ROOT}team`, "Our team")}${link(`${ROOT}branches`, "Branches")}${link(`${ROOT}team`, "Careers")}</div>
-  <div class="${c.footerCol}"><strong>Help</strong><span class="${c.footerLink}" data-open-quote>Request a quote</span>${link(`${ROOT}book`, "Book a service")}<span class="${c.footerLink}">Cookie settings</span>${link(`${ROOT}branches`, "Contact us")}</div>
+  <div class="${c.footerCol}"><strong>Help</strong><span class="${c.footerLink}" data-open-quote>Request a quote</span>${link(`${ROOT}book`, "Book a service")}<span class="${c.footerLink}">Cookie settings</span>${link(`${ROOT}newsletter`, "Offers & reminders")}${link(`${ROOT}branches`, "Contact us")}</div>
   <div class="${c.footerCol}"><strong>Talk to us</strong><span>${COMPANY.phone}</span><span>${escapeHtml(COMPANY.email)}</span><span>Monday to Friday, 8am to 5:30pm</span></div>
 </div>
 <p class="${c.legal}">&copy; 2026 ${escapeHtml(COMPANY.name)} Ltd. Registered in England and Wales. Gas Safe business registration 118822. Site by Harbourline Digital &middot; build ${SITE_BUILD}</p>
