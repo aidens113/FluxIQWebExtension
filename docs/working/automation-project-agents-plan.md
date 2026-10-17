@@ -398,7 +398,8 @@ $0.069 cheaper in `project`. The gap is:
   parts' words; (E) a step whose trial act was possible is marked possibly lasting for the subflow judge. Fix C (a
   merge carries the predecessor's proposal) is folded into P1.
 - **P5 One-part plans test once** (after P1 and P3; the design in `cost-gap-core-code.md` (5)): the builder's test is
-  the judged whole run, the brief is sized near the whole purse, no scoped judge, no reset brief between runs.
+  the judged whole run, the brief is sized near the whole purse, no scoped judge, no reset brief between runs. Its
+  tests are paid by the brief's allowance with the judging reserve as backstop (Core t685, after cost round 1).
 
 **Validation:** per unit, Core `tsc` and the tests in the changed directories, structure audit; then one live round of
 the five A8 tasks in `project` only, comparing calls and dollars by role within one price rate. Live runs only after
@@ -647,6 +648,30 @@ Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are
 - Outcome: Accepted. Found by t679: a reset cannot undo an act made inside a part subflow's trial (no item in its
   state diff) yet says every act is undone; with t683's three small reset gaps it is Core t684, in flight. The live
   round waits for it (no launch with a known fix in flight)
+
+### 2026-10-16 — Cost round 1; Core t684-t688 from what it found
+- Agent: supervisor (lane sync, launches, four debug notes); worker debug of towels (`run-mvblov2i-abb7d82e.md`);
+  workers t684, t685, t686, t687, t688; supervisor verified and integrated each
+- Changed: Core t684 (a reset undoes acts made inside a part: `landed-acts.ts` counted a Call Subflow's page-after as
+  seen; a reset that comes back done names every act still in place; t683's three reset gaps). Core t685 (single-path
+  tests paid by the brief's allowance, the judging reserve as backstop; `llm/build-purse/judge-backstop.ts`). Core t686
+  (`agreement/no-reasons.ts`: a re-asked answer replaces a no only when every reason is settled; recheck words state
+  what was measured). Core t687 (a condition in the request's own exclusion words is kept; wholly refuted advice is not
+  passed on). Core t688 (the result repair starts where it stands; "no next page" ends its loop; duplicate steps
+  refused). Docs: the A8 Run Plan's launch environment; the plan compacted (frozen pairs 2-7, the 2026-10-15 ledger)
+- Why: cost round 1 (`## Cost Gap Plan`): everything-store's third test refused unaffordable (t685); towels' false
+  judged yes (t686, t687) and a result repair that applied nothing (t688); t684 found by t679
+- Validation: (supervisor) t684 after merging dev: tsc exit 0; vitest project-agents, project-build, subflow-trial,
+  candidate-trial, subflow-candidate -> 125 files, 804 passed. t685: llm, project-agents, project-build, flow-bootstrap,
+  candidate-trial, subflow-trial -> 497 files, 4963 passed, 2 skipped. t686 after merging dev: result-verification,
+  candidate-trial, subflow-trial, flow-bootstrap, project-agents -> 392 files, 3865 passed. t687 after merging dev
+  (t686 in): same dirs -> 396 files, 3882 passed. t688 after merging dev: flow-draft, llm, flow-bootstrap,
+  runtime-adaptation, executor -> 542 files, 5702 passed. tsc exit 0 for each; Core `pnpm task finish` -> `pnpm check`
+  passed for each; Core dev pushed `d4730345`
+- Outcome: Accepted. t687 found a t679 regression: the single path never carries the judged run's kept conditions to
+  the builder's gate (Core t689, in flight); t688 and t686 left four `llm/` round-stall sites dropping saved steps'
+  schedules, a wrong page-loop hint, the read-guidance line and `verify.ts`'s record wiring (Core t690, in flight).
+  The rerun of everything-store and towels waits for both
 
 ## Open Questions
 
