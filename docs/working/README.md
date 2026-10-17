@@ -10,9 +10,11 @@ Format, status vocabulary, ledger rules, worker briefs, and cross-repository
 pairing are defined in
 [Agent Working Document Protocol](./agent-working-doc-protocol.md).
 
+Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
+
 ## Active
 
-| Document | Owner | Lines | Scope | Paired |
+| Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md) | Senior supervisor agent (planned by a lane lead) | 753 | Execution plan for the MVP's next two milestones after lanes A-D qualified: the adaptation gate (create, drift, diagnose, repair, verify, persist, resume, reuse on three realistic sites, twice each, later run zero-call) and a first breadth sample of the 68 realistic tasks on sites not yet proven. | `adaptation-and-breadth-plan.md` |
 | [agent-working-doc-protocol.md](./agent-working-doc-protocol.md) | Senior supervisor agent | 498 | How the supervisor and workers use `docs/working/` as durable memory and as the coordination substrate for multi-agent work. | `agent-working-doc-protocol.md` |
@@ -20,6 +22,7 @@ pairing are defined in
 | [automation-project-agents-plan.md](./automation-project-agents-plan.md) | Senior supervisor agent | 744 | The browser side of FluxIQ's product-level agent system for building an automation project — a project supervisor agent that owns the task, structure, interfaces, case plan, budget and assembly, and spawns bounded subflow builders, validation and repair. This document owns host-action (tab) ownership, the chat presentation, Lab qualification and the extension wiring; the domain-neutral agent contracts are owned by the Core paired document. | `automation-project-agents-plan.md` |
 | [breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md) | Senior supervisor agent | 181 | 40 new live tasks (four per realistic site), each run live, debugged and fixed; plus the install-package proof (MVP item 1). Not the adaptation gate. | none |
 | [first-class-data-extraction-plan.md](./first-class-data-extraction-plan.md) | Senior supervisor agent | 719 | Make structured data extraction a fundamental FluxIQ capability: Core owns generic datasets (schema, per-run persistence, preview, CSV/JSON export, iteration) and their UI; the web domain and extension own DOM extraction, element picking, repeating-structure and field detection, and pagination; extraction is recordable and compiles to ordinary Flow nodes; the Testing Lab measures FluxIQ's own extraction. | `first-class-data-extraction-plan.md` |
+| [hosted-production-plan.md](./hosted-production-plan.md) | Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution | 461 | Extension, domain and product side of three deployments (hosted service, local, self-hosted): server profiles and sign-in in the extension, transport and data minimisation, consent-bound execution, manifests and store review, domain changes, product panel content, hosted-service infrastructure, user docs and privacy, Lab and e2e coverage. Core contracts live in the paired document. | `hosted-production-plan.md` |
 | [live-testing-handoff-audit-2026-10-11.md](./live-testing-handoff-audit-2026-10-11.md) | Codex senior supervisor | 750 | Reconcile Claude's live testing, saved run verdicts, lane worktrees and working notes, and provide an executable continuation plan. | `mvp-final-month-plan.md` |
 | [manual-panel-test-findings.md](./manual-panel-test-findings.md) | User for submission; senior supervisor agent for triage and closure | 311 | Capture manual panel, extension, recording, Flow creation, execution, repair, reuse, and performance findings so isolated workers can reproduce and fix them. | none |
 | [mvp-final-month-plan.md](./mvp-final-month-plan.md) | Senior supervisor agent | 562 | The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls. | `mvp-final-month-plan.md` |
@@ -28,14 +31,14 @@ pairing are defined in
 
 ## Paused
 
-| Document | Owner | Lines | Scope | Paired |
+| Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [agent-token-efficiency-plan.md](./agent-token-efficiency-plan.md) | Senior supervisor agent | 516 | Keeping the senior supervisor agent's context small on every project: fix instruction loading, add a global layer under `~/.claude` fed from a shared brain repository, define global / family / project / task memory tiers, and enforce delegation, worker return, and handoff rules mechanically. | `agent-token-efficiency-plan.md` |
 | [codex-ui-ux-review-2026-09-30.md](./codex-ui-ux-review-2026-09-30.md) | Codex senior supervisor | 637 | All Core web panels and the extension, focusing on user journeys, accessible controls, feedback and recovery. | `codex-ui-ux-review-2026-09-30.md in the sibling FluxIQ Core worktree.` |
 
 ## Complete
 
-| Document | Owner | Lines | Scope | Paired |
+| Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [action-visual-entity-target-plan.md](./action-visual-entity-target-plan.md) | Extension domain | 60 | Letting recorded and executed web actions identify the visual state entity they interacted with, via a domain-level WebAutomationActionVisualTarget. | `action-visual-entity-target-plan.md` |
 | [agent-git-workflow-plan.md](./agent-git-workflow-plan.md) | Senior supervisor agent | 562 | How work reaches `dev` in this repository when several agents run at once — when a unit of work gets its own branch, when it also gets its own worktree, how a worktree is paired with FluxIQ Core, how provenance survives the fact that workers never commit, and what tooling makes the correct path the cheap one. It deliberately does not introduce pull requests, review gates on `dev`, or any change to what `pnpm check`, `pnpm test` and `pnpm build` mean. | `none yet — a Core-side document is required only if Core adopts the paired-branch half of this (see Open Questions).` |
@@ -58,7 +61,7 @@ pairing are defined in
 These no longer own current status; each names its successor in `Status
 detail`. Retained for evidence. Do not plan current work from them.
 
-| Document | Owner | Lines | Scope | Paired |
+| Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-defensive-runtime-plan.md) | Senior supervisor agent | 618 | Make a model-authored Flow faithful to what the model actually did, and make a Flow's execution survive a site we do not control. Covers the build loop's authoring model, the draft Flow and its edit and dry-run tools, branch and loop authoring, the runtime's deterministic recovery ladder, and the adversarial fixture conditions that measure both. It deliberately does not cover the real-site lane itself, the campaign measurement, new extraction capabilities, or the Week 2 exit criteria, which stay in their own documents. | `flow-authoring-and-defensive-runtime-plan.md` |
 | [language-driven-flow-loop-plan.md](./language-driven-flow-loop-plan.md) | Senior supervisor agent | 663 | Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running several complex, multi-node live scenarios in parallel lanes, debugging every run end to end, fixing every cause it exposes, and re-running that same scenario until it works. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop. | none |
@@ -70,10 +73,10 @@ detail`. Retained for evidence. Do not plan current work from them.
 
 ## Archived
 
-| Document | Owner | Lines | Scope | Paired |
+| Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
 | [bootstrap-no-proposal-investigation.md](./bootstrap-no-proposal-investigation.md) | Senior supervisor agent | 278 | Diagnose and fix the first closed boundary that turns a successful model-backed Flow bootstrap request into zero durable proposals, then rerun that same live UI path before focused tests. | none |
 | [llm-production-automation-plan.md](./llm-production-automation-plan.md) | root coordination agent | 1577 ⚠ | Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository. | none |
 
-⚠ marks documents over the 800-line compaction threshold (2 of 37 here).
+⚠ marks documents over the 800-line compaction threshold (2 of 38 here).
 Compact them the next time work touches them; do not schedule a bulk rewrite.

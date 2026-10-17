@@ -396,7 +396,6 @@
       "apps/extension/src/panel/chat/view/tests/scroll-follow.test.ts": 3,
       "apps/extension/src/panel/shell/run-follow.ts": 3,
       "apps/scenario-lab/src/scenarios/crossborder-marketplace/tests/browser-paths.test.ts": 3,
-      "apps/scenario-lab/src/scenarios/job-board/tests/browser-paths.test.ts": 3,
       "domain/scripts/host-build-identity/tests/build.test.mjs": 3,
       "domain/src/requests/policy/tests/validation.test.ts": 3,
       "domain/src/runtime/tests/carried-row-service-repair.test.ts": 3,
