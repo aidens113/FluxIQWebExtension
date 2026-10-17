@@ -673,6 +673,24 @@ Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are
   schedules, a wrong page-loop hint, the read-guidance line and `verify.ts`'s record wiring (Core t690, in flight).
   The rerun of everything-store and towels waits for both
 
+### 2026-10-16 — Core t689 (single path keeps kept conditions), t690 (repair rounds keep schedules); cost round 2 launched
+- Agent: workers t689 (two rounds: supervisor decided a single-path repair brief inherits conditions kept on earlier
+  briefs' whole runs of the same subflow), t690; supervisor verified, integrated, synced the lanes, launched round 2
+- Changed: Core t689 `project-agents/single-subflow/{single-subflow-trial,assembled-from}.ts`,
+  `subflow-candidate/subflow-trial-gate.ts`: the judged run's kept conditions ride on the single-path trial result, so
+  the builder's controller refuses a dropped one once. Core t690 `flow-draft/scheduled-candidate/step-copy.ts` (new,
+  used by the four round-stall sites and two earlier copies), `llm/draft-amendment-feedback.ts` (no "repeat the next
+  page over the read" inside a page loop), `llm/evidence-loop-decision.ts` (+ its prompt pin: a filter's option words
+  do not show each kept row meets the request; a venue-listing example), `result-verification/verify.ts` (Core's
+  record reaches the narrowing re-ask)
+- Why: t687 found the t679 regression; t686 and t688 left these in files they did not own
+- Validation: (supervisor) t689 after merging dev: tsc exit 0; vitest project-agents, project-build, subflow-candidate,
+  subflow-trial, result-verification -> 229 files, 1664 passed. t690 after merging dev (t689 in): tsc exit 0; vitest
+  llm, flow-draft, result-verification, flow-bootstrap, project-agents, candidate-trial -> 636 files, 6259 passed, 2
+  skipped. Core `pnpm task finish` -> `pnpm check` passed for both; Core dev pushed `807e4ebe`. Lanes synced: each
+  downstream tree at `40b5ee32` and Core at `807e4ebe`, both containing dev; Core builds current
+- Outcome: Accepted. Cost round 2 launched at the full price rate (after 00:30 UTC), comparable with pair 8 in dollars
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
