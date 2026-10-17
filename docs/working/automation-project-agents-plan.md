@@ -1,9 +1,9 @@
 # Automation Project Agents Plan
 
 Status: Active
-Status detail: Built and qualified: A8 passed on frozen pair 8 (`project` 10 of 10), and `project` is the product default since 2026-10-16 (Core t667). Next: the one-part cost gap.
+Status detail: Built, qualified and the product default; the cost gap is closed: `project` passed 10 of 10 on one frozen source at $0.028 a build (pair 8: `project` $0.108, `candidate` $0.067).
 Created: 2026-10-13
-Last updated: 2026-10-16
+Last updated: 2026-10-17
 Owner: Senior supervisor agent
 Scope: The browser side of FluxIQ's product-level agent system for building an automation project — a project supervisor agent that owns the task, structure, interfaces, case plan, budget and assembly, and spawns bounded subflow builders, validation and repair. This document owns host-action (tab) ownership, the chat presentation, Lab qualification and the extension wiring; the domain-neutral agent contracts are owned by the Core paired document.
 Paired document: `C:\Users\osrs_\FluxStuff\!FluxIQ\docs\working\automation-project-agents-plan.md`
@@ -13,62 +13,51 @@ Related: [MVP final month plan](./mvp-final-month-plan.md), [state-aware recover
 
 ## Current State
 
-**Built, qualified and the product default (2026-10-16).** The system of agents the user asked for (a project
-supervisor that plans a Flow's subflows and spawns bounded subflow builders, the way this repository's supervisor
-spawns workers) is built in Core with its browser side here, passed the Lab comparison A8, and `project` is now the
-product's default authoring mode (Core t667). The Core paired document owns the roles and contracts; this one owns the
-browser side, the chat, the Lab qualification and the cross-repository order.
+**Built, qualified, the product default, and now cheaper than `candidate` (2026-10-17).** The system of agents the user
+asked for (a project supervisor that plans a Flow's subflows and spawns bounded subflow builders, the way this
+repository's supervisor spawns workers) is built in Core with its browser side here, passed the Lab comparison A8, and
+`project` is the product default authoring mode (Core t667). The Core paired document owns the roles and contracts;
+this one owns the browser side, the chat, the Lab qualification and the cross-repository order.
 
 **Decided (supervisor recommendations; the user may overrule any):**
 - Five roles: project supervisor, subflow builder, repair agent; validator and promotion owner stay the existing Core
   services.
-- Authoring mode `project` beside `candidate`; the default flipped to `project` on 2026-10-16 after A8 passed (an
-  extend still builds `candidate`; `candidate` and `legacy` stay selectable with `FLUXIQ_AUTHORING_MODE`). One-part
-  tasks are a one-subflow plan, so there is one path.
-- **Concurrent in Core, one at a time in the extension** (user, 2026-10-13: "make it possible in core, but have
-  extension set it to only 1 at a time"). The web domain declares host capacity 1, so builders share the browser one at
-  a time under a lease that names the tab; raising it needs separate browser contexts first.
-- One Flow purse; the supervisor carves allowances and keeps a reserve for the judged whole run and one repair round.
-- Creation ends only on one judged whole-Flow run from the start; builder subflow trials are partial tests.
+- Authoring mode `project` beside `candidate`; the default since 2026-10-16 (an extend still builds `candidate`;
+  `candidate` and `legacy` stay selectable with `FLUXIQ_AUTHORING_MODE`). A one-part task is a one-subflow plan whose
+  builder's test is the judged whole run (Core t679).
+- **Concurrent in Core, one at a time in the extension** (user, 2026-10-13). The web domain declares host capacity 1.
+- One Flow purse; the supervisor carves allowances and keeps a reserve for the judged whole run and one repair round;
+  a single-path test is paid by its brief's allowance with the reserve as backstop (Core t685).
+- Creation ends only on one judged whole-Flow run from the start.
 
-**A8 result (A8 Run Plan, frozen pair 8: downstream `2d32847e`, Core `f7a0c4d1`).** `project` passed 10 of 10: two
-consecutive passes on each of the five realistic tasks (bigbox cart, bigbox towels, crossborder, everything-store,
-social). `candidate` passed 9 of 9 run and failed towels round 1 (round 2 skipped as a known failure); it has failed
-towels in every pair since pair 2. Cost at the higher price rate: `project` $0.108 a build, `candidate` $0.067 (about
-1.6 times). Eight frozen pairs ran in all; every failed run has a debug note under
-`../language-driven-flow-loop-plan/debugs/` and every general cause was fixed structurally (Core t570-t668, downstream
-t568-t657; both ledgers). Frozen pair 8's table is in the A8 Run Plan; earlier pairs are archived.
+**The cost gap is closed (`## Cost Gap Plan`).** On one frozen source (cost rounds 3 and 4, downstream `1866ee3e`,
+Core `f406dcb4`), `project` passed 10 of 10, two consecutive passes on each of the five A8 tasks, at $0.028 a build at
+the full price rate; frozen pair 8 at the same rate: `project` $0.108, `candidate` $0.067 (towels failed). Cause found
+2026-10-16: two thirds of the old gap was finished work thrown away (an unread handed-on value blocking a brief; plan
+amends dropping done proposals; a predecessor's proposal re-doing a later part's act), plus guidance that taught
+splitting and a one-part plan tested twice. Fixed by Core t671-t676, t679 (P1-P5), then the live defects the cost
+rounds exposed: t684 (in-part acts a reset could not undo), t685 (single-path test funding), t686-t690 (a re-asked
+answer replaces a no only when every reason is settled; request-exclusion conditions kept; the repair lane), t689 (the
+single path carries kept conditions), t691-t693 (extra rows need a reason; the confirming judge call asks the converse
+question; a keep-everything read is a doubt; a repair told what its condition kept).
 
-**What the A8 loop changed, in short:** a plan keeps the person's request and a done part survives an additive amend
-(Core t645, t658); builders hand on only values a step makes and one read value is expressible (t645, t646); the judge
-is weighed only by what Core measured (t629-t636, t641, t651, t652, t654, t659, t660, t663, t665, t666), a yes is
-checked against kept rows (t663), a looping or long judge reply keeps its verdict and is read whole (t653, t665);
-playback holds only refuted nos and never rests on a re-asked yes (t660, t662, t664); clearing spares layers the run
-opened and a hidden control routes back to its opener (t656, t661); the chat cards are honest (t649); the Lab records
-routing and cleared layers and reads a bypassed optional step correctly (t643, t657).
-
-**Done since 2026-10-13 (all pushed):** W1-W8 here with Core A1-A6; A8 complete; the default flip.
+**Done 2026-10-16/17 (all pushed):** the above; W1's follow-ups (t669 one session-picking rule, t670 stale lease
+holder e2e); t675 (`extract` checked before a run); Core t674, t681, t694 splits; Core t677 (exact first-ask yes flag);
+Core t683 (reset reason; the fallback stays in memory by design: no supervisor restarts mid-build); t678 and Core t682
+(a push the structure audit fails is refused); t680 (an audit rule for RegExp literals whose string swallows an
+escape).
 
 **Not done / next:**
-- The cost gap, investigated 2026-10-16 (see `## Cost Gap Plan`): most of it is finished work thrown away, not a
-  one-part overhead. Merged: P1-P5 (Core t671, t672, t673, t676, t679) and Core t684 (a reset that cannot undo an
-  act made inside a part says so and is fixed). Cost round 1 (off-peak) passed four of five and exposed a P5 budget
-  defect (Core t685) and a false judged yes on towels (Core t686-t690). Cost round 2 (full rate, after them) passed
-  four of five at $0.031 a build on average (pair 8: `project` $0.108, `candidate` $0.067); social failed on a false
-  judged yes: a final read with no condition stored all 8 rows where the answer holds 4, a Core note vouched for the
-  extra rows, and the confirming judge call is an identical repeat (`run-mvbr0w7e-6a01c05b.md`). Merged: Core t691
-  (extra rows must be justified; the second judge call becomes the converse question), t693 (a repair is told what
-  its condition kept), Core t692 (a keep-everything read after an act is a doubt the judge must settle), Core t694
-  (a split). Cost round 3 running (all five, full rate).
-- Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
-  fallback stays in memory by design), `submission.ts` split (Core t681),
-  the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
-- W1's follow-ups are closed (t669 one session-picking rule, t670 stale lease holder e2e; merged 2026-10-16).
-- Price note: DeepSeek's per-token price measured about $0.11 per weighted million tokens around 23:46 and 04:54 UTC
-  and about $0.22 around 02:17 and 06:49 UTC; compare costs only within one rate.
+- The handoff sweep: downstream `pnpm check` passes after its fix; Core's whole vitest run failed 18 of 12,473 (host-lease,
+  two trial tests), fixed forward as Core t695 (in flight at handoff; see Core's ledger).
+- Open from the cost rounds: a confirmed yes on the single path relies on t691/t692's naming rules; watch live builds
+  for false holds from the stricter yes (none seen in rounds 3-4). `service/subflow-trial/` and the shallow copies in
+  `completion-attempt.ts:59` drop scheduled candidates (t690 left them: no hand-over to the next round).
+- A7 (project extend) after held-topology units 1-4 (Core).
+- Price note: DeepSeek's discount window is 16:30-00:30 UTC (about half the rate); compare dollars only within one rate.
 
-**Blocked:** nothing. Three decisions are the user's (Open Questions); each has a recommendation the plan already
-follows (the schedule one is now settled: the comparison passed before the freeze).
+**Blocked:** nothing. Three decisions are the user's (Open Questions); each has a recommendation the plan follows.
+
 ---
 
 ## User Direction
@@ -420,39 +409,9 @@ each run's screenshots. A pass of the round: every task passes, no brief is thro
 causes P1-P4 fixed, and one-part tasks run one brief with no reset brief. Each failure gets a debug note before any
 rerun.
 
-**Cost round 1 (2026-10-16, 23:13-23:50 UTC, off-peak price; downstream `a835db3b`, Core `8ac92ef1`).** The first
-launch omitted the pairs' process environment and all four were refused at $0 (the A8 Run Plan's command now records
-it). Calls are rate-independent; dollars are at about half pair 8's rate.
-
-| Task | Verdict | $ (off-peak) | Calls | Briefs | Pair 8 `project` calls | Pair 8 `candidate` calls | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| crossborder-marketplace-hub-to-cart | passed | 0.022 | 29 | 1 | 93 / 56 | 18 / 18 | one subflow, both parts; one test, the judged run |
-| bigbox-retail-pickup-cart | passed | 0.034 | 38 | 1 | 75 / 81 | 38 / 35 | one test, the judged run |
-| social-network-feed-confirm-requests | passed | 0.041 | 53 | 2 | 62 / 78 | 30 / 28 | repair brief for the site's slow-down (user rule), one extra assemble |
-| everything-store-plus-earbuds-under-50 | passed | 0.049 | 41 | 2 | 31 / 35 | 26 / 35 | third test refused unaffordable: the judging reserve paid every single-path test (Core t679 defect; t685) |
-| bigbox-retail-pickup-towels | failed | 0.110 | 79 | 1 | 65 / 59 | 49 (failed) | a false judged yes: a correct no re-asked as a filter complaint (t666 path) and replaced; Core J1-J3 |
-
-Debug notes: `../language-driven-flow-loop-plan/debugs/run-mvbl7oaa-de54f314.md`, `run-mvbl865c-97c1f8f7.md`,
-`run-mvbl9hrv-db5a120b.md`, `run-mvblai1v-a31e7593.md`, `run-mvblov2i-abb7d82e.md`.
-
-**Cost round 2 (2026-10-17, 02:03-02:17 UTC, full price rate, the same rate as pair 8; downstream `40b5ee32`, Core
-`807e4ebe`, after Core t685-t690).** Dollars now compare directly with pair 8.
-
-| Task | Verdict | $ | Calls | Briefs / tests | Pair 8 `project` $ | Pair 8 `candidate` $ |
-| --- | --- | --- | --- | --- | --- | --- |
-| crossborder-marketplace-hub-to-cart | passed | 0.027 | 28 | 1 / 1 | 0.142, 0.081 | 0.028, 0.029 |
-| bigbox-retail-pickup-cart | passed | 0.034 | 40 | 1 / 1 | 0.114, 0.137 | 0.072, 0.065 |
-| bigbox-retail-pickup-towels | passed | 0.033 | 33 | 1 / 2 | 0.125, 0.106 | failed 0.125 |
-| everything-store-plus-earbuds-under-50 | passed | 0.029 | 21 | 1 / 2 | 0.081, 0.105 | 0.082, 0.127 |
-| social-network-feed-confirm-requests | failed | 0.031 | 33 | 1 / 1 | 0.084, 0.109 | 0.042, 0.036 |
-
-Four passes average $0.031 a build against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Social failed after a
-judged yes (`run-mvbr0w7e-6a01c05b.md`): the final read had no condition and stored all 8 requests where the answer
-holds the 4 accepted; both judge calls saw 8 and said yes, because Core's t624 also-in-result note vouched for the 4
-extra rows and the confirming call is a byte-identical temperature-0 repeat. The builder wrote the same unfiltered read
-in round 1 and pair 8, whose judges caught it; t679's single judged run removed the second judging that sometimes did.
-Not caused by t686-t690 (no no was produced). Fixes: Core t691, t692, t693 (paired). Debug notes: `run-mvbr0acz-5ccd4d74.md`, `run-mvbr0aok-c6d28b9b.md`,
-`run-mvbr0tnr-49431979.md`, `run-mvbrhw4t-e440847e.md`.
+**Cost rounds 1 and 2** (2026-10-16/17; four of five each; the three live defects they found: an unaffordable
+single-path test, Core t685; a false yes from a re-asked no, Core t686-t690; a false yes over extra rows, Core
+t691-t693) are archived in [archive/2026-10-17-cost-rounds-1-2.md](automation-project-agents-plan/archive/2026-10-17-cost-rounds-1-2.md).
 
 **Cost round 3 (2026-10-17, 05:10-05:30 UTC, full rate; downstream `1866ee3e`, Core `f406dcb4`, after Core
 t691-t694).** All five passed.
@@ -465,9 +424,22 @@ t691-t694).** All five passed.
 | everything-store-plus-earbuds-under-50 | 0.027 | 19 | 1 / 2 | 0.081, 0.105 | 0.082, 0.127 |
 | social-network-feed-confirm-requests | 0.025 | 34 | 2 / 2 | 0.084, 0.109 | 0.042, 0.036 |
 
-$0.135 for five builds, $0.027 a build, against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Round 4 runs the
-same source (no change between) to make a frozen pair. Debug notes: `run-mvbxvhwm-a8e6113a.md`,
-`run-mvbxvhw6-eb018396.md`, `run-mvbxvwkw-4e052ea5.md`, `run-mvbxw85h-198fa7ec.md`, `run-mvbyc30x-e827a493.md`.
+$0.135 for five builds, $0.027 a build, against pair 8 `project`'s $0.108 and `candidate`'s $0.067. Debug notes:
+`run-mvbxvhwm-a8e6113a.md`, `run-mvbxvhw6-eb018396.md`, `run-mvbxvwkw-4e052ea5.md`, `run-mvbxw85h-198fa7ec.md`,
+`run-mvbyc30x-e827a493.md`.
+
+**Cost round 4 (2026-10-17, 05:31-05:43 UTC, full rate; the same source fingerprint as round 3, no change between).**
+All five passed: crossborder $0.021 (25 calls, one brief, one test), towels $0.038 (31), social $0.026 (37, a repair
+brief), everything-store $0.029 (21), bigbox cart $0.028 (27; run on slot 1 after slot 2's loop guard refused it at $0
+for three live runs in 30 minutes). Debug notes: `run-mvbykx6v-e7cf27c4.md`, `run-mvbyldi7-c854bf75.md`,
+`run-mvbym7a1-ed7fd6df.md`, `run-mvbyms77-6c9b970a.md`, `run-mvbyvszm-6eb82f8c.md`.
+
+**Reading of rounds 3 and 4, one frozen pair (supervisor, 2026-10-17): the cost gap is closed.** `project` passed 10 of
+10, two consecutive passes on each of the five A8 tasks, at $0.277 for ten builds, $0.028 a build at the full price
+rate. Frozen pair 8, at the same rate: `project` $0.108 a build, `candidate` $0.067 (towels failed). `project` now costs
+about a quarter of what it did and less than half of `candidate`, and passes towels, which `candidate` has failed in
+every pair since pair 2. Every one-part task ran one brief; the cost round's three live defects (an unaffordable
+single-path test, two false judged yeses) were fixed structurally before the frozen pair.
 
 ## Units (this repository)
 
@@ -540,33 +512,8 @@ Entries for 2026-10-15 waves 4-7 (t605-t630 downstream sides, the second sweep, 
 Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are archived in
 [archive/2026-10-16-ledger-2026-10-15-waves-8-27.md](automation-project-agents-plan/archive/2026-10-16-ledger-2026-10-15-waves-8-27.md).
 
-### 2026-10-16 — A8 frozen pair 6 wave 32; stopped; clearing spares run-opened layers (t656); playback records routing (t657); Core t658-t661
-- Agent: supervisor (wave 32, the stop, the peak-price finding); read-only debugs `reports/a8-bigbox-cart-run-mvac0ddx-debug.md`, `a8-towels-run-mvac0nmw-debug.md`, `a8-towels-run-mvac1av6-debug.md`; workers t656, t657 (three rounds: refused guards kept, unknown keys ignored); Core t658-t661 (Core ledger); supervisor verified and integrated
-- Changed: t656 `apps/extension/src/content/action-runtime/interference/{run-opened,page-wall,clearable-layers}.ts`, `presence.ts`, `recovery/attempt.ts`, `content/actions/execute.ts`: layers a successful press opened are spared by clearing until they leave, a missing target clears only a page-blocking wall, a present-but-hidden target says `shown: false` (`domain/src/actions/types.ts`, `runtime/failure/codes.ts`); a headed content spec on bigbox-retail reproduces the closed store picker and passes. t657 `packages/test-runner/src/lab-runs/write-playback-steps.ts` and `playback-step/`: playback steps record cleared layers and the state-routing record (refused guards, `noMatchCause`); `flow-lane/state-routing-attempt.ts` keeps records with unknown keys, copying only known fields
-- Why: wave 32 (2026-10-16 02:17 UTC, peak price): `project` bigbox cart passed $0.094; `candidate` cart failed $0.191 (playback closed the Flow's own store picker); `project` towels failed $0.190 (a judged-yes part dropped by an amend, then Core misreadings); `candidate` towels failed $0.242 with a correct Flow refuted after playback on a no-op filter claim. The same tokens cost twice wave 27's (23:46 UTC); failing builds also made two to three times the calls
-- Validation: t656 after merging dev: extension `src/content/action-runtime src/content/actions` -> 530 pass; `check-extension.mjs` exit 0; domain `runtime/failure client` -> 91 pass; domain tsc exit 0; audit passed; content specs headed (worker) 19 + 1 passed; merged `061f2845`. t657 after merging dev: test-runner check and build exit 0; flow-lane, lab-runs, playback-step, playback-skips dist tests -> 285 pass; audit passed; merged `06e5f4b9`. Pushed
-- Outcome: Accepted. Next: t662 (a saved Flow records its judged trial), then frozen pair 7
-
-### 2026-10-16 — A8 frozen pair 7 wave 37; stopped on a false yes over kept rows; Core t662-t664
-- Agent: supervisor (wave 37, the stop); read-only debug `reports/a8-towels-run-mvahlxuu-debug.md`; Core t662-t664 (Core ledger)
-- Changed: the A8 Run Plan's frozen pair 7 table and stop note; the wave's debug notes and UI review
-- Why: wave 37 (04:46 UTC; priced at the lower rate, about $0.11 per weighted million tokens, not peak as first noted): `project` bigbox cart passed $0.043 (two subflows), towels passed $0.033; `candidate` bigbox cart passed $0.033 (the t656 store-picker fix held), towels failed $0.123 on a false build yes over a kept row that is not the item asked for
-- Validation: wave 37's verdicts as above; Core t663 and t664 each `pnpm check` -> passed; merged and pushed
-- Outcome: Accepted. Frozen pair 8 next
-
-### 2026-10-16 — A8 frozen pair 8: the flip rule is met; Core t665, t666 merged after it
-- Agent: supervisor (waves 42-46 on one frozen pair, the decision to run on past wave 42's `candidate` towels failure, the flip); read-only debug `reports/a8-towels-run-mvam0lys-debug.md`; Core t665, t666 (Core ledger), built during the pair and merged after it
-- Changed: the A8 Run Plan's frozen pair 8 table, run-on note and reading; every run's debug note; Core t667 (in flight) makes `project` the product default
-- Why: `project` passed 10 of 10 on one frozen pair (two consecutive passes on each task); `candidate` passed 9 of 9 run with towels round 1 failed (round 2 skipped as a known failure); `candidate` has failed towels in every pair since pair 2
-- Validation: frozen pair 8 (downstream `2d32847e`, Core `f7a0c4d1`): `project` cart $0.114, $0.137; towels $0.125, $0.106; crossborder $0.142, $0.081; everything-store $0.081, $0.105; social $0.084, $0.109 (total $1.084); `candidate` cart $0.072, $0.065; towels failed $0.125; crossborder $0.028, $0.029; everything-store $0.082, $0.127; social $0.042, $0.036 (total $0.606); all at the higher price rate
-- Outcome: Accepted. The default flips to `project` (Core t667); next cost item: a one-part task run as several briefs (crossborder round 1: five briefs)
-
-### 2026-10-16 — Handoff: A8 complete, `project` the default
-- Agent: supervisor (handoff)
-- Changed: Current State rewritten for the finished A8 and the default flip; header status
-- Why: end of the A8 work unit
-- Validation: `pnpm structure:check` -> "structure-audit: passed (201 warning(s), 639 baselined)."; Core `node scripts/structure-audit.mjs` -> "structure-audit: passed (389 warning(s), 1156 baselined)."; every merge this session ran its narrow checks and Core's `pnpm check` (ledgers)
-- Outcome: Accepted. Next: the one-part cost gap
+Entries for 2026-10-16 A8 frozen pairs 6-8, the default flip and the A8 handoff are archived in
+[archive/2026-10-17-ledger-a8-pairs-6-8.md](automation-project-agents-plan/archive/2026-10-17-ledger-a8-pairs-6-8.md).
 
 ### 2026-10-16 — Cost gap investigated: finished work thrown away, not a one-part overhead
 - Agent: workers cost-gap-run-evidence (the 19 frozen-pair-8 run records), cost-gap-core-code (Core read-only);
@@ -768,6 +715,25 @@ Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are
   files, 2053 passed. Core `pnpm task finish` -> `pnpm check` passed for both; Core dev pushed `f406dcb4`. Lanes synced:
   downstream `1866ee3e`, Core `f406dcb4`, both containing dev, Core builds current
 - Outcome: Accepted. Cost round 3 launched (all five, full rate)
+
+### 2026-10-17 — Cost rounds 3 and 4: the cost gap is closed; handoff sweep
+- Agent: supervisor (rounds 3 and 4 on one frozen source, ten debug notes, the sweep, the `pnpm check` fix, handoff);
+  worker t695 (Core sweep fix-forward, in flight at this entry)
+- Changed: `## Cost Gap Plan` (rounds 3 and 4, the reading), Current State rewritten; the plan compacted (A8 pairs 6-8
+  ledger and cost rounds 1-2 to the archive); ten debug notes under `../language-driven-flow-loop-plan/debugs/`.
+  `package.json` `check` and `lab:test` gate Core's build and build test-contracts before their `node --test`
+  (`scripts/build-cache/tests/check-prefix.test.mjs` pins it; `docs/architecture/repository-layout.md`); a supervisor
+  edit of three files straight on dev, one step past the two-file tier, because it is the sweep's own fix
+- Why: the frozen pair is the confirmation the plan asked for; the sweep found the Lab tests importing a
+  `packages/test-contracts/dist` built before 2026-10-14's refusal screen (three failures that hide a refusal sentence)
+- Validation: rounds 3 and 4 (Lab, `--authoring-mode project`, same fingerprint `sha256:a3e616b2...`): ten of ten
+  passed, $0.277 billed, $0.028 a build at the full rate. Sweep: Core `pnpm exec vitest run` (packages/fluxiq, Core dev
+  `0fcca029`) -> "Test Files 7 failed | 1407 passed | 3 skipped (1417)", "Tests 18 failed | 12448 passed | 7 skipped",
+  19m25s: host-lease (client-gateway, project-agents host-resources), applied-judged-trial, provider-unavailable
+  authoring modes; fixing forward as Core t695. Downstream `pnpm check` -> first "# pass 667 # fail 3" (stale
+  test-contracts dist), then after the fix and rebuilding the main Core checkout (4732 minutes behind its source)
+  "# pass 671 # fail 0", "structure-audit: passed (202 warning(s), 639 baselined)", exit 0, 3m31s
+- Outcome: Accepted. Pushed downstream; Core t695 follows, then Core's ledger records the sweep fix
 
 ## Open Questions
 
