@@ -1,4 +1,4 @@
-import { friendRequestAnswer, friendRequestAnswerSubject } from "../oracle/index.js";
+import { accountChanges, ACCOUNT_CHANGES_SUBJECT, friendRequestAnswer, friendRequestAnswerSubject } from "../oracle/index.js";
 import { requestAuditAccountFacts } from "../qualification/index.js";
 import { escapeHtml as esc, page } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
@@ -50,12 +50,14 @@ export function buildMarkerText(mode: FeedMode): string {
  */
 export function sitePage(context: ShellContext, title: string, main: string, script: string): string {
   const { css, seed, state } = context;
-  const body = `<div class="${css.app}">${topBar(context)}${main}</div>${state.consent === "pending" ? consentDialog(css) : ""}<div class="${css.toastRegion}" role="status" aria-live="polite"></div><style>${feedStylesheet(css, seed)}</style><script type="application/json" data-testid="social-request-audit-account">${requestAuditAccountFacts(state).replaceAll("<", "\\u003c")}</script>${REQUEST_IDS.map((id) => `<script type="text/plain" data-testid="${friendRequestAnswerSubject(id)}">${friendRequestAnswer(state.requests, id)}</script>`).join("")}`;
+  const body = `<div class="${css.app}">${topBar(context)}${main}</div>${state.consent === "pending" ? consentDialog(css) : ""}<div class="${css.toastRegion}" role="status" aria-live="polite"></div><style>${feedStylesheet(css, seed)}</style><script type="application/json" data-testid="social-request-audit-account">${requestAuditAccountFacts(state).replaceAll("<", "\\u003c")}</script>${REQUEST_IDS.map((id) => `<script type="text/plain" data-testid="${friendRequestAnswerSubject(id)}">${friendRequestAnswer(state.requests, id)}</script>`).join("")}<script type="text/plain" data-testid="${ACCOUNT_CHANGES_SUBJECT}">${accountChanges(state).replaceAll("<", "\\u003c")}</script>`;
   return page(title, body, `
 const qualificationAccountFacts = ${requestAuditAccountFacts.toString()};
 const oracleRequestAnswer = ${friendRequestAnswer.toString()};
 const oracleRequestSubject = ${friendRequestAnswerSubject.toString()};
 const oracleRequestIds = ${JSON.stringify(REQUEST_IDS)};
+const oracleAccountChanges = ${accountChanges.toString()};
+const oracleAccountSubject = ${JSON.stringify(ACCOUNT_CHANGES_SUBJECT)};
 const qualificationMutate = mutate;
 mutate = async (operation, payload = {}) => {
   const result = await qualificationMutate(operation, payload);
@@ -65,6 +67,8 @@ mutate = async (operation, payload = {}) => {
     const answer = document.querySelector('[data-testid="' + oracleRequestSubject(id) + '"]');
     if (answer) answer.textContent = oracleRequestAnswer(result.state.requests, id);
   }
+  const changes = document.querySelector('[data-testid="' + oracleAccountSubject + '"]');
+  if (changes) changes.textContent = oracleAccountChanges(result.state);
   return result;
 };
 ${script}`);

@@ -1,5 +1,5 @@
 import { confirmRequestsFacts } from "./oracle/index.js";
-import { requestAuditWorkflow } from "./qualification/index.js";
+import { claimFoundKeyWorkflow, deleteStrangerRequestsWorkflow, hideSuggestedPostsWorkflow, recentGroupPostsWorkflow, requestAuditWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { communityBySlug, feedPlanFor, FRIEND_REQUESTS, fullDateText, MAYA, OPEN_DAY_POST, personBySlug, type FeedPost } from "./content/index.js";
@@ -82,6 +82,12 @@ const PENDING: ExpectedFact = { id: "pending-post", subject: "pending-posts", pr
  *   server's answer to every request, so confirming one too many fails;
  * - `move-open-day` changes a boosted post the site will not let anyone edit,
  *   which can only be done by deleting it and posting again.
+ *
+ * After them come the read-only request audit and four breadth workflows
+ * (`qualification/`), each judged by its table and by the account's whole set
+ * of lasting acts (`oracle/account-changes.ts`): a filtered read of recent
+ * group posts, hiding the feed's suggested posts, deleting the one request
+ * with no mutual friends, and claiming a found key in another group.
  *
  * `recordingEvents` names types without counts: no recording lane has run this
  * fixture, so only "this type occurred" can be claimed honestly.
@@ -241,6 +247,10 @@ export const socialNetworkFeedManifest = createScenarioManifest({
       },
     },
     requestAuditWorkflow,
+    recentGroupPostsWorkflow,
+    hideSuggestedPostsWorkflow,
+    deleteStrangerRequestsWorkflow,
+    claimFoundKeyWorkflow,
   ],
 });
 
