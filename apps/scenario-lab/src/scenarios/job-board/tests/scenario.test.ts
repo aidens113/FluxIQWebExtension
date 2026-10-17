@@ -52,15 +52,18 @@ function qualifies(card: Card): boolean {
 }
 const asRecord = (card: Card) => ({ title: card.title, company: card.company, salary: card.salary, link: card.href });
 
-test("the manifest is valid, with three workflows each carrying one armed variant", () => {
+test("the manifest is valid, with three workflows each carrying one armed variant and five carrying none", () => {
   const result = validateWebScenario(scenario.manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(scenario.manifest.workflows?.map(({ id }) => id), ["remote-rust-roles", "apply-remote-rust-role", "remove-closed-saved-jobs"]);
+  assert.deepEqual(scenario.manifest.workflows?.map(({ id }) => id), [
+    "remote-rust-roles", "apply-remote-rust-role", "remove-closed-saved-jobs",
+    "remote-easy-apply", "save-quillmark-remote", "halvard-labs-office-jobs", "halvard-careers-roles",
+  ]);
   assert.deepEqual([scenario.manifest, ...(scenario.manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id, arm }) => [id, arm])), [
     [["overflow-save", { operation: "set-mode", payload: { mode: "overflow-save" } }]],
     [["no-exact-matches", { operation: "set-mode", payload: { mode: "quiet-market" } }]],
     [["posting-closed", { operation: "set-mode", payload: { mode: "posting-closed" } }]],
-    [],
+    [], [], [], [], [],
   ]);
   const closed = resolveScenarioWorkflow(scenario.manifest, { workflowId: "apply-remote-rust-role", variantId: "posting-closed" });
   assert.deepEqual(closed.expected.failure, { category: "target_not_found" });
@@ -297,8 +300,11 @@ test("arming a rendering starts the board over, and an unknown operation or payl
 });
 
 test("the live tasks name the variants and datasets the manifest declares", () => {
-  assert.equal(JOB_BOARD_LIVE_TASKS.length, 9);
-  const datasets = new Set(["extract-remote-rust-roles", "extract-application", "extract-open-saved-jobs"]);
+  assert.equal(JOB_BOARD_LIVE_TASKS.length, 13);
+  const datasets = new Set([
+    "extract-remote-rust-roles", "extract-application", "extract-open-saved-jobs",
+    "extract-remote-easy-apply", "extract-saved-after-quillmark", "extract-halvard-labs-office-jobs", "extract-halvard-careers-roles",
+  ]);
   for (const task of JOB_BOARD_LIVE_TASKS) {
     assert.equal(task.scenarioId, "job-board");
     if (task.expectedDatasetId) assert.ok(datasets.has(task.expectedDatasetId), task.id);

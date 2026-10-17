@@ -1,5 +1,8 @@
 import type { MarketMode, MarketState } from "./types.js";
 
+/** The stores the account already follows on a first visit, as the account flyout lists them. */
+const FOLLOWED_AT_START = ["hubsmith", "mirafone", "qinport"] as const;
+
 /**
  * A first visit: signed in (the buyer is automating their own account), no
  * consent answered, every promotion still waiting to be shown, an empty cart,
@@ -19,6 +22,7 @@ export function createMarketState(seed: number, mode: MarketMode = "baseline"): 
     flashDeal: "pending",
     interruption: null,
     coupons: { stores: [], attempts: {}, platform: false },
+    following: [...FOLLOWED_AT_START],
     cart: [],
     nextLine: 1,
     search: { loadsSinceCheck: 0, challenged: false, checksPassed: 0 },
