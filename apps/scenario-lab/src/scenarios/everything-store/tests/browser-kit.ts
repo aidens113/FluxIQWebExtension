@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import type { ExpectedFact } from "@fluxiq-web-extension/test-contracts";
+import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
 
@@ -154,6 +154,48 @@ function pause(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A recording's target as Playwright finds it: `role:<role>:<name>`, `testid:<id>`, or a selector. */
+function locate(page: Page, target: string) {
+  const role = /^role:([a-z]+):(.+)$/u.exec(target);
+  if (role) return page.getByRole(role[1] as Parameters<Page["getByRole"]>[0], { name: role[2] ?? "", exact: true });
+  if (target.startsWith("testid:")) return page.getByTestId(target.slice("testid:".length));
+  return page.locator(target);
+}
+
+/** An extract step's rows: each match of the target, each field its first match's trimmed text, or `@attribute`. */
+const EXTRACT = String.raw`({ target, fields }) => [...document.querySelectorAll(target)].map((row) => Object.fromEntries(Object.entries(fields).map(([key, spec]) => {
+  const at = spec.lastIndexOf('@');
+  const [selector, attribute] = at > 0 ? [spec.slice(0, at), spec.slice(at + 1)] : [spec, null];
+  const node = row.querySelector(selector);
+  return [key, node ? (attribute ? node.getAttribute(attribute) ?? '' : node.textContent.trim()) : ''];
+})))`;
+
+/**
+ * Plays a workflow's recording in the session, step by step, as written, and
+ * returns what each extract step read. Only the operations the store's
+ * recordings use are known; any other fails the test naming it, so a
+ * recording can never pass here by a step being skipped. A check sets the
+ * box only when it differs, because checkout reloads on every change and a
+ * check that verified afterwards would read the reloading page.
+ */
+async function playRecording(session: StoreSession, steps: readonly ScenarioStep[]): Promise<Record<string, Array<Record<string, string>>>> {
+  const { page, lab } = session;
+  const read: Record<string, Array<Record<string, string>>> = {};
+  for (const step of steps) {
+    const target = step.target === undefined ? undefined : locate(page, step.target).first();
+    if (step.operation === "navigate") await page.goto(`${lab.origin}${step.path ?? ""}`);
+    else if (step.operation === "waitForState") await target!.waitFor({ state: "visible", timeout: step.timeoutMs ?? 5000 });
+    else if (step.operation === "click") await target!.click({ timeout: step.timeoutMs ?? CONTROL_TIMEOUT_MS });
+    else if (step.operation === "type") await target!.fill(String(step.value ?? ""));
+    else if (step.operation === "select") await target!.selectOption(String(step.value ?? ""));
+    else if (step.operation === "check") { if (await target!.isChecked() !== (step.value === true)) await target!.click(); }
+    else if (step.operation === "scroll") await page.mouse.wheel(0, Number(step.value ?? 0));
+    else if (step.operation === "extract") read[step.id] = await page.evaluate(`(${EXTRACT})(${JSON.stringify({ target: step.target, fields: step.fields ?? {} })})`) as Array<Record<string, string>>;
+    else if (step.operation !== "checkpoint") throw new Error(`${step.id}: the player does not know ${step.operation}`);
+  }
+  return read;
+}
+
 /** The browser session helpers the scenario's path tests share. */
 export const BROWSER_KIT = {
   openStore,
@@ -165,6 +207,7 @@ export const BROWSER_KIT = {
   search,
   readWholePage,
   readCart: (page: Page) => page.evaluate(READ_CART) as Promise<Array<Record<string, string>>>,
+  playRecording,
   pause,
   closeBrowser: async () => {
     const opened = launching;
