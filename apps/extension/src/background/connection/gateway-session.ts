@@ -75,6 +75,12 @@ export type GatewaySessionHandlers = {
   readonly onCommand: (payload: ServerCommandPayload, messageId: string) => void;
   // Fired on every heartbeat tick while the session is connected.
   readonly onHeartbeat: () => void;
+  // Fired on every heartbeat tick while the socket is open but not yet
+  // connected (`pairing`, `connecting`): nothing crosses the socket then, so the
+  // extension resets the service worker's idle timer here, or Chrome stops it
+  // about 30 s in, long before a person has had time to approve (t706). Not a
+  // gateway message: an unpaired session may not send client data.
+  readonly keepAlive?: () => void;
 };
 
 // The connection-health fields the extension status carries.
@@ -363,6 +369,7 @@ export class GatewaySession {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (this.connectionState === "connected") this.deps.handlers.onHeartbeat();
+      else if (this.connectionState === "pairing" || this.connectionState === "connecting") this.deps.handlers.keepAlive?.();
     }, HEARTBEAT_INTERVAL_MS);
   }
 

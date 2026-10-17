@@ -3,9 +3,10 @@
 // state does, so a failure stays visible until the connection is actually back.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 
 import { createClientGatewayMessage } from "@fluxiq/client-gateway-websocket";
+import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
 import { GatewaySession, type GatewaySessionDeps } from "../gateway-session";
 
@@ -152,4 +153,120 @@ test("the offline queue is asked for a command's result by its id, and only a re
   assert.deepEqual(await session.queuedActionResult("cmd-2"), { commandId: "cmd-2", status: "succeeded" });
   assert.equal(await session.queuedActionResult("cmd-1"), undefined, "a recording event is not a result");
   assert.equal(await session.queuedActionResult("cmd-3"), undefined);
+});
+
+// --- Staying awake while a person approves ------------------------------------
+// t706: Chrome's MV3 idle rule stopped the service worker about 30 s after the
+// pairing code showed, because nothing reset its idle timer while the session
+// waited for approval. The socket closed, and a person who approved after that
+// was approved for a socket that no longer existed. Each heartbeat tick now
+// calls `keepAlive` while the socket is open but not connected.
+
+/** A socket that opens on the next turn and can be dropped by the test. */
+class OpeningSocket {
+  static latest: OpeningSocket | undefined;
+  readyState = 0;
+  private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
+  constructor(readonly url: string) {
+    OpeningSocket.latest = this;
+    setTimeout(() => {
+      this.readyState = 1;
+      for (const listener of this.listeners.get("open") ?? []) listener({});
+    }, 0);
+  }
+  send(): void {}
+  close(): void { this.readyState = 3; }
+  addEventListener(type: string, listener: (event: unknown) => void): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(listener);
+    this.listeners.set(type, set);
+  }
+  removeEventListener(type: string, listener: (event: unknown) => void): void {
+    this.listeners.get(type)?.delete(listener);
+  }
+  /** The worker stopping, or the network dropping: the socket closes under the session. */
+  drop(): void {
+    this.readyState = 3;
+    for (const listener of this.listeners.get("close") ?? []) listener({ code: 1006, reason: "" });
+  }
+}
+
+function tickingHarness(token: string | undefined) {
+  const ticks: string[] = [];
+  const deps: GatewaySessionDeps = {
+    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
+    session: () => ({ clientId: "client-1", ...(token !== undefined ? { token } : {}) }) as FluxIQSession,
+    persistSession: async () => undefined,
+    emitStatus: () => undefined,
+    reportError: () => undefined,
+    clearError: () => undefined,
+    beforeConnect: async () => undefined,
+    queue: { queueEvent: async () => 0, readQueuedEvents: async () => [], clearQueuedEvents: async () => undefined },
+    handlers: {
+      onServerMessage: () => undefined,
+      onPairingRequired: () => undefined,
+      onSessionReady: () => undefined,
+      onCommand: () => undefined,
+      onHeartbeat: () => ticks.push("heartbeat"),
+      keepAlive: () => ticks.push("keepAlive")
+    }
+  };
+  return { session: new GatewaySession(deps), ticks };
+}
+
+/** Opens a session with `setInterval` faked (the socket still opens on a real timeout) and runs `body` against it. */
+async function withTickingSession(token: string | undefined, body: (h: ReturnType<typeof tickingHarness>) => void | Promise<void>): Promise<void> {
+  const h = tickingHarness(token);
+  mock.timers.enable({ apis: ["setInterval"] });
+  try {
+    await withSocket(OpeningSocket, async () => {
+      await h.session.connect();
+      try { await body(h); } finally { h.session.closeClient(); }
+    });
+  } finally {
+    mock.timers.reset();
+  }
+}
+
+test("while a person approves pairing, every tick keeps the worker awake and sends no heartbeat", async () => {
+  await withTickingSession(undefined, (h) => {
+    assert.equal(h.session.state(), "pairing");
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 15);
+    assert.deepEqual(h.ticks, Array(15).fill("keepAlive"), "five minutes of approval window, a keepalive every tick");
+  });
+});
+
+test("while the gateway checks a saved token, every tick keeps the worker awake", async () => {
+  await withTickingSession("token-1", (h) => {
+    assert.equal(h.session.state(), "connecting");
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 2);
+    assert.deepEqual(h.ticks, ["keepAlive", "keepAlive"]);
+  });
+});
+
+test("once connected, ticks are heartbeats, as before, and no keepalive", async () => {
+  await withTickingSession(undefined, (h) => {
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS);
+    h.session.markSessionReady();
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 2);
+    assert.deepEqual(h.ticks, ["keepAlive", "heartbeat", "heartbeat"]);
+  });
+});
+
+test("after the socket closes, nothing ticks", async () => {
+  await withTickingSession(undefined, (h) => {
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS);
+    OpeningSocket.latest!.drop();
+    assert.equal(h.session.state(), "disconnected");
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 5);
+    assert.deepEqual(h.ticks, ["keepAlive"]);
+  });
+});
+
+test("after the extension closes the client, nothing ticks", async () => {
+  await withTickingSession(undefined, (h) => {
+    h.session.closeClient();
+    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 5);
+    assert.deepEqual(h.ticks, []);
+  });
 });
