@@ -54,7 +54,10 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
   one-part overhead. Merged: P1-P5 (Core t671, t672, t673, t676, t679) and Core t684 (a reset that cannot undo an
   act made inside a part says so and is fixed; merged). Cost round 1 ran (`## Cost Gap Plan`): four of five passed,
   crossborder and bigbox cart at 29 and 38 calls (pair 8: 93/56, 75/81); everything-store hit a P5 budget defect (Core
-  t685, in flight) and towels failed after a judged yes (debug in flight). Next: t685, the towels cause, then a rerun.
+  t685, in flight) and towels failed on a false judged yes from a Core judging defect in both modes (debug
+  `run-mvblov2i-abb7d82e.md`: a correct no re-asked as a filter complaint and replaced; a condition in the request's own
+  exclusion words dropped on refuted advice; a result repair that spent 48 decisions and applied nothing). Core J1-J3
+  in flight. Next: those fixes, then a rerun of everything-store and towels.
 - Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
   fallback stays in memory by design), `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
@@ -424,7 +427,7 @@ it). Calls are rate-independent; dollars are at about half pair 8's rate.
 | bigbox-retail-pickup-cart | passed | 0.034 | 38 | 1 | 75 / 81 | 38 / 35 | one test, the judged run |
 | social-network-feed-confirm-requests | passed | 0.041 | 53 | 2 | 62 / 78 | 30 / 28 | repair brief for the site's slow-down (user rule), one extra assemble |
 | everything-store-plus-earbuds-under-50 | passed | 0.049 | 41 | 2 | 31 / 35 | 26 / 35 | third test refused unaffordable: the judging reserve paid every single-path test (Core t679 defect; t685) |
-| bigbox-retail-pickup-towels | failed | 0.110 | 79 | 1 | 65 / 59 | 49 (failed) | judged yes, playback failed the oracle (`output_not_observed`); debug in flight |
+| bigbox-retail-pickup-towels | failed | 0.110 | 79 | 1 | 65 / 59 | 49 (failed) | a false judged yes: a correct no re-asked as a filter complaint (t666 path) and replaced; Core J1-J3 |
 
 Debug notes: `../language-driven-flow-loop-plan/debugs/run-mvbl7oaa-de54f314.md`, `run-mvbl865c-97c1f8f7.md`,
 `run-mvbl9hrv-db5a120b.md`, `run-mvblai1v-a31e7593.md`, `run-mvblov2i-abb7d82e.md` (in the lane trees until merged).
