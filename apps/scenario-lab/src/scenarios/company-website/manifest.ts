@@ -1,4 +1,4 @@
-import { companyReviewWorkflow } from "./qualification/index.js";
+import { apprenticesWorkflow, companyReviewWorkflow, heatPumpQuoteWorkflow, newsletterSignupWorkflow, saturdayCertificateWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { TEAM } from "./data/index.js";
@@ -155,7 +155,7 @@ const BOOKING_SCRIPT: ScenarioStep[] = [
 const TEAM_EXPECTED = [{ step: "extract-gas-engineers", count: GAS_ENGINEER_RECORDS.length, records: GAS_ENGINEER_RECORDS.map((record) => ({ ...record })) }];
 
 /**
- * Kestrel Lane Heating & Plumbing. Four workflows, each a job people really
+ * Kestrel Lane Heating & Plumbing. Its workflows, each a job people really
  * give an assistant on a small firm's website:
  *
  * - primary: request a quote through the three-step drawer, with a honeypot,
@@ -167,6 +167,9 @@ const TEAM_EXPECTED = [{ step: "extract-gas-engineers", count: GAS_ENGINEER_RECO
  * - `book-service`: book the right slot in a cross-origin widget, which takes
  *   a deposit. The expectations are the run in which the person allowed that
  *   payment; unallowed, the right outcome is to ask them.
+ * - the qualification workflows (`qualification/`): a booking review that
+ *   stops before the deposit, and the breadth rows' apprentices read,
+ *   newsletter sign-up, empty Saturday search and heat pump quote journey.
  *
  * `recordingEvents` name types without counts: no recording lane has run this
  * fixture, so a tally would be a guess.
@@ -263,6 +266,10 @@ export const companyWebsiteManifest = createScenarioManifest({
       },
     },
     companyReviewWorkflow,
+    apprenticesWorkflow,
+    newsletterSignupWorkflow,
+    saturdayCertificateWorkflow,
+    heatPumpQuoteWorkflow,
   ],
   evidencePolicy: { screenshots: "events", trace: "failure", video: "failure", sampleFps: 0, reviewRequired: false },
 });

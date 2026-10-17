@@ -19,7 +19,7 @@ const c = marketClasses(MARKET_SEED, "baseline");
 const RATED_45_OR_MORE = [90, 92, 94, 96, 98, 100].map((width) => `[style="width:${width}%"]`).join(",");
 
 /** Close the welcome coupons when they arrive, then answer the consent banner they were covering. */
-const ARRIVE: ScenarioStep[] = [
+export const ARRIVE: ScenarioStep[] = [
   { id: "welcome-arrives", operation: "waitForState", target: 'text="Welcome back, Mara!"', timeoutMs: 8000 },
   { id: "dismiss-welcome", operation: "click", target: 'text="No thanks"' },
   { id: "accept-cookies", operation: "click", target: 'text="Accept all"' },
@@ -34,7 +34,7 @@ const ARRIVE: ScenarioStep[] = [
  * thirty seconds after the click, when each tab gets a renderer process of
  * its own.
  */
-const OPEN_OFFICIAL_LISTING: ScenarioStep[] = [
+export const OPEN_OFFICIAL_LISTING: ScenarioStep[] = [
   { id: "results-drawn", operation: "waitForState", target: 'text="Voltbay Official Store"', timeoutMs: 6000 },
   { id: "open-listing", operation: "click", target: `a[href="${itemHref(VOLTBAY_OFFICIAL_ID)}"] >> nth=1` },
   { id: "listing-tab", operation: "switchTab", path: itemHref(VOLTBAY_OFFICIAL_ID), timeoutMs: 30_000 },

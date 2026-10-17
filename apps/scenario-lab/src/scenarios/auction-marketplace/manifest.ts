@@ -1,3 +1,4 @@
+import { buyItNowQuoteWorkflow, cheapAccessoriesWorkflow, markIiSellersWorkflow, sellerShopWorkflow } from "./breadth/index.js";
 import { accessoryCleanupWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
@@ -263,5 +264,9 @@ export const auctionMarketplaceManifest = createScenarioManifest({
       }],
     },
     accessoryCleanupWorkflow,
+    cheapAccessoriesWorkflow,
+    markIiSellersWorkflow,
+    buyItNowQuoteWorkflow,
+    sellerShopWorkflow,
   ],
 });

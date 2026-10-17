@@ -61,7 +61,7 @@ ${specs.length === 0 ? "" : `<div class="${c.skuGroup}" id="${rotatingId(state, 
 <div class="${c.errorTip}"></div>
 </div>
 <div>
-<div class="${c.sideCard}"><b>${escapeHtml(store.name)}</b><br>${store.positiveFeedback} positive feedback · ${store.followers} followers<br><span class="${c.linkish}">Visit store</span> · <span class="${c.linkish}">Follow</span></div>
+<div class="${c.sideCard}"><b>${escapeHtml(store.name)}</b><br>${store.positiveFeedback} positive feedback · ${store.followers} followers<br><span class="${c.linkish}">Visit store</span> · <span class="${c.linkish}">${state.following.includes(store.id) ? "Following" : "Follow"}</span></div>
 <div class="${c.sideCard} ${c.deliveryBox}">Ship to <b>${escapeHtml(REGIONS[region].country)}</b><br><span>${escapeHtml(shippingText(listing.shipping, region))}</span><br>Delivery: <span>${escapeHtml(deliveryWindow(choice.origin, region))}</span><br><span>Ships from ${escapeHtml(choice.origin)}</span></div>
 <div class="${c.sideCard}"><b>Return &amp; refund policy</b><br>Free returns within 15 days for items shipped from EU warehouses.<br><b>Security &amp; privacy</b><br>Safe payments: we do not share your card details with sellers.</div>
 </div>
@@ -79,6 +79,7 @@ ${moreFromStore.length === 0 ? "" : `<div class="${c.sectionTitle}">More from ${
     initial: choice,
     skus: skuTable(listing, region),
     redesigned,
+    following: state.following.includes(store.id),
     cart: state.cart,
   };
   return marketDocument({

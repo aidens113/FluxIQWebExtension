@@ -40,6 +40,12 @@ export function storeCouponsText(state: MarketState): string {
   return `Store coupons: ${held.join("; ")}`;
 }
 
+/** What the account flyout says about followed stores: each one, in the order followed, or that there are none. */
+export function followedStoresText(state: MarketState): string {
+  if (state.following.length === 0) return "Followed stores: none";
+  return `Followed stores: ${state.following.map((storeId) => storeById(storeId).name).join("; ")}`;
+}
+
 /** Paid orders only: an order held for review has not been paid for and is not on its way. */
 export function ordersSummaryText(state: MarketState): string {
   return `Orders to be shipped (${state.orders.filter((order) => order.status === "paid").length})`;
@@ -53,5 +59,6 @@ export function accountFlyoutMarkup(state: MarketState, c: MarketClasses): strin
     + `<p class="${c.flyoutLine}">${escapeHtml(platform)}</p>`
     // Read-only fixture oracle; never a discovery input for the automation product.
     + `<script type="application/json" data-testid="coupon-only-account">${JSON.stringify({ platformCoupon: state.coupons.platform, checkoutOpen: state.checkout !== null, orders: state.orders.length })}</script>`
-    + `<p class="${c.flyoutLine}">Wish list (7) · Followed stores (3) · Feedback (2)</p></div>`;
+    + `<p class="${c.flyoutLine}" data-testid="followed-stores">${escapeHtml(followedStoresText(state))}</p>`
+    + `<p class="${c.flyoutLine}">Wish list (7) · Feedback (2)</p></div>`;
 }
