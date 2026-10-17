@@ -11,7 +11,8 @@
  * The store coupon's first claim always fails with "Network busy, please try
  * again" -- the live service's cold start -- and its second succeeds.
  * "Add to cart" posts the line after a 700 ms spinner and refreshes the header
- * flyouts, but not the number on the cart icon.
+ * flyouts, but not the number on the cart icon. The store card's "Follow"
+ * follows the store, and "Following" unfollows it.
  */
 export function itemScript(): string {
   return ITEM;
@@ -155,6 +156,18 @@ buyButton.addEventListener('click', async () => {
   buyButton.innerHTML = '<span class="' + css.spinner + '"></span>';
   await mutate('buy-now', line);
   location.href = boot.root + 'checkout';
+});
+
+// The store card's Follow control: a plain span, which posts the change, flips its own wording and refreshes the
+// account flyout. Pressing Following unfollows, as the live site's toggle does.
+const followControl = qsa('.' + css.linkish, byClass('sideCard')).find((node) => node.textContent === 'Follow' || node.textContent === 'Following');
+let following = pageData.following;
+if (followControl) followControl.addEventListener('click', async () => {
+  const result = await mutate('follow-store', { storeId: pageData.storeId, follow: !following });
+  following = result.state.following.includes(pageData.storeId);
+  followControl.textContent = following ? 'Following' : 'Follow';
+  toast(following ? 'You are now following this store.' : 'You have unfollowed this store.');
+  await refreshFlyouts();
 });
 
 // The store coupon comes from the promotions team's widget library, rendered into its own shadow root.

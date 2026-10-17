@@ -52,6 +52,11 @@ export async function runScript(page: Page, origin: string, script: readonly Sce
         case "click": await locate(page, step.target!).click({ timeout }); break;
         case "type": await locate(page, step.target!).fill(String(step.value ?? ""), { timeout }); break;
         case "navigate": await page.goto(`${origin}${step.path}`); break;
+        // As the Lab's step runner scrolls: the wheel, then half a second for the page to answer it.
+        case "scroll":
+          await page.mouse.wheel(0, Number(step.value ?? 500));
+          await page.waitForTimeout(500);
+          break;
         case "waitForState": await locate(page, step.target!).waitFor({ state: "visible", timeout }); break;
         case "checkpoint": break;
         case "extract": extracted.set(step.id, await extract(page, step)); break;

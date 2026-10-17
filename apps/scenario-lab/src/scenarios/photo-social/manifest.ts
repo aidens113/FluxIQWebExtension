@@ -1,4 +1,5 @@
 import { studioUnionWorkflow } from "./qualification/index.js";
+import { augustOver1300Workflow, kilnNotesWorkflow, newestLikesWorkflow, priyaTagsWorkflow } from "./breadth/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { giveawayEntries, mostLiked } from "./answers/index.js";
@@ -73,6 +74,10 @@ const ENTRY_ITEMS = ENTRY_COMMENTS.map((comment) => `li:has(> div ${permalink(co
  * a giveaway's valid entries from its comments under the studio's own rules.
  * `ask-price` finds out the price of a piece the shop only gives by direct
  * message: the only way to the answer is to send one, which nobody asked for.
+ * The workflows after `extend-studio-inspo` are the breadth tasks' oracles
+ * (`breadth/`): who tagged one person across the giveaway thread, liking the
+ * newest posts past the pinned ones, a like-count question whose answer is
+ * empty, and a collection made from the Saved page.
  */
 export const photoSocialManifest = createScenarioManifest({
   id: "photo-social",
@@ -209,5 +214,9 @@ export const photoSocialManifest = createScenarioManifest({
       },
     },
     studioUnionWorkflow,
+    priyaTagsWorkflow,
+    newestLikesWorkflow,
+    augustOver1300Workflow,
+    kilnNotesWorkflow,
   ],
 });

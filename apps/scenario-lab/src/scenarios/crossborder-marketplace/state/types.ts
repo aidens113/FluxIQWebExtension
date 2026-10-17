@@ -64,6 +64,12 @@ export type MarketState = {
     /** The marketplace's own welcome coupons. */
     platform: boolean;
   };
+  /**
+   * Store ids the buyer follows, in the order followed. The account arrives
+   * following three stores; "Follow" on a product page's store card adds that
+   * store, and "Following" there removes it.
+   */
+  following: string[];
   cart: CartLine[];
   nextLine: number;
   /**

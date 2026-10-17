@@ -53,7 +53,7 @@ export function buyDrawerMarkup(css: AuctionClasses, listing: Listing): string {
 <section>
 <p>${escapeHtml(listing.title)}</p>
 <p>Price: <strong></strong></p>
-<p>Postage: ${escapeHtml(postageText(listing.currency, listing.postage))}</p>
+<p>Postage: <span>${escapeHtml(postageText(listing.currency, listing.postage))}</span></p>
 <div class="${css.trap}" aria-hidden="true"><label>Order reference <input type="text" name="reference" tabindex="-1" autocomplete="off"></label></div>
 <p class="${css.legal}">By selecting Confirm and pay, you agree to buy this item and to pay for it with your saved card ending 4417.</p>
 </section>
