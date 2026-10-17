@@ -1,3 +1,4 @@
+import { halvardCareersRolesWorkflow, halvardLabsOfficeJobsWorkflow, remoteEasyApplyWorkflow, saveQuillmarkRemoteWorkflow } from "./breadth/index.js";
 import { closedJobsWorkflow } from "./qualification/index.js";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
@@ -65,6 +66,9 @@ const ALLOWED_CONSOLE_ERRORS = ["status of 429"];
  * (an extraction judged record by record); `apply-remote-rust-role` applies
  * for one of them through Talentloom and reads back the confirmation (a
  * consequential task: its reference is derived from every answer sent).
+ * After them come `remove-closed-saved-jobs` (`qualification/`) and the four
+ * breadth workflows (`breadth/`), each judged by its records and the account
+ * read-out, with no variant.
  */
 export const jobBoardManifest = createScenarioManifest({
   id: "job-board",
@@ -202,5 +206,9 @@ export const jobBoardManifest = createScenarioManifest({
       }],
     },
     closedJobsWorkflow,
+    remoteEasyApplyWorkflow,
+    saveQuillmarkRemoteWorkflow,
+    halvardLabsOfficeJobsWorkflow,
+    halvardCareersRolesWorkflow,
   ],
 });

@@ -1,19 +1,17 @@
 import { soldSavesWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 import { after, before, test } from "node:test";
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, type Browser } from "@playwright/test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
-import { closeLabSession } from "../../tests/close-lab-session.js";
 import { bikeRecords, savedRecords } from "../answers.js";
 import { listingByKey } from "../catalog/index.js";
 import { CLASSIFIEDS_ROOT } from "../root.js";
 import { localClassifiedsScenario as scenario } from "../scenario.js";
 import { OFFER_LISTING_KEY } from "../targets.js";
-import type { ClassifiedsMode, ClassifiedsState } from "../types.js";
+import type { ClassifiedsMode } from "../types.js";
 import { listingPath } from "../view/index.js";
 import { failingFacts, locate, readRecords, runScript } from "./browser-support.js";
+import { onceEach, openSession, serverState, type Session } from "./lab-session.js";
 
 /**
  * Kerbfind Marketplace in a real browser, one test per live task: each walks
@@ -29,46 +27,9 @@ let browser: Browser;
 before(async () => { browser = await chromium.launch({ channel: "chromium", headless: true }); });
 after(async () => { await browser.close(); });
 
-type Session = { lab: RunningScenarioLab; page: Page; errors: string[]; close(): Promise<void> };
-
-async function session(mode: ClassifiedsMode = "baseline"): Promise<Session> {
-  const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed: manifest.seed });
-  let context: BrowserContext | undefined;
-  try {
-    if (mode !== "baseline") await post(lab, "set-mode", { mode });
-    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "Europe/London" });
-    const page = await context.newPage();
-    const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`${lab.origin}${CLASSIFIEDS_ROOT}`);
-    const opened = context;
-    return { lab, page, errors, close: () => closeLabSession(lab, opened) };
-  } catch (error) {
-    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
-    await closeLabSession(lab, context).catch(() => undefined);
-    throw error;
-  }
-}
-
-async function post(lab: RunningScenarioLab, operation: string, payload: unknown): Promise<void> {
-  const response = await fetch(`${lab.origin}/api/local-classifieds/${operation}`, {
-    method: "POST", headers: { authorization: `Bearer ${lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify(payload),
-  });
-  assert.equal(response.status, 200);
-}
-
-async function serverState(lab: RunningScenarioLab): Promise<ClassifiedsState> {
-  const response = await fetch(`${lab.origin}/__control/final-state?scenario=local-classifieds`, { headers: { authorization: `Bearer ${lab.runToken}` } });
-  return (await response.json() as { state: ClassifiedsState }).state;
-}
+const session = (mode: ClassifiedsMode = "baseline"): Promise<Session> => openSession(browser, mode);
 
 const workflow = (workflowId: string, variantId?: string) => resolveScenarioWorkflow(manifest, { workflowId, ...(variantId ? { variantId } : {}) });
-
-/** Each listing once, first sighting kept, by the address it links to: the dedupe step a correct Flow ends with. */
-function onceEach(records: ReadonlyArray<Record<string, string>>): Array<Record<string, string>> {
-  const seen = new Set<string>();
-  return records.filter((record) => !seen.has(record.url!) && Boolean(seen.add(record.url!)));
-}
 
 /** The bike workflow's script, split at its extract step. */
 function bikeScript(): { before: ScenarioStep[]; extract: ScenarioStep } {
