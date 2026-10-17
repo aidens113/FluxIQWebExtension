@@ -2,16 +2,16 @@ import { closedJobsWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { chromium, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
+import { chromium, type Browser, type Page } from "@playwright/test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
-import { closeLabSession } from "../../tests/close-lab-session.js";
 import { APPLICATION_FRAME_TITLE } from "../ats/index.js";
 import { postingById } from "../catalog/index.js";
 import { APPLICATION_RECORD, EXPECTED_REFERENCE } from "../candidate.js";
 import { halvardWeek, remoteRustRecords, shortlistFacts } from "../expectations.js";
 import { jobBoardScenario as scenario } from "../scenario.js";
-import type { JobBoardMode, JobBoardState } from "../types.js";
+import type { JobBoardMode } from "../types.js";
+import { openLabSession } from "./lab-session.js";
+import { Driver } from "./scenario-driver.js";
 
 /*
  * The site driven in a real browser. The honest paths are the manifest's own
@@ -22,9 +22,6 @@ import type { JobBoardMode, JobBoardState } from "../types.js";
  * Next, keep pressing a heart -- and each must fail the same oracle.
  */
 
-const RUN_TOKEN = "job-board-browser-token-7f3a9c";
-type Role = Parameters<Page["getByRole"]>[0];
-type Records = Array<Record<string, string | null>>;
 let browser: Browser;
 
 // Same-site tabs share one renderer process. The honest paths open a page in a new tab, and Chromium's default, a
@@ -33,109 +30,7 @@ let browser: Browser;
 before(async () => { browser = await chromium.launch({ channel: "chromium", headless: true, args: ["--process-per-site"] }); });
 after(async () => { await browser?.close(); });
 
-type Session = { lab: RunningScenarioLab; context: BrowserContext; page: Page; errors: string[]; close(): Promise<void> };
-
-async function session(mode: JobBoardMode = "baseline"): Promise<Session> {
-  const lab = await startScenarioLab({ runToken: RUN_TOKEN, seed: 42 });
-  let context: BrowserContext | undefined;
-  try {
-    if (mode !== "baseline") await post(lab, "set-mode", { mode });
-    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "Europe/London" });
-    const errors: string[] = [];
-    const watch = (page: Page) => {
-      page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
-      page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`); });
-    };
-    context.on("page", watch);
-    const page = await context.newPage();
-    await page.goto(`${lab.origin}${scenario.startPath}`);
-    const opened = context;
-    return { lab, context: opened, page, errors, close: () => closeLabSession(lab, opened) };
-  } catch (error) {
-    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
-    await closeLabSession(lab, context).catch(() => undefined);
-    throw error;
-  }
-}
-
-async function post(lab: RunningScenarioLab, operation: string, payload: unknown): Promise<void> {
-  const response = await fetch(`${lab.origin}/api/job-board/${operation}`, { method: "POST", headers: { authorization: `Bearer ${RUN_TOKEN}`, "content-type": "application/json" }, body: JSON.stringify(payload) });
-  assert.equal(response.status, 200);
-}
-
-async function finalState(lab: RunningScenarioLab): Promise<JobBoardState> {
-  const response = await fetch(`${lab.origin}/__control/final-state?scenario=job-board`, { headers: { authorization: `Bearer ${RUN_TOKEN}` } });
-  return ((await response.json()) as { state: JobBoardState }).state;
-}
-
-/** A manifest step runner with the recording lane's target grammar. */
-class Driver {
-  active: Page;
-  readonly extracted = new Map<string, Records>();
-  constructor(private readonly context: BrowserContext, page: Page) { this.active = page; }
-
-  locate(target: string): Locator {
-    if (!target.startsWith("frame:")) return scoped(this.active, target);
-    const body = target.slice("frame:".length);
-    const slash = body.indexOf("/");
-    return scoped(this.active.frameLocator(`iframe[title="${body.slice(0, slash)}"]`), body.slice(slash + 1));
-  }
-
-  async run(script: readonly ScenarioStep[]): Promise<void> {
-    for (const step of script) {
-      try { await this.perform(step); } catch (error) { throw new Error(`step ${step.id} failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`); }
-    }
-  }
-
-  private async perform(step: ScenarioStep): Promise<void> {
-    const target = () => this.locate(step.target ?? "");
-    switch (step.operation) {
-      case "click": return target().click({ timeout: 8000 });
-      case "navigate": { await this.active.goto(new URL(step.path!, this.active.url()).href); return; }
-      case "type": return target().fill(String(step.value), { timeout: 8000 });
-      case "select": { await target().selectOption(String(step.value), { timeout: 8000 }); return; }
-      case "check": return target().setChecked(step.value === true, { timeout: 8000 });
-      case "waitForState": return target().first().waitFor({ state: "visible", timeout: step.timeoutMs ?? 5000 });
-      case "checkpoint": return;
-      case "switchTab": {
-        const deadline = Date.now() + (step.timeoutMs ?? 5000);
-        for (;;) {
-          const page = this.context.pages().find((candidate) => new URL(candidate.url()).pathname === step.path);
-          if (page) { await page.waitForLoadState("domcontentloaded"); this.active = page; return; }
-          if (Date.now() > deadline) throw new Error(`no tab at ${step.path}`);
-          await delay(100);
-        }
-      }
-      case "extract": {
-        const items = target();
-        const records: Records = [];
-        for (let index = 0; index < await items.count(); index += 1) {
-          const record: Record<string, string | null> = {};
-          for (const [name, spec] of Object.entries(step.fields ?? {})) {
-            const at = spec.lastIndexOf("@");
-            const selector = at < 0 ? spec : spec.slice(0, at);
-            const element = selector ? items.nth(index).locator(selector).first() : items.nth(index);
-            record[name] = at < 0 ? ((await element.textContent()) ?? "").replace(/\s+/gu, " ").trim() : await element.getAttribute(spec.slice(at + 1));
-          }
-          records.push(record);
-        }
-        this.extracted.set(step.id, records);
-        return;
-      }
-      default: throw new Error(`the job-board driver does not run ${step.operation}`);
-    }
-  }
-}
-
-function scoped(scope: Page | FrameLocator, target: string): Locator {
-  if (target.startsWith("testid:")) return scope.getByTestId(target.slice("testid:".length));
-  if (target.startsWith("role:")) {
-    const body = target.slice("role:".length);
-    const colon = body.indexOf(":");
-    return colon < 0 ? scope.getByRole(body as Role) : scope.getByRole(body.slice(0, colon) as Role, { name: body.slice(colon + 1), exact: true });
-  }
-  return scope.locator(target);
-}
+const session = (mode: JobBoardMode = "baseline") => openLabSession(browser, mode);
 
 const script = (workflowId?: string) => resolveScenarioWorkflow(scenario.manifest, workflowId === undefined ? {} : { workflowId }).recordingScript;
 const readOut = async (page: Page, id: string) => ((await page.getByTestId(id).textContent()) ?? "").trim();
@@ -147,7 +42,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
       const driver = new Driver(run.context, run.page);
       await driver.run(script());
       for (const fact of shortlistFacts("baseline")) assert.equal(await readOut(driver.active, fact.subject), fact.value, fact.id);
-      const state = await finalState(run.lab);
+      const state = await run.finalState();
       for (const posting of halvardWeek()) assert.ok(state.saved.includes(posting.key), posting.id);
       assert.deepEqual(state.follows, []);
       assert.deepEqual(run.errors, []);
@@ -170,7 +65,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
       const driver = new Driver(run.context, run.page);
       await driver.run(script("apply-remote-rust-role"));
       assert.deepEqual(driver.extracted.get("extract-application"), [APPLICATION_RECORD]);
-      const [application] = (await finalState(run.lab)).applications;
+      const [application] = (await run.finalState()).applications;
       assert.equal(application?.reference, EXPECTED_REFERENCE);
       assert.equal(application?.flagged, false);
       assert.deepEqual(run.errors, []);
@@ -196,7 +91,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
     const recorded = await session("overflow-save");
     try {
       await assert.rejects(new Driver(recorded.context, recorded.page).run(script()), /save-first/u);
-      assert.deepEqual((await finalState(recorded.lab)).follows, ["Halvard Systems"]);
+      assert.deepEqual((await recorded.finalState()).follows, ["Halvard Systems"]);
     } finally { await recorded.close(); }
     const run = await session("overflow-save");
     try {
@@ -235,7 +130,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
       await assert.rejects(driver.run(script("apply-remote-rust-role")), /step posting-shown failed/u);
       assert.equal(await readOut(driver.active, "posting-status"), "No longer accepting applications");
       assert.equal(await driver.active.getByTestId("application-reference").count(), 0);
-      assert.deepEqual((await finalState(run.lab)).applications, []);
+      assert.deepEqual((await run.finalState()).applications, []);
     } finally { await run.close(); }
   });
 
@@ -248,7 +143,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
       const driver = new Driver(run.context, run.page);
       await assert.rejects(driver.run([...steps.slice(0, at), bot, ...steps.slice(at)]), /step confirmation-shown failed/u);
       assert.ok(await driver.locate(`frame:${APPLICATION_FRAME_TITLE}/text=Thank you for applying, Morgan!`).isVisible());
-      const [application] = (await finalState(run.lab)).applications;
+      const [application] = (await run.finalState()).applications;
       assert.equal(application?.flagged, true);
       assert.equal(application?.reference, null);
     } finally { await run.close(); }
@@ -270,7 +165,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
       await heart.dispatchEvent("click");
       await assert.rejects(heart.click({ timeout: 1500 }));
       await delay(800);
-      assert.deepEqual((await finalState(run.lab)).saved, [postingById("hv2").key, postingById("px").key]);
+      assert.deepEqual((await run.finalState()).saved, [postingById("hv2").key, postingById("px").key]);
     } finally { await run.close(); }
   });
 
@@ -299,7 +194,7 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
 test("qualification final: unsave closed job updates actual membership before ordinary list navigation", { timeout: 60000 }, async () => {
   const opened = await session();
   try {
-    const { page, context, lab } = opened;
+    const { page, context } = opened;
     const driver = new Driver(context, page);
     const steps = closedJobsWorkflow.recordingScript;
     const navigation = steps.findIndex(({ id }) => id === 'closed-refresh-list');
@@ -309,7 +204,7 @@ test("qualification final: unsave closed job updates actual membership before or
     assert.equal(await page.locator('main ol li').count(), 2, 'existing visible list remains stale');
     await driver.run(steps.slice(navigation));
     assert.deepEqual(driver.extracted.get('extract-open-saved-jobs'), closedJobsWorkflow.expected.extracted![0]!.records);
-    assert.deepEqual((await finalState(lab)).saved, ['13707d7b1e529572']);
+    assert.deepEqual((await opened.finalState()).saved, ['13707d7b1e529572']);
   } finally { await opened.close(); }
 });
 

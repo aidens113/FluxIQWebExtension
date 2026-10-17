@@ -3,6 +3,7 @@ export { renderBookingConfirmed } from "./booking-confirmed.js";
 export { bookingWidget } from "./booking-widget.js";
 export { renderBranches, renderDirections } from "./branches.js";
 export { renderHome } from "./home.js";
+export { renderNewsletter } from "./newsletter.js";
 export { personCard } from "./person-card.js";
 export { quoteDrawer, quoteDrawerIds } from "./quote-drawer.js";
 export type { QuoteDrawerIds } from "./quote-drawer.js";

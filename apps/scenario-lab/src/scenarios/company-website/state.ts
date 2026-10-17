@@ -41,7 +41,14 @@ export function mutateCompanyWebsiteState(state: CompanyWebsiteState, operation:
     case "subscribe-newsletter": {
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 120) : "";
       if (!email.includes("@")) return state;
-      return { ...state, newsletter: { dismissed: true, subscribers: [...state.newsletter.subscribers, email] } };
+      // A mailing list keeps an address once: signing up again with it changes nothing but the offer's dismissal.
+      const subscribers = state.newsletter.subscribers.includes(email) ? state.newsletter.subscribers : [...state.newsletter.subscribers, email];
+      return { ...state, newsletter: { dismissed: true, subscribers } };
+    }
+    case "unsubscribe-newsletter": {
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      if (!state.newsletter.subscribers.includes(email)) return state;
+      return { ...state, newsletter: { ...state.newsletter, subscribers: state.newsletter.subscribers.filter((entry) => entry !== email) } };
     }
     case "dismiss-chat-greeting":
       return { ...state, chat: { ...state.chat, greetingDismissed: true } };

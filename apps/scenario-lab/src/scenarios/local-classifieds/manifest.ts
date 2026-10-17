@@ -1,4 +1,5 @@
 import { soldSavesWorkflow } from "./qualification/index.js";
+import { budgetBikesWorkflow, furnitureWorkflow, priceCheckWorkflow, testRideWorkflow } from "./breadth/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { listingByKey, sellerById } from "./catalog/index.js";
@@ -6,11 +7,9 @@ import { bikeRecords, SAVED_TOTAL_AFTER, savedRecords } from "./answers.js";
 import { priceText } from "./format/index.js";
 import { CLASSIFIEDS_ROOT } from "./root.js";
 import { OFFER_AMOUNT, OFFER_LISTING_KEY, SAVED_TABLE_KEYS } from "./targets.js";
-import { listingPath } from "./view/index.js";
+import { answerCookies, CARD_FIELDS, notificationsNotNow, radius, RESULT_CARDS, resultLink, searchFor, sortCheapestFirst } from "./script/index.js";
 
 const OFFER_LISTING = listingByKey(OFFER_LISTING_KEY);
-const RESULTS = `section[aria-label="Collection of Marketplace items"]`;
-const resultLink = (key: string) => `${RESULTS} a[href="${listingPath(listingByKey(key))}"]`;
 
 /** The facts every rendering's front page holds on arrival: the account's two conversations and two saves, and where it is. */
 const buyingIs = (count: number): ExpectedFact => ({ id: "buying-count", subject: "marketplace_buying_count", predicate: "text", value: String(count) });
@@ -29,44 +28,6 @@ const OFFER_RECEIPT: ExpectedFact = { id: "offer-receipt", subject: "marketplace
  */
 const ONLY_THE_OFFER: ExpectedFact = { id: "only-the-offer", subject: "marketplace_conversation", predicate: "text", value: `You've sent ${sellerById(OFFER_LISTING.seller).name} 1 offer` };
 const SAVED_TOTAL: ExpectedFact = { id: "saved-total", subject: "marketplace_saved_total", predicate: "text", value: SAVED_TOTAL_AFTER };
-
-/**
- * The radius picker is a web component with its own shadow root, and its
- * Apply swallows the first press after the select changes, so a script
- * presses it twice and then waits for the chip to say the new radius.
- */
-function radius(from: number, to: number, prefix: string): ScenarioStep[] {
-  return [
-    { id: `${prefix}-open-radius`, operation: "click", target: `role:button:Kelford · Within ${from} mi` },
-    { id: `${prefix}-choose-radius`, operation: "select", target: "role:combobox:Radius", value: String(to) },
-    { id: `${prefix}-apply-radius`, operation: "click", target: "role:button:Apply" },
-    { id: `${prefix}-apply-radius-again`, operation: "click", target: "role:button:Apply" },
-    { id: `${prefix}-radius-applied`, operation: "waitForState", target: `role:button:Kelford · Within ${to} mi`, timeoutMs: 4000 },
-  ];
-}
-
-const sortCheapestFirst = (prefix: string): ScenarioStep[] => [
-  { id: `${prefix}-open-sort`, operation: "click", target: "role:combobox:Sort by" },
-  { id: `${prefix}-cheapest-first`, operation: "click", target: "role:option:Price: lowest first" },
-];
-
-const answerCookies: ScenarioStep = { id: "allow-cookies", operation: "click", target: "role:button:Allow all cookies" };
-const notificationsNotNow = (prefix: string): ScenarioStep[] => [
-  { id: `${prefix}-notifications-asked`, operation: "waitForState", target: "role:button:Not now", timeoutMs: 6000 },
-  { id: `${prefix}-notifications-not-now`, operation: "click", target: "role:button:Not now" },
-];
-const searchFor = (text: string, prefix: string): ScenarioStep[] => [
-  { id: `${prefix}-type-search`, operation: "type", target: "role:searchbox:Search Marketplace", value: text },
-  { id: `${prefix}-run-search`, operation: "press", target: "role:searchbox:Search Marketplace", value: "Enter" },
-];
-
-/** What a person reads off each card in the grid: the title, the current price and not the one struck through, the place, and the link. */
-const BIKE_FIELDS = {
-  title: "div:nth-of-type(3) > span",
-  price: "div:nth-of-type(2) > span:first-child",
-  location: "div:nth-of-type(4) > span",
-  url: "@href",
-};
 
 /** What a person reads off each saved row: the title, the current price, and whether it is still for sale. */
 const SAVED_FIELDS = {
@@ -103,6 +64,8 @@ const saveTable = (key: string, index: number): ScenarioStep[] => [
  *   more than the answer: the grammar has no way to leave out a card the feed
  *   sent twice, and neither has FluxIQ's list extraction.
  * - `save-dining-tables` saves three listings and reads the saved list back.
+ * - `remove-sold-saves` and the four breadth workflows (`breadth/`) each
+ *   carry their own oracle beside the task that is judged by it.
  *
  * `recordingEvents` name types without counts on purpose: no recording lane
  * has run this fixture yet.
@@ -175,7 +138,7 @@ export const localClassifiedsManifest = createScenarioManifest({
         { id: "scroll-to-end", operation: "scroll", value: 2500 },
         { id: "scroll-to-end-again", operation: "scroll", value: 2500 },
         { id: "results-ended", operation: "waitForState", target: "text=Results outside your search", timeoutMs: 12000 },
-        { id: "extract-bike-results", operation: "extract", target: `${RESULTS} > div:first-child a[href*="/item/"]`, fields: BIKE_FIELDS },
+        { id: "extract-bike-results", operation: "extract", target: RESULT_CARDS, fields: CARD_FIELDS },
         { id: "bikes-extracted", operation: "checkpoint" },
       ],
       expected: {
@@ -247,5 +210,9 @@ export const localClassifiedsManifest = createScenarioManifest({
       ],
     },
     soldSavesWorkflow,
+    furnitureWorkflow,
+    testRideWorkflow,
+    priceCheckWorkflow,
+    budgetBikesWorkflow,
   ],
 });
