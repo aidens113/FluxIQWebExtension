@@ -56,9 +56,10 @@ routing and cleared layers and reads a bypassed optional step correctly (t643, t
   defect (Core t685) and a false judged yes on towels (Core t686-t690). Cost round 2 (full rate, after them) passed
   four of five at $0.031 a build on average (pair 8: `project` $0.108, `candidate` $0.067); social failed on a false
   judged yes: a final read with no condition stored all 8 rows where the answer holds 4, a Core note vouched for the
-  extra rows, and the confirming judge call is an identical repeat (`run-mvbr0w7e-6a01c05b.md`). In flight: Core t691
-  (extra rows must be justified; the second judge call becomes the converse question), Core t692 (a keep-everything
-  read after an act is a doubt), t693 paired (a repair is told what its condition kept). Next: those, then round 3.
+  extra rows, and the confirming judge call is an identical repeat (`run-mvbr0w7e-6a01c05b.md`). Merged: Core t691
+  (extra rows must be justified; the second judge call becomes the converse question), t693 (a repair is told what
+  its condition kept). In flight: Core t692 part 2 (a keep-everything
+  read after an act is a doubt, wired end to end). Next: t692, then cost round 3.
 - Open follow-ups recorded in the ledgers: none from this plan beyond t684. Done: the reset-reason flag (Core t683; the
   fallback stays in memory by design), `submission.ts` split (Core t681),
   the `extract` check (t675), the `verdict.ts` split (Core t674), the exact first-ask yes flag (Core t677).
@@ -710,6 +711,28 @@ Entries for 2026-10-15 waves 8 to frozen pair 5 (t640-t655 downstream sides) are
   skipped. Core `pnpm task finish` -> `pnpm check` passed for both; Core dev pushed `807e4ebe`. Lanes synced: each
   downstream tree at `40b5ee32` and Core at `807e4ebe`, both containing dev; Core builds current
 - Outcome: Accepted. Cost round 2 launched at the full price rate (after 00:30 UTC), comparable with pair 8 in dollars
+
+### 2026-10-17 — Cost round 2; extra rows need a reason (Core t691), a repair told what its condition kept (t693)
+- Agent: supervisor (round 2 launches, four debug notes); worker debug of social (`run-mvbr0w7e-6a01c05b.md`); workers
+  t691 (its converse-ask wiring needed `verify.ts` and `verdict/unquoted-line.ts`, outside its brief: it wrote a tested
+  patch the supervisor applied as its own commit), t692 (part 1 committed on its branch; part 2 wiring in flight), t693
+  (paired); supervisor verified and integrated
+- Changed: Core t691 `result-verification/request-rows/` (`storedThoughLeftOut`: a row a condition left out of what the
+  Flow acted on but another read stored needs a yes that names it with the request's words), `agreement/{said,
+  ask-again}.ts`, `first-ask/`, `verify.ts`: the confirming judge call asks the converse question (each stored row
+  against the request's words) instead of repeating the first. t693 downstream `apps/extension/src/content/extraction/
+  {item-filter,list-reader,filtered-answer}.ts`, `domain/src/actions/extraction/kept-values.ts` (new), the list-read
+  condition account; Core `flow-draft/condition-account.ts` (new), `llm/repeat-guard/narrowed-nothing.ts` (new),
+  `llm/draft-amendment-feedback.ts`: a condition that rejected no row is named with up to three values it read (a
+  diagnostic sample in a refusal, not the model's page view; noted against the no-limits rule)
+- Why: cost round 2 social's false yes and its six identical repair decisions
+- Validation: (supervisor) t693 Core after merging dev: tsc exit 0; vitest llm, flow-draft, flow-bootstrap -> 429
+  files, 4633 passed; downstream domain tsc both configs ok; `node scripts/test-domain.mjs actions runtime/llm-evidence`
+  -> pass 1271, fail 0; extension tsc ok; audit passed; both sides finished and pushed (downstream `f22c0dac`, Core
+  `a9b4718d`). t691 after merging dev (t693 in): tsc exit 0; vitest result-verification, candidate-trial,
+  subflow-trial, flow-bootstrap, project-agents, project-build -> 421 files, 3997 passed, 2 skipped; Core `pnpm task
+  finish` -> `pnpm check` passed; pushed `f909ce8c`
+- Outcome: Accepted. Follow-up: `llm/draft-amendment-feedback.ts` is at exactly 800 lines; split before its next change
 
 ## Open Questions
 
