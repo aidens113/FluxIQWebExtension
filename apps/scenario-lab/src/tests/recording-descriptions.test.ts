@@ -18,5 +18,5 @@ test("all realistic workflow recordings have separate authored demonstration des
     }
   }
   assert.equal(sites.size, 10);
-  assert.equal(count, 42);
+  assert.equal(count, 82);
 });
