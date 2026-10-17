@@ -11,8 +11,10 @@
 // uncut, and are screened where they become evidence: `rejectedSamples`, only
 // when an exploring model's node run asks for every rejected row or a Flow's
 // playback for the rows each condition removed by itself
-// (`./rejected-samples.ts`), and `conditions.seen` (`./seen-values.ts`).
+// (`./rejected-samples.ts`), and `conditions.seen` (`./seen-values.ts`) with
+// `conditions.keptValues` (`./kept-values.ts`).
 
+import { webAutomationExtractionConditionKeptValuesValue, type WebAutomationExtractionConditionKeptValues } from "./kept-values";
 import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
@@ -288,6 +290,8 @@ export type WebAutomationExtractionConditionReport = {
   unfiltered: boolean;
   /** One value each condition's own read found on an item it held of, cut to 60 characters (`./seen-values.ts`); absent from a page build that predates it. */
   seen?: WebAutomationExtractionConditionSeen | undefined;
+  /** Per condition, the first few distinct values it read on rows the read kept (`./kept-values.ts`); absent from a page build that predates it. */
+  keptValues?: WebAutomationExtractionConditionKeptValues | undefined;
   /**
    * Per condition, positionally, the items it rejected that every other
    * condition held of: the rows it removed by itself. A row several conditions
@@ -440,13 +444,16 @@ function conditionReportValue(value: unknown): WebAutomationExtractionConditionR
   // One count per condition, none above that condition's own rejections.
   const alone = report.alone === undefined ? undefined : aloneCounts(report.alone, rejected);
   if (report.alone !== undefined && alone === undefined) return undefined;
+  const keptValues = report.keptValues === undefined ? undefined : webAutomationExtractionConditionKeptValuesValue(report.keptValues, rejected.length);
+  if (report.keptValues !== undefined && keptValues === undefined) return undefined;
   return {
     applied,
     kept,
     rejected: [...rejected],
     unfiltered: report.unfiltered,
     ...(seen !== undefined ? { seen } : {}),
-    ...(alone !== undefined ? { alone } : {})
+    ...(alone !== undefined ? { alone } : {}),
+    ...(keptValues !== undefined ? { keptValues } : {})
   };
 }
 

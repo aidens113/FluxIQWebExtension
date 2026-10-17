@@ -330,6 +330,23 @@ answers only the rows it kept, possibly none, and `minItems` counts the items
 seen, so a page whose rows the conditions all rejected is still a page the list
 was on.
 
+The condition report also says what a condition that rejected nothing read
+(t693). Beside the per-condition `rejected` counts and `seen`, the page reports
+`conditions.keptValues`: per condition, up to three distinct values
+(`WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST`) it tested on rows every
+condition kept, whole, and an empty list where it read none
+(`content/extraction/item-filter.ts`, `domain/src/actions/extraction/kept-values.ts`).
+They are collected per document and are not carried by a continued read's
+checkpoint. An exploring list read's draft statement passes them on to Core as
+`conditions` (`domain/src/runtime/llm-evidence/node-run/list-read/condition-account.ts`):
+per condition, `kept` (the items asked about less the ones it rejected),
+`rejected` and `keptValues`. Core carries each value only where the read the
+model was shown contains it. When the model reruns that read unchanged, the
+refusal names any condition that left out no row and quotes what it read,
+instead of pointing at the act after the read
+(`AS/runtime/llm/repeat-guard/narrowed-nothing.ts`). Run
+`run-mvbr0w7e-6a01c05b`'s repair resent such a condition six times.
+
 A Flow read moves its ordering off the page. Dispatch
 (`domain/src/output-nodes/extract-list/dispatch.ts`) writes `dedupe`, `sort`,
 `maxItems` and `minItems` into the record output's `process` (`maxItems` as

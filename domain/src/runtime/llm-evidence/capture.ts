@@ -273,6 +273,18 @@ export type WebLlmEvidenceToolExecution = {
      * must learn `changed` before this side sends it.
      */
     changed?: Array<{ words: string; how: "appeared" | "went" | "reads" | "rose" }>;
+    /**
+     * What each `where` condition of a list read did, in the order the read's
+     * `where` lists them: how many items it held of (`kept`) and `rejected`,
+     * and `keptValues`, the few values it read on the rows the read kept
+     * (`./node-run/list-read/condition-account.ts`, t693). Said only by a list
+     * read whose summary counts its conditions. Core withholds a value the
+     * call's evidence never showed, and tells an unchanged rerun of the read
+     * which condition left out no row (`AS/runtime/llm/repeat-guard/
+     * narrowed-nothing.ts`). Core's key list for a statement is exact, so Core
+     * must learn `conditions` before this side sends it.
+     */
+    conditions?: Array<{ kept: number; rejected: number; keptValues: string[] }>;
   };
 };
 

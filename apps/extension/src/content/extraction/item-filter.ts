@@ -59,8 +59,18 @@
 // read found on a row it kept, and three times refuted an exact answer as a
 // broken read. Core says the value only where the column is not stored
 // (`result-verification/read-account/condition.ts`).
+//
+// **And what it read on the rows the read kept.** A condition that holds of
+// every item narrows nothing, and `rejected: 0` does not say why: run
+// `run-mvbr0w7e-6a01c05b`'s repair resent one `is present` condition six times
+// because nothing told it that condition kept every row or what it read on them.
+// So the filter also writes, into the caller's `kept`, the first few distinct
+// values each condition tested on an item **every** condition held of, at most
+// `WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST` each
+// (`domain/src/actions/extraction/kept-values.ts`): values it already tested,
+// never more of the item.
 
-import { webAutomationExtractConditionHolds, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST, webAutomationExtractConditionHolds, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
@@ -97,8 +107,11 @@ export type ExtractItemRejections = readonly number[];
  * and every item is a record. `seen`, when given, holds one entry per condition,
  * and each `null` entry takes the first non-empty value that condition tested
  * on an item it held of, whether it read the value itself or named a column.
+ * `kept`, when given, holds one list per condition, and an item every condition
+ * held of adds each condition's non-empty value to its list when the list does
+ * not hold it yet and is not full.
  */
-export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (string | null)[], capture?: { observations: WebAutomationExtractionRejectionObservation[]; page: number; item: number }) => ExtractItemRejections) | undefined;
+export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (string | null)[], capture?: { observations: WebAutomationExtractionRejectionObservation[]; page: number; item: number }, kept?: string[][]) => ExtractItemRejections) | undefined;
 
 /** No condition rejected the item, shared because it is the answer for every row a read keeps. */
 const KEPT: ExtractItemRejections = [];
@@ -114,10 +127,12 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
   const written = request.where;
   if (written === undefined || written.length === 0) return undefined;
   const conditions = written.map((condition, index) => normalize(condition, index, request));
-  return (item, record, seen, capture) => {
+  return (item, record, seen, capture, kept) => {
     let rejectedBy: number[] | undefined;
+    const values: (string | undefined)[] = [];
     for (const [index, entry] of conditions.entries()) {
       const value = valueOf(entry, item, record);
+      values.push(value);
       if (webAutomationExtractConditionHolds(entry.says, value)) {
         if (seen?.[index] === null && value) seen[index] = value;
         continue;
@@ -129,8 +144,19 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
         capture.observations.push({ conditionIndex: index, state: value === undefined ? "absent" : "present", ...(value === undefined ? {} : { value }), source: entry.value.kind, ...(declared === undefined ? {} : { readKind: declared.kind }), page: capture.page, item: capture.item });
       }
     }
-    return rejectedBy ?? KEPT;
+    if (rejectedBy) return rejectedBy;
+    if (kept) noteKept(kept, values);
+    return KEPT;
   };
+}
+
+/** Each condition's value on an item every condition held of, added to its list once, while the list has room. */
+function noteKept(kept: string[][], values: readonly (string | undefined)[]): void {
+  for (const [index, value] of values.entries()) {
+    const list = kept[index];
+    if (!value || list === undefined || list.length >= WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST || list.includes(value)) continue;
+    list.push(value);
+  }
 }
 
 function normalize(condition: WebAutomationExtractItemCondition, index: number, request: WebAutomationExtractListRequest): Condition {

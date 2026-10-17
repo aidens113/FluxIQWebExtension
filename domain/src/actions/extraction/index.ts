@@ -2,6 +2,7 @@ export * from "./condition-grammar";
 export * from "./condition-match";
 export * from "./field-key";
 export * from "./field-match";
+export * from "./kept-values";
 export * from "./order-report";
 export * from "./order-request";
 export * from "./read-request";

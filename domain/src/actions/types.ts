@@ -226,7 +226,8 @@ export type {
   WebAutomationRecordedListExtraction,
   WebAutomationRecordedValueExtraction
 } from "./extraction";
-export { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./extraction";
+// The page collects at most this many values per condition on the rows it kept (`content/extraction/item-filter.ts`).
+export { WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST, WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./extraction";
 
 // The readers that decide what an extraction *is*, and whether one of its
 // conditions holds of a value, re-exported for the same reason the types above
