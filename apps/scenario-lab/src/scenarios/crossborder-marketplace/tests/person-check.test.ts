@@ -36,7 +36,7 @@ test("the Lab recognises the traffic screen by what it shows, and presses the bo
   assert.ok(check!.clearsWithinMs >= 2_300, "the wait covers the page's own two-second check and its reload");
 });
 
-test("the spain-hubs rows expect a hand-off but do not require one", () => {
-  assert.deepEqual(PERSON_CHECKS.handOffs.map(({ workflowId, variantId, person, required }) => `${workflowId}/${variantId ?? "-"}:${person}:${required}`), ["spain-hubs/-:completes:false", "spain-hubs/list-layout:completes:false"]);
+test("the spain-hubs and free-hubs-under-ten rows expect a hand-off but do not require one", () => {
+  assert.deepEqual(PERSON_CHECKS.handOffs.map(({ workflowId, variantId, person, required }) => `${workflowId}/${variantId ?? "-"}:${person}:${required}`), ["spain-hubs/-:completes:false", "spain-hubs/list-layout:completes:false", "free-hubs-under-ten/-:completes:false"]);
   assert.equal(PERSON_CHECKS.answer, undefined, "nothing on this check is read and typed");
 });
