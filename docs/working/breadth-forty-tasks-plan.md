@@ -5,13 +5,9 @@ Status detail: Task authoring and the install-package lane dispatched; live lane
 Created: 2026-10-17
 Last updated: 2026-10-17
 Owner: Senior supervisor agent
-Scope: Write 40 new live instruction tasks (four per realistic site), run every one live in the Lab, debug and fix
-what each exposes; in parallel, prove MVP item 1 (install FluxIQ from the release packages on a clean profile).
-It does not cover the adaptation gate (`adaptation-and-breadth-plan.md`), whose drift tasks stay there.
-Paired document: none (Core fixes found by the live lanes are ledgered in Core's own working documents)
-Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md),
-[automation-project-agents-plan.md](./automation-project-agents-plan.md) (A8 launch shape),
-[release-packaging.md](../architecture/release-packaging.md)
+Scope: 40 new live tasks (four per realistic site), each run live, debugged and fixed; plus the install-package proof (MVP item 1). Not the adaptation gate.
+Paired document: none
+Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [automation-project-agents-plan.md](./automation-project-agents-plan.md) (A8 launch shape), [release-packaging.md](../architecture/release-packaging.md)
 
 ---
 
