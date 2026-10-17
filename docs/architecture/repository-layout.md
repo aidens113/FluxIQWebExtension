@@ -415,10 +415,15 @@ pnpm --filter @fluxiq-web-extension/extension build
 The extension build writes unpacked targets to `apps/extension/dist/chrome`
 and `apps/extension/dist/firefox`, or under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT`
 when a Lab instance owns the build. `pnpm lab:test` runs the launcher's own
-tests on their own. `pnpm check` does not call it: it opens with one combined
-`node --test` over the structure-audit, Lab, task, worktree, build-cache and
-check tests, then runs `node scripts/structure-audit.mjs`, then
-`node scripts/check/core-build.mjs`, then `pnpm -r check`.
+tests on their own. `pnpm check` does not call it: it opens with
+`node scripts/check/core-build.mjs` and the cached `test-contracts` build,
+because the Lab's tests import `packages/test-contracts/dist` (a refusal's
+sentence is screened with it, and dropped when it is missing or stale -- on
+2026-10-17 a `dist` built before that screen was added on 2026-10-14 failed
+three of them), then one
+combined `node --test` over the structure-audit, Lab, task, worktree,
+build-cache and check tests, then `node scripts/structure-audit.mjs`, then
+`pnpm -r check`.
 Tests are never cached; only the package builds and checks behind them are.
 
 `scripts/check/core-build.mjs` refuses a FluxIQ Core that is unbuilt or whose

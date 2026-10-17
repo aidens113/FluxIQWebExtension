@@ -13,15 +13,35 @@ import { REPOSITORY_ROOT } from "../index.mjs";
 const SUITES = ["structure:test", "lab:test", "task:test", "build-cache:test", "check:test"];
 const scripts = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, "package.json"), "utf8")).scripts;
 
-function globsOf(command) {
-  assert.match(command, /^node --test /u, command);
-  return [...command.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+// The Lab's tests import `packages/test-contracts/dist` (a Core refusal's
+// sentence is screened with it and dropped when it is missing or stale), so
+// `pnpm check` and `pnpm lab:test` gate Core's build and build test-contracts,
+// through the build cache, before their `node --test` (2026-10-17: a dist from
+// before that screen failed three Lab tests in the sweep).
+const BUILD_FIRST = ["node scripts/check/core-build.mjs", "node scripts/build-cache/cli.mjs test-contracts:build"];
+
+/** A script's one `node --test` step. */
+function testStep(command) {
+  const step = command.split(" && ").find((part) => part.startsWith("node --test "));
+  assert.ok(step, command);
+  return step;
 }
 
-test("pnpm check starts with one node --test over exactly the suites' globs", () => {
-  const [prefix, ...rest] = scripts.check.split(" && ");
-  assert.deepEqual(globsOf(prefix), SUITES.flatMap((suite) => globsOf(scripts[suite])));
-  // The Core build gate runs before `pnpm -r check` bundles the extension
+function globsOf(command) {
+  return [...testStep(command).matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+}
+
+test("pnpm check builds what its tests import, then one node --test over exactly the suites' globs", () => {
+  const steps = scripts.check.split(" && ");
+  const at = steps.indexOf(testStep(scripts.check));
+  assert.deepEqual(steps.slice(0, at), BUILD_FIRST);
+  assert.deepEqual(globsOf(scripts.check), SUITES.flatMap((suite) => globsOf(scripts[suite])));
+  // The Core build gate also stands before `pnpm -r check` bundles the extension
   // against Core's dist (scripts/check/core-build.mjs).
-  assert.deepEqual(rest, ["node scripts/structure-audit.mjs", "node scripts/check/core-build.mjs", "pnpm -r check"]);
+  assert.deepEqual(steps.slice(at + 1), ["node scripts/structure-audit.mjs", "pnpm -r check"]);
+});
+
+test("pnpm lab:test builds what its tests import before them", () => {
+  const steps = scripts["lab:test"].split(" && ");
+  assert.deepEqual(steps.slice(0, steps.indexOf(testStep(scripts["lab:test"]))), BUILD_FIRST);
 });
