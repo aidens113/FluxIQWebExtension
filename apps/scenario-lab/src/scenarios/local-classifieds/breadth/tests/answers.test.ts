@@ -73,6 +73,13 @@ test("each plausible wrong reading of a task gives a different table", () => {
   // The buyer's own "Would you take £180?" sits in Alex's thread beside his £200.
   assert.notDeepEqual(cardRecords({ ...BUDGET_BIKE_QUERY, maxPrice: 180 }), budgetBikeRecords(), "the buyer's figure, not Alex's");
   assert.notDeepEqual(cardRecords({ ...BUDGET_BIKE_QUERY, conditions: [] }), budgetBikeRecords(), "every condition, fair and free included");
+  // Both instructions name the category, because the bare word reads wider or narrower than the site's category does.
+  const bikeWordSearch = cardRecords({ ...BUDGET_BIKE_QUERY, surface: "search", category: null, text: "bike" }).map(({ title }) => title);
+  assert.ok(["Exercise bike, magnetic resistance", "Bike helmet, adult M, 55-59cm", "Bike rack for car, carries 3 bikes"].every((title) => bikeWordSearch.includes(title)), "a search for bike finds the exercise bike, the helmet and the rack");
+  assert.ok(furnitureRecords().some(({ title }) => title === "Dining table legs x4, hairpin, 71cm"), "the Furniture category holds the table legs, which 'a piece of furniture' could leave out");
+  for (const id of ["local-classifieds-nearby-furniture", "local-classifieds-bikes-within-alex-price"]) {
+    assert.match(LOCAL_CLASSIFIEDS_LIVE_TASKS.find((task) => task.id === id)!.instruction, /every listing in the (?:Furniture|Bicycles) category/u, id);
+  }
   // The road bike to message is the cheapest only once both radius and condition are applied.
   assert.equal(matchingListings(ROAD_QUERY)[0]!.key, TEST_RIDE_LISTING_KEY);
   assert.equal(matchingListings({ ...ROAD_QUERY, radius: 20 })[0]!.key, "road-50");
