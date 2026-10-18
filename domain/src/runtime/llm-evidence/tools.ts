@@ -674,7 +674,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       // whatever handles its text prints.
       const retained = retainedFor(evidence);
       if (retained === undefined) return { status: "absent", reason: "evidence_unrecognized" };
-      return validateWebRuntimeTargetOverrideEvidence(retained.evidence, target, failedAction, retained.selectors);
+      return validateWebRuntimeTargetOverrideEvidence(retained.evidence, target, failedAction, retained.selectors, retained.drawings);
     },
     resolveExtractionHandle(input) {
       return extractionHandles.resolve({ projectId: input.projectId, flowId: input.flowId }, input.handle);
