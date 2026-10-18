@@ -556,3 +556,40 @@ None yet.
 - Revise five task variants before further launch: job-board-remote-rust-roles-quiet-market, its after-creation variant, job-board-halvard-labs-office-jobs, photo-social-august-over-1300, company-website-saturday-certificate. Keep intent and honest site behavior, adjust task/fixture/workflow/oracle together, prove positive paths provider-free, never force a judge yes.
 - Job run-mvdgaz8z-27ff3d1b is NOT accepted: actual CLI1, oracle0/0 passed but product unverified and requested replay not run;69calls/$0.056217954. Root debug written. This user direction supersedes every prior empty-result allowance in this plan and its historic audit reports.
 - Corpus nonempty regression and before-launch guard are required. Existing nonempty auction/social work continues; no additional zero-row scraping paid/browser launch.
+
+### Supervisor brief: codex-positive-scraping-corpus
+- Worker: held_lane_review; unit t721-positive-scraping-data-guard, worktree C:/Users/osrs_/FluxStuff/fxwork/t721-positive-scraping-data-guard. Supervisor owns request guard files; worker owns corpus files, partitioned below.
+- Objective: all108 realistic tasks eligible for browser testing have meaningful positive data when scraping; fix five currently empty task variants and prove actual paths.
+- Read: newest Current State/AGENTS positive-data rule; apps/scenario-lab/src/scenarios/{job-board,photo-social,company-website}/live-tasks.ts, then imports owning quiet-market, halvard-labs-office-jobs, august-over-1300, saturday-certificate workflows/expected/site data. Follow those imports only; no MVP background rediscovery.
+- Phase1 owns only docs/working/breadth-forty-tasks-plan/reports/codex-positive-scraping-corpus.md; inspect source read-only and propose exact existing fixture/instruction/workflow/oracle/test files before source edits.
+- Phase2 preapproved owns existing scenarios/tests/realistic-site-live-tasks.test.ts for nonempty-record regression; remaining exact fixture/source list requires supervisor assignment from phase1 findings.
+- Must not touch: packages/test-runner (supervisor guard), extension/domain/Core source, shared plans/AGENTS, other reports, generated outputs, profiles, commits/pushes. No paid launch.
+- Five affected task IDs: job-board-remote-rust-roles-quiet-market and -after-creation; job-board-halvard-labs-office-jobs; photo-social-august-over-1300; company-website-saturday-certificate.
+- Keep intent; choose/add realistic matching data or revise branch/condition to actual available data with the same intent. Never invent result rows, weaken an oracle, hardcode fixture answers into model guidance, or silently remove a task from coverage.
+- Update honest workflow/expected rows/task wording together; shared fixture changes require checking other affected task oracles. Quiet market may be small, must not be empty. Positive expected data must be reachable through actual browser controls.
+- Definition of done: corpus audit108/87dataset tasks all with nonempty exact records; narrow affected scenario tests/check; provider-free browser path per changed workflow/variant reaching nonempty oracle. No whole suites. Use only realistic browser sites and fresh isolated data.
+- Cache off; shared Core task preparation is currently running under supervisor session15606. Read-only discovery allowed now; no package builds until preparation exits. Keep source frozen during relevant validation.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-positive-scraping-corpus.md.
+
+### Supervisor brief: positive scraping launch guard
+- Unit t721 shares one branch/worktree for coherent positive-data requirement. Supervisor owns packages/test-runner/src/flow-lane/creation/{request.ts,tests/request.test.ts} and authored docs/architecture/testing-facility.md; worker owns corpus regression and later explicit fixture paths.
+- Refuse realistic scraping/dataset task before topology/browser/provider when expected rows absent/empty/count-only/inconsistent. Dataset expectations must be nonempty record-by-record; pure action goals remain valid. Preserve provider-free synthetic unit use and normal real-user empty search behavior.
+- Fail-first guard regressions, owning request tests, affected package typecheck and structure audit; no paid launch needed for guard.
+
+### Supervisor brief: codex-auction-numeric-guard
+- Worker: storage_comparison, existing auction monitor continues read-only in frozen t563. Source work ONLY idle paired t567, synced downstream e1ce99f4/Core b2721f85; no source/build mutation in live t563.
+- Objective: fix proved false quantity contradiction on actual auction trial0051/judges0052/0053; six rows/model yes remain insufficient without real oracle acceptance.
+- Read: actual sanitized numeric guard receipts/probe, Core runtime/result-verification/request-rows/left-out-stating-a-kept-number.ts and its existing owning tests; result-verdict.ts read-only.
+- Owns: that guard source, its existing owning test file, own t567 report docs/working/breadth-forty-tasks-plan/reports/codex-auction-numeric-guard.md. Find exact owning test path before edits and report it.
+- Fix bounded negated text-matches classification: incidental digits in a type-exclusion regex do not establish a numeric quantity range. Preserve genuine typed numeric predicates and positive numeric-text safety checks. Propose any broader semantic change before edits.
+- First fail-first generic regression matching closed condition shape, with real numeric guard positive/negative controls. Never use fixture answer/names/products in model guidance or weaken oracle/output verification.
+- Must not touch: t563 live source/build, reset worker Core files, t721 corpus/guard, public protocols/permissions, shared plans, captured state, commits/pushes. No paid launch.
+- Validation: owning guard/verdict tests only, affected Core package check/audit; library rebuild only after readers exit if needed for downstream currentness. Do not rebuild t563. Root independently reviews/tests before integration.
+- Report to: t567 docs/working/breadth-forty-tasks-plan/reports/codex-auction-numeric-guard.md.
+
+### 2026-10-18 ? Positive corpus scope approved; social source accepted
+- Supervisor reviewed the positive corpus report. All28 exact existing source/test paths listed under its Exact proposed source ownership are assigned to held_lane_review in t721, with no other source paths. Preserve108 tasks/87 dataset tasks; quiet market retains actual m7, hybrid Labs role is non-Rust, August positive post preserves other ranking IDs, Saturday uses existing Wrenfield capacity across three weeks. Exact rows/formats/account state require actual browser proof, not source-calculated acceptance.
+- Company slot semantics may add truthful aria-disabled/data-date attributes without changing free capacity or calendar behavior. Owning fixture driver may implement existing pagination and selector@attribute contract; no public contract or Core changes. Revised tasks explicitly state ordered columns/value formats.
+- Worker source edit release waits for supervisor bootstrap15606 actual exit; root guard/tests/docs are already frozen for its automatic workspace build. This worktree initial provisioning ran one whole workspace build (including shared Core web) in background; count it against the daily sweep limit and do not request another full build/check/test suite for these fixes. Future commands cache off.
+- Social feedback committed ec9b8593 and merged e1ce99f4 after supervisor43 independent domain cases, source review and actual3-case Chromium proof/type/audit gates. Supervisor audit13269 also passed210/638. Root reset additional15-case reader passed after58 earlier; full latest owning67 cases passed, final downstream checks/browser pending.
+- Auction run-mvdghd7e-267bcda3 failed93calls/$0.110640684, no Flow/oracle/replay. Generic negated-digit text condition false quantity guard reproduced; t567 bounded Core source correction assigned. No paid rerun until debug, changed-source gates and supervisor release.
