@@ -680,7 +680,7 @@ including integrated downstream27366 on latest accepted social source.
 This is actual content/domain/Core ledger proof, not model adherence or installed
 background pairing proof. Paid canonical behavior acceptance remains pending.
 
-## Final correction return — source/build frozen
+## Final correction return â€” source/build frozen
 
 All required gates observed green. Final extension check1059 actually exited0
 43.191s, including source/test TS and in-memory browser bundles. Both git diff
@@ -748,3 +748,119 @@ No active worker readers/builds, no paid launch. Own report frozen for superviso
 integration/push/explicit canonical model-reset-only release. Next run must use
 fresh isolated workspace r1-reset-kettle-t719-20261018-fixed (old ...20261018
 belongs to the failed run and is preserved), subject to the normal slot/guards.
+
+## Explicit canonical changed-source live release
+
+Supervisor accepted/merged/pushed reset corrections, synced t719 to downstream
+644b2009/Coree58e4cf9 (accepted same Core executable/library source; downstream
+positive-data guard/corpus current, canonical kettle fixture unchanged), and
+explicitly released a paid model-reset-only round. Both trees clean at launch.
+Fresh workspace r1-reset-kettle-t719-20261018-fixed did not exist; old failed
+workspace/profile preserved. Existing slot2 owner t719/bf-slot-2, no active run.
+Normal launcher76195 admitted with no overrides and verified Core current.
+
+Actual command: project-mode create-flow from real extension chat, canonical
+everything-store-kettle-to-cart, --model-reset-only, DeepSeek flash, headed
+persistent-isolated bf-slot-2, $0.25/250calls/one replay. Normal launcher owns
+run outputs; worker made no independent build/source changes or commits/pushes.
+Log node_modules/codex-reset-canonical-fixed-live.log. Runtime readiness/actual
+run id pending startup; no positive reset/live outcome claimed at launch.
+
+Actual run allocated: run-mvdhyf9k-3afd7eb6. Normal prelude completed126982ms;
+run-scoped extension/test-runner outputs rebuilt by launcher, Core current stamps
+accepted. Host production startup compiled98s and is checking types; no model
+activity/readiness outcome yet verified. Staging directory and fresh session are
+present, launcher76195 remains active.
+
+Host production build exited0. Actual authenticated readiness queried privately:
+candidateTrial.startReset=false; owning Lab readiness trialRunner=true,
+startReset=false,fixtureResetBetweenTrials=false,source=core. No fixture hook or
+override. Launcher76195 remains active; model/reset behavior still pending.
+
+### Fixed canonical actual failure (live acceptance remains open)
+
+Launcher76195 exited1. Run run-mvdhyf9k-3afd7eb6 failed runtime.behavior;
+54calls/$0.035059812/642605ms/110steps; flowCreated=false, no whole judge/replay.
+Actual authenticated no-hook readiness verified, no override or fixture reset.
+First reset0088 correctly retains create act-9. Navigation0090 reaches Cart;
+0092 wrong modify_existing then0094 corrected delete on same new-line Delete
+both refuse candidate.undo_unproved without execution. Completion0106 guarded
+reset-first; separate reset0108/0109 ends failed0110. No reset success claimed.
+
+Required debug saved at docs/working/language-driven-flow-loop-plan/debugs/
+run-mvdhyf9k-3afd7eb6.md. Original Cart visited0019/0066 before Add0074;
+corrected0094 targets newly appearing first line Delete, not original controls.
+Source/action-result digest same across those visits. Exact private passive
+original/current collection signatures and act spot were not persisted; they
+cannot be inferred from sanitized model page text. Root requested read-only seam
+analysis and proposed bounded full-transport diagnostic; no source changes or
+paid rerun. Existing accepted browser4 explicitly bridges content/domain to a
+local ledger with dummy resource, so does not prove actual gateway/project-build
+transport or model adherence. Live run failed independently of that source proof.
+
+### Actual installed transport diagnostic (approved test-only brief)
+
+Read absolute main brief/Current State; Core source remains read-only. Added only
+apps/extension/e2e/site-reset/{gateway.ts,index.ts,tests/installed-project.spec.ts}.
+Uses public FluxIQ.create (providers disabled), registered web domain/runtime,
+actual gateway.connect/receive through websocket transport and installed current
+MV3 artifact. Scripted provider drives actual project-build; no manual ledger,
+source/result seeding, fixture reset or private Core import. Delegating passive
+state/permission wrappers retain only opaque scope/subject/state hashes/counts.
+
+Source tsc80910 passed; actual test-project tsc96213 found optional-JSON typing
+errors, corrected before browser. First browser86987 failed BEFORE collection
+because Node strip-only TypeScript cannot load domain constructor properties;
+existing repository content-runner workaround --no-experimental-strip-types
+applied. Browser15656 now loading public runtime/domain imports; no product
+behavior receipt yet. Source frozen during active readers; no product fix/paid
+rerun/build started.
+
+### Genuine installed/project transport RED on failed live source644/e58
+
+Actual browser36570 exited1 after dirty-trial/reset path, not import/setup.
+Command from apps/extension: NODE_OPTIONS=--no-experimental-strip-types,
+FLUXIQ_BUILD_CACHE_DIR=off, FLUXIQ_E2E_EXTENSION_PATH=the current bf-slot-2
+run-scoped e2e-chromium artifact; pnpm exec playwright test -c
+e2e/playwright.config.ts e2e/site-reset/tests/installed-project.spec.ts --workers=1.
+Public domain/node export uses already-current launcher-built domain output;
+registered public native web-node bundle matches production host registration.
+No Core source/build, private import, fake source/result/ledger, fixture hook,
+paid provider or user profile was used. Actual pairing through Connect succeeded.
+
+Real builder observes Cart baseline (two complete same-group scopes, sizes2/2),
+returns to its previously observed detail URL, declares Add create_new, visits
+Cart (sizes3/2), submits actual handle-bound Flow and calls test_subflow. Dirty
+trial returns candidate.trial_reset_required. Builder returns to Cart with
+undoes and presses the new first line's first Delete, declared delete/undoes.
+It is refused candidate.undo_unproved with no execution. Assertion expects ok
+and therefore fails. Final build ending is project.completion_nothing_assembled
+following intentional diagnostic stop on inverse refusal, not a Flow acceptance.
+
+Exact structural receipts: baseline group p:aa970487a6115c9becb436615be9a838;
+scopes p:ee9f019a70270aa9af584c8ae4b43d62 and
+p:44f2e600657a729c10d1e3eaf68facf5 remain identical after Add/reset arrival.
+Baseline whole ordered inventory/state digest31e17a0ad06c5f936ef1; after Add and
+refused inverse5f57f1f17931ac71eddb. New subject
+s:f347b49bc2f99bd2bea390412d94c78c absent from originals, present in current
+Cart inventory, exactly equals Add subject/page. Add has opaque detail scope;
+inverse has correct Cart scope, original matching item identity and Cart page,
+but NO control.subject. Gateway errors0. Thus inventory evidence does reach
+actual service route; the missing inverse subject is now a concrete mismatch.
+The ledger is correctly refusing an unproved identity rather than losing the
+whole inventory or using a different resource. No product defect fix inferred.
+
+Concrete hypothesis distinguishing prior browser4: that proof selects quantity2,
+so first Delete is the separate textual Delete. This diagnostic and failed live
+Add use defaultquantity1, where a preceding decrement/bin control is labelled
+Delete too. The first matched Delete is that bin; its actual domain declaration
+lacks subject despite having item/scope. Existing proof did not cover this path.
+Need read-only trace/compare current accepted988 source before any product fix;
+root will sync after preserving this red diagnostic. Test typeproject was checked
+earlier and optional-JSON errors corrected; final new test source not yet rerun
+through typeproject/audit (browser actual path is the red receipt).
+
+Preserved ignored red log apps/extension/node_modules/codex-reset-installed-644-red.log;
+Playwright reset-structural.json attachment contains closed digests/counts only,
+under apps/extension/e2e/test-results/artifacts. Old paid failure/root/profile and
+all source outputs preserved. All diagnostic readers exited; no live rerun.
