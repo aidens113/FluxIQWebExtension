@@ -1,8 +1,8 @@
 # Codex R1 reset review
 
 Status: Transfer and whole-trial original-authority integration implemented;
-source/tests frozen. Final Core check/build passed. Downstream gates/live held for
-supervisor commit and both-branch sync to latest dev, then explicit release.
+source/tests frozen. Transfer/authority committed and both branches synced to
+latest dev. Final integrated gates are running; paid live proof awaits release.
 
 ## Current verified result
 
@@ -400,7 +400,7 @@ From t719 downstream:
 $env:FLUXIQ_BUILD_CACHE_DIR='off'
 $env:FLUXIQ_TEST_TARGET='persistent-isolated'
 $env:FLUXIQ_DEMO_HEADLESS='false'
-$env:FLUXIQ_LAB_INSTANCE='r1-reset-t719'
+$env:FLUXIQ_LAB_INSTANCE='bf-slot-2'
 $env:FLUXIQ_LAB_CORE_BRANCH='task/t719-site-reset-undoable-acts'
 $env:FLUXIQ_LLM_RUN_COST_CEILING_USD='0.25'
 pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode project --llm-task create-flow --instruction-task everything-store-kettle-to-cart --target persistent-isolated --workspace r1-reset-kettle-t719-20261017 --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
@@ -435,3 +435,70 @@ are complete. Downstream gates/live remain held for supervisor commit and paired
 latest-dev sync, then integrated-gate release. Worker has not committed, merged,
 pushed or called a paid provider. Exact canonical launch and evidence checklist
 are prepared above; paid/installed whole-flow proof remains pending release.
+
+## Final integrated gates after paired latest-dev sync
+
+Supervisor committed transfer/authority Core8c638a46 and downstream1282782d,
+then merged current dev into both t719 branches, including social accounting,
+person handoff, build leases and judge retrieval/copy repairs. Both trees were
+clean at integrated-gate start. No source edits authorized or made during this
+batch. Core head21678360. Running focused reset/project/landed-act guards plus
+social accounts/trial-stop and judge diagnosis/refutation/value-reading controls;
+log node_modules/codex-reset-integrated-core-tests.log. Both structure audits
+run separately into node_modules/codex-reset-integrated-audit.log in each tree.
+Core libraries/check follow actual test completion; downstream type/unit/content
+gates wait for actual Core build completion. Paid canonical run remains held
+until supervisor accepts gates and assigns slot2/bf-slot-2.
+
+Integrated Core focused suite51174 passed406/406 in40files,144.91s. Scope was
+reset/place/project ownership and actual whole/subflow routing; social read-account
+accounts and candidate/subflow trial stops; judge diagnosis-channel, refuted-no
+and value-reading controls. Full suites were not run. Both integrated audits
+passed: Core401 advisories/1154 baseline, downstream208/638. Cache-off integrated
+library gate79150 now builds/checks contracts, checks/builds fluxiq and builds
+client-gateway-websocket; log node_modules/codex-reset-integrated-core-build.log.
+Downstream type/unit/browser gates remain sequenced after actual successful exit.
+
+
+Supervisor's integrated-gate continuation reserves the next canonical proof for
+slot2 / bf-slot-2 after acceptance; prepared instance environment updated to that
+label. This is preparation only, not a paid-release or slot-lease assertion.
+
+Integrated Core library command79150 actually exited0: contracts build/check
+reused; fluxiq check71.647s; fluxiq build127.252s; websocket library reused.
+Only then started labelled downstream gates: domain63012 (codex-reset-integrated),
+domain+extension checks69893, extension unit17588 (same independent package
+label), browser19705 (unchanged reset plus both cart extraction spec files).
+Logs: downstream node_modules/codex-reset-integrated-{domain-tests,typechecks,
+browser}.log and extension/node_modules/codex-reset-integrated-unit.log.
+Supervisor's independently labelled domain owning-places check is compatible
+and shares no test build output with this batch. Paid remains unexecuted.
+
+Integrated downstream unit gates: domain87/87 passed (preservation/resource,
+places, host routing and replay read-account controls); extension36/36 passed
+(generic inferred fields and trusted result transport). Supervisor independently
+ran owning domain places with a distinct label and observed9/9, including the
+immediate resource-bound transfer witness, exit0. This supplements its accepted
+Core source review and60/60 independent preservation/service checks above.
+No root or worker source changes during this integrated gate batch.
+
+FINAL integrated gates complete on frozen Core21678360/downstream6bbc4891.
+Both remaining processes actually exited0: checks69893 (domain52.354s;
+extension186.583s, including source/test TS and in-memory browser bundles),
+content19705 (4/4 passed,4.3min including preparation). Realistic Chromium
+content harness used unchanged everything-store site and actual own controls:
+new quantity2 line deletion plus existing-line Save/Try again/Move to cart
+restored every original ordered collection row/state fingerprint in21.6s.
+Existing named, recorded, and automatic cart extraction cases passed unchanged.
+This proves provider-free browser/content/domain evidence and own-control
+behavior; it does not prove installed background transport/model reset behavior.
+Canonical paid end-to-end task still requires supervisor release and slot2.
+
+Final batch totals: Core406/406 (40 focused owning files), domain87/87,
+extension36/36, real-browser4/4; Core libraries/check, downstream source/test
+checks and browser bundles, both audits all exit0. Supervisor independently
+verified domain places9/9 on this integration, plus preservation/service60/60
+and accepted source review before dev sync. No full-suite sweep was run.
+Post-gate git status: Core clean; downstream only this worker report modified.
+No source changes, paid calls, commits, merges or pushes by this worker.
+Source/build freeze retained pending supervisor review and live release.
