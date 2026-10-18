@@ -286,6 +286,7 @@ test("an all-optional contract type is writable, and absent stays absent", () =>
     listPosition: undefined,
     tablePosition: undefined,
     record: undefined,
+    subject: undefined,
     shadowHosts: undefined
   });
   assert.deepEqual(empty, {}, "a context with nothing worth reporting is an empty object, not a bag of undefineds");
@@ -303,6 +304,7 @@ test("an all-optional contract type is writable, and absent stays absent", () =>
     listPosition: undefined,
     tablePosition: { row: 2, column: 3, columnHeader: "Amount" },
     record: undefined,
+    subject: undefined,
     shadowHosts: undefined
   });
   assert.deepEqual(Object.keys(placed), ["formName", "landmark", "heading", "tablePosition"]);

@@ -46,7 +46,7 @@ export function gatewayActionResultFromRejection(rejection: WebAutomationActionR
   };
 }
 
-export function gatewayActionResultFromBrowserResult(result: BrowserActionResult): ClientGatewayActionResult {
+export function gatewayActionResultFromBrowserResult(result: BrowserActionResult, source?: { tabId?: number | undefined; frameId?: number | undefined }): ClientGatewayActionResult {
   const visualTarget = result.visualTarget ?? (result.element
     ? webAutomationActionVisualTargetFromElement(result.element as never)
     : undefined);
@@ -60,6 +60,8 @@ export function gatewayActionResultFromBrowserResult(result: BrowserActionResult
     target: result.element ? webAutomationActionTargetFromElement(result.element as never) as unknown as JsonObject : undefined,
     payload: compactObject({
       ...webAutomationActionResultPayload(result as never),
+      // Worker-owned context, never a field read from the page's result.
+      sourceId: browserSourceId(source?.tabId, source?.frameId),
       visualTarget: visualTarget as unknown as JsonObject
     }) as JsonObject,
     // Every status that is not a success carries its message as the error.
@@ -72,6 +74,12 @@ export function gatewayActionResultFromBrowserResult(result: BrowserActionResult
     // dropped at the boundary, so the gateway saw only a message string.
     failure: result.failure
   }) as ClientGatewayActionResult;
+}
+
+function browserSourceId(tabId: number | undefined, frameId: number | undefined): string | undefined {
+  const frame = frameId ?? 0;
+  if (tabId === undefined || !Number.isSafeInteger(tabId) || tabId < 0 || !Number.isSafeInteger(frame) || frame < 0) return undefined;
+  return `tab:${tabId}:frame:${frame}`;
 }
 
 function compactObject<T extends Record<string, unknown>>(value: T): T {

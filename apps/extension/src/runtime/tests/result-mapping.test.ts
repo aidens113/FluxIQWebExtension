@@ -62,6 +62,18 @@ test("a robot check that cleared by itself reaches the gateway payload as checkW
   assert.equal("checkWait" in (gatewayActionResultFromBrowserResult(browserResult({ checkWait: { waitedMs: 600_001 } })).payload ?? {}), false);
 });
 
+test("gateway evidence carries only the worker's bounded tab and frame identity", () => {
+  const result = browserResult({ actionType: "web.dom.capture_snapshot" });
+  assert.equal(gatewayActionResultFromBrowserResult(result, { tabId: 17 }).payload?.sourceId, "tab:17:frame:0");
+  assert.equal(gatewayActionResultFromBrowserResult(result, { tabId: 17, frameId: 4 }).payload?.sourceId, "tab:17:frame:4");
+  assert.notEqual(gatewayActionResultFromBrowserResult(result, { tabId: 18 }).payload?.sourceId, gatewayActionResultFromBrowserResult(result, { tabId: 17 }).payload?.sourceId);
+  for (const source of [undefined, {}, { tabId: -1 }, { tabId: NaN }, { tabId: 1.5 }, { tabId: 17, frameId: -1 }]) {
+    assert.equal("sourceId" in (gatewayActionResultFromBrowserResult(result, source).payload ?? {}), false);
+  }
+  const pageSupplied = Object.assign({}, result, { sourceId: "tab:999:frame:0" });
+  assert.equal("sourceId" in (gatewayActionResultFromBrowserResult(pageSupplied).payload ?? {}), false, "page fields cannot invent a trusted resource");
+});
+
 function statePathOf(value: unknown): unknown {
   return value && typeof value === "object" && "statePath" in value ? value.statePath : undefined;
 }

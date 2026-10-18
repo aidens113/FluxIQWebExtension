@@ -86,7 +86,7 @@ import { webAutomationActLanded } from "./act-landing";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
 import { createWebAutomationHostResourcePort } from "./host-resources";
-import { publishedWebLlmPage, sanitizeWebLlmSnapshot, sanitizeWebLlmSnapshotWithBindings, screenedEvidenceUrl } from "./llm-evidence";
+import { publishedWebLlmPage, webResetResource, sanitizeWebLlmSnapshot, sanitizeWebLlmSnapshotWithBindings, screenedEvidenceUrl } from "./llm-evidence";
 import { webLlmPageOptionGroups, webLlmPageResultCount } from "./llm-evidence/page-groups";
 import {
   compareWebAutomationRouteSignatures,
@@ -211,6 +211,9 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // which is every page a model is shown.
       const snapshot = actionSnapshot(result.payload);
       const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
+      const action = result.payload?.result;
+      const resetResource = webResetResource(result.metadata?.sessionId, isRecord(action) ? action.sourceId : undefined);
+      if (resetResource !== undefined) binding.resetResource = resetResource;
       const packet = binding.evidence;
       const documentTimeOrigin = packet.navigation?.timeOrigin;
       // Its option groups and result count, as data beside the view (header, t655).

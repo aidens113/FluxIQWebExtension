@@ -188,6 +188,14 @@ export type DescribedEvidenceElement = {
    * names an element only by its handle.
    */
   drawing: string | undefined;
+  /**
+   * What it is about, as the page read it
+   * (`apps/extension/src/content/identity/record.ts` `recordSubject`): a
+   * heading's words, a control's row title, or a lone control's nearest
+   * titled part. Never in the packet: it is digested into the place tokens
+   * FluxIQ Core ties an undo to its act by (`./control-spot/`, Core t719).
+   */
+  subject: string | undefined;
 };
 
 /** Separates a record address's parts: a unit separator, which page keys and text do not use. */
@@ -308,7 +316,8 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     position: documentPosition(raw.documentBounds),
     shadowHosts: shadowHostChain(raw.context),
     dialog: dialogName(raw.context),
-    drawing: webElementDrawing(raw.drawing)
+    drawing: webElementDrawing(raw.drawing),
+    subject: elementSubject(raw.context)
   };
 }
 
@@ -391,6 +400,11 @@ function dialogName(context: unknown): string | undefined {
   if (!isJsonRecord(context)) return undefined;
   const name = screenedPageText(context.dialog);
   return name === undefined || isWithheldText(name) ? undefined : name;
+}
+
+/** What the element is about, as the page read it (`DescribedEvidenceElement.subject`); only ever digested. */
+function elementSubject(context: unknown): string | undefined {
+  return isJsonRecord(context) ? pageText(context.subject) : undefined;
 }
 
 /**
