@@ -49,7 +49,8 @@ $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; n
 the lane trees until merged).
 
 **Not done / held (each has a report under `reports/`):**
-- **Codex continuation in progress:** storage A/B in t707 (source and dist rebuilt for each half); R1 preservation review in t719; held judge/drawing/reveal gates in t563/t567; Lab build lease in t720. No new paid run has launched yet.
+- **Codex continuation in progress:** storage A/B in t707 (source and dist rebuilt for each half); R1 preservation review in t719; drawing/reveal gates in t567; paging person handoff in t565. No new paid run has launched yet.
+- **Codex integrated locally:** held judge fix Core t563 (4 files/41 tests, typecheck, audit passed) and Lab build lease t720 (supervisor reran 18 real-process/guard tests, audit passed). The lease holds Core's actual library-build locks throughout a run, blocking forced builds and cache restores. Direct commands bypassing Core's build cache are outside this protection.
 - **R1 review found a blocking preservation defect:** subject equality alone admits removal of a pre-existing same-product line and can accept a partial quantity undo as complete. t719 is adding destination observations made before the act and positive completion evidence; unproved quantity inverses must fail closed. See `codex-reset-review` report when written.
 - **Core `dev` is green and pushed:** the `flow_script.repeat_over_twice` words and corpus case merged (Core
   `31f2ccdf`, pushed with `4d6fb8b6`).
@@ -305,6 +306,14 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Validation: t563 targeted result-verification vitest -> 4 files, 41 tests passed; t567 action-element-target -> 10 tests passed; extension focused recovery/reveal/recording/shared tests -> 137 passed.
 - Outcome: Partial. t567 recovery diagnostics now require a successful action before claiming reveal; new disappearance regression passes. R1 baseline-preservation gap reproduced by worker, not yet supervisor-verified.
 - Follow-up: observe storage comparison; review reset changes; finish held-fix gates and build lease; then launch realistic live tests.
+
+### 2026-10-17 — Judge fix and Lab build lease integrated locally
+- Agent: supervisor; build lease by held_lane_review
+- Changed: Core t563 result-verification fix merged to local dev; downstream t720 run-lifetime Core build lease merged to local dev. t567 diagnostics fix committed separately on its lane.
+- Why: share the reviewed judge correction and prevent the rebuild race that killed the prior company-website run.
+- Validation: supervisor result-verification vitest 41/41, fluxiq:check exit 0, Core audit passed; lease and unbuilt-Core tests 18/18, downstream audit passed (208 warnings, 638 baselined); post-dev-merge working-docs check passed.
+- Outcome: Accepted locally. A premature t567 content-harness launch read incomplete rebuilding Core output and failed bundling; invalid as product evidence, rerun after Core build finishes. No paid run started.
+- Follow-up: storage A/B, safe R1 baseline checks, t567 build/harness, t565 paging handoff, then frozen live lanes. Push both dev branches together after coherent integration.
 
 ### 2026-10-17 — Plan written; Phase 1 dispatched
 - Agent: supervisor
