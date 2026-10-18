@@ -134,11 +134,15 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   const identity = written === undefined ? undefined : webAutomationDedupeLinkIdentity(authored, written);
   const narrowed = identity === undefined ? undefined : webAutomationDeclaredColumnsRead(authored, identity);
   const request = narrowed?.request ?? identity;
+  const intermediate = isJsonObject(authored) && authored.purpose === "intermediate";
   // A request that parsed was an object, as written, renamed or narrowed.
   const sent = narrowed !== undefined ? narrowed.request as unknown as JsonObject
     : identity !== undefined && identity !== written ? identity as unknown as JsonObject
     : stored?.renamed === true ? stored.request as unknown as JsonObject : rest.extractList as JsonObject;
-  const onePage = request === undefined ? undefined : webAutomationExtractListOnePageRead(sent, request);
+  // A transient list has no collected answer on which minRows can run. Keep
+  // its minimum on the actual read; all other collection processing still
+  // reaches the strict intermediate contract and is refused there.
+  const onePage = request === undefined ? undefined : intermediate ? intermediateOnePageRead(sent, request) : webAutomationExtractListOnePageRead(sent, request);
   const page = onePage === undefined ? rest : { ...rest, extractList: onePage.page };
   const timed = request !== undefined && leftDefault(page.timeoutMs) ? { ...page, timeoutMs: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS } : page;
   const parameters = withFlowAsks(timed, request);
@@ -147,12 +151,30 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
     : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns, narrowed?.shown);
   const timeout = commandTimeout(parameters.timeoutMs);
   if (declared === undefined) return { ok: true, payload: { parameters, ...timeout } };
+  if (intermediate) {
+    const original = parseAutomationStudioRecordOutput(declared);
+    if (!original.ok) return { ok: false, result: recordOutputRefusal(original.issues, declared) };
+    // Whole-row dedupe is normally omitted as the durable answer's default.
+    // There is no durable answer here: never silently lose that read request.
+    if (request?.dedupe !== undefined && isJsonObject(declared)) {
+      const deduped = { ...declared, process: { dedupe: request.dedupe as unknown as JsonValue } };
+      const checked = parseAutomationStudioRecordOutput(deduped);
+      if (!checked.ok) return { ok: false, result: recordOutputRefusal(checked.issues, deduped) };
+    }
+  }
   const processed = withReadProcess(declared, onePage);
   const parsed = parseAutomationStudioRecordOutput(processed);
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues, processed) };
   // The parsed output is plain JSON; its type only spells the optional keys.
   const recordOutput = parsed.output as unknown as JsonObject;
   return { ok: true, payload: { parameters, ...timeout, recordOutput } };
+}
+
+/** Keep the native minimum while mapping all collection processing through the normal reader. */
+function intermediateOnePageRead(sent: JsonObject, request: WebAutomationExtractListRequest): ReturnType<typeof webAutomationExtractListOnePageRead> {
+  const { minItems, ...withoutMinimum } = request;
+  const onePage = webAutomationExtractListOnePageRead(sent, withoutMinimum);
+  return minItems === undefined ? onePage : { ...onePage, page: { ...onePage.page, minItems } };
 }
 
 /**
