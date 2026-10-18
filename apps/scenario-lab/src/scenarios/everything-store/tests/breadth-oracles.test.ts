@@ -96,6 +96,48 @@ test("the checkout review fails when the order is placed, the whole cart is chec
   assert.notEqual(checkoutSessionFacts(apply(buyNow, "set-address", { addressId: "home" })), asked);
 });
 
+test("the office kettle cannot go through the cart: checking out only it from the cart still adds a cart line and is not a Buy Now", () => {
+  const added = apply(fresh(), "add-to-cart", { sku: "B0BAKTL15W", quantity: 1 });
+  const onlyKettle = ["L1", "L2"].reduce((state, lineId) => apply(state, "select-line", { lineId, selected: false }), added);
+  const checkout = [
+    ["set-address", { addressId: "office" }], ["set-delivery", { option: "standard" }], ["set-gift-card", { apply: true }], ["set-plus-trial", { enabled: false }],
+  ].reduce((state, [operation, payload]) => apply(state, operation as string, payload), apply(onlyKettle, "start-checkout", { pipeline: "cart" }));
+  assert.equal((JSON.parse(checkoutSessionFacts(checkout)) as { lines: unknown[] }).lines.length, 1, "the kettle alone is checked out");
+  assert.notEqual(checkoutSessionFacts(checkout), factValue("office-checkout-review", "office-checkout-as-asked"));
+  assert.notEqual(restoreClothsAccountFacts(checkout), factValue("office-checkout-review", "office-cart-unchanged-nothing-ordered"));
+  const task = EVERYTHING_STORE_LIVE_TASKS.find(({ id }) => id === "everything-store-office-checkout-review");
+  assert.match(task?.instruction ?? "", /\bBuy Now\b/u, "the instruction names the store's own route, the only one the oracle accepts");
+});
+
+/** How the instruction must say each column is written, because the oracle compares values exactly. */
+const COLUMN_FORMATS: Readonly<Record<string, RegExp>> = {
+  name: /name is the product name as listed/u,
+  price: /price is the price[^.]*written like \$\d+\.\d\d/u,
+  rating: /rating is the number shown beside its stars, written like \d\.\d/u,
+  url: /url is the address the product name links to/u,
+  coupon: /coupon is the saving the coupon badge names, written like Save/u,
+  item: /item is the product name/u,
+  quantity: /quantity is a plain number/u,
+  address: /address is the delivery address exactly as checkout shows it, name included/u,
+  arriving: /arriving is the delivery date as checkout writes it, like [A-Z][a-z]+day, [A-Z][a-z]+ \d+/u,
+  total: /total is the order total, written like \$\d+\.\d\d/u,
+};
+
+function datasetEntry(stepId: string) {
+  const workflowIds = [undefined, ...(scenario.manifest.workflows ?? []).map(({ id }) => id)];
+  return workflowIds.map((workflowId) => resolveScenarioWorkflow(scenario.manifest, workflowId === undefined ? {} : { workflowId }).expected.extracted?.find(({ step }) => step === stepId)).find((entry) => entry !== undefined);
+}
+
+test("every dataset task states the order and how each value it is judged on is written", () => {
+  for (const task of EVERYTHING_STORE_LIVE_TASKS.filter(({ judgeBy }) => judgeBy === "expected-dataset")) {
+    const entry = datasetEntry(task.expectedDatasetId ?? "");
+    const columns = Object.keys(entry?.records?.[0] ?? {});
+    assert.ok(columns.length > 0, `${task.id}: its dataset lists records`);
+    for (const column of columns) assert.match(task.instruction, COLUMN_FORMATS[column] ?? /^$/u, `${task.id}: how ${column} is written`);
+    if ((entry?.records?.length ?? 0) > 1) assert.match(task.instruction, /in the order|keep the order/u, `${task.id}: the order`);
+  }
+});
+
 test("every store page carries the checkout fact, escaped, and the page script keeps it current", () => {
   const home = scenario.render(fresh(), { runToken: "everything-store-unit-token", seed: 241 });
   assert.match(home, /<script type="application\/json" data-testid="everything-checkout-session">null<\/script>/u);
