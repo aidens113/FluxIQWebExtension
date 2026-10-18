@@ -24,6 +24,17 @@ const TYPE = "web.output.dom-type";
 const NAVIGATE = "web.output.browser-navigate";
 const PERMITTED = async () => ({ permitted: true as const });
 
+test("passes an observed opaque resource into the actual permission declaration without changing its classes", async () => {
+  let control: unknown;
+  const answer = await webActionPermission({ check: async (declaration) => {
+    control = declaration.control;
+    assert.deepEqual(declaration.consequences, ["create_new"]);
+    return { permitted: true };
+  }, declared: ["create_new"], control: { name: "Create", kind: "button", resource: "p:trusted-resource", subject: "s:document" }, verb: "press", effect: "mutate" });
+  assert.equal(answer.kind, "permitted");
+  assert.deepEqual(control, { name: "Create", kind: "button", resource: "p:trusted-resource", subject: "s:document" });
+});
+
 test("a read that declared nothing is written back with no consequences key at all", async () => {
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);

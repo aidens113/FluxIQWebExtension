@@ -1233,3 +1233,226 @@ build-only detached runner/action preflight seam, scoped to candidate/subflow
 trials rather than ordinary finalized runs. It is deliberately NOT included in
 this first file map or asserted already supported. Current strict beforeTrial
 and post-trial ledger/whole-baseline requirements remain in force throughout.
+
+## Authorized first implementation unit: project exploratory create baseline
+
+Read BOTH current briefs after root synced paired trees (Core3dd56610,
+downstream9f7f9713-containing merge); Core boundary notice given. Source scope
+is project-builder exploration ONLY, with explicit internal opt-in enabled by
+brief-ports. Ordinary candidate/final-user paths, irreversible/mixed policy,
+owned undo, retry and strict ordered restoration remain unchanged. Trial runtime
+preflight remains excluded; no overall reset/live acceptance claimed.
+
+Fail-first actual permission callback:78326 exited1, one newcase failed because
+executor count was1 when required0 (19oldcases skipped),23.02s. Log Core
+packages/fluxiq/node_modules/codex-create-baseline-failfirst.log. First code/test
+batch31671 then passed35/35 across4owners in24.23s. Actual project-service
+regression was added next to prove normal ports opt in and publish trusted refs,
+not merely a manually bridged callback. Pre-resource-passthrough case failed
+because actual observation issued no ref. My initial invocation was incorrectly
+from Core root and also collected two .tmp copies of that same case; it is not
+three independent failures. Correct package-cwd rerun56991 is pending.
+
+Approved extra actual transport seams: site-reset/start-check.ts reconstructs
+reads and had dropped resource; llm/harness-options/binding.ts had omitted its
+optional type. Root approved both plus existing start-check owner. These now
+preserve only a bounded opaque domain field; never resource inside opaque state.
+Existing domain resetResource derives exclusively from trusted session/source.
+No raw identity/session/tab/selector/record data is emitted with receipts.
+
+Implementation keeps immutable originals (including displayed originalcount)
+and issued bounded refs; malformed/reduced/foreign-resource groups invalidate
+stale admission; missing trusted resource does not bypass identified creates.
+Refs are Core envelope metadata stripped before domain execution and never
+become lasting permission or weaken later inverse proof. Generic source/page
+identity candidates must both be absent when the existing fallback can match
+either, preventing a vendor/other source label from hiding a pre-existing item.
+Directory budget checked: site-reset had13files versus25limit, so focused private
+create-baselines module is permitted. No sharedCore/Chrome modifications/builds,
+paid retry, commits/merges/pushes or sharedplan edits by worker.
+
+Actual service diagnosis clarified (closed reader69710 exit1/53.33s): phase2,
+domain inputs example.look/example.create; create.missing result had only ok,
+so the FIRST missing-baseline refusal assertion failed before destination
+navigation. Earlier mention of an unissued ref described the final test symptom,
+not a proved resource-only cause. Source inspection found acts-record.ts64-73
+reconstructed Calls with only claim/target/explored and dropped optional new
+preflight capability. Root approved this exact adapter+existing
+project-build-acts-record.test.ts and required fail-closed missing capability in
+already-owned action-permissions.ts. No adapter edits while37757type reader is
+active. This service case is deliberately exposing integration omissions rather
+than accepting35direct-unit passes as full behavior.
+
+Final source review corrections (current frozen first-unit source): resource
+passthrough plus acts-record forwarding now make the actual project-service
+case green:59714 exit0,1case/4skipped,52.73s total. The project port opts in;
+ordinary candidate/final-user paths remain opted out. Tool schema exposes the
+new destination reference only with project-only createBaselines:true. Missing
+adapter capability fails closed for the same identified pure-create predicate
+as the registry: subject, or page only when item is absent. It does not classify
+an item+page/no-subject control as identified via that fallback.
+
+Owning batch42063:117passed/1failed out of118,140.87s. The single failure was
+new test fixture reuse of an original page scope while changing its collection
+group; same-page omitted-group invalidation correctly revoked that authority.
+The fixture now uses its genuinely distinct late page scope, retaining behavior.
+Both structure audits passed after formatting/internal-barrel corrections.
+Final Core package check92167 exited0,123392ms with shared cache disabled.
+Final focused delta93034 is still active; source remains frozen for that reader.
+Helper testtype9917 exited2 only at domain permission.ts:125 because installed
+Core declarations do not yet include newly approved control.resource. It must
+be rerun after the supervisor-approved own-lane library build; no output files
+were hand-edited and no stale-type bypass was used.
+
+The installed-project test is strengthened, not yet rerun in this unit: it
+first attempts an identified create with no original reference and requires
+recoverable candidate.create_baseline_required with zero actual click dispatches.
+It then observes the real complete original inventory, reads the issued ref,
+returns and retries, adds exactly one line, proves dirty-trial refusal, executes
+its own admitted inverse, and requires exact ordered whole-baseline restoration
+plus clean-trial admission. All previous positive nonempty fingerprints,
+complete2/2 ->3/2 ->2/2 inventory and same-subject checks remain. No fixture reset,
+manual ledger seeding, hidden navigation, new inverse permission or paid retry.
+Browser execution awaits supervisor source review and narrow own-lane build
+release; trial-runtime create admission remains explicitly outside first unit.
+
+FINAL owning delta93034 exited0:45/45 across6files,133.45s. This includes
+callback23,registry9,tool-schema1,reset-calls4,acts-record3 and actual project
+brief-ports5 (normal-service precondition case4.335s). Core packagecheck92167
+and both structure audits are green. No active own source readers remain.
+Exact owning command (Core packages/fluxiq cwd, FLUXIQ_BUILD_CACHE_DIR=off):
+
+```
+pnpm exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/tests/action-permissions.test.ts src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/create-baselines.test.ts src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/undoes-tool.test.ts src/programs/automation-studio/runtime/service/project-build/tests/reset-calls.test.ts src/programs/automation-studio/runtime/service/project-build/tests/project-build-acts-record.test.ts src/programs/automation-studio/runtime/service/project-build/tests/project-build-brief-ports.test.ts --maxWorkers=2 --minWorkers=1
+```
+
+Logs: Core packages/fluxiq/node_modules/codex-create-baseline-final-delta.log,
+codex-create-baseline-final-check-2.log; paired roots node_modules/
+codex-create-baseline-{core,downstream}-audit-2.log. Browser-helper type failure
+is preserved in extension/node_modules/codex-create-baseline-helper-type.log;
+rerun required after approved Core declarations build. Worker sent freeze and
+review-ready notice; no library/build/browser launch yet. No paid acceptance.
+
+Post-review own-lane preparation (root120/120 independent/sourceaccepted):
+Frozen Core4ae19d30/downstreamc0b18aa8. Approved three-library command14119
+exited0: process FLUXIQ_BUILD_CACHE_DIR=off; node scripts/build-cache/cli.mjs
+contracts:build fluxiq:build client-gateway-websocket:build. Contracts reused
+312ms, FluxIQ built95957ms, gateway reused399ms. Core outputs current. No
+workspace/shared-Core/extension build or browser/provider launch.
+
+Affected downstream evidence owner tests passed30/30, native0,6098.372ms test
+execution, labelled codex-create-baseline-final. Current domain build native0,
+24096ms, rewrote2021specifiers/663files after removing1392old emittedfiles.
+Domain check native2 exposes a bounded real type omission: tools.ts165 public
+WebLlmEvidenceRuntime.startState return type lacks optional resource while
+observe.ts returns it and Core binding now retains it. Existing new assertions
+start-state.test.ts73/74 are fail-first TS2339, not a runtime failure. Root
+approved exactly resource?:string type alignment in tools.ts; no extra behavior.
+The installed helper typecheck was mistakenly run in parallel with domain
+clean/rebuild and saw temporarily missing domain/node (my dependency-ordering
+error). No product conclusion drawn; rerun after completed build required.
+A helper-only retry81511 is pending before the approved one-field source edit;
+then affected30/check/build/helpertype will run in dependency order. Native
+failures and logs retained. No browser release requested until gates pass.
+
+Approved one-field tools.ts return-type alignment applied only after helper81511
+exited0 against the completed initial domain build. Final affected owners rerun
+passed30/30 native0 (4256.2857ms), domaincheck66024 native0/29366ms,
+domainbuild60967 native0/21027ms. Final helper63509 started strictly AFTER that
+build completed and exited0. Downstream audit48735 exited0. No source/API
+behavior beyond approved opaque optional field type; current source heads remain
+Core4ae19d30/downstreamc0b18aa8 with only tools.ts + this report uncommitted.
+Logs are downstream/node_modules/codex-create-baseline-domain-{tests,check,build}-2.log,
+node_modules/codex-create-baseline-downstream-audit-3.log and extension/
+node_modules/codex-create-baseline-helper-type-final.log. All own readers ended.
+
+Proposed next proof, not launched: after supervisor review/commit/release, own
+lane extension test:e2e:build (cacheoff), then extension cwd:
+
+```
+pnpm exec playwright test -c e2e/playwright.config.ts e2e/site-reset/tests/installed-project.spec.ts --workers=1 --retries=0 --reporter=list --output=e2e/test-results/create-baseline-project-20261018
+```
+
+This preserves old proof output paths and installed Chrome state. Fresh headed
+MV3/profile and isolated real Core project use registered domain/native runtime,
+actual unchanged gateway and provider-disabled scripted provider. Assertions
+require refusal with actual click-dispatch count unchanged, safe real baseline
+observation -> issuedref -> retry -> own inverse -> exact original ordered
+whole inventory -> clean trial. No manual ledger/source/result seeding, hidden
+navigation, fixture reset, liveprovider launch or paid trial is authorized.
+First-unit scope remains exploratory preflight only; arbitrary unseen trial
+creates remain a separately identified exposure, not an acceptance claim.
+
+## First exploratory-baseline unit: actual installed proof accepted
+
+Frozen source pair for proof: Core4ae19d30/downstream9595c615. Released own-lane
+extension test:e2e:build92336 native0/88681ms; e2e-chromium22files verified.
+Only owning extension bundle was rebuilt; sharedCore/Chrome/Web/workspace were
+untouched. Exact released Playwright command above ran40781 native0:1/1passed,
+54.1s actualcase/2.7m total. Fresh headed persistent MV3 profile, real gateway,
+registered domain/native runtime, actual public project-build service and
+provider-disabled scripted decisions. No fixture reset or manually seeded ledger.
+
+Closed actual evidence: ending proposed; missing-ref create received
+candidate.create_baseline_required, click dispatches0 before/0after; original
+complete collection sizes2/2 (4subjects), post-Add3/2 (5subjects), restored2/2.
+Original/restored exact ordered fingerprint b4113b7bd79302114756; same2scopes/
+1group persisted. Actual dirty-trial candidate.trial_reset_required, admitted
+own inverse ok, final clean trial yes. Actual target one match, pointer span,
+positive subject; actual Add/inverse same positive subject, absent original and
+present post-Add (asserted in test). Gateway errors0. Root independently read
+log, closed receipt and .last-run passed and accepted first-unit transport proof.
+This remains scripted mechanism acceptance, not whole canonical model acceptance.
+
+Allowlisted artifacts (relative to owning extension):
+- node_modules/codex-create-baseline-installed-browser.log: actual structural
+  console receipt + terminal1passed; SHA256
+  474CC747472B7DD5309257AF8D29EA400FF2B4764ECDEB8652A76CF65E4618CD.
+- node_modules/codex-create-baseline-installed-closed.json: generated closed
+  count/hash/code projection; SHA256
+  9C3F8B169847C1EF4F0BFD25E8F00F899E02795FE14E98E0F07FECA3A34FA178.
+- e2e/test-results/create-baseline-project-20261018/.last-run.json: passed.
+  The list reporter did not persist testInfo attachments on pass; structural
+  receipt is retained in the actual log, not claimed as a separate attachment.
+- Downstream node_modules/codex-create-baseline-extension-build.log: build0.
+Older Chrome/profiles/logs/proofs are preserved. No active own source reader or
+browser/build process remains, no worker commits/merges/pushes.
+
+## Read-only prepared canonical r5 (NOT LAUNCHED)
+
+Required previous debug exists:
+docs/working/language-driven-flow-loop-plan/debugs/run-mvdl5eg0-a56fdad7.md.
+Previous failure native1/53calls/$0.032546700 is retained unchanged. New source
+actually changes the first identified exploratory create admission and trusted
+transport; it does not invent an original state after effect. Root must first
+integrate currentdev, run required narrow integration checks and push/release
+BOTH repositories. Do not assume proof heads4ae19d30/9595c615 are final liveheads.
+
+Exact normal proposed command (run from owning downstream root only after explicit
+paid release, process env FLUXIQ_LAB_INSTANCE=bf-slot-2 and
+FLUXIQ_BUILD_CACHE_DIR=off; no overrides):
+
+```
+pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode project --llm-task create-flow --instruction-task everything-store-kettle-to-cart --target persistent-isolated --workspace codex-reset-positive-t719-20261018-r5 --model-reset-only --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
+```
+
+Task intent remains exactly canonical: two specified sage1.7litre store-sold
+kettles in Cart, existing phonecase moved to Save for later, final Cart-only
+table in task format. No task/fixture/oracle change to avoid transfer. Fresh
+workspace path did not exist when checked. Slot2 owner still t719/reset-review/
+bf-slot-2 with pidnull; verify free/normal ownership again at actual launch.
+Normal launcher performs waste/balance/debug/changed-source/behind-dev guards,
+Core entries/stamps/quiet/currentcurrency, guarded no-hook admission and own
+run-scoped preparation. No dry-run or guard mutation was done during prep.
+
+After allocation require actual authenticated candidateTrial.startReset=false
+AND candidateTrial.fixtureResetBetweenTrials=false, not merely commandflag.
+Inspect receipts for complete positive original destination observation before
+first successful identified create; rejected precondition must have no lasting
+mutation. Track all owned effects/reset receipts and original ordered baseline
+preservation before trials/whole run. Required acceptance remains real extension
+project chat -> judged whole run/oracle -> one zero-call replay, with terminal
+cost/calls/pending/breach accounting and required debug on failure. First-unit
+proof explicitly excludes arbitrary previously unseen/dynamic trial creates;
+whole canonical quantity+transfer behavior remains UNPROVEN until real run.
+No paid launch/retry is authorized by this preparation.

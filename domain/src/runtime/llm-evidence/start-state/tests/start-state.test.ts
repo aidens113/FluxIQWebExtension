@@ -10,6 +10,7 @@ import { createWebAutomationLlmEvidenceRuntime } from "../..";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { webLlmPageText } from "../../page-view";
 import { sanitizeWebLlmSnapshot } from "../../sanitize";
+import { webResetResource } from "../../control-spot";
 
 const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
 const request = { projectId: "project", flowId: "flow", callId: "start", permission: automationStudioActionPermissionDenied };
@@ -69,6 +70,8 @@ test("the bound runtime exposes startState: a passive look with hidden state, an
   assert.equal(start.state.schemaVersion, WEB_START_STATE_SCHEMA_VERSION);
   assert.equal(start.state.location, "https://shop.test/cart");
   assert.equal(start.state.title, "Cart");
+  assert.equal(start.resource, webResetResource("session", "tab:1:frame:0"));
+  assert.equal(now.resource, start.resource);
   const lines = start.state.lines as string[];
   assert.ok(lines.some((line) => line.includes("3 items in cart")));
   assert.ok(lines.some((line) => line.includes("Ledger: 3 reserved") && line.includes("\"hidden\":true")), "non-rendered state is part of the state");
