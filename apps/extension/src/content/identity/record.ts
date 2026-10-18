@@ -523,6 +523,97 @@ export function sitsInRepeatedRow(element: Element): boolean {
   return found !== undefined && sameShape(found.row, found.twinRow);
 }
 
+/**
+ * What the element is about, in the words a person names it by (FluxIQ Core
+ * t719), or `undefined` where nothing here can say.
+ *
+ * Core ties an undo of a build's own act to that act's own item, and an act
+ * whose effect shows elsewhere had none an undo there could match: an Add to
+ * Cart pressed on a detail page sits in no row, and the line it made appears in
+ * the basket; a Save for later moves its line to another list, whose control is
+ * another one. Every such undo was refused and the build's trials ran on what
+ * earlier trials left. What ties them is what both are about, so:
+ *
+ * - a heading is about its own words (the domain reads a page's main heading
+ *   as what the page is about, which a detail page's own controls act on);
+ * - a control in a record, or in the row its own kind marks out, is about that
+ *   row's title -- the first heading in it, else its first link's words, which
+ *   on a basket line, a result or a card is the item's own name -- but only
+ *   where that title tells the row from its neighbour's: two rows titled alike
+ *   say nothing of which one is meant;
+ * - a control alone of its kind on the page -- a detail page's Add to Cart, a
+ *   saved list's only Move to cart -- is about the title of the nearest part of
+ *   the page around it that has one. Alone, there is no other row it could be
+ *   confused with. One with an alike control elsewhere but no row of its own
+ *   to tell them apart is about nothing.
+ *
+ * The words never leave the domain: it digests them, and Core compares the
+ * digests only for equality.
+ */
+export function recordSubject(element: Element): string | undefined {
+  if (HEADING_TAGS.has(tagOf(element)) || element.getAttribute("role")?.trim().toLowerCase() === "heading") return recordText(element);
+  const record = enclosingRecord(element);
+  if (record) return distinctTitle(record, sameTagSibling(record));
+  const found = controlRow(element);
+  if (found) return distinctTitle(found.row, found.twinRow);
+  if (soleAncestors(element).twin) return undefined;
+  return nearestTitle(element);
+}
+
+/** The row's title, where it differs from its neighbour's (`recordSubject`); a lone row's title as it is. */
+function distinctTitle(row: Element, neighbour: Element | undefined): string | undefined {
+  const title = rowTitle(row);
+  return title !== undefined && (neighbour === undefined || rowTitle(neighbour) !== title) ? title : undefined;
+}
+
+/** A sibling of the record with its tag, the record's neighbour in its list, if it has one. */
+function sameTagSibling(record: Element): Element | undefined {
+  for (const sibling of record.parentElement?.children ?? []) {
+    if (sibling !== record && tagOf(sibling) === tagOf(record)) return sibling;
+  }
+  return undefined;
+}
+
+/**
+ * The title of the nearest part of the page above the element that has one,
+ * within the record depth bound -- or none, failing closed, when that title
+ * sits in a part beside the element's that is shaped like it
+ * (`inSiblingOfOwnShape`): a line with no title of its own is not about its
+ * neighbour.
+ */
+function nearestTitle(element: Element): string | undefined {
+  let current = element.parentElement;
+  for (let depth = 0; current && depth < MAX_RECORD_DEPTH; depth += 1) {
+    const title = rowTitleElement(current);
+    if (title) return inSiblingOfOwnShape(element, title.element) ? undefined : title.words;
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+/**
+ * Whether `title` sits beside `element` in a sibling part of the same shape:
+ * where their paths meet, they come through two different children of one
+ * tag and class, as two rows of one list do. Stricter than
+ * `titleInAnotherRow`, which a row with no title of its own passes: a subject
+ * must be the element's own part's, or the page's around it.
+ */
+function inSiblingOfOwnShape(element: Element, title: Element): boolean {
+  const elementSide = new Map<Element, Element>();
+  let child: Element = element;
+  for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    elementSide.set(ancestor, child);
+    child = ancestor;
+  }
+  let titleChild: Element = title;
+  for (let ancestor = title.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const ownChild = elementSide.get(ancestor);
+    if (ownChild) return ownChild !== titleChild && sameShape(ownChild, titleChild);
+    titleChild = ancestor;
+  }
+  return false;
+}
+
 /** The nearest record at or above the element. The element itself counts: a recorded click on a row *is* the row. */
 function enclosingRecord(element: Element): Element | undefined {
   let current: Element | null = element;

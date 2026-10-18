@@ -71,6 +71,7 @@ import { elementAttributes } from "./descriptor-attributes";
 import {
   hasClickHandler,
   hasEnteredValue,
+  isActionableElement,
   isInteractableUiElement,
   isSemanticTextElement
 } from "./element-traits";
@@ -133,7 +134,8 @@ export function describeElement(element: Element): DomElementDescriptor {
   if (markupRole) descriptor.implicitRole = markupRole;
   const drawing = elementDrawing(element);
   if (drawing) descriptor.drawing = drawing;
-  const context = elementContext(element);
+  // What it is about, only for what is acted on or names a page (FluxIQ Core t719, `identity/record.ts` `recordSubject`).
+  const context = elementContext(element, { subject: actedOnOrHeading(element, descriptor) });
   if (context) descriptor.context = context;
   const select = selectState(element);
   if (select) {
@@ -144,6 +146,19 @@ export function describeElement(element: Element): DomElementDescriptor {
   if (attributes && state.length && attributes.class !== undefined) attributes.class = classNames.join(" ");
   if (attributes) descriptor.attributes = attributes;
   return descriptor;
+}
+
+/** Heading tags, whose words say what the part of the page they head is about. */
+const HEADING_TAGS: ReadonlySet<string> = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+
+/**
+ * Whether what the element is about is worth saying (FluxIQ Core t719): a
+ * control -- by its markup or role, a press listener, or a tab stop the page
+ * gave it -- or a heading. Everything else is a wrapper or words, never acted on.
+ */
+function actedOnOrHeading(element: Element, descriptor: DomElementDescriptor): boolean {
+  if (descriptor.hasClickHandler === true || isActionableElement(element) || element.hasAttribute("tabindex")) return true;
+  return HEADING_TAGS.has(descriptor.tagName) || element.getAttribute("role")?.trim().toLowerCase() === "heading";
 }
 
 /**

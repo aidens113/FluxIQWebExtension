@@ -311,7 +311,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // location acts on the browser rather than on anything in front of it.
     // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
     const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
-    const spot = current ? webTargetSpot(current, webPlanFirstTargetHandle(written)) : {}; // Its record and dialog as opaque tokens: Core ties an undo to its act's own item (Core t475).
+    const spot = current ? webTargetSpot(current, webPlanFirstTargetHandle(written)) : {}; // Its record and dialog, and what it and its page are about, as opaque tokens: Core ties an undo to its act by them (Core t475, t719).
     // A node whose act the page decides must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,

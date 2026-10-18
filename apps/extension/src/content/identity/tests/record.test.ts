@@ -26,7 +26,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agreesWithRecordedRecord, recordIdentity } from "../record";
+import { agreesWithRecordedRecord, recordIdentity, recordSubject } from "../record";
 
 // `isSensitiveFormControl` narrows with `instanceof HTMLInputElement`, and the
 // accessible-name rule with the other element classes below, each a
@@ -483,4 +483,68 @@ test("the only Qty left, on the line beside the named one, is refused: the group
   bigboxCart([{ line: towels }, soap]);
   assert.equal(agreesWithRecordedRecord({ text: TOWELS }, soap.qty), false);
   assert.equal(agreesWithRecordedRecord({ text: SOAP }, soap.qty), true);
+});
+
+// FluxIQ Core t719: what an element is about (`recordSubject`), which the
+// domain digests so Core can tie the undo of a build's act to the act where its
+// effect shows elsewhere -- an add on a detail page and the basket line it made,
+// a line saved for later and its row in the saved list. The shop drawn here is
+// generic: lines are plain `<div>`s whose actions are spans with a tab stop.
+
+const KETTLE = "Copper Pour-Over Kettle 1 L";
+const WRAPS = "Beeswax Wraps, Set of 3";
+
+/** A basket line: the item's link, and its actions as spans with a tab stop. */
+function basketLine(title: string | undefined): { line: Element; remove: Element; save: Element } {
+  const remove = el("span", { attributes: { tabindex: "0", class: "act" }, children: ["Delete"] });
+  const save = el("span", { attributes: { tabindex: "0", class: "act" }, children: ["Save for later"] });
+  const named = title === undefined ? [el("span", { children: ["Gift card"] })] : [el("a", { attributes: { href: `/p/${title.length}` }, children: [title] })];
+  const body = el("div", { attributes: { class: "body" }, children: [...named, el("div", { attributes: { class: "actions" }, children: [remove, save] })] });
+  return { line: el("div", { attributes: { class: "line" }, children: [body, el("p", { children: ["$12.00"] })] }), remove, save };
+}
+
+function basket(lines: { line: Element }[], saved: Element[] = []): void {
+  el("main", { children: [el("h1", { children: ["Your basket"] }), el("div", { attributes: { class: "lines" }, children: lines.map((entry) => entry.line) }), el("section", { children: [el("h2", { children: ["Saved for later"] }), ...saved] })] });
+}
+
+test("a heading is about its own words, and a basket line's actions about the line's own title", () => {
+  const heading = el("h1", { children: [KETTLE] });
+  el("main", { children: [heading] });
+  assert.equal(recordSubject(heading), KETTLE);
+  const kettle = basketLine(KETTLE), wraps = basketLine(WRAPS);
+  basket([kettle, wraps]);
+  assert.equal(recordSubject(kettle.remove), KETTLE);
+  assert.equal(recordSubject(kettle.save), KETTLE);
+  assert.equal(recordSubject(wraps.remove), WRAPS);
+});
+
+test("a saved list's only Move to cart is about its own item, and a detail page's lone add about the part around it", () => {
+  const move = el("span", { attributes: { tabindex: "0" }, children: ["Move to cart"] });
+  const savedItem = el("div", { attributes: { class: "saved" }, children: [el("a", { attributes: { href: "/p/9" }, children: [WRAPS] }), move] });
+  basket([basketLine(KETTLE)], [savedItem]);
+  assert.equal(recordSubject(move), WRAPS);
+  const add = el("button", { children: ["Add to basket"] });
+  el("main", { children: [el("h1", { children: [KETTLE] }), el("div", { attributes: { class: "buy" }, children: [el("a", { attributes: { href: "/seller" }, children: ["Sold by Fernhill Goods"] }), add] })] });
+  assert.equal(recordSubject(add), "Sold by Fernhill Goods");
+});
+
+test("a line with no title of its own is about nothing, never about its neighbour", () => {
+  const untitled = basketLine(undefined), kettle = basketLine(KETTLE);
+  basket([kettle, untitled]);
+  assert.equal(recordSubject(untitled.remove), undefined);
+  assert.equal(recordSubject(kettle.remove), KETTLE);
+});
+
+test("a control in a record is about the record's title, and rows titled alike say nothing of which is meant", () => {
+  const row = (title: string) => {
+    const remove = el("button", { children: ["Remove"] });
+    return { item: el("li", { children: [el("a", { attributes: { href: `/p/${title}` }, children: [title] }), remove] }), remove };
+  };
+  const kettle = row(KETTLE), wraps = row(WRAPS);
+  el("ul", { children: [kettle.item, wraps.item] });
+  assert.equal(recordSubject(kettle.remove), KETTLE);
+  assert.equal(recordSubject(wraps.remove), WRAPS);
+  const first = row(KETTLE), second = row(KETTLE);
+  el("ul", { children: [first.item, second.item] });
+  assert.equal(recordSubject(first.remove), undefined);
 });

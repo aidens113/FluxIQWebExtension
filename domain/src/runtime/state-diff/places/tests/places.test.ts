@@ -7,7 +7,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, type WebLlmSnapshotBinding } from "../../../llm-evidence";
+import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, webResetResource, type WebLlmSnapshotBinding } from "../../../llm-evidence";
+import { webResetCollections } from "../../../llm-evidence/control-spot";
 import { createWebStatePlacesMemo, webStateDiffPlaces, webStateSnapshotPlaces } from "..";
 
 type Spec = { tag: string; selector: string; text?: string; cls?: string; record?: JsonObject; dialog?: string; children?: Spec[] };
@@ -148,4 +149,39 @@ test("the memory keeps the latest snapshots' places only", () => {
   assert.equal(memo.of("web.state.1@a:before_action"), undefined);
   assert.equal(memo.of("web.state.3@b:after_action"), places);
   assert.equal(memo.of(undefined), undefined);
+});
+
+// Core t719: a trial's add pressed on a title's own page sits in no item, and
+// the line it makes is on another page; the spot also says what the control and
+// its page are about, so a reset's undo on that line can be tied to the step.
+test("a step's control in no item still names what it and its page are about, as opaque tokens", () => {
+  const titlePage = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/titles/ivanhoe", title: "Library", interactiveElements: [
+    { tagName: "main", selector: "main" },
+    { tagName: "h1", selector: "main > h1", text: "Ivanhoe", name: "Ivanhoe", parent: 0, context: { subject: "Ivanhoe" } },
+    { tagName: "button", selector: "main > button", text: "Add to list", name: "Add to list", parent: 0, context: { subject: "Walter Scott" } }
+  ] });
+  const diff = step(titlePage, titlePage, press("main > button"));
+  assert.deepEqual(diff.spot, { subject: webControlSpotToken("subject", "Walter Scott"), page: webControlSpotToken("subject", "Ivanhoe") });
+  assert.doesNotMatch(JSON.stringify(diff), /Ivanhoe|Walter/u);
+});
+
+
+test("trial diffs preserve immediate complete resource-bound inventories without publishing raw names", () => {
+  const captured = (name: string, quantity: string, source = "tab:1:frame:0") => {
+    const binding = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/documents", title: "Documents", interactiveElements: [
+      { tagName: "div", role: "list", selector: "#documents" },
+      { tagName: "div", role: "listitem", selector: "#row", parent: 0, attributes: { "aria-setsize": "1", "aria-posinset": "1" } },
+      { tagName: "button", selector: "#move", parent: 1, name: "Move", context: { subject: name } },
+      { tagName: "input", selector: "#count", parent: 1, value: quantity, context: { subject: name } }
+    ] });
+    binding.resetResource = webResetResource("session.one", source)!;
+    return binding;
+  };
+  const before = captured("First document", "2"), after = captured("Other document", "3");
+  const diff = webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(after), { definitionId: "web.output.dom-click", parameterValues: { selector: "#move" } }, false);
+  assert.deepEqual(diff.collections, { before: webResetCollections(before).collections, after: webResetCollections(after).collections });
+  assert.doesNotMatch(JSON.stringify(diff.collections), /First document|Other document|tab:1|session.one/u);
+  assert.equal(webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(after), { definitionId: "web.output.dom-click" }, true).collections, undefined);
+  const different = captured("Other document", "3", "tab:2:frame:0");
+  assert.equal(webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(different), { definitionId: "web.output.dom-click" }, false).collections, undefined);
 });

@@ -1008,3 +1008,15 @@ new shared evaluator specifically owns navigate and explicit URL opens.
 ### Meaningful authored assertion and wait predicates
 
 Text assertions use contains semantics and require a nonblank expected string; text waits likewise require nonblank text for text conditions. Missing, empty or whitespace-only text cannot certify a page state. Explicit literal text such as null remains supported without word filtering. Absence assertions require an authored selector, fingerprint/element, coordinate or visual target; focused-element inference cannot supply the missing subject. Unscoped text assertions read the page even when another field is focused. Valid targeted existence/absence, wait timeout and observed-state mismatch behavior retain their contracts.
+
+
+### Bounded inferred columns
+
+Field discovery and proposal share a 64-column bound. Detection retains late
+ordinary data instead of discarding discovered columns at a separate 24-column
+limit. Proposals can therefore be larger, while discovery work and the model
+packet's independent reported byte budget remain bounded. Existing deterministic
+page order, mixed-template separation, partial-field reservations, positional
+line groups and sensitive-field exclusions remain in effect; no value or field
+meaning receives preference. If template separation expands the source set past
+64, coverage and partial/group retention choose within that same proposal bound.

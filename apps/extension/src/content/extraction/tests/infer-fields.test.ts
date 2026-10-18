@@ -291,19 +291,27 @@ test("a container with one line, or lines named by their own class, offers no gr
   assert.equal(inferFields(named[0]!, named).some((field) => field.spec.lines === true), false);
 });
 
-test("where the bound has no room for both, the group is kept in place of the last of its own positional lines", () => {
-  // Thirty columns every card has come before the lines, so coverage alone
-  // spends the whole bound before reaching the group.
+test("late ordinary data and partial positional lines survive more than twenty-four earlier columns", () => {
   const extra = Array.from({ length: 30 }, (_, index) => `value ${index}`);
   const run = WAYS_CARDS.map(({ title, lines }) => waysCard(title, lines, extra));
   const fields = inferFields(run[0]!, run);
-  assert.equal(fields.length, 24, "the bound is unchanged");
-  const group = fields.find((field) => field.spec.lines === true);
-  assert.ok(group, JSON.stringify(fields.map((field) => field.label)));
+  assert.ok(fields.length > 24);
+  assert.equal(holding(fields, run, run.map(() => "value 29")).length, 1);
+  assert.equal(holding(fields, run, run.map(() => "$9.99")).length, 1);
+  assert.ok(fields.some((field) => field.spec.lines === true));
   const selectors = fields.map((field) => field.spec.selector);
-  // The partial lines are the ones the bound reserves places for; the last of them gave its place to the group.
   assert.equal(selectors.includes(":scope > div.ways > div:nth-of-type(2)"), true);
-  assert.equal(selectors.includes(":scope > div.ways > div:nth-of-type(3)"), false);
+  assert.equal(selectors.includes(":scope > div.ways > div:nth-of-type(3)"), true);
+  assert.deepEqual(inferFields(run[0]!, run), fields, "proposal order and keys are deterministic");
+});
+
+test("a record exposing more than sixty-four sources remains bounded at discovery", () => {
+  const extra = Array.from({ length: 100 }, (_, index) => `value ${index}`);
+  const run = [waysCard("A", [], extra), waysCard("B", [], extra)];
+  const fields = inferFields(run[0]!, run);
+  assert.equal(fields.length, 64);
+  assert.equal(holding(fields, run, run.map(() => "value 62")).length, 1);
+  assert.equal(holding(fields, run, run.map(() => "value 63")).length, 0);
 });
 
 // One list, two item templates (live run `run-mvczv4jn-1b61183c`, step 0021).
