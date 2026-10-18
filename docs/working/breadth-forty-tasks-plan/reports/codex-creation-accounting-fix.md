@@ -530,3 +530,47 @@ if(!originalInstructionBound||!same(before)||!same(judged)||!same(replay))proces
 '@
 $verify | node --input-type=module
 ```
+
+### Current-dev integration gates: frozen post-merge pair
+
+Supervisor committed the accepted installed proof report as3d85a471 and merged current published dev into both isolated task trees without conflicts. All checks below used frozen Core **be5669363300094bd9900417f057d53326e63d93** and downstream **db92f06dc3ec2bc9f1938a332b4e08aa3089a0c8**. Both trees were clean before and after all readers; only this report is edited afterward. Every process set FLUXIQ_BUILD_CACHE_DIR=off. No shared Core, source fix, HEAD movement, whole sweep, production Web build, new browser/provider run or historical profile mutation occurred.
+
+The current exact scope is **13 distinct approved accounting owners (173 cases) plus four directly intersecting intermediate-output safety owners (57 cases), total17 files/230 passed**. The earlier supervisor14/188 claim is retained as historical evidence with a scope caveat: its extra distinct path could not be recovered; supervisor explicitly chose the documented13-owner map rather than inventing a14th. Current counts come from the actual final Vitest summary and per-file results.
+
+| Gate | Actual native exit/result | Log relative to owning repository |
+| --- | --- | --- |
+| Core focused source tests |0;17/17files,230/230cases,225.67s |packages/fluxiq/node_modules/codex-accounting-currentdev-tests.log |
+| Core contracts package check |0;actual compiler24.020s/no stamp |node_modules/codex-accounting-currentdev-checks.log |
+| Core fluxiq package check |0;actual compiler137.232s/changed source |same Core checks log |
+| Core structure audit |0;404 advisory warnings/1152 baselined |node_modules/codex-accounting-currentdev-audit.log |
+| Downstream structure audit |0;211 advisory warnings/638 baselined |node_modules/codex-accounting-currentdev-audit.log |
+| Own contracts library |0;actual rebuild6.204s |Core node_modules/codex-accounting-currentdev-libraries.log |
+| Own fluxiq library |0;actual rebuild78.822s |same library log |
+| Own gateway library |0;actual rebuild4.359s |same library log |
+| Downstream owning Core currentness |0;current with own source |node_modules/codex-accounting-currentdev-core-current.log |
+| Domain source/test package check |0;actual compilers50.044s |node_modules/codex-accounting-currentdev-domain-check.log |
+| Extension package source/test check |0;actual check84.941s |node_modules/codex-accounting-currentdev-extension-check.log |
+| Conditional Web package check |0;actual compiler100.356s/no stamp |Core node_modules/codex-accounting-currentdev-web-check.log |
+
+All three library targets rebuilt from changed inputs; none was stamp reuse. All package check targets actually executed their owning check commands. Web typecheck was included because the merged intermediate-output shared contract/runtime changes cross into Web's consumer types; no Web production build was run.
+
+A preliminary downstream cache-CLI command supplied two check targets at once; this downstream CLI supports one target. It truthfully refused usage/native2 before running either check, retained in downstream node_modules/codex-accounting-currentdev-checks.log. Corrected to the separate owning package commands below, both native0; no product or test failure was hidden.
+
+Exact commands (each in the indicated own repository, with process cache off):
+
+```powershell
+# Own Core/packages/fluxiq:
+pnpm.cmd exec vitest run src/programs/automation-studio/runtime/llm/tests/run-budget.test.ts src/programs/automation-studio/runtime/llm/purse/tests/purse.test.ts src/programs/automation-studio/runtime/llm/build-purse/tests/purse.test.ts src/programs/automation-studio/runtime/llm/build-purse/tests/harness-hold.test.ts src/programs/automation-studio/runtime/llm/build-purse/tests/settlement-ledger.test.ts src/programs/automation-studio/runtime/recovery/refuted-result/tests/purse.test.ts src/programs/automation-studio/runtime/result-verification/accounting/tests/accounting.test.ts src/programs/automation-studio/runtime/result-verification/tests/run-outcome.test.ts src/programs/automation-studio/runtime/result-verification/tests/run-outcome-repair.test.ts src/programs/automation-studio/runtime/result-verification/tests/zero-provider-run.test.ts src/programs/automation-studio/runtime/service/runtime-adaptation/tests/refuted-result-port.test.ts src/programs/automation-studio/runtime/service/runtime-session/tests/in-run-repair.test.ts src/programs/automation-studio/runtime/tests/service-adaptation/tests/caller-paid-result-check.test.ts src/programs/automation-studio/runtime/executor/tests/record-capture.test.ts src/programs/automation-studio/runtime/result-verification/build-test/tests/stores.test.ts src/programs/automation-studio/runtime/executor/state-routing/tests/reopen.test.ts src/programs/automation-studio/runtime/service/datasets/tests/intermediate-output.test.ts --maxWorkers=2 --minWorkers=1
+# Own Core:
+node scripts/structure-audit.mjs
+node scripts/build-cache/cli.mjs contracts:check fluxiq:check
+node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build
+node scripts/build-cache/cli.mjs web:check
+# Own downstream:
+node scripts/structure-audit.mjs
+node scripts/check/core-build.mjs
+pnpm.cmd --filter @fluxiq-web-extension/domain check
+pnpm.cmd --filter @fluxiq-web-extension/extension check
+```
+
+Scope limits remain unchanged: settled fully itemized same-run receipts restore; unknown/malformed/pending/omitted historical accounting refuses new paid continuation. Runtime ledger totals do not claim all separate re-author build spend. Chrome/Edge live proofs validated the preceding frozen installed artifact pair; these current-dev integration gates validate the refreshed source pair without claiming a new live run. Original old paid-unknown run remains unaccepted. All readers terminal; report frozen for supervisor independent inspection/integration.
