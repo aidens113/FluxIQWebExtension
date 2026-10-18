@@ -1324,6 +1324,18 @@ Where checks are met:
   "Checking you are human…" becoming "Confirm you are human" ends as
   person-only. The failure (`actionNeedsPerson` in `results.ts`) says the
   press was made.
+- **A Next page move that lands on a check**
+  ([`content/extraction/page-advance/person-check.ts`](../../apps/extension/src/content/extraction/page-advance/person-check.ts)):
+  a marked new-document arrival and an in-document pager press inspect the
+  landing before treating its absent list as a retryable server refusal.
+  Person-only checks use the same typed `actionNeedsPerson` result as a click;
+  a self-clearing check is waited for up to 15 seconds within the command's
+  deadline before it needs a person. No fallback navigation or reload answers
+  a check. The move was already dispatched, so Continue advances to the Flow's
+  next one-page read at that landing, without pressing Next again. A replay
+  of the same movement mark likewise checks arrival without another press.
+  Multi-page `extract_list` remains retired: the supported page loop is a
+  one-page read followed by Next page, with Core collecting each read's rows.
 
 A navigation or a click whose landed check cleared by itself says so twice:
 in its validation's prose, and as a fact, `checkWait: { waitedMs }` on the
