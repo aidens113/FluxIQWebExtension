@@ -306,6 +306,7 @@ function readColumn(entry: unknown, ownKey: string | undefined, detected: Detect
       header: spec.header,
       required: entry.required as boolean,
       handling: spec.handling,
+      lines: spec.lines,
       element: spec.element
     }),
     assumed: column.assumed
@@ -338,6 +339,8 @@ function namedColumn(name: string, attributeGiven: string | undefined, detected:
       header: undefined,
       required: spec.required,
       handling: undefined,
+      // An attribute is read off the container itself, never line by line.
+      lines: undefined,
       element: undefined
     }),
     assumed

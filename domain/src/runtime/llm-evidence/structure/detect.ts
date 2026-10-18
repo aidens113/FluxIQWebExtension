@@ -218,6 +218,7 @@ async function capturedDetection(
     records: sanitized.records,
     shadowHosts: sanitized.shadowHosts,
     dialogNames: sanitized.dialogNames,
+    drawings: sanitized.drawings,
     stateDigest: states?.stateDigest,
     routeState: states?.routeState,
     pageQuery: sanitized.pageQuery

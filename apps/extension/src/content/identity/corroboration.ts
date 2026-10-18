@@ -24,6 +24,13 @@
 // say what kind of control a candidate is, and a weak query or a crowded family
 // already agrees on them.
 //
+// **A drawing corroborates too** (lane 4, t567). A control with no words is
+// named by what it draws (`./drawing.ts`), and the page hands Core a drawing
+// in its `attributes` slot only where the candidate draws exactly the recorded
+// one (`score.ts`), so an `attributes` contribution here is a whole drawing
+// agreeing, never a partial one. It is what separates a row's save icon from
+// the share icon beside it, which agree on every structural signal.
+//
 // **Not a second scorer.** Nothing here compares a string. It reads the
 // contributions Core returned: which signal each scored, and the similarity Core
 // charged it, which is the contribution's `score` over its `weight`
@@ -48,9 +55,9 @@ const EXACT_SIMILARITY = 0.92;
 /**
  * The signals that say *which* control a candidate is. `score.ts` ranks by more
  * than these, and `veto.ts` asks whether the recording carried any of them; this
- * list is what may corroborate.
+ * list is what may corroborate. `attributes` is the drawing (header).
  */
-const DISTINGUISHING_SIGNALS: readonly string[] = ["visibleText", "accessibleName", "label", "id", "testId"];
+const DISTINGUISHING_SIGNALS: readonly string[] = ["visibleText", "accessibleName", "label", "id", "testId", "attributes"];
 
 /**
  * Whether at least one distinguishing signal the recording carried agreed with

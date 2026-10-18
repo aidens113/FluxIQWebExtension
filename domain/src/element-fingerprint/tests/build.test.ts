@@ -81,6 +81,17 @@ test("a secret control keeps the author's description of it and none of its word
   assert.deepEqual(password.attributes, { placeholder: "Your password" });
 });
 
+test("what a wordless control draws is saved as the extension's token, and nothing else is saved under that name", () => {
+  const icon = webElementFingerprint({ tagName: "span", classNames: ["q8f2"], drawing: "d1.1x9kq3", secret: false });
+  assert.deepEqual(icon, { classNames: ["q8f2"], tagName: "span", drawing: "d1.1x9kq3" });
+  // Page text in its place is not a drawing: the field is the extension's digest, never the page's words.
+  for (const drawing of ["Save this job", "d1.", "d1.ABC", " d1.1x9kq3", "d1.1x9kq3 <svg>"]) {
+    assert.equal(webElementFingerprint({ tagName: "span", drawing, secret: false }).drawing, undefined, drawing);
+  }
+  // A secret control's drawing is no contents of it, and is kept like its other structural signals.
+  assert.equal(webElementFingerprint({ tagName: "input", inputType: "image", drawing: "d1.7", secret: true }).drawing, "d1.7");
+});
+
 test("blank strings and blank class tokens say nothing", () => {
   const fingerprint = webElementFingerprint({ tagName: "button", visibleText: "  ", classNames: [" ", "primary", "primary"], id: "", secret: false });
   assert.deepEqual(fingerprint, { classNames: ["primary"], tagName: "button" });

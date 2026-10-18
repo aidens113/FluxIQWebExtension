@@ -42,6 +42,16 @@ live lane leads, one per `lab-slots/slot-N`, each looping run -> debug -> fix ->
 integration round every 60-90 minutes. Launch shape: the A8 command in `automation-project-agents-plan.md`
 (`--authoring-mode project`, `--llm-max-cost-usd 0.25`, the five environment variables), workspace `bf-<task>`.
 
+**Scope change (user, 2026-10-17, later the same day):** "only a few tests should be fully end to end, since its very
+time intensive", and "make 100% sure that ALL TESTS are actually possible" (prompts may be reworded to fit sites;
+AGENTS.md rule). So: one full end-to-end pass per site (build from chat, judged run, zero-call replay), and every one
+of the 108 tasks audited provider-free by ten `audit-<site>` workers (t708-t717). Per-site picks: everything-store
+and job-board done; bigbox rated-delivery-towels; local-classifieds test-ride-question; crossborder
+free-hubs-under-ten; auction cheap-accessory-auctions; social recent-group-posts; photo-social kiln-notes;
+company-website apprentices; professional-network connect-kade-senior-engineer.
+
+Before today: 343 live runs since 2026-09-30 on 18 distinct tasks, 9 of them ever passed, all on the four main sites.
+
 **Phases 1-2 done (2026-10-17):** all 40 tasks merged (t696-t705), the shared corpus tests updated, scenario-lab
 851 of 851. **Phase 3 running:** four live lane leads. **Install proof (t706):** in progress.
 
@@ -128,6 +138,58 @@ point is declared there, so asking fails the run and is a product defect); an em
   was not exercised.
 - Report to: `docs/working/breadth-forty-tasks-plan/reports/package-lead.md` in the worktree.
 
+### Brief: audit-<site> (ten copies, one per realistic site, dispatched as `worker-high`)
+- Repository: this repository, in the site's audit worktree only (`fxwork/t<NNN>-audit-<site>`, named at dispatch).
+- Task: prove every task of `<site>` in `REALISTIC_SITE_LIVE_TASKS` (originals, additions and variant rows) is
+  achievable and unambiguous, the AGENTS.md rule of 2026-10-17. For each task:
+  1. Possible: a person can do it on the site as built; a recording or browser-path test in `<site>/tests/`
+     reaches its oracle (add one where a task has none; for a variant row, on the variant).
+  2. Unambiguous: read only the instruction and the site. Does exactly the oracle's answer follow? Check every
+     term against the site's own labels and options (e.g. Delivery vs Shipping vs Pickup), every filter and
+     exclusion (sponsored, accessories, duplicates, lookalikes), the order, each value's format (as shown or
+     normalised), every column, what must be left untouched, and an empty right answer being stated as possible.
+  3. Judge-checkable: a judge given the instruction and the pages can confirm each row and act.
+  4. Fits the purse: count the pages and acts the honest path needs; flag one that is unlikely in a $0.25 build.
+  5. Fix what fails, keeping the task's intent: reword the instruction, correct the oracle, or add fixture
+     data; never weaken an oracle to accept a wrong answer. Rows sharing an instruction change together.
+  Live evidence: debug notes under `docs/working/language-driven-flow-loop-plan/debugs/` in the lane trees
+  `C:/Users/osrs_/FluxStuff/fxwork/{t563,t565,t566,t567}/!FluxIQWebExtension/` name tasks that failed on wording.
+- Required reads: this brief; the site's `live-tasks.ts`, `manifest.ts`, `qualification/` or `breadth/`, pages,
+  data and `tests/`; `scenarios/live-instructions.ts` lines 26-60.
+- Owns (may edit): `apps/scenario-lab/src/scenarios/<site>/**` in its worktree; its report.
+- Must not touch: `scenarios/tests/*`, `src/tests/*` (report the entries a change needs), other sites, Core,
+  extension, domain, any model guidance.
+- Definition of done: every task has a verdict; `node ../../scripts/build-cache/cli.mjs scenario-lab:build` then
+  `node --test dist/scenarios/<site>/**/*.test.js` in `apps/scenario-lab` passes (the site only, not the whole
+  suite, while live lanes run), `pnpm.cmd --filter @fluxiq-web-extension/scenario-lab check` exit 0, and
+  `node scripts/structure-audit.mjs` passes.
+- Report to: `docs/working/breadth-forty-tasks-plan/reports/audit-<site>.md`: per task id, the verdict (ok,
+  reworded with old and new text and why, oracle fixed, fixture fixed, or not possible and why), then tests run.
+
+### Brief: install-core-lead (t707, dispatched as `lead`)
+- Repository: FluxIQ Core and this repository, in `C:/Users/osrs_/FluxStuff/fxwork/t707/` only (`!FluxIQ` on
+  branch `task/t707-install-core-fixes`, `!FluxIQWebExtension` beside it). Follow Core's AGENTS.md there.
+- Task: fix the five first-run defects the install proof found (`reports/package-lead.md`, "Core bugs"), each at
+  its cause, with a fail-first test beside it:
+  C1 `/get-started` always says "runtime did not answer" (`fluxiq.ts:58` returns null, which
+  `useOnboardingReadings.ts:85` rejects); C2 approving a pairing whose socket has closed still creates trust,
+  loses the token and marks the dead session ready (`pairing-flow.ts` `complete()`): it must fail honestly so
+  the browser pairs again; C3 `client-gateway-transport.ts` `selectSession` sends commands to that dead session;
+  C4 the Get started buttons create projects with no domain, which the extension refuses; C5 a provider key added
+  during a sign-in stays locked until the next sign-in. Confirm each from the code before fixing it; if one is
+  not real, say why.
+- Then repeat the install proof's first automation once (Chrome, the clean profile and isolated ports in
+  `reports/package-lead.md`, the release package built from this tree): one paid build under the $0.25 ceiling, on
+  a realistic scenario, supervised, run to a result and then rerun with no model calls.
+- Rules: isolated data and ports, never the user's panel, profiles or `.fluxiq`; never show tokens or keys; no Lab
+  slot; headed browsers; no model guidance that mirrors a scenario.
+- Owns (may edit): the t707 tree, both repositories; its report. Must not touch: the lane trees, main checkouts,
+  shared working documents.
+- Definition of done: per defect, the cause, the fix, the tests beside it and their observed output; Core
+  typecheck of each touched package and Core's structure audit; the extension tests beside any downstream change;
+  the first automation's result and its zero-call rerun, or exactly where it stopped and why.
+- Report to: `docs/working/breadth-forty-tasks-plan/reports/install-core-lead.md` in `fxwork/t707/!FluxIQWebExtension`.
+
 ### Brief: live-lane-<N> (four copies, dispatched as `lead-xhigh`, Phase 3)
 - Repository: this repository and Core, in the lane's tree only: lane 1 `fxwork/t563` (slot-1), lane 2
   `fxwork/t565` (slot-2), lane 3 `fxwork/t566` (slot-3), lane 4 `fxwork/t567` (slot-4); each holds both checkouts.
@@ -175,6 +237,18 @@ point is declared there, so asking fails the run and is a product defect); an em
   `pnpm task finish` x10 -> structure audit passed each
 - Outcome: Accepted
 - Follow-up: Phase 3 live lanes
+
+### 2026-10-17 — Install proof: Chrome and Edge install and pair; first automation stalled on Core (t706)
+- Agent: package-lead (verified by the supervisor)
+- Changed: `apps/extension/src/background/connection.ts`, `connection/gateway-session.ts` (+5 tests): a cheap
+  extension API call each heartbeat while pairing or connecting keeps the MV3 worker alive past 30 s; `docs/user/
+  install.md`, `quickstart.md`; `docs/architecture/extension-client.md` (supervisor)
+- Why: approval after about 30 s never paired (reproduced twice at about 108 s; after the fix Chrome paired at 80 s,
+  Edge at about 55 s, both through the real Load-unpacked steps)
+- Validation: `EXTENSION_TEST_BUILD_LABEL=t706-verify node scripts/test-extension.mjs background/connection/tests`
+  -> "# tests 254 # pass 254 # fail 0" (supervisor rerun); `pnpm task finish t706` -> structure audit passed, merged
+- Outcome: Partial. Firefox not installed here; the first automation stalled (likely Core C2/C3), about $0.01 spent
+- Follow-up: t707 fixes Core C1-C5 and reruns the first automation once
 
 ## Open Questions
 

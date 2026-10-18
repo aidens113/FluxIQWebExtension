@@ -94,6 +94,15 @@
 // **A value the page draws in pieces is one column** -- a price written as
 // sibling spans for its whole number, decimals and currency -- offered as the
 // element that holds the pieces (`composed-value/composed-value.ts`).
+//
+// **A group of lines only a position can name is also offered whole** -- the
+// lines read joined, beside each positional line -- since 2026-10-17
+// (`line-group/`).
+//
+// **A column means one kind of element in every item** -- a positional one
+// that met different kinds in different templates is split (`template-kind/`)
+// -- and **a value an element states only in an attribute is a column too**
+// (`stated-name/`), both since 2026-10-17.
 
 import {
   webAutomationExtractionFieldKey,
@@ -106,7 +115,10 @@ import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensi
 import { badgeNaming, constantBadgeName } from "./badge-name";
 import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
+import { keepLineGroups, positionalLine } from "./line-group";
 import { recordControlType } from "./record-control";
+import { statedAttributes } from "./stated-name";
+import { separateKinds } from "./template-kind";
 import { valueShape } from "./value-shape";
 import { statedMoreTightly } from "./value-statement";
 
@@ -141,6 +153,10 @@ export type FieldSource = {
    * name is the same in every item that has the element (`badge-name.ts`).
    */
   accessibleName?: boolean | undefined;
+  /** Whether the source reads its element as a container of lines, each child's words joined (`field-reader.ts`). */
+  lines?: true | undefined;
+  /** For a line named by its position among its siblings: the selector of the container offered whole beside it. */
+  lineOf?: string | undefined;
 };
 
 /** The form controls whose live value a record can read. */
@@ -225,10 +241,11 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
   // back into document order so a record's columns read as the page reads.
   // Before coverage spends the bound, a few places go to the columns only some
   // items have, which are the ones a read narrowing the run has to name.
-  const measured = fieldSources(item, run).map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
+  const sources = separateKinds(fieldSources(item, run), run, (owner, element) => pathWithinItem(owner, element)?.label);
+  const measured = sources.map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
   const byCoverage = [...measured].sort((left, right) => right.coverage - left.coverage);
   const reserved = new Set(byCoverage.filter((entry) => entry.coverage > 0 && entry.coverage < 1).slice(0, Math.min(RESERVED_PARTIAL_FIELDS, MAX_PROPOSED_FIELDS)));
-  const kept = [...reserved, ...byCoverage.filter((entry) => !reserved.has(entry)).slice(0, MAX_PROPOSED_FIELDS - reserved.size)]
+  const kept = keepLineGroups(measured, [...reserved, ...byCoverage.filter((entry) => !reserved.has(entry)).slice(0, MAX_PROPOSED_FIELDS - reserved.size)])
     .sort((left, right) => left.position - right.position);
   const taken = new Set<string>();
   return kept.map(({ source, coverage }) => {
@@ -270,6 +287,7 @@ export function proposedFieldSpec(source: FieldSource, coverage: number): WebAut
     ...(source.selector === undefined ? {} : { selector: source.selector }),
     ...(source.attribute === undefined ? {} : { attribute: source.attribute }),
     ...(source.header === undefined ? {} : { header: source.header }),
+    ...(source.lines === true ? { lines: true } : {}),
     required: coverage >= 1,
     ...(source.sensitive ? { handling: "exclude" as const } : {})
   };
@@ -305,7 +323,7 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
     let position = 0;
     for (const source of [...itemAttributeSources(candidate), ...elementSources(candidate, peers)]) {
       position += 1;
-      const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? ""].join("\u0000");
+      const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true ? "lines" : ""].join("\u0000");
       const seen = collected.get(identity);
       if (seen) {
         seen.labels.set(source.label, (seen.labels.get(source.label) ?? 0) + 1);
@@ -380,6 +398,9 @@ function columnSources(item: Element): FieldSource[] {
 /** What the item's descendants offer, in document order, one source per element but for an image. */
 function elementSources(item: Element, peers: readonly Element[]): FieldSource[] {
   const sources: FieldSource[] = [];
+  // Each container of positional lines met in this item, with the selector it
+  // is offered by, or `undefined` once it is known not to be offered.
+  const containers = new Map<Element, string | undefined>();
   for (const element of item.querySelectorAll("*")) {
     if (sources.length >= MAX_CANDIDATE_FIELDS) break;
     const tag = element.tagName.toLowerCase();
@@ -399,6 +420,7 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
     const { selector, label } = named;
     const pathLabel = named.path;
     const sensitive = isWithinSensitiveControl(element);
+    const offered = sources.length;
     if (tag === "img") {
       sources.push({ kind: "attribute", label: `${label} src`, selector, attribute: "src", sensitive });
       sources.push({ kind: "attribute", label: `${label} alt`, selector, attribute: "alt", sensitive });
@@ -420,7 +442,15 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
       // leaf is never a badge: the two branches cannot both apply.
       const badge = badgeSource(item, element, named, sensitive, peers);
       if (badge !== undefined) sources.push(badge);
-      else if ((isTextLeaf(element) || composesValue(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
+      else if ((isTextLeaf(element) || composesValue(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) {
+        const line = positionalLine(item, element, selector, (container) => selectorWithinItem(item, container, peers), containers);
+        if (line?.group !== undefined) sources.push({ kind: "text", ...line.group, sensitive: false, lines: true });
+        sources.push({ kind: "text", label, selector, sensitive, pathLabel, ...(line === undefined ? {} : { lineOf: line.lineOf }) });
+      }
+    }
+    // What an element that is a column states only in an attribute (`stated-name/`).
+    if (sources.length > offered && tag !== "img" && !VALUE_TAGS.has(tag)) {
+      for (const attribute of statedAttributes(element, selector, peers)) sources.push({ kind: "attribute", label: `${label} ${attribute}`, selector, attribute, sensitive });
     }
   }
   return sources;

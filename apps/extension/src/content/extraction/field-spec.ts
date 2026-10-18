@@ -12,7 +12,9 @@
 //   resolved against the page) and `value` (a form control's live value), and
 //   adds `required` (true only when it says so) and `handling`. A `column`
 //   spec reads the cell under its header; it has no selector of its own, so one
-//   sent with it is not used.
+//   sent with it is not used. A `text` spec with `lines: true` reads its
+//   element as a container of lines, each child's text on its own, joined in
+//   order (`field-reader.ts`); `lines` on any other kind is not used.
 //
 // **A field is required only where the author said so, and the string grammar
 // says nothing.** Until 2026-09-26 `parseStringField` returned `required: true`
@@ -55,7 +57,8 @@ type ExtractFieldSpec = Exclude<ExtractField, string>;
 
 /** What one included field reads inside each item, and whether a record may lack it. */
 export type ExtractFieldReader =
-  | { kind: "text" | "link" | "value"; selector?: string; required: boolean }
+  | { kind: "text"; selector?: string; required: boolean; lines?: true }
+  | { kind: "link" | "value"; selector?: string; required: boolean }
   | { kind: "attribute"; selector?: string; attribute: string; required: boolean }
   | { kind: "column"; header: string; required: boolean };
 
@@ -111,6 +114,7 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
   const kind: unknown = spec.kind;
   switch (kind) {
     case "text":
+      return { kind, ...where, required, ...(spec.lines === true ? { lines: true as const } : {}) };
     case "link":
     case "value":
       return { kind, ...where, required };

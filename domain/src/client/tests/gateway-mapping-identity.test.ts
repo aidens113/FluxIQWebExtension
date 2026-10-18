@@ -182,7 +182,8 @@ test("a command whose wire target carried no element still takes the repair, nev
 test("a loop's row reaches the page on the declared element, through the node, Core's rewrite and the wire target", async () => {
   // t195: the node scopes its recorded record to the row, and nothing between
   // it and the page may drop the values -- neither Core's target rewrite nor
-  // either of this domain's two element normalizers.
+  // either of this domain's two element normalizers. The recorded key stays
+  // beside them: it is what tells the page the build placed the control in a row.
   const node = { ...recordedSaveNode(), element: { ...recordedSave, context: { record: { keyAttribute: "data-id", key: "p1" } } } };
   const implementation = createWebAutomationOutputNodeImplementationBundle().implementations["web.dom.click"];
   assert.ok(implementation);
@@ -190,6 +191,6 @@ test("a loop's row reaches the page on the declared element, through the node, C
   const result = await implementation(context);
   const parameters = (result.effects?.[0]?.payload as JsonObject).parameters as JsonObject;
   const command = dispatchedClick("row", preparedByCore(parameters));
-  assert.deepEqual(command.element?.context?.record, { values: ["Red Toaster", "$39.99"] });
+  assert.deepEqual(command.element?.context?.record, { keyAttribute: "data-id", key: "p1", values: ["Red Toaster", "$39.99"] });
   assert.deepEqual(outputTargetFromPayload(preparedByCore(parameters))?.element, command.element);
 });

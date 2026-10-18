@@ -9,6 +9,13 @@
 // call carries the page with the layer in it, and says which handles cover the
 // control, so the next call deals with the layer and then presses again.
 //
+// Unless the runtime clears the cover itself: a cover whose own way out the
+// extension's defence presses -- a close glyph, a "No thanks", a consent
+// layer's least-consent answer -- is closed by that defence before the press
+// lands, as in playback, so such a press is sent (`./layer/runtime-clears.ts`,
+// `run-mvcxf4uz-64cd322c`). This file still says what covers the control and
+// how it closes; that file says whether the runtime will close it.
+//
 // A consent layer is closed by answering it, so its closers are the answers
 // that consent to nothing -- "Reject non-essential", "Necessary only", a "×"
 // -- named first, and never an accept-all (cause 9 of `run-musq0b1m-0472cfa0`:

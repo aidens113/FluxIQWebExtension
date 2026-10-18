@@ -35,6 +35,7 @@ export function webElementFingerprintFromDescriptor(descriptor: unknown): WebAut
     classNames: read.classNames,
     testId: read.testId,
     attributes: read.attributes,
+    drawing: read.drawing,
     context: read.context,
     secret: isSensitiveElementDescriptor(descriptor)
   });

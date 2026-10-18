@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../../html.js";
 import { memberNamed } from "../data/index.js";
 import { initials, profileHref, renderShellPage, ROOT, type ShellKit } from "../shell/index.js";
+import { invitationLimitNotice } from "./invitation-limit.js";
 import { pendingReceived, receivedRowMarkup } from "./rows.js";
 
 const SUGGESTED = ["Rahul Verma", "Oskar Nilsson", "Lieke Postma", "Pavel Novák", "Omar Farouk", "Tobias Keller"];
@@ -9,6 +10,7 @@ const SUGGESTED = ["Rahul Verma", "Oskar Nilsson", "Lieke Postma", "Pavel Novák
  * My Network: the first three invitations waiting for an answer, with a
  * "Manage" link to all of them -- one of two links on the page reading
  * "Manage" -- and people to connect with, each a real connection request.
+ * The weekly invitation limit notice heads the page while it applies.
  */
 export function renderMyNetworkPage(kit: ShellKit): string {
   const c = kit.css;
@@ -23,7 +25,7 @@ export function renderMyNetworkPage(kit: ShellKit): string {
   }).join("");
   const rail = `<section class="${c.card}"><div class="${c.sectionHead}"><h2 style="font-size:16px;margin:0">Manage my network</h2><a class="${c.link}" href="${ROOT}mynetwork/invitation-manager/sent/">Manage</a></div>
 <ul style="list-style:none;margin:0;padding:8px 0">${[["Connections", "612"], ["Following & followers", ""], ["Groups", "4"], ["Events", "2"], ["Pages", "14"], ["Newsletters", "3"]].map(([label, count]) => `<li style="display:flex;justify-content:space-between;padding:8px 16px"><span>${escapeHtml(label!)}</span><span class="${c.muted}">${count}</span></li>`).join("")}</ul></section>`;
-  const main = `<section class="${c.card}"><div class="${c.sectionHead}"><h2 style="font-size:16px;margin:0">Invitations (${received.length})</h2><a class="${c.link}" href="${ROOT}mynetwork/invitation-manager/">Show all</a></div>
+  const main = `${invitationLimitNotice(kit)}<section class="${c.card}"><div class="${c.sectionHead}"><h2 style="font-size:16px;margin:0">Invitations (${received.length})</h2><a class="${c.link}" href="${ROOT}mynetwork/invitation-manager/">Show all</a></div>
 <ul id="${listId}" class="${c.inviteList}">${received.slice(0, 3).map((invitation) => receivedRowMarkup(kit, invitation)).join("\n")}</ul></section>
 <section class="${c.card}"><h2 class="${c.cardTitle}">People you may know from Northwick Analytics</h2><div id="${gridId}" class="${c.grid}">${cards}</div></section>`;
   const script = `const GL = window.GL;

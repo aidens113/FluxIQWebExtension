@@ -25,8 +25,14 @@ import type { ClientGatewayActivity } from "../../shared/activity/index";
 
 /** Core's title for a decision to finish (`runtime/activity/wording/decision.ts` in FluxIQ Core). */
 const FINISHING = "Checking whether the Flow is finished";
-/** Core's words for a build its supervisor ended: its ending row ("The supervisor ended the build ...") and the build's last ("... the supervisor ended it ..."). */
-const SUPERVISOR_ENDED = /\bsupervisor ended\b/iu;
+/**
+ * Core's words for a build its supervisor ended: its ending row and the
+ * build's last. An older Core says "The supervisor ended the build ..." and
+ * "... the supervisor ended it ..."; a newer one says it in a person's words,
+ * "FluxIQ could not finish the Flow" or "FluxIQ stopped with the Flow only
+ * partly built" (t567 lane 4), which a time limit's words never are.
+ */
+const SUPERVISOR_ENDED = /\bsupervisor ended\b|\bFluxIQ could not finish the Flow\b|\bFluxIQ stopped with the Flow only partly built\b/iu;
 /** A dotted id: a reason carrying one is not words, and is not said. */
 const RAW_ID = /\b[a-z]+\.[a-z_]+/iu;
 /** How much of a remembered why the last row must already hold to be taken as saying it. */

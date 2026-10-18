@@ -127,7 +127,7 @@ function proposalForLevel(level: Element): WebAutomationExtractionProposal | und
     itemCount: run.length,
     fields,
     ...(pagination === undefined ? {} : { pagination }),
-    confidence: Math.round(item.confidence * meanCoverage(fields) * 100) / 100
+    confidence: Math.round(item.confidence * meanCoverage(withoutLineGroups(fields)) * 100) / 100
   };
 }
 
@@ -145,6 +145,12 @@ export function itemTemplateSignature(element: Element): string {
     testId: testIdFor(element),
     classes: element.classList
   });
+}
+
+/** The fields less any group of lines, which restates lines already measured (`line-group/`), so a group leaves the confidence as it was. */
+function withoutLineGroups<T extends { spec: { lines?: boolean | undefined } }>(fields: readonly T[]): readonly T[] {
+  const measured = fields.filter((field) => field.spec.lines !== true);
+  return measured.length > 0 ? measured : fields;
 }
 
 function meanCoverage(fields: ReadonlyArray<{ coverage: number }>): number {

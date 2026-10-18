@@ -11,9 +11,37 @@
  *   asks for confirmation and then removes the post for good.
  * - Share opens a menu whose first item, "Share now (Friends)", publishes on
  *   the spot, as the real one does.
+ * - Pointing at a timestamp shows its full date and time in a hover card, the
+ *   way a person finds out when a post was written: the feed itself only says
+ *   "3h" or "2d", and the timestamp's label is otherwise heard, not seen.
  */
 export const UNIT_SCRIPT = String.raw`
 const articleOf = (node) => node.closest('[role="article"]');
+const STAMP = 'a[href*="/posts/"][aria-label]';
+let hoverCard = null;
+function hideHoverCard() {
+  if (!hoverCard) return;
+  hoverCard.node.remove();
+  hoverCard = null;
+}
+document.addEventListener('pointerover', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const stamp = target && target.closest(STAMP);
+  if (!stamp || (hoverCard && hoverCard.stamp === stamp)) return;
+  hideHoverCard();
+  const [node] = fromHtml('<div class="' + C.hoverCard + '" role="tooltip">' + esc(stamp.getAttribute('aria-label')) + '</div>');
+  const box = stamp.getBoundingClientRect();
+  node.style.top = (box.bottom + window.scrollY + 6) + 'px';
+  node.style.left = (box.left + window.scrollX) + 'px';
+  document.body.appendChild(node);
+  hoverCard = { node, stamp };
+});
+document.addEventListener('pointerout', (event) => {
+  if (!hoverCard || !(event.target instanceof Node) || !hoverCard.stamp.contains(event.target)) return;
+  const next = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+  if (next && hoverCard.stamp.contains(next)) return;
+  hideHoverCard();
+});
 function postIdOf(article) {
   for (const link of article.querySelectorAll('a[href*="/posts/"]')) {
     if (link.closest('.' + cls('sharedBox'))) continue;

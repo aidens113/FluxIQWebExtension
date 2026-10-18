@@ -100,6 +100,8 @@
 // - the `name` attribute, a test id, and under `attributes` only the
 //   identifying ones (the builder's one list) -- never the packet's whole map,
 //   which holds the element's state as well as its identity;
+// - for a control with no words, what it draws (`drawing`, which the binding
+//   keeps beside the packet as it keeps the dialog's name, lane 4 t567);
 // - where it sat: its form, landmark, list and table position, shadow hosts
 //   and record.
 //
@@ -116,7 +118,7 @@ import { present } from "../present";
 
 /** The recorded fingerprint fields a handle's element can honestly fill. */
 export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint,
-  "tagName" | "role" | "implicitRole" | "accessibleName" | "label" | "visibleText" | "selector" | "inputType" | "id" | "classNames" | "name" | "testId" | "attributes"> & {
+  "tagName" | "role" | "implicitRole" | "accessibleName" | "label" | "visibleText" | "selector" | "inputType" | "id" | "classNames" | "name" | "testId" | "attributes" | "drawing"> & {
   context?: WebPlanElementContext | undefined;
 };
 
@@ -127,8 +129,8 @@ type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "landm
  * bound to -- and, for an element inside open shadow roots, by the host chain
  * the binding kept beside that selector (`../packet-fingerprint/`).
  */
-export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[], dialog?: string): WebPlanElementIdentity {
-  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts, dialog });
+export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[], dialog?: string, drawing?: string): WebPlanElementIdentity {
+  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts, dialog, drawing });
   const context = fingerprint.context;
   return present<WebPlanElementIdentity>({
     tagName: fingerprint.tagName,
@@ -144,6 +146,7 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
     name: fingerprint.name,
     testId: fingerprint.testId,
     attributes: fingerprint.attributes,
+    drawing: fingerprint.drawing,
     context: context === undefined ? undefined : present<WebPlanElementContext>({
       formId: context.formId,
       landmark: context.landmark,
@@ -230,12 +233,13 @@ export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentit
  * controls.
  */
 const LENT_BY_THE_NEWEST_VIEW: readonly (readonly LendableField[])[] = [
-  ["implicitRole", "inputType", "label", "id", "testId", "name"],
+  // A drawing leaves out how the picture is painted, so a filled and an unfilled icon draw the same: an act does not change it.
+  ["implicitRole", "inputType", "label", "id", "testId", "name", "drawing"],
   ["accessibleName", "visibleText"],
   ["classNames"]
 ];
 
-type LendableField = "implicitRole" | "inputType" | "label" | "id" | "testId" | "name" | "accessibleName" | "visibleText" | "classNames";
+type LendableField = "implicitRole" | "inputType" | "label" | "id" | "testId" | "name" | "drawing" | "accessibleName" | "visibleText" | "classNames";
 
 /** `identity` with `fields` as the newest view gave them, where it gave them. */
 function lent(identity: WebPlanElementIdentity, newer: WebPlanElementIdentity, fields: readonly LendableField[]): WebPlanElementIdentity {
@@ -279,6 +283,7 @@ function agreedAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElemen
     name: agreed(earlier.name, newer.name),
     testId: agreed(earlier.testId, newer.testId),
     attributes: agreedAttributes(earlier.attributes, newer.attributes),
+    drawing: agreed(earlier.drawing, newer.drawing),
     context: Object.keys(context).length > 0 ? context : undefined
   });
 }

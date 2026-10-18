@@ -8,7 +8,7 @@ const MOON_JAR_PRICE = "Saltmarsh Goods has posted a speckled moon jar without s
 
 const PRIYA_TAGS = "Priya Nair (@priya.nair) wants to know who tagged her under the Autumn Kiln Giveaway post from Harbourlight Studio, the verified pottery account. Find every comment and reply on that post that tags @priya.nair, and give me one row per comment with columns author, comment and date: author is the username of whoever wrote it, comment is its text exactly as written, and date is the day it was posted, as YYYY-MM-DD. List the rows in the order they appear under the post once every comment and reply has been loaded.";
 
-const NEWEST_LIKES = "Like the three most recent posts the verified Harbourlight Studio account has published, and do not like, save, follow or message anything else. Then give me a table of the posts you liked, newest first, with one column, link, holding each post's address.";
+const NEWEST_LIKES = "Like the three most recent posts the verified Harbourlight Studio account has published, reels included, and do not like, save, follow or message anything else. Then give me a table of the posts you liked, newest first, with one column, link, holding each post's address.";
 
 const AUGUST_OVER_1300 = "Did the verified Harbourlight Studio account get more than 1,300 likes on any post it published in August 2026? Give me every such post as a table with columns date and likes, where date is the day it was posted as YYYY-MM-DD and likes is the exact number of likes the post shows. If none did, an empty table is the right answer.";
 

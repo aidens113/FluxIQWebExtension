@@ -131,11 +131,20 @@ function optionSelectorValue(value: unknown): WebAutomationOptionSelector | unde
   return request.by === "index" && index !== undefined ? { by: "index", index } : undefined;
 }
 
-/** `untilStable` keeps its required `maxScrolls`: without it the request is refused, never defaulted. */
+/** Every key a scroll request has (`actions/schemas.ts`, which closes it). */
+const SCROLL_REQUEST_KEYS: ReadonlySet<string> = new Set(["mode", "x", "y", "maxScrolls"]);
+
+/**
+ * `untilStable` keeps its required `maxScrolls`: without it the request is
+ * refused, never defaulted. A key the request does not have refuses it whole,
+ * as the schema does at submit: `{"mode": "by", "until": ...}` asks for
+ * something no mode does, and running its `by` part would be a guess.
+ */
 function scrollRequestValue(value: unknown): WebAutomationScrollRequest | undefined {
   const request = jsonObject(value);
   const mode = memberOf(request?.mode, ["by", "toElement", "untilStable"] as const);
   if (!request || mode === undefined) return undefined;
+  if (Object.keys(request).some((key) => !SCROLL_REQUEST_KEYS.has(key))) return undefined;
   if (mode === "toElement") return { mode };
   const y = finiteNumber(request.y);
   if (mode === "by") {

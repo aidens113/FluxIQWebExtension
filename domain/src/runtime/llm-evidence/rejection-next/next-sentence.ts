@@ -1,7 +1,8 @@
 // The sentence a refusal's `next` carries: what to do now, read off the
 // refusal's reason and the resolver's codes beside it (`instead`), and never off
-// the page. Each sentence is this domain's own fixed words, so it may ride in a
-// detail (`../tool-rejection.ts`, header). Read again from the same fields on a
+// the page. Each sentence is this domain's own fixed words, and at most this
+// domain's own handles (`t12`), so it may ride in a detail
+// (`../tool-rejection.ts`, header). Read again from the same fields on a
 // repeat (`../repeated-refusal.ts`), so a repeated refusal says the same.
 //
 // Split out of `../tool-rejection.ts` when it reached its line limit (t509),
@@ -14,8 +15,9 @@ import type { WebLlmToolRejectionReason } from "../tool-rejection";
 const RENUMBERED_BY_RELOAD = "web.handle.renumbered_by_reload";
 
 /** What to do next after a refusal for `reason`, or nothing where the reason says the whole of it. */
-export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: readonly string[] | undefined, closeWith: readonly string[] | undefined): string | undefined {
-  return reason === "covered_by_layer" ? (closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT)
+export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: readonly string[] | undefined, closeWith: readonly string[] | undefined, target?: string): string | undefined {
+  // Read off the cover, the target and the closers, so a repeat that passes them back says it again.
+  return reason === "covered_by_layer" ? coveredNext(instead?.[0], target, closeWith)
     // Read off the codes, so a repeat that passes them back says it again.
     : reason === "handle_not_in_packet" && instead?.includes(RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
@@ -60,10 +62,50 @@ const FILTERED_LIST_NEXT = "Nothing was pressed. This page's Next leads to the l
   + "and no page number beside it keeps them, so the same step is answered the same way here. Find another control on the page that reaches the next page of this same filtered list, "
   + "or read this page and end the list here, saying in the answer that the later pages could not be reached with the filters kept.";
 
-/** What to do about a control a layer covers, when the layer's own close control is known (`closeWith`). */
-const COVERED_NEXT_CLOSE = "Nothing was done. The layer in instead covers the target: press one of closeWith to close it, then make this same call again, unchanged.";
-/** The same, when no control of the layer reads as closing it. */
-const COVERED_NEXT = "Nothing was done. The layer in instead covers the target: close or answer it with one of its own controls on the page, then make this same call again, unchanged.";
+/**
+ * What to do about a press on a control a layer covers (`covered_by_layer`),
+ * naming the cover, the target and the layer's closers inline, in the order
+ * they are to be acted on.
+ *
+ * **Why the handles are inlined, and the call is never said to be made again
+ * unchanged.** On `run-mvcwem7d-34689f55`, 2026-10-17, a press on a control
+ * under a layer was refused with `closeWith` naming the layer's two closers
+ * and a next that ended "then make this same call again, unchanged". The model
+ * made the same call again, unchanged, on its very next decision, and the
+ * repeat (which had then lost `closeWith`, `../repeated-refusal.ts`) fell back
+ * to "one of its own controls on the page": the model kept reading the covered
+ * control, marked `covered-by` the layer, as one of the layer's own. Five
+ * refused presses a brief, twice, and no Flow. So the sentence says which
+ * handle to press first, that the covered press is refused the same way while
+ * the layer stands, and only then to press the target again.
+ *
+ * A handle is inlined only when it is this domain's own token (`t12`), never
+ * page text; anything else falls back to the field's name.
+ */
+function coveredNext(cover: string | undefined, target: string | undefined, closeWith: readonly string[] | undefined): string {
+  const layer = isHandle(cover) ? `layer ${cover}` : "the layer in instead";
+  const covering = isHandle(cover) ? cover : "the layer";
+  const pressed = isHandle(target) ? target : "the target";
+  const opening = `Nothing was done: ${layer} covers ${pressed}. `;
+  const refusedAgain = `Do not press ${pressed} again while ${covering} covers it: that press is refused the same way. `;
+  const after = `Once the layer is gone, press ${pressed} again.`;
+  if (closeWith !== undefined && closeWith.length > 0) {
+    const closers = closeWith.every(isHandle) ? eitherOf(closeWith) : "one of closeWith";
+    return `${opening}Press ${closers} first; it closes that layer. ${refusedAgain}${after}`;
+  }
+  return `${opening}Close or answer that layer first with a control inside it (the page view lists those after the layer's own line), `
+    + `never a control marked covered-by ${covering}: those lie under the layer. ${refusedAgain}${after}`;
+}
+
+/** `a`, `a or b`, `a, b or c`. */
+function eitherOf(handles: readonly string[]): string {
+  return handles.length === 1 ? handles[0]! : `${handles.slice(0, -1).join(", ")} or ${handles[handles.length - 1]!}`;
+}
+
+/** Whether `value` is one of this domain's handles (`t12`), and so may be said in a sentence. */
+function isHandle(value: string | undefined): value is string {
+  return value !== undefined && /^t[1-9][0-9]*$/u.test(value);
+}
 
 /**
  * What to do about a handle the page renumbered by reloading. A rerun reloads
@@ -88,5 +130,5 @@ const STALE_NEXT_INSTEAD = "Nothing was done. The handle in target came from a v
 
 /** Whether `instead` is one target handle (`t12`), as a stale-handle refusal names the element's current one, and not a resolver's codes. */
 function staleHandleNamed(instead: readonly string[] | undefined): boolean {
-  return instead?.length === 1 && /^t[1-9][0-9]*$/u.test(instead[0]!);
+  return instead?.length === 1 && isHandle(instead[0]);
 }
