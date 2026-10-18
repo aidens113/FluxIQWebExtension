@@ -36,20 +36,23 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | --- | --- |
 | everything-store | PASS coupon-earbuds-rated-four, batteries-and-descaler, sage-small-kettle-if-in-stock; office-checkout-review failed x2 (reworded by the audit to name Buy Now; rerun owed) |
 | job-board | PASS remote-easy-apply, halvard-careers-roles; save-quillmark-remote and halvard-labs-office-jobs failed (causes fixed by lane 4 fixes 1-3; reruns owed) |
-| social-network-feed | PASS delete-stranger-requests; recent-group-posts failed x2 (paging and mixed-template columns, both fixed), hide-suggested-posts failed (lane 3 fix 4) |
-| bigbox-retail | rated-delivery-towels: oracle passed 16/16 on the reworded task but FluxIQ's judges said no (judge-evidence summary; lane 1 fix 4 in progress) |
-| crossborder, auction, local-classifieds, photo-social, company-website, professional-network | no pass yet; final runs at wrap-up: LANE_RESULTS |
+| social-network-feed | PASS delete-stranger-requests; recent-group-posts failed x3 (paging and mixed-template columns fixed and proven live; run-mvd94oxq stored a repost twice, deduped by a tracking-parameter URL, and cut text at "See more": both open); hide-suggested-posts failed (lane 3 fix 4, rerun owed) |
+| bigbox-retail | rated-delivery-towels: oracle passed 16/16 twice (run-mvd1ex8o, run-mvd8ypsv) but FluxIQ's judges said no; the second no was a settled sponsored-only row read as missing (lane 1 fix 4, unmerged) |
+| crossborder-marketplace | free-hubs-under-ten open after 4 runs: covers and paging fixed; run-mvd9554h retried the site's "Security check" on page 3 instead of handing it to the person (fix proposed in its debug, not built) |
+| auction-marketplace | cheap-accessory-auctions failed once on plan grammar (fixed, proven live elsewhere); not rerun |
+| local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
+| company-website | apprentices run-mvd8mcu6 failed at $0 before any model call: the supervisor's background rebuild of Core in the lane tree killed Core's server mid-run; reveal-by-scroll (lane 4 fix 5, unmerged) is for this task |
+| photo-social, professional-network | kiln-notes and connect-kade-senior-engineer not run |
 
-Totals at the integration round: 19 runs, 6 passed, 13 failed, $0.975 billed, plus about $0.31 for the install
-proof. Every failure has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in
+Totals at the stop: 24 runs, 6 passed, 18 failed, $1.224 billed across the four lanes (lane 1 $0.545, lane 2
+$0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; no balance error. Every failure has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in
 the lane trees until merged).
 
 **Not done / held (each has a report under `reports/`):**
-- **Core `dev` is not green until** the `flow_script.repeat_over_twice` words and corpus case (uncommitted in
-  `fxwork/t707/!FluxIQ`: `flow-bootstrap/plan/issue-feedback.ts`, `candidate/tests/refusal-locator-corpus.test.ts`)
-  are committed and merged: CORE_STATUS.
-- **Storage change held:** the same tree's `storage/canonical-authority/{whole-operation,owner-store}.ts` and
-  `storage/sqlite-repository.ts` (one SQLite open per operation, written to cure a creation-test timeout) left 7
+- **Core `dev` is green and pushed:** the `flow_script.repeat_over_twice` words and corpus case merged (Core
+  `31f2ccdf`, pushed with `4d6fb8b6`).
+- **Storage change held:** the storage change, committed UNMERGED on Core branch `task/t707-storage-held` (`72abeeab`;
+  `storage/canonical-authority/{whole-operation,owner-store}.ts`, `storage/sqlite-repository.ts`) (one SQLite open per operation, written to cure a creation-test timeout) left 7
   storage tests timing out at 15-30 s under load; not merged until compared against `dev` (`reports/integration-core.md`).
 - **R1 site reset (t719, committed UNMERGED on `task/t719-site-reset-undoable-acts`, both repositories):** a
   build's own add-to-cart and save acts were never undone before re-runs (every undo refused `wrong_target`); the
@@ -57,11 +60,21 @@ the lane trees until merged).
   everything-store live round, then merge. It blocks the install proof's last step.
 - **Install proof's last step:** build an automation from the installed extension, then rerun it with zero model
   calls (everything-store kettle-to-cart), after R1.
-- **Lane work not merged:** LANE_UNMERGED.
+- **Lane work committed UNMERGED (merge in integration round 2 after its narrow checks):** lane 1 fix 4, judges and
+  settled left-out rows (Core `task/t563-a8-lab-comparison` `94c3c49f`); lane 4 fix 5 reveal-by-scroll and fix 6
+  drawing identity on recording and repair paths (`task/t567-a8-lane-4b` downstream `83d883b4`, Core `4d90c6e7`;
+  rebuild Core in the lane tree before a run). Lanes 2 and 3 have no unmerged code. Lane trees t563 and t567 are now
+  ahead of `dev`, so they cannot fast-forward until round 2 merges them.
+- **Open product causes from the last runs:** a person check met by next_page arrival must hand off, not retry
+  (lane 2); dedupe across URLs that differ only by tracking parameters, and expanding an item's own "See more"
+  (lane 3); test-ride step 14 (lane 1); find_on_page shows a hidden control as an ordinary match (lane 4).
+- **Structural gap:** rebuilding Core in a lane tree while its run is live kills the run, and the Lab does not refuse
+  it (it cost run-mvd8mcu6). Make the Lab hold a build lock per lane tree, or refuse a launch or a build while the
+  other holds the tree.
 
-**Next, in order:** (1) commit and merge the t707 corpus fix, prove Core `dev` green, push both `dev` branches
-together if not already pushed; (2) review and merge R1 (t719) after one live everything-store round; (3) merge
-the lanes' remaining fixes (integration round 2) and sync the lane trees; (4) finish one pass per remaining site and
+**Next, in order:** (1) settle the held storage change (run the storage tests with and without it under the same load);
+(2) review and merge R1 (t719) after one live everything-store round; (3) integration round 2: merge the unmerged lane branches above with narrow checks, sync and rebuild the lane
+trees (never during a live run), and build the Lab build lock; (4) finish one pass per remaining site and
 the owed reruns (office-checkout-review, save-quillmark-remote, halvard-labs-office-jobs, recent-group-posts,
 hide-suggested-posts, rated-delivery-towels); (5) the install proof's create-and-zero-call rerun.
 
@@ -289,6 +302,25 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Outcome: Partial until integration-core passes and Core t707 merges
 - Follow-up: push both, sync lanes, resume them on one pass per site; R1 (site reset treats add-to-cart and
   save-for-later as undoable never) next, then the install proof's create-and-zero-call rerun
+
+### 2026-10-18 — Wrap-up: integration round 1 pushed; lanes stopped; held work on branches
+- Agent: supervisor (lanes 1-4 stopped after their in-flight runs, the user's choice; integration-core and
+  site-reset-undo stopped and reported)
+- Changed: Core `dev` merges t707's `flow_script.repeat_over_twice` words and corpus case and a lowered baseline;
+  downstream `dev` merges the lanes' wrap-up docs, web-11 (decline optional cookies), the AGENTS.md rule "only a
+  few tasks run fully end to end", and the hosted plan's later user directions (both repositories). Held,
+  committed UNMERGED: t707 storage change (`task/t707-storage-held`), R1 (t719 both repositories), lane 1 fix 4
+  (Core t563), lane 4 fixes 5-6 (t567 both repositories).
+- Why: the user wrapped up the session to continue in another agent; everything must stand alone
+- Validation: Core `npx vitest run` on refusal-locator-corpus, issue-feedback-words and script-statements ->
+  10/10 files passed; `node scripts/build-cache/cli.mjs fluxiq:check` -> exit 0; Core structure audit -> passed
+  (400 warnings, 1154 baselined); downstream `npx tsc -p tsconfig.test.json --noEmit` (domain) -> exit 0 and
+  `node scripts/check-extension.mjs` -> exit 0 against the rebuilt final Core; downstream structure audit ->
+  passed; `test-domain.mjs runtime/llm-evidence/system-instructions` -> 17/17 after web-11. Not run: Core storage
+  tests without the held change (the open comparison); full suites (twice-a-day rule).
+- Outcome: Accepted (pushed: Core `4d6fb8b6`, downstream this commit's push)
+- Follow-up: the "Next, in order" list in Current State; the supervisor's background lane rebuild killed
+  run-mvd8mcu6 at $0, which is the build-lock gap named there
 
 ## Open Questions
 
