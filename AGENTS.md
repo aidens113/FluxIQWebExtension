@@ -420,6 +420,11 @@ wording, its oracle or its fixture to fit the site, keeping its intent, and neve
 to accept a wrong answer. Changing a task is not teaching to the test: the model's guidance stays
 generic.
 
+**Only a few tasks run fully end to end** (user, 2026-10-17): a full live run (build from the
+extension chat, the judged whole run, a zero-call replay) is time-intensive, so a breadth round runs
+about one task per site end to end, plus reruns of tasks whose failures were fixed; every other task
+is proven provider-free by the audit above (a browser path reaching its oracle, unambiguous wording).
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is

@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Historical A-D creation qualified; instruction-led foundations and focused reliability fixes integrated; structural acceptance, current adaptation/breadth and release qualification remain open.
 Created: 2026-10-05
-Last updated: 2026-10-13
+Last updated: 2026-10-18
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -12,6 +12,8 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**Latest (2026-10-18): read [breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md) first.** It holds the current state of live qualification (40 new tasks, all 108 tasks audited as possible and unambiguous, one full pass per site, 6 of 40 passing), the install-package proof (MVP item 1: Chrome and Edge install and pair; the create-and-zero-call rerun waits on R1, t719), and what is merged, held or unpushed. Hosted sign-in for the Chrome release is planned in [hosted-production-plan.md](./hosted-production-plan.md). The paragraphs below are dated 2026-10-13 and older.
 
 **User wrap for today, October 13.** User requested that work stop for today; this supersedes continuous execution for this session. Verified t525/t528/t527/t531/t530/t529 units are merged on both dev branches (latest paired task merges downstream `7b545504` / Core `a12d36a4`). Final helper/chat selection: 110 tests and Core source/test types passed; completion projections: 94 distinct tests plus affected types; judge/retry: 140 combined; rooted topology: 66; transport/read: 31 and two inspected Chromium content-harness passes. Both owning merge audits passed; no full-suite claim or changed-source live qualification. All workers are stopped.
 
