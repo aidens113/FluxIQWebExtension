@@ -233,9 +233,25 @@ test("every dataset task names exactly the columns its expected records carry", 
   }
 });
 
+/**
+ * The judge compares records by position and values exactly, so a table of
+ * more than one row is right only in one order, and a date only in one form.
+ * The instruction has to say both, or a run that sorted its rows or wrote
+ * "2026-09-21 05:55" did what it was asked and still failed.
+ */
+test("every table of several rows says its order, and every posted column asks for the site's own full date", () => {
+  for (const task of SOCIAL_NETWORK_FEED_TASKS.filter(({ judgeBy }) => judgeBy === "expected-dataset")) {
+    const owner = manifest.workflows?.find(({ recordingScript }) => recordingScript.some(({ id }) => id === task.expectedDatasetId));
+    const entry = resolveScenarioWorkflow(manifest, { ...(owner ? { workflowId: owner.id } : {}), ...(task.variantId ? { variantId: task.variantId } : {}) }).expected.extracted?.find(({ step }) => step === task.expectedDatasetId);
+    const records = entry?.records ?? [];
+    if (records.length > 1) assert.match(task.instruction, /in the order (?:the|the complete request) (?:list|feed) (?:first )?show/u, `${task.id}: ${records.length} rows and no order`);
+    if (records.some((record) => "posted" in record)) assert.match(task.instruction, /posted is its full date and time exactly as the site writes it/u, task.id);
+  }
+});
+
 test("the open-day table holds the run to what the instruction keeps fixed: the post stays Public, and only the moved post is left", () => {
   const task = SOCIAL_NETWORK_FEED_TASKS.find(({ id }) => id === "social-network-feed-move-open-day")!;
-  assert.match(task.instruction, /including who can see it, should stay the same/u);
+  assert.match(task.instruction, /everything else it says, and who can see it, should stay the same/u);
   const workflow = resolveScenarioWorkflow(manifest, { workflowId: "move-open-day" });
   // A repost left at the composer's default audience (Friends) must read differently from the right one,
   // and so must a repost that left the Saturday post in place: the table is every open-day post of Maya's.
