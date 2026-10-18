@@ -22,6 +22,63 @@ import { element, input, withStubPage } from "./stub-page";
 
 const load = () => import("../describe-element");
 
+/** A detached, laid-out record tree for the complete descriptor, without a browser. */
+function withDescriptorRecords(root: Element, pointer: Element, body: () => void): void {
+  const all = (node: Element): Element[] => [node, ...[...node.children].flatMap(all)];
+  for (const node of all(root)) {
+    const matches = (selector: string) => selector.split(",").some(part => {
+      const value = part.trim();
+      if (value === "*") return true;
+      if (!value.startsWith("[")) return value === node.tagName.toLowerCase();
+      const attribute = /^\[([^=\]]+)(?:=["']?([^"'\]]+)["']?)?\]$/u.exec(value);
+      return !!attribute && node.hasAttribute(attribute[1]!) && (attribute[2] === undefined || node.getAttribute(attribute[1]!) === attribute[2]);
+    });
+    Object.assign(node, {
+      localName: node.tagName.toLowerCase(), classList: [],
+      getBoundingClientRect: () => ({ left: 10, top: 10, right: 50, bottom: 30, width: 40, height: 20 }),
+      getAttributeNames: () => [...node.attributes].map(attribute => attribute.name),
+      matches,
+      closest: (selector: string) => {
+        for (let current: Element | null = node; current; current = current.parentElement) if (current.matches(selector)) return current;
+        return null;
+      },
+      querySelectorAll: (selector: string) => all(node).slice(1).filter(child => child.matches(selector)),
+      querySelector: (selector: string) => all(node).slice(1).find(child => child.matches(selector)) ?? null
+    });
+  }
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const installed = {
+    window: { innerWidth: 1000, innerHeight: 800, scrollX: 0, scrollY: 0 },
+    document: { querySelectorAll: () => [], getElementById: () => null },
+    HTMLAnchorElement: class {}, CSS: { escape: (value: string) => value },
+    getComputedStyle: (node: Element) => ({ cursor: node === pointer ? "pointer" : "auto", display: "block", backgroundImage: "none" })
+  };
+  const previous = new Map(Object.keys(installed).map(key => [key, Object.getOwnPropertyDescriptor(globals, key)]));
+  Object.assign(globals, installed);
+  try { body(); } finally {
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globals, key, descriptor);
+      else delete globals[key];
+    }
+  }
+}
+
+test("a pointer-only record control carries its subject while an ordinary wrapper does not", async () => {
+  await withStubPage(load, ({ describeElement }) => {
+    const control = element("span", { id: "record-action", "aria-label": "Archive" }, "Archive");
+    const wrapper = element("div", { id: "record-words" }, "Details");
+    const first = element("li", {}, element("h3", {}, "Copper Field Notes"), control, wrapper);
+    const second = element("li", {}, element("h3", {}, "Indigo Field Notes"), element("span", {}, "Archive"));
+    withDescriptorRecords(element("ul", {}, first, second), control, () => {
+      const descriptor = describeElement(control);
+      assert.equal(descriptor.hasClickHandler, undefined);
+      assert.equal(descriptor.role, undefined);
+      assert.equal(descriptor.context?.subject, "Copper Field Notes");
+      assert.equal(describeElement(wrapper).context?.subject, undefined);
+    });
+  });
+});
+
 test("a file input yields no value, so the chosen file's local name never leaves the page", async () => {
   await withStubPage(load, ({ readElementValue }) => {
     assert.equal(readElementValue(input("file", "C:\\fakepath\\expense-receipts.csv")), undefined);

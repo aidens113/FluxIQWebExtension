@@ -864,3 +864,174 @@ Preserved ignored red log apps/extension/node_modules/codex-reset-installed-644-
 Playwright reset-structural.json attachment contains closed digests/counts only,
 under apps/extension/e2e/test-results/artifacts. Old paid failure/root/profile and
 all source outputs preserved. All diagnostic readers exited; no live rerun.
+
+### Current-source comparison and exact retained leaf proof
+
+Supervisor preserved diagnostic737c9d5c, merged current accepted code into t719;
+checked downstream87d7c230/Coree58e4cf9. Source delta versus644 is only generic
+extension infer-fields/path-equivalence. Approved extension-only build28838
+actually exited0 (42555ms); Chrome/Firefox/e2e default targets verified. No Core
+build. Domain/node code unchanged. Exact unchanged provider-free installed
+project test44432 on current default artifact actually exited1 with the SAME
+candidate.trial_reset_required then candidate.undo_unproved behavior. New field
+normalization does not resolve this reset failure. Original/current scopes stay
+stable, two complete inventories2/2 ->3/2; new subject matches Add, inverse still
+lacks subject. Current red preserved codex-reset-installed-988-red.log/json.
+
+Supervisor approved unchanged-result raw gateway observer and one passive
+web.describe_element on the exact inverse handle. First observer attempt88626
+stopped on test-only snapshot-key typo (DomSnapshot.interactiveElements, not
+elements); no inverse or product inference from that attempt. Corrected after
+reader exit. Actual final descriptor run59980 exited1 at expected inverse-ok
+assertion, preserving the same genuine refusal. Unique matching uses described
+tag + rounded document box privately against raw snapshot, without printing
+text/selectors/values or changing any result, handle, target or evidence.
+
+Exact measured leaf: handle digest6d0555e4e072cd3abb72; matchCount1; tagspan;
+rolePresent=false; tabindexPresent=false; ownHandlerBool=false;
+cursorPointer=true; subjectPresent=false. A separate Delete span in the SAME
+record has rolePresent=false,tabindexPresent=true,ownHandlerBool=false,
+cursorPointer=true,subjectPresent=true. Thus this is the actual bin span, not an
+assumed SVG/path leaf. Both act on the same new row, and the first is a legitimate
+own-control inverse at quantity1. Original/current complete collection witnesses
+continue to carry the new Add subject; actual gateway errors0.
+
+Source chain: describe-element.ts actedOnOrHeading admits native/actionable
+markup, handler, tabindex and heading, but excludes pointer-only UI. It passes
+subject:false into identity/context.ts, so recordSubject is never called for
+the bin. Sanitized target.subject is absent; webTargetSpot emits no inverse
+subject; Core's aboutTheAct therefore correctly refuses. Existing
+isInteractableUiElement already recognizes pointer UI. Prior browser4 used
+quantity2 so its first Delete was the separate tab-stop span, which explains
+why that narrower bridge test passed. No Core inverse weakening is justified.
+
+Minimal proposed correction (NOT IMPLEMENTED): generic passive subject capture
+in content/describe-element.ts should use the established interactable UI
+predicate; preserve existing record/title ambiguity and sensitivity gates,
+without making any action executable or changing permission. Owning regression
+is the real installed test now red; proportional owning describe-element tests
+and generic page-evidence architecture wording should accompany source approval.
+No fixture/oracle/task-shaped guidance/public API change or paid rerun proposed.
+
+Narrow final helper gates observed: extension testproject tsc53482 exited0;
+downstream structure audit20455 exited0. Earlier audit45662 found only8 owned
+statement-packing lines; formatting expanded after readers exited and audit91525
+also passed. No unchanged whole suite or Core build repeated. Final source has
+only approved testhelper observer/formatting changes plus own report/debug.
+Closed leaf receipt preserved in apps/extension/node_modules/
+codex-reset-installed-descriptor-red.log and .json; original644/current988 red
+receipts remain separate. Browser/profile/server teardown complete, all readers
+exited. Await supervisor source review and product brief; no production edit.
+
+Future-green harness limit: current scripted judge branch has a placeholder
+loop_verification/verdict reply; the real service judge contract is diagnosis
+with diagnosis.answersRequest. All red evidence above occurs before that branch.
+Before claiming a future green whole/trial result, correct that test-only reply
+and assert clean-trial admission/outcome explicitly. No such green is claimed.
+
+### Authorized pointer-control product correction in progress
+
+Read new absolute-main pointer-control subject capture fix brief/Current State.
+Added generic owning full-descriptor regression in existing describe-element.test:
+two distinct titled li records, a pointer-only span with no handler/role/tabindex,
+and an ordinary-wrapper negative. Test-local detached DOM exercises the ACTUAL
+describeElement, no production accessor or export added. Fail-first reaches exact
+assertion subjectundefined vs Copper Field Notes (16existingpass/1newfail), saved
+apps/extension/node_modules/codex-reset-pointer-unit-failfirst.log.
+
+Bounded source correction now applied: actedOnOrHeading uses the existing
+isInteractableUiElement predicate (already used for descriptor text), plus its
+existing handler/heading policy. Removed unused isActionableElement import.
+Context's bounded record-title/sensitive/ambiguity rules unchanged; no Core,
+ledger, permission, executable binding, retry, fixture/oracle or guidance change.
+Owning descriptor17/17 now pass; focused descriptor+context+record66/66 pass.
+
+Green-only scripted judge corrected to diagnosis/diagnosis.answersRequest and
+actual installed proof now explicitly requires clean-trial yes after dirty
+trial refusal, successful own inverse and exact original whole-group digest.
+Earlier placeholder limitation is superseded, not silently treated as success.
+Extension packagecheck72040 and downstreamaudit41233 active on frozen source;
+no extension-only rebuild/browser green result yet, no paid run.
+
+### Pointer correction FINAL provider-free actual-gateway GREEN
+
+Actual browser99151 exited0:1/1 passed, test50.0s,total1.8m. Real installed MV3,
+actual Core gateway connect/receive, registered web runtime/native bundle and
+ACTUAL project-build service, scripted provider (zero paid calls), fresh owned
+profile/server. No seeded source/results/ledger/places, no fixture reset hook,
+no private Core API, no user/old paid profile touched. Final build endingproposed.
+
+Measured sequence and exact acceptance:
+- Original two same-group complete scopes sizes2/2 captured by actual builder.
+- Add create_new carries subject/page s:f347b49bc2f99bd2bea390412d94c78c.
+- Current Cart sizes3/2; dirty trial blocked candidate.trial_reset_required.
+- The SAME uniquely matched pointer-only bin span (handlehash6d0555e4e072cd3abb72;
+  tagspan/no role/no tabindex/no own handler/cursorpointer) NOW has subjectPresent
+  true. Its delete/undoes declaration carries exactly Add's subject and Cart
+  scope/item; permissionpermitted=true and actual own-control inverse returnsok.
+- Fresh complete inventories return to sizes2/2 with EXACT original ordered
+  subjects AND every row-state fingerprint: whole-group baseline and restored
+  digest4232b5244d055e2dd068. Both settled reads11/12 agree with originalread1.
+- Only then clean test_subflow runs and returns verdictyes under repaired actual
+  diagnosis/answersRequest judge contract; real project build endingproposed.
+- Same-row tabindex textual Delete retains subject; gatewayerrors0.
+
+All final focused gates observed on frozen source:
+- New generic full-descriptor fail-first expectedsubject vs undefined, then17/17.
+- Worker descriptor/context/record owners66/66 exit0; supervisor independently
+  reran actual same source in separatelabel and confirmed66/66 exit0.
+- Extension packagecheck72040 exit0/40223ms, source+test TS and in-memory browser
+  bundles; therefore helpertesttype included. No narrow-type gaps remain.
+- Downstream structure audit41233 exit0; gitdiffcheck after authored updates.
+- Extension-only build12160 exit0/21481ms; current Chrome/Firefox/e2e targets
+  verified before browser. Core was only currency-checked, never rebuilt/edited.
+- Actual installed/project test99151 exit0, not inferred from compilation.
+
+Green JSON derived from actual log saved at apps/extension/node_modules/
+codex-reset-pointer-gateway-green.json; logcodex-reset-pointer-gateway-browser.log.
+Prior644/current988/descriptor red receipts remain separately preserved. Test
+source/build freeze retained; fixture teardown done, no active reader/build.
+
+Changed product source ONLY apps/extension/src/content/describe-element.ts.
+Owning source regression apps/extension/src/content/tests/describe-element.test.ts.
+Owned actual proof/helper changes e2e/site-reset/{gateway.ts,index.ts,
+tests/installed-project.spec.ts}; report and failed-run debug updated. Root owns
+architecture wording. No Core/strict-ledger/permission/action/retry/oracle/guidance
+change, commits/merges/pushes or paid run by worker. Existing first+3retry engine
+remains unchanged; this proof exercises successful actions, not a new fault case.
+
+Limit: this is a provider-free real-transport new-line/bin-reset proof. It does
+not replace the unchanged canonical quantity2+saved-line model chat/whole judge/
+zero-call replay acceptance, which remains pending an explicit supervisor paid
+release. Earlier failed54call live run remains failed. No claim that every
+possible pre-existing quantity inverse is now supported. Original strict
+fail-closed preservation boundaries remain in force.
+
+### Final strengthened actual-transport receipt (2026-10-18)
+
+Supervisor-requested positive controls were added to the SAME installed-project
+case, without another product edit or extension rebuild. Browser8192 exited0:
+1/1 PASS, test44.8s/total2.1min. The assertions require proposed completion,
+nonempty20hex baseline/restored digests, actual complete original2/2 and
+post-Add3/2 inventories (4/5 subjects), identical trusted scopes/groups, positive
+same Add/inverse subject absent original/present post-Add, permitted declarations,
+and unique pointer-only span target with subjectPresent=true. No undefined or
+empty-inventory equality can satisfy these controls.
+
+Actual final original/restored whole ordered digest is d140d64cef5b715da7a7;
+post-Add digest226cddf538d4f83f7e19. Dirty trial returned
+candidate.trial_reset_required; own delete inverse returned ok; clean trial
+returned yes; final service ending proposed; gatewayErrors empty. Inverse and Add
+subject both s:f347b49bc2f99bd2bea390412d94c78c. The actual pointer target has
+no role/tabindex/own-handler, cursorPointer=true, subjectPresent=true and a unique
+descriptor match. Raw row data was neither logged nor published.
+
+Preserved final closed receipt: apps/extension/node_modules/
+codex-reset-pointer-final-green.json, derived from actual log
+codex-reset-pointer-final-browser.log. Earlier red receipts and initialgreen99151
+remain separately preserved. Final helper testtype21055 exited0 and downstream
+structure audit70398 exited0. Parent independent current-source66/66 remains
+accepted; no unchanged unit repeat. All final readers/owned browser teardown
+finished; source and product bundle are frozen. No Core build/edit, paid run,
+commit, merge or push by worker. Canonical model/whole-judge/zero-call replay
+acceptance remains pending explicit supervisor release.

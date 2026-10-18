@@ -1,6 +1,6 @@
 # run-mvdhyf9k-3afd7eb6 — corrected canonical no-hook reset refused
 
-Status: Failed; required debug recorded; structural root-cause investigation open.
+Status: Failed live run; source cause proved and correction verified provider-free; canonical paid rerun pending.
 Worker: codex-reset-review; task t719; slot2/bf-slot-2.
 Source: downstream644b2009/Coree58e4cf9, clean at launch, frozen throughout.
 Task: unchanged everything-store-kettle-to-cart; headed isolated Chromium;
@@ -100,3 +100,69 @@ no inverse subject. This is a concrete identity/context hypothesis, not proof
 that Core should weaken admission. Supervisor will preserve test, sync current
 accepted988 downstream and rerun exact path before approving any product change.
 No paid rerun/source fix authorized.
+
+## Current-source confirmation and proved cause
+
+After supervisor sync to downstream87d7c230/Coree58 and approved extension-only
+rebuild (exit0), exact installed/project comparison44432 again refused the
+correct inverse. Current generic field equivalence does not fix the defect.
+
+Approved passive describe plus unchanged-result gateway observer59980 uniquely
+matched the actual retained handle to its raw snapshot descriptor by tag and
+rounded document box: span, no role/tabindex/own handler, cursorpointer,
+subjectabsent. Same-record textual Delete counterpart is a span with tabindex,
+cursorpointer and subjectpresent. It is not a guessed nested SVG/path. No raw
+names/rows/values/selectors were printed. Both actual complete original/current
+inventories and new subject survived transport; no gateway error. The genuine
+refusal remains candidate.undo_unproved without execution.
+
+Source cause is descriptor eligibility, not missing baseline or Core ownership:
+describe-element.actedOnOrHeading excludes pointer-only controls before calling
+elementContext with subject:true; the latter therefore omits recordSubject for
+this legitimate bin. Domain inverse declaration lacks subject and Core cannot
+prove it names Add's new subject. Existing isInteractableUiElement already
+recognizes such pointer UI. Prior provider-free proof setsquantity2, skipping
+the bin-labelledDelete path. Minimal generic descriptor correction proposed to
+supervisor; not implemented, no Core/permission/oracle weakening or paid rerun.
+
+Exact closed red logs/JSON preserved under apps/extension/node_modules as
+codex-reset-installed-644-red, codex-reset-installed-988-red and
+codex-reset-installed-descriptor-red. Helper testtype53482/audit20455 both exit0;
+all test/browser readers and isolated server/profile lifetimes ended.
+
+## Authorized correction verified, paid acceptance still pending
+
+Minimal descriptor predicate now reuses existing isInteractableUiElement for
+passive subject eligibility, retaining existing handler/heading and bounded,
+sensitive record-title rules. No Core/strict-ledger/permission/oracle change.
+Generic full-descriptor unit failed first for pointer-only repeated-record
+control, then passed with ordinary-wrapper negative. Focused owners66/66;
+supervisor independent66/66; extension source/test/bundle check and audit pass.
+Only extension rebuilt (exit0), no Corebuild or paid rerun.
+
+SAME actual installed MV3/gateway/project-build proof99151 exited0 (1/1,test50s).
+Dirty trial reset_required -> same bin delete/undoes admitted with matching
+subject -> exact original ordered whole-group state digest restored
+4232b5244d055e2dd068 -> clean trial yes -> real project build proposed.
+Original/current/restored collection sizes2/2 ->3/2 ->2/2; gatewayerrors0.
+The actual leaf remains a pointer-only span; subjectPresent changed false totrue.
+Green-only scripted judge was repaired to diagnosis/answersRequest and clean
+trial yes explicitly asserted. All readers/builds and owned browser teardown
+ended; source frozen for supervisor review/integration. Closed actualgreen
+receipt/log in apps/extension/node_modules/codex-reset-pointer-gateway-green.json
+and codex-reset-pointer-gateway-browser.log; prior red receipts preserved.
+This provider-free proof does not convert this failed paid run into a pass or
+prove canonical quantity2/saved-line chat+judge/replay acceptance.
+
+Final strengthened provider-free transport rerun8192 PASS1/1 (44.8s case,
+2.1min total), actualexit0. Positive nonempty digest/inventory/subject assertions
+all passed: original2/2 -> post-Add3/2 -> restored2/2, exact ordered whole digest
+d140d64cef5b715da7a7 restored; same positive Add/inverse subject;
+pointer-only inverse descriptor uniquely matched with subjectPresent=true;
+dirty trial reset_required -> own inverse ok -> clean trial yes -> proposed.
+Final structural receipt apps/extension/node_modules/
+codex-reset-pointer-final-green.json. Helper testtype21055/audit70398 exited0.
+No further product edit/build for assertion strengthening; all readers finished.
+This closes actual transport reproduction for the pointer eligibility defect,
+not the pending canonical paid model/whole-judge/replay acceptance. The original
+failed paid run remains failed and its artifacts remain untouched.

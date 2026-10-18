@@ -5,7 +5,7 @@ import type { FluxIQ } from "fluxiq";
 import type { ClientGatewayClientMessage } from "fluxiq/client-gateway";
 
 /** A websocket transport for the real Core gateway; every envelope is delegated unchanged. */
-export async function startResetDiagnosticGateway(fluxiq: FluxIQ) {
+export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (message: ClientGatewayClientMessage) => void) {
   const gateway = fluxiq.programs.clientGateway;
   const sockets = new Set<Socket>();
   const errors: string[] = [];
@@ -20,10 +20,17 @@ export async function startResetDiagnosticGateway(fluxiq: FluxIQ) {
       const body = Buffer.from(raw);
       const head = body.length < 126 ? Buffer.from([0x81, body.length]) : body.length < 65536
         ? Buffer.from([0x81, 126, body.length >> 8, body.length & 255]) : Buffer.alloc(10);
-      if (head.length === 10) { head[0] = 0x81; head[1] = 127; head.writeBigUInt64BE(BigInt(body.length), 2); }
+      if (head.length === 10) {
+        head[0] = 0x81;
+        head[1] = 127;
+        head.writeBigUInt64BE(BigInt(body.length), 2);
+      }
       socket.write(Buffer.concat([head, body]));
     } } });
-    socket.on("close", () => { sockets.delete(socket); gateway.disconnect(session.sessionId); });
+    socket.on("close", () => {
+      sockets.delete(socket);
+      gateway.disconnect(session.sessionId);
+    });
     socket.on("error", () => { errors.push("socket_error"); });
     let buffered = Buffer.alloc(0), fragments: Buffer[] | undefined;
     let receiving = Promise.resolve();
@@ -33,7 +40,10 @@ export async function startResetDiagnosticGateway(fluxiq: FluxIQ) {
         const frame = readFrame(buffered);
         if (!frame) break;
         buffered = buffered.subarray(frame.length);
-        if (frame.opcode === 8) { socket.end(); break; }
+        if (frame.opcode === 8) {
+          socket.end();
+          break;
+        }
         if (frame.opcode === 1) fragments = [frame.body];
         else if (frame.opcode === 0 && fragments) fragments.push(frame.body);
         else continue;
@@ -41,7 +51,9 @@ export async function startResetDiagnosticGateway(fluxiq: FluxIQ) {
         const raw = Buffer.concat(fragments).toString("utf8");
         fragments = undefined;
         receiving = receiving.then(async () => {
-          await gateway.receive(session.sessionId, JSON.parse(raw) as ClientGatewayClientMessage);
+          const message = JSON.parse(raw) as ClientGatewayClientMessage;
+          observe?.(message);
+          await gateway.receive(session.sessionId, message);
         }).catch(() => { errors.push("gateway_receive_failed"); });
       }
     });
@@ -62,8 +74,15 @@ export async function startResetDiagnosticGateway(fluxiq: FluxIQ) {
 function readFrame(buffer: Buffer): { opcode: number; final: boolean; body: Buffer; length: number } | undefined {
   if (buffer.length < 2) return undefined;
   let length = buffer[1]! & 127, offset = 2;
-  if (length === 126) { if (buffer.length < 4) return undefined; length = buffer.readUInt16BE(2); offset = 4; }
-  else if (length === 127) { if (buffer.length < 10) return undefined; length = Number(buffer.readBigUInt64BE(2)); offset = 10; }
+  if (length === 126) {
+    if (buffer.length < 4) return undefined;
+    length = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (length === 127) {
+    if (buffer.length < 10) return undefined;
+    length = Number(buffer.readBigUInt64BE(2));
+    offset = 10;
+  }
   const masked = (buffer[1]! & 128) !== 0;
   if (buffer.length < offset + (masked ? 4 : 0) + length) return undefined;
   const mask = masked ? buffer.subarray(offset, offset + 4) : undefined;

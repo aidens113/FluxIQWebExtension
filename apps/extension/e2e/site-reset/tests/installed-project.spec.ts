@@ -14,7 +14,7 @@ import { startResetDiagnosticGateway } from "../index";
 const TASK = "Create one new store line.";
 const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;
 type Entry = { callId: string; toolId: string; value: JsonObject };
-const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 20);
+const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value) ?? "undefined").digest("hex").slice(0, 20);
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
 const answer = (decision: JsonObject) => ({ response: { kind: "evidence_tool_decision", summary: "Provider-free transport diagnostic", decision }, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostUsd: 0 } });
 
@@ -26,7 +26,12 @@ test("installed gateway project build preserves original collection authority fo
   await initial.setup();
   await initial.close();
   const fluxiq = registerWebAutomationDomain(make());
-  const gateway = await startResetDiagnosticGateway(fluxiq);
+  let latestRawSnapshot: JsonObject | undefined;
+  const gateway = await startResetDiagnosticGateway(fluxiq, message => {
+    if (message.type !== "client.action_result") return;
+    const snapshot = record(record(message.payload).payload).snapshot;
+    if (snapshot !== null && typeof snapshot === "object" && !Array.isArray(snapshot)) latestRawSnapshot = snapshot;
+  });
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("hex") });
   const service = fluxiq.programs.automationStudio;
   service.bindNativeNodeRuntime(new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES }).register(createWebAutomationOutputNodeManifest(), createWebAutomationOutputNodeImplementationBundle()));
@@ -36,6 +41,7 @@ test("installed gateway project build preserves original collection authority fo
   const reads: Array<{ call: string; scopes: string[]; groups: string[]; sizes: number[]; hash: string; subjects: string[] }> = [];
   const declarations: Array<{ call: string; consequences: unknown; scope?: string; subject?: string; page?: string; item?: string; permitted: boolean }> = [];
   const outcomes: Array<{ call: string; ok: unknown; code: unknown }> = [];
+  const targetDescriptors: JsonObject[] = [];
   let build: Promise<unknown> | undefined;
   let projectId = "", flowId = "";
   let instructionSourceId = "";
@@ -91,12 +97,12 @@ test("installed gateway project build preserves original collection authority fo
       return result;
     };
     service.bindLlmEvidenceRuntime(runtime);
-    let supervisorStep = 0, builderStep = 0, addHandle = "";
+    let supervisorStep = 0, builderStep = 0, addHandle = "", inverseHandle = "";
     const receipts: Array<{ call: string; code: unknown }> = [];
     let failure: JsonObject = {};
     service.bindLlmExecutionProvider(() => ({ provider: {
       metadata: { provider: "scripted", model: "provider-free" }, runTask: async request => {
-        if (request.taskKind === "loop_verification") return { response: { kind: "loop_verification", verdict: "yes", reason: "Diagnostic trial completed.", confidence: 1 }, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostUsd: 0 } };
+        if (request.taskKind === "loop_verification") return { response: { kind: "diagnosis", summary: "Diagnostic trial completed.", diagnosis: { answersRequest: "yes" } }, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostUsd: 0 } };
         const loop = request.context.evidenceLoop;
         const tools = (loop?.tools ?? []).map(tool => tool.toolId);
         const evidence = (loop?.evidence ?? []) as Entry[];
@@ -120,8 +126,14 @@ test("installed gateway project build preserves original collection authority fo
         const node = (id: string, name: string, parameters: JsonObject, consequences: string[] = [], extra: JsonObject = {}) => call(id, "core.run_node", { node: name, parameters, consequences, ...extra });
         builderStep++;
         if (builderStep === 1) return node("original", "web.output.browser-navigate", { url: cart });
-        if (builderStep === 2) { baseline = reads.at(-1)?.hash; return node("detail", "web.output.browser-navigate", { url: detail }); }
-        if (builderStep === 3) { addHandle = handle("Add to Cart"); return node("add", "web.output.dom-click", { target: { handle: addHandle } }, ["create_new"]); }
+        if (builderStep === 2) {
+          baseline = reads.at(-1)?.hash;
+          return node("detail", "web.output.browser-navigate", { url: detail });
+        }
+        if (builderStep === 3) {
+          addHandle = handle("Add to Cart");
+          return node("add", "web.output.dom-click", { target: { handle: addHandle } }, ["create_new"]);
+        }
         if (builderStep === 4) return node("destination", "web.output.browser-navigate", { url: cart });
         if (builderStep === 5) return call("submit", "core.submit_subflow", { flow: [`flow: New line`, `step open: open the product`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(detail)}`, `step add: add the product`, `  node: web.dom.click`, `  target: ${addHandle}`, `  consequences: create_new`].join("\n") });
         const submitted = last("core.submit_subflow");
@@ -137,12 +149,37 @@ test("installed gateway project build preserves original collection authority fo
           return node("undo.arrival", "web.output.browser-navigate", { url: cart }, [], { undoes: act });
         }
         if (builderStep === 8) {
+          inverseHandle = handle("Delete");
+          return call("describe.inverse", "web.describe_element", { target: inverseHandle });
+        }
+        if (builderStep === 9) {
+          const description = String(last("web.describe_element")?.element ?? "");
+          const tag = description.match(/<(\w+)>/u)?.[1];
+          const box = description.match(/box: x=(-?\d+) y=(-?\d+) (\d+)x(\d+)/u)?.slice(1).map(Number);
+          const elements = (latestRawSnapshot?.interactiveElements as JsonObject[] | undefined) ?? [];
+          const matches = elements.filter(element => {
+            const bounds = record(element.documentBounds);
+            return element.tagName === tag && box?.every((number, index) => number === Math.round(Number(bounds[["x", "y", "width", "height"][index]!])));
+          });
+          const features = (element: JsonObject): JsonObject => ({
+            tag: element.tagName ?? null,
+            rolePresent: typeof element.role === "string",
+            tabindexPresent: Object.hasOwn(record(element.attributes), "tabindex"),
+            ownHandlerBool: element.hasClickHandler === true,
+            cursorPointer: element.cursor === "pointer",
+            subjectPresent: typeof record(element.context).subject === "string"
+          });
+          const matched = matches.length === 1 ? matches[0] : undefined;
+          const row = matched ? digest(record(matched.context).record) : undefined;
+          const siblings = matched ? elements.filter(element => element !== matched && digest(record(element.context).record) === row && (element.accessibleName === "Delete" || element.visibleText === "Delete") && Object.hasOwn(record(element.attributes), "tabindex")) : [];
+          targetDescriptors.push({ handleHash: digest(inverseHandle), matchCount: matches.length, ...(matched ? features(matched) : {}), sameRowAlternatives: siblings.map(features) });
+          if (!matched) throw new Error("diagnostic.descriptor_match_unproved");
           const acts = tested?.actsToUndo as JsonObject[] | undefined;
           const act = acts?.[0]?.act;
           if (typeof act !== "string") throw new Error("diagnostic.reset_act_missing");
-          return node("undo", "web.output.dom-click", { target: { handle: handle("Delete") } }, ["delete"], { undoes: act });
+          return node("undo", "web.output.dom-click", { target: { handle: inverseHandle } }, ["delete"], { undoes: act });
         }
-        if (builderStep === 9) {
+        if (builderStep === 10) {
           const undone = last("core.run_node");
           receipts.push({ call: "undo", code: undone?.code ?? (undone?.ok === true ? "ok" : "unknown") });
           restored = reads.at(-1)?.hash;
@@ -164,14 +201,42 @@ test("installed gateway project build preserves original collection authority fo
       return "failed";
     });
     const ending = await build;
-    const diagnostic = { ending, failure, supervisorStep, builderStep, baseline, restored, receipts, reads, declarations, outcomes, gatewayErrors: gateway.errors };
+    const diagnostic = { ending, failure, supervisorStep, builderStep, baseline, restored, receipts, reads, declarations, outcomes, targetDescriptors, gatewayErrors: gateway.errors };
     await testInfo.attach("reset-structural.json", { body: Buffer.from(JSON.stringify(diagnostic)), contentType: "application/json" });
     console.log(JSON.stringify({ resetDiagnostic: diagnostic }));
+    expect(ending).toBe("proposed");
+    expect(baseline).toMatch(/^[a-f0-9]{20}$/u);
+    expect(restored).toMatch(/^[a-f0-9]{20}$/u);
+    const original = reads.find(read => read.hash === baseline && read.sizes.length === 2 && read.sizes[0] === 2 && read.sizes[1] === 2);
+    const postAdd = reads.find(read => read.sizes.length === 2 && read.sizes[0] === 3 && read.sizes[1] === 2);
+    expect(original).toBeDefined();
+    expect(postAdd).toBeDefined();
+    if (!original || !postAdd) throw new Error("diagnostic.complete_inventory_missing");
+    expect(original.subjects).toHaveLength(4);
+    expect(postAdd.subjects).toHaveLength(5);
+    expect(original.scopes.every(scope => /^p:[a-f0-9]{32}$/u.test(scope))).toBe(true);
+    expect(postAdd.scopes).toEqual(original.scopes);
+    expect(postAdd.groups).toEqual(original.groups);
+    const add = declarations.find(declaration => declaration.call === "add");
+    const inverse = declarations.find(declaration => declaration.call === "undo");
+    expect(add?.subject).toMatch(/^s:[a-f0-9]{32}$/u);
+    expect(add?.permitted).toBe(true);
+    expect(inverse?.permitted).toBe(true);
+    expect(inverse?.subject).toBe(add?.subject);
+    expect(inverse?.scope).toBe(postAdd.scopes[0]);
+    expect(original.subjects).not.toContain(add?.subject);
+    expect(postAdd.subjects).toContain(add?.subject);
+    expect(targetDescriptors).toHaveLength(1);
+    expect(targetDescriptors[0]).toMatchObject({ matchCount: 1, tag: "span", rolePresent: false, tabindexPresent: false, ownHandlerBool: false, cursorPointer: true, subjectPresent: true });
     expect(receipts.find(receipt => receipt.call === "trial.dirty")?.code).toBe("candidate.trial_reset_required");
     expect(receipts.find(receipt => receipt.call === "undo")?.code).toBe("ok");
     expect(restored).toBe(baseline);
+    expect(receipts.find(receipt => receipt.call === "trial.clean")?.code).toBe("yes");
   } finally {
-    if (build) { service.buildCancellation.cancel(projectId, flowId); await build; }
+    if (build) {
+      service.buildCancellation.cancel(projectId, flowId);
+      await build;
+    }
     await gateway.close();
     await fluxiq.close();
     await lab.close();
