@@ -42,6 +42,20 @@ test("the extraction oracle is the search's own matches: 23 people, each once, n
   assert.equal(resolveScenarioWorkflow(manifest, { workflowId: "people-search", variantId: "premium-upsell" }).expected.extracted?.[0]?.records?.length, 23);
 });
 
+test("each people-search task names the words its oracle searched for, the exact values, and the order the oracle compares by", () => {
+  const ids = ["professional-network-rotterdam-data-engineers", "professional-network-rotterdam-data-engineers-upsell", "professional-network-netherlands-data-engineers"];
+  for (const id of ids) {
+    const task = LIVE_INSTRUCTION_TASKS.find((candidate) => candidate.id === id)!;
+    assert.ok(task.instruction.includes(`"${ROTTERDAM_ENGINEERS.keywords}"`), `${id} quotes the search words`);
+    assert.match(task.instruction, /exactly as the results show it/u, `${id} names the values' format`);
+    assert.match(task.instruction, /in the order the search shows them/u, `${id} names the order`);
+    assert.match(task.instruction, /first place they appear among the remaining results/u, `${id} places a repeated or promoted person`);
+  }
+  // A plural or a place in the words is a different search, with a different answer.
+  assert.equal(peopleResultsPage({ ...ROTTERDAM_ENGINEERS, keywords: "data engineers" }).total, 0);
+  assert.notEqual(peopleResultsPage({ ...ROTTERDAM_ENGINEERS, keywords: "data engineer rotterdam" }).total, 23);
+});
+
 test("results pages carry the ad, promoted profiles, a repeat and a module that no oracle counts", () => {
   const pages = [1, 2, 3].map((number) => peopleResultsPage({ ...ROTTERDAM_ENGINEERS, page: number }));
   assert.deepEqual(pages.map(({ pageCount }) => pageCount), [3, 3, 3]);
@@ -118,6 +132,18 @@ test("withdrawals, answers and connection requests change the store only when th
   const armed = mutate(sent, "set-mode", { mode: "premium-upsell" });
   assert.deepEqual(armed.store, createState(4303).store, "arming starts the session over");
   assert.equal(armed.mode, "premium-upsell");
+});
+
+test("the weekly invitation limit notice the allowance task quotes stands until enough month-old requests are withdrawn", () => {
+  const NOTICE = "You’ve reached the weekly invitation limit";
+  const shows = (subpath: string, state = createState(4303)) => (page(subpath, state)?.body ?? "").includes(NOTICE);
+  assert.equal(shows("mynetwork/"), true, "My Network");
+  assert.equal(shows("mynetwork/invitation-manager/sent/"), true, "Sent");
+  assert.equal(shows("mynetwork/invitation-manager/"), false, "Received is about the other direction");
+  const withdraw = (count: number) => staleConnectionRequests().slice(0, count).reduce((state, { urn }) => mutate(state, "withdraw-invitation", { urn }), createState(4303));
+  assert.equal(shows("mynetwork/invitation-manager/sent/", withdraw(8)), true, "twenty still pending");
+  assert.equal(shows("mynetwork/invitation-manager/sent/", withdraw(12)), false, "the goal's sixteen are under the limit");
+  assert.equal(shows("mynetwork/", withdraw(12)), false);
 });
 
 test("the search asks for a check after three results requests inside three seconds, and never at a reading pace", () => {

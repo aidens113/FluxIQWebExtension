@@ -1,5 +1,6 @@
 import { escapeHtml } from "../../../html.js";
 import { renderShellPage, ROOT, type ShellKit } from "../shell/index.js";
+import { invitationLimitNotice } from "./invitation-limit.js";
 import { managerClientScript } from "./manager-client.js";
 import { INVITATION_PAGE_SIZE, pendingReceived, pendingSent, receivedRowMarkup, SENT_TYPES, sentRowMarkup, type SentRowData } from "./rows.js";
 
@@ -28,7 +29,8 @@ function leftRail(kit: ShellKit): string {
  * requests, page invitations and a newsletter invitation together -- with a
  * count on every filter pill that is right when the page is rendered and never
  * again: a withdrawal removes its row and leaves every count where it was.
- * Ten rows load at first and ten more on each "Show more".
+ * Ten rows load at first and ten more on each "Show more". Sent carries the
+ * weekly invitation limit notice while it applies.
  */
 export function renderManagerPage(kit: ShellKit, tab: "received" | "sent", type: string): string {
   const c = kit.css;
@@ -52,7 +54,8 @@ export function renderManagerPage(kit: ShellKit, tab: "received" | "sent", type:
     const pills = kinds.map(([label, count], index) => `<button class="${c.pill}${index === 0 ? ` ${c.pillOn}` : ""}" type="button">${label} (${count})</button>`).join("");
     body = `<div class="${c.pillBar}" style="position:static">${pills}</div><ul id="${listId}" class="${c.inviteList}">${received.map((invitation) => receivedRowMarkup(kit, invitation)).join("\n")}</ul>`;
   }
-  const main = `<section class="${c.card}"><div class="${c.sectionHead}"><h1 style="font-size:20px;margin:0">Manage invitations</h1><a class="${c.link}" href="#">Preferences</a></div>${tabs}${body}</section>`;
+  const notice = tab === "sent" ? invitationLimitNotice(kit) : "";
+  const main = `${notice}<section class="${c.card}"><div class="${c.sectionHead}"><h1 style="font-size:20px;margin:0">Manage invitations</h1><a class="${c.link}" href="#">Preferences</a></div>${tabs}${body}</section>`;
   return renderShellPage(kit, {
     title: `${tab === "sent" ? "Sent" : "Received"} invitations | Guildline`,
     active: "network",

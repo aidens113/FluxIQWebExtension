@@ -1,3 +1,4 @@
+export { invitationLimitNotice } from "./invitation-limit.js";
 export { renderManagerPage, sentFragment } from "./manager-page.js";
 export type { SentFragment } from "./manager-page.js";
 export { renderMyNetworkPage } from "./my-network-page.js";
