@@ -12,10 +12,6 @@
   same candidate (`candidate.unchanged_submission`) until repeat refusals stopped it (0147-0151). Repair brief-2 was
   stopped by three repeats of `web.detect_repeating_structure` refused `target_unobserved` / `handle_not_in_packet`
   (0250-0256). No permission ask was recorded (`permissionAnswers` none): no trial reached Send.
-- Why it failed: NOT fully debugged (the session was wrapped up). Known: the seller-name read's target, found during
-  exploration on the listing page, was not on the page the trial reached at step 14. Not established: whether the
-  trial was on a different listing or page state than exploration (reset start, results order), or whether the
-  element's identity (a name-text-bound target) does not survive a reload. Next step: compare step 14's trial page
-  view with the exploration page view where the target was saved.
+- Why it failed (read-only diagnosis completed2026-10-18): authored navigation/coverage mismatch. The chosen card t932 belongs to a different listing from direct navigation0119/0135, where seller target t1317 was observed. Exploration and final candidate omitted requested radius-setting; source-catalogue comparison confirms the selected cheaper card is outside that radius. Candidate0141/0145 mixes original-card click with the other listing's seller/form targets. Optional t1096 closes chat only, not the listing; no modal-versus-standalone target defect established. Trial0143 succeeds through click/chat close, then correctly rejects foreign seller identity at step14 after four attempts.0145 returns the same unchanged candidate's prior trial rather than a separate new execution.
 - UI review: not done for this run.
-- Next: open; no rerun until the cause above is established.
+- Next: no new source defect proven. Existing generic Core preceding-context trial feedback already addresses this causal chain and was integrated after the historical run. No task-specific guidance, fixture/oracle weakening, identity loosening or automatic paid retry. Detailed structural evidence and limitations: ../breadth-forty-tasks-plan/reports/codex-classifieds-target.md.
