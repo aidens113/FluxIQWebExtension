@@ -273,6 +273,9 @@ export function elementFingerprint(value: unknown): WebAutomationElementFingerpr
     value: stringValue(element.value),
     role: stringValue(element.role),
     implicitRole: stringValue(element.implicitRole),
+    // What a wordless control draws: a digest the extension wrote, which the
+    // page compares and looks controls up by (`content/identity/drawing.ts`).
+    drawing: stringValue(element.drawing),
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),

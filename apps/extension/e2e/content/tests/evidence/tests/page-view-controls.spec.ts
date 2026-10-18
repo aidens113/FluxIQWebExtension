@@ -239,7 +239,7 @@ test("crossborder home: the search box is a search field with its placeholder ap
   const search = lines.findIndex((line) => / field\[search\] placeholder "Autumn Mega Sale: up to 70% off"/u.test(line));
   expect(search, lines.join("\n")).toBeGreaterThanOrEqual(0);
   // Covered, after four seconds, by the welcome-coupon modal the page stamps at two.
-  expect(lines[search + 1], "the magnifier follows the search box, a control without words").toMatch(/^t\d+ clickable(?: covered-by \S+)?$/u);
+  expect(lines[search + 1], "the magnifier follows the search box, a control without words").toMatch(/^t\d+ clickable(?: icon)?(?: class="[^"]*")?(?: use="[^"]*")?(?: covered-by \S+)?$/u);
   for (const answer of ["Manage choices", "Reject non-essential", "Accept all"]) {
     expect(linesFor(lines, new RegExp(`^t\\d+ clickable "${answer}"`, "u")), answer).toHaveLength(1);
   }

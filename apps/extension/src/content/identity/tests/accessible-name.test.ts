@@ -109,3 +109,14 @@ test("an element that is, or sits inside, a sensitive control takes no name from
     assert.equal(nameFor(ordinaryOption), "Mornings");
   });
 });
+
+test("an inline svg is named by its own title child, and an svg without one by nothing", async () => {
+  const titled = element("svg", { viewBox: "0 0 24 24" }, element("title", {}, " Close  panel "), element("path", { d: "M0 0" }));
+  const bare = element("svg", { viewBox: "0 0 24 24", focusable: "false" }, element("path", { d: "M0 0" }));
+  const labelled = element("svg", { "aria-label": "Settings" }, element("title", {}, "Gear"));
+  await withNamedPage([titled, bare, labelled], (nameFor) => {
+    assert.equal(nameFor(titled), "Close panel");
+    assert.equal(nameFor(bare), undefined);
+    assert.equal(nameFor(labelled), "Settings");
+  });
+});

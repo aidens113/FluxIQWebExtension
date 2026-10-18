@@ -31,6 +31,8 @@ import type { LookupRoot } from "../selector";
 import { ownPressCursor } from "../evidence/press-cursor";
 import { pageListensForPress } from "../page-press";
 import { accessibleNameFor } from "./accessible-name";
+import { elementDrawing } from "./drawing";
+import { DRAWING_ATTRIBUTE } from "./drawing-attribute";
 import { normalizedText } from "./normalized-text";
 import { implicitRole } from "./implicit-role";
 import { labelText } from "./label";
@@ -231,6 +233,11 @@ function pageMadePressable(element: Element): boolean {
  * (`domain/src/runtime/llm-evidence/elements.ts`). Making a grid row resolvable
  * by position needs a positional signal *in Core's matcher*, with weight enough
  * to clear the margin -- a Core change, not a wiring change here.
+ *
+ * **What a wordless element draws is here, under `attributes`** (`./drawing.ts`,
+ * keyed by `./drawing-attribute.ts`): the one attribute a candidate hands Core.
+ * `score.ts` gives that slot a weight of its own and compares a drawing only
+ * where it agrees, which is what the positional attempt above could not do.
  */
 export function candidateFingerprint(element: Element, index: number): ElementFingerprintCandidate {
   const tagName = element.tagName.toLowerCase();
@@ -242,6 +249,7 @@ export function candidateFingerprint(element: Element, index: number): ElementFi
   const visibleText = normalizedText(element.textContent);
   const accessibleName = accessibleNameFor(element);
   const label = labelText(element);
+  const drawing = elementDrawing(element);
   const rect = element.getBoundingClientRect();
   return {
     candidateId: testId ?? id ?? `${tagName}:${index}`,
@@ -254,6 +262,7 @@ export function candidateFingerprint(element: Element, index: number): ElementFi
     ...(visibleText ? { visibleText } : {}),
     ...(accessibleName ? { accessibleName } : {}),
     ...(label ? { label } : {}),
+    ...(drawing ? { attributes: { [DRAWING_ATTRIBUTE]: drawing } } : {}),
     bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     isVisibleOnViewport: rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight
   };

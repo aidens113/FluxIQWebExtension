@@ -1,3 +1,4 @@
+import { elementDrawing } from "./identity";
 import { isVolatileIdentifier, siblingPosition, type LookupRoot } from "./selector";
 
 export type ElementFingerprint = {
@@ -9,6 +10,8 @@ export type ElementFingerprint = {
   tagName?: string;
   name?: string;
   attributes?: Record<string, string>;
+  /** What a wordless control drew (`identity/drawing.ts`): a set of controls, as a class set is. */
+  drawing?: string;
 };
 
 /**
@@ -24,11 +27,22 @@ export type ElementFingerprint = {
  * not-found.md`). So the class set answers with every element carrying it, up
  * to `MAX_CLASS_SET_MATCHES`, and says it is `shared`: the resolver adds what
  * the recording's words match and lets scoring choose.
+ *
+ * A drawing (`identity/drawing.ts`, lane 4 t567) is a set the same way: every
+ * row draws its save icon alike. So it answers as the class set does, `shared`,
+ * with every element of the recorded tag that draws the same -- first, beside
+ * the class set's matches, or alone when the page renamed the class. It only
+ * ever adds candidates: the record gate and scoring after it choose among
+ * them, so an icon in another row, or a picture that changed, is never acted on
+ * because of it.
  */
 export type StableFingerprintMatches = { matches: Element[]; shared: boolean };
 
 /** Class-set matches handed on. The scorer is given no more than this (`identity/candidates.ts`), so more cannot change which one wins. */
 const MAX_CLASS_SET_MATCHES = 60;
+
+/** Elements of the recorded tag read for their drawing. A resolution runs on every action's critical path. */
+const MAX_DRAWING_SCAN = 2_000;
 
 /**
  * Resolves the most stable available part of an element fingerprint, looking
@@ -76,12 +90,29 @@ export function stableFingerprintMatches(fingerprint: ElementFingerprint, root: 
     const byName = query(root, `${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
     if (byName) return single(byName);
   }
+  const drawn = fingerprint.drawing ? sameDrawing(root, tag, fingerprint.drawing) : [];
   if (fingerprint.classNames?.length) {
     const classSet = `${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`;
     // `query` has parsed it, so asking for every match cannot throw.
-    if (query(root, classSet)) return { matches: [...root.querySelectorAll(classSet)].slice(0, MAX_CLASS_SET_MATCHES), shared: true };
+    if (query(root, classSet)) {
+      const classed = [...root.querySelectorAll(classSet)];
+      return { matches: [...new Set([...drawn, ...classed])].slice(0, MAX_CLASS_SET_MATCHES), shared: true };
+    }
   }
+  if (drawn.length) return { matches: drawn.slice(0, MAX_CLASS_SET_MATCHES), shared: true };
   return { matches: [], shared: false };
+}
+
+/** The elements of `tag` in `root` that draw `drawing`, in document order, reading at most `MAX_DRAWING_SCAN` of them. */
+function sameDrawing(root: LookupRoot, tag: string, drawing: string): Element[] {
+  const found: Element[] = [];
+  let scanned = 0;
+  for (const element of root.querySelectorAll(tag)) {
+    scanned += 1;
+    if (scanned > MAX_DRAWING_SCAN) break;
+    if (elementDrawing(element) === drawing) found.push(element);
+  }
+  return found;
 }
 
 /**

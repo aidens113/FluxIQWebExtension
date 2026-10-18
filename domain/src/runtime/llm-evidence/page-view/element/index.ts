@@ -6,6 +6,7 @@
 export { attributeValue } from "./attribute-value";
 export { undoubledWords } from "./doubling";
 export { webLlmGroupToken } from "./group-token";
+export { webLlmIconHints } from "./icon-hints";
 export { webLlmElementKind } from "./kind";
 export { meaningfulWords } from "./meaningful";
 export { normalisedWords } from "./normalised";

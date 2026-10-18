@@ -1,8 +1,10 @@
 // The words the page view prints for one element (t223, "Words"), whole:
 //
-//  - a control: the first of `name`, `text`, `label` and its `title` attribute
-//    that says anything -- never its placeholder, which is an example or an
-//    advertisement rather than what the field is, and is printed apart as
+//  - a control: the first of `name`, `text`, `label`, its `title` attribute
+//    and the tooltip the page wrote on it (`data-tooltip`, `data-tip`,
+//    `data-title`, `aria-description`) that says anything -- never its
+//    placeholder, which is an example or an advertisement rather than what
+//    the field is, and is printed apart as
 //    `placeholder "…"` (`./state-tokens.ts`, t229); a name that is only the
 //    placeholder is passed over the same way (`placeholderName`). A control
 //    the page only drew (`drawn`: a `<div>` with a listener or a pointer) says
@@ -24,6 +26,9 @@ import { meaningfulWords } from "./meaningful";
 import { webLlmReadableWords } from "./readable-words";
 import { webLlmViewTraits } from "./traits";
 
+/** Where a page writes a control's tooltip when it gives it no name. */
+const TOOLTIP_ATTRIBUTES = ["data-tooltip", "data-tip", "data-title", "aria-description"] as const;
+
 /**
  * What a line for this element says, or `undefined` when it says nothing (a
  * control with no words, an element that gets no line). `delegate` as in
@@ -40,7 +45,7 @@ export function webLlmElementWords(element: WebLlmEvidenceElement, delegate = fa
 function rawWords(element: WebLlmEvidenceElement, traits: ReturnType<typeof webLlmViewTraits>): string | undefined {
   switch (traits.lineRole) {
     case "control":
-      return webLlmReadableWords(element, [element.placeholderName === true ? undefined : element.name, traits.drawn ? traits.ownWords : element.text, element.label, attributeValue(element, "title")]
+      return webLlmReadableWords(element, [element.placeholderName === true ? undefined : element.name, traits.drawn ? traits.ownWords : element.text, element.label, attributeValue(element, "title"), ...TOOLTIP_ATTRIBUTES.map((name) => attributeValue(element, name))]
         .find((candidate) => candidate !== undefined && candidate.trim() !== ""));
     case "layer":
       return element.name;

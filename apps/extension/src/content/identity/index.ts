@@ -59,9 +59,17 @@
 // replaced and the rest kept, so the same rules can be put to that part. The
 // resolver acts on the reading only for an exact strategy's one answer, and
 // only when nothing else in the scope reads the same way.
+//
+// `drawing.ts` is the signal of a control with no words: a digest of what it
+// draws -- its svg's shapes, the symbol it uses, its image's source -- never of
+// how it is painted, so a filled and an unfilled icon are one control.
+// `describe-element.ts` records it, `candidates.ts` describes a candidate by
+// it, `score.ts` weighs it where it agrees, and `../element-finder.ts` looks
+// controls up by it.
 
 export { accessibleNameFor, authoredNameAttribute } from "./accessible-name";
 export { boundedText } from "./bounded-text";
+export { elementDrawing } from "./drawing";
 export { normalizedText } from "./normalized-text";
 export { candidateFingerprint, candidateLabel, collectTargetCandidates } from "./candidates";
 export { corroboratesExactly } from "./corroboration";
