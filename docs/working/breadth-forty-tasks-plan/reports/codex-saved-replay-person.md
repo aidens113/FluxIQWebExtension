@@ -1,6 +1,6 @@
 # Saved replay person handoff diagnosis
 
-Status: Bounded correction implemented; owning tests, both package typechecks and both native audits passed. Source frozen for supervisor review. No build/browser replay/paid probe executed.
+Status: Implemented, narrowly validated and actual saved provider-free replay PASSED. Supervisor independent receipt review pending. No paid provider call, source rerun, commit or push performed by worker.
 Owner: storage_comparison (worker). Date: 2026-10-18.
 
 The failed saved replay did reach Core's deterministic person-needed handling, but its ask could not be persisted. A declared Lab actor is also absent from the saved-replay launcher; adding that actor alone cannot fix this recorded failure.
@@ -88,3 +88,31 @@ Downstream root: `node C:/Users/osrs_/AppData/Local/Temp/t566-saved-person-bundl
 Each repository root: `node scripts/structure-audit.mjs`. FLUXIQ_BUILD_CACHE_DIR=off process-only for compilation commands. Audits were recaptured through Python subprocess because Windows PowerShell redirection returned shell1 for native stderr warnings even while native tool printed passed; final native exit is authoritative.
 
 Remaining proof: supervisor review, authorized own-tree Core library build/current runner build, then explicit provider-free saved replay release and actual exact dataset/final-state/fresh-ask/zero-accounting inspection. Units do not prove the live handoff or finalized accounting.
+
+
+## Released production build and saved replay (in progress)
+
+Supervisor committed Core723e0ae8/downstream65be76e0 then merged current dev; actual paired starting HEADs Core723e0ae8/downstream20dcccf5, clean. Postmerge2lifecycle tests passed (native0,6.634seconds; Temp/t566-saved-person-postmerge.log). Exact authorized cache-off three-library Core build started; runner build and one existing-workspace provider-free replay will follow only after success. Shared Core untouched. No replay started at this boundary.
+
+Own3-library build native0/57.381seconds (contracts/gateway stamps reused, fluxiq actual compiler56.269seconds), runner normal build native0/43.929seconds. Actual existing wrapper launched once, allocated replay-mvdl3yxn-b1d9134d; active session69861. Launcher log C:/Users/osrs_/FluxStuff/fxwork/t566/!FluxIQWebExtension/node_modules/codex-crossborder-person-replay.log. Normal owning launcher is preparing session-local Core production server; no runtime run/ask yet. No manual Web/fullbuild or sharedCore mutation.
+
+
+## Final actual saved replay outcome
+
+ONE authorized invocation completed native CLI exit0 in325.604seconds, replay `replay-mvdl3yxn-b1d9134d`, actual Core runtime `65298446-0230-41d9-baf1-59494c498e46`. Same retained persistent workspace/project/Flow as failed replay. Own Core723e0ae8/downstream20dcccf5 stayed unchanged through execution. Normal owning launcher prepared its session-local production server (Next compile89seconds plus type/static generation); worker did not manually launch a Web/full build. No active worker readers/processes remain after natural cleanup.
+
+Actual receipt: `C:/Users/osrs_/FluxStuff/fxwork/t566/!FluxIQWebExtension/test-runs/instances/bf-slot-3/replays/replay-mvdl3yxn-b1d9134d.json`.
+
+Actual structural person evidence: `C:/Users/osrs_/FluxStuff/fxwork/t566/!FluxIQWebExtension/test-runs/instances/bf-slot-3/replays/replay-mvdl3yxn-b1d9134d/person-hand-offs.json`.
+
+- Verdict passed, reasons empty, runtime succeeded17actions/zero errors. Exact ordered10observed/10compared/10matched records,40expected/40present fields,zero unexpected fields; final state/playbackGoalHeld true. SQLite dataset10records/0invalid/nottruncated.
+- Flow content hash before=after `745d12554867d9d37536e37babdff491b19639570b4deb066c3e12b45ed6d2c4`; retained origin served at saved address true and scenarioPortRetained true. Dataset digest `3d9e3075e366634295da0ccce973368a6a2950c9de882d06266689a72060e0e2`.
+- Factory providers disabled, runIntent null, credential environment names empty, stored key count1before/1after/preserved true. Explicit coreProviderCallCount0, accountedCalls0, calls0, interventions0, harnessActivations0, llmGate.invoked false. This invocation made no paid model call. Missing accounting was not defaulted to zero.
+- Fresh real ask `person-needed.a50795a3-b04a-4fe9-970d-dcff934aafbd` was answered via Core by the declared actor: cleared true/person_done/3.1seconds, pollFailures0, no permission answers. Read-only SQLite independently confirms this ask belongs to the NEW runtime run, status answered/choice/person_done, created1792313649560/answered1792313652673. Old original-run answered ask was not reused.
+- resultVerification is unverified; provider-free replay proves exact task goal and zero calls, not a fresh paid model judgment. The original whole-run accepted oracle/reported verdict remains separate evidence.
+
+Actual launch log: `C:/Users/osrs_/FluxStuff/fxwork/t566/!FluxIQWebExtension/node_modules/codex-crossborder-person-replay.log`. Exact owning wrapper `node node_modules/codex-crossborder-replay.mjs` retains bf-slot-3/persistent-isolated workspace `codex-crossborder-positive-t566-20261018-r2`, task `crossborder-marketplace-free-hubs-under-ten`, project `a47be866-d10e-41f2-bc37-b86f3150d4e6`, Flow `flow.ddea0e5c-b845-45d3-844e-6c18660729f6`. It explicitly blanks provider credential variables in process environment while preserving stored keys, and uses existing supported lab replay. No overrides/challenge bypass/fixture edits/new model build.
+
+Build logs: `C:/Users/osrs_/AppData/Local/Temp/t566-person-core-library-build.log` and `C:/Users/osrs_/AppData/Local/Temp/t566-person-runner-production-build.log`; exact postmerge units `C:/Users/osrs_/AppData/Local/Temp/t566-saved-person-postmerge.log`.
+
+Worker final git state: Core clean, downstream only this own report modified. Await supervisor independent actual receipt/sidecar verification before full crossborder acceptance accounting. Photo diagnosis remains held per priority instruction; its first-divergence evidence is already preserved in own photo report/debug.
