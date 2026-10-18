@@ -11,6 +11,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { webAutomationActionResultPayload } from "@fluxiq-web-extension/domain/client";
 import { extractListAction } from "../extract-list";
+import { assertTextDisclosed } from "../../extraction/text-disclosure";
+import { fakeShadowDom } from "../../extraction/tests/fake-shadow-dom";
 import type { ActionResultEvidence } from "../../action-runtime";
 import type { ListExtractionOutcome } from "../../extraction";
 import type { ContentActionDependencies } from "../types";
@@ -32,6 +34,19 @@ const REQUEST: WebAutomationExtractListRequest = {
 };
 
 const COMMAND: BrowserActionCommand = { commandId: "cmd-extract-list", actionType: "web.dom.extract_list", extractList: REQUEST };
+
+test("incomplete-text refusal reaches failed action feedback without a successful extracted payload", async () => {
+  const dom = fakeShadowDom();
+  let refusal: Error | undefined;
+  try {
+    assertTextDisclosed(dom.el("p", {}, "Partial… ", dom.el("button", {}, "See more")), "description");
+  } catch (error) { refusal = error as Error; }
+  assert.ok(refusal);
+  const { deps, calls } = dependencies(refusal);
+  const result = await extractListAction(COMMAND, deps, 1);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(calls, [{ builder: "failure", error: refusal }]);
+});
 
 /** Dependencies whose list capability answers with `read` and whose result builders record what they were handed. */
 function dependencies(read: ListExtractionOutcome | Error): { deps: ContentActionDependencies; calls: Recorded[] } {

@@ -12,6 +12,23 @@ import { fakeShadowDom } from "./fake-shadow-dom";
 const dom = fakeShadowDom();
 const TEXT = { kind: "text", required: true } as const;
 
+test("a selected text field with a disclosure refuses partial text, while a sibling control does not", () => {
+  const partial = dom.el("p", {}, "Partial text… ", dom.el("button", {}, "Read more"));
+  assert.equal(readField(partial, "description", TEXT), "Partial text… Read more");
+  assert.throws(() => readField(partial, "description", TEXT, "complete"), /incomplete_text/u);
+  const complete = dom.el("p", {}, "Whole text");
+  dom.el("article", {}, complete, dom.el("button", {}, "Read more"));
+  assert.equal(readField(complete, "description", TEXT), "Whole text");
+});
+
+test("link identity changes only an explicitly requested helper; ordinary links and href attributes stay raw", () => {
+  const raw = "https://records.example/entry?id=7&__cft__[0]=showing&__tn__=tracking#part";
+  const anchor = dom.el("a", { href: raw }, "Record");
+  assert.equal(readField(anchor, "url", { kind: "link", required: true }), new URL(raw).href);
+  assert.equal(readField(anchor, "href", { kind: "attribute", attribute: "href", required: true }), raw);
+  assert.equal(readField(anchor, "identity", { kind: "link", identity: "tracking-free", required: true }), "https://records.example/entry?id=7#part");
+});
+
 /** A sent connection request as the page draws it: the name, the headline, the age in a shadow root, and Withdraw. */
 function sentRow(name: string, age: string): Element {
   const time = dom.shadow(dom.el("gl-time-ago", { datetime: "2026-08-19T08:00:00.000Z", format: "sent" }), dom.el("span", {}, age));

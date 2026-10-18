@@ -108,6 +108,7 @@ import {
   type WebAutomationExtractListRequest
 } from "../../actions/extraction";
 import { webAutomationDeclaredColumnsRead } from "./declared-columns";
+import { webAutomationDedupeLinkIdentity } from "./dedupe-link-identity";
 import { webAutomationDerivedRecordOutput } from "./derived-record-output";
 import { webAutomationExtractListOnePageRead } from "./one-page-read";
 import { webAutomationReconciledRecordOutput } from "./reconciled-record-output";
@@ -130,10 +131,12 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   const stored = read === undefined ? undefined : webAutomationStoredColumns(authored, read);
   if (stored?.ok === false) return { ok: false, result: unreadColumnsRefusal(stored.unread, stored.columns) };
   const written = stored?.request ?? read;
-  const narrowed = written === undefined ? undefined : webAutomationDeclaredColumnsRead(authored, written);
-  const request = narrowed?.request ?? written;
+  const identity = written === undefined ? undefined : webAutomationDedupeLinkIdentity(authored, written);
+  const narrowed = identity === undefined ? undefined : webAutomationDeclaredColumnsRead(authored, identity);
+  const request = narrowed?.request ?? identity;
   // A request that parsed was an object, as written, renamed or narrowed.
   const sent = narrowed !== undefined ? narrowed.request as unknown as JsonObject
+    : identity !== undefined && identity !== written ? identity as unknown as JsonObject
     : stored?.renamed === true ? stored.request as unknown as JsonObject : rest.extractList as JsonObject;
   const onePage = request === undefined ? undefined : webAutomationExtractListOnePageRead(sent, request);
   const page = onePage === undefined ? rest : { ...rest, extractList: onePage.page };

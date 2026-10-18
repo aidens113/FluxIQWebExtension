@@ -184,7 +184,7 @@ function normalize(condition: WebAutomationExtractItemCondition, index: number, 
 function valueOf(entry: Condition, item: Element, record: ReadRecord): string | undefined {
   return entry.value.kind === "field"
     ? valueInRecord(record, entry.value.key)
-    : readField(item, entry.name, entry.value.reader) ?? undefined;
+    : readField(item, entry.name, entry.value.reader, "complete") ?? undefined;
 }
 
 /**

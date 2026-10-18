@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Storage comparison settled; judge fix, build lease and paging handoff integrated. Reset and social-read fixes are under validation; headed company-site launch is in prelude. Live coverage remains 6 passing tasks.
+Status detail: Storage comparison settled; judge fix, build lease, paging handoff and generic trial feedback pushed. Reset transfer continuation and final social integration checks active. Company live failed on hybrid paging ($0.082465122); crossborder and bigbox live builds active. Live coverage remains 6 passing tasks.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -41,7 +41,7 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | crossborder-marketplace | free-hubs-under-ten open after 4 runs: covers and paging fixed; run-mvd9554h retried the site's "Security check" on page 3 instead of handing it to the person (fix proposed in its debug, not built) |
 | auction-marketplace | cheap-accessory-auctions failed once on plan grammar (fixed, proven live elsewhere); not rerun |
 | local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
-| company-website | apprentices run-mvd8mcu6 failed at $0 before any model call: the supervisor's background rebuild of Core in the lane tree killed Core's server mid-run; reveal-by-scroll (lane 4 fix 5, unmerged) is for this task |
+| company-website | Earlier run-mvd8mcu6 failed at $0 from a concurrent Core rebuild. New run-mvddb1jn-a15ca13f reached real headed chat build but failed after seven trials, 118 calls/$0.082465122, no Flow: hidden load-more was treated as ended before scroll-loaded batches. Generic hybrid paging repair/regressions in t567; no rerun yet. |
 | photo-social, professional-network | kiln-notes and connect-kade-senior-engineer not run |
 
 Totals at the stop: 24 runs, 6 passed, 18 failed, $1.224 billed across the four lanes (lane 1 $0.545, lane 2
@@ -49,7 +49,7 @@ $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; n
 the lane trees until merged).
 
 **Not done / held (each has a report under `reports/`):**
-- **Codex continuation in progress:** R1 preservation validation in t719; social-feed dedupe/disclosure fixes in t566; generic preceding-navigation trial feedback in t563. t567 drawing/reveal gates passed, including 145 combined recovery/paging tests and extension check after merging the latest dev. Headed company-site launch is in prelude; no new paid call observed yet. An earlier launch refused at $0 because it lacked the latest paging merge; that merge is now included.
+- **Codex continuation in progress:** R1 new-line witness/transport and generic 64-column repair checked and committed locally in t719; collection-transfer continuation now covers explored and trial-owned effects for the canonical install task. Social fix merged to both local dev branches after all integrated gates; slot-3 release is next. Company apprentices failed on hidden load-more before scroll batches (details in table); t567 generic hybrid repair is in progress. Crossborder run-mvddq555-2804ed24 and bigbox run-mvddx6wf-17e9eab0 are active. No new live pass yet.
 - **Storage decision:** exclude the optional pooling proposal from this integration. Supervisor inspected both raw JSON results: held 482 passed/2 failed/4 skipped; baseline 484 passed/0 failed/4 skipped. Unaffected controls changed timing materially, so causality is unproved. Source and production dist were restored to baseline and independently verified against the build stamp. Original proposal `72abeeab` and baseline-restoration `c13c0a30` remain only on held Core branch t707; no storage delta enters dev.
 - **Codex integrated locally:** held judge fix Core t563 (4 files/41 tests, typecheck, audit passed) and Lab build lease t720 (supervisor reran 18 real-process/guard tests, audit passed). The lease holds Core's actual library-build locks throughout a run, blocking forced builds and cache restores. Direct commands bypassing Core's build cache are outside this protection.
 - **Classifieds feedback integrated locally:** Core t563 d5488b29 traces preceding context rather than assuming the failed step caused the failure. Supervisor source review and package-local candidate/subflow tests 12/12 passed; worker compiler check and audit passed. The original wrong-navigation run still needs live acceptance.
@@ -113,6 +113,28 @@ point is declared there, so asking fails the run and is a product defect); an em
 (`august-over-1300`, `halvard-labs-office-jobs`, `saturday-certificate`) if Core stores no zero-row dataset.
 
 ## Worker Briefs
+
+### Brief: codex-company-hybrid-paging (supervisor implementation)
+- Repository: paired t567 lane; company run-mvddb1jn-a15ca13f ended failed, 118 calls/$0.082465122, seven trials, no Flow. Source may now change.
+- Finding: the authored next-page handle carries a load-more control that is hidden during initial scroll-loaded batches. load-more.ts treats hidden as ended after one second; trials read only eight cards, while the real site has further batches. Generic repair must support this phase transition, preserving visible control preference and disabled/end behavior.
+- Owns: extension page-advance/load-more.ts; owning scroll-loaded-list test; existing realistic reveal-by-scroll company harness; authored web-capabilities.md; own debug/report. Core changes are only merging accepted dev before rebuilding this lane.
+- Validation: fail-first generic hidden-control/scroll-growth regression; all page-advance and next-page tests; realistic company harness proving scroll-to-control transition and all rows reachable; affected typecheck/audit. No task/oracle/model-guidance shaping. Debug required before changed-source paid rerun, then same company task and zero-call replay.
+
+### Brief: codex-social-live-acceptance
+- Repository: paired t566 task trees, held_lane_review continues after supervisor committed social fixes and merged latest dev into both. Slot-3 / bf-slot-3.
+- Task now: finish one frozen cache-off three-library Core production build, domain/extension typechecks and both audits after dev integration. Source must remain frozen. Supervisor owns combined test verification and commits/merges/pushes.
+- After explicit supervisor paid release: real chat build/judge/zero-call replay of social-network-feed-recent-group-posts, then social-network-feed-hide-suggested-posts; isolated workspace per task, initial $0.25 ceiling and 250 calls. Only realistic sites.
+- Owns: own social completion report and new codex-live-lane-3.md, own run/debug evidence. No source changes without exact supervisor assignment; never shared plans, task/oracle shaping, commits/merges/pushes.
+- Required reads: Current State, own completion report, prior live-lane-3 report and failed-run debugs. Verify slot and provider-key presence without values. Keep code/build output fixed while live; debug failures before changed-source rerun.
+- Report: build/check results, exact run ids/cost/outcomes and remaining causes; no raw recorded page data or credentials. Paid run remains held until supervisor release.
+
+### Brief: codex-reset-transfer-continuation
+- Repository: paired t719 task trees; reset_review continues after locally committed new-line witness and generic column repair. No dev acceptance yet.
+- Task: finish the canonical install task's reversible move between collections, for both exploration and trial-owned effects. Keep existing task/oracle and model guidance generic.
+- Owns: Core site-reset/{ledger,contracts,act-places}.ts and owning tests, candidate-trial/landed-acts.ts and owning test, authored llm-flow-bootstrap.md; downstream state-diff/places/{diff.ts,tests/places.test.ts}, existing site-reset-subject.spec.ts and own report.
+- Design: opaque complete pre/post collection witnesses from existing passive snapshots; trusted same resource/page group, positively matching act origin scope, unique before-present/after-absent origin and before-absent/after-present destination. Freeze immediate post-act destination state, never invent it from later reset reads. Trial acts carry equivalent witnesses through generic private Core contracts.
+- Admission/completion: one modify inverse on the proved moved subject; no deletion or quantitative guess, no unknown/partial/later baseline or pre-existing same-subject destination. Complete only when ordered baseline subject sequences and every baseline row-state fingerprint are restored across both collections and captured siblings. Regressions include swapped rows, altered quantities, fake inverse and different resources.
+- Validation: owning narrow tests/typechecks/audits, real everything-store own-controls round trip preserving baseline values/order; source/build frozen before any paid run. No known-block paid run, no commits/merges/pushes or shared-plan edits by worker. Supervisor owns integration and release.
 
 ### Brief: codex-lane-1-live-acceptance
 - Repository: paired t563 lane trees, task/t563-a8-lab-comparison; worker storage_comparison re-dispatched after its diagnosis.
@@ -358,6 +380,20 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Validation: R1 worker reports 116 Core preservation tests and actual add-quantity-two/remove-own-line Chromium proof; supervisor reviewed collection/resource witnesses and ledger admission/completion source. Existing cart extraction fails identically with current, wrapper-free and original markup (24 columns, no price); generic discovered-column retention fix authorized, unchanged browser regressions required. Social disclosure/dedupe checks and generic classifieds feedback narrow checks remain in progress.
 - Outcome: Partial. No new paid call or live pass observed yet. Supervisor's first classifieds Vitest command ran from Core root and also selected staged .tmp copies; stopped that owned process and reran from packages/fluxiq. The stopped run is not accepted validation.
 - Follow-up: observe real headed run outcomes, integrate verified fixes, then complete remaining sites and owed reruns.
+
+### 2026-10-17 — Headed company build active; lane 1 released
+- Agent: supervisor; storage_comparison owns slot-1 acceptance
+- Changed: pushed downstream eec6a973 and Core 93850947, including paging and generic preceding-context feedback. t563 pair synced to these dev heads after successful frozen Core build; slot-1 bigbox live launch released. Company's isolated Core web build passed, browser/side panel opened, real provider/tool steps recorded (43 at observation); draft accepted after recoverable control/handle refusals.
+- Validation: supervisor package-local candidate/subflow feedback tests 12/12; both repository audits exit 0; both pushes observed success. Social worker's executable/passive seam fixes list-read refusal without blocking discovery; final browser proof pending. R1 complete-inventory and larger proposal checks remain pending final browser/type validation.
+- Outcome: Partial. No new final live verdict yet; live sources remain frozen. Optional storage optimization remains excluded; user .clinerules/fluxiq.md untouched.
+- Follow-up: inspect paid outcomes and spend, finish reset/social integration and continue remaining site coverage.
+
+### 2026-10-17 — Social fix integrated; company hybrid defect reproduced from live evidence
+- Agent: supervisor; held_lane_review and reset_review
+- Changed: social complete-text/opt-in helper-link identity fix merged to both local dev branches (t566 downstream97f970e7, Core7005f611; readiness e4ed34d6). R1 checked new-line unit preserved locally only (downstreama55806bb/e8b2d7fd, Core4bb74570/c61455d3); transfer pre/post-witness continuation remains unmerged.
+- Validation: supervisor social Core25/25, extension76/76, domain19/19, Chromium2/2; after merging latest dev, combined Core37/37 and paging/disclosure extension103/103. Worker final Core build, domain/extension checks, both audits passed on frozen pair. R1 supervisor Core24/24, domain67/67, extension36/36; inspected strengthened browser proof and fresh Playwright passed status; worker four realistic browser specs passed unchanged.
+- Outcome: Partial. Company run-mvddb1jn-a15ca13f failed with no Flow, seven trials,118calls/$0.082465122. Debug traces hidden load-more being returned as ended before scroll-loaded batches; t567 adds generic regression/fix, no paid rerun yet. Crossborder and bigbox are active; social live release follows ancestry sync. No new accepted live pass yet.
+- Follow-up: freeze and launch social slot-3; complete canonical reset transfer, hybrid paging proof/rerun, remaining sites and install replay.
 
 ### 2026-10-17 — Plan written; Phase 1 dispatched
 - Agent: supervisor
