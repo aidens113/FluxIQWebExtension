@@ -158,6 +158,16 @@ and the next step's "Set as my store" was left with no box. Classification of a
 refusal (`overlaysAt`) and the rate-limit reader still see every layer, the
 run's included.
 
+A target that is present but not shown can trigger a scroll before each in-page
+retry (`content/action-runtime/reveal/`). For a target with no box, the scroll
+aims at the end of its nearest rendered ancestor; for a boxed target outside
+the viewport, it aims at the target. Moving the page uses waits of 400, 800 and
+1600 ms within the existing attempt count and command deadline. Inert targets
+and closed dialogs, popovers, menus or fixed layers are left to their opening
+controls. The result records the scroll count and confirms a reveal only when
+the action succeeds; a target disappearing after scrolling is not a reveal.
+Boxed targets clipped inside nested scrolling panels still need broader coverage.
+
 Around that loop, every node is also attempted again as a whole: the first
 attempt and three retries, at Core's 250 ms, 1 s and 2 s
 (`AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`, user rule 2026-10-07, t355).
