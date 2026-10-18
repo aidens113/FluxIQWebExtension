@@ -9,9 +9,11 @@ import type { WebAutomationNextPageBy, WebAutomationNextPageEnd, WebAutomationNe
 import type { PageMoveMark } from "../../../shared/extraction-continuation";
 import type { RefusedPageHost } from "./refused-page";
 import type { PaginationStop } from "./types";
+import type { RobotCheckSighting } from "../../action-runtime";
 
 /** One step's answer: moved, ended, failed with its word and a sentence, or out of time. */
 export type PageMoveOutcome =
+  | { outcome: "needs_person"; sighting: RobotCheckSighting }
   | { outcome: "moved"; by: WebAutomationNextPageBy; page?: number | undefined }
   | { outcome: "ended"; stop: WebAutomationNextPageEnd }
   | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string; filtersDropped?: number | undefined }
