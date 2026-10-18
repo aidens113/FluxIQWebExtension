@@ -1,19 +1,19 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Stopped at the user's wrap-up; 6 of 40 new tasks pass live, all 108 audited; Core dev, R1 and the lanes' last fixes are held.
+Status detail: Codex resumed execution; storage A/B, safe reset review, held-fix validation and Lab build lease are in progress; live coverage remains 6 passing tasks.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
 Scope: 40 new live tasks (four per realistic site), each run live, debugged and fixed; plus the install-package proof (MVP item 1). Not the adaptation gate.
-Paired document: none
+Paired document: `breadth-forty-tasks-plan.md` in FluxIQ Core
 Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [automation-project-agents-plan.md](./automation-project-agents-plan.md) (A8 launch shape), [release-packaging.md](../architecture/release-packaging.md)
 
 ---
 
 ## Current State
 
-**Stopped 2026-10-18 at the user's wrap-up; work continues in another agent (Codex).** This section is written to
+**Resumed by Codex on the user's go-ahead (client date 2026-10-17).** Historical wrap-up dates below are retained as recorded by Claude. This section is written to
 stand alone. The user's requests: 40 new tasks on the ten realistic sites, run live, debugged and fixed, fast
 (2026-10-17); the install-package proof; then "only a few tests fully end to end" and "make 100% sure ALL TESTS
 are actually possible" (both now AGENTS.md rules, Automated Testing Facility Boundary).
@@ -49,6 +49,8 @@ $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; n
 the lane trees until merged).
 
 **Not done / held (each has a report under `reports/`):**
+- **Codex continuation in progress:** storage A/B in t707 (source and dist rebuilt for each half); R1 preservation review in t719; held judge/drawing/reveal gates in t563/t567; Lab build lease in t720. No new paid run has launched yet.
+- **R1 review found a blocking preservation defect:** subject equality alone admits removal of a pre-existing same-product line and can accept a partial quantity undo as complete. t719 is adding destination observations made before the act and positive completion evidence; unproved quantity inverses must fail closed. See `codex-reset-review` report when written.
 - **Core `dev` is green and pushed:** the `flow_script.repeat_over_twice` words and corpus case merged (Core
   `31f2ccdf`, pushed with `4d6fb8b6`).
 - **Storage change held:** the storage change, committed UNMERGED on Core branch `task/t707-storage-held` (`72abeeab`;
@@ -110,6 +112,53 @@ point is declared there, so asking fails the run and is a product defect); an em
 (`august-over-1300`, `halvard-labs-office-jobs`, `saturday-certificate`) if Core stores no zero-row dataset.
 
 ## Worker Briefs
+
+### Brief: codex-paging-person-handoff
+- Repository: downstream `C:/Users/osrs_/FluxStuff/fxwork/t565/!FluxIQWebExtension`, task/t565-a8-lane-2 (dev synced). Its sibling Core is read-only until a specific generic gap is reported.
+- Task: fix next_page and paged-read arrival at a person-only robot check so it hands off through the existing needs-person/parking seam, then resumes the intended list without repeating a completed move. Trace the real failure first.
+- Required reads: Current State here; debugs/run-mvd9554h-42cdf9b7.md under language-driven-flow-loop-plan; content/extraction/page-advance/{arrival,list-change,move-outcome}.ts; action-runtime/{challenge-evidence,results}.ts; existing click needsPerson route and owning tests.
+- Owns (may edit): extension extraction page-advance/action handlers and owning tests needed for this handoff, existing shared outcome contract if needed, related authored architecture docs, own report. Notify exact additional paths before changing other layers.
+- Must not touch: other trees, unrelated runtime/retry policy, model guidance, scenario task/oracle. Never solve a robot check, weaken oracle, commit, merge or push.
+- Definition of done: regression reproduces old missing-list failure; person-only check gives USER_INTERVENTION_REQUIRED with existing typed evidence, self-clearing checks keep normal waits, list resumes after person clears. Narrow unit and realistic content-harness tests, extension typecheck and audit. No live/paid run until supervisor release and integration of build lease/reset.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-paging-person-handoff.md in t565.
+
+### Brief: codex-lab-build-lease
+- Repository: downstream `C:/Users/osrs_/FluxStuff/fxwork/t720-lab-core-build-lease`, branch task/t720-lab-core-build-lease. Shared sibling Core is read-only.
+- Task: prevent Core library rebuilds from deleting modules under an active Lab run, and prevent a run from starting during a rebuild. Reuse Core's existing per-step build locks when possible; do not invent a parallel lock no builder obeys.
+- Required reads: Current State here; scripts/lab/{run-lab,build-lock}.mjs; scripts/build-cache/lock/; scripts/worktree/{core-build,cache-delegation}.mjs; Core scripts/build-cache/{run-step,workspace/resolve-step}.mjs (read-only); code structure guidance.
+- Owns (may edit): focused downstream scripts/lab/core build-lease module and owning tests/barrels; run-lab.mjs; docs/architecture/testing-facility.md; own report.
+- Must not touch: Core source, other trees, secrets/runtime data, shared plans. No commits/merges/pushes. Never build a lane tree while it runs.
+- Design: acquire the three actual Core library build locks before reading/validating/loading Core; hold through the child run and final scan; heartbeat leases so long runs are not mistaken for stale builds; release on success/failure and handle process exit. Distinct Core roots must proceed independently. Cached reuse may proceed if it writes no module contents. Resolve actual stamp paths from the owning Core scripts/registry, failing honestly if unsupported.
+- Definition of done: child-process tests show a real Core build-cache run cannot restore/build outputs until lease release, a prior build blocks launch, stale owners recover, and separate roots remain independent; cleanup on exceptions. Run changed script tests and structure audit only. No paid tests yet.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-lab-build-lease.md in t720.
+
+### Brief: codex-storage-comparison
+- Repository: Core `C:/Users/osrs_/FluxStuff/fxwork/t707/!FluxIQ`, now on `task/t707-storage-held` with dev merged.
+- Task: settle held commit 72abeeab by a fair source-and-dist A/B comparison; diagnose failures, retain only a safe justified improvement.
+- Required reads: this document's Current State; sibling downstream report `reports/integration-core.md`; Core AGENTS.md boundary and validation rules; the three files in 72abeeab and their owning tests.
+- Owns (may edit): the three storage files in 72abeeab, tests beside them, related authored storage docs, and own report in sibling downstream tree.
+- Must not touch: other trees, shared plans, unrelated source, user state. Never commit, merge, switch branches, or push.
+- Comparison: run whole-process tests and affected storage/creation tests with the change and without it; rebuild fluxiq dist before EACH half (children load dist). Use the same worker limits and comparable concurrent load. Record exact failures and timings. Do not blame load without evidence.
+- Definition of done: a supported accept/fix/drop recommendation; meaningful narrow tests, Core fluxiq typecheck and structure audit. No full suite. Leave source and dist in the recommended state, documenting any reverse diff.
+- Report to: `C:/Users/osrs_/FluxStuff/fxwork/t707/!FluxIQWebExtension/docs/working/breadth-forty-tasks-plan/reports/codex-storage-comparison.md`.
+
+### Brief: codex-reset-review
+- Repository: both `C:/Users/osrs_/FluxStuff/fxwork/t719/` repositories, task/t719-site-reset-undoable-acts, dev merged by supervisor.
+- Task: review R1 subject/page undo matching end to end, especially protection of pre-existing lines and quantities. Fix defects at the cause; prepare one live everything-store round proving reset of only this build's own effects.
+- Required reads: this document's Current State; reports/site-reset-undo.md in your tree; changed source/tests from 62eb9b41 downstream and 61160ebe Core; Core AGENTS.md boundary; A8 Run Plan in automation-project-agents-plan.md.
+- Owns (may edit): R1 source/tests and related architecture docs in t719 only; own report. If another source file is required, report its exact path before editing.
+- Must not touch: other lane trees, shared plans, unrelated user state. Never commit/merge/push. Do not start paid/live runs yet; send ready with exact launch and await supervisor release.
+- Definition of done: review risks resolved or precisely evidenced; narrow Core/domain/extension tests and affected typechecks/audits pass; Core dist rebuilt before downstream checks. Preserve all pre-existing site state. No scenario-shaped model guidance.
+- Report to: `docs/working/breadth-forty-tasks-plan/reports/codex-reset-review.md` in t719 downstream.
+
+### Brief: codex-held-lane-review
+- Repository: read-only review of t563 and t567 paired lane trees; report in main downstream only.
+- Task: inspect held Core 94c3c49f and downstream 83d883b4/Core 4d90c6e7; identify merge prerequisites, exact narrow checks, bugs or unsafe assumptions. Verify source against reports, not report claims alone.
+- Required reads: this document's Current State; reports/live-lane-1-fix-4.md, lane4-w5-reveal-by-scroll.md, lane4-w6-drawing-every-path.md; changed source/tests of those three commits; Core boundary rules.
+- Owns (may edit): only `docs/working/breadth-forty-tasks-plan/reports/codex-held-lane-review.md` in main downstream.
+- Must not touch: any source, branches, build output, runtime data or other reports. Never commit/merge/push. Do not build or launch tests in these trees while reviewing.
+- Definition of done: concrete review findings with paths/lines, whether each fix should merge, minimal verification commands, and conflicts expected with t719. Flag missing behavior rather than silently expanding scope.
+- Report to: path above.
 
 ### Brief: tasks-<site> (ten copies, one per row of the table above, t696-t705)
 - Repository: this repository, in the site's worktree only (the table above); never the main checkout.
@@ -248,6 +297,14 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Report to: `docs/working/breadth-forty-tasks-plan/reports/live-lane-<N>.md` in the lane tree.
 
 ## Work Ledger
+
+### 2026-10-17 — Codex continuation: isolated checks and preservation review
+- Agent: supervisor; workers storage_comparison, reset_review, held_lane_review
+- Changed: written continuation briefs; merged dev into t707 held-storage Core, t719 pair and t563/t567 pairs; t720 task worktree provisioning.
+- Why: user authorized executing the handoff including live tests; establish safe reset and integrated fixes before paid runs.
+- Validation: t563 targeted result-verification vitest -> 4 files, 41 tests passed; t567 action-element-target -> 10 tests passed; extension focused recovery/reveal/recording/shared tests -> 137 passed.
+- Outcome: Partial. t567 recovery diagnostics now require a successful action before claiming reveal; new disappearance regression passes. R1 baseline-preservation gap reproduced by worker, not yet supervisor-verified.
+- Follow-up: observe storage comparison; review reset changes; finish held-fix gates and build lease; then launch realistic live tests.
 
 ### 2026-10-17 — Plan written; Phase 1 dispatched
 - Agent: supervisor
