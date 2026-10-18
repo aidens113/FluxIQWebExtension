@@ -269,11 +269,12 @@ test("ordinary repair freshly tests the untouched carried selector through real 
   }
 });
 
-for (const missing of ["declaration", "start"] as const) test(`actual saved repair refuses missing ${missing} before full-test actions`, { timeout: 120_000 }, async (t) => {
+test("actual saved repair refuses a missing declaration before full-test actions", { timeout: 120_000 }, async (t) => {
+  const missing = "declaration";
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-carried-service-"));
   let harness: Awaited<ReturnType<typeof fixture>> | undefined;
   try {
-    harness = await fixture(root, missing === "declaration" ? { missingDeclaration: true } : { missingStart: true });
+    harness = await fixture(root, { missingDeclaration: true });
     const run = await harness.service.runRuntimeSession({ projectId: harness.projectId, flowId: harness.flowId, authorizedDomainIds: [WEB_AUTOMATION_DOMAIN_ID], llmExecution: { ...ACTOR, intent: "build_and_adapt" } });
     const detail = await harness.service.getFlowRunDetail(harness.projectId, run.runId);
     const saved = harness.commands.filter((call) => call.phase === "saved-run" && ["web.dom.click", "web.dom.type"].includes(call.action));
@@ -284,7 +285,46 @@ for (const missing of ["declaration", "start"] as const) test(`actual saved repa
     assert.equal(run.status, "failed");
     assert.ok(JSON.stringify(detail?.metadata).includes("llm_evidence_loop.full_run_required"), "actual carried provenance gap must refuse whole-test acceptance");
     assert.deepEqual(repair, [], "no reset or action may run with missing source provenance");
-    if (missing === "start") assert.equal(detail?.actionAttempts?.some((attempt) => {
+  } finally {
+    await harness?.service.close();
+    assert.equal(path.dirname(path.resolve(root)), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(root).startsWith("fluxiq-carried-service-"));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// A saved run whose host capture had no URL captured no start for the Flow's
+// first step. Since Core t688 (`flow-draft/starts-where-it-stands.ts`) the whole
+// test of an unchanged carried first step runs from where the target stands, as
+// the saved Flow's own playback starts it: no reset is invented, and the run
+// still never claims a start token it did not capture.
+test("actual saved repair without a captured start tests the carried Flow where it stands", { timeout: 120_000 }, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-carried-service-"));
+  let harness: Awaited<ReturnType<typeof fixture>> | undefined;
+  try {
+    harness = await fixture(root, { missingStart: true });
+    const run = await harness.service.runRuntimeSession({ projectId: harness.projectId, flowId: harness.flowId, authorizedDomainIds: [WEB_AUTOMATION_DOMAIN_ID], llmExecution: { ...ACTOR, intent: "build_and_adapt" } });
+    const detail = await harness.service.getFlowRunDetail(harness.projectId, run.runId);
+    const saved = harness.commands.filter((call) => call.phase === "saved-run" && ["web.dom.click", "web.dom.type"].includes(call.action));
+    const repair = harness.commands.filter((call) => call.phase === "repair" && ["web.browser.navigate", "web.dom.click", "web.dom.type"].includes(call.action));
+    t.diagnostic(JSON.stringify({ case: "start", status: run.status, savedActions: saved.map((call) => call.action), repairActions: repair.map((call) => call.action), replacementChecked: harness.replacementChecked(), judgeCalls: harness.judgeCalls() }));
+    assert.deepEqual(saved.map((call) => call.action), ["web.dom.click", "web.dom.type"], "setup must actually execute the original saved Flow");
+    assert.ok(harness.replacementChecked(), "a valid faulty-step replacement must reach the real full-test gate");
+    assert.ok(!repair.some((call) => call.action === "web.browser.navigate"), "with no captured start the test must not invent a reset");
+    const click = repair.findIndex((call) => call.action === "web.dom.click" && call.parameters.selector === "#open");
+    const type = repair.findIndex((call, index) => index > click && call.action === "web.dom.type" && call.parameters.text === "right");
+    assert.ok(click >= 0 && type > click, "the whole test must replay the carried opener where it stands, then the bound replacement");
+    const buildJudge = harness.modelCalls.find((call) => call.task === "loop_verification" && call.phase === "repair");
+    assert.ok(buildJudge && buildJudge.commandCount > harness.commands.indexOf(repair[type]!), "the accepting judge must follow the actual whole-test commands");
+    assert.equal(run.status, "succeeded");
+    assert.equal(harness.text(), "right");
+    // The saved run's attempts are the ones before its result was judged; the
+    // repaired Flow's later playback is captured through the evidence page,
+    // which carries its URL, so only the saved attempts are URL-less.
+    const attempts = detail?.actionAttempts ?? [];
+    const judged = attempts.findIndex((attempt) => attempt.nodeId === "result-verification");
+    assert.ok(judged > 0, "the saved run's result must actually be judged");
+    assert.equal(attempts.slice(0, judged).some((attempt) => {
       const refs = attempt.metadata?.stateRefs;
       return isRecord(refs) && isRecord(refs.beforeAction) && isRecord(refs.beforeAction.from);
     }), false, "URL-less actual host captures must not invent a start token");
