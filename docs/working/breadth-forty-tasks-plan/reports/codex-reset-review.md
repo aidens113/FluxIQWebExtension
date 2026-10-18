@@ -1456,3 +1456,204 @@ cost/calls/pending/breach accounting and required debug on failure. First-unit
 proof explicitly excludes arbitrary previously unseen/dynamic trial creates;
 whole canonical quantity+transfer behavior remains UNPROVEN until real run.
 No paid launch/retry is authorized by this preparation.
+
+## Canonical r5 changed-source release: terminal FAILED
+
+Parent explicitly released published pair downstream152b87ad/Core32864aea;
+worker verified cleanheads, previousrequireddebug, absentfreshworkspace and own
+slot2 before exact approved launch68211. Required processenvs set explicitly:
+FLUXIQ_TEST_TARGET=persistent-isolated, FLUXIQ_LAB_INSTANCE=bf-slot-2,
+FLUXIQ_BUILD_CACHE_DIR=off. Normal guards admitted, no overrides. Source/HEAD
+remained frozen throughout; only normal own run preparation built outputs.
+Normal preparation73233ms; new run-mve8vn94-023a5213 allocated; real extension
+side-panel/projectchat and actual model activity observed.
+
+Actual nativeexit1/runtime.behavior/lab.chat_build_failed, flowCreatedfalse,
+136steps/564503ms. Actual67calls/$0.043542330:66build/$0.043334490 plus1chat/
+$0.000207840. Pending0/breaches0/unrecorded0/uncountedempty. No whole Flow/oracle/
+judge/replay, not a zero-call success. Terminal closed receipt own node_modules/
+codex-reset-canonical-r5-terminal-closed.json. Requireddebug written:
+docs/working/language-driven-flow-loop-plan/debugs/run-mve8vn94-023a5213.md.
+No paidretry/sourcechanges; oldprofiles/failedruns/proofs preserved.
+
+Authenticated actual Core startReset=false observed and projected to
+node_modules/codex-reset-canonical-r5-readiness.json. Failed chat branch does
+not persist Lab candidateTrial metadata in snapshots/events, so no independent
+persisted fixtureResetBetweenTrials flag is claimed. Normal model-reset-only
+admission/source selects false; that source-backed selection remains distinct
+from actual Core flag and from a missing Lab receipt. Actual no-hook guard was
+preserved, no fixture reset manually invoked. Root to review qualification.
+
+Actual new mechanism success:0029create_new refused baseline_required,0031
+realoriginaldestinationrefs1/2eachcount2,0035referencedcreate succeeded. Actual
+model pre-create recovery is therefore positive, unlike r4.0057dirtytrial
+refused;0063 ownnew-line inverse succeeds;0069 repeat correctly already_done.
+Overall reset still fails.
+
+Causal correction after final artifacts: act10 maps0039 first Save attempt,
+act11 maps0049 Try again; BOTH final calls/durablebuildrecord declare
+modify_existing. An early live file read showed empty0039array; finalartifacts
+supersede that transient observation. Both actualtargetrows match4/4unique
+originalfirstCartrowanchors, not newcreatedrow. FirstSavefails in frozenfixture
+cart-script.ts; successfulretry moves that originalrow.0065 picks correct unique
+observed Move to cart control on savedoriginalrow (2uniqueanchors) BUT CLAIMS
+act10, so undo_unproved; zero inverseclaims foract11 anywhere in136steps.
+Private Core per-act subject/scope/immediatewitness inventories notpersisted;
+act11 legitimateinverse availability remains unknown rather than assumed.
+
+Allowlisted node_modules projections: codex-reset-canonical-r5-pre-create-closed.json,
+-act-correlation-closed.json, -inverse-claims-closed.json,
+-persisted-acts-closed.json and -terminal-closed.json (all share fullprefix
+codex-reset-canonical-r5). No rawrows/locations/auth values. Durableactclasses
+were read through SQLite readOnly:true from the existing global database,
+restricted automation.state project-build records; no programstate mutation.
+
+Bounded proposed next diagnostic ONLY (not yet authorized/edited): existing
+apps/extension/e2e/site-reset/tests/installed-project.spec.ts, same actualpublic
+registered harness, add a declaredfailedattempt/declaredretry originalrow move.
+After owncreatedline reset, compare wrong-act10 refusal/no dispatch against
+correct-act11 inverse, then require exactorderedwholeoriginal2/2 and cleantrial
+settlement (bothpendingattempts). This differentiates wrongactselection from
+missing real transport witness before any product change. Existingfirstunit
+scriptednew-line proof and manualledger tests do not establish that path.
+No active own browser/build/source readers remain. Parent available for next
+bounded brief; no worker commits/merges/pushes/sharedplan edits.
+
+## Authorized failed-attempt versus successful-retry diagnostic (source ready)
+
+Read exact new main brief +CurrentState. Only existing installed-project.spec.ts
+changed (now395lines, under400advisory); no Core/product/guidance/fixture/source
+build edits. Existing new-line golden case preserved through parameterization.
+New case title: installed gateway project build distinguishes a failed save
+from its successful retry inverse. Its local diagnostic instruction authorizes
+temporary original-line movement/restoration while finalgoal stays one new line,
+so the existing add-only candidate and scripted greenjudge remain truthful for
+this mechanism experiment; canonical task is untouched.
+
+The provider picks the original first row by its product-link words observed
+in the original public page, then resolves freshly observed controls with those
+same words. Offline comparison against finalized actualr5 page records confirms
+the selector resolves original Save/Tryagain/MoveToCart consistently; no DOM
+selector/rawsnapshot chooses an action. A read-only test visibility wait allows
+the site to reveal retry, then public web.find_on_page actually captures it.
+Actualtrial actsToUndo.call supplies create/failed/retry actrefs; no guessed ids.
+Existing unchanged callbacks record actualresource/subject/scope/classes and
+complete collection state digests. Stages capture original, postAdd, failedSave,
+postRetry, afterDelete, afterWrong and afterCorrect. Assertions require positive
+original2/2, postAdd3/2, sameinventoryafterfailure, retry2/3 on originalsubject,
+ownednewdelete1/3, wrongclaimzero dispatch/stablehash, correctclaimone dispatch,
+exactoriginal2/2hash/order and cleantrial. A genuine correctclaim refusal logs a
+red structuralreceipt and fails; no expectation relaxation or hiddenreset.
+
+Helpertype78081 actualexit0; downstreamaudit62248 actualexit0. Logs owning
+extension/node_modules/codex-reset-retry-helper-type.log and downstreamroot/
+node_modules/codex-reset-retry-audit.log. Sources frozen; all ownreaders ended.
+Selected proposed command after rootreview/release (not launched):
+
+```
+pnpm exec playwright test -c e2e/playwright.config.ts e2e/site-reset/tests/installed-project.spec.ts --grep "distinguishes a failed save" --workers=1 --retries=0 --reporter=list --output=e2e/test-results/reset-retry-project-20261018
+```
+
+Current product artifact unchanged/current; no default extension/Core/Web build.
+Await root explicit browserrelease, not userpermission. No paidrepeat.
+
+Retry diagnostic first actual browser36884 native1: experimental red BEFORE any
+retry inverse. Builderstep10/no save.retry execution/empty actrefs; original2/2,
+Add3/2, failedSave3/2. No Coretransfer conclusion follows. Actual log retained
+extension/node_modules/codex-reset-retry-installed-browser.log; failedtrace and
+screenshots under e2e/test-results/reset-retry-project-20261018. Do not overwrite
+or recast this first failure as a product defect.
+
+Read-only source identifies helper contract mismatch: page-find/search.ts61-67
+and run.ts return {location,found:string}, never full.page. rowControl consumes
+latest full.page, so after retry.observe search it still scans the pre-retry
+Savepage that cannot show the new Tryagain control. Root authorized ONLY closed
+selection observer before changing behavior; it records builderstep, blockcount,
+identitypresent and last/find/shown fullpage/control boolean facts, no row text,
+targets, results or authority changes. Source now408lines (<800hardbudget, above
+400advisory). Observer helpertype80106 and audit90833 both actual0.
+
+Proposed exact bounded correction sent for rootreview, NOT applied yet: three
+public observation calls retry.observe/wrong.observe/correct.observe use normal
+core.run_node web.output.dom-capture_snapshot parameters{} instead of find.
+Public source: output-nodes/definitions.ts174/217, runtime/tools.ts470initial,
+node-run/run.ts215-239 one readablePage capture/nodeEvidence full.page/withCallStates.
+No reload, no clearing current error, no new action target or permission, no
+weakened assertion. Root to approve before helperedit/rerun. No paid/Corebuild/
+extensionbuild/product edits; no own reader active.
+
+Root independently reviewed publicsnapshot source and approved EXACT3 test-only
+observation replacements; applied retry.observe/wrong.observe/correct.observe
+as core.run_node web.output.dom-capture_snapshot parameters{}. No reload or
+changedtarget/result/assertion. Observer helpertype51028/audit32837 actual0.
+Root conditionalrelease allowedone new narrowed browser after these gates;
+started65909 to fresh output reset-retry-project-20261018b, log extension/
+node_modules/codex-reset-retry-snapshot-browser.log. Original36884red log/trace
+preserved. Observer-only variant was not knowingly rerun to repeat established
+contract mismatch; firstcause was independently source-reviewed. No product/
+Core/Web/extension build or paidcall, no target/evidence seeding. Test source
+frozen during actualbrowser; result pending.
+
+## Successful-retry transport diagnostic accepted
+
+Root reviewed/released correction and actual browser65909 exited0:1/1passed,
+1.4mcase/1.8mtotal. Fresh output reset-retry-project-20261018b; priorred untouched.
+endingproposed/failurenone; actual subject/scope/resource evidence and actrefs
+come from real callbacks/receipts. FailedSaveact2, successfulRetryact3.
+Original2/2 ->postAdd3/2 ->failedSave3/2 ->postRetry2/3 ->ownnewdelete1/3.
+Wrongact2 inverse code undo_unproved, dispatch4->4 and wholehash unchanged
+ ec606790127e8b954f60. Fresh correctact3 inverse ok, dispatch4->5 exactlyonce;
+original/restored81c29223177005d79daf, exactordered2/2 and cleantrialyes;
+gatewayerrors0. Same positive originalsubject throughout failed/retry/inverses,
+same trustedresource, actual sourceCartscope versus inverseSavedscope. Failed
+attempt's original intent and retry both settle only at fulloriginal restoration.
+Root independently read terminal/log/.last-run/closedreceipt and accepted proof.
+No Core/product change, build, paidcall or automatic permission reassignment.
+
+Allowlisted owning extension artifacts:
+- node_modules/codex-reset-retry-snapshot-browser.log, SHA256
+  7982fdb10be0007f0e734b2235bc9c9b47a8234af5fb312369247528e549c728
+- node_modules/codex-reset-retry-snapshot-closed.json: generated closed stages,
+  counts/hash/classes/refusal/success/permitted flags and opaque resource/subject
+- e2e/test-results/reset-retry-project-20261018b/.last-run.json: passed
+Typed/audit logs: extension/node_modules/codex-reset-retry-snapshot-type.log,
+downstream/node_modules/codex-reset-retry-snapshot-audit.log. Source remains
+frozen after exact3publicread replacements; no active own readers/browser/build.
+
+## Proposed next unit: generic informational inverse feedback ONLY
+
+No production edits authorized/made. Actualr5 picks the correct row/control but
+claims failedact10; final receipts show zero claims for actualsuccessfulact11.
+Actualtransport now proves explicit successful-retry act can be inverted safely
+without absorbing earlier intent prematurely. It does not retroactively reveal
+unpersisted canonical private act11 witnesses or accept canonical model behavior.
+
+Exact proposed Core owners (runtime/flow-bootstrap/site-reset): ledger.ts,
+words.ts and tests/ledger-subject.test.ts, tests/words.test.ts. Existing downstream
+installed-project.spec.ts may assert feedback if root requests integration proof;
+no new domain/public API/fixture/guidance owner needed. Root owns authored docs.
+
+Current target() unprovedclosure hardcodes generic created-destination retarget
+text and lists all pending acts; no positive related-act feedback exists. Pure
+helper extracted from CURRENT transfer admission condition can identify a unique
+OTHER later claimable/unspent act: same positive original subject/source scope/
+trusted resource, independently recorded pure reversible transfer, matching
+current declared target and fresh valid frozen destination state. Extraction
+must be behavior-preserving and NONMUTATING; never call target(other) to probe
+because it assigns subjectUndo when admitted.
+
+Requested wrong claim remains refused undo_unproved/executor0. Only add optional
+informational otherActsWithObservedEffect:[existing namedAct(other)] and generic
+words: Another recorded act on this item has its own observed effect. Inspect
+that act and explicitly name its id if that is the effect you are reversing.
+This refused call did not run; the original state still needs fresh complete
+proof. No automatic reassignment, permission, markundone, execution or guessed
+retry provenance. No unique positive current match leaves current refusal.
+
+Controls: wrongclaim+positivehint still0execution/bothpending/trialblocked;
+explicitcorrectclaim+freshfullbaseline settles both. Negatives cover foreign
+resource/scope/group, different subject, ambiguous matching acts, missing/late/
+partial/malformed original/current group, changed frozenstate, spent/undone,
+irreversible/mixed/undeclared effects. Probe feedback must leave attempt/spent/
+subjectUndo/ownership state unchanged. Existing strict preservation tests remain.
+Source/test implementation awaits root's written boundedbrief, no paidr6.
