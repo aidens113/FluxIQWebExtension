@@ -56,6 +56,7 @@ for (const retryTransfer of [false, true]) test(retryTransfer
   let originalItem = "", failedSaveAct = "", retryAct = "";
   let wrongClicksBefore = 0, wrongClicksAfter = 0, wrongHashBefore: string | undefined, wrongHashAfter: string | undefined;
   let wrongInverseCode: unknown, correctInverseCode: unknown;
+  let otherEffectActs: string[] = [];
   let rowSelectionFailure: JsonObject | undefined;
   let correctClicksBefore = 0, correctClicksAfter = 0;
   const transferStages: Array<{ stage: string; readIndex: number }> = [];
@@ -280,6 +281,8 @@ for (const retryTransfer of [false, true]) test(retryTransfer
         if (retryTransfer && step === 13) {
           const refused = last("core.run_node");
           wrongInverseCode = refused?.code;
+          const related = refused?.otherActsWithObservedEffect;
+          otherEffectActs = Array.isArray(related) ? related.map(value => record(value).act).filter((value): value is string => typeof value === "string") : [];
           wrongClicksAfter = clickDispatches;
           wrongHashAfter = reads.at(-1)?.hash;
           transferStage("afterWrong");
@@ -316,7 +319,7 @@ for (const retryTransfer of [false, true]) test(retryTransfer
       return "failed";
     });
     const ending = await build;
-    const diagnostic = { ending, failure, supervisorStep, builderStep, baseline, restored, receipts, reads, declarations, outcomes, targetDescriptors, rowSelectionFailure, missingCreate: { code: missingCreateCode, clickDispatchesBefore: missingClicksBefore, clickDispatchesAfter: missingClicksAfter }, retryTransfer: retryTransfer ? { failedSaveAct, retryAct, wrongInverseCode, correctInverseCode, wrongClicksBefore, wrongClicksAfter, wrongHashBefore, wrongHashAfter, correctClicksBefore, correctClicksAfter, stages: transferStages } : null, gatewayErrors: gateway.errors };
+    const diagnostic = { ending, failure, supervisorStep, builderStep, baseline, restored, receipts, reads, declarations, outcomes, targetDescriptors, rowSelectionFailure, missingCreate: { code: missingCreateCode, clickDispatchesBefore: missingClicksBefore, clickDispatchesAfter: missingClicksAfter }, retryTransfer: retryTransfer ? { failedSaveAct, retryAct, wrongInverseCode, correctInverseCode, otherEffectActs, wrongClicksBefore, wrongClicksAfter, wrongHashBefore, wrongHashAfter, correctClicksBefore, correctClicksAfter, stages: transferStages } : null, gatewayErrors: gateway.errors };
     await testInfo.attach("reset-structural.json", { body: Buffer.from(JSON.stringify(diagnostic)), contentType: "application/json" });
     console.log(JSON.stringify({ resetDiagnostic: diagnostic }));
     expect(ending).toBe("proposed");
@@ -379,6 +382,7 @@ for (const retryTransfer of [false, true]) test(retryTransfer
       expect(staged("postRetry").subjects.slice(2)).toContain(failed?.subject);
       expect(staged("afterDelete").sizes).toEqual([1, 3]);
       expect(wrongInverseCode).toBe("candidate.undo_unproved");
+      expect(otherEffectActs).toEqual([retryAct]);
       expect(wrongClicksAfter).toBe(wrongClicksBefore);
       expect(wrongHashBefore).toMatch(/^[a-f0-9]{20}$/u);
       expect(wrongHashAfter).toBe(wrongHashBefore);

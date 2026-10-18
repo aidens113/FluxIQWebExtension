@@ -1657,3 +1657,98 @@ partial/malformed original/current group, changed frozenstate, spent/undone,
 irreversible/mixed/undeclared effects. Probe feedback must leave attempt/spent/
 subjectUndo/ownership state unchanged. Existing strict preservation tests remain.
 Source/test implementation awaits root's written boundedbrief, no paidr6.
+
+## Generic informational inverse feedback: source implementation/gates
+
+Read exact written brief+CurrentState after root preserved accepted diagnostic
+1bfde958 and merged currentdev; proof/runtime unchanged before this unit.
+Current base Coreebd504be/downstreamc8a3e7e7. Exact owning production files:
+Core site-reset/ledger.ts, words.ts; owning tests ledger-subject.test.ts,
+words.test.ts. Optional existing installed spec adds closed hint assertions only.
+No shared docs, public APIs, contracts/barrels, fixtures or model examples changed.
+
+FAILFIRST30026 native1:2newtests failed/53skipped,28.40s. Resource-bearing
+wrongclaim lacked otherActsWithObservedEffect and unproved words method absent,
+as expected. Log Core packages/fluxiq/node_modules/codex-reset-effect-feedback-failfirst.log.
+
+Production transfer-target condition extracted into private pure transferTarget;
+exact static git-HEAD comparison confirms608oldchars==608newchars mechanically.
+Existing accepted explicit-claim branch alone still assigns subjectUndo/admission;
+no probe calls target(). Refusal remains candidate.undo_unproved. Pure hintlookup
+only names UNIQUE LATER independently witnessed claimable/unspent reversible
+transfer on same positive originalsubject/source scope, with current target
+passing that SAME predicate. Additional hint-only preclaimed originalbaseline,
+fresh whole-group scope membership/sequence and resourcefilters cannot widen
+admission. ANY resource present requires allthree positive/equal; allabsent
+retains existing trusted scope/group proof. Invalid/ambiguous/stale/partial/
+foreign candidates produce no hint. No reassignment, execution, permission,
+consumption, counterchange or earlier-intent absorption.
+
+Found/approved exact integration omission: spotOf previously dropped already
+supplied optionalresource. Same owned ledger now preserves that field (also for
+trialSpot delegation); resource-bearing positive test and missing/foreign/empty
+negatives cover it. Actual scopes still carry prior trusted resourcebinding;
+transfer admission predicate gains NO resource condition or other authority.
+Generic words support created OR modified effects and require inspection and
+EXPLICIT other-act id plus fresh complete original-state proof. No fixture words.
+
+Owning84906 native0:83/83 across2files (ledger79,words4),37.74s. Includes28defect
+controls, repeatedwrongclaim/bothpending, explicitcorrectclaim/oneinverse/full
+restoration, existingquantity-change-not-absorbed test now checks hint too.
+Corecheck63414 native0/94197ms cacheoff; Coreaudi73664 native0. Budgets now
+ledger747/words81/ledger-subject611/words-test38, no waiver or baseline inflation.
+Commands Core packages/fluxiq cwd: pnpm exec vitest run
+src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/ledger-subject.test.ts
+src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/words.test.ts
+--maxWorkers=2 --minWorkers=1; pnpm check (package only); Core root node
+scripts/structure-audit.mjs. Logs package/node_modules/codex-reset-effect-feedback-
+{owning,check}.log and Core root/node_modules/codex-reset-effect-feedback-audit.log.
+
+Existing installed spec only records/asserts otherEffectActs==[actualretryAct]
+from real wrong-claim refusal. Existing zero-dispatch/correct-once/exactwhole
+baseline/cleantrial assertions unchanged. Helpertype63273 native0 against current
+libraries; newbrowser not run, since Corefeedback outputs not rebuilt/released.
+Downstreamaudit58575 pending at writing; source frozen for finalreview. No
+libraries/browser/provider/paidr6 or worker commit/merge/push. Canonicalr5 FAILED
+is preserved; source tests do not constitute new full live acceptance.
+
+### Generic feedback actual installed transport: accepted mechanism evidence
+
+Root independently ran owning83/83 native0 and compared exact608char extracted
+admission identical; source review/resource preservation accepted. Root-authored
+architecture remains supervisor-owned and untouched by worker.
+
+Prior downstreamaudit58575 ended native0. Released own3libraries97712 native0
+(cacheoff): contracts reused1048ms, fluxiq rebuilt112443ms, gateway reused525ms.
+Exact command ownCore root: node scripts/build-cache/cli.mjs contracts:build
+fluxiq:build client-gateway-websocket:build. Log node_modules/codex-reset-effect-
+feedback-libraries.log. Frozen heads Coreebd504be/downstreamc8a3e7e7 throughout.
+Refreshed helpertype5747/Coreaudit76256/downaudit28977 all native0; respective
+logs extension/node_modules/codex-reset-effect-feedback-refreshed-helper-type.log,
+Core/node_modules/codex-reset-effect-feedback-refreshed-audit.log and downstream
+node_modules/codex-reset-effect-feedback-refreshed-downstream-audit.log.
+
+Root-released ONE narrowed installedgateway browser29917 native0:1passed(5.0m,
+case1.5m). Actual installed MV3/gateway/public project service; providerdisabled,
+scripted provider only, fresh isolated profile, realistic everything-store.
+Command extension cwd cacheoff: pnpm exec playwright test -c
+e2e/playwright.config.ts e2e/site-reset/tests/installed-project.spec.ts --grep
+"distinguishes a failed save" --workers=1 --retries=0 --reporter=list
+--output=e2e/test-results/reset-retry-feedback-20261018.
+
+Actual wrongclaim act-2 refused candidate.undo_unproved; informational
+otherEffectActs=[act-3] exactly actual successfulretry receipt. No reassignment:
+clickdispatch4->4 and hash7bf4c85690295041bdde unchanged. Explicitcorrectact-3
+claim admitted, exactlyoneclick4->5. Original complete2/2->Add3/2->retry2/3->
+ownDelete1/3->exactoriginal2/2; ordered original/restored hash both
+9dff895713a9a2122d82. Dirtytrial candidate.trial_reset_required, cleantrial yes,
+endingproposed, gatewayerrors0. Missingcreate baseline guard still0->0dispatch.
+All original strict assertions retained. No fixture reset/manual ledger seeding.
+
+Closed review receipt extension/node_modules/codex-reset-effect-feedback-closed.json;
+structural log same directory/codex-reset-effect-feedback-browser.log SHA256
+345CAE86039CB3872887352016D46B7688BF91D5488B941F75CF4F52EDD322C7;
+output e2e/test-results/reset-retry-feedback-20261018/.last-run.json passed.
+All readers ended. No source/HEAD mutations, commits, merges, pushes or paidr6.
+Canonicalr5 FAILED remains unchanged; scripted actualtransport proof establishes
+feedback delivery and strict inverse behavior, not fullmodel canonical acceptance.
