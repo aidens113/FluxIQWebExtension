@@ -238,7 +238,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer);
+    const guide = startGuide(status, noAnswer, store.lost());
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
     if (next !== screen) {

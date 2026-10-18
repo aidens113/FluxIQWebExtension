@@ -2,8 +2,9 @@
 //
 // The gate is visible (a non-zero box, not hidden, not inert), enabled (no
 // `disabled` and no `aria-disabled`), and reachable: after scrolling the
-// element into view, the point at its centre must land on the element itself or
-// one of its descendants rather than on an overlay. A refusal names which of
+// element into view, a point inside it -- its centre, or failing that another
+// point of its visible box -- must land on the element itself or one of its
+// descendants rather than on an overlay. A refusal names which of
 // the three failed, so the result can report a closed code instead of a
 // generic failure: `hidden` is TARGET_NOT_SHOWN, Core's `target_not_found`, and
 // `disabled` and `covered` are TARGET_NOT_ACTIONABLE (`results.ts`). A `covered` refusal also says what layer the
@@ -14,6 +15,20 @@
 // being knowable: an element with no box has no point to hit-test, and a
 // disabled one is refused whether or not something covers it. Reporting the
 // first reason found therefore always reports the most fundamental one.
+//
+// **The centre first, then the rest of the target.** The centre of the
+// target's visible part is tried first, and when it lands on the target that is
+// where the action goes, as it always has. When it does not, the probe pattern
+// the interference scan lays over the viewport (`interference/probe-points.ts`)
+// is laid over the target's visible box instead, and the first point that lands
+// on the target is where the action goes: the report carries that point, and
+// every verb dispatches at the report's point. Live (t707 round 3, D2), a cart's
+// "Save for later" link in a 543 px tab was refused eight trials running
+// because the line's static price paragraph had an oversized box over the
+// link's centre; it drew nothing there, and 27 of 63 points on the link hit the
+// link, so a person's click on its words worked. Only when no probed point
+// reaches the target is it refused as `covered`, and the refusal still names
+// what lies over its centre, the point the recovery reads the covering layer at.
 //
 // The scroll happens here rather than in the caller so that the hit test is
 // taken against exactly the geometry the action will use. A caller that scrolls
@@ -27,7 +42,7 @@
 
 import { deepElementFromPoint } from "../selector";
 import { composedClosest, composedContains } from "../shadow-dom";
-import { coveringLayerSentence } from "./interference";
+import { coveringLayerSentence, probePoints } from "./interference";
 import { scrollElementIntoView } from "./scroll-element-into-view";
 
 export type ActionabilityRejectionCode = "disabled" | "hidden" | "covered";
@@ -37,6 +52,8 @@ export type ActionabilityReport =
   | { actionable: false; code: ActionabilityRejectionCode; detail: string; point?: { x: number; y: number } | undefined };
 
 type Point = { x: number; y: number };
+/** A box in viewport coordinates. */
+type Area = { left: number; top: number; right: number; bottom: number };
 
 export function checkActionability(element: Element): ActionabilityReport {
   if (!element.isConnected) return reject("hidden", "the element is not in the document");
@@ -51,23 +68,61 @@ export function checkActionability(element: Element): ActionabilityReport {
 
   scrollElementIntoView(element);
 
-  const point = hitPoint(element, view);
-  if (!point) return reject("hidden", "no part of the element is inside the viewport, even after scrolling");
+  const area = visibleArea(element, view);
+  if (!area) return reject("hidden", "no part of the element is inside the viewport, even after scrolling");
 
-  // The hit test descends through open shadow roots, so a control inside a
-  // widget is tested against what is painted inside that widget rather than
-  // against its host, and a covering layer in one is named by its own content.
-  const hit = deepElementFromPoint(point.x, point.y, element.ownerDocument) ?? undefined;
-  if (!hit) return reject("covered", `nothing is painted at ${describePoint(point)}`, point);
-  if (hit === element) return { actionable: true, point, detail: `the point ${describePoint(point)} landed on the target` };
-  if (composedContains(element, hit)) {
-    return { actionable: true, point, detail: `the point ${describePoint(point)} landed on ${elementLabel(hit)}, inside the target` };
+  const centre = centreOf(area);
+  const hit = hitAt(element, centre);
+  if (hit && composedContains(element, hit)) return { actionable: true, point: centre, detail: landedOn(element, hit, centre) };
+
+  const elsewhere = pointReachingTarget(element, area, centre);
+  if (elsewhere) {
+    const underCentre = hit ? elementLabel(hit) : "nothing painted";
+    const detail = `${landedOn(element, elsewhere.hit, elsewhere.point)}; its centre ${describePoint(centre)} landed on ${underCentre}`;
+    return { actionable: true, point: elsewhere.point, detail };
   }
+
+  if (!hit) return reject("covered", `nothing is painted at ${describePoint(centre)}`, centre);
   // What covers the target, said so the reader can deal with it: the layer the
   // hit landed in and the controls on it (`interference/covering-layer.ts`).
-  const layer = coveringLayerSentence(element, point);
-  const covered = `the point ${describePoint(point)} landed on ${elementLabel(hit)}, which covers the target`;
-  return reject("covered", layer ? `${covered}; ${layer}` : covered, point);
+  const layer = coveringLayerSentence(element, centre);
+  const covered = `the point ${describePoint(centre)} landed on ${elementLabel(hit)}, which covers the target`;
+  return reject("covered", layer ? `${covered}; ${layer}` : covered, centre);
+}
+
+/**
+ * What is painted at the point. The hit test descends through open shadow
+ * roots, so a control inside a widget is tested against what is painted inside
+ * that widget rather than against its host, and a covering layer in one is
+ * named by its own content.
+ */
+function hitAt(element: Element, point: Point): Element | undefined {
+  return deepElementFromPoint(point.x, point.y, element.ownerDocument) ?? undefined;
+}
+
+/** The words for a point that landed on the target or inside it. */
+function landedOn(element: Element, hit: Element, point: Point): string {
+  if (hit === element) return `the point ${describePoint(point)} landed on the target`;
+  return `the point ${describePoint(point)} landed on ${elementLabel(hit)}, inside the target`;
+}
+
+/**
+ * The first point of the probe pattern, laid over the target's visible box,
+ * that lands on the target or inside it. The centre was already tried, so it is
+ * skipped. At most eleven more hit tests, and only for a target whose centre
+ * missed it.
+ */
+function pointReachingTarget(element: Element, area: Area, centre: Point): { point: Point; hit: Element } | undefined {
+  const width = area.right - area.left;
+  const height = area.bottom - area.top;
+  for (const offset of probePoints(width, height)) {
+    const point = { x: area.left + offset.x, y: area.top + offset.y };
+    const atCentre = Math.abs(point.x - centre.x) < 1 && Math.abs(point.y - centre.y) < 1;
+    if (atCentre) continue;
+    const hit = hitAt(element, point);
+    if (hit && composedContains(element, hit)) return { point, hit };
+  }
+  return undefined;
 }
 
 function reject(code: ActionabilityRejectionCode, detail: string, point?: Point): ActionabilityReport {
@@ -115,18 +170,22 @@ function disabledReason(element: Element): string | undefined {
 }
 
 /**
- * The centre of the part of the element that is inside the viewport. Clamping
- * matters for an element taller or wider than the screen: its true centre can
- * be off-screen, where `elementFromPoint` answers nothing at all.
+ * The part of the element that is inside the viewport. Clamping matters for an
+ * element taller or wider than the screen: its true centre can be off-screen,
+ * where `elementFromPoint` answers nothing at all.
  */
-function hitPoint(element: Element, view: Window): Point | undefined {
+function visibleArea(element: Element, view: Window): Area | undefined {
   const rect = element.getBoundingClientRect();
   const left = Math.max(rect.left, 0);
   const top = Math.max(rect.top, 0);
   const right = Math.min(rect.right, view.innerWidth);
   const bottom = Math.min(rect.bottom, view.innerHeight);
   if (right <= left || bottom <= top) return undefined;
-  return { x: (left + right) / 2, y: (top + bottom) / 2 };
+  return { left, top, right, bottom };
+}
+
+function centreOf(area: Area): Point {
+  return { x: (area.left + area.right) / 2, y: (area.top + area.bottom) / 2 };
 }
 
 /** A short, stable name for an element in a refusal: enough to find it on the page, bounded in length. */

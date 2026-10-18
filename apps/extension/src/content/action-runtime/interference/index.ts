@@ -10,7 +10,9 @@
 // `layer-text.ts` reads a layer's own bounded words, for `way-out.ts` and for
 // `../rate-limit-notice.ts`, which asks whether a press was refused as too fast,
 // as busy, or as needing something first.
-// `probe-points.ts` says where `overlays.ts` hit-tests the viewport;
+// `probe-points.ts` says where `overlays.ts` hit-tests the viewport, and,
+// over a target's own visible box, where `../actionability.ts` tries it when
+// its centre is not the target's;
 // `pressable-way-out.ts` is the one per-layer rule `clear.ts` presses by and
 // `presence.ts` asks by, so the recovery can clear a wall a missing target is
 // hidden behind.
@@ -32,6 +34,7 @@ export { clearableLayerOverPage } from "./presence";
 export { runOpenedLayers } from "./run-opened";
 export { coveringLayerSentence } from "./covering-layer";
 export { overlaysAt, overlaysOverPage } from "./overlays";
+export { probePoints } from "./probe-points";
 export { boundedLayerText } from "./layer-text";
 export { layerKind } from "./layer-kind";
 export { dismissControlIn, hasDismissalControl } from "./way-out";
