@@ -1,5 +1,46 @@
 # Codex R1 reset review
 
+Status: Canonical r6 exact oracle and separate0model replay PASSED; full acceptance
+HELD because paid whole-result checks disagree. Source/HEADs frozen, no retry.
+
+## Current verified result
+
+Released r6 run-mvebqbm4-b3f3b742 on exactfrozen downstream64789a1c/Corea62d3330
+built through real extension chat, modelresetonly. Main launcher native0; exact
+2orderedrows/6values and3finalfacts held. Model followed originalbaseline-before-
+create precondition, restored explicitowned effects, rejected redundant inverse,
+recovered a stale target and reached subflowtrialyes. Actualauthenticated Core
+candidateTrial supported/startResetfalse. Requestedfixturepolicy is kept separate.
+
+FULL QUALIFICATION IS HELD: runtime d58b5896-b7a7-457a-bbe5-9b352f3f8a45 paid
+checks0122/0123 returned does_not_answer/answers on identical originalinstruction-
+bound system/user packets. Core correctly retains unverified/model_disagreed.
+First check raises cartcompleteness concern, but its packet contains all2exact
+sourceexpectedrows/6values plus baseline row in active section and moved row in
+Savedsection/count3. No demonstrated expectedrow/terminalpage transport omission;
+no automaticyes, weakened oracle or productfix inferred from model disagreement.
+
+Independent providerdisabled savedFlow replay replay-mvec94bt-08e9adc6 native0/
+PASSED: exact2x3/finalgoal, allzerocanonicalcalls/cost/pending/omitted, no harness,
+providerfactoryfalse/envkeys[], storedkeys preserved1->1, exactFlowcontenthash
+before=after99d10edfbe19d0cd342e04ff598b2b6120d5952e589a5c0233137dad86f33587.
+Replay honestlyunverified/no_model_available; cannot upgrade paidjudge disagreement.
+
+Canonical paidwhole ledger restored through ownpublicexport from digestverified
+exactrun_summary:2itemizedcalls/$0.001898760/pending0/omitted0/breaches0. Replay
+ledger explicit0calls/$0. Source Labraw aggregate63/$0.052895436/unrecorded2 remains
+unchanged; actualstepLog61/$0.050996676 and61itemizedlines show2/$0.001898760
+aggregate excess exactly the alreadyitemized wholechecks. Authoring+chat+
+buildjudges separately59/$0.049097916. Source/integration gates priorpassed206Core/
+31domain/types/libs/build/audits; no source changes during runs or diagnosis.
+
+Requireddebug written docs/working/language-driven-flow-loop-plan/debugs/
+run-mvebqbm4-b3f3b742.md. Final closed paths/counts/commands below; root independent
+review/publication owns acceptance. No hint emitted in paidr6 (model selectedact11
+itself); prior installedtransport test remains directproof of newhint branch.
+Earlier r5 remains FAILED. Historical receipts below are not currentacceptance.
+
+## Prior source verification opening (before r6; retained)
 Status: Bounded successful-effect feedback implemented and supervisor-reviewed;
 current-dev merged-source narrow integration gates ALL passed. Worker source and
 HEADs frozen; root owns final integration/publication. No paid r6 release/run.
@@ -1856,3 +1897,131 @@ Log paths (all ignored, preserved):
 Only report dirty after this write. No worker commits/merges/pushes; no paidr6.
 Canonical task intent/oracle unchanged. Root independent integration/publication
 and any explicit subsequent full canonical live release remain required.
+### Read-only r6 readiness before root refreshed-source release
+
+Written canonical reset r6 brief read. No launcher/prelude/browser/provider call.
+Current task trees Core475c7bfc/downstream32d6acd4 unchanged during these reads.
+Fresh exact workspace ABSENT at owning runs root:
+test-runs/instances/bf-slot-2/persistent-isolated/codex-reset-positive-t719-20261018-r6.
+Prior r5 workspace exists and required debug run-mve8vn94-023a5213.md exists.
+Slot2 owner taskt719/instancebf-slot-2/pidnull, no active run recorded.
+Machinewide STOP-balance absent (not an assertion of a fetched provider balance).
+Owning providerKeySource read-only helper confirmed credentialpresent in checkout
+file; no credential values exposed and no provider request made.
+
+Exact unchanged source task everything-store-kettle-to-cart remains positive2
+orderedCart rows/6values(item/quantity/price), excluding saveditems. Owning
+add-to-cart workflow records expectedquantity and existingbaseline row; final
+facts require subtotal, case savedcount and notchallenged. No task/fixture/oracle
+changes or expectedanswer injection. Task intentionally changes its own cart/
+saved state; unrelated baseline preservation remains required, not whole-account
+unchanged language that would contradict the task.
+
+Proposed normal command (NOT RUN until explicit refreshed-source release):
+pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow
+--llm-provider deepseek --llm-model deepseek-flash --authoring-mode project
+--llm-task create-flow --instruction-task everything-store-kettle-to-cart
+--target persistent-isolated --workspace codex-reset-positive-t719-20261018-r6
+--model-reset-only --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250
+--llm-max-run-tokens 48000000. Process FLUXIQ_LAB_INSTANCE=bf-slot-2,
+FLUXIQ_TEST_TARGET=persistent-isolated, FLUXIQ_BUILD_CACHE_DIR=off.
+
+Normal guards/productionprelude own admission/preparation; no overrides. Require
+ACTUALauthenticated CoretrialRunnertrue/startResetfalse after allocation before
+claiming nohook readiness. Fixturefalse argument/helperecho is requestedpolicy,
+not observedstate absent an independent persistedreceipt. Track originalbaseline
+beforecreate, failed/retry act attribution, informationalhint versus explicit
+claim, exactrestoration and cleantrials. Acceptance remains realchat/judgedwhole/
+exactpositiveoracle/finalfacts plus explicit0call/0cost/noharness replay. Canonical
+r5 staysfailed. All readonlyreaders terminal; ownreport now frozen forrootrefresh.
+### Canonical r6 actual live release and ongoing run
+
+Root observed pairedpush42de21f6/a62d3330 native0, saved r6prep3a0139ca then
+refreshed ownpair down64789a1c/Corea62d3330 clean. Exact written ONE paidr6
+release received; normal exact command above launched32272 with process
+bf-slot-2/persistent-isolated/cacheoff, .25USD/250calls/48Mtokens/replay1/modelresetonly.
+No extra build/retry/source/HEAD mutation. Normalprelude reuseddomain998ms,
+passed Corequiet/entries/staleness, completed build-lock wait131588ms, and owned
+productionWeb preparation. No sharedCore/manualbuild or guards bypassed.
+
+Actual allocatedID run-mvebqbm4-b3f3b742 was first confirmed from BOTH exactown
+.staging-run directory and freshworkspace .sessions directory, beforelog caughtup.
+Earlier monitor word unallocated meant log visibility only and is superseded:
+allocation alreadyexisted during Webbuild. Realchat/providerbuild then began.
+
+Independent AUTHENTICATED actualCore readiness: candidateTrial capabilitypresent
+(trialRunner supported), startResetFALSE. Closed proof node_modules/codex-reset-
+canonical-r6-readiness.json. Requestedfixturefalse recorded separately; no
+independently persisted actualfixtureResetBetweenTrials flag claimed. Existing
+Lab admission requires agreement with nohook policy; no fixture hook used as
+reset workaround. Sources frozen64789a1c/a62d3330 throughrun.
+
+Actual0029create refused candidate.create_baseline_required;0031 original2/2
+collection receipts issued;0037 create succeeds with destination-1 explicitref.
+0051 trial blockedresetrequired;0055 explicitownact7Delete succeeded.0061 first
+trial admitted but execution_failed/candidate.execution_incomplete, leftownact8.
+Aftercandidate revision0069,0071 retrial refuseddirtysite;0075 explicitownact8
+Delete succeeded. Trialownedcreate/reset routing therefore exercised, but no
+passingtrial/wholeoracle/judge/replay acceptance yet. This is ongoing progress,
+not terminal result. Rawpage/model/row data not reproduced. Closedstructuraltool
+projection node_modules/codex-reset-canonical-r6-tools-closed.json; launchlog
+node_modules/codex-reset-canonical-r6.log. Fullprivateartifacts retained byowner.
+### Canonical r6 terminal, zero replay and remaining jury disagreement
+
+Launcher32272 actualnative0, main Labrun run-mvebqbm4-b3f3b742,123steps/716142ms.
+Projectad9165ea-d60c-40f4-a335-f78abf2ad497, Flow873fbe9d-e2aa-4cb1-b9f0-917530ef9fb0.
+Exactrecords2/2 and6/6fields/0unexpected/0nonstring; recordsHELD/finalstateHELD,
+all3factsheld. Realchat/subflowyes/wholeexecution succeeded. Paidwhole checkstatus
+unverified/core.result.verdicts_disagree; no fullacceptance despiteLabnative0.
+
+Read-only two originalchecker requestpackets0122/0123 and responses inspected,
+not repeated. Both exactoriginalcataloginstruction binding and identicalrequest
+system/userhashes (closed terminalfile). Negativecartcompleteness concern conflicts
+with ALL6sourceexpected rowvalues actuallyinpacket and complete relevant active/
+Savedterminalsections. Contextwithheld=true is retained; no claim it caused missing
+expectedrecords because sample2/2, noRequiredMissing andnoTruncation. No productbug
+or sourcefix inferred from conservativejury disagreement. ActualcheckrequestIDs
+llm.loop_verification.7cb251ee-f5c7-45d0-97ee-c6f7cb670948 and
+llm.loop_verification.71337176-96b6-443d-a80d-8f8f73ac97cb eachmatchoneownledgercall.
+
+Separate replay initially81578 refused beforeallocation: unsupported run-only
+--target. Worker corrected onlyCLIflag under sameauthorization (no paidcall or
+productedit), preserving firstlog. Actualcorrected81580 native0, receipt
+replay-mvec94bt-08e9adc6 PASSED. Exactcommand sameproviderblank process:
+pnpm lab replay everything-store --instruction-task everything-store-kettle-to-cart
+--workspace codex-reset-positive-t719-20261018-r6
+--project ad9165ea-d60c-40f4-a335-f78abf2ad497
+--flow flow.873fbe9d-e2aa-4cb1-b9f0-917530ef9fb0.
+Processall24providercredentialvariablesblank, FLUXIQ_TEST_ENV_FILES=none,
+FLUXIQ_PROVIDER_KEY_FILES=none, bf-slot-2/persistent-isolated/cacheoff. Owning
+replay disablesfactory/preserveskeys/comparesFlowhash/requireszeroaccounting;
+no manualkey deletion/restart. Exact2orderedrows6fields/playbackGoalHeldtrue,
+modelcalls/accounted/interventions/harness all0/gatefalse, keys1->1preserved.
+Canonical replay runtime62ab6c11-5d91-4b07-9f6f-465db124f53d restoresexplicit0
+cost/pending/omitted/breaches and0callrecords; no-model result staysunverified.
+
+Canonical paidwhole runtime d58b5896-b7a7-457a-bbe5-9b352f3f8a45 proof: exactown
+projectSQLite run_summary chunks SHAverified; selectedsameRun latestsummary;
+own public AutomationStudioLlmRunBudgetLedger.restore true,2itemized/pending0/
+omitted0/breaches0, charged=reported total$0.001898760. Percheck$0.001634724 and
+$0.000264036. Labraw63/$0.052895436/unrecorded2PRESERVED. ActualstepLog61/
+$0.050996676 and61observeditemizedlines contain NOduplicate requestIDs. Aggregate
+excess2/$0.001898760 equalswholechecks; actualsourceunique totals61/.050996676,
+authoring+chat+buildjudges59/.049097916 separately, zero replayseparatefree.
+No handedit to generatedrunreports or spendledger.
+
+Exactclosedignoredartifacts ownnode_modules:
+- codex-reset-canonical-r6-readiness.json (authenticatedactualstartResetfalse)
+- codex-reset-canonical-r6-tools-closed.json (final123steps,0hintemissions)
+- codex-reset-canonical-r6-terminal-closed.json (oracle,binding,hashes,raw/reconciledcost)
+- codex-reset-canonical-r6-judge-packet-closed.json (actualsourcevalues/terminalsection predicates)
+- codex-reset-canonical-r6-canonical-ledger-closed.json (publicrestorecost/identity/zeros)
+Logs codex-reset-canonical-r6.log, codex-reset-canonical-r6-zero-replay.log
+(syntaxrefusal) andcodex-reset-canonical-r6-zero-replay-b.log (actualfreepass).
+Actualreplayreceipt test-runs/instances/bf-slot-2/replays/replay-mvec94bt-08e9adc6.json.
+Requireddebug docs/working/language-driven-flow-loop-plan/debugs/run-mvebqbm4-b3f3b742.md.
+No rawmodel/page/row/credentials printed in authored docs. Profiles/evidencepreserved.
+
+All ownlauncher/readers terminal; pairedHEADs64789a1c/a62d3330 frozen. Onlyreport
+andnewdebug writable/changed. Rootindependentacceptance remainsrequired; no source/
+guidance/fixture/oracle edits, commits/merges/pushes or additionalpaidretry.
