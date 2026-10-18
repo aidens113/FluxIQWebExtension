@@ -10,11 +10,11 @@
 // $0.0861 spent). This is the sum, and the phases stay beside it so each can
 // still be read, and budgeted, on its own.
 //
-// **No call is counted twice.** The result check's calls are made outside the
-// run's budget, so Core's accounting and per-call lines leave them out -- but
-// a run detail with neither is read from its interventions, which do include
-// them (`observed-usage.ts`). A check call the run phase already itemized, by
-// its request id, is taken out of that phase and counted under `judge` only.
+// **No identified call is counted twice.** Current Core shares the run's
+// canonical ledger with paid result checks; older receipts may exclude them.
+// A uniquely itemized matching request moves its canonical charge to `judge`.
+// Legacy intervention-only receipts use their reported charge. Missing or
+// ambiguous identities never justify subtracting spend.
 //
 // **The step log closes what Core's records leave out.** Core writes every
 // provider call into the run's step log (`step-log-spend.ts`), and two kinds
@@ -69,6 +69,7 @@ export type LiveLlmRunSpend = {
     /** The creation build's reading of the person's instructions (the consequences they ask for), from the step log. */
     read: LiveLlmSpendPhase | null;
   };
+  /** A phase with an unaccounted call count or an unknown, noncanonical judge cost. */
   uncountedPhases: Array<"judge" | "reauthor">;
   /** What the run's step log held and what it added to the phases; `null` when there was no step log to read. */
   stepLog: LiveLlmStepLogReconciliation | null;
@@ -139,10 +140,15 @@ export function liveLlmRunSpend(input: {
   const split = creationBuildSplit(coreBuild, input.stepLog);
   const build = coreBuild && split ? { calls: Math.max(0, coreBuild.calls - split.calls), estimatedCostUsd: Math.max(0, sum([coreBuild.estimatedCostUsd, -split.estimatedCostUsd])) } : coreBuild;
   const judgeCalls = input.judge?.interventions ?? [];
-  const checkJudge = judgeCalls.length > 0 ? { calls: judgeCalls.length, estimatedCostUsd: sum(judgeCalls.map((call) => call.estimatedCostUsd ?? 0)) } : null;
+  const overlap = resultCheckOverlap(input.runtime, judgeCalls);
+  const judgeUncounted = judgeCalls.some((call, index) => call.estimatedCostUsd === null && !overlap.has(index));
+  const checkJudge = judgeCalls.length > 0 ? { calls: judgeCalls.length, estimatedCostUsd: sum(judgeCalls.map((call, index) => overlap.get(index)?.cost ?? call.estimatedCostUsd ?? 0)) } : null;
   const judge = split && split.judge.calls > 0 ? { calls: (checkJudge?.calls ?? 0) + split.judge.calls, estimatedCostUsd: sum([checkJudge?.estimatedCostUsd ?? 0, split.judge.estimatedCostUsd]) } : checkJudge;
   const read = split && split.read.calls > 0 ? { calls: split.read.calls, estimatedCostUsd: split.read.estimatedCostUsd } : null;
-  const runtime = input.runtime ? runtimeWithoutJudge(input.runtime, judgeCalls) : null;
+  const runtime = input.runtime ? {
+    calls: input.runtime.calls - [...overlap.values()].filter((call) => call.counted).length,
+    estimatedCostUsd: Math.max(0, sum([input.runtime.totalEstimatedCostUsd, ...[...overlap.values()].map((call) => -call.cost)])),
+  } : null;
   let reauthor: LiveLlmSpendPhase | null = input.reauthor && input.reauthor.attempts.length > 0
     ? { calls: input.reauthor.uncountedAttempts > 0 && input.reauthor.calls === 0 ? null : input.reauthor.calls, estimatedCostUsd: input.reauthor.totalEstimatedCostUsd }
     : null;
@@ -178,7 +184,7 @@ export function liveLlmRunSpend(input: {
     calls: counted(phases) + (stepLog?.unattributed.calls ?? 0),
     totalEstimatedCostUsd,
     phases: { build, runtime, judge, reauthor, chat, read },
-    uncountedPhases: reauthorUncounted ? ["reauthor"] : [],
+    uncountedPhases: [...(judgeUncounted ? ["judge" as const] : []), ...(reauthorUncounted ? ["reauthor" as const] : [])],
     stepLog,
     perBuild: flowSpend(input.ceilingUsd, totalEstimatedCostUsd, { build, read, judge, chat, runtime }, input.reauthor, stepLog?.unattributed ?? null),
   };
@@ -245,20 +251,29 @@ function flowSpend(
 }
 
 /**
- * The run phase with any result-check call it itemized taken out.
- *
- * Only a run read from its interventions -- no accounting, no per-call lines
- * -- can hold one, and there its figures are the interventions' own, so the
- * matched calls come out of both its count and its cost.
+ * Exact, unique request overlaps only. Canonical charges, including settled
+ * reservations, move intact; pending holds and unitemized history stay in the
+ * aggregate. A legacy intervention has only its reported figure to transfer.
  */
-function runtimeWithoutJudge(runtime: LiveLlmObservedUsage, judgeCalls: LiveLlmJudgeCalls["interventions"]): LiveLlmSpendPhase {
+function resultCheckOverlap(runtime: LiveLlmObservedUsage | null | undefined, judgeCalls: LiveLlmJudgeCalls["interventions"]): Map<number, { cost: number; counted: boolean }> {
+  const overlap = new Map<number, { cost: number; counted: boolean }>();
+  if (!runtime) return overlap;
   const fromInterventions = runtime.accounting === null && runtime.perCallRecords === "not recorded";
-  const judgeIds = new Set(judgeCalls.flatMap((call) => call.requestId ?? []));
-  const matched = fromInterventions ? runtime.observedCalls.filter((call) => call.requestId !== null && judgeIds.has(call.requestId)) : [];
-  return {
-    calls: Math.max(0, runtime.calls - matched.filter((call) => call.totalTokens !== null || call.estimatedCostUsd !== null).length),
-    estimatedCostUsd: Math.max(0, sum([runtime.totalEstimatedCostUsd, ...matched.map((call) => -(call.estimatedCostUsd ?? 0))])),
-  };
+  for (const [index, judge] of judgeCalls.entries()) {
+    if (!judge.requestId || judgeCalls.filter((call) => call.requestId === judge.requestId).length !== 1) continue;
+    const matches = runtime.observedCalls.filter((call) => call.requestId === judge.requestId);
+    if (matches.length !== 1) continue;
+    const call = matches[0]!;
+    const charge = runtime.perCallRecords !== "not recorded" ? call.charged : undefined;
+    const cost = charge?.estimatedCostUsd ?? (fromInterventions ? call.estimatedCostUsd : null);
+    if (cost === null || !Number.isFinite(cost) || cost < 0) continue;
+    // An unreported zero reservation has no known price, unlike a reported free call.
+    if (charge?.cost === "reserved" && cost === 0 && call.estimatedCostUsd === null) continue;
+    overlap.set(index, { cost, counted: charge !== undefined || call.totalTokens !== null || call.estimatedCostUsd !== null });
+  }
+  // Contradictory aggregates cannot authorize a negative phase or a guessed deduction.
+  if ([...overlap.values()].filter((call) => call.counted).length > runtime.calls || sum([...overlap.values()].map((call) => call.cost)) > sum([runtime.totalEstimatedCostUsd])) overlap.clear();
+  return overlap;
 }
 
 /** Rounded to the nano-dollar, so a sum of provider figures does not carry float dust into a ledger. */

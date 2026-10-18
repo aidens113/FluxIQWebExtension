@@ -73,3 +73,37 @@ node node_modules/codex-auction-readonly-diagnosis.mjs
 Supervisor independently reviewed the full helper, verified SHA07b1, reran it native0 and asserted the actual strict receipt. Its separate codex-root-auction-receipt-verified.json confirms same-run/unique-request hash de218a35, canonical1call/$0.001041924/pending0/omitted0, reported24versus23step records, all three scalar mismatches, wrong fixed versus auction-bin selection and no structured output. Proof accepted independently: this is one actual paid check reported twice by Lab, not evidence that the provider billed it twice. The auction result remains failed.
 
 New required debug: docs/working/language-driven-flow-loop-plan/debugs/run-mveba82m-fd0616dc.md. All diagnostic readers exited. Report/helper/receipt now frozen for root preservation and branch refresh; no implementation, rerun, fixture/oracle change or source movement performed.
+
+## Implemented bounded Lab overlap correction
+
+Supervisor preserved the preceding diagnosis/debug in cbb2d35c and refreshed the own pair before this implementation: downstream f47380fcadaf139182126392188eb9ed2d8b0fd4 / Core a62d3330. No subsequent HEAD movement, Core source change, browser/server/provider launch, generated run-artifact rewrite or spend-ledger correction was performed by this worker.
+
+Exact production ownership: packages/test-runner/src/live-llm/run-spend.ts and observed-usage.ts. Exact test ownership: their tests/run-spend.test.ts and tests/observed-usage.test.ts, plus NEW tests/canonical-judge-spend.test.ts. No production live-llm-run.ts edit. Only this own report is additionally edited; shared architecture/working plans remain supervisor-owned.
+
+Observed canonical calls now retain a separate copied charged/provenance object, leaving reported usage null where unknown. Spend reconciliation requires one nonempty exact request ID on each side. It transfers the canonical charged amount from runtime to judge, including a settled positive reservation; it does not substitute a lower reported figure. Legacy intervention-only matches retain reported-cost behavior. Different, missing or ambiguous identities authorize no deduction; contradictory aggregate bounds authorize none either. Pending holds, omitted/unitemized residual spend and incomplete-history flags are retained. A canonical reported-free call remains one call at zero cost; an unpriced zero reservation does not become a free replay. An unmatched unknown judge cost is exposed through the existing uncountedPhases judge marker. Ambiguous history may therefore remain conservatively overcounted, rather than being guessed into a lower total.
+
+Validation observed, all with process FLUXIQ_BUILD_CACHE_DIR=off:
+
+- Own Core three-library prep native0: contracts/gateway reused valid stamps; fluxiq rebuilt (~58.9s) after the published reset source change. Log own Core node_modules/codex-paid-check-overlap-libraries.log. No Core Web or whole-workspace build.
+- Fail-first regression native1, expected runtime0/$0 versus actual runtime1/$0.002: downstream node_modules/codex-paid-check-overlap-red.log. The first normal runner build surfaced a fixture-only nullable requestId typing error; fixed its explicit row.id before observing the semantic red failure. Direct owning runner tsc then exited0.
+- Final semantic owning compilation native0 and **50/50 tests passed**, no skipped/cancelled tests, in run-spend, observed-usage, NEW canonical-judge-spend, existing live-llm-run and call-rows. Logs node_modules/codex-paid-check-overlap-final2-compile.log and codex-paid-check-overlap-final2-tests.log. The actual composition exercises build authorization/settlement, playback authorization, normalized canonical detail plus raw verification parsing, snapshot, public runTotal and usage; one paid check is counted once. Earlier broader tests caught a negative-zero rounding difference, fixed without weakening their assertions.
+- Normal runner package check native0, including actual Core currentness guard, domain build stamp reuse and runner typecheck: node_modules/codex-paid-check-overlap-runner-check-final.log. This final check followed the sole later formatting-only test fix.
+- Both structure audits native0, no baseline or waiver change: downstream node_modules/codex-paid-check-overlap-audit-final.log; own Core node_modules/codex-paid-check-overlap-audit.log. Downstream's first audit found one packed test line; expanded it after readers exited, then final audit passed. git diff --check native0. No full suite was run.
+
+## Same-input fixed-owner recomputation
+
+NEW ignored helper node_modules/codex-auction-fixed-spend-recompute.mjs, SHA256 **b03ef7f673a9cb69123b12f14d62d8536e3f6b7f6c8d71e21ca2c9f7d6253fcb**. It retains the fixed own SQLite/CAS scope and integrity checks of the previously reviewed reader. It additionally invokes the actual existing public-detail parser against an in-memory endpoint return (no HTTP), the owning build-usage and step-log readers, and the newly compiled pure spend owner. The original HEAD spend source is retained only in ignored node_modules/codex-paid-check-overlap-original.ts, SHA256 **093ca2756d6db5b4dc70cd1961d0c46bcc5c75c02ddf146a2914a46a8ac4d75f**; TypeScript transpiles that pure owner in memory, without process spawning or product-source writes.
+
+Before accepting the corrected figure, the helper asserts that the old owner reproduces the **entire saved runSpend object deep-equal** from these same independently read inputs. It then asserts fixed23calls/$0.016103250, exactly one fewer paid check/$0.001041924, matching the real step log. Canonical restore/same-run/unique request identity remain proven; no cost-only matching or manual subtraction is used as the implementation. Original live/flow/repair snapshots are SHA256-identical before and after. The reader does not write any database, artifact, Flow, run or billing ledger.
+
+NEW exclusive-created closed receipt node_modules/codex-auction-fixed-spend-recompute-receipt.json, SHA256 **417677d464e458239f756f1eb0a9b66b5695a6ee92794678826173204e08eb53**. Syntax/actual recomputation native0. The receipt preserves dataAccepted=false, scalarMatches=[false,false,false], datasets0, accountFactsHeld=true and replaysExecuted0. This fixes Lab reporting, not the auction selection/output/judgment failure. Original generated24call report is retained; supervisor owns any later ledger correction.
+
+Independent closed rerun, from own t563 downstream (prints only the structural receipt):
+
+```powershell
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+node --check node_modules/codex-auction-fixed-spend-recompute.mjs
+node --disable-warning=ExperimentalWarning node_modules/codex-auction-fixed-spend-recompute.mjs
+```
+
+Final source/helper/receipt/report frozen for supervisor independent review; no commit, push or paid rerun performed.
