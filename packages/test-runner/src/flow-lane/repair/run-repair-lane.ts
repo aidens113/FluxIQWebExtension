@@ -157,6 +157,12 @@ export async function runLiveRepairLane(
     });
   }
   const resultRepair = resultRepairOf(input.lane.run);
+  const recovery = input.lane.run.harnessRecovery;
+  const cleanCreation = described.task === "create-flow" && input.lane.observation?.oracleVerdict === "passed"
+    && input.lane.observation.reportedVerdict === "passed" && recovery.attempted === false
+    && recovery.interventions.length === 0 && recovery.runtimePatchAttempts.length === 0
+    && recovery.adaptationIds.length === 0 && recovery.changeProposalIds.length === 0
+    && !recovery.refusalCode && !recovery.refusalRung && !recovery.resultReauthor && !recovery.resultRepair;
   // Everything the Flow lane's own run was given, rebuilt here because the lane
   // returns its Flow but not the inputs it resolved for it: the same secret
   // bindings and the same uploaded files, keyed by the paths this Flow's nodes
@@ -176,7 +182,8 @@ export async function runLiveRepairLane(
     task: described.task,
     purpose: described.purpose,
     recovery: resultRepair ? { ...input.lane.run.harnessRecovery, adaptationIds: [...new Set([...input.lane.run.harnessRecovery.adaptationIds, resultRepair.adaptationId])] } : input.lane.run.harnessRecovery,
-    ...(resultRepair?.datasets ? { expectedDatasets: resultRepair.datasets } : {}),
+    ...(resultRepair?.datasets ? { expectedDatasets: resultRepair.datasets } : cleanCreation && input.lane.run.extracted ? { expectedDatasets: input.lane.run.extracted } : {}),
+    ...(cleanCreation ? { replayOfUnchangedCreation: true as const } : {}),
     replays: input.replays,
     inputs: { ...rebuiltInputs(input, nodes), scenarioId: input.scenarioId, facilityRunId: input.facilityRunId },
     // The reset comes first, as it does in the Flow lane: it would otherwise discard the arm.
