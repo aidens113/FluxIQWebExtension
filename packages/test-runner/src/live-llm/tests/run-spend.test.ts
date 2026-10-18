@@ -5,6 +5,8 @@ import test from "node:test";
 import type { LiveLlmObservedUsage } from "../observed-usage.js";
 import type { LiveLlmReauthorRecord } from "../reauthor-record.js";
 import { liveLlmRunSpend } from "../run-spend.js";
+import { liveLlmObservedUsage } from "../observed-usage.js";
+import type { ExistingRunProviderCall } from "../../existing-fluxiq-control.js";
 import { LAB_CEILING_USD } from "./lab-ceiling.js";
 
 /** Core's per-Flow ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
@@ -26,8 +28,104 @@ function call(requestId: string | null, estimatedCostUsd: number) {
   return { requestId, taskKind: null, stage: null, provider: "deepseek", model: "deepseek-flash", promptVersion: null, validationOk: true, validationCodes: [], inputTokens: 10, outputTokens: 1, totalTokens: 11, estimatedCostUsd };
 }
 
+function canonical(rows: Array<{ id: string; charged: number; reported?: number | null }>, pendingCost = 0): LiveLlmObservedUsage {
+  const lines = rows.map((row, index): ExistingRunProviderCall => ({
+    ...call(row.id, row.reported === undefined ? row.charged : row.reported ?? 0),
+    estimatedCostUsd: row.reported === undefined ? row.charged : row.reported,
+    requestId: row.id, sequence: index + 1, allowance: "run", budgetBreach: false,
+    charged: { inputTokens: 10, outputTokens: 1, totalTokens: 11, estimatedCostUsd: row.charged, tokens: "reported", cost: row.reported === null ? "reserved" : "reported" },
+  }));
+  return liveLlmObservedUsage({
+    summary: { runId: "run-1", projectId: "p", flowId: "f", status: "succeeded", routeDecisionCount: 0, subflowEntryCount: 0, actionAttemptCount: 1, updatedAt: 1 },
+    actionAttempts: [], routeDecisions: [], subflows: [], providerCalls: lines, providerCallsOmitted: 0,
+    llmAccounting: { calls: lines.length, inputTokens: lines.length * 10, outputTokens: lines.length, totalTokens: lines.length * 11,
+      estimatedCostUsd: nano(rows.reduce((sum, row) => sum + row.charged, pendingCost)), pendingCalls: pendingCost > 0 ? 1 : 0, budgetBreaches: 0 },
+  });
+}
+
+test("a settled canonical paid check is transferred to judge once by its exact request identity", () => {
+  const runtime = canonical([{ id: "judge-1", charged: 0.002 }]);
+  const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "judge-1", estimatedCostUsd: 0.002 }] }, ceilingUsd: CEILING });
+  assert.deepEqual(spend.phases.runtime, { calls: 0, estimatedCostUsd: 0 });
+  assert.deepEqual(spend.phases.judge, { calls: 1, estimatedCostUsd: 0.002 });
+  assert.equal(spend.calls, 1);
+  assert.equal(spend.totalEstimatedCostUsd, 0.002);
+});
+
+test("partial overlap keeps recovery, external checks, pending holds and canonical charged cost", () => {
+  const runtime = canonical([{ id: "recovery", charged: 0.003 }, { id: "check", charged: 0.004, reported: 0.001 }], 0.005);
+  const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "check", estimatedCostUsd: 0.001 }, { requestId: "outside", estimatedCostUsd: 0.002 }] }, ceilingUsd: CEILING });
+  assert.deepEqual(spend.phases.runtime, { calls: 1, estimatedCostUsd: 0.008 });
+  assert.deepEqual(spend.phases.judge, { calls: 2, estimatedCostUsd: 0.006 });
+  assert.equal(spend.calls, 3);
+  assert.equal(spend.totalEstimatedCostUsd, 0.014);
+  assert.equal(runtime.accounting?.pendingCalls, 1);
+});
+
+test("unreported settled charges remain charged and a genuinely reported free check remains free", () => {
+  for (const row of [{ id: "check", charged: 0.006, reported: null }, { id: "check", charged: 0, reported: 0 }]) {
+    const runtime = canonical([row]);
+    const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "check", estimatedCostUsd: row.reported }] }, ceilingUsd: CEILING });
+    assert.deepEqual(spend.phases.runtime, { calls: 0, estimatedCostUsd: 0 });
+    assert.deepEqual(spend.phases.judge, { calls: 1, estimatedCostUsd: row.charged });
+    assert.equal(spend.calls, 1);
+    assert.equal(spend.totalEstimatedCostUsd, row.charged);
+    assert.deepEqual(spend.uncountedPhases, []);
+    assert.equal(runtime.observedCalls[0]?.estimatedCostUsd, row.reported);
+  }
+});
+
+test("missing, different and ambiguous request identities never authorize a deduction", () => {
+  const cases = [
+    { rows: [{ id: "a", charged: 0.002 }], ids: [null] },
+    { rows: [{ id: "a", charged: 0.002 }], ids: ["b"] },
+    { rows: [{ id: "a", charged: 0.002 }], ids: ["a", "a"] },
+    { rows: [{ id: "a", charged: 0.002 }, { id: "a", charged: 0.002 }], ids: ["a"] },
+  ];
+  for (const { rows, ids } of cases) {
+    const runtime = canonical(rows);
+    const spend = liveLlmRunSpend({ runtime, judge: { interventions: ids.map((requestId) => ({ requestId, estimatedCostUsd: 0.002 })) }, ceilingUsd: CEILING });
+    assert.deepEqual(spend.phases.runtime, { calls: rows.length, estimatedCostUsd: runtime.totalEstimatedCostUsd });
+    assert.equal(spend.calls, rows.length + ids.length);
+    assert.equal(spend.totalEstimatedCostUsd, nano(runtime.totalEstimatedCostUsd + ids.length * 0.002));
+  }
+});
+
+test("a known overlap preserves incomplete history and never consumes omitted or pending charges", () => {
+  const runtime = canonical([{ id: "check", charged: 0.002 }], 0.005);
+  runtime.calls = 3;
+  runtime.totalEstimatedCostUsd = 0.011;
+  runtime.perCallRecords = "incomplete";
+  runtime.unrecordedCalls = 2;
+  const before = structuredClone(runtime);
+  const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "check", estimatedCostUsd: 0.002 }] }, ceilingUsd: CEILING });
+  assert.deepEqual(spend.phases.runtime, { calls: 2, estimatedCostUsd: 0.009 });
+  assert.equal(spend.calls, 3);
+  assert.equal(spend.totalEstimatedCostUsd, 0.011);
+  assert.deepEqual(runtime, before);
+});
+
+test("unknown judge cost stays explicit and inconsistent aggregates cannot be subtracted", () => {
+  const unknown = canonical([{ id: "check", charged: 0, reported: null }]);
+  const spend = liveLlmRunSpend({ runtime: unknown, judge: { interventions: [{ requestId: "check", estimatedCostUsd: null }] }, ceilingUsd: CEILING });
+  assert.deepEqual(spend.uncountedPhases, ["judge"]);
+  assert.equal(spend.calls, 2, "unknown pricing is not a provider-free replay");
+  const mismatch = canonical([{ id: "check", charged: 0.004 }]);
+  mismatch.totalEstimatedCostUsd = 0.001;
+  const inconsistent = liveLlmRunSpend({ runtime: mismatch, judge: { interventions: [{ requestId: "check", estimatedCostUsd: 0.004 }] }, ceilingUsd: CEILING });
+  assert.deepEqual(inconsistent.phases.runtime, { calls: 1, estimatedCostUsd: 0.001 });
+  assert.equal(inconsistent.totalEstimatedCostUsd, 0.005);
+});
+
+test("an explicit canonical zero-call replay remains zero", () => {
+  const spend = liveLlmRunSpend({ runtime: canonical([]), judge: { interventions: [] }, ceilingUsd: CEILING });
+  assert.equal(spend.calls, 0);
+  assert.equal(spend.totalEstimatedCostUsd, 0);
+  assert.deepEqual(spend.uncountedPhases, []);
+});
+
 test("a run whose own accounting leaves the result check out has the check added, not subtracted", () => {
-  // Core's accounting and per-call lines never list the result check's calls.
+  // This older receipt's accounting and per-call lines exclude the result check.
   const runtime = usage({ calls: 3, perCallRecords: "recorded", observedCalls: [call("diag-1", 0.001), call("diag-2", 0.001), call("patch-1", 0.001)], totalEstimatedCostUsd: 0.003, accounting: { calls: 3, inputTokens: 30, outputTokens: 3, totalTokens: 33, estimatedCostUsd: 0.003, budgetBreaches: 0, pendingCalls: 0 } });
   const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "judge-1", estimatedCostUsd: 0.002 }] }, ceilingUsd: CEILING });
   assert.deepEqual(spend.phases, { build: null, runtime: { calls: 3, estimatedCostUsd: 0.003 }, judge: { calls: 1, estimatedCostUsd: 0.002 }, reauthor: null, chat: null, read: null });
