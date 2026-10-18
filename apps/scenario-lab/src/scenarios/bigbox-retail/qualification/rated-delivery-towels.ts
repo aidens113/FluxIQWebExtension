@@ -7,10 +7,12 @@ import { LEFTOVER_SOAP_LINE } from "./leftover-soap-line.js";
 /**
  * The paper towels that can be delivered and are rated 4.5 or better, in the
  * order the Highest rating sort draws them (rating, then review count), once
- * each. Derived by hand from `catalog/paper-towels.ts`: of the 27 paper towel
+ * each. Derived by hand from `catalog/paper-towels.ts`: of the 28 paper towel
  * listings, the 8 marketplace ones and the 2 store-sold ones that only ship
- * have no delivery, and of the 17 left the Prints pack (4.4) and the Kitchen
- * pack (4.3) are rated too low. Holders are another department.
+ * have no delivery, and of the 18 left the Prints pack (4.4) and the Kitchen
+ * pack (4.3) are rated too low. Holders are another department; the bamboo
+ * countertop holder delivers today and is rated 4.6, so the instruction's
+ * "not holders or dispensers" is what leaves it out.
  */
 const RECORDS: ReadonlyArray<Readonly<Record<string, string>>> = [
   { name: "Hearthside Select-A-Size Paper Towels, 8 Double Rolls", price: "$14.47", rating: "4.9" },
