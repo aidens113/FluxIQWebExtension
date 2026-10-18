@@ -551,3 +551,28 @@ test("a list read's statement says what each condition kept and rejected, with t
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
   assert.equal(looked.draft !== undefined && "conditions" in looked.draft, false);
 });
+
+test("an incomplete-text list refusal reaches the builder with executable disclosure recovery", async () => {
+  let reads = 0;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page("Catalogue", 0), structure: structuredClone(ROWS) } };
+      reads += 1;
+      return { status: "failed", failure: { code: "web.validation.output_not_observed", category: "validation", retryable: false,
+        actual: "incomplete_text: field description contains an unexpanded text disclosure; expand it with an explicit registered row-bound click before reading the field again" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const detected = await runtime.executeTool({ ...PROJECT, callId: "detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  const handle = (detected.evidence as WebLlmRepeatingStructure).extraction;
+  const failed = await runtime.executeTool({ ...PROJECT, callId: "read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED,
+    value: { node: EXTRACT, parameters: { extractList: { handle } }, consequences: [] } });
+  assert.equal(reads, 1);
+  assert.equal(failed.effectApplied, false);
+  assert.equal((failed.evidence as JsonObject).code, "output_not_observed");
+  const detail = (failed.evidence as JsonObject).detail as JsonObject;
+  assert.equal(detail?.reason, "incomplete_text");
+  assert.match(String(detail?.next), /nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click.*Next page/u);
+  assert.doesNotMatch(JSON.stringify(failed.evidence), /field description|unexpanded text disclosure/u);
+});

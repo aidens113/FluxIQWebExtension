@@ -1,9 +1,9 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed424calls/$0.357334143, two accepted passes/five failures/one unverified empty run. Positive-data corpus revision required. Company source pushed both dev branches. Canonical model-reset-only failed; bounded ledger/feedback corrections active. Social supported disclosure proof active; conditional jobs and read-only auction coverage preparing in isolated lanes.
+Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed517calls/$0.467974827, two accepted passes/six failures/one unverified empty run. Positive-data guard and five corpus corrections are in validation. Company and social source pushed; numeric guard merged locally. Canonical reset correction passed actual-ledger browser proof; final combined build pending before paid rerun. Selected-card field defect assigned.
 Created: 2026-10-17
-Last updated: 2026-10-17
+Last updated: 2026-10-18
 Owner: Senior supervisor agent
 Scope: Forty new tasks across ten realistic sites, all provider-free audited, selective full live acceptance per site and repaired failure, plus installed-extension creation and replay proof.
 Paired document: `breadth-forty-tasks-plan.md` in FluxIQ Core
@@ -41,7 +41,7 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
 | bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
 | crossborder-marketplace | free-hubs-under-ten: new run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but judge required exact search wording in titles and later repair left two oracle state facts unobserved. Generic judge guidance in final integrated gates; no full accepted pass. |
-| auction-marketplace | cheap-accessory-auctions failed once on plan grammar (fixed, proven live elsewhere); not rerun |
+| auction-marketplace | cheap-accessory-auctions run-mvdghd7e-267bcda3 failed93calls/$0.110640684, no Flow/oracle/replay. Negated digit-bearing text exclusion was falsely interpreted as a quantity range; generic guard fix independently passed10 cases and is merged locally. Rerun pending combined source gates. |
 | local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
 | company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
 | photo-social, professional-network | kiln-notes and connect-kade-senior-engineer not run |
@@ -56,7 +56,7 @@ the lane trees until merged).
 - **R1 source pushed, live proof failed:** prior push downstream72fb4d80/Corebb858c89 included original-inventory/transfer/reset ownership fixes and narrow/browser gates. Canonical run-mvdflu8o-d99d3100 used --model-reset-only and actual startReset=false, but failed53calls/$0.034600230, no Flow/whole judge/replay. Required debug inspected. Retry attribution, cross-page create accounting and permanently kept unresolved acts now have a bounded fix brief; no paid reset rerun until changed-source validation/review.
 - **Social recovery:** recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538. Worker is proving the supported explicit disclosure loop and closed incomplete-text feedback. No implicit clicks or truncated results accepted; generic guidance must not mirror fixture content.
 - **Other failures:** crossborder run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but later repair lacked two oracle state facts. Bigbox run-mvddx6wf-17e9eab0 matched its full oracle but failed stored-copy claim parsing. Generic query/judge/parser repairs are pushed; Bigbox rerun passed. Crossborder rerun remains owed.
-- **Continuation spend:** eight completed live runs, two accepted passes/five failures/one unverified result,424calls/$0.357334143. Historical spend above is separate; install proof remains separate.
+- **Continuation spend:** nine completed live runs, two accepted passes/six failures/one unverified result,517calls/$0.467974827. Historical spend above is separate; install proof remains separate.
 - **Storage excluded:** held optional72abeeab and restorationc13c0a30 remain only t707. Supervisor verified482pass/2fail/4skip held versus484/0/4 baseline; timing causality unproved. No pooling delta enters dev.
 - **Remaining:** accepted full coverage for crossborder, auction, classifieds, photo and professional; owed store/jobs/social reruns; installed Chrome/Edge extension automation creation and zero-call rerun. Install/pairing already proven, Firefox unavailable. Lifetime Core build leases remain active; no source mutation in live lanes.
 
@@ -556,3 +556,60 @@ None yet.
 - Revise five task variants before further launch: job-board-remote-rust-roles-quiet-market, its after-creation variant, job-board-halvard-labs-office-jobs, photo-social-august-over-1300, company-website-saturday-certificate. Keep intent and honest site behavior, adjust task/fixture/workflow/oracle together, prove positive paths provider-free, never force a judge yes.
 - Job run-mvdgaz8z-27ff3d1b is NOT accepted: actual CLI1, oracle0/0 passed but product unverified and requested replay not run;69calls/$0.056217954. Root debug written. This user direction supersedes every prior empty-result allowance in this plan and its historic audit reports.
 - Corpus nonempty regression and before-launch guard are required. Existing nonempty auction/social work continues; no additional zero-row scraping paid/browser launch.
+
+### Supervisor brief: codex-positive-scraping-corpus
+- Worker: held_lane_review; unit t721-positive-scraping-data-guard, worktree C:/Users/osrs_/FluxStuff/fxwork/t721-positive-scraping-data-guard. Supervisor owns request guard files; worker owns corpus files, partitioned below.
+- Objective: all108 realistic tasks eligible for browser testing have meaningful positive data when scraping; fix five currently empty task variants and prove actual paths.
+- Read: newest Current State/AGENTS positive-data rule; apps/scenario-lab/src/scenarios/{job-board,photo-social,company-website}/live-tasks.ts, then imports owning quiet-market, halvard-labs-office-jobs, august-over-1300, saturday-certificate workflows/expected/site data. Follow those imports only; no MVP background rediscovery.
+- Phase1 owns only docs/working/breadth-forty-tasks-plan/reports/codex-positive-scraping-corpus.md; inspect source read-only and propose exact existing fixture/instruction/workflow/oracle/test files before source edits.
+- Phase2 preapproved owns existing scenarios/tests/realistic-site-live-tasks.test.ts for nonempty-record regression; remaining exact fixture/source list requires supervisor assignment from phase1 findings.
+- Must not touch: packages/test-runner (supervisor guard), extension/domain/Core source, shared plans/AGENTS, other reports, generated outputs, profiles, commits/pushes. No paid launch.
+- Five affected task IDs: job-board-remote-rust-roles-quiet-market and -after-creation; job-board-halvard-labs-office-jobs; photo-social-august-over-1300; company-website-saturday-certificate.
+- Keep intent; choose/add realistic matching data or revise branch/condition to actual available data with the same intent. Never invent result rows, weaken an oracle, hardcode fixture answers into model guidance, or silently remove a task from coverage.
+- Update honest workflow/expected rows/task wording together; shared fixture changes require checking other affected task oracles. Quiet market may be small, must not be empty. Positive expected data must be reachable through actual browser controls.
+- Definition of done: corpus audit108/87dataset tasks all with nonempty exact records; narrow affected scenario tests/check; provider-free browser path per changed workflow/variant reaching nonempty oracle. No whole suites. Use only realistic browser sites and fresh isolated data.
+- Cache off; shared Core task preparation is currently running under supervisor session15606. Read-only discovery allowed now; no package builds until preparation exits. Keep source frozen during relevant validation.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-positive-scraping-corpus.md.
+
+### Supervisor brief: positive scraping launch guard
+- Unit t721 shares one branch/worktree for coherent positive-data requirement. Supervisor owns packages/test-runner/src/flow-lane/creation/{request.ts,tests/request.test.ts} and authored docs/architecture/testing-facility.md; worker owns corpus regression and later explicit fixture paths.
+- Refuse realistic scraping/dataset task before topology/browser/provider when expected rows absent/empty/count-only/inconsistent. Dataset expectations must be nonempty record-by-record; pure action goals remain valid. Preserve provider-free synthetic unit use and normal real-user empty search behavior.
+- Fail-first guard regressions, owning request tests, affected package typecheck and structure audit; no paid launch needed for guard.
+
+### Supervisor brief: codex-auction-numeric-guard
+- Worker: storage_comparison, existing auction monitor continues read-only in frozen t563. Source work ONLY idle paired t567, synced downstream e1ce99f4/Core b2721f85; no source/build mutation in live t563.
+- Objective: fix proved false quantity contradiction on actual auction trial0051/judges0052/0053; six rows/model yes remain insufficient without real oracle acceptance.
+- Read: actual sanitized numeric guard receipts/probe, Core runtime/result-verification/request-rows/left-out-stating-a-kept-number.ts and its existing owning tests; result-verdict.ts read-only.
+- Owns: that guard source, its existing owning test file, own t567 report docs/working/breadth-forty-tasks-plan/reports/codex-auction-numeric-guard.md. Find exact owning test path before edits and report it.
+- Fix bounded negated text-matches classification: incidental digits in a type-exclusion regex do not establish a numeric quantity range. Preserve genuine typed numeric predicates and positive numeric-text safety checks. Propose any broader semantic change before edits.
+- First fail-first generic regression matching closed condition shape, with real numeric guard positive/negative controls. Never use fixture answer/names/products in model guidance or weaken oracle/output verification.
+- Must not touch: t563 live source/build, reset worker Core files, t721 corpus/guard, public protocols/permissions, shared plans, captured state, commits/pushes. No paid launch.
+- Validation: owning guard/verdict tests only, affected Core package check/audit; library rebuild only after readers exit if needed for downstream currentness. Do not rebuild t563. Root independently reviews/tests before integration.
+- Report to: t567 docs/working/breadth-forty-tasks-plan/reports/codex-auction-numeric-guard.md.
+
+### 2026-10-18 ? Positive corpus scope approved; social source accepted
+- Supervisor reviewed the positive corpus report. All28 exact existing source/test paths listed under its Exact proposed source ownership are assigned to held_lane_review in t721, with no other source paths. Preserve108 tasks/87 dataset tasks; quiet market retains actual m7, hybrid Labs role is non-Rust, August positive post preserves other ranking IDs, Saturday uses existing Wrenfield capacity across three weeks. Exact rows/formats/account state require actual browser proof, not source-calculated acceptance.
+- Company slot semantics may add truthful aria-disabled/data-date attributes without changing free capacity or calendar behavior. Owning fixture driver may implement existing pagination and selector@attribute contract; no public contract or Core changes. Revised tasks explicitly state ordered columns/value formats.
+- Worker source edit release waits for supervisor bootstrap15606 actual exit; root guard/tests/docs are already frozen for its automatic workspace build. This worktree initial provisioning ran one whole workspace build (including shared Core web) in background; count it against the daily sweep limit and do not request another full build/check/test suite for these fixes. Future commands cache off.
+- Social feedback committed ec9b8593 and merged e1ce99f4 after supervisor43 independent domain cases, source review and actual3-case Chromium proof/type/audit gates. Supervisor audit13269 also passed210/638. Root reset additional15-case reader passed after58 earlier; full latest owning67 cases passed, final downstream checks/browser pending.
+- Auction run-mvdghd7e-267bcda3 failed93calls/$0.110640684, no Flow/oracle/replay. Generic negated-digit text condition false quantity guard reproduced; t567 bounded Core source correction assigned. No paid rerun until debug, changed-source gates and supervisor release.
+
+### Supervisor brief: selected-card field inference (2026-10-18)
+- Worker: storage_comparison; source ONLY idle t567 downstream. Preserve frozen t563 evidence; no paid launch.
+- Objective: fix structural cause of job run-mvdgaz8z-27ff3d1b selecting transient selected-card-only field paths instead of stable full-coverage equivalents.
+- Read: own empty-result review, actual structural detection receipts, content/extraction/infer-fields.ts and existing owning unit/browser tests.
+- Owns: apps/extension/src/content/extraction/infer-fields.ts; its tests/infer-fields.test.ts; existing apps/extension/e2e/content/tests/extraction/tests/structure-detection.spec.ts; own reports/codex-selected-card-fields.md.
+- Before edits verify exact existing paths and propose generic mechanism; report any additional owner needed. No fixture, domain, Core, protocol or other worker file edits.
+- Fail-first reproduces selected ancestor class producing duplicate partial fields. Preserve legitimate optional marks, mixed templates, sensitive exclusions, semantic leaf selectors and bounded inference.
+- No hardcoded fixture names/classes, no teaching model which key to pick, no blanket deletion of partial fields or weakened read conditions.
+- Definition of done: owning unit regression plus negative controls, affected package check/audit, provider-free realistic job-board browser proof using actual inference/read with nonempty matching rows after selection changes.
+- No Core rebuild yet; final R1/numeric integration is in progress elsewhere. Source edits may proceed; coordinate final dependency sync/build with supervisor. Cache off, narrow checks only.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-selected-card-fields.md. No commits/pushes or shared document edits.
+
+### 2026-10-18 ? Positive-data enforcement and final combination gates
+- Root positive-data launch guard reproduced baseline empty acceptance fail-first, then passed9/9 owning tests and test-runner package check (actual exit0,26.162s). Realistic dataset tasks require nonempty record-by-record expectations after variant resolution, with count agreement; pure action goals remain valid. Ordinary real-user empty searches unchanged.
+- Worker revised five empty variants in t721; initial affected scenario corpus/instruction/oracle tests70/70 prove108 tasks/87 positive datasets. Actual Chromium path and package checks still running; source-calculated rows alone are not acceptance.
+- Reset correction frozen Corefe2d8422/downstreama173a02b passed final combined60/60 (ledger50/numeric10) and both audits. Earlier actual-ledger browser4/4, downstream111 and package checks retained; final Core library/check active, no paid launch.
+- Numeric guard Core3fb6b891 and downstream report287c032e merged locally; supervisor independent10/10 observed. Last pushed downstream7abd7bfa/Coreb2721f85; later local numeric and forthcoming reset changes not yet pushed.
+- Supervisor assigned selected-card field inference in idle t567; no hardcoded fixture/style names, optional marks/templates/sensitive handling preserved; positive realistic browser proof required. Source proposal first.
+- Supervisor scope amendment: approved additional apps/extension/src/content/extraction/field-path-equivalence.ts (one exported structural pruning function actually called by infer-fields), plus existing extraction/index.ts if barrel convention requires it. Existing786-line infer-fields must remain under800-line budget. Owning tests continue through actual inference; no extract-and-drop.
