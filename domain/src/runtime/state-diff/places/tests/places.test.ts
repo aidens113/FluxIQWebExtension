@@ -7,7 +7,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, type WebLlmSnapshotBinding } from "../../../llm-evidence";
+import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, webResetResource, type WebLlmSnapshotBinding } from "../../../llm-evidence";
+import { webResetCollections } from "../../../llm-evidence/control-spot";
 import { createWebStatePlacesMemo, webStateDiffPlaces, webStateSnapshotPlaces } from "..";
 
 type Spec = { tag: string; selector: string; text?: string; cls?: string; record?: JsonObject; dialog?: string; children?: Spec[] };
@@ -162,4 +163,25 @@ test("a step's control in no item still names what it and its page are about, as
   const diff = step(titlePage, titlePage, press("main > button"));
   assert.deepEqual(diff.spot, { subject: webControlSpotToken("subject", "Walter Scott"), page: webControlSpotToken("subject", "Ivanhoe") });
   assert.doesNotMatch(JSON.stringify(diff), /Ivanhoe|Walter/u);
+});
+
+
+test("trial diffs preserve immediate complete resource-bound inventories without publishing raw names", () => {
+  const captured = (name: string, quantity: string, source = "tab:1:frame:0") => {
+    const binding = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/documents", title: "Documents", interactiveElements: [
+      { tagName: "div", role: "list", selector: "#documents" },
+      { tagName: "div", role: "listitem", selector: "#row", parent: 0, attributes: { "aria-setsize": "1", "aria-posinset": "1" } },
+      { tagName: "button", selector: "#move", parent: 1, name: "Move", context: { subject: name } },
+      { tagName: "input", selector: "#count", parent: 1, value: quantity, context: { subject: name } }
+    ] });
+    binding.resetResource = webResetResource("session.one", source)!;
+    return binding;
+  };
+  const before = captured("First document", "2"), after = captured("Other document", "3");
+  const diff = webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(after), { definitionId: "web.output.dom-click", parameterValues: { selector: "#move" } }, false);
+  assert.deepEqual(diff.collections, { before: webResetCollections(before).collections, after: webResetCollections(after).collections });
+  assert.doesNotMatch(JSON.stringify(diff.collections), /First document|Other document|tab:1|session.one/u);
+  assert.equal(webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(after), { definitionId: "web.output.dom-click" }, true).collections, undefined);
+  const different = captured("Other document", "3", "tab:2:frame:0");
+  assert.equal(webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(different), { definitionId: "web.output.dom-click" }, false).collections, undefined);
 });

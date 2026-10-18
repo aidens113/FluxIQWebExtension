@@ -8,7 +8,7 @@ import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../../../scenario-lab/sr
 
 const SAGE = TIDEWELL_KETTLES.find((child) => child.variant?.colour === "Sage Green" && child.variant.capacity === "1.7 L")!;
 
-test("a cross-page add exposes a new subject and deleting only that line preserves every baseline line and quantity", async ({ openHarness }) => {
+test("new-line removal and an existing-line transfer restore every baseline value and original order", async ({ openHarness }) => {
   test.setTimeout(90_000);
   const harness = await openHarness("everything-store");
   await harness.page.getByRole("dialog", { name: "Never miss a deal" }).waitFor({ timeout: 15_000 });
@@ -61,5 +61,26 @@ test("a cross-page add exposes a new subject and deleting only that line preserv
     expect(restored?.subjects).toEqual(original.subjects);
     expect(restored?.states).toEqual(original.states);
   }
+  expect(await lines()).toEqual(baseline);
+
+  // The install task also moves the existing first line to a sibling collection.
+  // Use only its own controls, including the site's recoverable first-save failure.
+  const ownExistingLine = harness.page.locator('[data-line="L2"]');
+  await ownExistingLine.locator('[data-action="save-for-later"]').click();
+  await ownExistingLine.getByText("Try again", { exact: true }).click({ timeout: 15_000 });
+  await expect(ownExistingLine.locator('[data-action="move-to-cart"]')).toHaveCount(1);
+  const transferred = await runtime.startState!({ ...request, callId: "transferred" });
+  const origin = before!.collections!.find((original) => original.subjects.some((subject) => !transferred!.collections!.find((current) => current.scope === original.scope)?.subjects.includes(subject)));
+  expect(origin).toBeTruthy();
+  const movedSubjects = origin!.subjects.filter((subject) => !transferred!.collections!.find((current) => current.scope === origin!.scope)?.subjects.includes(subject));
+  expect(movedSubjects).toHaveLength(1);
+  const destination = transferred!.collections!.find((current) => current.scope !== origin!.scope && current.subjects.includes(movedSubjects[0]!));
+  expect(destination?.group).toBe(origin!.group);
+  expect(before!.collections!.find((current) => current.scope === destination!.scope)!.subjects).not.toContain(movedSubjects[0]);
+  expect(destination!.states[movedSubjects[0]!]).toBeTruthy();
+  await ownExistingLine.locator('[data-action="move-to-cart"]').click();
+  await expect(ownExistingLine.locator('[data-action="save-for-later"]')).toHaveCount(1);
+  const restored = await runtime.startState!({ ...request, callId: "restored" });
+  expect(restored!.collections).toEqual(before!.collections);
   expect(await lines()).toEqual(baseline);
 });

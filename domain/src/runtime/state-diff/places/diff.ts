@@ -41,6 +41,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { webTargetSpot } from "../../llm-evidence";
+import { webResetCollections } from "../../llm-evidence/control-spot";
 import { webNodeTargetPlaceKey } from "./node-target";
 import type { WebStateSnapshotPlaces } from "./snapshot";
 
@@ -56,7 +57,12 @@ export function webStateDiffPlaces(
 ): JsonObject {
   const spot = before ? spotOf(before, node) : undefined;
   const items = before && after && !documentChanged ? vouched(before, after) : undefined;
-  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}) };
+  const was = before && !documentChanged ? webResetCollections(before).collections : [];
+  const now = after && !documentChanged ? webResetCollections(after).collections : [];
+  const groups = new Set(was.map((collection) => collection.group));
+  const collections = was.length && now.length && now.every((collection) => groups.has(collection.group))
+    ? { before: was, after: now } : undefined;
+  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}), ...(collections ? { collections } : {}) };
 }
 
 function spotOf(before: WebStateSnapshotPlaces, node: { definitionId: string; parameterValues?: JsonObject | undefined }): JsonObject | undefined {

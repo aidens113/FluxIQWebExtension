@@ -1,32 +1,43 @@
 # Codex R1 reset review
 
-Status: New-line preservation and generic extraction unit checked and frozen;
-separate canonical-transfer continuation approved but implementation held for
-supervisor commit/release. Paid/live release remains held.
+Status: Transfer and whole-trial original-authority integration implemented;
+source/tests frozen. Final Core check/build passed. Downstream gates/live held for
+supervisor commit and both-branch sync to latest dev, then explicit release.
 
 ## Current verified result
 
 R1's destructive subject-only matching is replaced by complete resource-bound
-pre-act destination witnesses and exact row-state restoration checks. Modern
+pre-act destination witnesses and exact ordered row-state restoration. Modern
 unproved reversible leftovers block ordinary trials; wrong targets can be
-corrected. Repeated own adds can share one proved removal. Scope/resource
-transport stays private. Generic extraction retains late discovered columns
-within64 instead of truncating at24. No task/oracle was changed.
+corrected. Repeated own adds can share one proved removal. A witnessed transfer
+can be reversed once without guessing quantity; changed moved-row values refuse
+admission, and original full baseline values/order are required for completion.
+Scope/resource transport stays private. Generic extraction retains late
+discovered columns within64; no task/oracle was changed.
 
-Final worker results: Core116/116 narrow guards; cache-off Core check/build exited0;
-domain67/67; infer-fields19/19 after two fail-first regressions; domain and
-extension type/bundle checks exited0; Core and downstream structure audits0.
-Real Chromium content run4/4 passed: whole-baseline reset proof15.5s, unchanged
-task-named cart extraction7.9s, recorded read3.6s, automatic extraction7.8s.
-Total browser invocation5.5min including harness setup. Supervisor independently
-reported Core24/24, domain67/67, extension36/36 for this frozen source.
+Whole-trial supervisor ownership now inherits immutable original scope/group
+inventories recorded before the project's first known lasting effect. This
+never overwrites current observations or manufactures originals from reset
+reads. The real whole-trial port regression routes builder observations and
+supervisor trial acts through reset ownership, combining add+transfer, without
+manually pre-seeding trial baselines. Different resources, post-effect-first
+reads and malformed immediate witnesses refuse honestly.
 
-Canonical install still requires a positive collection-transfer inverse for
-saving the pre-existing phonecase; current unit safely refuses that unproved
-inverse. A separate approved bounded patch will also enforce original subject
-order. No paid run, commit, merge, push, or user-state reset by this worker.
-Billed cost remains zero. Historical review notes below record superseded
-intermediate designs and failed checks; this summary is the current state.
+Latest worker Core narrow service/guard run:136/136 in12files, followed by a
+focused actual whole-owner test covering all four modes. Core audit0. Prior
+frozen transfer batch: Core125/125 + check/build0; domain68/68; domain and
+extension type/bundle checks0; both audits0. Real Chromium content proof passed
+at22.5s: new-line add/removal plus existing phonecase Save, visible Try-again
+recovery and Move-to-cart restore every ordered collection, semantic row state,
+baseline line SKU/text/quantity. Whole browser invocation3.6min. Final authority Core replacement44679 exited0 (check37.6s/build215.4s);
+supervisor requested no downstream repeat until paired latest-dev sync completes.
+
+Original reviewed unit is in local supervisor commits downstream a55806bb and
+e8b2d7fd, Core4bb74570 and c61455d3. Transfer/authority continuation remains for
+supervisor review/integration. No paid run, commit, merge, push or user-state
+reset by this worker; billed cost remains zero. Unknown quantity inverses and
+missing original/immediate witnesses still fail closed. Historical notes below
+record superseded intermediate designs and failed checks; this section is current.
 
 ## Findings recorded during review
 
@@ -263,3 +274,164 @@ browser34804 passed4. Core audit22322 passed400 advisories; downstream55798
 passed208 advisories after replacing internal test import with public startState.
 All product sources/tests remain frozen awaiting supervisor commit and transfer
 release. Only this report was updated after final validation.
+
+## Transfer continuation implementation (2026-10-17)
+
+Supervisor preserved reviewed unit in local commits: downstream a55806bb and
+e8b2d7fd; Core 4bb74570 and c61455d3. Release received for approved transfer
+continuation and equivalent private immediate trial/exploration witnesses.
+
+Fail-first preservation run:25/28 passed; explored/trial transfer admission
+was missing and swapped baseline order was falsely accepted. New transition
+witnesses now freeze an immediate complete origin-present/destination-absent to
+origin-absent/destination-present movement. Origin must match the act's scope;
+all other rows/order survive. Later moved-row state edits refuse inverse.
+One modify inverse is spent once. Completion requires original ordered rows and
+all baseline row values in both collections and captured siblings.
+
+Transport paths added as authorized: Core site-reset/contracts.ts and
+act-places.ts + tests/act-places.test.ts; candidate-trial/landed-acts.ts + its
+owning test; downstream state-diff/places/diff.ts + owning tests. No browser
+concepts or raw page values enter Core. A later reset read cannot create the
+original transition; trial acts receive the same per-step immediate evidence.
+
+First broad narrow run:120/121 passed. The new malformed-duplicate-subject
+transport regression caught an existing deduplicating token reader being reused
+for complete inventories; fixed to reject a raw subject-array length mismatch.
+Core check is running; no paid or browser run until final frozen rebuild.
+The browser proof now includes original first-line Save-for-later, explicit
+site Try-again recovery, Move-to-cart inverse, and full original ordered
+collection/semantic-state/line equality. Fixture/task/oracle stay unchanged.
+
+Transfer final guard validation:125/125 in10 Core files passed, including both
+requested separation cases: transient pre-move retry text permits safe transfer
+inverse; an earlier quantity modification is never absorbed or marked reset by
+moving the line back. Immediate destination fingerprint must remain unchanged
+before inverse admission. Core preliminary check exited0 without stamping
+because source changed during it (not counted as final); final frozen cache-off
+contracts/check/build81639 is now running. Core check completed22.8s; waiting
+for actual build completion before downstream reads. Core audit16832 and
+downstream52746 both exited0. One two-assignment test line was split for the
+Core statement-packing rule; no test semantics changed. Product source/tests
+are frozen for final validation.
+
+Transfer supervisor verification commands (same cwds as above):
+
+```
+pnpm.cmd --filter fluxiq exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/ledger-subject.test.ts src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/act-places.test.ts src/programs/automation-studio/runtime/service/candidate-trial/tests/landed-acts.test.ts --maxWorkers 2 --minWorkers 1
+```
+
+Then after actual frozen Core build exits, downstream:
+
+```
+$env:DOMAIN_TEST_BUILD_LABEL='supervisor-reset-transfer'
+node domain/scripts/test-domain.mjs control-spot/tests state-diff/places/tests start-state/tests runtime/tests/host-runtime io/tests/gateway-output-dispatcher.test
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+pnpm.cmd --filter @fluxiq-web-extension/extension test:content -- --workers=1 site-reset-subject.spec.ts
+```
+
+The same real browser proof retains its new-line add/removal assertions and adds
+the canonical existing-phonecase collection round trip with explicit recoverable
+Try-again control. It compares complete ordered inventories and all row-state
+fingerprints plus every baseline line's SKU/text/quantity after both operations.
+
+## Whole-trial ownership integration gap (supervisor review)
+
+The transfer browser round trip passed1/1 at22.5s; domain68/68 and final
+domain/extension checks passed47.3s/155.0s after correcting helper imports to
+the existing control-spot barrel. Core source was kept frozen through these
+checks. The supervisor then identified a real whole-trial integration gap:
+whole-trials.ts creates the supervisor ledger before builder exploration;
+that ledger receives trial effects but not the builder's original inventories.
+Per-step before-move data cannot replace the original baseline because an
+earlier trial Add may already be present there.
+
+Authorized refinement: the project ledger remembers immutable first complete
+scope/group inventories ONLY before its first known lasting project act.
+These are original-build authority, shared by trusted opaque scope; current
+observations are never overwritten by adoption. Late/post-effect reset reads
+cannot establish authority. Whole-trial ownership refreshes this original
+baseline before recording trial effects. Independent resources retain distinct
+scopes and cannot inherit one another's authority.
+
+Exact extra Core paths: site-reset/project-ledger.ts + owning test;
+service/project-build/reset-calls.ts + owning test; whole-trials.ts + actual
+whole-owner coverage in tests/project-build-reset.test.ts. The new test invokes
+the real whole-trial wrapper with a stubbed underlying run, constructs it before
+any builder observations, routes baseline via the actual builder/reset facade,
+and combines a new-line Add with a pre-existing-line transfer. No trial ledger
+is manually preseeded. Negative cases cover first observation after a lasting
+act and a different trusted resource. A separate project-ledger case checks
+immutable data and preservation of the current observation while adopting.
+
+Actual whole-trial owner regression failed first at the supervisor new-line
+inverse admission (no manually preseeded owner), then combined service/guard
+run6549 passed136/136 in12files after authority integration. This includes all
+8 whole-project reset integration cases and the subflow reset integration.
+Final focused whole-owner run also includes an explicit malformed immediate
+state-map negative in addition to original/late/other-resource modes. Original
+authority data stays private and immutable; adopting it leaves current subject,
+state and freshness maps untouched. Core structure audit39364 passed.
+
+Authority final focused regression79537 passed all four modes, including a
+malformed immediate row-state map. Whole-port early owner creation is simulated
+by constructing its ledger before builder observation only; no baseline is
+manually seeded. Final frozen Core cache-off contracts/check/build84704 started
+with all source/tests frozen. Supervisor review commands for added authority:
+
+```
+pnpm.cmd --filter fluxiq exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/project-ledger.test.ts src/programs/automation-studio/runtime/service/project-build/tests/reset-calls.test.ts src/programs/automation-studio/runtime/service/project-build/tests/project-build-reset.test.ts --maxWorkers 2 --minWorkers 1
+```
+
+No further source edits are planned. Original authority is intentionally
+conservative: scopes first observed after a known lasting project effect are
+not promoted to original-build authority. Missing originals block ordinary
+reset/trial success. Per-owner reads still retain their own valid local
+pre-effect baselines; resource tokens keep independent resources distinct.
+
+## Prepared canonical paid launch (NOT EXECUTED)
+
+Requires supervisor's latest-dev integration, final narrow gates, assignment of
+one free live slot, and explicit release. Instance label is unique; the slot
+lease remains supervisor-owned. No known-block alternate task is proposed.
+From t719 downstream:
+
+```powershell
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+$env:FLUXIQ_TEST_TARGET='persistent-isolated'
+$env:FLUXIQ_DEMO_HEADLESS='false'
+$env:FLUXIQ_LAB_INSTANCE='r1-reset-t719'
+$env:FLUXIQ_LAB_CORE_BRANCH='task/t719-site-reset-undoable-acts'
+$env:FLUXIQ_LLM_RUN_COST_CEILING_USD='0.25'
+pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode project --llm-task create-flow --instruction-task everything-store-kettle-to-cart --target persistent-isolated --workspace r1-reset-kettle-t719-20261017 --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
+```
+
+Inspect model build exploration, each trial reset and judged whole run: cart
+original inventory must be observed before effects; only this build's new kettle
+line is removed; existing phonecase is returned from saved through its own
+control; original batteries, saved rows, quantities and order survive; ordinary
+trial never admits leftovers. Require exact existing task oracle and a zero-call
+replay. If any launch/run fails, preserve evidence and debug before a changed-
+source rerun; no guard override or blind retry. Paid and installed extension
+transport behavior remain unverified by this worker until this controlled proof.
+
+Final authority build84704 stopped in typecheck: two newly added service-test
+control fixtures omitted required kind. Both now specify button; no production
+or predicate change. Runtime136/focused owner tests had passed. Final frozen
+cache-off replacement44679 running; downstream/live hold remains per supervisor
+until its commits and paired latest-dev sync. No source edits while it runs.
+
+Supervisor independent source review accepted transfer+authority integration.
+Its five-file run31064 passed60/60 in294.99s: actual project reset8,
+reset-calls3, ledger-subject30, project-ledger8 and landed-acts11. No worker
+checks were repeated after this acceptance. Source/tests remain frozen while
+final Core44679 completes; supervisor will commit and sync both branches before
+releasing integrated gates. Main docs-only commits changed no executable code.
+
+
+Final frozen authority Core build44679 EXITED0: contracts reused, typecheck37.6s,
+library build215.4s. No source/test edit during the run. All worker processes
+are complete. Downstream gates/live remain held for supervisor commit and paired
+latest-dev sync, then integrated-gate release. Worker has not committed, merged,
+pushed or called a paid provider. Exact canonical launch and evidence checklist
+are prepared above; paid/installed whole-flow proof remains pending release.
