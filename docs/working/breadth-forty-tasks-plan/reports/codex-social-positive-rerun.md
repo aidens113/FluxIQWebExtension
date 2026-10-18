@@ -1,6 +1,6 @@
 # Social recent group posts: changed-source rerun
 
-Status: Actual changed-source paid run remains FAILED47calls/$0.058921614; no promoted Flow/oracle/replay. Required debug preserved. Supervisor-authorized explicit intermediate ownership implementation passed Core130tests/contracts17/Web13/domain31, final mechanical service2, all five owning package types, both audits and3library build. FINAL typed-sink real Chromium diagnostic native0/1passed:26helper rows drive disclosure,26full rows, sole26x2answer batch/0invalid/notruncated/nohelperbatch. Source/HEAD frozen for supervisor verification; no active worker processes, no paid retry/commit/merge/push. This browser proof covers content/domain/Core capture, not installed background/chat/SQL/reopen/model/task acceptance. Historical sections below are retained as evidence.
+Status: Original paid run remains FAILED47calls/$0.058921614; no promoted Flow/oracle/replay. Required debug preserved. Approved feature committed by supervisor, then current-dev merged into paired t567: Corec180914a499dc4664ea713219747e6cc9868eb8f/downstream024e5ec7d549c6d700a44704e1c158a2901ef27a. Post-merge Core130/contracts17/Web13/domain31, all five package types, both audits and required own3library targets passed native0; actual refreshed Core compiler107649ms, unchanged contracts/websocket stamps reused. Supervisor independently decoded all integration logs. Prior positive browser26helper/26full/sole26x2answer batch retained; no new browser or paid run. No active worker readers/processes. Report complete and source/HEAD frozen for supervisor paired integration/publication. Fresh social r3 proposed only, awaiting release. Historical sections below are evidence.
 Owner: storage_comparison worker. Date:2026-10-18.
 
 ## Prepared task and frozen-source boundary
@@ -312,3 +312,63 @@ docs/working/language-driven-flow-loop-plan/debugs/run-mvdln2dd-6bc98e25.md  [NE
 ```
 
 Downstream supervisor-owned authored doc preserved, not worker-edited: `docs/architecture/build-loop.md`. No other dirty source files observed. Ignored build/browser/log artifacts are evidence only and must not be staged. Integration/commit/current-dev merge/narrow verification and any subsequent release remain supervisor-owned.
+
+### FINAL current-dev integration gates and social r3 proposal
+
+Read NEW MAIN supervisor integration brief/Current State. Supervisor committed exact approved unit Coreaa04a943/downstream8b65f078 and merged current dev into both task trees. Frozen exact heads throughout all integration readers:
+
+- Core `c180914a499dc4664ea713219747e6cc9868eb8f`.
+- Downstream `024e5ec7d549c6d700a44704e1c158a2901ef27a`.
+
+Both trees were clean before readers and remained clean after every reader terminated; only this report changes afterward. No source/doc/build-script fixes, commits, merges, pushes, shared Core writes or baseline edits. No whole suite/build, production Web build, sync-core, new browser or paid run. Root independently decoded/read all actual logs and confirmed the same statuses before this final report write.
+
+All terminal native statuses0 (integration-specific logs, elapsed measured where available):
+
+| Gate | Actual result/elapsed | Absolute log |
+| --- | --- | --- |
+| Core owning9files |130/130,66.69s, realservice2 current+reopen included|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-core-tests.log|
+| Contracts owning parser |17/17,5.12s|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-contracts-tests.log|
+| Web owning draft |13/13,5.99s tests/12679ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-web-tests.log|
+| Normal domain3files |31/31,607.458ms tests/35876ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQWebExtension/node_modules/codex-intermediate-integration-domain-tests.log|
+| Contracts type |0/10445ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-contracts-type.log|
+| Core package check |0/108819ms compiler/112823ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-core-type.log|
+| Web package check |0/117504ms compiler/121236ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-web-type.log|
+| Domain package check |0/53876ms command/79021ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQWebExtension/node_modules/codex-intermediate-integration-domain-type.log|
+| Extension package check |0/100277ms command/124690ms wall|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQWebExtension/node_modules/codex-intermediate-integration-extension-type.log|
+| Own3library targets |0: contracts unchanged stamp948ms, ACTUAL fluxiq compiler107649ms after precreate merge, websocket unchanged stamp224ms|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-libraries.log|
+| Core audit |0,404warnings/1154baselined; elapsed not separately instrumented|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQ/node_modules/codex-intermediate-integration-core-audit.log|
+| Downstream audit |0,211warnings/638baselined; elapsed not separately instrumented|C:/Users/osrs_/FluxStuff/fxwork/t567/!FluxIQWebExtension/node_modules/codex-intermediate-integration-domain-audit.log|
+
+No baseline reductions generated or waiver inflation. Required library invocation explicitly ran all3 normal targets with process `FLUXIQ_BUILD_CACHE_DIR=off`; stamp reuse is reported as reuse, not compilation. Normal downstream guards reported own Core current. All191 selected tests are distinct within this integration batch; root's earlier176 selected cases have a different safety-file selection, as explained above. Prior final corrected-sink browser native0/positive26x2 log is retained, not relabeled as a new post-merge browser run. No new source-relevant browser need was identified or authorized.
+
+Actual commands (each in the owning package/root described; process-only cacheoff for library/package checks):
+
+```text
+Core root: node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build
+Core packages/fluxiq: pnpm.cmd exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/authoring/tests/read-record-output.test.ts src/programs/automation-studio/runtime/flow-bootstrap/plan/tests/record-output-contract.test.ts src/programs/automation-studio/runtime/flow-bootstrap/answerability/tests/check.test.ts src/programs/automation-studio/runtime/executor/tests/record-capture.test.ts src/programs/automation-studio/runtime/result-verification/build-test/tests/stores.test.ts src/programs/automation-studio/runtime/service/datasets/tests/intermediate-output.test.ts src/programs/automation-studio/runtime/result-verification/request-rows/tests/stored-though-left-out.test.ts src/programs/automation-studio/runtime/result-verification/exclusion-evidence/tests/recheck.test.ts src/programs/automation-studio/runtime/result-verification/request-rows/tests/unquoted-rows.test.ts
+Core packages/contracts: pnpm.cmd exec vitest run src/record-sets/tests/parse-output.test.ts
+Core packages/contracts: pnpm.cmd exec tsc --noEmit
+Core root: pnpm.cmd --filter fluxiq check
+Core root: pnpm.cmd --filter @fluxiq/web check
+Core apps/web: pnpm.cmd exec vitest run src/features/automation-studio/parameters/record-output/tests/record-output-draft.test.ts
+Downstream root: pnpm.cmd --filter @fluxiq-web-extension/domain check
+Downstream root: pnpm.cmd --filter @fluxiq-web-extension/extension check
+Downstream root, DOMAIN_TEST_BUILD_LABEL=codex-intermediate-integration: pnpm.cmd --filter @fluxiq-web-extension/domain test output-nodes/extract-list/tests/reconciled-record-output.test.ts output-nodes/extract-list/tests/one-page-read.test.ts runtime/llm-evidence/plan-resolution/extraction/tests/run-record-output.test.ts
+Each repository root: node scripts/structure-audit.mjs
+```
+
+Fresh social r3 readiness proposal ONLY, no paid release:
+
+- Existing scenario/task unchanged: social-network-feed / social-network-feed-recent-group-posts, navigate-and-extract, expected-dataset extract-recent-group-posts. No social fixture/task/source changes since approved8b65f078. Read-only existing compiled expected module confirms1dataset/3rows/15fields/uniform5columns; no raw values printed. Normal task instruction/oracle/account condition stays unchanged.
+- Keep existing normal project authoring/chat entry, profile identifier lab-create-flow, provider deepseek, model deepseek-flash, judged whole run plus1required provider-free replay,0.25USD/250calls/48000000run-token ceilings. Current owning commands.ts supports those profile fields; no profile/manifest hand-edit. Normal owner must allocate the manifest and refresh runner/host/browser artifacts through its prelude after release; this work does not claim an already-created r3 manifest or running production Web host.
+- Slot4 owner observed t567/bf-slot-4/pidnull. Fresh isolated workspace `codex-social-positive-t567-20261018-r3` absent; required previous debug `docs/working/language-driven-flow-loop-plan/debugs/run-mvdln2dd-6bc98e25.md` present/committed. Read-only normal credential resolver probe returned only deepseekCredentialPresent=true; no secret values/lengths exposed. Credential resolver/command parser source unchanged since approved8b65f078.
+- Source changed concretely since failed r2 through explicit intermediate contract/capture/adapter feature, not only docs/HEAD; old failed Flow remains failed and unmarked. Fresh model must actually express correct ownership and pass oracle/judge/replay; source tests do not establish paid acceptance. Normal previous-debug/source-currency/balance/positive-data guards remain; no overrides or bypasses proposed.
+- Root integration/publication and final source HEADs must be recorded before any released allocation. No further whole production Web preparation was performed or proposed outside the normal owning launcher.
+
+Concrete proposed owning command after SEPARATE root release (process environment FLUXIQ_LAB_INSTANCE=bf-slot-4, FLUXIQ_BUILD_CACHE_DIR=off, FLUXIQ_TEST_TARGET=persistent-isolated to match explicit target):
+
+```text
+pnpm.cmd lab run social-network-feed --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode project --llm-task create-flow --instruction-task social-network-feed-recent-group-posts --target persistent-isolated --workspace codex-social-positive-t567-20261018-r3 --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
+```
+
+All native worker readers/processes terminal. No new model/provider calls/spend. Source and HEAD frozen; this is the final report write pending supervisor paired integration. No further worker writes or launch until a new bounded assignment/release.
