@@ -42,6 +42,16 @@ live lane leads, one per `lab-slots/slot-N`, each looping run -> debug -> fix ->
 integration round every 60-90 minutes. Launch shape: the A8 command in `automation-project-agents-plan.md`
 (`--authoring-mode project`, `--llm-max-cost-usd 0.25`, the five environment variables), workspace `bf-<task>`.
 
+**Scope change (user, 2026-10-17, later the same day):** "only a few tests should be fully end to end, since its very
+time intensive", and "make 100% sure that ALL TESTS are actually possible" (prompts may be reworded to fit sites;
+AGENTS.md rule). So: one full end-to-end pass per site (build from chat, judged run, zero-call replay), and every one
+of the 108 tasks audited provider-free by ten `audit-<site>` workers (t708-t717). Per-site picks: everything-store
+and job-board done; bigbox rated-delivery-towels; local-classifieds test-ride-question; crossborder
+free-hubs-under-ten; auction cheap-accessory-auctions; social recent-group-posts; photo-social kiln-notes;
+company-website apprentices; professional-network connect-kade-senior-engineer.
+
+Before today: 343 live runs since 2026-09-30 on 18 distinct tasks, 9 of them ever passed, all on the four main sites.
+
 **Phases 1-2 done (2026-10-17):** all 40 tasks merged (t696-t705), the shared corpus tests updated, scenario-lab
 851 of 851. **Phase 3 running:** four live lane leads. **Install proof (t706):** in progress.
 
