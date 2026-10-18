@@ -1035,3 +1035,201 @@ accepted; no unchanged unit repeat. All final readers/owned browser teardown
 finished; source and product bundle are frozen. No Core build/edit, paid run,
 commit, merge or push by worker. Canonical model/whole-judge/zero-call replay
 acceptance remains pending explicit supervisor release.
+
+## Changed-source canonical r4 (2026-10-18, active)
+
+Supervisor observed paired pushes downstream57ad8dc2/Core2b13e40c and synced both
+idle t719 trees before explicit launch release. Core executable remains e58;
+all product validation unchanged. The mistakenly copied no-act sage-small task
+was caught read-only and corrected by supervisor BEFORE spend. Actual task is
+unchanged everything-store-kettle-to-cart (quantity2 + existing saved-line move).
+
+Normal launcher68904 active, headed bf-slot-2/persistent-isolated fresh workspace
+codex-reset-positive-t719-20261018-r4, project real extension chat, DeepSeek flash,
+model-reset-only, replays1, .25USD/250calls/48000000tokens. Normal guard admitted
+sha256:210333e25ed551be227c3c7eb17d84c14ee0e161e93c063733922c9bba7655bb;
+no override. Existing Core libraries/entries/staleness passed without rebuild;
+normal prelude owns run-scoped outputs. No worker source/HEAD mutation during
+live. Allocation and actual authenticated no-hook receipt pending; no behavior
+success claimed from admission. Log node_modules/codex-reset-canonical-r4.log.
+
+### Canonical r4 terminal failure and first causal comparison
+
+Launcher68904 exited1: run-mvdl5eg0-a56fdad7 failed runtime.behavior,
+53calls/$0.032546700,263342ms,108persistedsteps,flowCreated=false; no whole oracle/
+judge/replay. Actual authenticated startReset=false and fixtureResetBetweenTrials
+=false; no fixture hook/override. Exactfinal accounting pending0/breaches0/
+unrecorded0/uncountedempty. New required debug:
+docs/working/language-driven-flow-loop-plan/debugs/run-mvdl5eg0-a56fdad7.md.
+
+Concrete difference from positive actualgateway test: canonical first Cart
+observation0035 occurs AFTER successful create_new0029 (act-8). Pre-Add0028
+provider request already contained the generic pre-effect complete-destination
+baseline instruction. Trial0033 correctly blocks;0037modify/0039delete inverses
+refuse. Second builder makes another lasting Add0066 (act-14) while act-8 remains;
+trial0072 retainsboth; later reset inverses/cannotUndo refuse. No clean trial
+was admitted. Original inventory cannot truthfully be reconstructed from these
+late reads; exact opaque private ledger witnesses were not persisted and are
+not asserted known. Read-only source/root-cause comparison continues per parent;
+no source edit/build/paid retry. All original profiles/artifacts preserved.
+
+## Read-only proposed next unit: explicit pre-create baseline admission
+
+Status: DESIGN ONLY, supervisor selection required; no product edits/builds or
+paid retry. Required r4 debug is complete. This design separates the immediate
+causal fix from broader trial admission rather than asserting an existing hook
+can do more than it does.
+
+### First bounded causal fix
+
+The non-undo permission callback in flow-bootstrap/action-permissions.ts346-351
+currently sends the declaration directly to the ordinary lasting permission
+check. Add a separate recoverable builder-reset precondition BEFORE that check
+and before domain execution. act-places.ts already passively reads and forwards
+observed evidence before input.run, so this check needs no hidden navigation,
+new background read or inferred page semantics.
+
+Policy accepted by supervisor: ONLY builder exploratory mutate actions with
+exactly pure create_new, an identified source subject (subject, otherwise page)
+and trusted opaque resource require a complete original destination witness,
+unless the exact source scope already supplies the same proof. This is a
+necessary precondition for reversible identified creation generally; it DOES
+NOT infer cross-page inventory semantics from registered click, button words,
+site text or create_new alone. send_or_publish, move_money, mixed irreversible
+classes, ordinary finalized user-run gates and explicit owned undoes keep their
+existing policy. Truly nonlasting actions still declare[]. Existing uncertainty
+and automatic retry protections remain; a refused precondition applied nothing.
+
+Add resetDestination to the BUILDER run-node augmentation owned by
+site-reset/undoes-tool.ts (NOT the ordinary global run-node tool). Its value is
+an opaque reference printed by a previous trusted complete original collection
+observation. Strip this Core envelope key before the domain executes the node,
+just as undoes is stripped. Model-written scopes/arrays/counts never become
+baseline authority. Missing/unknown/forged/late/partial/foreign-resource refs
+return a recoverable candidate.create_baseline_required-style result with
+effectApplied=false,targetsUnchanged=true; no act recorded and no permission
+request or person-denial abort. The model can safely navigate/observe the
+intended destination through already-shown controls, return to the original
+control, and retry with the issued reference.
+
+Publish only a bounded receipt for each currently observed complete ORIGINAL
+collection: reference, collection ordinal within that observation, subject count.
+The receipt is attached to that actual tool result so the model can associate
+it with the page/list it just observed. No raw records, item titles, resource
+ids, gateway session/tab ids, selectors or state fingerprints are published.
+Core resolves the receipt back to its immutable scope/group/resource/inventory.
+Root's existing complete-list validator applies before references are issued.
+First complete AFTER-effect reads can update current evidence but never mint
+original authority for the project. Existing immutable first-original authority
+must survive later observations, owners and safe retries.
+
+At admission require the referenced original complete inventory to match the
+actual declaration's trusted resource and prove its actual source subject/page
+absent. Compare opaque tokens only; do not accept a model-supplied subject.
+A caller cannot substitute another subject, sibling scope or foreign tab. This
+reference is a precondition, NOT an authorization to undo later: current strict
+inverse/ordered whole-group restoration checks remain unchanged, and a falsely
+chosen intended destination cannot grant Delete elsewhere.
+
+Same-scope/no-destination alternatives are narrow: exact source-scope original
+complete authority, same trusted resource and positively absent source subject
+can satisfy the check without an explicit reference because the declaration
+already identifies that precise scope. Merely another complete collection on
+the same resource, a visible matching name, source-state disappearance, or
+post-act createdItems is NOT pre-act authority. Where no such destination or
+same-scope evidence exists, the identified reversible create stays unexecuted;
+there is no guessed deletion or fabricated baseline. An intentional irreversible
+send/publish/money action remains its existing class/policy. This unit does not
+classify every possible create as a collection effect or invent a safe inverse
+for actions whose original state was never observed.
+
+### Trusted resource gap and exact source map
+
+Current source/destination scope hashes bind resources internally but cannot
+be compared to prove two different pages share one resource. Add optional
+opaque resource passthrough, sourced ONLY from already trusted resetResource:
+
+Core, under packages/fluxiq/src/programs/automation-studio/:
+- runtime/action-permissions/declaration.ts: additive control.resource and strict
+  parser/read field; unchanged ordinary permission semantics.
+- runtime/flow-bootstrap/site-reset/contracts.ts: optional read.resource,
+  Spot.resource, internal receipt/preflight methods/types.
+- runtime/flow-bootstrap/site-reset/create-baselines.ts + index.ts: proposed new
+  focused private registry for original receipts/pre-create validation; no new
+  public package export. Directory budget must be checked before implementation.
+- runtime/flow-bootstrap/site-reset/{ledger,project-ledger}.ts: share/adopt
+  immutable project original authority and apply existing whole-group validation;
+  preserve current observations and actual act temporal ordering.
+- runtime/flow-bootstrap/site-reset/undoes-tool.ts: builder-only input property
+  and generic property guidance. Ordinary llm/node-tools/run-node.ts unchanged.
+- runtime/flow-bootstrap/action-permissions.ts: parse/strip reference, trusted
+  resource passthrough, recoverable pre-act refusal before ordinary check; leave
+  owned inverse target(), planStep/person-denial and final-run behavior unchanged
+  in this FIRST unit.
+- runtime/service/project-build/reset-calls.ts: delegate registry/preflight to
+  project authority while preserving actual owner routing.
+- runtime/service/project-build/brief-ports.ts: placing()325-327 can attach the
+  issued refs AFTER act-places observed the actual read, using typed execution
+  evidence; opening capture must also have actual observed authority before
+  publishing. Add generic precondition/retry guidance, no scenario examples.
+
+Downstream, domain/src/runtime/llm-evidence/:
+- control-spot/target.ts: optional resource from trusted page.resetResource.
+- permission.ts: preserve that opaque field into actual control declaration.
+- start-state/observe.ts: include resource on private passive read. Existing
+  capture/sanitize/resource helper and browser transport remain unchanged.
+No extension product/fixture/oracle edits required. Existing installed-project
+proof may add a pre-Add attempt with missing reference and assert no mutation,
+then actual Cart baseline/navigation/retry and unchanged exact restoration.
+
+### Owning fail-first/positive controls
+
+Core existing owners: action-permissions/tests/declaration.test.ts;
+flow-bootstrap/tests/action-permissions.test.ts;
+site-reset/tests/{ledger-subject,project-ledger,act-places}.test.ts;
+service/project-build/tests/{reset-calls,project-build-reset,
+project-build-brief-ports}.test.ts. New focused registry owner would be
+site-reset/tests/create-baselines.test.ts; tool augmentation may be covered
+there or a focused tests/undoes-tool.test.ts after budget review.
+
+Required failure shape: source detail observed, no complete destination,
+purecreate_new declared -> actual executor count0, no recorded act/no lasting
+permission ask; observe valid original destination then retry exact source with
+issued ref -> executor count1; own inverse restores exact baseline. Negatives:
+forged/missing/foreign-resource/after-first-act/partial/malformed whole group,
+wrong subject or pre-existing subject; duplicate scopes/subjects never normalized
+into authority. Positive exact same-scope original witness stays admitted;
+nonlasting navigation/read and owned undoes retain existing behavior; send,
+publish,money,mixed irreversible unchanged. Rejected precondition must NOT abort
+the builder: safe observation/retry succeeds in the actual project service path.
+
+Domain owners: control-spot/tests/target.test.ts;
+start-state/tests/start-state.test.ts;
+node-run/tests/unwritten-consequences.test.ts (existing permission passthrough)
+and a focused llm-evidence/tests/permission.test.ts only if direct coverage is
+needed. Existing complete collection/host-runtime tests should demonstrate
+unchanged trusted capture/resource behavior. Actual installed-gateway spec is
+apps/extension/e2e/site-reset/tests/installed-project.spec.ts. No manual ledger
+bridge, no fixture reset, no paid run to establish this regression.
+
+### Trial exposure explicitly separated
+
+Existing submission.permissionFor uses action-permissions.planStep; that path
+currently aborts planRefused for ordinary authority refusal. It is not an actual
+trial runtime per-step destination gate. Whole/subflow detached trials get
+ordinary graphOptions; the current ports do not expose a trusted actual-action
+reset-preflight callback. Therefore the FIRST unit above prevents the observed
+exploratory mistake, but does NOT claim to guard arbitrary unseen write-only or
+dynamic trial creates. Root should select a separate bounded trial integration
+phase if needed before accepting that broader behavior.
+
+A later concrete-source submission guard could bind an explicit baseline prep
+to the exact registered operation + trusted source resource/subject/scope and
+validate resolved concrete declarations via permissionFor, returning a distinct
+recoverable validation issue rather than person-denial abort. Native scripts
+have no resetDestination syntax today; automatic prepared mappings must not
+claim coverage for unseen subjects. True runtime trial coverage would need a
+build-only detached runner/action preflight seam, scoped to candidate/subflow
+trials rather than ordinary finalized runs. It is deliberately NOT included in
+this first file map or asserted already supported. Current strict beforeTrial
+and post-trial ledger/whole-baseline requirements remain in force throughout.
