@@ -12,6 +12,13 @@ const page = {
   dialogNames: new Map([["t4", "You're going too fast"]])
 };
 
+test("preserves the trusted opaque resource across source scopes and omits it when absent", () => {
+  assert.equal(webTargetSpot({ ...page, resetResource: "p:trusted-resource" }, "t1").resource, "p:trusted-resource");
+  assert.equal(webTargetSpot({ ...page, resetResource: "p:trusted-resource" }, "t2").resource, "p:trusted-resource");
+  assert.equal(webTargetSpot(page, "t1").resource, undefined);
+  assert.deepEqual(webTargetSpot({ ...page, resetResource: "p:trusted-resource" }, undefined), {});
+});
+
 test("names a control's record and dialog by opaque tokens: the same row alike, another row not", () => {
   const amara = webTargetSpot(page, "t1");
   assert.deepEqual(amara, { item: webControlSpotToken("item", `text${SEP}Amara Osei`) });

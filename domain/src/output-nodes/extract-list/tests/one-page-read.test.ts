@@ -53,6 +53,33 @@ function sent(parameters: JsonObject): { payload: JsonObject; extractList: JsonO
 
 const RETIRED_MESSAGE = "This step used to go through pages by itself; the Flow now needs a Next page step and a repeat.";
 
+test("intermediate reads preserve native minimum/where and saved redispatch without answer processing", () => {
+  for (const minimum of [undefined, 0, 1]) {
+    const recordOutput = { ...authored, purpose: "intermediate" };
+    const original = { ...read, ...(minimum === undefined ? {} : { minItems: minimum }) };
+    const first = sent({ extractList: original, recordOutput });
+    assert.deepEqual(first.extractList.where, read.where);
+    assert.equal(first.extractList.minItems, minimum);
+    assert.equal(first.recordOutput.purpose, "intermediate");
+    assert.equal(first.recordOutput.process, undefined);
+    const second = sent({ extractList: original, recordOutput: first.recordOutput });
+    assert.deepEqual(second, first);
+  }
+});
+
+test("intermediate reads refuse collection processing instead of dropping ordering, dedupe or limits", () => {
+  for (const changes of [{ maxItems: 2 }, { sort: ordered.sort }, { dedupe: ordered.dedupe }, { dedupe: { by: Object.keys(read.fields) } }]) {
+    const dispatch = webAutomationExtractListDispatch({ extractList: { ...read, ...changes }, recordOutput: { ...authored, purpose: "intermediate" } });
+    assert.equal(dispatch.ok, false);
+    if (dispatch.ok) continue;
+    assert.ok(JSON.stringify(dispatch.result.outputs).includes("record_output.intermediate_process_unsupported"));
+  }
+  const dispatch = webAutomationExtractListDispatch({ extractList: { ...read, dedupe: { by: Object.keys(read.fields) } },
+    recordOutput: { ...authored, purpose: "intermediate", process: { dedupe: { by: ["title"] } } } });
+  assert.equal(dispatch.ok, false);
+  if (!dispatch.ok) assert.ok(JSON.stringify(dispatch.result.outputs).includes("record_output.intermediate_process_unsupported"));
+});
+
 test("a read that goes through more than one page by itself is refused before anything runs", () => {
   for (const paginate of [
     { next: "a.next", maxPages: 5 },

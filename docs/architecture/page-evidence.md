@@ -773,6 +773,21 @@ deletion is accepted as restored. One removal may account for multiple adds
 by this build to the same new line; it never authorizes deleting a baseline line.
 
 
+Project-builder exploratory pure creation now requires original authority before
+execution. The domain passes its existing trusted, hashed `resetResource` into
+private start-state reads and control declarations, alongside the subject and
+scope. Core issues bounded original-destination references from complete trusted
+observations, and compares the actual control's resource and subject before
+allowing an identified `create_new`. The model supplies only the issued
+`resetDestination` reference; it supplies no resource, inventory or subject
+authority. The envelope is stripped before domain execution. Missing authority
+or a missing preflight adapter refuses without mutation or a permission ask,
+leaving ordinary navigation and observation available for a safe retry. This
+project-exploration guard does not cover unseen dynamic trial actions or change
+finalized-run permissions. Updated Core and domain must ship together because
+older declaration parsers reject the added resource field; browser transport is
+unchanged.
+
 Modern resource-scoped reversible acts require positive baseline restoration.
 If an unproved inverse is kept or named cannotUndo, Core refuses the next
 ordinary trial as candidate.trial_reset_unproved. It never measures leftovers

@@ -30,6 +30,7 @@ export function webTargetSpot(page: Pick<WebLlmSnapshotBinding, "records" | "dia
   const subject = page.subjects?.get(handle);
   const collection = webResetCollections(page).controls.get(handle);
   return present<WebTargetSpot>({
+    resource: page.resetResource,
     item: record ? webControlSpotToken("item", record) : undefined,
     dialog: dialog ? webControlSpotToken("dialog", dialog) : undefined,
     subject: subject ? webControlSpotToken("subject", subject) : undefined,
@@ -39,4 +40,4 @@ export function webTargetSpot(page: Pick<WebLlmSnapshotBinding, "records" | "dia
 }
 
 /** The opaque tokens of where a control sits and what it and its page are about; each absent where there is none. */
-type WebTargetSpot = { item?: string; dialog?: string; subject?: string; page?: string; scope?: string };
+type WebTargetSpot = { item?: string; dialog?: string; subject?: string; page?: string; scope?: string; resource?: string };

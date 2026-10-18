@@ -48,6 +48,16 @@ const authored = {
   }
 };
 
+test("reconciliation preserves explicit intermediate ownership and leaves old outputs unmarked", () => {
+  const output = webAutomationReconciledRecordOutput({ ...authored, purpose: "intermediate" }, request);
+  const parsed = parseAutomationStudioRecordOutput(output);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) throw new Error("expected parsed intermediate");
+  assert.equal(parsed.output.purpose, "intermediate");
+  assert.deepEqual(stored(output).rows, stored(webAutomationReconciledRecordOutput(authored, request)).rows);
+  assert.equal(Object.hasOwn(webAutomationReconciledRecordOutput(authored, request) as object, "purpose"), false);
+});
+
 function stored(output: unknown) {
   const parsed = parseAutomationStudioRecordOutput(output);
   assert.equal(parsed.ok, true, JSON.stringify(parsed));

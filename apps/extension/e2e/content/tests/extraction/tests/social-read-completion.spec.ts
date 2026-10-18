@@ -1,5 +1,6 @@
 // Real content-script proof on the realistic feed. No model, background
 // worker or provider. The ordering proof uses Core's real loop executor.
+import { createHash } from "node:crypto";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
 import { acceptAutomationStudioFlowBootstrapResult, AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, AutomationStudioNodeRegistry, normalizeAutomationStudioElementTarget, runAutomationStudioGraph, type AutomationStudioFlowDocument } from "fluxiq/automation-studio";
@@ -127,7 +128,8 @@ test("normally authored optional For Each expands helper rows before a full feed
     return resolved.parameters;
   };
   const where = [{ field: "identity", is: "present" }];
-  const helperParameters = await resolve("web.output.dom-extract_list", { extractList: { handle: packet.extraction, fields: { identity: columnKeys.identity! }, where }, recordOutput: { datasetId: "helper", writeMode: "replace" } });
+  const helperParameters = await resolve("web.output.dom-extract_list", { extractList: { handle: packet.extraction, fields: { identity: columnKeys.identity! }, where }, recordOutput: { datasetId: "helper", writeMode: "replace", purpose: "intermediate" } });
+  expect((helperParameters.recordOutput as JsonObject).purpose).toBe("intermediate");
   const fullParameters = await resolve("web.output.dom-extract_list", { extractList: { handle: packet.extraction, fields: { identity: columnKeys.identity!, description: columnKeys.description! }, where }, recordOutput: { datasetId: "answer", writeMode: "append" } });
   const nextParameters = await resolve("web.output.dom-next_page", { nextPage: { list: packet.extraction } });
   const looked = await runtime.executeTool({ ...base, callId: "look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
@@ -196,8 +198,39 @@ test("normally authored optional For Each expands helper rows before a full feed
   const scopedRows: Array<JsonValue | undefined> = [];
   const clickOutcomes: Array<{ status: string; code?: string; category?: string }> = [];
   const proofIssues: string[] = [];
+  const batchReceipts: Array<{ datasetId: string; nodeId: string; rows: number; fields: string[]; invalidCount: number; truncated: boolean }> = [];
+  type CaptureHandler = NonNullable<NonNullable<Parameters<typeof runAutomationStudioGraph>[1]>["onRecordBatch"]>;
+  type CapturedBatch = Parameters<CaptureHandler>[0];
+  type CaptureSummary = Awaited<ReturnType<CaptureHandler>>;
+  const capturedDatasets = new Map<string, Map<string, CapturedBatch>>();
   let commandId = 0;
   const trace = await runAutomationStudioGraph(flow, {
+    // Actual Core capture supplies this hook. The helper must still drive its
+    // row loop, but only the validated positive answer may emit a batch.
+    onRecordBatch: async (batch): Promise<CaptureSummary> => {
+      // This diagnostic uses a private in-memory sink, not SQL. Its receipt is
+      // backed by actual retained rows; batch retries replace the same key.
+      const previous = capturedDatasets.get(batch.datasetId);
+      // Core capture already supplies the stored schema. This deterministic
+      // JSON digest belongs only to this sink; it is not the SQL digest.
+      const schema = JSON.stringify(batch.schema);
+      if (previous && [...previous.values()].some((held) => JSON.stringify(held.schema) !== schema)) throw new Error("The captured dataset changed its schema.");
+      const retained = batch.writeMode === "replace" ? new Map<string, CapturedBatch>() : previous ?? new Map<string, CapturedBatch>();
+      retained.set(batch.batchKey, structuredClone(batch));
+      capturedDatasets.set(batch.datasetId, retained);
+      const passes = [...retained.values()];
+      batchReceipts.push({ datasetId: batch.datasetId, nodeId: batch.nodeId, rows: batch.rows.length,
+        fields: batch.schema.fields.map((field) => field.id), invalidCount: batch.invalidCount, truncated: batch.truncated });
+      const summary: CaptureSummary = {
+        runId: "run.content-capture", datasetId: batch.datasetId, nodeIds: [...new Set(passes.map((held) => held.nodeId))],
+        schemaDigest: `sha256:${createHash("sha256").update(schema).digest("hex")}`,
+        recordCount: passes.reduce((count, held) => count + held.rows.length, 0),
+        invalidCount: passes.reduce((count, held) => count + held.invalidCount, 0),
+        truncated: passes.some((held) => held.truncated), updatedAt: Date.now()
+      };
+      if (batch.label !== undefined) summary.label = batch.label;
+      return summary;
+    },
     nativeNodeExecutor: async ({ node, inputs }) => {
       const id = actionIds[node.definitionId];
       if (!id) return undefined;
@@ -224,6 +257,7 @@ test("normally authored optional For Each expands helper rows before a full feed
         const rows = reply.extracted as Array<Record<string, string>>;
         const output = payload.recordOutput as JsonObject;
         if (output.datasetId === "helper") {
+          if (output.purpose !== "intermediate") proofIssues.push("helper.purpose");
           if (output.writeMode !== "replace") proofIssues.push("helper.writeMode");
           if (rows.some((row) => Object.keys(row).join(",") !== "identity")) proofIssues.push("helper.columns");
           if (rows.some((row) => typeof row.identity !== "string" || row.identity.length === 0)) proofIssues.push("helper.missing_identity");
@@ -261,8 +295,15 @@ test("normally authored optional For Each expands helper rows before a full feed
   expect(scopedRows.every((row) => typeof (row as JsonObject)?.identity === "string" && String((row as JsonObject).identity).length > 0)).toBe(true);
   expect(fullCounts).toHaveLength(1);
   expect(fullCounts[0]!).toBeGreaterThanOrEqual(helperCounts[0]!);
+  expect(batchReceipts).toEqual([{ datasetId: "answer", nodeId: "full", rows: fullCounts[0]!,
+    fields: ["identity", "description"], invalidCount: 0, truncated: false }]);
+  expect([...capturedDatasets.keys()]).toEqual(["answer"]);
+  const capturedRows = [...(capturedDatasets.get("answer")?.values() ?? [])].flatMap((batch) => batch.rows);
+  expect(capturedRows).toHaveLength(fullCounts[0]!);
+  expect(capturedRows.every((row) => Object.keys(row).join(",") === "identity,description")).toBe(true);
   expect(afterMoveCollapsed).toEqual([0]);
   expect(trace.attempts.find((attempt) => attempt.nodeId === "next")?.route).toBe("ended");
+  console.info("intermediate-capture-receipt", JSON.stringify({ helperCounts, fullCounts, batchReceipts }));
   // This fixture's current-page read reveals its full home feed; no genuine
   // subsequent page with collapsed text remains, so no two-page proof is claimed.
 });

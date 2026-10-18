@@ -46,6 +46,9 @@ test("installed gateway project build preserves original collection authority fo
   let projectId = "", flowId = "";
   let instructionSourceId = "";
   let baseline: string | undefined, restored: string | undefined;
+  let clickDispatches = 0, missingClicksBefore = 0, missingClicksAfter = 0;
+  let missingCreateCode: unknown;
+  let destinationReference = "";
   try {
     await page.goto(new URL("/scenarios/everything-store", lab.origin).href);
     await page.getByRole("dialog", { name: "Never miss a deal" }).waitFor();
@@ -72,7 +75,10 @@ test("installed gateway project build preserves original collection authority fo
     console.log(JSON.stringify({ resetDiagnosticStage: "actual_gateway_paired" }));
     const runtime = createWebAutomationLlmEvidenceRuntime({
       eligibleSessionIds: () => fluxiq.programs.clientGateway.snapshot().sessions.filter(session => session.status === "ready").map(session => session.sessionId),
-      executeAction: (session, command) => fluxiq.programs.automationStudioClientGateway.executeAction(session, command)
+      executeAction: (session, command) => {
+        if (command.actionType === "web.dom.click") clickDispatches++;
+        return fluxiq.programs.automationStudioClientGateway.executeAction(session, command);
+      }
     });
     const startState = runtime.startState!.bind(runtime);
     runtime.startState = async input => {
@@ -125,34 +131,48 @@ test("installed gateway project build preserves original collection authority fo
         };
         const node = (id: string, name: string, parameters: JsonObject, consequences: string[] = [], extra: JsonObject = {}) => call(id, "core.run_node", { node: name, parameters, consequences, ...extra });
         builderStep++;
-        if (builderStep === 1) return node("original", "web.output.browser-navigate", { url: cart });
+        if (builderStep === 1) {
+          addHandle = handle("Add to Cart");
+          missingClicksBefore = clickDispatches;
+          return node("add.missing", "web.output.dom-click", { target: { handle: addHandle } }, ["create_new"]);
+        }
         if (builderStep === 2) {
-          baseline = reads.at(-1)?.hash;
-          return node("detail", "web.output.browser-navigate", { url: detail });
+          missingCreateCode = last("core.run_node")?.code;
+          missingClicksAfter = clickDispatches;
+          receipts.push({ call: "add.missing", code: missingCreateCode });
+          return node("original", "web.output.browser-navigate", { url: cart });
         }
         if (builderStep === 3) {
-          addHandle = handle("Add to Cart");
-          return node("add", "web.output.dom-click", { target: { handle: addHandle } }, ["create_new"]);
+          baseline = reads.at(-1)?.hash;
+          const destinations = record(last("core.run_node")?.resetDestinations).collections as JsonObject[] | undefined;
+          const reference = destinations?.[0]?.ref;
+          if (typeof reference !== "string") throw new Error("diagnostic.original_destination_ref_missing");
+          destinationReference = reference;
+          return node("detail", "web.output.browser-navigate", { url: detail });
         }
-        if (builderStep === 4) return node("destination", "web.output.browser-navigate", { url: cart });
-        if (builderStep === 5) return call("submit", "core.submit_subflow", { flow: [`flow: New line`, `step open: open the product`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(detail)}`, `step add: add the product`, `  node: web.dom.click`, `  target: ${addHandle}`, `  consequences: create_new`].join("\n") });
+        if (builderStep === 4) {
+          addHandle = handle("Add to Cart");
+          return node("add", "web.output.dom-click", { target: { handle: addHandle } }, ["create_new"], { resetDestination: destinationReference });
+        }
+        if (builderStep === 5) return node("destination", "web.output.browser-navigate", { url: cart });
+        if (builderStep === 6) return call("submit", "core.submit_subflow", { flow: [`flow: New line`, `step open: open the product`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(detail)}`, `step add: add the product`, `  node: web.dom.click`, `  target: ${addHandle}`, `  consequences: create_new`].join("\n") });
         const submitted = last("core.submit_subflow");
         const tested = last("core.test_subflow");
         if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
         const candidate = { revision: submitted.revision, digest: submitted.digest };
-        if (builderStep === 6) return call("trial.dirty", "core.test_subflow", candidate);
-        if (builderStep === 7) {
+        if (builderStep === 7) return call("trial.dirty", "core.test_subflow", candidate);
+        if (builderStep === 8) {
           receipts.push({ call: "trial.dirty", code: tested?.code });
           const acts = tested?.actsToUndo as JsonObject[] | undefined;
           const act = acts?.[0]?.act;
           if (typeof act !== "string") throw new Error("diagnostic.reset_act_missing");
           return node("undo.arrival", "web.output.browser-navigate", { url: cart }, [], { undoes: act });
         }
-        if (builderStep === 8) {
+        if (builderStep === 9) {
           inverseHandle = handle("Delete");
           return call("describe.inverse", "web.describe_element", { target: inverseHandle });
         }
-        if (builderStep === 9) {
+        if (builderStep === 10) {
           const description = String(last("web.describe_element")?.element ?? "");
           const tag = description.match(/<(\w+)>/u)?.[1];
           const box = description.match(/box: x=(-?\d+) y=(-?\d+) (\d+)x(\d+)/u)?.slice(1).map(Number);
@@ -179,7 +199,7 @@ test("installed gateway project build preserves original collection authority fo
           if (typeof act !== "string") throw new Error("diagnostic.reset_act_missing");
           return node("undo", "web.output.dom-click", { target: { handle: inverseHandle } }, ["delete"], { undoes: act });
         }
-        if (builderStep === 10) {
+        if (builderStep === 11) {
           const undone = last("core.run_node");
           receipts.push({ call: "undo", code: undone?.code ?? (undone?.ok === true ? "ok" : "unknown") });
           restored = reads.at(-1)?.hash;
@@ -201,10 +221,13 @@ test("installed gateway project build preserves original collection authority fo
       return "failed";
     });
     const ending = await build;
-    const diagnostic = { ending, failure, supervisorStep, builderStep, baseline, restored, receipts, reads, declarations, outcomes, targetDescriptors, gatewayErrors: gateway.errors };
+    const diagnostic = { ending, failure, supervisorStep, builderStep, baseline, restored, receipts, reads, declarations, outcomes, targetDescriptors, missingCreate: { code: missingCreateCode, clickDispatchesBefore: missingClicksBefore, clickDispatchesAfter: missingClicksAfter }, gatewayErrors: gateway.errors };
     await testInfo.attach("reset-structural.json", { body: Buffer.from(JSON.stringify(diagnostic)), contentType: "application/json" });
     console.log(JSON.stringify({ resetDiagnostic: diagnostic }));
     expect(ending).toBe("proposed");
+    expect(missingCreateCode).toBe("candidate.create_baseline_required");
+    expect(missingClicksAfter).toBe(missingClicksBefore);
+    expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
     expect(baseline).toMatch(/^[a-f0-9]{20}$/u);
     expect(restored).toMatch(/^[a-f0-9]{20}$/u);
     const original = reads.find(read => read.hash === baseline && read.sizes.length === 2 && read.sizes[0] === 2 && read.sizes[1] === 2);
@@ -221,6 +244,9 @@ test("installed gateway project build preserves original collection authority fo
     const inverse = declarations.find(declaration => declaration.call === "undo");
     expect(add?.subject).toMatch(/^s:[a-f0-9]{32}$/u);
     expect(add?.permitted).toBe(true);
+    const refused = declarations.find(declaration => declaration.call === "add.missing");
+    expect(refused?.permitted).toBe(false);
+    expect(refused?.subject).toBe(add?.subject);
     expect(inverse?.permitted).toBe(true);
     expect(inverse?.subject).toBe(add?.subject);
     expect(inverse?.scope).toBe(postAdd.scopes[0]);
