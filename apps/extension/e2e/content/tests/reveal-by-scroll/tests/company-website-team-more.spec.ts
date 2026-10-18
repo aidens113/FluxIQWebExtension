@@ -15,6 +15,7 @@ import type { Page } from "@playwright/test";
 import type { BrowserActionResult } from "../../../../../src/shared/protocol.js";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
+import { TEAM } from "../../../../../../scenario-lab/src/scenarios/company-website/data/index.js";
 
 const PEOPLE = 'section[aria-label="Our people"]';
 const MORE = `${PEOPLE} > button`;
@@ -69,5 +70,32 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
     const second = await harness.runAction({ commandId: "more-2", actionType: "web.dom.click", selector: MORE });
     expect(second.status, `${second.message} | ${actualOf(second)}`).toBe("succeeded");
     await expect.poll(() => people(page), { message: "the press loaded more people", timeout: 10_000 }).toBeGreaterThan(before);
+  });
+
+  test("Next page reaches every batch when its detected Load more begins hidden", async ({ openHarness, page }) => {
+    test.setTimeout(90_000);
+    const harness = await openHarness("company-website");
+    await openTeamAtTop(harness);
+    let ended = false;
+    for (let move = 0; move < 8 && !ended; move += 1) {
+      const before = await people(page);
+      let result: BrowserActionResult | undefined;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        result = await harness.runAction({
+          commandId: `hybrid-${move}-${attempt}`,
+          actionType: "web.dom.next_page",
+          timeoutMs: 30_000,
+          nextPage: { item: `${GRID} > article`, pagination: { mode: "loadMore", control: MORE } }
+        });
+        if (result.status === "succeeded") break;
+        expect(result.failure?.code).toBe("web.validation.output_not_observed");
+      }
+      expect(result?.status, `${result?.message} | ${result && actualOf(result)}`).toBe("succeeded");
+      ended = result!.nextPage?.outcome === "ended";
+      if (!ended) expect(await people(page)).toBeGreaterThan(before);
+      if (move === 0) expect(result!.nextPage).toEqual({ outcome: "moved", by: "scroll" });
+    }
+    expect(ended, "the list eventually ends after its final batch").toBe(true);
+    expect(await people(page), "every fixture card is reachable through Next page, including the last batch").toBe(TEAM.length);
   });
 });

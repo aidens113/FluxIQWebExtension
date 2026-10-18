@@ -1018,3 +1018,16 @@ new shared evaluator specifically owns navigate and explicit URL opens.
 ### Meaningful authored assertion and wait predicates
 
 Text assertions use contains semantics and require a nonblank expected string; text waits likewise require nonblank text for text conditions. Missing, empty or whitespace-only text cannot certify a page state. Explicit literal text such as null remains supported without word filtering. Absence assertions require an authored selector, fingerprint/element, coordinate or visual target; focused-element inference cannot supply the missing subject. Unscoped text assertions read the page even when another field is focused. Valid targeted existence/absence, wait timeout and observed-state mismatch behavior retain their contracts.
+
+### Lists that change from scroll loading to a load-more control
+
+Next page prefers the list's visible load-more control and ends on a visible
+disabled one. When the control is absent or remains hidden after its settling
+window, the same list receives a bounded scroll using its ordinary loading and
+new-item evidence. New rows report a scroll move. If the scroll instead exposes
+the control, Next page rechecks it and follows it. With neither new rows nor a
+rendered control, the list ends with control_absent.
+
+The read's page limit is checked before this fallback moves the list; its page
+count remains distinct from the fallback's own scroll bound. A timed-out or
+unchanged loading attempt retains the existing typed failure and retry path.

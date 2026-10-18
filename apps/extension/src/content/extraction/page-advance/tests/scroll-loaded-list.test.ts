@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { STORE_ITEM, storePage } from "../../tests/store-pager";
 import { movePage } from "..";
+import { pressLoadMore } from "../load-more";
 
 /** One row of the fake document per element, and the viewport's height, in px. */
 const ROW_PX = 100;
@@ -68,6 +69,10 @@ class El {
 
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
   }
 
   get textContent(): string {
@@ -149,6 +154,10 @@ type FeedOptions = {
   stuck?: boolean;
   /** Whether a Load more control under the feed also loads a batch. */
   loadMore?: boolean;
+  /** The button is exposed only after an initial scroll-loaded batch. */
+  hiddenLoadMore?: boolean;
+  /** Scrolling exposes the button without loading a batch itself. */
+  revealMoreOnScroll?: boolean;
 };
 
 type FeedPage = { body: El; feed: El; scrolls(): number; posts(): number; restore(): void };
@@ -172,6 +181,7 @@ function feedPage(options: FeedOptions): FeedPage {
   let left = options.batches;
   let loading = false;
   let scrolls = 0;
+  let more: El | undefined;
   const view = { scrollX: 0, scrollY: 0, innerHeight: VIEWPORT_PX };
   const load = (): void => {
     if (loading || left === 0) return;
@@ -186,13 +196,20 @@ function feedPage(options: FeedOptions): FeedPage {
       for (const item of batch()) feed.append(item);
       if (options.busy) feed.setAttribute("aria-busy", "false");
       loading = false;
+      if (options.hiddenLoadMore) more?.removeAttribute("hidden");
     }, options.batchMs);
   };
   const onScroll = (): void => {
+    if (options.revealMoreOnScroll) {
+      more?.removeAttribute("hidden");
+      return;
+    }
     if (rowOf(sentinel) - view.scrollY < view.innerHeight + REACH_PX) load();
   };
   if (options.loadMore) {
     const control = new El("button", { "data-more": "" }, "Load more");
+    more = control;
+    if (options.hiddenLoadMore) control.setAttribute("hidden", "");
     control.onClick = load;
     main.append(control);
   }
@@ -304,6 +321,36 @@ test("a named Load more is pressed, never scrolled past, on a page that would al
     assert.deepEqual(await movePage({ item: POST, pagination: { mode: "loadMore", control: "button[data-more]" } }, { timeoutMs: 30_000 }), { outcome: "moved", by: "loadMore" });
     assert.equal(feed.posts(), 10);
     assert.equal(feed.scrolls(), 0, "the window was not scrolled");
+  });
+});
+
+test("a hidden Load more does not end the list before its scroll-loaded batch exposes the control", async () => {
+  await onFeed({ batchMs: 200, batches: 2, loadMore: true, hiddenLoadMore: true }, async (feed) => {
+    const request = { item: POST, pagination: { mode: "loadMore" as const, control: "button[data-more]" } };
+    assert.deepEqual(await movePage(request, { timeoutMs: 30_000 }), { outcome: "moved", by: "scroll" });
+    assert.equal(feed.posts(), 10);
+    assert.ok(feed.scrolls() > 0);
+    const scrolls = feed.scrolls();
+    assert.deepEqual(await movePage(request, { timeoutMs: 30_000 }), { outcome: "moved", by: "loadMore" });
+    assert.equal(feed.posts(), 15);
+    assert.equal(feed.scrolls(), scrolls, "the now-visible button is preferred to another scroll");
+  });
+});
+
+test("a hidden Load more cannot scroll beyond a read's requested page limit", async () => {
+  await onFeed({ batchMs: 200, batches: 2, loadMore: true, hiddenLoadMore: true }, async (feed) => {
+    const progress = { item: POST, shown: document.querySelectorAll(POST), pagesRead: 1, scrolls: 0, deadline: Date.now() + 10_000, hasUnreadItem: () => false };
+    assert.deepEqual(await pressLoadMore({ mode: "loadMore", control: "button[data-more]" }, { ...progress, shown: Array.from(progress.shown) }, 1), { outcome: "truncated", stop: "page_limit" });
+    assert.equal(feed.scrolls(), 0);
+    assert.equal(feed.posts(), 5);
+  });
+});
+
+test("a scroll that exposes only the Load more control presses it before reporting the list ended", async () => {
+  await onFeed({ batchMs: 200, batches: 1, loadMore: true, hiddenLoadMore: true, revealMoreOnScroll: true }, async (feed) => {
+    assert.deepEqual(await movePage({ item: POST, pagination: { mode: "loadMore", control: "button[data-more]" } }, { timeoutMs: 30_000 }), { outcome: "moved", by: "loadMore" });
+    assert.equal(feed.posts(), 10);
+    assert.ok(feed.scrolls() > 0);
   });
 });
 
