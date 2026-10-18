@@ -721,3 +721,30 @@ Provider-free proof verifies content/domain/actual ledger controls, not model
 adherence or installed background pairing. Pre-existing quantity-change adds
 without an exact inverse remain honestly refused; this is not every possible
 reset capability. Supervisor owns commits/integration and next paid release.
+
+## Final frozen numeric-guard combination
+
+Supervisor committed correction Core3815be32/downstreame01dd089 then merged
+current dev into both idle branches. Frozen combo heads Corefe2d8422/downstream
+a173a02b, clean source at start. Only additional Core behavior is accepted
+kept-number/negated-exclusion guard3fb6b891 (1 behavioral line,2tests), no public
+contract change. Supervisor explicitly retained previous domain111/browser4/
+all package type acceptance; no unchanged service/facade/domain/browser repeat.
+
+Mechanical owning59291 PASSED60/60 (ledger-subject50+kept-number10),31.11s.
+Both audits77451/55490 actually exited0. Only after those readers exited started
+cacheoff Core libraries/check; log node_modules/codex-reset-numeric-build.log.
+Source and outputs not edited while it runs. No paid run; explicit supervisor
+integration/push/release still required before canonical --model-reset-only.
+
+Frozen combo build68209 actually exited0: fluxiq check64.082s/build88.071s;
+contracts/check/gateway reused valid stamps. Frozen heads remain Corefe2d8422 /
+downstreama173a02b. Final mechanical gates complete:60/60 owning tests plus both
+audits and cacheoff Core package/check/libraries all exit0. No source edits,
+no unchanged downstream/facade/service/browser repeats. Previous accepted
+111domain/4browser/alltypes remain explicitly retained by supervisor because the
+only added behavior was the generic numeric guard, with unchanged public APIs.
+No active worker readers/builds, no paid launch. Own report frozen for supervisor
+integration/push/explicit canonical model-reset-only release. Next run must use
+fresh isolated workspace r1-reset-kettle-t719-20261018-fixed (old ...20261018
+belongs to the failed run and is preserved), subject to the normal slot/guards.
