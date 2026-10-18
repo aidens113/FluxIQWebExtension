@@ -1,6 +1,6 @@
 # Codex live lane 1 acceptance
 
-Status: Bigbox live failure debugged; bounded fixes validated and awaiting supervisor integration
+Status: Integrated gates passed; awaiting supervisor paid release for changed-source acceptance
 
 ## Scope and safety state
 
@@ -54,3 +54,29 @@ Supervisor authorized exactly missing-claim.ts and tests/missing-claim-copy.test
 Exactly four approved Core paths changed for the two diagnosed failures: llm/diagnosis-instructions.ts, llm/tests/diagnosis-channel.test.ts, result-verification/refuted-no/missing-claim.ts, and refuted-no/tests/missing-claim-copy.test.ts. Diff: 64 insertions / 2 deletions. The proposed new prompt test was removed and placed in the existing channel test by supervisor authorization, preserving the 25-file directory budget.
 
 Final six-file parser/weigh/reask and actual prompt/channel command: 86 tests passed, exit 0, 46.52 s. Core actual compiler check passed, 87.603 s; final audit passed (401 warnings / 1154 baselined); diff-check clean. Typecheck preceded relocation of identical prompt-test code into its existing owner. No production build, paid rerun, commit, merge or push followed these fixes. Supervisor review/integration/release required before new paid acceptance. Bigbox is still failed despite a passing oracle; zero-call replay remains unproved. Classifieds and auction have not been launched by this worker.
+
+## Final integrated gates (supervisor requested)
+
+Frozen source at start: Core caef13e1, downstream 6253534d, both clean before own report updates. Supervisor committed generic fixes (Core 5a652d4a), independently verified changed tests and integrated current dev. No paid launch is authorized yet.
+
+Running cache-off three-library Core build, fluxiq compiler check, previous six test files plus result-verification/read-account/tests/accounts.test.ts, and both structure audits. Downstream domain/extension checks wait for rebuilt Core dist/currentness. Every command now captures exact stdout/stderr under C:/Users/osrs_/AppData/Local/Temp/t563-final-integrated-*.log, rather than only tool-session output. No source edit, commit, merge or push by worker.
+
+Integrated checks observed so far: Core focused seven files passed 111 tests (114.22 s), actual fluxiq compiler check passed (146.000 s), Core audit passed (401 warnings / 1154 baselined), downstream audit passed (208 warnings / 638 baselined). Core production library build still running; dependent domain/extension checks have not started. All outputs are captured in named temp logs. No source edits or paid launch.
+
+## Final integrated gate results
+
+All requested integrated gates passed on frozen executable source. Gate source started at Core caef13e1 / downstream 6253534d; supervisor subsequently added architecture documentation only (Core dc5c62bc), which does not invalidate these source checks.
+
+| Gate | Observed result | Captured log under C:/Users/osrs_/AppData/Local/Temp/ |
+| --- | --- | --- |
+| Core three-library build, cache off | exit 0; fluxiq compiled 312.394 s; contracts/gateway matched stamps | t563-final-integrated-core-build.log |
+| Core fluxiq check, cache off | exit 0; actual compiler 146.000 s | t563-final-integrated-core-check.log |
+| Focused Core tests | 7 files / 111 tests passed; 114.22 s | t563-final-integrated-core-tests.log |
+| Domain package check | exit 0; source/test TypeScript plus current Core guard; 41.832 s | t563-final-integrated-domain-check.log |
+| Extension package check | exit 0; package compiler/browser graph checks plus current Core guard; 88.773 s | t563-final-integrated-extension-check.log |
+| Core structure audit | exit 0; 401 warnings / 1154 baselined | t563-final-integrated-core-audit.log |
+| Downstream structure audit | exit 0; 208 warnings / 638 baselined | t563-final-integrated-downstream-audit.log |
+
+The focused test command is the previously recorded six files plus src/programs/automation-studio/runtime/result-verification/read-account/tests/accounts.test.ts, with maxWorkers=2/minWorkers=1. No full suite was run.
+
+Source remains frozen. No source edits, commits, merges, pushes or paid launch were made by worker during integrated gates. Supervisor owns final docs sync/audit and integration/push/release. Bigbox live acceptance still awaits a changed-source rerun; classifieds and auction have not been launched by this worker.
