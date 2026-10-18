@@ -1856,3 +1856,40 @@ Log paths (all ignored, preserved):
 Only report dirty after this write. No worker commits/merges/pushes; no paidr6.
 Canonical task intent/oracle unchanged. Root independent integration/publication
 and any explicit subsequent full canonical live release remain required.
+### Read-only r6 readiness before root refreshed-source release
+
+Written canonical reset r6 brief read. No launcher/prelude/browser/provider call.
+Current task trees Core475c7bfc/downstream32d6acd4 unchanged during these reads.
+Fresh exact workspace ABSENT at owning runs root:
+test-runs/instances/bf-slot-2/persistent-isolated/codex-reset-positive-t719-20261018-r6.
+Prior r5 workspace exists and required debug run-mve8vn94-023a5213.md exists.
+Slot2 owner taskt719/instancebf-slot-2/pidnull, no active run recorded.
+Machinewide STOP-balance absent (not an assertion of a fetched provider balance).
+Owning providerKeySource read-only helper confirmed credentialpresent in checkout
+file; no credential values exposed and no provider request made.
+
+Exact unchanged source task everything-store-kettle-to-cart remains positive2
+orderedCart rows/6values(item/quantity/price), excluding saveditems. Owning
+add-to-cart workflow records expectedquantity and existingbaseline row; final
+facts require subtotal, case savedcount and notchallenged. No task/fixture/oracle
+changes or expectedanswer injection. Task intentionally changes its own cart/
+saved state; unrelated baseline preservation remains required, not whole-account
+unchanged language that would contradict the task.
+
+Proposed normal command (NOT RUN until explicit refreshed-source release):
+pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow
+--llm-provider deepseek --llm-model deepseek-flash --authoring-mode project
+--llm-task create-flow --instruction-task everything-store-kettle-to-cart
+--target persistent-isolated --workspace codex-reset-positive-t719-20261018-r6
+--model-reset-only --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250
+--llm-max-run-tokens 48000000. Process FLUXIQ_LAB_INSTANCE=bf-slot-2,
+FLUXIQ_TEST_TARGET=persistent-isolated, FLUXIQ_BUILD_CACHE_DIR=off.
+
+Normal guards/productionprelude own admission/preparation; no overrides. Require
+ACTUALauthenticated CoretrialRunnertrue/startResetfalse after allocation before
+claiming nohook readiness. Fixturefalse argument/helperecho is requestedpolicy,
+not observedstate absent an independent persistedreceipt. Track originalbaseline
+beforecreate, failed/retry act attribution, informationalhint versus explicit
+claim, exactrestoration and cleantrials. Acceptance remains realchat/judgedwhole/
+exactpositiveoracle/finalfacts plus explicit0call/0cost/noharness replay. Canonical
+r5 staysfailed. All readonlyreaders terminal; ownreport now frozen forrootrefresh.
