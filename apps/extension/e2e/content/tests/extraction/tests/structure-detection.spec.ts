@@ -67,6 +67,47 @@ function requestFrom(structure: Detected, paginate?: WebAutomationExtractListPag
   return request;
 }
 
+test("job-board: selected cards keep one shared company field that reads matching jobs after selection changes", async ({ openHarness, page }) => {
+  const harness = await openHarness("job-board");
+  await page.goto(new URL("/scenarios/job-board/jobs?q=Halvard", page.url()).href);
+  const reject = page.getByRole("button", { name: "Reject non-essential", exact: true });
+  if (await reject.isVisible()) await reject.click();
+  const dismiss = page.getByRole("link", { name: "No thanks", exact: true });
+  if (await dismiss.isVisible()) await dismiss.click();
+  const titles = page.locator("article[data-jk] h2 a");
+  await expect(titles.first()).toBeVisible();
+  await titles.first().click();
+  const structure = await detected(harness);
+  const columns = await page.evaluate(({ item, fields }) => {
+    const rows = [...document.querySelectorAll(item)];
+    const target = (row: Element, company: boolean) => company
+      ? row.querySelector("article > div:nth-of-type(2) > span:first-child")
+      : row.querySelector("article h2 a");
+    const matching = (company: boolean) => fields.filter((field) => field.spec.kind === "text" && field.spec.selector
+      && rows.some((row) => row.querySelector(field.spec.selector!) === target(row, company)));
+    const company = matching(true);
+    const title = matching(false).find((field) => rows.every((row) => row.querySelector(field.spec.selector!) === target(row, false)));
+    const expected = rows.filter((row) => target(row, true)?.textContent === "Halvard Labs")
+      .map((row) => ({ title: target(row, false)?.textContent, company: target(row, true)?.textContent }));
+    return { company, title, expected };
+  }, { item: structure.proposal.item, fields: structure.proposal.fields });
+  expect(columns.company).toHaveLength(1);
+  expect(columns.company[0]!.coverage).toBe(1);
+  expect(columns.title).toBeTruthy();
+  expect(columns.expected.length).toBeGreaterThan(0);
+  await titles.nth(1).click();
+  const reply = await harness.runAction({
+    commandId: "read-jobs-after-selection-change", actionType: "web.dom.extract_list",
+    extractList: {
+      item: structure.proposal.item,
+      fields: { company: columns.company[0]!.spec as WebAutomationExtractField, title: columns.title!.spec as WebAutomationExtractField },
+      where: [{ field: "company", equals: ["Halvard Labs"] }]
+    }
+  });
+  expect(reply.status).toBe("succeeded");
+  expect(reply.extracted).toEqual(columns.expected);
+});
+
 /** Rows of one template: a label, and a password field marked by its type alone -- or, with `secretOnly`, the password alone. */
 async function injectCredentialRows(page: Page, secret: string, secretOnly: boolean): Promise<void> {
   await page.evaluate(([password, onlySecret]) => {

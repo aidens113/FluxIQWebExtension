@@ -104,6 +104,40 @@ function holding(fields: ReturnType<typeof inferFields>, run: readonly Element[]
   return fields.filter((field) => field.spec.kind === "text" && run.every((item, index) => read(item, field) === values[index]));
 }
 
+function documentCard(team: string, selected: boolean, marked: boolean): Element {
+  return dom.el("li", {}, dom.el("article", { class: selected ? "panel focus" : "panel" },
+    dom.el("div", { class: "metadata" }, dom.el("span", {}, team), dom.el("span", {}, "Office")),
+    ...(marked ? [dom.el("em", { class: "approval" }, "Reviewed")] : []),
+    dom.el("input", { type: "password", value: "private" })));
+}
+
+test("a selected ancestor does not duplicate a shared field as a partial column", () => {
+  const run = [documentCard("Team A", true, true), documentCard("Team B", false, false), documentCard("Team C", false, false)];
+  const fields = inferFields(run[0]!, run);
+  assert.equal(holding(fields, run, ["Team A", "Team B", "Team C"]).length, 1);
+  assert.equal(fields.some((field) => field.spec.selector?.includes(".focus")), false);
+  assert.ok(fields.some((field) => field.coverage < 1 && read(run[0]!, field) === "Reviewed"));
+  assert.equal(fields.some((field) => field.spec.handling !== "exclude" && read(run[0]!, field) === "private"), false);
+});
+
+test("same text on distinct subtype leaves is not an equivalent shared field", () => {
+  const run = [true, false, false].map((special) => dom.el("li", {},
+    dom.el("article", { class: special ? "panel subtype" : "panel" },
+      dom.el("div", { class: "metadata" }, dom.el("span", {}, "Shared"), dom.el("span", {}, "Desk")),
+      ...(special ? [dom.el("span", { class: "subtype-value" }, "Shared")] : []))));
+  const fields = inferFields(run[0]!, run);
+  assert.ok(fields.some((field) => field.coverage < 1 && field.spec.selector?.includes(".subtype-value") && read(run[0]!, field) === "Shared"));
+});
+
+test("a conflicting element beyond the discovery sample preserves a meaningful partial field", () => {
+  const run = Array.from({ length: 13 }, (_, index) => documentCard(`Team ${index}`, index === 0, false));
+  run.push(dom.el("li", {},
+    dom.el("article", { class: "panel" }, dom.el("div", { class: "metadata" }, dom.el("span", {}, "Other"), dom.el("span", {}, "Desk"))),
+    dom.el("article", { class: "panel focus" }, dom.el("div", { class: "metadata" }, dom.el("span", {}, "Owned"), dom.el("span", {}, "Desk")))));
+  const fields = inferFields(run[0]!, run);
+  assert.ok(fields.some((field) => field.spec.selector?.includes(".focus") && read(run.at(-1)!, field) === "Owned"));
+});
+
 function auctionCard(title: string, fresh: boolean): Element {
   const heading = dom.el("div", { role: "heading" }, ...(fresh ? [dom.el("span", { class: "badge" }, "New listing")] : []), dom.el("span", {}, title));
   return dom.el("li", { class: "card" },
