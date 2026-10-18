@@ -1,6 +1,11 @@
 import type { LiveInstructionTask } from "../live-instructions.js";
 
-const ROTTERDAM_ENGINEERS = "Use Guildline's people search to find data engineers who are 2nd-degree connections and based in Rotterdam in the Netherlands (not the Rotterdam in New York). Collect every person the search returns across all of its pages into a table with columns name, headline and location, listing each person only once and leaving out anything marked as promoted.";
+/**
+ * The search words are named because the oracle is what that search returns: a different query ("data engineers",
+ * or one with "Rotterdam" in it) returns other people. The order, the one-row-per-person rule and the exact values
+ * are named because the dataset is compared by position and value.
+ */
+const ROTTERDAM_ENGINEERS = "On Guildline, search people for \"data engineer\" and narrow the results to 2nd-degree connections based in Rotterdam in the Netherlands (not the Rotterdam in New York). Collect every person the search returns across all of its pages, whatever their exact title, into a table with columns name, headline and location, each value exactly as the results show it. Leave out anything marked as promoted, and list each person once, at the first place they appear among the remaining results, in the order the search shows them.";
 
 /**
  * The professional network's created-Flow tasks. The two withdrawal tasks
@@ -69,7 +74,7 @@ export const PROFESSIONAL_NETWORK_LIVE_TASKS: readonly LiveInstructionTask[] = [
     id: "professional-network-netherlands-data-engineers",
     scenarioId: "professional-network",
     kind: "navigate-and-extract",
-    instruction: "Use Guildline's people search to find data engineers who are 2nd-degree connections and based anywhere in the Netherlands. Go through every page of results and collect every person the search returns into a table with columns name, headline and location, in the order the search shows them, listing each person only once and leaving out anything marked as promoted.",
+    instruction: "On Guildline, search people for \"data engineer\" and narrow the results to 2nd-degree connections based anywhere in the Netherlands. Go through every page of results and collect every person the search returns, whatever their exact title, into a table with columns name, headline and location, each value exactly as the results show it. Leave out anything marked as promoted, and list each person once, at the first place they appear among the remaining results, in the order the search shows them.",
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-netherlands-engineers",
   },

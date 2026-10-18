@@ -15,6 +15,8 @@ const ORGANIC = extractStep.target!;
 const FIELDS = extractStep.fields!;
 const FILTERED = `${ROOT}search/results/people/?keywords=data%20engineer&network=${encodeURIComponent('["S"]')}&geoUrn=${encodeURIComponent(JSON.stringify([ROTTERDAM_NL]))}&origin=FACETED_SEARCH`;
 const CLOSE_CONVERSATION = { name: "Close your conversation with Priya Nair" } as const;
+/** The notice the invitation-allowance task's person read. */
+const LIMIT_NOTICE = "You’ve reached the weekly invitation limit";
 const pagerButton = (page: Page, label: string) => page.locator(`section[aria-label="Search results"] button`, { hasText: new RegExp(`^${label}$`, "u") });
 const pageStatus = (page: Page) => page.locator(`section[aria-label="Search results"] span`, { hasText: /^Page \d of \d$/u });
 
@@ -194,9 +196,13 @@ describe("professional-network in a browser", { concurrency: 4 }, () => {
     await goToPage(page, "3", "Page 3 of 3");
   }));
 
-  test("an honest withdrawal of month-old requests reaches the goal, and the site's final state agrees", () => session(async (current) => {
-    const page = await arrive(current, `${ROOT}mynetwork/invitation-manager/sent/`);
+  test("an honest withdrawal meets the weekly limit notice on My Network and Sent, reaches the goal, and clears the notice", () => session(async (current) => {
+    const page = await arrive(current, `${ROOT}mynetwork/`);
     await page.getByRole("button", CLOSE_CONVERSATION).click({ timeout: 8_000 });
+    await page.getByRole("status").getByText(LIMIT_NOTICE).waitFor({ timeout: 5_000 });
+    await page.locator(`a[href$="invitation-manager/sent/"]`).click();
+    await page.getByRole("button", { name: "People (28)" }).waitFor({ timeout: 8_000 });
+    assert.equal(await page.getByRole("status").getByText(LIMIT_NOTICE).isVisible(), true, "Sent says the limit is reached");
     await page.getByRole("button", { name: "People (28)" }).click();
     await loadEverySentRow(page, 28);
     const withdrawn = await withdrawWhere(page, (label, isPerson) => isPerson && /month|year/u.test(label));
@@ -204,6 +210,9 @@ describe("professional-network in a browser", { concurrency: 4 }, () => {
     await until(async () => (await factText(page, "invitation-store")) === STORE_AFTER_WITHDRAWAL);
     await page.reload();
     assert.equal(await factText(page, "invitation-store"), STORE_AFTER_WITHDRAWAL, "the goal survives a reload");
+    assert.equal(await page.getByText(LIMIT_NOTICE).count(), 0, "sixteen pending requests are under the limit");
+    await page.goto(`${current.lab.origin}${ROOT}mynetwork/`);
+    assert.equal(await page.getByText(LIMIT_NOTICE).count(), 0, "My Network no longer says it either");
     assert.deepEqual(current.consoleErrors, []);
   }));
 
