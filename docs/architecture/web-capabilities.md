@@ -1031,3 +1031,14 @@ rendered control, the list ends with control_absent.
 The read's page limit is checked before this fallback moves the list; its page
 count remains distinct from the fallback's own scroll bound. A timed-out or
 unchanged loading attempt retains the existing typed failure and retry path.
+
+### Bounded inferred columns
+
+Field discovery and proposal share a 64-column bound. Detection retains late
+ordinary data instead of discarding discovered columns at a separate 24-column
+limit. Proposals can therefore be larger, while discovery work and the model
+packet's independent reported byte budget remain bounded. Existing deterministic
+page order, mixed-template separation, partial-field reservations, positional
+line groups and sensitive-field exclusions remain in effect; no value or field
+meaning receives preference. If template separation expands the source set past
+64, coverage and partial/group retention choose within that same proposal bound.

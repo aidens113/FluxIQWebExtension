@@ -2,3 +2,5 @@
 // takes (Core t475): the token itself, and the tokens of a shown handle.
 export { webTargetSpot } from "./target";
 export { webControlSpotToken } from "./token";
+export { webResetResource } from "./resource";
+export { webResetCollections } from "./collection";

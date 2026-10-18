@@ -162,20 +162,17 @@ export type FieldSource = {
 /** The form controls whose live value a record can read. */
 const VALUE_TAGS = new Set(["input", "textarea", "select"]);
 
+/** How many sources are discovered before coverage is measured. Bounds the walk on a large item. */
+const MAX_CANDIDATE_FIELDS = 64;
+
 /**
- * At most this many fields are proposed, keeping the widest-covering.
- *
- * It was 12, which is what a person will read in a picker, and on a realistic
- * item that cut the answer off: measured on the everything-store's search
- * results, a product card's twelfth readable descendant in document order is
- * reached before its price, so a proposal of twelve carried the title, the
- * rating and the link and **not the price**. A field that is not proposed is a
- * column the model cannot ask for at all, so the bound is now what an item
- * plausibly exposes rather than what a list reads tidily, and the widest
- * covering are the ones kept. The packet the model is shown has its own byte
- * budget and says when it truncated (`structure/packet.ts`).
+ * Propose the same bounded set discovery can collect. A separate smaller
+ * proposal limit discarded late ordinary data from already discovered sources.
+ * Mixed-template splitting can add sources; coverage and partial/group rules
+ * still arbitrate those within this bound. The model packet has its own byte
+ * budget and reports truncation (`structure/packet.ts`).
  */
-const MAX_PROPOSED_FIELDS = 24;
+const MAX_PROPOSED_FIELDS = MAX_CANDIDATE_FIELDS;
 
 /**
  * How many of those places are held for columns that only *some* items have.
@@ -188,9 +185,6 @@ const MAX_PROPOSED_FIELDS = 24;
  * columns before coverage spends the rest.
  */
 const RESERVED_PARTIAL_FIELDS = 8;
-
-/** How many sources are collected before coverage decides between them. Bounds the walk on a large item. */
-const MAX_CANDIDATE_FIELDS = 64;
 
 /** How many of a run's items a text column's shape is read from (`value-shape.ts`). */
 const MAX_SHAPE_SAMPLES = 24;
