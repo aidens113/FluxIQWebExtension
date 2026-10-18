@@ -1,0 +1,56 @@
+# Codex live lane 1 acceptance
+
+Status: Bigbox live failure debugged; bounded fixes validated and awaiting supervisor integration
+
+## Scope and safety state
+
+Lane: t563 paired repositories, slot-1, instance bf-slot-1. Sequence: bigbox-retail-rated-delivery-towels, local-classifieds-test-ride-question, then auction-marketplace-cheap-accessory-auctions if both finish. Each task uses its own persistent-isolated workspace, real extension chat entry, judged whole run, and one zero-call replay. Initial build purse is $0.25. No scenario/oracle/model-guidance task shaping.
+
+Slot owner file assigns t563 / bf-live-lane-1 / bf-slot-1; pid null. Latest bf-slot-1 ledger launch is closed, run-mvd9nlx5-1373850d failed and has its required debug. No balance stop file exists. Provider discovery reports a key available in existing lane .env.local; the value was never printed. No other t563 production build or live run was found before the authorized Core build.
+
+## Preparation
+
+- Read live-lane-1 report, A8 Run Plan and exact prior run argument flags.
+- Prior classifieds diagnosis and validated generic feedback change: codex-classifieds-seller-read.md.
+- Downstream source before build: fd8f034c. Core contains the approved two-file generic feedback change awaiting supervisor commit/integration.
+- Started Core three-library build with process-only FLUXIQ_BUILD_CACHE_DIR=off: `pnpm.cmd --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build`, session 1934. Contracts and gateway reused matching stamps; fluxiq compiler rebuilding. Source stays frozen during this build.
+
+## Launch shape (prepared; not executed)
+
+Process environment: FLUXIQ_TEST_TARGET=persistent-isolated, FLUXIQ_DEMO_HEADLESS=false, FLUXIQ_LAB_INSTANCE=bf-slot-1, FLUXIQ_LAB_CORE_BRANCH=task/t563-a8-lab-comparison, FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25, FLUXIQ_BUILD_CACHE_DIR=off.
+
+`pnpm.cmd lab run bigbox-retail --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode project --llm-task create-flow --instruction-task bigbox-retail-rated-delivery-towels --target persistent-isolated --workspace codex-breadth-l1-rated-delivery-towels --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000`
+
+Subsequent launches use corresponding scenario/task and distinct workspace. Every actual failure must be debugged before a changed-source rerun. No paid run has launched during preparation.
+
+Core production build completed successfully, exit 0: contracts and client-gateway-websocket reused matching stamps; fluxiq actually rebuilt in 267.119 s with cache store disabled. Core source is clean at d5488b29 after supervisor commit; downstream source fd8f034c. Owning downstream Core-currency check is running. Paid launch remains unexecuted pending supervisor release.
+
+Readiness: `node scripts/check/core-build.mjs` passed exit 0 and confirmed t563 Core dist current with source. Lane is prepared; awaiting supervisor paid-run release. No production build remains active from this worker.
+
+## Released bigbox acceptance
+
+Supervisor released paid lane 1 after independently observing 12/12 focused tests and integrating guidance. Frozen pair at launch: Core 93850947, downstream eec6a973; documentation/ancestry changes only beyond the successful production build.
+
+Started the prepared bigbox command under bf-slot-1, workspace codex-breadth-l1-rated-delivery-towels, session 46432. Output is captured in the machine temp directory. This is the first new paid launch by this worker. No source edit or concurrent production build is allowed while the live lease is held.
+
+Bigbox run allocated: run-mvddx6wf-17e9eab0. Launcher prelude completed and test-runner CLI started at 22:28:12 local. Startup then prepared a new Core web production build: adapter reused matching receipt; owned web-build key lock acquired; attempt b-1c02898ea1a8 created at 22:32:52. No browser/model call had started at this point. Long initialization is traced to specific build preparation, not attributed to load or treated as a failed product run.
+
+## Bigbox measured outcome
+
+Run run-mvddx6wf-17e9eab0 ended failed, runtime.behavior, exit 1: 98 steps, 33 paid calls, $0.038557602. A Flow was promoted. The FULL oracle passed: records held and final state held, with exact ordered 16 records and all 48 fields matched. Core nevertheless reported core.result.does_not_answer_request; later result reauthor ended build_not_finished. Requested zero-call acceptance did not complete.
+
+Initial external-URL trial failure was recovered by the model without source intervention. Trial0031 and judges0032/0033 passed. Final playback judges0047/0048 called four sponsored-condition left-outs missing, leading to reauthor. Required debug written at docs/working/language-driven-flow-loop-plan/debugs/run-mvddx6wf-17e9eab0.md. No unchanged-source rerun, additional paid launch, or source edit has occurred. Supervisor informed promptly; read-only cause analysis continues.
+
+## Bigbox deterministic cause and bounded repair
+
+Read-only replay of actual playback judge0047/0048 against built Core: both wholly=false, zero findings. Each judge names four STORED labels; no unmatched label. Each has a rejected copy under sponsored condition1, all four settled and quote the request, with condition accounting also_in_result.
+
+Underlying parser defect: after removing parenthesized condition wording, the phrase is condition1 alone left out. refuted-no/missing-claim.ts LEFT_OUT_BY allowed also/wrongly/incorrectly but omitted alone, so those clauses were not classified as left_out_by and their stored-copy proof was missed.
+
+Supervisor authorized exactly missing-claim.ts and tests/missing-claim-copy.test.ts. Fail-first new generic library-copy regression: 1 failed,2passed,10skipped;93.31s. Positive case uses a colon/semicolon list of stored copies whose condition witnesses are settled. Negative controls retain genuinely missing rows under settled and unsettled conditions, and a stored title with no rejected copy. Parser now admits the single alone modifier; no verdict is forced and re-ask policy remains intact. Full narrow validation pending with crossborder prompt change.
+
+## Final bounded-fix validation
+
+Exactly four approved Core paths changed for the two diagnosed failures: llm/diagnosis-instructions.ts, llm/tests/diagnosis-channel.test.ts, result-verification/refuted-no/missing-claim.ts, and refuted-no/tests/missing-claim-copy.test.ts. Diff: 64 insertions / 2 deletions. The proposed new prompt test was removed and placed in the existing channel test by supervisor authorization, preserving the 25-file directory budget.
+
+Final six-file parser/weigh/reask and actual prompt/channel command: 86 tests passed, exit 0, 46.52 s. Core actual compiler check passed, 87.603 s; final audit passed (401 warnings / 1154 baselined); diff-check clean. Typecheck preceded relocation of identical prompt-test code into its existing owner. No production build, paid rerun, commit, merge or push followed these fixes. Supervisor review/integration/release required before new paid acceptance. Bigbox is still failed despite a passing oracle; zero-call replay remains unproved. Classifieds and auction have not been launched by this worker.
