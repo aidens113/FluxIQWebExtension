@@ -29,11 +29,25 @@
 // read is still shown whole. The packet beside the read is the page, sanitized,
 // with handles the model can act on. What is recorded for the replay is not
 // touched (`./replay.ts`).
+//
+// **A cleared layer's way out is the page's record too** (lane 2,
+// `run-mvcxf4uz-64cd322c`). Each `clearedLayers` entry may carry `wayOut`: the
+// page's address and the pressed control's descriptor, xpath included. Its rule
+// is that it stops at this domain's server half (`../../../actions/cleared-layers.ts`):
+// the dispatcher hands Core only an opaque reference. A press made while
+// exploring answered the model with it whole, which was rare while every
+// covered press was refused, and is not once the runtime clears a dismissible
+// cover first (`./layer/runtime-clears.ts`). So it is removed here; the layer's
+// kind, the allow-list word and the two names stay.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 
 /** The payload keys that hold the extension's record of the page rather than the node's answer. */
 const PAGE_RECORD_KEYS: ReadonlySet<string> = new Set(["snapshot", "element", "visualTarget", "resolution", "structure"]);
+
+/** The payload key listing what the runtime cleared, and the member of each entry that is the page's record. */
+const CLEARED_LAYERS_KEY = "clearedLayers";
+const WAY_OUT_KEY = "wayOut";
 
 /**
  * A node's payload without the page's own record, or nothing when that record
@@ -48,8 +62,24 @@ export function webNodeWithoutPageRecord(payload: JsonValue | undefined): JsonVa
       removed = true;
       continue;
     }
+    if (key === CLEARED_LAYERS_KEY && Array.isArray(value) && value.some(holdsWayOut)) {
+      removed = true;
+      kept[key] = value.map(withoutWayOut);
+      continue;
+    }
     kept[key] = value;
   }
   if (!removed) return payload;
   return Object.keys(kept).length === 0 ? undefined : kept;
+}
+
+function holdsWayOut(entry: JsonValue): boolean {
+  return typeof entry === "object" && entry !== null && !Array.isArray(entry) && WAY_OUT_KEY in entry;
+}
+
+/** A cleared layer as the model reads it: everything but its way out. */
+function withoutWayOut(entry: JsonValue): JsonValue {
+  if (!holdsWayOut(entry)) return entry;
+  const { [WAY_OUT_KEY]: _wayOut, ...rest } = entry as JsonObject;
+  return rest;
 }

@@ -735,7 +735,7 @@ export function rejectionDetail(fields: {
     useNode: (reason === "handle_wrong_kind_of_control" || reason === "handle_not_a_field") && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
     // Read off the reason and the codes, so a repeat that passes them back says it again (`./rejection-next/`).
-    next: webLlmRejectionNext(reason, fields.instead, fields.closeWith),
+    next: webLlmRejectionNext(reason, fields.instead, fields.closeWith, fields.target),
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,

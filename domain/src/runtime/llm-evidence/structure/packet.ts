@@ -316,7 +316,7 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
   return proposal.fields
     .filter((field) => field.spec.handling !== "exclude")
     .map((field) => {
-      const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec, lines.get(field.key));
+      const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec, lines.get(field.key), firstItem?.detected.evidence.elements);
       const handle = at.get(field.key);
       return { key: field.key, spec: field.spec, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample) };
     });

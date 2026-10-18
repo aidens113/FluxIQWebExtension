@@ -193,7 +193,9 @@ test("where the browser gives no status, a page that lost the list is retried as
   // A numbered pager with no page after the last read: the document holds still
   // on its pager (two seconds) and shows no card, which is the list lost.
   const numbered: WebAutomationExtractListRequest = { ...RESULTS, paginate: { mode: "numbered", pages: ".page", maxPages: 10 } };
-  const pager = [{ getAttribute: () => null, textContent: "1" } as unknown as Element];
+  // `closest` and `querySelector` answer nothing: a bare number that is no control
+  // (`pager-reading/current-page.ts` reads both on every candidate).
+  const pager = [{ getAttribute: () => null, textContent: "1", closest: () => null, querySelector: () => null } as unknown as Element];
   const lost = page([], { ".page": pager });
   const host = served(undefined);
   const taken: ExtractionCheckpoint[] = [];

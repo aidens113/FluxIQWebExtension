@@ -68,6 +68,7 @@ import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSP
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION } from "./catalog";
 import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
+import { webRuntimeClearsLayers } from "./layer";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
@@ -291,12 +292,16 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
     const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, webPlanFirstTargetHandle(written));
-    // A press on a control the look just taken shows covered is not sent: it
-    // would land on the cover (`./covered-target.ts`, C4). The refusal names
-    // the cover and carries the page it is on, so the layer can be dealt with
-    // first -- a popup that opened on a timer is named this way (C9).
+    // A press on a control the look just taken shows covered is sent when the
+    // runtime's own defence clears every cover over it: the extension's click
+    // refuses it at its gate, presses the cover's way out and presses again, as
+    // in playback, and the result names what it closed (`./layer/runtime-clears.ts`,
+    // `run-mvcxf4uz-64cd322c`). Any other cover is not sent: the press would land
+    // on it (`./covered-target.ts`, C4). That refusal names the cover and carries
+    // the page it is on, so the layer can be dealt with first -- a popup that
+    // opened on a timer is named this way (C9).
     const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, webPlanFirstTargetHandle(written)) : undefined;
-    if (current && covered) {
+    if (current && covered && !webRuntimeClearsLayers(current.evidence, covered.covers, (layer) => run.layers.owns(buildOf(run), layer))) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
         reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined, closeWith: covered.closers
