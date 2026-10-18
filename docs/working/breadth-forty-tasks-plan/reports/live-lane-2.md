@@ -1,8 +1,29 @@
 # Report: live-lane-2 (crossborder-marketplace, auction-marketplace)
 
-Lane tree `C:/Users/osrs_/FluxStuff/fxwork/t565` (downstream and Core on `task/t565-a8-lane-2`; downstream synced by
-the supervisor to dev `fb3919e2`, Core `76d66fe8`), Lab slot `lab-slots/slot-2`, instance `bf-slot-2`. Nothing
-committed.
+Lane tree `C:/Users/osrs_/FluxStuff/fxwork/t565` (downstream and Core on `task/t565-a8-lane-2`), Lab slot
+`lab-slots/slot-2`, instance `bf-slot-2`.
+
+## State at stop (2026-10-17, session wrap-up)
+
+- **Lane stopped** on the supervisor's wrap-up. No run in flight. Scope by then: one full pass each for
+  `crossborder-marketplace-free-hubs-under-ten` and `auction-marketplace-cheap-accessory-auctions`. **Neither has
+  passed yet.**
+- Tree: fixes 1-8 were committed by the supervisor (`7bb54be2`, Core `ce4fa307`), merged into dev in round 1 (`Merge
+  task t565: live lane 2 (covers, pagers, split prices)`, `74413ee3`), and the tree synced to dev `48cdbfee` /
+  Core `c1ed1bdd`. Core `dist` was rebuilt after the sync (19:44).
+- Uncommitted in `fxwork/t565` (documentation only): this report's edits since `7bb54be2`, and
+  `docs/working/language-driven-flow-loop-plan/debugs/run-mvd9554h-42cdf9b7.md` (r5's debug). No source changes.
+- Verified live: fix 3 (plan taken first try, r4 and r5), fix 4 (covered cookie press sent and the modal cleared,
+  r4 and r5), fix 7 (`next_page` 1 -> 2 on the class-marked pager, r5), fix 8 (the sale-price column chosen; read kept
+  7 of 40, r5). Not yet seen live: fix 5 (no supervisor stop-reason ending occurred since), fix 6 (the read's
+  `wayOut` removal: not inspected in r5's steps). Fixes 1-2 are in effect superseded by 4.
+- **Next cause to fix (free-hubs, r5):** a robot check met by `next_page` on page 3 is retried as "list not
+  observed" instead of being handed to the person (task `personCheck: completes`). See
+  `debugs/run-mvd9554h-42cdf9b7.md`; the suggested fix is in `apps/extension/src/content/extraction/page-advance/`
+  (arrival after a move should answer needs-person on a challenge page).
+- **cheap-accessory-auctions** has not run since r2 (plan grammar, fixed by fix 3). Its site opens with a "Bid on the
+  go" modal over a cookie bar (fix 4 covers that), and it pages over three pages (fix 7 may matter).
+- Spend: 5 paid runs, $0.1383 billed in total (ledger `totalEstimatedCostUsd`). No balance error.
 
 ## Fix log
 
@@ -30,16 +51,21 @@ baselined), Core passed (397 warnings, 1155 baselined). Core `dist` last rebuilt
 
 ## Queue
 
+**Scope change (user, via supervisor, 2026-10-17, during integration round 1):** only a few tasks run fully end to
+end (build from chat, judged run, zero-call replay), since each is time-intensive. Lane 2 needs one full pass per
+site, `crossborder-marketplace-free-hubs-under-ten` and `auction-marketplace-cheap-accessory-auctions`, then stops.
+The other six tasks are proven provider-free by a per-site audit, not live.
+
 | Task | Runs (run id, verdict, billed cost, calls) | Status |
 | --- | --- | --- |
-| crossborder-marketplace-free-hubs-under-ten | run-mvcwem7d-34689f55 failed $0.0114 17 (covered press); run-mvcxf4uz-64cd322c failed $0.0170 28 (same cause, advice not enough); run-mvd0pbn9-bad36023 failed $0.0779 47 (30-min limit: pager, price sample, paging loop) | rerun after round 1 |
-| crossborder-marketplace-follow-official-store | | queued |
-| crossborder-marketplace-mint-hub-fallback | | queued |
-| crossborder-marketplace-uk-express-quote | | queued |
-| auction-marketplace-cheap-accessory-auctions | run-mvcwp3wh-bcea2115 failed $0.0068 15 (plan grammar, fix 3) | rerun after round 1 |
-| auction-marketplace-save-mark-ii-sellers | | queued |
-| auction-marketplace-buy-it-now-quote | | queued |
-| auction-marketplace-lens-hood-seller-shop | | queued |
+| crossborder-marketplace-free-hubs-under-ten | run-mvcwem7d-34689f55 failed $0.0114 17 (covered press); run-mvcxf4uz-64cd322c failed $0.0170 28 (same cause, advice not enough); run-mvd0pbn9-bad36023 failed $0.0779 47 (30-min limit: pager, price sample, paging loop); run-mvd9554h-42cdf9b7 failed $0.0251 31 (round-1 tree: robot check on page 3 not handed to the person) | open; next fix in `debugs/run-mvd9554h-42cdf9b7.md` |
+| crossborder-marketplace-follow-official-store | | out of scope (per-site audit) |
+| crossborder-marketplace-mint-hub-fallback | | out of scope (per-site audit) |
+| crossborder-marketplace-uk-express-quote | | out of scope (per-site audit) |
+| auction-marketplace-cheap-accessory-auctions | run-mvcwp3wh-bcea2115 failed $0.0068 15 (plan grammar, fix 3) | open; not rerun since fix 3 |
+| auction-marketplace-save-mark-ii-sellers | | out of scope (per-site audit) |
+| auction-marketplace-buy-it-now-quote | | out of scope (per-site audit) |
+| auction-marketplace-lens-hood-seller-shop | | out of scope (per-site audit) |
 
 ## Launch shape
 
@@ -92,6 +118,13 @@ Fixes 3 and 4 worked live: the plan was taken first time, and the covered cookie
 closing the welcome modal. The build then ran out its 30 minutes on three general causes: `next_page` could not read
 this pager's current page (fix 7); the real price column had no sample (fix 8); a Click-plus-Read paging loop with no
 progress (lane 3 fix 3). Debug: `debugs/run-mvd0pbn9-bad36023.md`.
+
+### r5 run-mvd9554h-42cdf9b7 (free-hubs-under-ten, integrated round-1 tree): failed, $0.0251, 31 calls
+
+Fixes 3, 4, 7 and 8 held live: plan first try, covered press cleared, the sale-price column chosen, `next_page` 1 ->
+2. The move to page 3 met the site's traffic screen ("Security check", "I'm not a robot"), which the task expects a
+person to clear. The trial retried it as `output_not_observed` four times and never asked the person. Two briefs,
+four trials, and the supervisor ended honestly. Debug: `debugs/run-mvd9554h-42cdf9b7.md`.
 
 UI notes so far (chat): the ending is said twice (card and plain message) plus a toast. The supervisor-ended card
 shows "(llm evidence loop.unreadable replies)", an internal code turned into words.

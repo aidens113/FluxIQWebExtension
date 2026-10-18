@@ -1,9 +1,9 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: The 40 tasks are merged and verified; four live lanes run them; the install-package lead is working.
+Status detail: Stopped at the user's wrap-up; 6 of 40 new tasks pass live, all 108 audited; Core dev, R1 and the lanes' last fixes are held.
 Created: 2026-10-17
-Last updated: 2026-10-17
+Last updated: 2026-10-18
 Owner: Senior supervisor agent
 Scope: 40 new live tasks (four per realistic site), each run live, debugged and fixed; plus the install-package proof (MVP item 1). Not the adaptation gate.
 Paired document: none
@@ -13,47 +13,78 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
-**User request (2026-10-17):** "create like 40 more tasks on the complex scenario websites, run them all, debug, the
-whole thing. Fix anything that comes up. Do this fast!" and "also start working on the live package stuff too".
+**Stopped 2026-10-18 at the user's wrap-up; work continues in another agent (Codex).** This section is written to
+stand alone. The user's requests: 40 new tasks on the ten realistic sites, run live, debugged and fixed, fast
+(2026-10-17); the install-package proof; then "only a few tests fully end to end" and "make 100% sure ALL TESTS
+are actually possible" (both now AGENTS.md rules, Automated Testing Facility Boundary).
 
-**Phase 1 (dispatched 2026-10-17):** ten authoring workers, one per site, each in its own task worktree, each adding
-four tasks with oracles and browser-path proofs; one lead on the install-package proof (t706).
+**Done (all on local `dev` in both repositories; push state is in the last ledger entry):**
+- 40 new tasks, four per site (t696-t705), table under "## The Forty Tasks"; corpus 108 tasks, 82 workflows.
+- All 108 tasks audited provider-free (t708-t717, reports `reports/audit-<site>.md`): about 40 rows reworded so the
+  instruction alone yields exactly the oracle's answer (order, value formats, the site's own labels); three
+  fixture additions (social timestamps readable, professional-network weekly-limit notice, photo-social "at
+  least two" tags); no oracle weakened. `realistic-task-baseline.ts` follows 26 reworded original rows.
+- Integration round 1 (ledger 2026-10-18): four lanes' fixes, install fixes t706/t707, audits, t718's two old
+  test failures, and web-11 (FluxIQ declines optional cookies by default; user 2026-10-18).
+- Install proof: Chrome 155 and Edge 155 install through the real Load-unpacked steps and pair (slow approval,
+  dropped-socket guard proven live); 13 first-run defects fixed (pairing keepalive, C1-C5, G1, D1, D2, P1, P2,
+  Studio domain, Get started styling). Firefox is not installed on this machine.
 
-| Task | Site | Worktree (`C:/Users/osrs_/FluxStuff/fxwork/...`) |
-| --- | --- | --- |
-| t696 | everything-store | `t696-breadth-everything-store` |
-| t697 | crossborder-marketplace | `t697-breadth-crossborder-marketplace` |
-| t698 | bigbox-retail | `t698-breadth-bigbox-retail` |
-| t699 | job-board | `t699-breadth-job-board` |
-| t700 | local-classifieds | `t700-breadth-local-classifieds` |
-| t701 | auction-marketplace | `t701-breadth-auction-marketplace` |
-| t702 | photo-social | `t702-breadth-photo-social` |
-| t703 | social-network-feed | `t703-breadth-social-network-feed` |
-| t704 | company-website | `t704-breadth-company-website` |
-| t705 | professional-network | `t705-breadth-professional-network` |
-| t706 | install-package proof | `t706-install-package-proof` |
+**Live results (one full pass per site was the goal; the user's scope change):**
 
-**Phase 2 (supervisor):** verify each site's tasks, finish t696-t705 into `dev`, then update the two shared corpus
-tests (`scenarios/tests/realistic-site-live-tasks.test.ts` count and additions list;
-`scenarios/tests/live-instructions.test.ts` permission map) from the workers' reports.
+| Site | Result |
+| --- | --- |
+| everything-store | PASS coupon-earbuds-rated-four, batteries-and-descaler, sage-small-kettle-if-in-stock; office-checkout-review failed x2 (reworded by the audit to name Buy Now; rerun owed) |
+| job-board | PASS remote-easy-apply, halvard-careers-roles; save-quillmark-remote and halvard-labs-office-jobs failed (causes fixed by lane 4 fixes 1-3; reruns owed) |
+| social-network-feed | PASS delete-stranger-requests; recent-group-posts failed x3 (paging and mixed-template columns fixed and proven live; run-mvd94oxq stored a repost twice, deduped by a tracking-parameter URL, and cut text at "See more": both open); hide-suggested-posts failed (lane 3 fix 4, rerun owed) |
+| bigbox-retail | rated-delivery-towels: oracle passed 16/16 twice (run-mvd1ex8o, run-mvd8ypsv) but FluxIQ's judges said no; the second no was a settled sponsored-only row read as missing (lane 1 fix 4, unmerged) |
+| crossborder-marketplace | free-hubs-under-ten open after 4 runs: covers and paging fixed; run-mvd9554h retried the site's "Security check" on page 3 instead of handing it to the person (fix proposed in its debug, not built) |
+| auction-marketplace | cheap-accessory-auctions failed once on plan grammar (fixed, proven live elsewhere); not rerun |
+| local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
+| company-website | apprentices run-mvd8mcu6 failed at $0 before any model call: the supervisor's background rebuild of Core in the lane tree killed Core's server mid-run; reveal-by-scroll (lane 4 fix 5, unmerged) is for this task |
+| photo-social, professional-network | kiln-notes and connect-kade-senior-engineer not run |
 
-**Phase 3:** sync the four lane trees (t563, t565, t566, t567, both repositories) to `dev`, rebuild, and start four
-live lane leads, one per `lab-slots/slot-N`, each looping run -> debug -> fix -> rerun on its own branch, with an
-integration round every 60-90 minutes. Launch shape: the A8 command in `automation-project-agents-plan.md`
-(`--authoring-mode project`, `--llm-max-cost-usd 0.25`, the five environment variables), workspace `bf-<task>`.
+Totals at the stop: 24 runs, 6 passed, 18 failed, $1.224 billed across the four lanes (lane 1 $0.545, lane 2
+$0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; no balance error. Every failure has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in
+the lane trees until merged).
 
-**Scope change (user, 2026-10-17, later the same day):** "only a few tests should be fully end to end, since its very
-time intensive", and "make 100% sure that ALL TESTS are actually possible" (prompts may be reworded to fit sites;
-AGENTS.md rule). So: one full end-to-end pass per site (build from chat, judged run, zero-call replay), and every one
-of the 108 tasks audited provider-free by ten `audit-<site>` workers (t708-t717). Per-site picks: everything-store
-and job-board done; bigbox rated-delivery-towels; local-classifieds test-ride-question; crossborder
-free-hubs-under-ten; auction cheap-accessory-auctions; social recent-group-posts; photo-social kiln-notes;
-company-website apprentices; professional-network connect-kade-senior-engineer.
+**Not done / held (each has a report under `reports/`):**
+- **Core `dev` is green and pushed:** the `flow_script.repeat_over_twice` words and corpus case merged (Core
+  `31f2ccdf`, pushed with `4d6fb8b6`).
+- **Storage change held:** the storage change, committed UNMERGED on Core branch `task/t707-storage-held` (`72abeeab`;
+  `storage/canonical-authority/{whole-operation,owner-store}.ts`, `storage/sqlite-repository.ts`) (one SQLite open per operation, written to cure a creation-test timeout) left 7
+  storage tests timing out at 15-30 s under load; not merged until compared against `dev` (`reports/integration-core.md`).
+- **R1 site reset (t719, committed UNMERGED on `task/t719-site-reset-undoable-acts`, both repositories):** a
+  build's own add-to-cart and save acts were never undone before re-runs (every undo refused `wrong_target`); the
+  fix admits an undo by subject and page tokens for a reversing class. Narrow checks pass; needs review, one
+  everything-store live round, then merge. It blocks the install proof's last step.
+- **Install proof's last step:** build an automation from the installed extension, then rerun it with zero model
+  calls (everything-store kettle-to-cart), after R1.
+- **Lane work committed UNMERGED (merge in integration round 2 after its narrow checks):** lane 1 fix 4, judges and
+  settled left-out rows (Core `task/t563-a8-lab-comparison` `94c3c49f`); lane 4 fix 5 reveal-by-scroll and fix 6
+  drawing identity on recording and repair paths (`task/t567-a8-lane-4b` downstream `83d883b4`, Core `4d90c6e7`;
+  rebuild Core in the lane tree before a run). Lanes 2 and 3 have no unmerged code. Lane trees t563 and t567 are now
+  ahead of `dev`, so they cannot fast-forward until round 2 merges them.
+- **Open product causes from the last runs:** a person check met by next_page arrival must hand off, not retry
+  (lane 2); dedupe across URLs that differ only by tracking parameters, and expanding an item's own "See more"
+  (lane 3); test-ride step 14 (lane 1); find_on_page shows a hidden control as an ordinary match (lane 4).
+- **Structural gap:** rebuilding Core in a lane tree while its run is live kills the run, and the Lab does not refuse
+  it (it cost run-mvd8mcu6). Make the Lab hold a build lock per lane tree, or refuse a launch or a build while the
+  other holds the tree.
 
-Before today: 343 live runs since 2026-09-30 on 18 distinct tasks, 9 of them ever passed, all on the four main sites.
+**Next, in order:** (1) settle the held storage change (run the storage tests with and without it under the same load);
+(2) review and merge R1 (t719) after one live everything-store round; (3) integration round 2: merge the unmerged lane branches above with narrow checks, sync and rebuild the lane
+trees (never during a live run), and build the Lab build lock; (4) finish one pass per remaining site and
+the owed reruns (office-checkout-review, save-quillmark-remote, halvard-labs-office-jobs, recent-group-posts,
+hide-suggested-posts, rated-delivery-towels); (5) the install proof's create-and-zero-call rerun.
 
-**Phases 1-2 done (2026-10-17):** all 40 tasks merged (t696-t705), the shared corpus tests updated, scenario-lab
-851 of 851. **Phase 3 running:** four live lane leads. **Install proof (t706):** in progress.
+**Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
+the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
+simulate the website side locally in a test repository first, tenancy as an enterprise feature with permissions
+modelled on AWS IAM, and a faster schedule. Planning only; nothing implemented.
+
+**Blocked:** nothing needs the user. Lab: up to four lanes, one per `lab-slots/slot-N`, lane trees t563, t565, t566,
+t567 under `C:/Users/osrs_/FluxStuff/fxwork/`; launch shape in `automation-project-agents-plan.md` ("A8 Run Plan").
 
 ## The Forty Tasks
 
@@ -249,6 +280,47 @@ point is declared there, so asking fails the run and is a product defect); an em
   -> "# tests 254 # pass 254 # fail 0" (supervisor rerun); `pnpm task finish t706` -> structure audit passed, merged
 - Outcome: Partial. Firefox not installed here; the first automation stalled (likely Core C2/C3), about $0.01 spent
 - Follow-up: t707 fixes Core C1-C5 and reruns the first automation once
+
+### 2026-10-18 — Integration round 1: four lanes, install round 3, ten task audits
+- Agent: supervisor (lanes live-lane-1..4, install-core-lead, audit-<site> x10, integration-downstream, integration-core)
+- Changed: downstream `dev` merges t563, t565, t566, t567 (lane fixes: extraction lines and kind-stable columns,
+  runtime-cleared covers, pagers, split prices, scroll paging, row-bound clicks, icon-only controls and their
+  fingerprint signal), t707 (first-run C1-C5, G1, D2, P1), t708-t717 (audits), t718 (two old test failures);
+  `realistic-task-baseline.ts` follows 26 reworded original rows. Core `dev` merges the four lanes' Core branches
+  (builder retry after a repeat stop, covered-press advice, tool-call keys, stop reasons, parameter schemas at
+  submit, trial stops, no-progress repeats, adjacent repeats, plain-language endings) and, once integration-core
+  passes, t707 (C1-C5, G1, D1, P2, Studio domain, Get started styling).
+- Why: share every lane's fix with every lane; every task proven possible and unambiguous (user, 2026-10-17)
+- Validation: lanes' packet.ts/field-sample.ts conflict resolved by keeping both parameters (lines, page);
+  downstream (t718 worker, supervisor reran two): domain tsc both configs exit 0, `test-domain.mjs
+  runtime/llm-evidence output-nodes element-fingerprint actions client` 1623/1623, `runtime/tests` 114/114,
+  `test-extension.mjs content background panel shared` 2849/2849, `panel/chat panel/tests` 428/428,
+  scenario-lab check exit 0 and test 871/871, structure audit passed; shared corpus tests 30/30 after each
+  baseline update. Core on the integrated t707 tree: contracts/fluxiq/web checks exit 0, structure audit
+  passed, vitest on every touched runtime folder 1230/1234 files (3 failed: a new refusal code without words or
+  corpus case, and an order-dependent creation test), fixing in integration-core.
+- Outcome: Partial until integration-core passes and Core t707 merges
+- Follow-up: push both, sync lanes, resume them on one pass per site; R1 (site reset treats add-to-cart and
+  save-for-later as undoable never) next, then the install proof's create-and-zero-call rerun
+
+### 2026-10-18 — Wrap-up: integration round 1 pushed; lanes stopped; held work on branches
+- Agent: supervisor (lanes 1-4 stopped after their in-flight runs, the user's choice; integration-core and
+  site-reset-undo stopped and reported)
+- Changed: Core `dev` merges t707's `flow_script.repeat_over_twice` words and corpus case and a lowered baseline;
+  downstream `dev` merges the lanes' wrap-up docs, web-11 (decline optional cookies), the AGENTS.md rule "only a
+  few tasks run fully end to end", and the hosted plan's later user directions (both repositories). Held,
+  committed UNMERGED: t707 storage change (`task/t707-storage-held`), R1 (t719 both repositories), lane 1 fix 4
+  (Core t563), lane 4 fixes 5-6 (t567 both repositories).
+- Why: the user wrapped up the session to continue in another agent; everything must stand alone
+- Validation: Core `npx vitest run` on refusal-locator-corpus, issue-feedback-words and script-statements ->
+  10/10 files passed; `node scripts/build-cache/cli.mjs fluxiq:check` -> exit 0; Core structure audit -> passed
+  (400 warnings, 1154 baselined); downstream `npx tsc -p tsconfig.test.json --noEmit` (domain) -> exit 0 and
+  `node scripts/check-extension.mjs` -> exit 0 against the rebuilt final Core; downstream structure audit ->
+  passed; `test-domain.mjs runtime/llm-evidence/system-instructions` -> 17/17 after web-11. Not run: Core storage
+  tests without the held change (the open comparison); full suites (twice-a-day rule).
+- Outcome: Accepted (pushed: Core `4d6fb8b6`, downstream this commit's push)
+- Follow-up: the "Next, in order" list in Current State; the supervisor's background lane rebuild killed
+  run-mvd8mcu6 at $0, which is the build-lock gap named there
 
 ## Open Questions
 
