@@ -149,3 +149,17 @@ test("the memory keeps the latest snapshots' places only", () => {
   assert.equal(memo.of("web.state.3@b:after_action"), places);
   assert.equal(memo.of(undefined), undefined);
 });
+
+// Core t719: a trial's add pressed on a title's own page sits in no item, and
+// the line it makes is on another page; the spot also says what the control and
+// its page are about, so a reset's undo on that line can be tied to the step.
+test("a step's control in no item still names what it and its page are about, as opaque tokens", () => {
+  const titlePage = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/titles/ivanhoe", title: "Library", interactiveElements: [
+    { tagName: "main", selector: "main" },
+    { tagName: "h1", selector: "main > h1", text: "Ivanhoe", name: "Ivanhoe", parent: 0, context: { subject: "Ivanhoe" } },
+    { tagName: "button", selector: "main > button", text: "Add to list", name: "Add to list", parent: 0, context: { subject: "Walter Scott" } }
+  ] });
+  const diff = step(titlePage, titlePage, press("main > button"));
+  assert.deepEqual(diff.spot, { subject: webControlSpotToken("subject", "Walter Scott"), page: webControlSpotToken("subject", "Ivanhoe") });
+  assert.doesNotMatch(JSON.stringify(diff), /Ivanhoe|Walter/u);
+});

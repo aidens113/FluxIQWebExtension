@@ -5,18 +5,35 @@
 // handle sits in no record and no dialog. Core ties an undo of a build's own
 // act to that act's own item by these, and refuses a control on another row
 // unpressed.
+//
+// **And what it and its page are about (Core t719).** An act whose effect shows
+// elsewhere -- an add pressed on a detail page, whose line appears in the
+// basket; a line moved to a saved list -- has no item an undo there can match.
+// So the spot also carries `subject`, the digest of what the control is about
+// (`apps/extension/src/content/identity/record.ts` `recordSubject`: its row's
+// title, or a lone control's nearest titled part), and `page`, the digest of
+// what its page is about (the binding's `pageSubject`, its main heading). Both
+// are digests of one kind, so a detail page's heading and the basket line's
+// title, being the same words, are the same token. Core reads them only to tie
+// an undo to its act, and never sees the words.
 
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webControlSpotToken } from "./token";
 
-/** The tokens of the record and dialog `handle` sits in on `page`. */
-export function webTargetSpot(page: Pick<WebLlmSnapshotBinding, "records" | "dialogNames">, handle: string | undefined): WebTargetSpot {
+/** The tokens of the record and dialog `handle` sits in on `page`, and of what it and the page are about. */
+export function webTargetSpot(page: Pick<WebLlmSnapshotBinding, "records" | "dialogNames" | "subjects" | "pageSubject">, handle: string | undefined): WebTargetSpot {
   if (handle === undefined) return {};
   const record = page.records.get(handle);
   const dialog = page.dialogNames?.get(handle);
-  return present<WebTargetSpot>({ item: record ? webControlSpotToken("item", record) : undefined, dialog: dialog ? webControlSpotToken("dialog", dialog) : undefined });
+  const subject = page.subjects?.get(handle);
+  return present<WebTargetSpot>({
+    item: record ? webControlSpotToken("item", record) : undefined,
+    dialog: dialog ? webControlSpotToken("dialog", dialog) : undefined,
+    subject: subject ? webControlSpotToken("subject", subject) : undefined,
+    page: page.pageSubject ? webControlSpotToken("subject", page.pageSubject) : undefined
+  });
 }
 
-/** The opaque tokens of where a control sits; each absent where it sits in none. */
-type WebTargetSpot = { item?: string; dialog?: string };
+/** The opaque tokens of where a control sits and what it and its page are about; each absent where there is none. */
+type WebTargetSpot = { item?: string; dialog?: string; subject?: string; page?: string };

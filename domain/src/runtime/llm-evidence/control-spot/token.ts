@@ -10,13 +10,19 @@
 // domain. The same function names the items a start-state read lists
 // (`../start-state/page-state.ts`), so a control and the item it sits in carry
 // the same token.
+//
+// `kind: "subject"` digests what a control or a page is about (Core t719,
+// `control.subject` and `control.page`): one kind for both, so a detail page's
+// main heading and the basket line titled by the same words are one token.
 
 import { createHash } from "node:crypto";
 
 /** Hex characters kept of each digest: far past any collision a page could make. */
 const DIGEST_LENGTH = 32;
+/** Each kind's prefix, so a token says which kind it is and two kinds never collide. */
+const PREFIX = { item: "i", dialog: "d", subject: "s" } as const;
 
-/** The opaque token for a record address (`kind: "item"`) or a dialog's name (`kind: "dialog"`). */
-export function webControlSpotToken(kind: "item" | "dialog", value: string): string {
-  return `${kind === "item" ? "i" : "d"}:${createHash("sha256").update(`${kind}\0${value}`).digest("hex").slice(0, DIGEST_LENGTH)}`;
+/** The opaque token for a record address (`kind: "item"`), a dialog's name (`kind: "dialog"`), or what a control or page is about (`kind: "subject"`). */
+export function webControlSpotToken(kind: "item" | "dialog" | "subject", value: string): string {
+  return `${PREFIX[kind]}:${createHash("sha256").update(`${kind}\0${value}`).digest("hex").slice(0, DIGEST_LENGTH)}`;
 }
