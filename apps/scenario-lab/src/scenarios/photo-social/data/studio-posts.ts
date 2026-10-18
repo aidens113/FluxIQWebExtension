@@ -22,7 +22,7 @@ const STUDIO_HOME = "Harbourlight Studio, Portmere";
  *   like count, 640.
  */
 const ROWS: readonly Row[] = [
-  ["2026-09-20", "carousel", 3, 2987, 0, "Autumn Kiln Giveaway! We're giving away a set of four speckled tumblers from our last firing. To enter, tag two friends in a comment below. Full rules are pinned in the comments. Good luck!", STUDIO_HOME, "4 cups", true],
+  ["2026-09-20", "carousel", 3, 2987, 0, "Autumn Kiln Giveaway! We're giving away a set of four speckled tumblers from our last firing. To enter, tag at least two friends in a comment below. Full rules are pinned in the comments. Good luck!", STUDIO_HOME, "4 cups", true],
   ["2025-08-14", "photo", 1, 3412, 0, "Five years ago today we fired our first kiln load in a borrowed shed. Thank you for every mug, bowl and kind word since.", "Portmere Harbour", "pottery", true],
   ["2026-03-02", "photo", 1, 1570, 0, "Spring workshop dates are live: six Saturdays of throwing, trimming and glazing. Link in bio.", STUDIO_HOME, "text", true],
   ["2026-10-02", "photo", 1, 842, 0, "Seconds sale this Saturday from ten. Slightly wonky, entirely usable.", STUDIO_HOME, "tableware"],
