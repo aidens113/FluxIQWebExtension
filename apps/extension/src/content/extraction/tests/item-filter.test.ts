@@ -14,6 +14,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { itemFilterFor } from "../item-filter";
+import { fakeShadowDom } from "./fake-shadow-dom";
 import { extractList } from "../list-reader";
 import type { ExtractionCheckpoint } from "../../../shared/extraction-continuation";
 import type { WebAutomationExtractListRequest } from "../../types";
@@ -23,6 +24,13 @@ import type { WebAutomationExtractionRejectionObservation } from "@fluxiq-web-ex
 const ITEM = {} as Element;
 
 const FIELDS = { name: ".name", price: ".price", badge: ".badge" };
+
+test("an executable condition's own text read refuses an unexpanded field rather than filtering on partial text", () => {
+  const dom = fakeShadowDom();
+  const item = dom.el("p", {}, "Partial… ", dom.el("button", {}, "Read more"));
+  const rejects = itemFilterFor({ item: "p", fields: { name: ".name" }, where: [{ read: { kind: "text" }, contains: "Partial" }] });
+  assert.throws(() => rejects!(item, {}), /incomplete_text/u);
+});
 
 test("rejecting predicates preserve the evaluated absent and present-empty values without changing membership", () => {
   const rejects = itemFilterFor({ item: ".card", fields: FIELDS, where: [{ field: "badge", contains: "allowed" }, { field: "price", lessThan: 12 }] });

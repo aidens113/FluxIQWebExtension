@@ -1324,6 +1324,18 @@ Where checks are met:
   "Checking you are human…" becoming "Confirm you are human" ends as
   person-only. The failure (`actionNeedsPerson` in `results.ts`) says the
   press was made.
+- **A Next page move that lands on a check**
+  ([`content/extraction/page-advance/person-check.ts`](../../apps/extension/src/content/extraction/page-advance/person-check.ts)):
+  a marked new-document arrival and an in-document pager press inspect the
+  landing before treating its absent list as a retryable server refusal.
+  Person-only checks use the same typed `actionNeedsPerson` result as a click;
+  a self-clearing check is waited for up to 15 seconds within the command's
+  deadline before it needs a person. No fallback navigation or reload answers
+  a check. The move was already dispatched, so Continue advances to the Flow's
+  next one-page read at that landing, without pressing Next again. A replay
+  of the same movement mark likewise checks arrival without another press.
+  Multi-page `extract_list` remains retired: the supported page loop is a
+  one-page read followed by Next page, with Core collecting each read's rows.
 
 A navigation or a click whose landed check cleared by itself says so twice:
 in its validation's prose, and as a fact, `checkWait: { waitedMs }` on the
@@ -1782,6 +1794,27 @@ The extension keeps only transient recorder UI state for the active browser
 session. It does not persist canonical recordings locally.
 
 ## Defining An Extraction
+
+Link fields return their resolved raw href unless explicitly marked
+`identity: "tracking-free"`. That identity mode removes only recognized
+tracking query keys, preserving unknown and meaningful parameters, their
+remaining bytes and order, and fragments. A Flow dispatch adds the mode only
+to a link helper that its authored schema excludes, its explicit dedupe uses,
+and its displayed columns omit. Requested URL columns and raw `href`
+attribute reads retain their values; excluding a field from the read itself
+still prevents reading it.
+
+A list extraction's text or table-column field containing a visible unexpanded text-disclosure
+button refuses the read with `incomplete_text` in existing validation feedback.
+The author must expand it through an explicit registered row-bound click before
+reading again. Passive discovery and extraction never press the control. Plain
+prose, unrelated controls, and expanded or hidden controls do not establish an
+incomplete field. A typed refusal propagates through the whole list, so the
+runtime cannot store a partial field while reporting complete extraction.
+Executable list filters request the same completeness check. Passive field
+sampling and inference retain visible previews, allowing discovery of the
+list and its expansion controls. Scalar extraction uses its separate reader;
+this list-specific guard does not establish completeness for scalar reads.
 
 While a recording is running, the user picks one example item on the page — a
 product card, a table row — and FluxIQ records an extraction of the whole list it

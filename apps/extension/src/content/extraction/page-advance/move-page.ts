@@ -36,12 +36,22 @@ import { PaginationFault, paginationStopOf } from "./pagination-fault";
 import { pageShownNow } from "./shown-page";
 import { stepPage } from "./step-page";
 import type { PageStep, PaginationProgress } from "./types";
+import { PageMovePersonCheck } from "./person-check";
 
 /** How long the list's first item is waited for before the step: the read before it has normally drawn it already. */
 const LIST_WINDOW_MS = 5_000;
 
 /** Moves the list to its next page, or says it has none; see the header. */
 export async function movePage(request: WebAutomationNextPageRequest, options: PageMoveOptions = {}): Promise<PageMoveOutcome> {
+  try {
+    return await movePageNow(request, options);
+  } catch (error) {
+    if (error instanceof PageMovePersonCheck) return { outcome: "needs_person", sighting: error.sighting };
+    throw error;
+  }
+}
+
+async function movePageNow(request: WebAutomationNextPageRequest, options: PageMoveOptions): Promise<PageMoveOutcome> {
   const deadline = deadlineFor(options.timeoutMs);
   if (options.resume !== undefined) return await arriveAfterMove(request, options.resume, deadline, options);
   const shown = await awaitListItems(request.item, LIST_WINDOW_MS, deadline);
@@ -67,6 +77,7 @@ export async function movePage(request: WebAutomationNextPageRequest, options: P
   try {
     step = await stepPage(way, progress, undefined);
   } catch (error) {
+    if (error instanceof PageMovePersonCheck) throw error;
     return stoppedMove(paginationStopOf(error), error instanceof Error ? error.message : "Moving the list to its next page failed.", error instanceof PaginationFault ? error.filtersDropped : undefined);
   }
   switch (step.outcome) {

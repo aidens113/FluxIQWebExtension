@@ -58,7 +58,8 @@ type ExtractFieldSpec = Exclude<ExtractField, string>;
 /** What one included field reads inside each item, and whether a record may lack it. */
 export type ExtractFieldReader =
   | { kind: "text"; selector?: string; required: boolean; lines?: true }
-  | { kind: "link" | "value"; selector?: string; required: boolean }
+  | { kind: "link"; selector?: string; required: boolean; identity?: "tracking-free" }
+  | { kind: "value"; selector?: string; required: boolean }
   | { kind: "attribute"; selector?: string; attribute: string; required: boolean }
   | { kind: "column"; header: string; required: boolean };
 
@@ -116,6 +117,8 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
     case "text":
       return { kind, ...where, required, ...(spec.lines === true ? { lines: true as const } : {}) };
     case "link":
+      if (spec.identity !== undefined && spec.identity !== "tracking-free") throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a link identity the page does not know.`);
+      return { kind, ...where, required, ...(spec.identity === "tracking-free" ? { identity: spec.identity } : {}) };
     case "value":
       return { kind, ...where, required };
     case "attribute": {

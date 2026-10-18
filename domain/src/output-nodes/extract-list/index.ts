@@ -15,3 +15,4 @@ export * from "./record-output-process";
 export * from "./records-path";
 export * from "./stored-columns";
 export * from "./swapped-name";
+export { webAutomationDedupeLinkIdentity } from "./dedupe-link-identity";

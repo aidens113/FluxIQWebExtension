@@ -9,6 +9,7 @@
 
 export { movePage } from "./move-page";
 export { pageMoveFor } from "./continued-move";
+export { PageMovePersonCheck } from "./person-check";
 export type { PageMove, PageMoveOptions, PageMoveOutcome } from "./move-outcome";
 
 // The read's paged loop.
