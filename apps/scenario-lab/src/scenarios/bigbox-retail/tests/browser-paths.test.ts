@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { chromium, type Browser } from "@playwright/test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
-import { bigboxRetailManifest as manifest, ORDER_FINAL_FACTS, ORDER_RECORDS, PICKUP_CART_FACTS, PICKUP_TOWEL_RECORDS, START_FACTS, UNCHANGED_CART_FACTS } from "../manifest/index.js";
+import { bigboxRetailManifest as manifest, ORDER_FINAL_FACTS, ORDER_RECORDS, PICKUP_CART_FACTS, PICKUP_TOWEL_RECORDS, START_FACTS, STORE_REMEMBERED, UNCHANGED_CART_FACTS } from "../manifest/index.js";
 import { extractRecords, failingFacts, locate, openHarness, runSteps, type Harness } from "./browser-harness.js";
 
 /**
@@ -95,6 +95,19 @@ describe("honest paths pass every oracle", { concurrency: true }, () => {
     const script = manifest.recordingScript.flatMap((step) => (step.target === "testid:atc" ? [{ ...step, target: "div:not([hidden]) > button:text-is(\"Add to cart\")" }] : [step]));
     await runSteps(harness, script);
     assert.deepEqual(await failingFacts(harness.page, redesigned.expected.finalState ?? []), []);
+    await assertCleanRun(harness);
+  }));
+
+  test("with the store remembered an honest shopper sees the store already chosen, skips the switch, and gets the same cart", TIMEOUT, () => withHarness(async (harness) => {
+    await harness.arm(STORE_REMEMBERED.arm.operation, STORE_REMEMBERED.arm.payload ?? {});
+    await harness.open();
+    assert.deepEqual(await failingFacts(harness.page, STORE_REMEMBERED.expected.pageFacts ?? []), []);
+    const script = manifest.recordingScript.filter((step) => step.id !== "open-store-picker" && step.id !== "choose-millbrook");
+    await runSteps(harness, script);
+    assert.deepEqual(await failingFacts(harness.page, STORE_REMEMBERED.expected.finalState ?? []), []);
+    const state = await harness.state();
+    assert.equal(state.storeId, "1187");
+    assert.deepEqual(state.cart.map(({ sku, qty, fulfilment }) => `${sku}:${qty}:${fulfilment}`), ["5530601:1:pickup", "5510202:2:pickup", "5530102:1:pickup"]);
     await assertCleanRun(harness);
   }));
 });

@@ -44,6 +44,8 @@ test("newest-likes: the three most recent studio posts sit after the pinned ones
   const newest = grid.filter((post) => !post.pinned).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
   assert.deepEqual(records(newestLikesExpected), newest.map(({ code }) => ({ link: `/scenarios/photo-social/p/${code}/` })));
   assert.deepEqual(grid.slice(3, 6), newest, "the fourth to sixth cells are the newest");
+  assert.ok(newest.some((post) => post.kind === "reel"), "a reel is among the three newest");
+  assert.match(PHOTO_SOCIAL_LIVE_TASKS.find(({ id }) => id === "photo-social-newest-likes")!.instruction, /reels included/u, "so the instruction says reels count as posts");
   assert.ok(grid.slice(0, 3).every((post) => post.pinned), "the first three cells are pinned");
   assert.ok(grid.slice(0, 3).every((post) => post.date < newest[2]!.date), "every pinned post is older than the third newest");
   const like = (codes: readonly string[]) => codes.reduce((state, code) => mutatePhotoState(state, "like", { code, liked: true }), createPhotoState());
