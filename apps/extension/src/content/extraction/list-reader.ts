@@ -767,7 +767,7 @@ function readRecord(element: Element, fields: FieldReaders): ItemRead {
   const record: ExtractedListRecord = {};
   const missing: string[] = [];
   for (const [name, reader] of fields) {
-    const value = readField(element, name, reader);
+    const value = readField(element, name, reader, "complete");
     if (value === undefined) missing.push(name);
     else record[name] = value;
   }

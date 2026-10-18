@@ -70,6 +70,8 @@ export type WebAutomationExtractFieldSpec = {
    * them, since each line's words end where the next line's begin.
    */
   lines?: boolean | undefined;
+  /** Explicit URL identity read: omit known tracking-only parameters while retaining meaningful/unknown parameters and the fragment. Only `kind: "link"`; ordinary links and raw href attributes stay unchanged. */
+  identity?: "tracking-free" | undefined;
   /** The element the field was picked from, as the one fingerprint normalizer describes it. */
   element?: WebAutomationElementFingerprint | undefined;
 };

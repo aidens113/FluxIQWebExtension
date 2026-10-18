@@ -25,6 +25,11 @@ type ExtractField = WebAutomationExtractListRequest["fields"][string];
 /** Stands in for where a field reads; a refusal names the field key, never this. */
 const SELECTOR_SENTINEL = '[data-testid="SYNTHETIC_SELECTOR_SENTINEL"]';
 
+test("tracking-free identity is explicit on a link read, and absent on an ordinary link", () => {
+  assert.deepEqual(normalizeExtractField("identity", { kind: "link", selector: "a", identity: "tracking-free" }), { kind: "link", selector: "a", required: false, identity: "tracking-free" });
+  assert.deepEqual(normalizeExtractField("url", { kind: "link", selector: "a" }), { kind: "link", selector: "a", required: false });
+});
+
 test("a plain selector reads the element's text, and the string form requires nothing: it has no way to say so", () => {
   assert.deepEqual(normalizeExtractField("name", '[data-testid="product-name"]'), { kind: "text", selector: '[data-testid="product-name"]', required: false });
 });

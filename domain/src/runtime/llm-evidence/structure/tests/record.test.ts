@@ -53,6 +53,17 @@ async function detectAroundCard(runtime: WebAutomationLlmEvidenceRuntime) {
 
 const CARD: JsonObject = structuredClone(REPLY_CARD_LINK) as unknown as JsonObject;
 
+test("a handle preserves an explicit link identity option without changing ordinary link defaults", async () => {
+  const structure = structuredClone(RECORD_DETECTIONS["photo-social-reply-card"].structure) as unknown as { proposal: { fields: Array<{ key: string; spec: JsonObject }> } };
+  const field = structure.proposal.fields[0]!;
+  field.spec = { kind: "link", selector: "a", identity: "tracking-free" };
+  const runtime = pageRuntime("photo-social-reply-card", [CARD], structure);
+  await detectAroundCard(runtime);
+  const resolved = runtime.resolveExtractionHandle({ ...SCOPE, handle: "extraction.1" });
+  assert.ok(resolved.ok);
+  assert.deepEqual(resolved.binding.extractList.fields[field.key], { kind: "link", selector: "a", identity: "tracking-free" });
+});
+
 test("the record beside the run gets a second handle, and the packet names it with its columns and when to use it", async () => {
   const runtime = pageRuntime("photo-social-reply-card", [CARD]);
   const detected = await detectAroundCard(runtime);

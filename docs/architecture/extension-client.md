@@ -1783,6 +1783,27 @@ session. It does not persist canonical recordings locally.
 
 ## Defining An Extraction
 
+Link fields return their resolved raw href unless explicitly marked
+`identity: "tracking-free"`. That identity mode removes only recognized
+tracking query keys, preserving unknown and meaningful parameters, their
+remaining bytes and order, and fragments. A Flow dispatch adds the mode only
+to a link helper that its authored schema excludes, its explicit dedupe uses,
+and its displayed columns omit. Requested URL columns and raw `href`
+attribute reads retain their values; excluding a field from the read itself
+still prevents reading it.
+
+A list extraction's text or table-column field containing a visible unexpanded text-disclosure
+button refuses the read with `incomplete_text` in existing validation feedback.
+The author must expand it through an explicit registered row-bound click before
+reading again. Passive discovery and extraction never press the control. Plain
+prose, unrelated controls, and expanded or hidden controls do not establish an
+incomplete field. A typed refusal propagates through the whole list, so the
+runtime cannot store a partial field while reporting complete extraction.
+Executable list filters request the same completeness check. Passive field
+sampling and inference retain visible previews, allowing discovery of the
+list and its expansion controls. Scalar extraction uses its separate reader;
+this list-specific guard does not establish completeness for scalar reads.
+
 While a recording is running, the user picks one example item on the page — a
 product card, a table row — and FluxIQ records an extraction of the whole list it
 belongs to. Three parts share the work, and one file,
