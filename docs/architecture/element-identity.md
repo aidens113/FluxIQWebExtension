@@ -45,9 +45,21 @@ has since scrolled into that spot.
 `stableFingerprintMatches`
 ([`content/element-finder.ts`](../../apps/extension/src/content/element-finder.ts))
 tries, in order: the recorded selector, the xpath, the id, `data-testid`,
-`aria-label`/`name`, and the class set. Each of those names one control except
-the class set, which every like control carries, so it answers with all of its
-matches and marks them shared. The resolver then runs the name and exact-text
+`aria-label`/`name`, the drawing, and the class set. Each of those names one
+control except the drawing and the class set, which every like control
+carries, so they answer with all of their matches and mark them shared.
+
+The **drawing** is a digest of what a wordless control draws
+(`content/identity/drawing.ts`: an svg's geometry, a `<use>` symbol, an image
+path; never paint). Every save path stores it when the control has one: a
+recording carries it across the gateway (`WireElementTarget`,
+`background/connection/gateway-payloads.ts`), a model-built step takes it from
+the packet binding, and a runtime repair takes it from the same binding
+(`domain/.../target/override.ts`). Core keeps it through its element-target
+normalizer as an opaque token of at most 64 printable characters and never
+scores it. The save-time floor (`domain/src/element-fingerprint/signals.ts`)
+counts it as one signal, and counts only what the step actually saves. The
+model never sees it. The resolver then runs the name and exact-text
 scans as well and adds them to the same pool, and scoring chooses; a fingerprint
 whose matches include no element scoring as the recorded control is a miss that
 falls through to Level 2, not a tie. Before t436 the class set answered with its

@@ -27,12 +27,14 @@
 // The pause is injected rather than taken from a global so a test can drive four
 // attempts in no time at all and still assert what was waited.
 
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../../types";
 import { clearableLayerOverPage, clearInterference } from "../interference";
 import { CLEAN_RECOVERY_ACCOUNT, type RecoveryAccount, type RecoveryOutcome } from "./account";
 import { recoveryBackoffMs, recoveryBudgetRemainingMs } from "./budget";
 import { faultMayHideBehindLayer, faultNeedsInterference, recoverableFault, type RecoveryFault } from "./fault";
 import { refusedControl, refusedControlChanging, type RefusedControlState } from "./refused-control";
+import { revealUnshownTarget } from "../reveal";
 
 /** One execution's answer, and the account of what reaching it cost. */
 export type RecoveredExecution = {
@@ -64,6 +66,13 @@ export type RecoveryIntervention = (fault: RecoveryFault) => number;
 export type RecoveryLayerProbe = () => boolean;
 
 /**
+ * The scroll toward a target the attempt refused as not shown, made between
+ * attempts as a person would make it (`../reveal/`). Answers whether the page
+ * moved. Injected and defaulted for the reason `RecoveryIntervention` is.
+ */
+export type RecoveryReveal = (result: BrowserActionResult) => boolean;
+
+/**
  * Runs `attempt` until it answers with something retrying cannot improve, or
  * until the budget is spent, and reports the last answer with the account.
  *
@@ -79,12 +88,14 @@ export async function runWithRecovery(
   pause: RecoveryPause = sleep,
   now: () => number = Date.now,
   intervene: RecoveryIntervention = (fault) => clearInterference(undefined, faultMayHideBehindLayer(fault) ? "walls" : "any"),
-  layerOverPage: RecoveryLayerProbe = () => clearableLayerOverPage()
+  layerOverPage: RecoveryLayerProbe = () => clearableLayerOverPage(),
+  reveal: RecoveryReveal = revealUnshownTarget
 ): Promise<RecoveredExecution> {
   const absorbed: RecoveryFault[] = [];
   let waitedMs = 0;
   let attempts = 0;
   let dismissed = 0;
+  let revealed = 0;
   // The disabled control the previous attempt was refused at, while the
   // attempts in a row keep being refused that way; `NOT_SEEN` otherwise.
   let disabledBefore: RefusedControlState | undefined | typeof NOT_SEEN = NOT_SEEN;
@@ -94,7 +105,7 @@ export async function runWithRecovery(
     attempts += 1;
     const result = await attempt();
     const fault = recoverableFault(result, action);
-    if (fault === undefined) return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
+    if (fault === undefined) return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
     if (fault === "disabled_target") {
       // A control the gate refused as disabled is waited at only while it shows
       // it is changing (`refused-control.ts`). The first such refusal is given
@@ -110,7 +121,7 @@ export async function runWithRecovery(
       if (disabledBefore !== NOT_SEEN && !refusedControlChanging(disabledBefore, control)) {
         if (looked) absorbed.pop();
         else absorbed.push(fault);
-        return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
+        return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
       }
       looked = disabledBefore === NOT_SEEN;
       disabledBefore = control;
@@ -118,14 +129,14 @@ export async function runWithRecovery(
       disabledBefore = NOT_SEEN;
       looked = false;
     }
-    const backoffMs = recoveryBackoffMs(fault, absorbed.length, action, startedAt, now());
-    if (backoffMs === undefined) {
+    const allowedMs = recoveryBackoffMs(fault, absorbed.length, action, startedAt, now());
+    if (allowedMs === undefined) {
       // The fault was one this loop absorbs and there was no budget left to
       // absorb it with. It is recorded as absorbed all the same: what a reader
       // needs to know is that the defence was reached and was not enough, which
       // an account showing no fault at all would hide.
       absorbed.push(fault);
-      return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
+      return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
     }
     absorbed.push(fault);
     // Clear first, then wait, then run the verb again. A dialog does not leave
@@ -141,6 +152,17 @@ export async function runWithRecovery(
     // earlier step of the run opened, which no clearing presses (t656,
     // `interference/clearable-layers.ts`).
     if (faultNeedsInterference(fault) || (faultMayHideBehindLayer(fault) && layerOverPage())) dismissed += intervene(fault);
+    // A target refused as not shown is scrolled toward before the next attempt
+    // -- the end of where it would be drawn, so a lazy list's sentinel or a
+    // scroll listener fires -- after any layer was cleared, so the scroll is
+    // made on the page as the next attempt will meet it. Every attempt may
+    // scroll again: a list that loads a batch per scroll needs several. A
+    // scroll that moved the page waits on the reveal ladder, which has as many
+    // rungs as the one it replaces (`budget.ts`), so the bound on attempts is
+    // unchanged; one that moved nothing woke nothing, and the wait is as before.
+    const scrolled = fault === "obstructed_target" && reveal(result);
+    if (scrolled) revealed += 1;
+    const backoffMs = scrolled ? recoveryBackoffMs(fault, absorbed.length - 1, action, startedAt, now(), true) ?? allowedMs : allowedMs;
     waitedMs += backoffMs;
     await pause(backoffMs);
     // A clipped pause can land exactly on the command deadline, and a real
@@ -148,7 +170,7 @@ export async function runWithRecovery(
     // result is the honest answer; dispatching another verb would start work
     // after the timeout Core gave this command.
     if (recoveryBudgetRemainingMs(action, startedAt, now()) <= 0) {
-      return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
+      return { result, account: account(attempts, absorbed, waitedMs, dismissed, revealed, result) };
     }
   }
 }
@@ -156,9 +178,12 @@ export async function runWithRecovery(
 /** No disabled refusal at the previous attempt, so the next one is a first and is given its look. */
 const NOT_SEEN = Symbol("no disabled refusal at the previous attempt");
 
-function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs: number, dismissed: number): RecoveryAccount {
+function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs: number, dismissed: number, revealed: number, last: BrowserActionResult): RecoveryAccount {
   if (absorbed.length === 0) return attempts === 1 ? CLEAN_RECOVERY_ACCOUNT : { attempts, absorbed: [], waitedMs, dismissed, outcome: "clean" };
-  return { attempts, absorbed: [...absorbed], waitedMs, dismissed, outcome: outcomeOf(attempts, absorbed.length) };
+  const found: RecoveryAccount = { attempts, absorbed: [...absorbed], waitedMs, dismissed, outcome: outcomeOf(attempts, absorbed.length) };
+  // A different refusal can mean the target disappeared, not that scrolling revealed it.
+  if (revealed > 0) found.reveal = { scrolls: revealed, shown: last.status === "succeeded" };
+  return found;
 }
 
 /**

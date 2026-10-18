@@ -121,7 +121,7 @@ export function gatewayRecordingEventFromPayload(payload: RecordingEventPayload,
  * the rule), and so is `accessibleName`, whose specified derivation ends at a
  * push button's `value`, and so is `checked`, which for a checkbox or radio is
  * everything it holds. `label`, `context` (a landmark's name included),
- * `attributes` and the structural
+ * `attributes`, `drawing` and the structural
  * signals are author-written and are kept: they cannot hold what a person
  * typed, and withholding them would cost every login form its identity while
  * protecting nothing.
@@ -157,7 +157,11 @@ function elementTarget(element: DomElementDescriptor): JsonObject {
     accessibleName: secret ? undefined : element.accessibleName,
     label: element.label,
     implicitRole: element.implicitRole,
-    context: element.context
+    context: element.context,
+    // A digest of what a wordless control draws (`content/identity/drawing.ts`):
+    // geometry and image paths, never paint or page words, so it is kept for a
+    // sensitive control like `attributes` is.
+    drawing: element.drawing
   }) as unknown as JsonObject;
 }
 

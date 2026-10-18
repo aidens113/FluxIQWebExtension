@@ -123,13 +123,13 @@ type Nothing<T extends never> = T;
 const WIRE_ELEMENT_FIELDS = [
   "selector", "tagName", "xpath", "id", "classNames", "visibleText", "text", "value",
   "role", "name", "href", "inputType", "checked", "bounds", "documentBounds", "isVisibleOnViewport",
-  "hasClickHandler", "attributes", "testId", "accessibleName", "label", "implicitRole", "context"
+  "hasClickHandler", "attributes", "testId", "accessibleName", "label", "implicitRole", "context", "drawing"
 ] as const satisfies readonly (keyof WireElementTarget)[];
 
 export type EveryWireFieldListed = Nothing<Exclude<keyof WireElementTarget, typeof WIRE_ELEMENT_FIELDS[number]>>;
 
-/** The five Phase 1.3 signals, named again here so a rename fails this file too. */
-const IDENTITY_SIGNALS = ["testId", "accessibleName", "label", "implicitRole", "context"] as const satisfies readonly DomElementIdentitySignal[];
+/** The Phase 1.3 signals and the drawing digest, named again here so a rename fails this file too. */
+const IDENTITY_SIGNALS = ["testId", "accessibleName", "label", "implicitRole", "context", "drawing"] as const satisfies readonly DomElementIdentitySignal[];
 
 export type EveryIdentitySignalListed = Nothing<Exclude<DomElementIdentitySignal, typeof IDENTITY_SIGNALS[number]>>;
 
@@ -161,6 +161,7 @@ const fullyDescribed: DomElementDescriptor = {
   label: "Workspace name",
   implicitRole: "button",
   context: { formId: "settings-form", formName: "settings", fieldsetLegend: "General", landmark: "region", landmarkName: "Workspace", heading: "Workspace settings" },
+  drawing: "d1.q8f2k7",
   changed: true,
   recentlyInteracted: true
 };
@@ -195,6 +196,28 @@ test("the identity signals survive the recording's own Flow-node element", () =>
   assert.equal(fingerprint.accessibleName, "Save changes");
   assert.equal(fingerprint.label, "Workspace name");
   assert.equal(fingerprint.implicitRole, "button");
+});
+
+// A wordless icon control has no words to be found by: its tag, one hashed
+// class and what it draws. The drawing is the signal that lets the save-time
+// floor accept it, so a recording that dropped it would save a step the floor
+// refuses (or a weaker one than a model build saves for the same control).
+test("a recorded wordless icon carries its drawing to the gateway payload and its Flow-node element", () => {
+  const icon: DomElementDescriptor = {
+    tagName: "span",
+    selector: "span.x9k2",
+    classNames: ["x9k2"],
+    hasClickHandler: true,
+    drawing: "d1.q8f2k7"
+  };
+  const wire = wireElement(icon);
+  assert.equal(wire.drawing, "d1.q8f2k7");
+  const fingerprint = elementFingerprint(wire);
+  assert.ok(fingerprint, "the wire element normalizes to a fingerprint");
+  assert.equal(fingerprint.drawing, "d1.q8f2k7");
+  const sensitive = wireElement({ ...icon, inputType: "password", value: "hunter2" });
+  assert.equal(sensitive.drawing, "d1.q8f2k7", "a drawing is not a control's contents, so a sensitive control keeps it");
+  assert.equal("drawing" in wireElement({ ...icon, drawing: undefined }), false, "an icon that draws nothing sends no drawing key");
 });
 
 // `describe-element.ts` withholds all of this at capture. This is the second

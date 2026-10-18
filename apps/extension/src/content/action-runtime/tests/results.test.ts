@@ -82,3 +82,25 @@ test("a refusal anyone decided on purpose is still ACTION_REJECTED", async (t) =
   const result = actionRejected(CLICK, Date.now(), "unsupported_key", "a key this extension presses", "F13", { snapshot: {} as DomSnapshot });
   assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
 });
+
+test("a target refused as hidden is kept beside its result for the retry loop to scroll toward; a disabled one is not", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const { revealUnshownTarget } = await import("../reveal");
+  const asked: string[] = [];
+  // A target that is no longer in the document: the reveal reads that first and stops, so reading it proves it was noted.
+  const target = (name: string): Element => ({
+    get isConnected() {
+      asked.push(name);
+      return false;
+    }
+  }) as unknown as Element;
+  const hidden = actionRejected(CLICK, Date.now(), "hidden", "a target that can be clicked", "the element's display is none", { ...GATE, target: target("hidden") });
+  const disabled = actionRejected(CLICK, Date.now(), "disabled", "a target that can be clicked", "the element is disabled", { ...GATE, target: target("disabled") });
+  asked.length = 0;
+  assert.equal(revealUnshownTarget(hidden), false, "a detached target is not scrolled for");
+  assert.deepEqual(asked, ["hidden"], "the hidden refusal's target was noted, and the reveal consulted it");
+  asked.length = 0;
+  assert.equal(revealUnshownTarget(disabled), false);
+  assert.deepEqual(asked, [], "a disabled refusal's target is not noted for the reveal");
+  assert.equal(JSON.stringify(hidden).includes("isConnected"), false, "nothing of the element is on the result");
+});
