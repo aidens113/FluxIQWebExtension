@@ -3,6 +3,11 @@
 // FluxIQ -- each marked done, under way, a problem, or still to do. Pure, so
 // every connection state is tested without a DOM.
 //
+// When the background lost the wait it was on (its worker was stopped
+// mid-pairing or mid-connect, `panel/state/background-loss.ts`), the screen
+// says so and offers Connect, and never shows the old approval code: FluxIQ
+// withdrew it with the session (t707 P1).
+//
 // The screen shows while FluxIQ is not connected, this browser is not approved
 // yet, or something critical is wrong (the background does not answer). Once
 // the browser is connected the chat comes back.
@@ -12,6 +17,7 @@
 // exactly one of them is on screen whenever the connection is idle or failed.
 
 import type { ExtensionStatus } from "../../shared/protocol";
+import type { BackgroundLoss } from "../state";
 
 /** Where one step stands. `current` is the next thing to do; `waiting` is under way. */
 export type StartStepState = "done" | "current" | "waiting" | "problem" | "todo";
@@ -40,12 +46,17 @@ export type StartGuide = {
 const HEADING = "Get started with FluxIQ";
 const LINE = "Three steps, then ask FluxIQ for anything in the chat.";
 const NO_CODE = "------";
+const LOST_LINES: Readonly<Record<BackgroundLoss, string>> = {
+  pairing: "The approval code expired because the extension restarted. Press Connect for a new code.",
+  connecting: "The extension restarted before it connected. Press Connect to try again."
+};
 
 /**
  * The guide for `status`. `noAnswer` is true when the background did not
- * answer the panel; the next status to arrive ends it.
+ * answer the panel; the next status to arrive ends it. `lost` is the wait the
+ * background lost, from the panel store.
  */
-export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean): StartGuide {
+export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss): StartGuide {
   if (noAnswer && status === undefined) {
     return {
       gated: true,
@@ -63,6 +74,17 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
   const approve: StartStep = status.paired
     ? { key: "approve", title: "This browser is approved", state: "done" }
     : { key: "approve", title: "Approve this browser in FluxIQ", state: "todo" };
+
+  if (lost !== undefined) {
+    return {
+      gated: true,
+      heading: HEADING,
+      line: LINE,
+      steps: [openStep(), { key: "connect", title: "Connect this browser", state: "problem", line: LOST_LINES[lost] }, approve],
+      connect: { label: "Connect", action: "connect" },
+      addressLink: false
+    };
+  }
 
   switch (state) {
     case "pairing":

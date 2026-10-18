@@ -59,13 +59,10 @@ own: DeepSeek bills your account directly for the calls FluxIQ makes.
    - Scope: **Global**
 3. Choose **Continue**. Under **Authorize New Key**, enter your FluxIQ
    password (and your PIN, if you set one), then choose **Save Key**.
-4. Open the **Administrator** menu, choose **Log out**, and sign in again.
-   FluxIQ unlocks your keys when you sign in, so a key added during this
-   sign-in stays locked until the next one. Until then the panel's chat says
-   "your model key is locked".
-
 **It worked if** the key is listed as enabled. The key's value is not shown
-again.
+again. The key works at once in your current sign-in. After FluxIQ itself
+restarts, your keys stay locked until you sign in again; the panel's chat then
+says "your model key is locked" and asks you to sign out and in.
 
 You can see which key and model a flow uses in that flow's **Settings**, under
 **AI Provider**. The same section has the **Adaptation** switch:
@@ -80,13 +77,16 @@ You can see which key and model a flow uses in that flow's **Settings**, under
 Automations live in a web automation project, and the extension only works
 with that kind of project. Create one first:
 
-1. On the FluxIQ home page, under **Domains**, open **Web Automation**.
-2. Open **Automation Studio**, choose **Create project**, give it a name, and
-   choose **Create project**.
+- From **Get started**, choose **Describe an automation** (or another start
+  button). Get started works in the installed web automation domain, so the
+  project it creates is a web automation project.
+- Or, on the FluxIQ home page, under **Domains**, open **Web Automation**,
+  then **Automation Studio**, choose **Create project**, give it a name, and
+  choose **Create project**.
 
-A project created from the plain **Automation Studio** entry or from the
-**Get started** buttons is not a web automation project. With one of those
-open, the panel's chat says "this project is not one".
+A project created from the plain **Automation Studio** entry on the home page
+is not a web automation project. With one of those open, the panel's chat says
+"this project is not one".
 
 Then open the page you want to automate in a normal tab, and keep that tab
 in front. The quickest way to build is the panel's **Chat**: describe what
