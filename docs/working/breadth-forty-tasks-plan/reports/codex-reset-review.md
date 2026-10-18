@@ -502,3 +502,222 @@ and accepted source review before dev sync. No full-suite sweep was run.
 Post-gate git status: Core clean; downstream only this worker report modified.
 No source changes, paid calls, commits, merges or pushes by this worker.
 Source/build freeze retained pending supervisor review and live release.
+
+## Canonical model-reset-only live release
+
+Supervisor accepted R1 source separately from paid behavior and integrated both
+dev branches; t719 now Core01c9e703/downstreamd7332a87, clean executable source
+identical to final passed gates. Explicit paid release received for canonical
+everything-store-kettle-to-cart, project chat, judged whole run and one zero-call
+replay. Slot2 previous bf-slot-2 launch finished; no active launcher found.
+Claimed machine slot2 for t719/codex-reset-review/bf-slot-2. Provider helper
+confirms credential present without reading its value into logs. Existing
+no-hook admission guard retained; canonical launch adds --model-reset-only.
+Fresh isolated workspace r1-reset-kettle-t719-20261018, ceiling$0.25/250calls.
+No source/build mutation by worker during live; normal launcher preparation
+owns its run-scoped outputs. No overrides, commits, merges or pushes.
+
+Canonical launch session8752 admitted without overrides; run-mvdflu8o-d99d3100.
+Initial prelude101.239s passed source currentness, retained Core stamps and
+prepared bf-slot-2 run-scoped domain/extension/runner outputs. Supervisor synced
+docs-only dev updates before later staleness admission. Actual isolated Core
+production host preparation compiled successfully in118s, then lint/typecheck;
+no provider/chat action or actual readiness receipt yet at this observation.
+Logs: node_modules/codex-reset-canonical-live.log; isolated workspace .sessions/
+run-mvdflu8o-d99d3100/logs/core-web-build.log. Keep same run, no relaunch.
+Actual authenticated read-only Core readiness confirms candidateTrial.startReset
+false (normal candidate-trial version/judge/promotion). Explicit model-reset-only
+and unmodified lane guard admitted project chat; fixtureResetBetweenTrials=false.
+First real activity: extension flow.createHere, supervisor read/plan/dispatch,
+builder browser run_node calls. First trial0055 required reset for act9;
+inverse0061 refused candidate.undo_unproved without execution; cannotUndo0063
+refused candidate.trial_reset_unproved, then retarget0075 undo_act_kept.
+Run continues; no reset success or preserved ordered-baseline receipt claimed.
+Legacy reset feedback still advises cannotUndo leads to running with leftover
+acts; actual modern policy rejects that. Supervisor notified; no live edits.
+
+Canonical model-reset-only run finished FAIL, actual exit1:53calls/$0.03460023,
+687338ms,108steps; no promoted Flow/whole judge/replay. Actual Core startReset
+false verified through read-only owning client, unchanged no-hook guard admitted.
+Reset0055 required act9;0061 inverse unproved;0063 cannotUndo refused strict
+trial;0075 kept-state blocked correction. Second brief0096 required act13,
+0098/0100/0102 refused. No proved whole baseline restoration receipt.
+Required debug written language-driven-flow-loop-plan/debugs/
+run-mvdflu8o-d99d3100.md, with source-backed retry witness/feedback gap and
+cross-page create clearing branch requiring fail-first isolation. Supervisor
+notified; current source stays frozen, no rerun/provider call pending.
+
+## Canonical failure correction: codex-reset-live-gaps
+
+Supervisor synced idle t719 to company-integrated Corea4faf79f/downstream3b40df41
+and assigned bounded reset correction, no paid launch. Fail-first ledger run
+44591 proved3new failures/30existing pass: source-popup disappearance silently
+cleared strict create; unchanged source noEffect suppressed it; cannotUndo hid
+and permanently kept an identified reversible effect. Retry/composition run
+54559 then proved2new failures/44pass: declared retry inverse left original
+failed intent unresolved; builder first request lacked honest retry declaration
+guidance. Logs Core node_modules/codex-reset-{live-gaps,retry}-failfirst.log.
+
+Implemented within authorized owners: strict source diff/noEffect no longer
+proves restoration; kept strict acts remain listed/correctable. Original complete
+same-scope subject intents can settle only from fresh original whole resource
+group equality (all original ordered rows/states/no extra scope), including a
+true failed no-op without pointless inverse. Group freshness is measured against
+recorded act sequence, never imported original authority. Declared retry has its
+own immediate witness/inverse; undeclared recovery presses are not promoted.
+Generic Core instruction reaches builder decisions before actions and tells
+truthful lasting recovery declarations; empty declarations remain valid for
+truly nonlasting actions. Reset words use evidence terms, remove unconditional
+leftover-trial promises and qualify actual admitted unresolved runs.
+
+Additional authorized paths: service/project-build/brief-ports.ts and existing
+project-build-facade.test.ts instruction composition. Existing project reset
+whole-trial routing regression now asserts disappearing source notification
+cannot clear a destination create before its inverse. Existing realistic
+site-reset-subject.spec.ts now executes real actions through compiled private
+Core permission/placement/ledger seams and asserts success outside dispatchers;
+new-line disappearance plus failed-declared-save -> declared-retry -> inverse
+must leave no outstanding acts and restore exact original ordered inventories.
+No browser concepts/public protocol exported into Core. Generic architecture
+updated docs/architecture/automation-studio/llm-flow-bootstrap.md.
+
+Owning site-reset+actual project reset/facade check3472 active; no source mutation
+while that run reads. No live/browser run or library rebuild yet; paid remains
+held pending review/gates. Main plans unchanged by worker.
+
+First owning correction batch3472 completed138/139 across10files135.26s:
+ledger-subject36, actual project-reset8 and first-builder facade11 all passed;
+one old ledger.test copy assertion expected source-page wording. Corrected that
+assertion to positive-original-state evidence while preserving behavior checks;
+replacement ledger/words check2387 active. Supervisor independent58-test reader
+is also active; no Core mutation or library rebuild until it exits. Generic
+words now use actionable identified item/resource terms, not implementation
+labels. No behavior failure observed in the owning batch.
+
+Supervisor independent59518 passed58/58 (ledger-subject36, actual project-reset8,
+first-builder facade11, words3),287.31s. Its source reader exited before the next
+bounded change. New created-item/fingerprint fail-first62624 then observed4fail/
+2pass/36skipped: strict created-item branch lacked subject completion proof,
+both-missing fingerprints compared equal, empty fingerprints compared equal,
+extra fingerprint cardinality was ignored. Fixed within ledger: strict created
+items now use complete baseline/subject proof; original/current fingerprint maps
+require exact cardinality and positive nonempty matching values. Legacy created
+items retained. Affected ledger-subject42+ledger35+project-reset8 check97077 active.
+
+Supervisor added bounded duplicate subject/whole malformed-group controls: queue
+until97077 reader exits. A malformed sibling must invalidate the entire group's
+fresh current witness and original seeding, not get filtered into a smaller
+inventory. Target admission must not reuse stale positive transfer/create
+state after that invalidation. Same existing ledger/tests only; no contract or
+permission expansion. Docs-only current-dev sync queued after reader boundary.
+
+Further fail-first67156 proved8/8 malformed-group controls failing (29.45s):
+duplicate original/current subjects/scopes and sibling subjects normalized into
+apparently exact restoration; malformed fresh siblings left cached create and
+transfer inverses admissible. Ledger now validates groups before normalization,
+invalidates whole latest group freshness, and requires current fresh scope at
+new-subject inverse admission. Final focused group/project run67653 active.
+
+Read-only routing follow-up: project-ledger.observed itself normalizes original
+scope rows into a Map before adoption. A duplicate-scope original can lose its
+invalidity there. Reported exact minimal project-ledger/test + shared private
+collection-groups helper expansion to supervisor; not edited without scope.
+Thus ledger-only duplicate test is not yet whole-project duplicate-scope proof.
+
+Shared project validation expansion explicitly approved after reader67653:
+project duplicate-original-scope fail-first58730 FAILED1/8skipped28.37s. The
+site-reset directory had12files, now13 with private collection-groups.ts. That
+same validator is used before project original Map capture, ledger adoption
+and ledger current normalization; internal barrel only, no package export.
+It rejects duplicate scopes/subjects and malformed/nonempty fingerprint maps as
+a whole group. A malformed current sibling empties that group's fresh witness,
+so neither cached transfer nor new-subject inverse evidence may be reused.
+Valid originals remain immutable, and a later valid current read can recover.
+
+Core final source frozen for test97458 (ledger-subject50/project-ledger9/
+actual project-reset8 expected67) and structure audit54743. Prior affected
+batch97077 passed85/85; group-before-project-expansion67653 passed66/66. Root
+independent58/58 plus worker facade instruction11/11 remain unchanged. Root
+independent delta recheck and docs-only dev sync precede library rebuild.
+No source/readers/build overlap, no paid launch. Shared plans remain untouched.
+
+Final shared-validator owning97458 passed67/67 (50ledger-subject+9project-ledger+
+8actual project-reset),83.99s. Audit flagged only5packed statement lines; split
+those after actual reader exit, no behavior change. Replacement Core audit62032
+exit0; downstream audit7527 exit0. Core source/tests frozen. Supervisor's final
+independent delta15-case reader active and final ledger source review pending;
+no library build until it exits, then supervisor docs-only paired sync before
+cache-off production libraries/check and downstream type/browser gates.
+
+Supervisor independent delta84702 exited0:15/15 new controls/44intentionally
+skipped47.24s; final ledger/helper/project source semantics reviewed/accepted.
+Supervisor readers ended then synced t719: Coreb2721f85 (docs only), downstream
+e1ce99f4 includes accepted social disclosure/feedback source plus positive-data
+AGENTS rule. Inspected that rule/source delta. Core library/check67787 started
+cache off only after readers ended and audits green; fluxiq check135.469s passed,
+library compilation active. Integrated downstream audit27366 exit0 on this source.
+Downstream package/type/content builds wait actual Core command successful exit.
+
+Core frozen production67787 actually exited0: contracts reused, fluxiq check
+135.469s/build161.163s, gateway library reused. Then and only then started
+labelled downstream gates. Domain owning30669 passed111/111 (reset/resource/
+places/host + accepted social refusal/next-step/node-run compatibility). Extension
+social disclosure owner2/2 passed. Domain source/test check passed51.459s.
+Extension check90413 found only new browser-test type errors (optional undefined
+start and JsonObject evidence narrowing); no production type/bundle failure.
+Waited browser reader actual exit before fixing those two typing lines; final
+extension check1059 active. Core source/build unchanged/current throughout.
+
+Actual-ledger realistic browser32563 PASSED4/4 in3.2min, reset case27.7s:
+real new qty2 create/delete and declared failed Save -> declared recovery press
+-> one positive inverse, original ordered inventory/fingerprints/DOM rows exact,
+ledger.inPlace empty. Assertions ran outside effect/permission dispatchers.
+Three unchanged named/recorded/automatic extraction specs also passed, positive
+nonempty original rows. Afterward only test typing changed (JsonObject assertion
+erases at runtime; absent optional start is omitted). No test logic/product
+change; no repeated browser batch without a new concern. Both audits passed,
+including integrated downstream27366 on latest accepted social source.
+This is actual content/domain/Core ledger proof, not model adherence or installed
+background pairing proof. Paid canonical behavior acceptance remains pending.
+
+## Final correction return — source/build frozen
+
+All required gates observed green. Final extension check1059 actually exited0
+43.191s, including source/test TS and in-memory browser bundles. Both git diff
+--check commands exit0. No source/output mutation since final verification;
+only this report/debug updated. No active worker readers/builds remain.
+
+Evidence: owning67/67 (latest shared validator/project routing), preserved prior
+ledger35/35/words3/3/facade11/11, supervisor independent58/58 then final delta
+15/15; domain111/111; extension disclosure2/2; actual-ledger realistic browser4/4.
+Core contracts/check/libraries and domain/extension source+test checks/bundles,
+both audits all exit0. Only new browser-test typing needed correction after its
+actual4/4 browser pass; no behavior or product change. No full suites run.
+
+Changed Core paths (prefix packages/fluxiq/src/programs/automation-studio/runtime/):
+- flow-bootstrap/site-reset/collection-groups.ts (new private shared validator)
+- flow-bootstrap/site-reset/index.ts
+- flow-bootstrap/site-reset/ledger.ts
+- flow-bootstrap/site-reset/project-ledger.ts
+- flow-bootstrap/site-reset/words.ts
+- flow-bootstrap/site-reset/tests/ledger-subject.test.ts
+- flow-bootstrap/site-reset/tests/ledger.test.ts
+- flow-bootstrap/site-reset/tests/project-ledger.test.ts
+- flow-bootstrap/site-reset/tests/words.test.ts
+- service/project-build/brief-ports.ts
+- service/project-build/tests/project-build-facade.test.ts
+- service/project-build/tests/project-build-reset.test.ts
+Additional Core doc: docs/architecture/automation-studio/llm-flow-bootstrap.md.
+Changed downstream:
+- apps/extension/e2e/content/tests/created-identity/tests/site-reset-subject.spec.ts
+- docs/working/breadth-forty-tasks-plan/reports/codex-reset-review.md
+- docs/working/language-driven-flow-loop-plan/debugs/run-mvdflu8o-d99d3100.md
+No fixture, oracle, public protocol/package API, generated or unrelated source
+was changed by this correction. Parent's latest social integration was checked.
+
+Live acceptance remains pending: old canonical no-hook run failed53calls/
+$0.03460023, no Flow/whole judge/replay; no changed-source paid run launched.
+Provider-free proof verifies content/domain/actual ledger controls, not model
+adherence or installed background pairing. Pre-existing quantity-change adds
+without an exact inverse remain honestly refused; this is not every possible
+reset capability. Supervisor owns commits/integration and next paid release.
