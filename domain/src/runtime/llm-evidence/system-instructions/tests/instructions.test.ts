@@ -22,7 +22,15 @@ test("written instructions outrank optional untrusted demonstrations without fix
 
 test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-10");
+  assert.equal(version, "web-11");
+});
+
+// FluxIQ declines optional cookies by default (user, 2026-10-18): a consent
+// banner is answered by declining them unless the instruction says otherwise.
+test("a consent banner is answered by declining optional cookies unless the instruction says otherwise", () => {
+  assert.match(text, /Decline optional cookies on a consent banner/u);
+  assert.match(text, /consent banner unless told otherwise/u);
+  assert.doesNotMatch(text, /may be accepted or dismissed/u);
 });
 
 test("the text holds no control character but a newline, and stays under 3,600 characters", () => {
@@ -59,7 +67,6 @@ test("a covered control is pressed first, the runtime closes a layer it can dism
   assert.doesNotMatch(text, /a press a layer would take is refused target_covered/u);
   assert.match(text, /never another popup's/u);
   assert.match(text, /Closing or declining a popup is never one of the acts you were asked for/u);
-  assert.match(text, /consent banner may be accepted or dismissed/u);
   assert.doesNotMatch(text, /first close that popup/u);
 });
 
