@@ -6,6 +6,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { webLlmRejectionNext } from "../next-sentence";
 
+test("incomplete text names the supported helper, per-row optional disclosure, full read order after each page move", () => {
+  const next = webLlmRejectionNext("incomplete_text", ["private column"], ["private control"], "private row") ?? "";
+  assert.match(next, /nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click.*then read.*Next page/u);
+  assert.doesNotMatch(next, /private column|private control|private row/u);
+});
+
 test("a covered press with closers names the closers, then the cover, then the target, in that order", () => {
   assert.equal(
     webLlmRejectionNext("covered_by_layer", ["t476"], ["t478", "t488"], "t474"),

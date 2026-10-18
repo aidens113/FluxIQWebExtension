@@ -404,6 +404,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "fewer_records_than_required",
   "no_records_read",
   "option_not_offered",
+  "incomplete_text",
   "state_not_as_asserted",
   "page_not_scriptable",
   "channel_to_page_failed",

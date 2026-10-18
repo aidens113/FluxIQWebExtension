@@ -14,7 +14,7 @@ export function assertTextDisclosed(element: Element, name: string): void {
   });
   if (!control) return;
   const expected = `field ${name} contains fully disclosed text`;
-  const actual = `incomplete_text: field ${name} contains an unexpanded text disclosure; expand it with an explicit registered row-bound click before reading the field again`;
+  const actual = `incomplete_text: field ${name} contains unexpanded text; first read nonempty stable row-context columns without this field, use For Each with optional explicit registered row-bound clicks, then read full text; repeat this order after each Next page move`;
   throw Object.assign(new Error(actual), {
     failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, { expected, actual })
   });

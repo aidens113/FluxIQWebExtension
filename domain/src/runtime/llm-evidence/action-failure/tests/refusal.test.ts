@@ -24,6 +24,26 @@ import { webActionFailureRefusal } from "../refusal";
 /** The words the page put in its own comparison text, none of which may reach a refusal. */
 const PAGE_WORDS = ["Tidewell", "sage green", ".product-row td", "Brightaisle"] as const;
 
+test("only the closed incomplete_text prefix on an unobserved output gives disclosure recovery, never its page text", () => {
+  const actual = `incomplete_text: ${PAGE_WORDS.join(" ")}`;
+  const refused = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } });
+  assert.equal(refused.code, "output_not_observed");
+  assert.equal(refused.detail?.reason, "incomplete_text");
+  assert.match(refused.detail?.next ?? "", /registered row-bound click/u);
+  assert.equal(repeatedRejectionDetail(refused.detail, 2)?.next, refused.detail?.next);
+  const account = failedRead(summary({ listPresence: "appeared", itemsSeen: 1 }));
+  const withAccount = webActionFailureRefusal({ status: account.status, payload: account.payload, failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } });
+  assert.equal(withAccount.detail?.reason, "incomplete_text", "a positive incomplete-field marker must not become generic read shortfall");
+  for (const words of PAGE_WORDS) assert.equal(JSON.stringify(refused).includes(words), false);
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, WEB_AUTOMATION_FAILURE_CODES.TIMEOUT]) {
+    assert.notEqual(webActionFailureRefusal({ status: "failed", failure: { code, actual } }).detail?.reason, "incomplete_text");
+  }
+  for (const text of ["incomplete_textual: not the closed prefix", "prefix incomplete_text: elsewhere", "incomplete_text", undefined]) {
+    assert.notEqual(webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual: text } }).detail?.reason, "incomplete_text");
+  }
+  assert.notEqual(webActionFailureRefusal({ status: "timed_out", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } }).detail?.reason, "incomplete_text");
+});
+
 test("target ambiguity retains a closed distinct reason without exposing the failure's page text", () => {
   const ambiguous = webActionFailureRefusal({
     status: "failed",
