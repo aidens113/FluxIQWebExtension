@@ -430,7 +430,7 @@ sends the run to repair (`output-nodes/extract-list/dispatch.ts`,
 `actions/extraction/retired-paging.ts`). A one-page `paginate` (`maxPages: 1`,
 what the picker used to record) is dropped, since it reads the same page.
 
-Every pass of the read appends to that read's run dataset. At run end Core
+By default, every pass of the read appends to that read's run dataset. At run end Core
 processes each dataset's collected rows into its answer: each row is kept once
 by default (whole row, first seen kept), then the read's declared `dedupe`,
 `sort` and limit apply, carried as `recordOutput.process` (`maxItems` becomes
@@ -438,6 +438,18 @@ by default (whole row, first seen kept), then the read's declared `dedupe`,
 judges read the answer; the collected rows stay as evidence. The build test
 replays the span pass by pass and ends on Next page's `ended` answer, bounded
 by `most`.
+
+A declared `recordOutput.purpose: "intermediate"` keeps validated rows for
+computation and row-bound controls without saving an answer dataset. The
+domain preserves this explicit property through extraction reconciliation and
+the shared Core parser; it never infers the purpose from columns, names or
+loop usage. Schema validation and sensitivity handling still apply, and Core
+refuses invalid/truncated intermediate captures and nonempty answer `process`
+declarations. Intermediate output cannot satisfy a requested answer-table
+capability. Its read, condition and action evidence remains available to
+verification across current and reopened runs. Old Flows retain answer
+behavior; the new optional field requires a matching Core contracts/runtime
+release because older parsers reject it.
 
 ### Bound target test values
 
