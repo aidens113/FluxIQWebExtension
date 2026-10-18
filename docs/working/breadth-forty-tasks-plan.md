@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: All87 scraping expectations positive;10accepted tasks/7sites. Social changed-source run-mvdln2dd-6bc98e25 failed47calls/$0.058921614, no promotedFlow; exclusion-evidence diagnosis active. t719 exploratory original-baseline guard and t563 shared accounting/charged-build handoff under focused validation; neither source accepted yet. Installed Chrome functional proof preserved; strict paid accounting/Edge acceptance pending.
+Status detail: All87 scraping expectations positive;10accepted tasks/7sites. Social changed-source run-mvdln2dd-6bc98e25 failed47calls/$0.058921614, no promotedFlow; exclusion-evidence diagnosis active. t719 exploratory original-baseline guard passed focused gates and is entering isolated installed-gateway proof; t563 accounting focused gates/collector passed, fixed-artifact preparation active. Neither live source unit accepted yet. Installed Chrome functional proof preserved; strict paid accounting/Edge acceptance pending.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -224,8 +224,23 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Actualtransport addendum: exact Core site-reset/start-check.ts and llm/harness-options/binding.ts plus existing site-reset/tests/start-check.test.ts approved to preserve optional trustedopaque resource otherwise dropped between private startcapture and projectobservation. Strictreadvalidation unchanged, no modelresource substitution.
 - Actualadapter addendum: Core service/project-build/acts-record.ts and confirmed existing owningacts-record test approved to forward createBaseline/destinationReceipts, otherwise silentlydropped. Opted-in project guard must failclosed/recoverably for identifiedpurecreate when requiredcapability absent; no optionalchain bypass. Nonqualifying/irreversible/nonlasting paths unchanged; actualservice proof remainsrequired.
 - Compatibility: additive control.resource is accepted by updatedCore parser and emitted by updateddomain adapter; olderCore rejects that newfield, so pairedCore/domain source must integrate/push together. Existingextension browsertransport unchanged. FrozeninstalledChrome/sharedCoree58 retains matchingoldsource, not upgraded during proof.
+- Downstream declaration addendum: exact domain/src/runtime/llm-evidence/tools.ts startState return signature optional resource?:string alignment approved after actual domaincheck TS omission; existing observe output/Core binding already carry it. No runtime change. All readers must end before edit; rerun focused evidence tests/domaincheck, and helpertype only after completed domain build.
 - Gates focused Core/domain owning tests, touchedCore/domain package typechecks, both audits; max2workers/cacheoff, no whole suite/build/sharedCorebuild. Root source/tests review BEFORE ownCore libraries/domain/extension build and providerfree browserrelease; no paidretry authorized.
 - No extraowners without concreteproposal, modelguidance only generic no site/task/answer examples. SharedCoree58/Chrome preserved. Ownreport/newdebug updated, no sharedplan/commit/merge/push.
+
+### Supervisor brief: explicit intermediate record output
+- Worker storage_comparison in paired t567 only. Read Current State and final bounded design in own reports/codex-social-positive-rerun.md. Existing failedrun/debug/artifacts preserved. No paid/browser/build during initial red/source phase.
+- Own seven Core production files ONLY: packages/contracts/src/record-sets/{output,parse-output}.ts; under packages/fluxiq/src/programs/automation-studio/runtime: flow-bootstrap/authoring/record-output.ts, flow-bootstrap/plan/record-output-contract.ts, flow-bootstrap/answerability/plan-record-sets.ts, executor/record-capture.ts, result-verification/build-test/stores.ts.
+- Own exact eight Core test files in final design plus downstream extract-list/tests/reconciled-record-output.test.ts and plan-resolution/extraction/tests/run-record-output.test.ts under their existing domain owners; own existing report. No shared docs/commits/push.
+- Optional purpose answer|intermediate, absent answer. Explicit intermediate fully parses/schema-validates/allowlists/enforces sensitivity and retains actual validated outputs.records/native row aliases/loop state/read accounts/actions/conditions; emits NO durable batch in BOTH capture paths. No matcher exemption, dataset-name/shape heuristic or inferred purpose.
+- Reject unknown/null/malformed purpose. Initial intermediate rejects nonempty process, and fails capture on invalid/truncated rows rather than hiding lost-row signal; intentional schema field exclusion remains allowed. Answer/default append/replace unchanged. Intermediate same-ID replace cannot clear a saved answer.
+- Compiler canonicalization and saved Flow parameterJSON must preserve explicit purpose. Static answerability cannot count intermediate-only output as a durable answer; actual computation/loop capability remains. build-test reconstruction must agree with runtime nonpersist semantics, retaining all read/action/coverage evidence.
+- RED FIRST actual compiler->real service capture/store->close/reopen->same saved Flow rerun, generic deterministic native control rows/real row-bound loop/separate final answer. No stub compiler/capture/storage/summary. Assert actual outputs/loop/action evidence and positive answer; current/reopen read coverage is HARD GATE. If missing durable evidence seam, stop/propose owner; no SQL/summary expansion preauthorized.
+- Negative controls: unmarked/explicit-answer helper wrong rows still trigger storedElsewhere; multiple actual answer tables remain visible; wrong final extra/missing rows/columns/conditions still refused; upstream intermediate does not hide lasting acts/final-state obligations. Actual invalid/truncated/schema/encryption/sameID cases required.
+- Exact existing test owners: contracts record-sets/tests/parse-output; authoring/tests/read-record-output; plan/tests/record-output-contract; answerability/tests/check; executor/tests/record-capture; build-test/tests/stores; service/datasets/tests/service-wiring; request-rows/tests/stored-though-left-out. Adjacent focused integration test only if budget requires, propose exact path before adding.
+- No SQL/store schema, summary type, summary-reads/unquoted matcher/recheck transport production edits. Existing failedcandidate has no purpose and remains failed. Generic model contract text only, no scenario-shaped examples/guidance/fixture/oracle edits.
+- Compatibility: older Core rejects field; contracts/runtime/downstream build currency coordinated, old savedFlows/runs unchanged. Downstream production not authorized; exact regression-only owners above first, propose any actual adapter loss.
+- Gates owning changed tests/package typechecks + existing wrong-finalset cross-read/recheck safety tests, both audits, max2workers/cacheoff. No whole suites. Library build and actual realistic providerfree browser proof only after root review/release; paid rerun separately held.
 
 ## Work Ledger
 
@@ -277,10 +292,6 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Root reviewed actualsource chains and wrote authoredarchitecture changes in owningisolatedtrees. Next synccurrentdev/commit source, regenerate2removed Corebaselineentries throughowningscript, then ownlibrary-only builds and downstream/browser checks. No newproductsource integrated/pushed or live acceptanceclaimed yet.
 - Social run-mvdln2dd-6bc98e25 remainslive on frozen9f/3dd; helperrows notfinalanswer. Earlier looptrial65 endedno after realclickambiguity, model changedcandidate and trialscontinue. Completedcontinuation counts remain15/974/$0.840453990 until terminalreceipt.
 
-## Open Questions
-
-None requiring user input.
-
 ### 2026-10-18 - Resumed agents; isolated source frozen for library preparation
 
 - User requested resuming existing agents. Reset/accounting agents resumed with own-tree three-library builds only, process cacheoff, no whole builds/sharedCore mutation. Existing installedChrome proof/profile remains unchanged.
@@ -288,3 +299,21 @@ None requiring user input.
 - Validation: reset120/120 and accounting188/188 independently passed; accounting post-dev/person integration63/63 plus package typecheck native0. Both Core audits native0. Accounting generated baseline strictly reduced two counts and removed two cycles, no new waiver. Updated reset domain/helper gates await its own library build.
 - Root independently inspected social terminal evaluation and both live receipts: failed/runtime.behavior, flowCreatedfalse, finalcandidate not_judged,5trials,47calls/$0.058921614, observedunrecorded0/runSpenduncounted[]. No oracle/reportedverdict/replay. Agent read-only finaltrial positive comparison3orderedrecords/15fields is a claim pending root verification, not acceptance. Required debug/exclusion investigation active; no blind retry.
 - Continuation now16completed/1021calls/$0.899375604:4accepted,11failed,1unverifiedempty. Overall10accepted tasks/7sites unchanged. Historical and installed spend separate.
+
+### 2026-10-18 - Supervisor resumed after premature turn end
+
+- Root ended previous turn after agent resumption, leaving required reviews waiting; user asked why work stopped. Existing agents resumed with concrete next releases; no user approval required.
+- Reset exact tools.ts declaration reviewed/committed downstream9595c615; Core4ae19d30 unchanged. Released extension-only e2e build then single installed-project spec workers1/retries0/fresh isolatedprofile, provider-disabled. Required preact0dispatch/positiveoriginal2/2/Add3/2/strictinverse/exactordered2/2/cleantrial remains acceptance gate.
+- Accounting ownCorecb704f47 library prep independently read log0. Released proposed narrow downstream currentness/type/build/support registry steps and ownCore web:build ONLY for fixed installed proof, never whole/sharedCore build. Collector frozen for root independent review; fresh package must use nonexisting owned scratch paths. No new host/UI/provider release yet.
+- Social source unchanged. Released report-only explicit-output-ownership design: current all-stored-sets answer contract is obeyed, recheck packet intact; no matcher suppression. Require compiler/current/reopen provenance and wrong-finalset controls before product code.
+- Validation: worker reset30/30/domaincheck/build/helpertype/audit0; root reviewed one-field declaration. Accounting worker collector46assertions0 pending independent run. Social helper scripts reviewed read-only before root execution.
+
+### 2026-10-18 - Independent collector and social provenance checks
+
+- Validation: root independently reviewed collector telemetry/public-export realpath scope/canonical Ledger.restore and proof gate, syntax native0, hash c68698c558e6210aef085098cef4f2c432ab3b5457d42d382afcaa0c2fec80ea, selftest19telemetry+13oracle+14canonical=46/native0. Accepted only for new fixed t563 proof; old unknown paid run remains held.
+- Validation: root reviewed both read-only social helpers then executed native0. Finaltrial main dataset exact3orderedrecords/15fields/0unexpected. All4 captured judge/recheck pairs reproduce missingexclusion hold; identical evidence besides recheck, both missingprooflines present after row-ID normalization, all12 flagged storedElsewhere rows present. No recheck transport defect or acceptedFlow inferred.
+- Reset extension-only e2e build and exact installedproject diagnostic released on frozen9595c615/4ae19d30. Accounting ownproductionWeb and downstream narrow artifact prep active on cb704f47/ce53486f, collector frozen. New host/UI/provider release awaits gates/package/ownership, with no further user approval question.
+
+## Open Questions
+
+None requiring user input.
