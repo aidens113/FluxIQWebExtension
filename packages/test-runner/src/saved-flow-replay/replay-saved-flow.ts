@@ -16,6 +16,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveScenarioWorkflow, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
+import { startLabPerson, type LabPerson } from "../person-simulation/index.js";
 import type { PersistentRunAllocation } from "../allocation.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { RunnerFailure } from "../failure.js";
@@ -120,7 +121,12 @@ type ReplayState = {
  * that could not complete is a failed verdict with its reasons, never a throw;
  * only a replay refused before it started throws.
  */
-export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<SavedFlowReplayResult> {
+const replayDependencies = {
+  resolveLabPaths, loadScenarioManifest, loadCreatedFlowRequest, resolveScenarioWorkflow, startTopology, selectReplayProject, readFlowNodes, replayKeyIdentities, openReplayBrowser, resetScenarioLab, armScenarioVariant, runProviderFreeReplayFlow, removeRunOwnedTopologyState, startLabPerson
+};
+
+export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Partial<typeof replayDependencies> = {}): Promise<SavedFlowReplayResult> {
+  const dependencies = { ...replayDependencies, ...seams };
   const replayId = `replay-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const resultPath = path.join(options.runsDirectory, "replays", `${replayId}.json`);
   const environmentCredentialVariables = providerCredentialVariables(...options.credentialSources);
@@ -132,20 +138,21 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
   const state: ReplayState = { projectId: null, hashBefore: null, hashAfter: null, task: null, scenarioOrigin: null, scenarioPortRetained: null, origins: [], servedAtSavedAddress: null, keys: null, run: null, usage: null, coreProviderCallCount: null, extraction: null, playbackGoalHeld: null, error: null };
   let topology: RunningTopology | undefined;
   let browser: ReplayBrowser | undefined;
+  let person: LabPerson | undefined;
   let keysBefore: readonly string[] | undefined;
   let startTrace: { trace: ExtensionStartTrace; secrets: string[] } | undefined;
   try {
-    const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
-    const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
-    const request = await loadCreatedFlowRequest({ repositoryRoot: options.repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: options.scenarioId, ...(options.taskId ? { taskId: options.taskId } : {}) });
+    const labPaths = dependencies.resolveLabPaths(options.repositoryRoot, options.environment);
+    const scenario = await dependencies.loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
+    const request = await dependencies.loadCreatedFlowRequest({ repositoryRoot: options.repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: options.scenarioId, ...(options.taskId ? { taskId: options.taskId } : {}) });
     // `--variant` arms the named variant in place of the task's own (`workflow-selection.ts`); the receipt names the one armed.
     const selection = replayWorkflowSelection(request, options.variantId);
-    const workflow = resolveScenarioWorkflow(scenario, selection);
+    const workflow = dependencies.resolveScenarioWorkflow(scenario, selection);
     const { judgement } = request;
     state.task = { taskId: request.task.id, scenarioId: request.task.scenarioId, workflowId: request.workflowId ?? null, variantId: selection.variantId ?? null, judgeBy: judgement.judgeBy, stepId: judgement.judgeBy === "expected-dataset" ? judgement.stepId : null };
 
     const credentials = options.target.credentials;
-    topology = await startTopology({
+    topology = await dependencies.startTopology({
       repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
       runsDirectory: options.runsDirectory, runId: replayId,
       seed: options.seed ?? scenario.seed, target: options.target,
@@ -156,15 +163,15 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     const { control, authorizationPassword, scenarioOrigin } = topology;
     if (!control || !topology.projectId || !authorizationPassword) throw new RunnerFailure("environment.missing", "The persistent workspace's Core did not authenticate, so its saved Flows cannot be read");
     state.projectId = options.projectId ?? topology.projectId;
-    const projectId = await selectReplayProject(control, { defaultProjectId: topology.projectId, flowId: options.flowId, ...(options.projectId === undefined ? {} : { projectId: options.projectId }) });
+    const projectId = await dependencies.selectReplayProject(control, { defaultProjectId: topology.projectId, flowId: options.flowId, ...(options.projectId === undefined ? {} : { projectId: options.projectId }) });
     topology = { ...topology, projectId };
     state.projectId = projectId;
     state.scenarioOrigin = scenarioOrigin;
     state.scenarioPortRetained = (topology.allocation as Partial<PersistentRunAllocation>).scenarioPortRetained ?? null;
     state.hashBefore = (await control.getExactFlow(projectId, options.flowId)).contentHash;
-    keysBefore = await replayKeyIdentities(control);
+    keysBefore = await dependencies.replayKeyIdentities(control);
 
-    const nodes = await readFlowNodes(control, { projectId, flowId: options.flowId });
+    const nodes = await dependencies.readFlowNodes(control, { projectId, flowId: options.flowId });
     const actionTypes = createdFlowActionTypes(nodes, options.flowId);
     state.origins = savedNavigationOrigins(nodes, actionTypes);
     // A Flow that navigates nowhere starts on the page the run starts on -- which
@@ -179,12 +186,24 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     // The extension start's local diagnostic, screened for everything secret this replay holds; written beside the receipt whatever happens.
     const traceSecrets = [topology.allocation.controllerToken, authorizationPassword, credentials?.password, credentials?.authorizationPin, credentials?.totp, ...Object.values(secretInputs)].filter((value): value is string => typeof value === "string" && value.length > 0);
     startTrace = { trace: new ExtensionStartTrace({ secrets: traceSecrets }), secrets: traceSecrets };
-    browser = await openReplayBrowser(topology, { extensionPath: labPaths.extensionPath, startPath: scenario.startPath, trace: startTrace.trace });
-    await resetScenarioLab(scenarioOrigin, topology.allocation.controllerToken);
-    if (workflow.variant) await armScenarioVariant(scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
+    browser = await dependencies.openReplayBrowser(topology, { extensionPath: labPaths.extensionPath, startPath: scenario.startPath, trace: startTrace.trace });
+    await dependencies.resetScenarioLab(scenarioOrigin, topology.allocation.controllerToken);
+    if (workflow.variant) await dependencies.armScenarioVariant(scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     await browser.openStart();
+    person = await dependencies.startLabPerson({
+      control, projectId, context: browser.context,
+      scenarioOrigin, runToken: topology.allocation.controllerToken, scenarioId: scenario.id,
+      scenarioLabDist: labPaths.scenarioLabDist, workflowId: workflow.workflowId,
+      variantId: workflow.variant?.id, task: request.task.personCheck,
+      write: async snapshot => {
+        const directory = path.join(options.runsDirectory, "replays", replayId);
+        await mkdir(directory, { recursive: true });
+        await writeFile(path.join(directory, "person-hand-offs.json"), `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+      },
+      publish: async () => undefined,
+    });
     // No `llmExecution`: `runPersistedFlow` then asks Core for `adaptiveMode: "deterministic"`.
-    const run = await runProviderFreeReplayFlow(control, { projectId, flowId: options.flowId, facilityRunId: replayId, actionTypes, inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId: replayId } });
+    const run = await dependencies.runProviderFreeReplayFlow(control, { projectId, flowId: options.flowId, facilityRunId: replayId, actionTypes, inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId: replayId } });
     state.run = run;
     const detail = await control.getRunDetail(projectId, run.runId);
     state.usage = liveLlmObservedUsage(detail);
@@ -211,9 +230,12 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     state.error = replayErrorOf(error);
     reasons.push("the replay did not complete");
   } finally {
+    // Finish while both the fixture browser and Core conversation still exist.
+    await person?.finish();
+    if (person?.writeFailure) reasons.push("The replay person hand-off evidence could not be written");
     if (topology?.control && keysBefore) {
       try {
-        state.keys = replayKeyPreservation(keysBefore, await replayKeyIdentities(topology.control));
+        state.keys = replayKeyPreservation(keysBefore, await dependencies.replayKeyIdentities(topology.control));
         if (!state.keys.preserved) reasons.push("The stored Secret Key identities changed during the replay");
       } catch { reasons.push("The stored Secret Key identities could not be checked after the replay"); }
     }
@@ -227,7 +249,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
         .catch(/* best-effort: a local diagnostic may not replace the replay's result */ () => undefined);
     }
     await topology?.close().catch(/* best-effort: the result is already decided */ () => undefined);
-    if (topology) await removeRunOwnedTopologyState(topology).catch(/* best-effort: only this invocation's session directory */ () => undefined);
+    if (topology) await dependencies.removeRunOwnedTopologyState(topology).catch(/* best-effort: only this invocation's session directory */ () => undefined);
   }
   const result = resultOf({ replayId, resultPath, options, state, environmentCredentialVariables, reasons });
   await mkdir(path.dirname(resultPath), { recursive: true });

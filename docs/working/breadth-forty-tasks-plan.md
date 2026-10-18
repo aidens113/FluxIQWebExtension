@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: All87 scraping tasks require positive verifiable data; five formerly empty variants and selected-card extraction are fixed/browser-proven/pushed. Nine accepted tasks across six sites. Continuation14completed/921calls/$0.807907290:3accepted,9failed,1unverified empty run,1crossborder whole-run pass awaiting saved replay. Photo failed; diagnosis assigned. Clean-create replay runner correction and actual-transport reset diagnosis underway; installed Chrome package enabled, normal setup/create/replay pending.
+Status detail: All87 scraping expectations positive;10accepted tasks/7sites. Crossborder exact10rows40fields saved replay passed with fresh person ask and explicitzero calls; corrected no-hook reset run-mvdl5eg0-a56fdad7 failed53calls/$0.032546700, cause diagnosed. Installed Chrome exact creation/confirmed verdict and zero-call replay verified; strict creation accounting held. Isolated accounting design active; live source trees frozen.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -15,9 +15,9 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 **Scraping requires actual data (user, 2026-10-18).** All87 dataset tasks among108 now have positive record-by-record expectations. Five formerly empty fixture/task/oracle paths are revised and browser-proven. Launch guards reject empty/absent/count-only/inconsistent expectations; selected-card field discovery is fixed with independent positive browser proof. Ordinary real-user empty searches retain normal behavior.
 
-**Current acceptance:**9accepted tasks across6sites, including continuation company/bigbox/professional exact oracle/judge and0-call goal replay. Continuation14completed/921calls/$0.807907290:3accepted,9failed,1unverified empty run,1crossborder whole-run pass whose saved replay failed. Empty job run never accepted.
+**Current acceptance:**10accepted tasks across7sites, including continuation company/bigbox/professional exact oracle/judge and0-call goal replay. Continuation15completed/974calls/$0.840453990:4accepted,10failed,1unverified empty run. Empty job run never accepted.
 
-**Current defects/work:** clean-create requested replay fix16925172 is integrated with independent41tests/type/audit; no clean same-invocation live proof yet. Crossborder run-mvdism0y-ba67f226 passed10rows/40fields, but saved replay-mvdjb3nf-5da28870 stopped at declared person check with7of10 and unknown accounting, so full acceptance incomplete. Photo and auction latest runs failed without a Flow; required debug/source diagnosis underway. Pointer-only control subject fix54325eb4 integrated after66independentcases and strengthened actualgateway restoration proof; paid canonical reset rerun released only after pushed-source receipt. Coree58 unchanged. Canonical no-hook paid reset remains failed.
+**Current defects/work:** clean-create requested replay fix16925172 is integrated with independent41tests/type/audit; clean same-invocation proof remains owed. Crossborder original whole-run plus corrected saved replay accepted. Pointer-only subject fix54325eb4 is unit/actualgateway proven, but paidcanonical run-mvdl5eg0-a56fdad7 failed53calls/$0.032546700: destination baseline first observed after lastingAdd. Strict undo refusal preserved original ownership; preact admission design underway. Auction/photo/classifieds remain diagnosed or under diagnosis; no blind paid retry.
 
 **Installed proof:** genuine Chrome155/current verified0.1.0 package enabled, normal first-run setup/provider key/pairing completed. Real extension-chat Flow created. Explicit owner judgedwhole b393bc01 isconfirmed with exact4rows/12fields/finalstate; totalcall/cost accounting missing, strictcreation acceptance held. Separate normalpanelNoLLM replayd1fef089 independently passed exactdata/finalized0calls/0harness. Both savedFlowartifacts unchanged; accounting diagnosis next. Shared Coree58 and live source trees stay frozen; newer main commits may contain documentation or isolated downstream runner fixes only. Source acceptance and live acceptance remain separate.
 
@@ -46,28 +46,28 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | job-board | PASS remote-easy-apply, halvard-careers-roles; save-quillmark-remote and halvard-labs-office-jobs failed (causes fixed by lane 4 fixes 1-3; reruns owed) |
 | social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
 | bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
-| crossborder-marketplace | run-mvdism0y-ba67f226 whole-run PASS exact10rows/40fields/oracle/judge,21calls/$0.024137868; saved replay-mvdjb3nf-5da28870 FAILED at declared person check,7of10rows/unknown accounting. Full acceptance incomplete; actor diagnosis active. |
-| auction-marketplace | run-mvdi0946-d897f3cb FAILED134calls/$0.148715013, no Flow/oracle/replay; optional approximation-only bound dropped direct-price records. Earlier numeric guard fix remains valid. Required debug integrated; no unchanged rerun. |
-| local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
+| crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
+| auction-marketplace | `cheap-accessory-auctions`, `save-mark-ii-sellers`, `buy-it-now-quote`, `lens-hood-seller-shop` |
+| local-classifieds | test-ride-question run-mvd9nlx5 failed/noFlow/nothingSent. First divergence: radius omitted, wronglisting clicked; seller/formtargets copied from different directexploration. Runtime identity refusal correct; no new sourcebug proven. |
 | company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
 | professional-network | PASS kade-lead-contact run-mvdi9e8u-678c35df: exact1record/2fields/account oracle and reported verdict passed,49calls/$0.029735034, automatic runtime repair revision1->2; one successful replay0calls/no model/harness. Connect task remains provider-free audited. |
-| photo-social | Positive august-over-1300 run-mvdi88yz-e444d594 FAILED146calls/$0.102284736, no Flow/oracle/replay. First candidates read only first12grid cells; later target/modal failures. Required debug integrated, diagnosis active. |
+| photo-social | `priya-tags`, `newest-likes`, `august-over-1300`, `kiln-notes` |
 
 Totals at the stop: 24 runs, 6 passed, 18 failed, $1.224 billed across the four lanes (lane 1 $0.545, lane 2
 $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; no balance error. Every failure has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in
 the lane trees until merged).
 
 **Continuation status:**
-- **Accepted live passes:** company apprentices run-mvdes30x-65848f60, bigbox rated-delivery-towels run-mvdf5nlp-4878758e and professional lead-contact run-mvdi9e8u-678c35df, all full exact oracle/judge and successful zero-provider-call goal replay. With historical results: nine accepted tasks across six sites.
+- **Accepted live passes:** company apprentices run-mvdes30x-65848f60, bigbox rated-delivery-towels run-mvdf5nlp-4878758e and professional lead-contact run-mvdi9e8u-678c35df, all full exact oracle/judge and successful zero-provider-call goal replay. With historical results: ten accepted tasks across seven sites.
 - **Company source integrated and pushed:** merges downstream3b40df41/Corea4faf79f include drawing normalization, durable repair/reopen, bounded reveal and hybrid paging. Final combined Core52/domain32/extension147 tests, Core library/check, both downstream package checks and both audits passed. Pushed downstream02982452/Coreeff2657b.
 - **R1 source pushed, live proof failed:** prior push downstream72fb4d80/Corebb858c89 included original-inventory/transfer/reset ownership fixes and narrow/browser gates. Canonical run-mvdflu8o-d99d3100 used --model-reset-only and actual startReset=false, but failed53calls/$0.034600230, no Flow/whole judge/replay. Required debug inspected. Retry attribution, cross-page create accounting and permanently kept unresolved acts now have a bounded fix brief; no paid reset rerun until changed-source validation/review.
 - **Social recovery:** recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538. Supported explicit disclosure loop and closed incomplete-text feedback are accepted/pushed after43 independent domain cases, package checks/audits and actual3-case Chromium proof; paid rerun remains owed. No implicit clicks or truncated results accepted; generic guidance must not mirror fixture content.
 - **Other failures:** crossborder run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but later repair lacked two oracle state facts. Bigbox run-mvddx6wf-17e9eab0 matched its full oracle but failed stored-copy claim parsing. Generic query/judge/parser repairs are pushed; Bigbox rerun passed. Crossborder rerun remains owed.
-- **Continuation spend:** fourteen completed live runs, three accepted passes/nine failures/one unverified empty result/one exact crossborder whole-run pass pending replay,921calls/$0.807907290. Historical spend above is separate; install proof remains separate.
+- **Continuation spend:** fifteen completed live runs, four accepted passes/ten failures/one unverified empty result,974calls/$0.840453990. Historical spend above is separate; install proof remains separate.
 - **Storage excluded:** held optional72abeeab and restorationc13c0a30 remain only t707. Supervisor verified482pass/2fail/4skip held versus484/0/4 baseline; timing causality unproved. No pooling delta enters dev.
-- **Remaining:** accepted full coverage for crossborder, auction, classifieds and photo; owed store/jobs/social reruns; installed Chrome/Edge extension automation creation and zero-call rerun. Install/pairing already proven, Firefox unavailable. Lifetime Core build leases remain active; no source mutation in live lanes.
+- **Remaining:** accepted full coverage for auction, classifieds and photo; owed store/jobs/social reruns; strict paidcreation accounting for installedChrome and genuine Edge create/replay. Chrome functionalcreation/confirmedanswer/exactzero replay already independently verified; Firefox unavailable. Lifetime sharedCore build lease remains active.
 
-**Next, in order:** inspect active changed-source canonical/auction and positive photo/professional runs; debug/fix observed failures; continue remaining crossborder/classifieds coverage and owed positive jobs/social/store reruns; installed Chrome/Edge create/replay with safe helpers. All new source work uses narrow checks/builds only; two daily whole-build sweeps already consumed. No user input needed.
+**Next, in order:** implement isolated shared accounting correction; diagnose/admit preact original destination before canonicalreset retry; finish classifieds/photo/auction failure fixes; continue remaining three sites and owed positive jobs/social/store reruns; fixed-artifact genuineChrome/Edge create/replay. All source work uses narrow checks/builds only; two daily whole-build sweeps consumed. No user input needed.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -88,10 +88,10 @@ each site's `live-tasks.ts` and pinned in `scenarios/tests/live-instructions.tes
 | everything-store | `coupon-earbuds-rated-four`, `batteries-and-descaler`, `sage-small-kettle-if-in-stock`, `office-checkout-review` |
 | bigbox-retail | `rated-delivery-towels`, `napkins-for-delivery`, `checkout-quote-without-ordering`, `new-store-cheapest-towels` |
 | local-classifieds | `nearby-furniture`, `test-ride-question` (send), `carbon-price-check`, `bikes-within-alex-price` |
-| crossborder-marketplace | run-mvdism0y-ba67f226 whole-run PASS exact10rows/40fields/oracle/judge,21calls/$0.024137868; saved replay-mvdjb3nf-5da28870 FAILED at declared person check,7of10rows/unknown accounting. Full acceptance incomplete; actor diagnosis active. |
-| auction-marketplace | run-mvdi0946-d897f3cb FAILED134calls/$0.148715013, no Flow/oracle/replay; optional approximation-only bound dropped direct-price records. Earlier numeric guard fix remains valid. Required debug integrated; no unchanged rerun. |
+| crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
+| auction-marketplace | `cheap-accessory-auctions`, `save-mark-ii-sellers`, `buy-it-now-quote`, `lens-hood-seller-shop` |
 | social-network-feed | `recent-group-posts`, `hide-suggested-posts`, `delete-stranger-requests` (delete), `claim-found-key` (send) |
-| photo-social | Positive august-over-1300 run-mvdi88yz-e444d594 FAILED146calls/$0.102284736, no Flow/oracle/replay. First candidates read only first12grid cells; later target/modal failures. Required debug integrated, diagnosis active. |
+| photo-social | `priya-tags`, `newest-likes`, `august-over-1300`, `kiln-notes` |
 | job-board | `remote-easy-apply`, `save-quillmark-remote`, `halvard-labs-office-jobs`, `halvard-careers-roles` |
 | company-website | `apprentices`, `newsletter-signup`, `saturday-certificate`, `heat-pump-quote` (send, hand-off) |
 | professional-network | `netherlands-data-engineers`, `connect-kade-senior-engineer` (send), `accept-messaged-invitations`, `kade-lead-contact` |
@@ -170,6 +170,41 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Readonly trace owning Core caller-bound routine result-verification provider/usage persistence and normal run-detail aggregation on actuale58. Explain first missing accounting seam, exact minimal owner files/tests and how existing canonical accounting can be reused; no guessed defaults/schema/private state edits.
 - Report concrete evidence or remaining uncertainty before product changes. Core firstedit will require separate isolated tree/brief; sharedCore remainsread-only. Next Edgeproof held until coordination, no duplicatedChrome task/providercalls.
 
+### Supervisor brief: shared creation-accounting patch map
+- Worker held_lane_review, now isolated pairedt563 trees (rootfastforwarded57ad8dc2/2b13e40c). Existingt721 Chrome/profile/sharedCoree58 unchanged and leased; no source edits/builds/UIruns yet.
+- Own NEW downstream reports/codex-creation-accounting-fix.md only during this bounded readonly design. Read Core instructions/boundary/code-structure and prior actual diagnosis report in t721.
+- Root confirmed missing runBudget in run-outcome and paid gate write in run-record; in-run purse currently local to binder. Inspect exact5proposed owners plus typed verification/runtime contracts, canonical annotation writer and closest test harness to choose single shared run-owned ledger across runtime repairs/routine checks/rechecks.
+- Report exact minimal filemap including type/barrel/helper owners, module API and lifecycle, canonical gate merge preserving prior costs/diagnostics, bounded quota/pending/failure/cancellation semantics, concrete fail-first regression and public-detail roundtrip probe. No duplicated ledger math, no zero defaults, no public schema/protocol expansion or provider/authorization change.
+- Reuse canonical run-budget/harness reservation/settlement and current itemization. Existing limits apply to the whole run; resultcheck calls must not reset the purse or overwrite prior repair spend. Missing usage remains conservative.
+- No whole suites/builds (user twice-daily allowance consumed); no code until root approves concrete map. SharedCore and all live lanes frozen. Agent report afteractualsource/API evidence, then implementationbrief follows.
+
+### Supervisor brief: shared creation accounting implementation
+- Worker held_lane_review in pairedt563 only; own Core files in exact initial map from downstream reports/codex-creation-accounting-fix.md, their owning tests, plus canonical runtime/llm/run-budget.ts and tests/run-budget.test.ts for validated restoration. Downstream own existing fix report only. Root owns authored architecture/shared plans/commits.
+- Root approves single shared run-owned canonical purse across routine checks/rechecks/in-run and detached recovery, lower-layer profile compatibility alias, focused canonical gate projection. No provider/authority/schema/protocol/browser changes; sharedCoree58/Chrome/live lanes unchanged.
+- First reproduce missing paid receipt by extending existing caller-paid-result-check service case; require registered public full-detail and persisted receipt calls1/pending0/itemized1/omitted0/cost0.001/usage4+2=6. Record red actual exit before product edit.
+- Choose validated canonical restoration for SETTLED, internally consistent same-run existing receipts, so supported paid continuation retains prior spend. Canonical ledger alone owns validation/arithmetic; no second fake purse. Preserve omitted records/count/cost provenance and request identity; no double counting.
+- Unknown/malformed/missing-paid/pending history must preserve existing receipt and fail closed before another paid dispatch with an accounting-specific diagnostic. Never derive prior total from verdict.calls or zero-default unknown fields. New deterministic replay/newrun stays usable.
+- Preserve per-call standing grants versus global run ceilings. Later incompatible global profile must fail closed without resetting/widening the ledger; do not add general constrain API without concrete need. Existing provider resolution/permissions unchanged.
+- Required regressions: clean paid publicdetail, repair+check additive and idempotent writes, same-run settled restoration and duplicate identity, pending/unknown/malformed reentry refusal, no-model exactzero unaffected, timeout/missingusage conservative. Existing canonical harness reserve/settle semantics reused; propose any additional owner before editing it.
+- Gates focused owning tests max2workers, Core package typecheck and structureaudit with nativeexit observed. No whole suites/builds or sharedCorebuild; no live/UI/provider launch. Library build only after root source/tests review.
+- Keep modules narrow, barrels current, no catch-all expansion or any casts to hide provider profile types. Report files/counts/exits/limits and remaining uncertainties. Never commit/merge/push or edit shared plan.
+
+### Supervisor brief: classifieds modal versus standalone target diagnosis
+- Worker storage_comparison, idle t566 downstream; report own NEW reports/codex-classifieds-target.md plus required existing debug run-mvd9nlx5-1373850d.md only. No source/fixture/oracle/model-guidance edits or paid/browser launch yet. Core readonly.
+- Read historical debug and actual recorded run C:/Users/osrs_/FluxStuff/lab-runs/2026-10-17/run-mvd9nlx5-1373850d. Root verified candidate0145 sellerread targett1317 failed4times after t932click and optional t1096close. Zero Send/permissionask; no Flow.
+- Root new structural evidence: t932 actual clicks0037/0065/0087/0091 leave same results query URL hash6914dee31f72 but page becomes dialog/chat/seller. Directnavigate0119/0135 reaches distinct standalonepath hash5d6417f582fa and introducest1317; targetfound0139; submitted0141/0145 combines originalcardclick with standalone target. This is a lead, not established cause.
+- Compare actual view where t1096 was observed/activated, modal seller versus standalone seller and trial postclose page; examine current and recorded-source fixture modal/link handler plus target matching scope. Determine whether optionalclose closes listing, surface-bound target differs, or wrong listing. Use private internal reads, output only structural IDs/counts/hashes/codes, no page text/rows/URLs/credentials.
+- Exact rootread owners already consulted: view/card.ts, view/listing.ts, script/results.ts, script/opening.ts. Follow actual owner references narrowly; do not reread broad plans. Existing cheapest qualifying oracle remains unchanged.
+- Report first causal divergence, evidence versus uncertainty, bounded generic fix/proposed files and meaningful regression/live probe before sourceauthorization. No unchanged paid retry or fixture weakening. No source/build/mainplan/commits/pushes.
+
+### Supervisor brief: owed social changed-source live preparation
+- Worker storage_comparison AFTER finishing bounded classifieds report; operate idle pairedt567 only. Root committed oldphoto readonly findings8db2b486 and merged latest main downstreamdaf3c7d6/Core3dd56610 into t567. SharedCore/Chrome/t563/t719 untouched.
+- Own NEW reports/codex-social-positive-rerun.md only. No source/fixture/oracle/guidance edits. Read social failedrun debug run-mvdec14t-5b320706 and accepted43domain/3browser disclosure recovery notes in currentplan/archive. Changedsourceec9b8593/e1ce99f4 already integrated, meaningful gates observed.
+- Prepare exactly social-network-feed-recent-group-posts, slot4/bf-slot4/persistent-isolated, fresh codex-social-positive-t567-20261018-r2, realproject extensionchat DeepSeekflash, requestedreplays1, .25USD/250calls/48000000tokens. Read current audited instruction/positive exactdataset/finalstate expectations; no oracle to model. Normalguards/nooverrides. Do not reuse failedworkspace or spend before rootrelease.
+- Build only ownCore contracts/fluxiq/client-gateway-websocket libraries cacheoff, then normal runner-required narrowcurrentness artifacts. No manualCoreWeb/fullbuild, whole suites or sharedCorebuild. Owning live launcher may prepare its necessary isolated productionhost afterrelease.
+- Send exact proposed owning launchcommand plus positive expectedrecord/field counts, currentHEADs and observedbuildexits. Waitrootrelease beforepaidlaunch. Root holds mainHEADs during allocation if needed.
+- Onrelease run one actual changed-source build/judgedwhole/zero-call replay, freezeHEAD/source/buildthroughcompletion. Inspect exactorderedpositiveoracle/reportedverdict/finalstate/explicitfinalized0provider+model+harnessreplay, normalrealextensionchat entry; missingaccountunknown. Recordactualspend/calls/receipts and requireddebugbeforeanyretry. No commits/pushes/mainplanedits or panelmanagement.
+
 ## Work Ledger
 
 ### 2026-10-18 - Continuation compaction and overnight instruction
@@ -177,10 +212,6 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Settled briefs, historical ledger and superseded detail moved verbatim to [continuation archive](./breadth-forty-tasks-plan/archive/2026-10-18-continuation-history.md). Current State retains source/acceptance distinctions and pending work.
 - Validation: archive-preservation script verified142main/679archived lines; initial working-docs audit refused missing validation bullet, now corrected for rerun.
 - Pushed downstream7e36ba3d/Core63c9a00b; latest Core changes docs only, executableCoree58 remains frozen for installed proof.
-
-## Open Questions
-
-None requiring user input.
 
 ### 2026-10-18 - Resumed agents and independent installed readback
 - All three existing agents resumed on explicit user instruction; Chrome chat was submitted once and persisted one main Flow. Root independently ran reviewed collect.mjs against whole05b40730: exact4orderedrecords/12fields/ownoracle/integrity/finalstate passed, explicit0calls/pending/itemized/omitted/harness; judged_creation false because verdictunverified.
@@ -191,3 +222,26 @@ None requiring user input.
 - Validation: root current-source66/66 after devmerge exit0; independently inspected final actualgateway structural receipt: positivebaseline2/2 ->3/2 ->2/2, same subject, exact digest restored, dirtyblocked/owninverseok/cleantrialyes, gatewayerrors0. Worker final helpertype/audit0, actualstrengthenedbrowser1/1passed. Product54325eb4 integrated; paidcanonical remainsunproven.
 - Validation: root Core25/25/person-service-port tests, downstream2/2lifecycle tests, both nativeaudits0. Core723e0ae8/downstream65be76e0 committed in pairedt566 only; library/probe release now authorized, no publicpaid call.
 - Root independently reran installed collectors: NoLLM d1fef089 exit0/prooftrue/exact4rows/12fields/finalstate/explicitallzero; judged b393bc01 exit1/prooffalse/confirmed/exactsame data but accountingunknown. Dedicated readonly accounting investigation, no gate relaxed.
+
+### 2026-10-18 - Allocated isolated live continuations
+- All three existing agents resumed. Canonical no-hook everything-store-kettle-to-cart run-mvdl5eg0-a56fdad7 allocated in t719/bf-slot2; actual readiness and terminal reset/oracle/replay receipts pending. Main HEAD allocation hold released; live lane remains frozen.
+- Same saved crossborder Flow provider-free replay-mvdl3yxn-b1d9134d allocated in t566/bf-slot3; owning production-host startup pending. Core723e0ae8/downstream65be76e0 remain task-only until actual fresh ask/exact10rows40fields/finalizedzero proof is independently inspected.
+- Isolated t563 agent maps one shared creation-check/recovery accounting purse before implementation. Existing installed Chrome proof/profile/sharedCoree58 lease remains unchanged. Missing paid accounting remains unknown, never zero.
+- Validation: supervisor inspected both main git statuses and actual worker allocation receipts; no terminal live acceptance claimed. Narrow source gates already recorded; no new whole suite or manual whole build.
+
+
+### 2026-10-18 - Crossborder accepted; reset failure retained
+- Validation: root independently inspected actual saved replay-mvdl3yxn-b1d9134d receipt and realperson sidecar: exactordered10/10records40/40fields/noextras, finalstatepassed, Flowhash unchanged, savedoriginretained, keys1->1preserved, providersdisabled and explicit0calls/accounted/provider/intervention/harness. Freshperson-needed UUID answeredviaCore/person_done, clearedtrue, pollfailures0, permissions0. Provider-free verdictunverified remains separate from original paidwholejudgepass.
+- Crossborder now accepted with originalrun21calls/$0.024137868 plus actualsavedreplay0. Overall10accepted tasks/7sites; continuation15completed/974calls/$0.840453990:4accepted,10failed,1unverifiedempty. Historical and installed costs separate.
+- Validation: after currentdevdocs merged into pairedt566, root independently reran Core15person tests and downstream2lifecycle tests, bothnative0; both actualstructureaudits native0. Downstream-first/Core-own-repository noff integration completed. Lane/task stays active for assigned readonly classifieds diagnosis; persistent evidence retained, no lifecycle deletion while breadth work continues.
+- Root independently inspected reset run-mvdl5eg0-a56fdad7 terminalevaluation: failed/runtime.behavior, noFlow,263342ms; readiness confirms startResetfalse and fixtureResetBetweenTrialsfalse.53calls/$0.032546700; firstdestinationbaseline read occurred after lastingAdd, unlike positivegateway diagnostic. Requireddebug written, no blindretry; explicit preactdestination admission design underway.
+- Accounting worker authorized isolated failfirst+sharedcanonicalpurse implementation with validated settledreceipt restoration; unknown/malformed/pendingpaid history failclosed. No sharedCore/Chrome mutation or whole suite/build authorization.
+
+### 2026-10-18 - Classifieds first cause established; owed social preparation
+- Validation: root independently checked unchanged fixture diff against recorded48cdbfee, actual mixedcandidatehandles, unique catalogue seller hash0027ec8fd27a present in directnavigate0119/0135 and absent all four t932click packets. Worker exactradius/cardidentity trace recorded; optionalchatclose is not listingclose. Historical run omittedradius then mixedtargetcontexts; no new product defect proven. Existing generic preceding-context guidance already integrated after that run.
+- Integrated authored classifieds report/debug and photo first-gridcoverage findings without source/fixture/oracle/guidance changes. Photo later targetprovenance remains open; no blindpaidretry.
+- Storage agent proceeds to owed changed-source socialrecent preparation in isolatedt567. Prior generic disclosure fixec9b8593/e1ce99f4 is independently43domain/3browser proven; actualpositiveoracle/judge/0callreplay still owed. No paidlaunch before source/build/count/command review.
+
+## Open Questions
+
+None requiring user input.
