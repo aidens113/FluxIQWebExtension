@@ -1,6 +1,6 @@
 # Company hybrid paging live acceptance
 
-Status: Live and latest-dev integration checks passed; ready for paired merge.
+Status: Live and final combined R1 integration checks passed.
 
 Supervisor-owned paired t567 trees. The first company run failed118calls/$0.082465122; its debug is `../../language-driven-flow-loop-plan/debugs/run-mvddb1jn-a15ca13f.md`. Hidden load-more was returned as ended before scroll-loaded batches. Generic correction2c529c60 preserves visible/disabled controls, requested page bounds and bounded scrolling; no task/oracle changes.
 
@@ -18,3 +18,5 @@ Provider-free proof before rerun: fail-first hidden-control regressions; final p
 ## Integration
 
 Latest accepted judge dev changes merged into both task branches only after the live launcher exited. Combined drawing/durable/feedback/accounting/judge tests passed93/93 across6files; frozen Core library build153.959s and fluxiq typecheck119.022s passed. Both final audits passed (Core401advisories/1154baseline, downstream210/638). Domain check32.753s and extension check59.321s both exited0. No executable source changed after these gates. Held source is ready for paired merge/push. Remaining supervisor lane tasks: job-board-halvard-labs-office-jobs, then save-quillmark-remote after reset integration is available.
+
+R1 source was then accepted on dev first, keeping its paid model-reset-only behavior proof separate. Merged it into t567 before final acceptance: kept both hybrid-paging and bounded-column documentation in the sole merge conflict; shared DOM context and runtime type automerges preserve drawing plus private subject/collection fields. Final combined checks all passed: Core drawing/durable/ledger/project-owner52tests; domain target/declared/places32; extension recovery/reveal/paging/transport147; library build129.905s; Core typecheck178.045s; domain check67.788s; extension check104.030s; both audits401/1154 and210/638. No source changes followed. No paid company rerun is required for this merge; the next real job-board run will exercise the combined pair.
