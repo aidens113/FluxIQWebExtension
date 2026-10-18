@@ -1806,8 +1806,16 @@ still prevents reading it.
 
 A list extraction's text or table-column field containing a visible unexpanded text-disclosure
 button refuses the read with `incomplete_text` in existing validation feedback.
-The author must expand it through an explicit registered row-bound click before
-reading again. Passive discovery and extraction never press the control. Plain
+The author first reads minimal nonempty stable row-context columns without the
+incomplete field, then uses those records in For Each with an optional explicit
+registered row-bound disclosure click before reading full text. Units without
+usable context are excluded from that helper; a requested row that lacks it needs
+another context, rather than omission. This order repeats after each Next page
+move; one observed disclosure target acts on its own row. The domain recognizes
+only the closed `incomplete_text:` prefix on OUTPUT_NOT_OBSERVED and returns a
+closed incomplete-text reason with generic recovery ordering. Arbitrary failure
+text, field names and page values are not forwarded in that detail.
+Passive discovery and extraction never press the control. Plain
 prose, unrelated controls, and expanded or hidden controls do not establish an
 incomplete field. A typed refusal propagates through the whole list, so the
 runtime cannot store a partial field while reporting complete extraction.
