@@ -243,8 +243,10 @@ test("the extraction node's own throw is caught the same way, and reports the no
 });
 
 // t195: a For Each pass hands a body node its row on the `item` input. A node
-// whose recorded element sat in a repeated record is dispatched scoped to that
-// row's values; everything else is dispatched as it was recorded.
+// with a recorded element is dispatched with that row's values beside whatever
+// record it was recorded in; the page decides whether the control is a row's
+// (`content/action-runtime/pass-row.ts`). A node with no element is dispatched
+// as it was.
 
 async function executeOnRow(outputId: WebAutomationActionType, parameters: Record<string, JsonValue>, item: JsonValue | undefined): Promise<Record<string, JsonValue>> {
   const implementation = bundle.implementations[outputId];
@@ -284,7 +286,7 @@ test("a click in a recorded record on a loop's row is scoped to that row's value
   assert.deepEqual(parameters.element, {
     tagName: "BUTTON",
     visibleText: "Add to cart",
-    context: { landmark: "main", record: { values: ["Red Toaster", "$39.99", "https://shop.test/p/red-toaster"] } }
+    context: { landmark: "main", record: { text: "Blue Kettle $24.99 Add to cart", values: ["Red Toaster", "$39.99", "https://shop.test/p/red-toaster"] } }
   });
 });
 
@@ -308,9 +310,15 @@ test("a row that is not an object, or holds no string, leaves the recorded recor
   }
 });
 
-test("a control the build recorded in no record -- a dialog's Close -- is dispatched untouched on a loop's row", async () => {
-  const close = { selector: "dialog button.close", element: { tagName: "BUTTON", visibleText: "Close", context: { landmark: "dialog" } } };
-  assert.deepEqual(await executeOnRow("web.dom.click", close, { title: "Red Toaster" }), clicked(close));
+// Live run `run-mvd0qwhi-5f7dbf80`: a feed post's "Hide post", saved as
+// `{ landmark: "main" }` beside a positional selector, was dispatched untouched,
+// so every pass pressed the post the build had looked at.
+test("a control the build recorded in no record carries the loop's row too, for the page to place", async () => {
+  const hide = { selector: "div[role=feed] > div:nth-of-type(9) div[aria-label=Hide]", element: { tagName: "DIV", accessibleName: "Hide post", context: { landmark: "main" } } };
+  const parameters = await executeOnRow("web.dom.click", hide, { community: "Urban Growers", text: "Pigeons on brassicas" });
+  assert.deepEqual(parameters.element, { tagName: "DIV", accessibleName: "Hide post", context: { landmark: "main", record: { values: ["Urban Growers", "Pigeons on brassicas"] } } });
+  const bareElement = { selector: "#save", element: { tagName: "BUTTON" } };
+  assert.deepEqual((await executeOnRow("web.dom.click", bareElement, { title: "Red Toaster" })).element, { tagName: "BUTTON", context: { record: { values: ["Red Toaster"] } } });
   const bare = { selector: "#save" };
   assert.deepEqual(await executeOnRow("web.dom.click", bare, { title: "Red Toaster" }), clicked(bare));
 });
@@ -327,7 +335,7 @@ test("a control a built Flow found in a list, with no recorded record, is scoped
 test("a typed value in a row's field is scoped the same way as a click", async () => {
   const field = { selector: "li.result input.qty", text: "2", element: { tagName: "INPUT", context: { record: { keyAttribute: "data-id", key: "p1" } } } };
   const parameters = await executeOnRow("web.dom.type", field, { id: "p7", title: "Red Toaster" });
-  assert.deepEqual(parameters, { ...field, element: { tagName: "INPUT", context: { record: { values: ["p7", "Red Toaster"] } } } });
+  assert.deepEqual(parameters, { ...field, element: { tagName: "INPUT", context: { record: { keyAttribute: "data-id", key: "p1", values: ["p7", "Red Toaster"] } } } });
 });
 
 // t640 (`run-mv9q50ui`, RC3): a navigate whose `url` was bound to a value that

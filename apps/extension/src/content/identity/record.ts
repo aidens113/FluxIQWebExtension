@@ -504,6 +504,25 @@ export function isRecordElement(element: Element): boolean {
   return matchesSelector(element, RECORD_SELECTOR) || recordKey(element) !== undefined;
 }
 
+/**
+ * Whether the element sits in one row of several like it: in a record with a
+ * sibling of its own tag, or -- a control in no record -- in the row its own
+ * kind marks out, whose twin row has the same shape (`controlRowIdentity`'s
+ * rule). A loop pass asks it of the answer a control resolved to anywhere on the
+ * page (`../action-runtime/pass-row/`): an answer in another row of a list is
+ * another row's control, not a page-level one the pass may act on as it is.
+ *
+ * Read on the page as it is now, by the same rules a recording names a record
+ * by, so a control a recording would have placed in a row is in one here.
+ */
+export function sitsInRepeatedRow(element: Element): boolean {
+  const record = enclosingRecord(element);
+  if (record && repeatedAtCapture(record)) return true;
+  if (!isRowControl(element)) return false;
+  const found = controlRow(element);
+  return found !== undefined && sameShape(found.row, found.twinRow);
+}
+
 /** The nearest record at or above the element. The element itself counts: a recorded click on a row *is* the row. */
 function enclosingRecord(element: Element): Element | undefined {
   let current: Element | null = element;

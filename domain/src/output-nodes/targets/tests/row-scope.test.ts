@@ -18,10 +18,10 @@ const atListPosition: JsonObject = {
   element: { tagName: "DIV", accessibleName: "Confirm", context: { listPosition: { index: 1, total: 8 } } }
 };
 
-test("a control the build saw in a record is scoped to the row's own values", () => {
+test("a control the build saw in a record is scoped to the row's own values, keeping the record it was built on", () => {
   assert.deepEqual(webAutomationScopedToRow(inRecord, { title: "Red Toaster", price: "$39.99" }), {
     selector: inRecord.selector,
-    element: { tagName: "BUTTON", visibleText: "Add to cart", context: { record: { values: ["Red Toaster", "$39.99"] } } }
+    element: { tagName: "BUTTON", visibleText: "Add to cart", context: { record: { text: "Blue Kettle $24.99 Add to cart", values: ["Red Toaster", "$39.99"] } } }
   });
 });
 
@@ -38,9 +38,20 @@ test("no row, a row that is not an object, or a row with no text leaves the para
   }
 });
 
-test("a control in no repeated thing is the same control on every pass", () => {
-  const close: JsonObject = { selector: "dialog button.close", element: { tagName: "BUTTON", context: { landmark: "dialog" } } };
-  assert.equal(webAutomationScopedToRow(close, { title: "Red Toaster" }), close);
+// Whether a control with no recorded record is a row's is the page's question:
+// a feed card drawn as `[role=article]` has no list position, and its "Hide
+// post" was saved with neither (live run `run-mvd0qwhi-5f7dbf80`).
+test("a control the build saw in no record still carries the pass's row, for the page to place", () => {
+  const hide: JsonObject = { selector: "div[role=feed] > div:nth-of-type(9) div", element: { tagName: "DIV", accessibleName: "Hide post", context: { landmark: "main" } } };
+  assert.deepEqual(webAutomationScopedToRow(hide, { community: "Urban Growers", text: "Pigeons" }), {
+    selector: hide.selector,
+    element: { tagName: "DIV", accessibleName: "Hide post", context: { landmark: "main", record: { values: ["Urban Growers", "Pigeons"] } } }
+  });
+  const contextless: JsonObject = { selector: "#save", element: { tagName: "BUTTON" } };
+  assert.deepEqual(webAutomationScopedToRow(contextless, { title: "Red Toaster" }), { selector: "#save", element: { tagName: "BUTTON", context: { record: { values: ["Red Toaster"] } } } });
+});
+
+test("parameters naming no recorded element are left as they are", () => {
   const bare: JsonObject = { selector: "#save" };
   assert.equal(webAutomationScopedToRow(bare, { title: "Red Toaster" }), bare);
 });
