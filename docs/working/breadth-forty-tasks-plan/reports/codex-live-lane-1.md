@@ -80,3 +80,19 @@ All requested integrated gates passed on frozen executable source. Gate source s
 The focused test command is the previously recorded six files plus src/programs/automation-studio/runtime/result-verification/read-account/tests/accounts.test.ts, with maxWorkers=2/minWorkers=1. No full suite was run.
 
 Source remains frozen. No source edits, commits, merges, pushes or paid launch were made by worker during integrated gates. Supervisor owns final docs sync/audit and integration/push/release. Bigbox live acceptance still awaits a changed-source rerun; classifieds and auction have not been launched by this worker.
+
+## Changed-source bigbox acceptance (released; active)
+
+Supervisor released paid acceptance after independent final audit and integration. Frozen pair: Core ae0180e8 / downstream d6d74b7b; only documentation advanced beyond the 111-test/build/check/audit gates above. Fresh workspace codex-breadth-l1-rated-delivery-towels-r2 uses slot-1 / bf-slot-1, the existing chat authoring/judged whole run/one zero-call replay command, and $0.25 / 250-call limits. Launcher session 10323 is active. Exact log: C:/Users/osrs_/AppData/Local/Temp/codex-lane1-bigbox-r2.log. No source edits or builds by this worker during live execution. Hold after this final result for supervisor evidence review before further paid launches.
+
+Run allocated: run-mvdf5nlp-4878758e. Prelude completed in 123.161 s. Global evidence: C:/Users/osrs_/FluxStuff/lab-runs/2026-10-17/run-mvdf5nlp-4878758e. At allocation no steps or paid calls had occurred; owning session then started its required Core web production build. Startup log: C:/Users/osrs_/FluxStuff/fxwork/t563/!FluxIQWebExtension/test-runs/instances/bf-slot-1/persistent-isolated/codex-breadth-l1-rated-delivery-towels-r2/.sessions/run-mvdf5nlp-4878758e/logs/core-web-build.log.
+
+First actual activity confirmed: step1 chat status ok, 1 paid call / $0.000231240. Subsequent browser exploration confirmed web.detect_repeating_structure status ok and written run nodes. At the next observation 27 completed step metadata records / 14 paid calls / $0.007513542 were present. These are progress observations, not a final verdict.
+
+## Changed-source bigbox final outcome
+
+run-mvdf5nlp-4878758e passed, launcher exit 0. Final global metadata: 62 steps, 29 paid calls, $0.026501940. The Flow succeeded; actual oracle and reported verdict both passed. Records and final state held, including every unchanged-state fact. Exact extraction matched 16/16 ordered rows and 48/48 fields. Core result verification confirmed core.result.answers_request (answers); the final whole-run judge was step62. This is observed live acceptance, beyond compiler/test evidence.
+
+Requested replay was explicitly recorded: 1 requested / 1 ran; runtime ID 253a33dc-8e73-44f0-9423-4bb3b9343fe8, succeeded, providerCalls 0, modelCalled false, goalPassed true, flowSucceeded true, harnessActivations 0. Evidence: C:/Users/osrs_/FluxStuff/lab-runs/2026-10-17/run-mvdf5nlp-4878758e/evaluation.json, snapshots/flow-lane.json, snapshots/live-llm.json, snapshots/repair-lane.json and steps/0062-judge/decision.json. Launcher stdout/stderr: C:/Users/osrs_/AppData/Local/Temp/codex-lane1-bigbox-r2.log.
+
+No source edits, commits, merges, pushes, independent build or additional paid launch occurred during the live run. Launcher-owned preparation rebuilt downstream artifacts and its required web host before browser activity. Classifieds and auction remain unlaunched by this worker. Holding for supervisor evidence review and release before the next paid task.
