@@ -2,9 +2,11 @@
 // open shadow roots and slots: elements with attributes, text nodes, light
 // `textContent` that -- as in a browser -- never enters a shadow root, and a
 // `querySelectorAll` that understands the selectors inference writes (`*`,
-// `[attr]`, `[attr="v"]`, `tag.class`, `tag:nth-of-type(n)`, `tag:not([class])`,
-// `:scope > a > b` chains and a `:scope a` descendant step) and, as in a
-// browser, never crosses a shadow boundary.
+// `tag.class`, any number of `[attr]`, `[attr="v"]`, `[attr^="v"]` and
+// `:not([attr])` tests, `tag:nth-of-type(n)`, `:scope > a > b` chains and a
+// `:scope a` descendant step) and, as in a browser, never crosses a shadow
+// boundary. Anything else throws, so a test cannot pass on a selector this
+// fake only pretended to read.
 //
 // `fakeShadowDom()` installs the globals the readers ask (`Node` and the form
 // control classes they test `instanceof` against) and returns the builders.
@@ -65,7 +67,10 @@ class FakeShadowRoot extends FakeParentNode {
   }
 }
 
-const STEP = /^([a-z][a-z0-9-]*)?((?:\.[\w-]+)*)(?:\[([\w-]+)(?:="([^"]*)")?\])?(?::nth-of-type\((\d+)\))?(:not\(\[class\]\))?$/u;
+const STEP_TAG = /^[a-z][a-z0-9-]*/u;
+
+/** One test of a compound after its tag: a class, an attribute test, a position, or an absent attribute. */
+const STEP_PART = /^(?:\.([\w-]+)|\[([\w-]+)(?:(\^?)="((?:[^"\\]|\\.)*)")?\]|:nth-of-type\((\d+)\)|:not\(\[([\w-]+)\]\))/u;
 
 class FakeElement extends FakeParentNode {
   readonly nodeType = 1;
@@ -115,18 +120,28 @@ class FakeElement extends FakeParentNode {
     return this.assigned ?? [];
   }
   matchesStep(step: string): boolean {
-    const parsed = STEP.exec(step);
-    if (!parsed) throw new SyntaxError(`fake-shadow-dom cannot read the selector ${step}`);
-    const [, tag, classes, attribute, value, nth, unclassed] = parsed;
-    if (unclassed !== undefined && this.attrs.has("class")) return false;
-    if (tag !== undefined && this.tagName !== tag.toUpperCase()) return false;
-    if (classes && !classes.slice(1).split(".").every((name) => this.classList.includes(name))) return false;
-    if (attribute !== undefined && (!this.attrs.has(attribute) || (value !== undefined && this.attrs.get(attribute) !== value))) return false;
+    const tag = STEP_TAG.exec(step)?.[0];
+    let matches = tag === undefined || this.tagName === tag.toUpperCase();
+    for (let rest = step.slice(tag?.length ?? 0); rest !== "";) {
+      const part = STEP_PART.exec(rest);
+      if (!part) throw new SyntaxError(`fake-shadow-dom cannot read the selector ${step}`);
+      rest = rest.slice(part[0].length);
+      matches &&= this.matchesPart(part);
+    }
+    return matches;
+  }
+  private matchesPart([, className, attribute, prefix, value, nth, absent]: RegExpExecArray): boolean {
+    if (className !== undefined) return this.classList.includes(className);
+    if (absent !== undefined) return !this.attrs.has(absent);
     if (nth !== undefined) {
       const siblings = (this.parentNode?.children ?? []).filter((sibling) => sibling.tagName === this.tagName);
-      if (siblings.indexOf(this) + 1 !== Number(nth)) return false;
+      return siblings.indexOf(this) + 1 === Number(nth);
     }
-    return true;
+    const actual = attribute === undefined ? undefined : this.attrs.get(attribute);
+    if (actual === undefined) return false;
+    if (value === undefined) return true;
+    const wanted = value.replace(/\\(.)/gu, "$1");
+    return prefix === "^" ? actual.startsWith(wanted) : actual === wanted;
   }
 }
 

@@ -45,6 +45,18 @@ test("each form the detection writes names the element it was written for", () =
   assert.deepEqual(named(":scope > span:not([class])"), []);
 });
 
+test("a kind's step names its element: an absent attribute, and a link folder written as the page writes it", () => {
+  // The capture publishes `href="/p/1"` resolved, `https://shop.test/p/1`; the
+  // page's selector names it as written (`apps/extension/src/content/extraction/template-kind/`).
+  assert.deepEqual(named(':scope > a.link[href^="/p/"]'), [`${ITEM} > a`]);
+  assert.deepEqual(named(':scope a[href^="https://shop.test/p/"]'), [`${ITEM} > a`]);
+  assert.deepEqual(named(':scope > a[href^="/q/"]'), []);
+  assert.deepEqual(named(':scope > a[href^="//p/"]'), []);
+  assert.deepEqual(named(":scope > a:not([aria-label])"), [`${ITEM} > a`]);
+  assert.deepEqual(named(":scope > a:not([href])"), []);
+  assert.deepEqual(named(":scope span.meta:not([href])"), [`${ITEM} > span:nth-of-type(1)`, `${ITEM} > span:nth-of-type(2)`]);
+});
+
 test("an element addressed by its own anchor says no position, so a positional step does not match it", () => {
   assert.deepEqual(named(":scope > b:nth-of-type(1)"), []);
   assert.deepEqual(named(":scope > b"), ['[data-testid="price"]']);

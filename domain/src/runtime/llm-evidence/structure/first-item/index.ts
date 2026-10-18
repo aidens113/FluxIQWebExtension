@@ -4,4 +4,4 @@
 // `./compound.ts`); and that element itself, which a column's sample and
 // readable label are read from (`../field-sample.ts`).
 
-export { webLlmFirstItemElements, webLlmFirstItemHandles, type WebLlmFirstItemPages } from "./locate";
+export { webLlmFirstItemElements, webLlmFirstItemHandles, webLlmFirstItemLines, type WebLlmFirstItemPages } from "./locate";

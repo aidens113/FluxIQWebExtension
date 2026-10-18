@@ -41,6 +41,8 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       required: { type: "boolean", label: "Required" },
       // `encrypt` is reserved (D13) and refused at dispatch until it is built.
       handling: { type: "string", label: "Column", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS] },
+      // A `text` field only: each child line read on its own and joined (`./request.ts`).
+      lines: { type: "boolean", label: "Every line" },
       element: elementFingerprintSchema
     }
   } satisfies JsonObject;

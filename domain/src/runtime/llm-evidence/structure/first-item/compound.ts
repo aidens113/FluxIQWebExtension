@@ -4,10 +4,16 @@
 //
 // Only the forms the page's detection writes are read (`apps/extension/src/
 // content/extraction/item-selector.ts` and `infer-fields.ts`): a tag, classes,
-// an attribute's presence, its exact value or its prefix, `:not([class])` and
-// `:nth-of-type(n)`. Anything else -- an id, another pseudo-class, a combinator
-// -- is not a compound this reads, and the answer is `undefined` rather than a
-// guess, so a column whose element cannot be told is left without a handle.
+// an attribute's presence, its exact value or its prefix, an attribute's
+// absence (`:not([class])`, `:not([aria-label])`) and `:nth-of-type(n)`.
+// Anything else -- an id, another pseudo-class, a combinator -- is not a
+// compound this reads, and the answer is `undefined` rather than a guess, so a
+// column whose element cannot be told is left without a handle.
+//
+// A prefix the page wrote against a link as written (`[href^="/posts/"]`, from
+// `apps/extension/src/content/extraction/template-kind/`) is also held to a
+// URL attribute the capture published resolved (`../../attributes.ts`) by
+// that URL's path, so the same element is named here as on the page.
 
 /** What a compound is tested against: one element of a capture. */
 export type WebLlmCompoundSubject = {
@@ -25,7 +31,7 @@ const TAG = /^(?:\*|[A-Za-z][A-Za-z0-9-]*)/u;
 const CLASS = /^\.([A-Za-z_-][\w-]*)/u;
 const PRESENT = /^\[([A-Za-z_:][\w:.-]*)\]/u;
 const VALUE = /^\[([A-Za-z_:][\w:.-]*)(\^?)="((?:[^"\\]|\\.)*)"\]/u;
-const UNCLASSED = /^:not\(\[class\]\)/u;
+const ABSENT = /^:not\(\[([A-Za-z_:][\w:.-]*)\]\)/u;
 const NTH_OF_TYPE = /^:nth-of-type\(([1-9][0-9]*)\)/u;
 
 /** A test of one element for the compound, or `undefined` when the compound is empty or uses a form this does not read. */
@@ -63,7 +69,7 @@ function nextTest(rest: string): { test: Test; length: number } | undefined {
     return {
       test: (subject) => {
         const actual = attributeOf(subject, name);
-        return actual !== undefined && (prefix ? actual.startsWith(wanted) : actual === wanted);
+        return actual !== undefined && (prefix ? startsWith(actual, wanted) : actual === wanted);
       },
       length: value[0].length
     };
@@ -73,8 +79,11 @@ function nextTest(rest: string): { test: Test; length: number } | undefined {
     const name = (present[1] as string).toLowerCase();
     return { test: (subject) => attributeOf(subject, name) !== undefined, length: present[0].length };
   }
-  const unclassed = UNCLASSED.exec(rest);
-  if (unclassed) return { test: (subject) => attributeOf(subject, "class") === undefined, length: unclassed[0].length };
+  const absent = ABSENT.exec(rest);
+  if (absent) {
+    const name = (absent[1] as string).toLowerCase();
+    return { test: (subject) => attributeOf(subject, name) === undefined, length: absent[0].length };
+  }
   const nth = NTH_OF_TYPE.exec(rest);
   if (nth) {
     const index = Number(nth[1]);
@@ -86,6 +95,18 @@ function nextTest(rest: string): { test: Test; length: number } | undefined {
 /** The attribute's value, read as the element's own only: a page's attribute named `constructor` is not the object's. */
 function attributeOf(subject: WebLlmCompoundSubject, name: string): string | undefined {
   return Object.hasOwn(subject.attributes, name) ? subject.attributes[name] : undefined;
+}
+
+/**
+ * Whether the value starts with the prefix, or -- for a root-relative prefix
+ * (`/posts/`) and a value published as an absolute http(s) URL -- that URL's
+ * path, query and fragment do.
+ */
+function startsWith(actual: string, wanted: string): boolean {
+  if (actual.startsWith(wanted)) return true;
+  if (!wanted.startsWith("/") || wanted.startsWith("//") || !/^https?:\/\//iu.test(actual)) return false;
+  const url = URL.canParse(actual) ? new URL(actual) : undefined;
+  return url !== undefined && `${url.pathname}${url.search}${url.hash}`.startsWith(wanted);
 }
 
 function classesOf(subject: WebLlmCompoundSubject): string[] {
