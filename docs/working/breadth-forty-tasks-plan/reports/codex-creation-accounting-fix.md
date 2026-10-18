@@ -234,3 +234,299 @@ Observed behavior: a clean paid check persists and roundtrips through the regist
 Temporary part windows retain global limits and count new pending/patch holds. Restored .06 under global .10 can use a separate .04 NEW repair grant, without charging history twice. Outer repair charging uses only validated cumulative receipt deltas; unknown parts refuse subsequent paid parts. Re-author generation keeps its existing separate build accounting. Its private per-attempt creation-purse callback now preserves known conservative charges across timeout, so the retry remains possible inside the exact remainder while reported usage stays absent. Actual mock harness paths prove priced-timeout retry, provider-reported free0 retry, unknown unpriced0 refusal and a proven unsent zero release. The owning root counts a nested allowance once; carried/external/parent aggregates are excluded.
 
 Limits: this is a checked source unit awaiting independent supervisor acceptance. Runtime llmGate does not claim to itemize re-author build calls; those remain separate existing build receipts/outer charges. Omitted historical identities cannot be reconstructed, so paid continuation of an omitted receipt remains deliberately fail-closed. No library build, browser/UI session, installed-extension rerun, paid provider run, commit, merge or push was performed. Shared Core, installed Chrome/profile/host/lease and other live lanes are unchanged. The original installed judged run's unknown accounting has not been retroactively repaired or claimed verified.
+
+## Isolated artifact preparation and installed-proof proposal (2026-10-18)
+
+Supervisor independently observed188/188 owning cases, then63/63 post-current-dev/person integration cases and package tsc0. Supervisor committed Core source/baseline cb704f47 (architecture79e55db9) and downstream report ce53486f. Baseline regeneration lowered2/removed2; no new waivers. Those heads stayed frozen throughout this preparation; later main documentation-only commits were deliberately not merged.
+
+Authorized isolated Core preparation ACTUALLY exited0:
+
+```powershell
+# C:/Users/osrs_/FluxStuff/fxwork/t563/!FluxIQ
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build
+```
+
+Log: Core `node_modules/codex-creation-accounting-libraries.log`. Contracts reused1460ms; fluxiq rebuilt90905ms; gateway reused366ms. Core HEAD remained cb704f47ac3242871e3f2bdd2fc4146b9aca4609 and tracked source clean. No Web/shared-Core/whole-workspace build or browser/provider operation occurred.
+
+### Approved collector hardening, frozen for supervisor review
+
+Only scratch `codex-installed-proof-scripts/collect.mjs` changed (the historical scratchpad root remains the one identified in the prior installed-proof reports). SHA256 c68698c558e6210aef085098cef4f2c432ab3b5457d42d382afcaa0c2fec80ea. Other launcher/normal UI/native helpers are untouched.
+
+Existing public `fluxiq/automation-studio` re-exports `AutomationStudioLlmRunBudgetLedger`. Its import-only conditional export cannot be resolved with CommonJS createRequire.resolve; that probe truthfully returned ERR_PACKAGE_PATH_NOT_EXPORTED. The approved loader instead reads the selected linked package's public manifest, follows ONLY exports['./automation-studio'].import, and checks realpaths before importing. It requires the exact isolated t563 downstream, its nonredirected own Core sibling, a linked package matching that Core's packages/fluxiq, and a public export target contained inside that package. No private-path fallback or new shipped API. Actual newly compiled public entry import succeeded and exposed the canonical class.
+
+Paid creation acceptance additionally requires positive calls AND positive charged cost, complete itemization, omissions0, pending0, public count/cost consistency and canonical Ledger.restore acceptance. If full detail additionally publishes itemized calls, that public copy must restore too and equal the canonical metadata records. Only structural booleans/counts/costs are returned; parser failures and records stay private. Ordinary zero-call replay and unknown-accounting refusal remain unchanged. Receipt validation does not claim that separate re-author build calls belong to the run ledger.
+
+Commands, with cache off, from t563 downstream:
+
+```powershell
+node <approved-scratch>/codex-installed-proof-scripts/collect.mjs --self-test --repo C:/Users/osrs_/FluxStuff/fxwork/t563/!FluxIQWebExtension
+node --check <approved-scratch>/codex-installed-proof-scripts/collect.mjs
+```
+
+Observed native0 self-test: telemetry19, owning-oracle13, canonical14. Canonical controls include one real Ledger.reserve/complete-generated positive receipt; wrong artifact root; missing accounting; pending; omissions; public count/cost mismatch; missing request identity; inconsistent charge; different public request; extra private field; missing records; creation-zero refusal; unchanged zero replay acceptance. Private sentinel never appears in projected output. No real run was recollected or accepted with this change.
+
+### Proposed narrow preparation commands (NOT executed; awaiting supervisor release)
+
+Use process cache off for every command, remain on frozen t563 heads, inspect actual native exit before dependent steps. In t563 downstream:
+
+```powershell
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+node scripts/check/core-build.mjs
+pnpm.cmd --filter @fluxiq-web-extension/domain check
+pnpm.cmd --filter @fluxiq-web-extension/extension check
+node scripts/build-cache/cli.mjs domain:build
+node scripts/build-cache/cli.mjs domain:host-build
+node scripts/build-cache/cli.mjs extension:build
+node scripts/build-cache/cli.mjs test-contracts:build
+node scripts/build-cache/cli.mjs test-evidence:build
+node scripts/build-cache/cli.mjs scenario-lab:build
+node scripts/build-cache/cli.mjs test-runner:build
+```
+
+Each downstream cache CLI invocation accepts ONE registered step; its freshness check reuses current artifacts. The final four supporting steps provide the exact frozen task/oracle/fixture and collector's owning comparison modules, without a live Lab launch. Domain host externalizes Core, so the selected library artifacts must stay frozen/current for the entire host lifetime.
+
+Production Web remains a concrete prerequisite, with SEPARATE supervisor release required. In OWN t563 Core only:
+
+```powershell
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+node scripts/build-cache/cli.mjs web:build
+```
+
+The existing serve helper requires that selected Core's apps/web/.next/BUILD_ID and starts production Next from it. The old shared e58 Web must not be substituted for the fixed t563 runtime. No whole build is proposed.
+
+After accepted narrow prep, package using existing owning script:
+
+```powershell
+node apps/extension/scripts/release/package-extension.mjs --out <NEW-dedicated-scratch-package-dir>
+Expand-Archive -LiteralPath <NEW-package-dir>/fluxiq-web-extension-chrome-0.1.0.zip -DestinationPath <NEW-unpacked-dir>
+```
+
+Before packaging, resolve both NEW paths under the approved scratchpad and verify neither exists: the package owner recursively clears its output directory. Do not use --release or historical output paths. Record package verification, frozen pair, archive SHA256 and unpacked identity. The verified Chrome target supports Edge too; both installed browsers still require their own normal Load-unpacked action/profile.
+
+### Fresh genuine installed Chrome and Edge procedure
+
+Supervisor must designate available live capacity and explicitly release host/UI/provider operations. No launch has occurred. Proposed independent immediate-child proof roots: codex-installed-chrome-accounting-20261018b and codex-installed-edge-accounting-20261018b. Candidate Chrome ports3710/4710/3720/9360 and Edge3711/4711/3721/9361 must first be checked unbound; collision means choose a fresh set, never stop another process. New private config selects OWN t563 repo/Core, company-website, ceiling0.25 and the corresponding installed browser. No old config/private state copying.
+
+1. Start existing reviewed serve.mjs once per new root using hidden process/private structural logs. It acquires the existing Core build lease for owned-host lifetime. Do not start until all selected artifacts are prepared; never rebuild while either new host holds its lease. Keep old Chrome155/profile/launcher6404/shared e58 lease untouched. Record actual installed browser version and ownership receipt.
+2. Use normal installed-browser Extensions UI, Developer mode and one Load unpacked click; native exact-owned dialog handling selects only NEW verified unpacked package. Diagnose ambiguity rather than repeating Load. Open actual toolbar extension through the reviewed unique owned native controls. No extension-load launch flags or API-created Flow.
+3. Through normal fresh-owner login/Finish setup, provider profile, project and pairing UI, configure isolated state. Use source-backed fresh bootstrap procedure only; credentials/new generated replacement and authorized provider credential stay in private files, never argv/output. No external messages or personal accounts.
+4. Enter the EXACT current catalog company-website-apprentices instruction in actual extension chat, without expected rows or scenario-shaped product guidance. Preserve creation/trial records separately. This task has four ordered rows and three named fields (12 field values); owning schema/order/value/integrity/final-state oracle must all pass.
+5. The panel's ordinary repair-check policy does not by itself establish judged creation. Normal Open in FluxIQ, then owner Advanced -> Explore and adapt with the actually saved provider profile and original instruction bound, runs ONE judged whole. Require succeeded + confirmed + exact positive oracle + finalized positive fully itemized canonical run receipt; report actual count/cost, pending0/omitted0 and public agreement. Record Flow/subgraph hashes before/after; disclose any repair. Separate re-author receipts are not silently folded into run call claims.
+6. Restore starting page through ordinary site controls as needed. Run a SEPARATE normal panel Advanced No LLM whole replay. Require exact positive oracle/final state plus finalized calls0, cost0, pending0, itemized0, omissions0 and no non-result-check harness interventions. An unverified replay can establish goal/provider-free proof, never product-judge pass. Record its distinct run ID and Flow hashes.
+7. Repeat actual create/judged/replay in the other installed browser if claiming acceptance for BOTH Chrome and Edge. Reusing a Chrome-authored Flow in Edge would prove only Edge replay. On failure preserve profile/evidence, diagnose before a changed-source paid rerun, and never force a verdict. Leave owned hosts running until supervisor cleanup release.
+
+Known boundaries: current library preparation is accepted, while new Web/downstream packaging and both fresh installed proofs remain unexecuted. The old b393bc01 judged creation remains accounting-unknown/proof-false; the old d1fef089 zero replay remains its separate positive provider-free goal proof. No retroactive acceptance or guessed calls/spend. Existing helpers need no further change beyond the frozen collector delta unless fresh normal UI exposes a concrete bounded missing capability.
+
+### Released preparation completed; fresh package ready (2026-10-18)
+
+Supervisor released the proposed narrow isolated preparation and own Core Web artifact. Every actual native exit below was0. Source and helpers stayed frozen throughout; Core cb704f47 clean, downstream ce53486f with only this report dirty.
+
+| Released gate/build | Result |
+| --- | --- |
+| Core build currentness |0|
+| Domain source/test check |0; registered check51764ms|
+| Extension source/test check |0; registered check63592ms|
+| domain:build |0;23804ms|
+| domain:host-build |0|
+| extension:build |0;37510ms; Chrome/Firefox/e2e target verification passed|
+| test-contracts:build |0|
+| test-evidence:build |0|
+| scenario-lab:build |0;15601ms|
+| test-runner:build |0;30134ms|
+| OWN Core web:build |0;239522ms; production compile/type/static generation/traces completed|
+| Fresh owning package script |0|
+| Fresh ZIP unpack and owning target verification |0;14files/errors0/warnings0; exact ZIP/unpacked bytes equal|
+| Collector against rebuilt owner modules |0;19telemetry+13oracle+14canonical=46checks|
+
+Logs: downstream node_modules/codex-installed-accounting-{core-current,domain-check,extension-check,domain-build,domain-host-build,extension-build,test-contracts-build,test-evidence-build,scenario-lab-build,test-runner-build,package}.log; Core node_modules/codex-installed-accounting-web-build.log. No raw runtime logs/data or secrets were read.
+
+New artifact directories are immediate children of the approved historical scratchpad and were verified nonexistent before creation. Packaging used the owning script and unpacking used Expand-Archive, without an overwrite or cleanup of any historical path:
+
+- codex-installed-accounting-packages-20261018b
+- codex-installed-accounting-unpacked-20261018b
+
+Chrome/Edge ZIP: fluxiq-web-extension-chrome-0.1.0.zip; SHA256 **5e00078bc61f0d9f71cebe04c4b21d4580afdf5420b374015b3ecb6d756f58e7**. The owning package script also verified its Firefox ZIP, which is not an installed Firefox proof. ZIP readback equals all14 unpacked files; owning verifyExtensionTarget errors0/warnings0. Both installed browser binaries exist: Chrome155.0.8059.82 and Edge155.0.4283.62 (file version inspection only).
+
+Two NEW private configuration JSON files were created with exclusive CreateNew, without credentials or runtime state, in the existing approved codex-installed-proof-scripts scratch directory:
+
+- config-chrome-accounting-20261018b.json
+- config-edge-accounting-20261018b.json
+
+Each selects t563 downstream/OWN t563 Core, company-website and ceiling0.25. Chrome selects immediate-child proof root codex-installed-chrome-accounting-20261018b and ports web3710/gateway4710/fixture3720/CDP9360. Edge selects codex-installed-edge-accounting-20261018b and ports3711/4711/3721/9361. Both proof roots remain NONEXISTENT; all eight ports currently unbound. These are prepared config files, not launches. Config paths and proof roots must be rechecked immediately before launch.
+
+Exact proposed hidden start command, AFTER supervisor release, from the approved scratch helper directory (shown with an explicitly set absolute task variable; repeat for Edge only upon its release):
+
+```powershell
+$installedHelperRoot='C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/469d0f8b-69b3-419c-8ee1-425911c239a2/scratchpad/codex-installed-proof-scripts'
+Start-Process -FilePath (Get-Command node.exe).Source -ArgumentList @((Join-Path $installedHelperRoot 'serve.mjs'),'start','--config',(Join-Path $installedHelperRoot 'config-chrome-accounting-20261018b.json')) -WorkingDirectory $installedHelperRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $installedHelperRoot 'chrome-accounting-launcher-20261018b.log') -RedirectStandardError (Join-Path $installedHelperRoot 'chrome-accounting-launcher-20261018b.err') -PassThru
+```
+
+For Edge, substitute edge for chrome in the config and launcher output filenames. The launcher creates its own new profile/root, ownership receipt and existing owner API Core lease; it never loads an extension by launch flags. Normal native Load unpacked must select the NEW unpacked directory above. Host/fixture/browser ownership must be checked structurally from the new receipt after launch; no PID exists yet. No launch command has been executed and no provider call, UI action or old profile change occurred. Old launcher6404/profile/shared Core e58 are preserved. Awaiting supervisor collector/package review and explicit next host/UI/provider release; no further build is needed before that release on this frozen pair.
+
+### Fresh Chrome live bootstrap: diagnosed extension-storage path failure
+
+Supervisor released Chrome host/UI/providers (Edge remained held). Rechecked absent proof root and unbound ports; launched reviewed helper ONCE, actual launcher26924/web21112/fixture23388/browser8224. Targets: web66EB722B40EB690273DF4D0DC0CA2EB0; fixture1E990AC216A0D6B4D22DD623B7A93DF9; normal Extensions tab F83B9332530B51B767DBF5A1BF75ECE6; actual toolbar-opened panel C98AA49697464A30B09567508F4657A6. Original launch did not retain its Extensions tab, so a normal owned Extensions tab was opened; no extension injection/load flag.
+
+Normal Developer mode, ONE Load-unpacked click, strict native unique owned picker and approved directory selection succeeded. Chrome showed exactly one enabled0.1.0 card, no manifest errors. Toolbar exact public manifest name FluxIQ Web Automation Client uniquely matched and opened the panel. Fresh source-backed empty-user owner login and Finish setup succeeded; replacement credential stayed private. Normal UI saved the authorized DeepSeek key and created the isolated project. These setup operations called no LLM.
+
+Panel address settings were entered and Save pressed, but no successful save receipt is claimed: it subsequently showed closed extension_not_answering, no usable Connect/approval controls and no chat readiness. Did NOT reload or repeatedly press Connect. Runtime-error count2, manifest-error count0, serviceworker target1. Owning background stack17741:1 points to completion of the onInstalled asynchronous readSettings/writeSettings/readOrCreateClientId initializer. Existing GET_STATUS, separately authorized readonly with timeout, actually returned ok:false/error (not timeout and not runtime.lastError); no settings/status response was manufactured.
+
+Private error mapping found no owning source literal and isolated the closed lower-level category: IO error, redacted LOCK path, file-not-found; **ChromeMethodBFE15::LockFile::4**. Only enum/numeric receipts were printed. Privately selected installed-card ID gave actual extension-storage layout lengths: profile185; Local Extension Settings parent218 (EXISTS); selected extension DB directory251 (ABSENT); LOCK256; ordinary DB log262. The profile path chosen for this testing bootstrap exceeds legacy directory/file bounds; Chrome cannot initialize extension-local persistence, so this is an owned launcher/config path failure before connection/pairing, not provider/product-run acceptance or machine-load blame. Short-path comparative confirmation remains pending.
+
+Proposed unchanged helper with NEW compatible immediate-child root codex-installed-chrome-c3: profile167, selected DB233, LOCK238, ordinary log244. Existing helper regex requires codex-installed-(chrome|edge)-suffix; a shortened root lacking chrome would refuse. Proposed NEW config-chrome-c3.json selects same frozen t563 artifacts/scenario/ceiling/ports after exact failed-launcher stop. Preserve failed root/profile/logs and owner/project; no state migration or overwrite. Awaiting supervisor exact owned-stop/restart release. Old launcher6404/shared e58 remain untouched; no extension chat build, judged run or replay/paid provider call has been dispatched in this failed bootstrap.
+
+### Short-root comparative bootstrap passed; original Chrome proof resumed
+
+Supervisor released exact owned stop and one shorter fresh launch. Existing serve stop actually returned stopped/native0 for failed launcher26924; ownership receipt verified stopped and failedprofile preserved. All four ports were free before exclusive new config-chrome-c3.json and absent codex-installed-chrome-c3 root. ONE unchanged-helper launch:2636; owned web12332/fixture27932/browser15348. No build/helper/source changed; failed b-root and old6404/e58 preserved.
+
+Same fresh verified package installed normally with Developer mode, ONE Load click, unique owned native picker, and exact public-name toolbar entry. New targets: web930F9905E11B04722638EFFEAEA98E7A; fixtureCC72715370297778A57193C7198A18DB; Extensions117196F31D70C19F2F0E5C6966E1827F; panelC607E9B505F50A6D80BB983455F1AA4D. Readonly GET_STATUS now actually succeeds (disconnected/pairedfalse initially). Actual selected own extension DB CREATED: profile167, DBdirectory233, longest observed DBfile249; LOCK, LOG and numbered log all exist, every observed DBfile path below260. This comparative change confirms the original longer test-profile path caused bootstrap failure. Other unrelated Chrome-provided cards were ignored by exact own package name/version identity, not modified.
+
+Fresh owner normal login/Finish setup, saved DeepSeek key, project creation and panel address Save succeeded. GET_STATUS confirms own gateway/web equality, then one Connect. Approval reference matched privately between actual panel and unique web modal before normal Confirm pairing. Status connected/pairedtrue/project3a632950-4de1-4a85-b9af-d344a90a1c4b equals normal created project's Studio URL identity. No old profile/credentials/runtime state was copied.
+
+Fixture brought foreground; entered EXACT current catalog instruction from private input file and clicked actual conversationSendButton ONCE. It is now building under own project: build-9b7e2005-a935-4a1d-97b6-d1b4f0ce2def; draft Flow flow.3b82bc17-ad54-4d2c-8166-ba6fb80f2bdd. Existing readonly activityRead shows working, phase running, sequence114/history88; no terminal/promoted/judge/accounting/replay acceptance yet. No second instruction/rerun. Only closed phases/identities/counts were projected, no model/page text.
+
+Per supervisor request created NEW config-edge-e3.json exclusively in the approved helper directory, with absent compatible immediate-child root codex-installed-edge-e3, same approved Edge ports/scenario/ceiling/frozen pair. Computed Edge profile165/DB231/normal manifest247. Long old Edge config is superseded before any launch. Edge HOST/UI/PROVIDERS remain held and unstarted.
+
+## Fresh genuine installed Chrome acceptance: strict paid whole plus separate zero replay
+
+Both actual collector runs exited0; supervisor independent acceptance remains its own verification step. Browser Chrome155.0.8059.82, genuine normally installed verified0.1.0 package SHA5e00078bc61f0d9f71cebe04c4b21d4580afdf5420b374015b3ecb6d756f58e7, own frozen t563 Corecb704f47/downstreamce53486f; source/helpers/builds never changed under the host lease. Company-website task company-website-apprentices was created from ONE real extension-chat instruction. Original source-backed catalog instruction remains exactly bound in the saved owning instruction set/Flow metadata (private equality only).
+
+The real chat build9b7e2005-a935-4a1d-97b6-d1b4f0ce2def ended done/sequence141. Normal Automations showed root and generated graph separately; selected the UNIQUE root row matching its public owning Flow identity/name privately, never first-match. Normal Open in FluxIQ opened target99A31C6D1F6CE34695272A3F1DD32D0F. Normal Add tab -> Run and test -> select its tab -> Advanced -> Explore and adapt; exact original Flow URL, Ready1, actual Run enabled, owner mode selected/aria true, no readiness alerts. No API-created/modified Flow, no forced verdict, no supplied expected rows/model guidance.
+
+Before each whole run used the fixture's own Home navigation to return the read-only site to its starting page. No fixture-reset API, browser storage changes, repeated lasting operation or test-only workaround. UI run requests were the ordinary supported controls. The extension's compact strip has ordinary Run without an explicit intervention-mode picker; explicit Explore and adapt and No LLM intervention were selected in FluxIQ's normal signed-in WEB panel inside this installed Chrome, executing through its paired real extension gateway. This surface distinction is intentional and recorded, not claimed as a nonexistent extension-only picker.
+
+| Proof | Actual run ID | Observed terminal receipt |
+| --- | --- | --- |
+| Explicit owner judged whole |18311e53-cf79-4f65-bf81-69c5cdd29c68|succeeded/confirmed; proofPassedtrue; canonicalReceiptValidatedtrue; paidCreationAccountingReadytrue; calls1/itemized1/pending0/omitted0; charged estimated cost$0.002081724; public count/pending/cost agreementtrue; harness0|
+| Separate actual normal No LLM replay |eb6df4a5-b35e-4369-933b-028636b9dcaa|succeeded/unverified; goal_and_provider_free_replay proofPassedtrue; explicitcalls0/cost0/pending0/itemized0/omitted0/harness0; all public agreementtrue; providerFreetrue|
+
+EACH run has one result dataset, four actual ordered records and three named fields (12 field values), one dataset page, owning oracletrue, exact ordered rowstrue, integritytrue, finalStatePassedtrue and goalPassedtrue. No raw rows/schema values/pairing keys or messages were printed. Persisted verdict and finalized accounting were observed before acceptance, never inferred from status/compilation/UI. The positive paid gate uses the newly compiled public canonical Ledger.restore, including strict provenance/arithmetic validation, full itemization and optional public-call consistency.
+
+The $0.002081724 is the judged WHOLE RUN's own canonical charged estimated total. Earlier authoring/generation calls retain their separate existing build ledgers; this number is not mislabeled as cumulative chat/build spend or a provider invoice. No aggregate build cost is guessed. Omitted/pending/unknown histories remain fail-closed; the old b393bc01 creation stays accounting-unknown and is not retroactively repaired.
+
+Private STRUCTURAL receipts (no raw API payload/data) in scratch/codex-installed-chrome-c3:
+
+- creation-receipt.json: accepted public collector read of18311e53; initial acceptance was observed before replay; later readonly recollection persisted the same accepted receipt with no provider dispatch.
+- replay-receipt.json: actual separate replay acceptance, native0.
+- before-judged-artifact-hashes.json / after-judged-artifact-hashes.json / after-replay-artifact-hashes.json: full canonical artifact and definition hashes; EXACTLY unchanged at all three boundaries, original instruction still bound. Definition hashes omit only createdAt/updatedAt; full hashes include them. No repair or saved artifact change occurred.
+
+Full canonical artifacts, identical before/after judged whole/after zero replay:
+
+| Artifact | SHA256 | Definition SHA256 |
+| --- | --- | --- |
+| Root flow.3b82bc17-ad54-4d2c-8166-ba6fb80f2bdd |0b56cd07c831670890044fac4f28441e3383cd17bf5ddfd3ba361caf66452be8|e25ef66061e6bb50da51c88fd7f83c2b6891e50b416a50358b114f83bcf7e085|
+| Generated graph ending .bootstrap.b06e1cab3844508d.list_apprentices.graph (9nodes/11edges) |054a5be74d33a0fe77ce5db4c096139452f9488047a630af5d74536e6b84debc|0e4340fc924f7f7d108dfb9065503a66d872458e3cd0274fffe7b15df99c29ba|
+
+Exact collector scope for supervisor independent verification: `--repo C:/Users/osrs_/FluxStuff/fxwork/t563/!FluxIQWebExtension --port 9360 --web-origin http://127.0.0.1:3710 --fixture-origin http://127.0.0.1:3720 --web-target 99A31C6D1F6CE34695272A3F1DD32D0F --fixture-target CC72715370297778A57193C7198A18DB --project 3a632950-4de1-4a85-b9af-d344a90a1c4b --flow flow.3b82bc17-ad54-4d2c-8166-ba6fb80f2bdd --task company-website-apprentices`. Use `--run 18311e53-cf79-4f65-bf81-69c5cdd29c68 --mode creation`, or `--run eb6df4a5-b35e-4369-933b-028636b9dcaa --mode replay`; `--wait-ms 0` is sufficient now. Existing reviewed collect.mjs is unchanged at c68698c558e6210aef085098cef4f2c432ab3b5457d42d382afcaa0c2fec80ea.
+
+Current retained ownership: NEW Chrome launcher2636/Web12332/fixture27932/browser15348; root codex-installed-chrome-c3 and its existing lifetime Core lease remain running until supervisor exact cleanup release. No Edge host/UI/provider has started; short config-edge-e3.json is ready, root absent. A second helper on the SAME Core must not rebuild or disturb the held Core locks. Failed long-profile evidence, old Chrome6404/profile/shared e58 and all files are preserved. No worker commits, merges, pushes or shared-document/source edits.
+
+
+### Independent final hash command and prepared Edge scope
+
+Supervisor independently accepted BOTH live collector receipts (native0, strict paid creation and separate zero replay). Final post-replay hashes above also passed. This exact readonly command recomputes live public Flow artifacts and compares both captured boundaries; it prints structural identities/hashes/equalities only, never raw Flow content or instruction text. Run from t563 downstream; no source/helper file is written:
+
+```powershell
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+$verify = @'
+
+import fs from'node:fs/promises';import path from'node:path';import{createHash}from'node:crypto';
+import{connectSurface}from'file:///C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/469d0f8b-69b3-419c-8ee1-425911c239a2/scratchpad/codex-installed-proof-scripts/controls.mjs';
+const scope={projectId:'3a632950-4de1-4a85-b9af-d344a90a1c4b',flowId:'flow.3b82bc17-ad54-4d2c-8166-ba6fb80f2bdd'};
+const w=await connectSurface({port:9360,surface:'web',origin:'http://127.0.0.1:3710',target:'930F9905E11B04722638EFFEAEA98E7A'});
+let flows,instructions;
+try {
+ const result=await w.evaluate(async scope=>{
+  if(location.origin!=='http://127.0.0.1:3710')throw Error('scope');
+  const read=async(endpoint,payload)=>{if(!['list-flows','get-flow-instruction-set'].includes(endpoint))throw Error('read_only');const r=await fetch('/api/programs/automation-studio/'+endpoint+'?domainId=web-automation',{method:'POST',credentials:'same-origin',redirect:'error',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000)});const e=await r.json();if(!r.ok||e?.ok!==true)throw Error('read_refused');return e.payload};
+  const a=await read('list-flows',{projectId:scope.projectId});if(!Array.isArray(a.flows))throw Error('flow_list');const b=await read('get-flow-instruction-set',scope);return{flows:a.flows.map(entry=>entry.flow),instructions:b.instructions};
+ },scope);flows=result.flows;instructions=result.instructions;
+}finally{w.close();}
+if(!Array.isArray(flows)||!flows.length||flows.some(f=>f.projectId!==scope.projectId||!Array.isArray(f.nodes)||!Array.isArray(f.edges)))throw Error('flow_scope');
+const canonical=v=>Array.isArray(v)?v.map(canonical):v!==null&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+const hash=v=>createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
+const hashes=flows.map(f=>({flowId:f.flowId,sha256:hash(f),definitionSha256:hash(Object.fromEntries(Object.entries(f).filter(([k])=>!['createdAt','updatedAt'].includes(k)))),nodes:f.nodes.length,edges:f.edges.length})).sort((a,b)=>a.flowId.localeCompare(b.flowId));
+const root='C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/469d0f8b-69b3-419c-8ee1-425911c239a2/scratchpad/codex-installed-chrome-c3';
+const original=await fs.readFile(path.join(root,'inputs/task-instruction.txt'),'utf8');const exact=v=>typeof v==='string'?v.trim()===original.trim():Array.isArray(v)?v.some(exact):v!==null&&typeof v==='object'?Object.values(v).some(exact):false;
+const originalInstructionBound=exact(instructions)||exact(flows.find(f=>f.flowId===scope.flowId));
+
+const before=JSON.parse(await fs.readFile(path.join(root,'before-judged-artifact-hashes.json'),'utf8'));
+const after=JSON.parse(await fs.readFile(path.join(root,'after-replay-artifact-hashes.json'),'utf8'));
+const beforeEqualsLive=JSON.stringify(before.hashes)===JSON.stringify(hashes);
+const replayEqualsLive=JSON.stringify(after.hashes)===JSON.stringify(hashes);
+console.log(JSON.stringify({originalInstructionBound,beforeEqualsLive,replayEqualsLive,hashes}));
+if(!originalInstructionBound||!beforeEqualsLive||!replayEqualsLive)process.exitCode=1;
+
+'@
+$verify | node --input-type=module
+```
+
+Prepared Edge config is the NEW existing scratch helper file config-edge-e3.json. Exact own repo C:/Users/osrs_/FluxStuff/fxwork/t563/!FluxIQWebExtension, Core C:/Users/osrs_/FluxStuff/fxwork/t563/!FluxIQ, browser edge, scenario company-website, ceiling0.25, ports web3711/gateway4711/fixture3721/CDP9361, absent immediate-child scratch root codex-installed-edge-e3. It selects the same existing verified unpacked package through later normal native Load UI, not a config/load-extension flag. Profile165/DB231/manifest247. Chrome host2636 still holds the Core's exclusive owner step locks; Edge's unchanged launcher must wait until supervisor has verified Chrome hashes and released its exact owned stop, then verify ports/root again. No Edge host/UI/providers have started. Only report and fresh private config/receipt artifacts changed; tracked Core source clean, frozen heads unchanged.
+
+### Released Edge e3 ownership and native-navigation diagnosis
+
+After root independently verified the Chrome hashes, the exact own Chrome launcher2636 was stopped through the unchanged serve owner protocol, native0. Its profile/evidence were preserved; old launcher6404/sharedCoree58 remained running and untouched. Fresh e3 root and four ports were rechecked before one hidden unchanged-helper launch. Edge launcher35316 owns web36408, fixture42084 and browser26004. Parent independently confirmed actual Edge155.0.4283.62 and ownership. Ports3711/4711/3721/9361; web target B917C94AFA9B5A9A476920E26D460855, fixture C111E28C9FBC64D827E179BE10EEDB1F, normal Extensions target A73C7F791CB92F19E3B2B2D9C4386826. Source, package and helpers remain frozen; the host holds the existing Core build lease.
+
+Normal Extensions navigation currently needs diagnosis before installation. This Edge uses nested Fluent shadow controls. Both exact Developer mode labels and their DEVELOPER-MODE-SWITCH owners are geometrically hidden. Exact scoped native Developer mode probes returned zero. A different unique geometrically visible Fluent switch was not toggled: root-authorized partial AX read (fetchRelatives false) returned role switch, ignored false, checked false, exact Developer mode label equality false and exact Allow other stores equality false, native0. The four visible Fluent buttons and one visible link did not exactly match the bounded normal-navigation captions checked; viewport921x928 has no horizontal overflow. No hidden switch mutation, duplicate Load click, installation or Edge provider call occurred. Proposed next seam is private read-only classification of only these normal browser-owned navigation controls, with closed categories and no raw captions output.
+
+Navigation diagnosis resolved through the unique visible HAMBURGER-BUTTON-owned Extensions menu, normal selector click after label-mode safely refused its unsupported Fluent tag. That menu exposed one visible dev-switch with exact Developer mode label; normal toggle checked true. Closing the unique native Extensions menu exposed a unique visible enabled native Load unpacked button. One Load click produced exactly one real owned folder dialog/input1152/confirm1; normal folder action selected the frozen approved package, native0. No hidden toggle or install flag was used.
+
+The actual installed panel target is 899E0BC645222C6F54FFEAB89C31222E. Edge's native Open-package caption differs from Chrome; private exact public-caption discovery found one owned visible enabled semantic Open control, then the unchanged native helper clicked it. GET_STATUS received/ok true, version0.1.0. Actual profile/Default extension DB exists length231/maxfile247, LOCK/LOG/numberedlog all present. An initial metadata check used the wrong browser-profile directory name and returned absent; corrected to the unchanged launcher's source-owned profile directory before this verified receipt.
+
+Fresh normal sign-in/Finish setup, saved DeepSeek profile, project creation and reference-matched normal pairing completed. Project3c4f425c-f703-43ed-bf5e-d5b26386acd4; pairing web target4CCEA4E4B1D877D50724688AC20AB2FC. GET_STATUS connected/paired/projectMatches true, gateway/web match own ports, input empty before entry. One exact catalog instruction was typed and sent through the real panel after bringing the own fixture forward. Build79416657-6905-41d7-b36e-21be03168be1, Flow flow.c1ce6c21-7d4e-4710-8bd5-5013fe586725; first owning activity receipt thinking/working true. This is progress, not a terminal success or accounting acceptance.
+
+### Root independent acceptance and released Edge cleanup
+
+Root independently reran both actual Edge collectors: native0, all strict proof gates true, confirmed paid whole and separate unverified all-zero goal replay. Root also ran the exact public live hash command below: native0, original instruction binding and all three before/judged/replay-to-live comparisons true. Chrome had already been independently accepted; the original t721 paid-unknown proof remains held.
+
+Under the written cleanup brief, first verified ownership launcher35316/not stopped, then invoked unchanged serve.mjs stop for only codex-installed-edge-e3. Actual native0 returned stopped. Subsequent native0 verification: ownership stopped true/expected launcher true, own launcher35316/web36408/fixture42084/browser26004 alive count0, remaining direct owned descendants count0. The selected own Core resolver's contracts:build, fluxiq:build and client-gateway-websocket:build stamp locks are all absent. Profile and all five structural receipt/hash files preserved. Old launcher6404 remains running; old sharedCoree58 and historical profiles/evidence untouched. No source, HEAD or build movement occurred. Own report frozen pending root's refresh/integration-gate handoff.
+
+### Edge final judged and zero-replay receipts
+
+The single extension-chat build completed done, sequence86/history71. Normal Automations root selection and Open in FluxIQ opened owned web target7193293397DA8B9465186E59AB0AA7CD. Through the actual browser's web UI, Run and test was added and activated, Advanced opened, Explore and adapt selected. Before launch mode-selected true/ready1/readiness-alerts0/Run-enabled true were verified. The compact installed side panel has no explicit intervention selector; the owner web Run and test UI provides it, and actual browser execution uses the installed extension gateway. No API-created Flow or API-started run was used.
+
+After the fixture's ordinary Home control, one judged whole run **3235be49-9e2b-4258-bd72-c999a92ff1c2** succeeded with persisted verdict **confirmed**. Frozen collector native0: proofPassed true, exact ordered4rows/12values, owning oracle/integrity/final state true, paid canonical receipt validated true, public count/cost consistency true. ProviderCalls1/itemized1/pending0/omitted0/harness0; estimatedCostUsd **0.002078274**. This is the run-owned ledger cost; authoring build spend and provider invoice totals are separate and were not guessed.
+
+A separate normal explicit **No LLM intervention** selection was verified selected/Run enabled, followed by own fixture Home and one normal Run click. Replay **8d20ce19-6cba-439c-b1c5-827677b8522a** succeeded with verdict **unverified**. Frozen collector native0: goal/provider-free proofPassed true, exact same ordered4rows/12values and final state true; finalized calls0/cost0/itemized0/pending0/omitted0/harness0, all consistency checks true. This is not labeled a judged replay.
+
+Full and definition hashes before judged, after judged, and after replay are unchanged for both Flow artifacts; original catalog instruction binding remains exact. Root Flow SHA ee53217a9135904872cb546cec64a266710121a1ba93da590a557e5cb9be5d82 / definition3007fc9d51a2db5f818a44c96a17012fe6eef1efd09999647201c52bb4d93731. Generated graph9nodes11edges SHA be067889bccf4d2e15252034a02738aca4bdb7fd060f2a044f0d7dae166b9b43 / definitionb1f8d43875d1d08b855f6aa544c83f57d372da3366612334225b9915b47b2773. No runtime graph repair was observed across these hashes.
+
+Private structural receipt files in the own codex-installed-edge-e3 root: creation-receipt.json, replay-receipt.json, before-judged-artifact-hashes.json, after-judged-artifact-hashes.json, after-replay-artifact-hashes.json. No raw rows, page content, keys or pairing values are included in this report. Edge host35316 remains running/leased pending root cleanup release; source/HEAD/package/helper freeze remains. Old t721 paid-unknown proof is still held and unchanged.
+
+Independent final Edge live hash command (read-only public owning APIs and private instruction comparison; prints only identities/hashes/booleans):
+
+```powershell
+$env:FLUXIQ_BUILD_CACHE_DIR='off'
+$verify=@'
+
+import fs from'node:fs/promises';import path from'node:path';import{createHash}from'node:crypto';
+import{connectSurface}from'file:///C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/469d0f8b-69b3-419c-8ee1-425911c239a2/scratchpad/codex-installed-proof-scripts/controls.mjs';
+const scope={projectId:'3c4f425c-f703-43ed-bf5e-d5b26386acd4',flowId:'flow.c1ce6c21-7d4e-4710-8bd5-5013fe586725'};
+const w=await connectSurface({port:9361,surface:'web',origin:'http://127.0.0.1:3711',target:'7193293397DA8B9465186E59AB0AA7CD'});
+let flows,instructions;
+try {
+ const result=await w.evaluate(async scope=>{
+  if(location.origin!=='http://127.0.0.1:3711')throw Error('scope');
+  const read=async(endpoint,payload)=>{if(!['list-flows','get-flow-instruction-set'].includes(endpoint))throw Error('read_only');const r=await fetch('/api/programs/automation-studio/'+endpoint+'?domainId=web-automation',{method:'POST',credentials:'same-origin',redirect:'error',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000)});const e=await r.json();if(!r.ok||e?.ok!==true)throw Error('read_refused');return e.payload};
+  const a=await read('list-flows',{projectId:scope.projectId});if(!Array.isArray(a.flows))throw Error('flow_list');const b=await read('get-flow-instruction-set',scope);return{flows:a.flows.map(entry=>entry.flow),instructions:b.instructions};
+ },scope);flows=result.flows;instructions=result.instructions;
+}finally{w.close();}
+if(!Array.isArray(flows)||!flows.length||flows.some(f=>f.projectId!==scope.projectId||!Array.isArray(f.nodes)||!Array.isArray(f.edges)))throw Error('flow_scope');
+const canonical=v=>Array.isArray(v)?v.map(canonical):v!==null&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+const hash=v=>createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
+const hashes=flows.map(f=>({flowId:f.flowId,sha256:hash(f),definitionSha256:hash(Object.fromEntries(Object.entries(f).filter(([k])=>!['createdAt','updatedAt'].includes(k)))),nodes:f.nodes.length,edges:f.edges.length})).sort((a,b)=>a.flowId.localeCompare(b.flowId));
+const root='C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/469d0f8b-69b3-419c-8ee1-425911c239a2/scratchpad/codex-installed-edge-e3';
+const original=await fs.readFile(path.join(root,'inputs/task-instruction.txt'),'utf8');const exact=v=>typeof v==='string'?v.trim()===original.trim():Array.isArray(v)?v.some(exact):v!==null&&typeof v==='object'?Object.values(v).some(exact):false;
+const originalInstructionBound=exact(instructions)||exact(flows.find(f=>f.flowId===scope.flowId));
+
+const before=JSON.parse(await fs.readFile(path.join(root,'before-judged-artifact-hashes.json'),'utf8'));
+const judged=JSON.parse(await fs.readFile(path.join(root,'after-judged-artifact-hashes.json'),'utf8'));
+const replay=JSON.parse(await fs.readFile(path.join(root,'after-replay-artifact-hashes.json'),'utf8'));
+const same=a=>JSON.stringify(a.hashes)===JSON.stringify(hashes);
+console.log(JSON.stringify({originalInstructionBound,beforeEqualsLive:same(before),judgedEqualsLive:same(judged),replayEqualsLive:same(replay),hashes}));
+if(!originalInstructionBound||!same(before)||!same(judged)||!same(replay))process.exitCode=1;
+
+'@
+$verify | node --input-type=module
+```
