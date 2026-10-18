@@ -21,6 +21,13 @@
 //     follows is printed as a link, without the title a second time, and a
 //     profile picture's "lena.moss's profile picture" stays beside the
 //     "lena.moss" link, since it says more.
+//     An inline `<svg>` named by its own `<title>` names it the same way.
+//  5a. A control left with no words that holds none anywhere is an icon: its
+//     line says `icon` and the class tokens and symbols the page gave it and
+//     what it holds (`../element/icon-hints.ts`). A pressable `<span>` holding
+//     an unlabelled `<svg>` inside a card otherwise read as a bare handle,
+//     or, before its cursor was read as its own, not at all (lane 4,
+//     `run-mvcwf9u2-28bb44fd`).
 //  6. A visible named ARIA group with no line of its own gets a text line of
 //     its name, as a legend does, unless a line already says it
 //     (`../group-names.ts`, t610). F1 does not fold it: no ancestor's words
@@ -41,7 +48,7 @@
 // they do not apply, and the view prints a duplicate rather than dropping words.
 
 import type { WebLlmEvidenceElement } from "../../elements";
-import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmViewTraits } from "../element";
+import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmIconHints, webLlmViewTraits } from "../element";
 import { mergedWebLlmFragments } from "../fragment-merge";
 import { webLlmGroupNames, type WebLlmGroupNames } from "../group-names";
 import type { WebLlmPageTree } from "../page-tree";
@@ -71,23 +78,30 @@ function firstPass(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageT
     const words = own ?? held;
     if (groupName === undefined && (role === "text" || role === "image") && foldedIntoAncestor(element, tree, lined)) continue;
     if (role === "text" && sameWords(lines.at(-1)?.words, words)) continue;
-    const line: WebLlmViewLine = held === undefined ? { element, role, words } : { element, role, words, imageWords: true };
+    const icon = words === undefined && role === "control" ? webLlmIconHints(element, visibleInsides(elements, index, tree)) : undefined;
+    const line: WebLlmViewLine = held !== undefined ? { element, role, words, imageWords: true } : icon !== undefined ? { element, role, words, icon } : { element, role, words };
     lines.push(line);
     lined.set(element, line);
   }
   return lines;
 }
 
-/** Rule 5: the alts of the visible images under a wordless control, in order, which follow it in document order. */
+/** Rule 5: the alts of the visible images (and the titles of the inline `<svg>`s) under a wordless control, in order. */
 function heldImageWords(elements: readonly WebLlmEvidenceElement[], index: number, tree: WebLlmPageTree): string | undefined {
-  const control = elements[index]!;
-  const alts: string[] = [];
-  for (let next = index + 1; next < elements.length && tree.isUnder(elements[next]!, control); next += 1) {
-    const inside = elements[next]!;
-    const traits = webLlmViewTraits(inside);
-    if (traits.visible && traits.image && meaningfulWords(inside.name)) alts.push(inside.name!);
-  }
+  const alts = visibleInsides(elements, index, tree)
+    .filter((inside) => (inside.tag === "svg" || webLlmViewTraits(inside).image) && meaningfulWords(inside.name))
+    .map((inside) => inside.name!);
   return alts.length === 0 ? undefined : alts.join(" ");
+}
+
+/** The visible elements under the element at `index`, which follow it in document order. */
+function visibleInsides(elements: readonly WebLlmEvidenceElement[], index: number, tree: WebLlmPageTree): WebLlmEvidenceElement[] {
+  const holder = elements[index]!;
+  const insides: WebLlmEvidenceElement[] = [];
+  for (let next = index + 1; next < elements.length && tree.isUnder(elements[next]!, holder); next += 1) {
+    if (webLlmViewTraits(elements[next]!).visible) insides.push(elements[next]!);
+  }
+  return insides;
 }
 
 /**

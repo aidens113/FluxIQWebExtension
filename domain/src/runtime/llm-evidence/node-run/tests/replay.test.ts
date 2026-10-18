@@ -157,7 +157,7 @@ const CARD_CONTROL: JsonObject = {
   selector: "li.request:nth-of-type(1) button.confirm",
   element: { tagName: "button", visibleText: "Confirm", context: { listPosition: { index: 1, total: 3 }, record: { text: "Tom Becker 1 mutual friend Confirm" } } }
 };
-const ROW_SCOPED_ELEMENT = { tagName: "button", visibleText: "Confirm", context: { listPosition: { index: 1, total: 3 }, record: { values: ["Amara Osei", "23 mutual friends"] } } };
+const ROW_SCOPED_ELEMENT = { tagName: "button", visibleText: "Confirm", context: { listPosition: { index: 1, total: 3 }, record: { text: "Tom Becker 1 mutual friend Confirm", values: ["Amara Osei", "23 mutual friends"] } } };
 
 test("a replayed step carrying a row presses that row's control, as the Flow's loop pass does", async () => {
   const stubbed = stub();

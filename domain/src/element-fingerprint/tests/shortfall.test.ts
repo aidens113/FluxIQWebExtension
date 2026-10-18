@@ -66,3 +66,23 @@ test("where a control sat narrows the search and names no control, so it does no
   });
   assert.deepEqual(signals, ["kind"]);
 });
+
+// Lane 4 (`run-mvcwqwec-0aa4f98b`): a list row's wordless icon control, a `<span>` with one hashed class and an
+// unlabelled `<svg>`, was refused at save because its only identity was the tag and the lone class. What it draws
+// is the signal a person tells it apart by, so a drawing counts once -- and the lone class stays uncounted
+// without one (t442 F5).
+test("what a wordless control draws is one signal, and a lone class beside a bare tag is still none", () => {
+  const icon = { tagName: "span", selector: "li:nth-of-type(2) > article > span:nth-of-type(1)", classNames: ["q8f2"], context: { record: { text: "Line Cook" } } };
+  assert.deepEqual(webElementIdentitySignals(icon), ["kind"]);
+  assert.equal(webElementIdentityShortfall(icon)?.code, WEB_ELEMENT_IDENTITY_SHORTFALL_CODE);
+
+  // Kind and drawing are the two the floor asks for; beside the drawing the one class counts as well.
+  assert.deepEqual(webElementIdentitySignals({ tagName: "span", drawing: "d1.1x9kq3" }), ["kind", "drawing"]);
+  assert.equal(webElementIdentityShortfall({ tagName: "span", drawing: "d1.1x9kq3" }), undefined);
+  assert.deepEqual(webElementIdentitySignals({ ...icon, drawing: "d1.1x9kq3" }), ["kind", "drawing", "classNames"]);
+  assert.equal(webElementIdentityShortfall({ ...icon, drawing: "d1.1x9kq3" }), undefined);
+
+  // A drawing alone, with no kind, is still one signal; a blank one is none.
+  assert.notEqual(webElementIdentityShortfall({ drawing: "d1.1x9kq3" }), undefined);
+  assert.deepEqual(webElementIdentitySignals({ ...icon, drawing: " " }), ["kind"]);
+});

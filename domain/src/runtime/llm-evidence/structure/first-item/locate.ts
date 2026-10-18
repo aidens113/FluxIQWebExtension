@@ -90,6 +90,26 @@ export function webLlmFirstItemElements(proposal: WebAutomationExtractionProposa
 }
 
 /**
+ * Each `lines` field's lines in the first item that has its container: the
+ * container's listed children, in document order, which the field's sample is
+ * joined from as the page joins them (`../field-sample.ts`). A field that is
+ * not read line by line, or whose container cannot be told, is left out.
+ */
+export function webLlmFirstItemLines(proposal: WebAutomationExtractionProposal, detected: WebLlmSnapshotBinding): ReadonlyMap<string, readonly WebLlmEvidenceElement[]> {
+  const found = new Map<string, readonly WebLlmEvidenceElement[]>();
+  const lined = proposal.fields.filter((field) => field.spec.lines === true);
+  if (lined.length === 0) return found;
+  const tree = webLlmPageTree(detected);
+  const items = listItems(tree, proposal);
+  if (items.length === 0) return found;
+  for (const field of lined) {
+    const node = columnElement(tree, items, field.spec);
+    if (node !== undefined) found.set(field.key, tree.children(node).map((child) => child.element));
+  }
+  return found;
+}
+
+/**
  * The column's element in the first item that has it: the walk stops at the
  * first item with any element for the field, and gives that element only when
  * it is the one there. A form the walk does not read gives none.

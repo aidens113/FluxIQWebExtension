@@ -37,11 +37,14 @@ type PacketContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "
  * caller holds the binding that issued its handle, and inside `shadowHosts`
  * where the binding kept a host chain beside it -- the key a recorded node
  * carries as `context.shadowHosts`, so a created node's click and wait are
- * scoped to the widget's root as a recorded one's are.
+ * scoped to the widget's root as a recorded one's are. `drawing` is what the
+ * binding kept of what a wordless control draws (`../sanitize.ts`
+ * `drawings`): never in the packet, so only a caller holding the binding can
+ * give it.
  */
 export function webPacketElementFingerprint(
   element: WebLlmEvidenceElement,
-  input: { selector?: string | undefined; shadowHosts?: readonly string[] | undefined; dialog?: string | undefined } = {}
+  input: { selector?: string | undefined; shadowHosts?: readonly string[] | undefined; dialog?: string | undefined; drawing?: string | undefined } = {}
 ): WebAutomationElementFingerprint {
   const attributes = screenedAttributes(element.attributes);
   return webElementFingerprint({
@@ -56,6 +59,7 @@ export function webPacketElementFingerprint(
     // A link's destination is where it goes, which a page changes per session and per row; it is no identity.
     href: undefined,
     attributes,
+    drawing: input.drawing,
     context: contextOf(element, input.shadowHosts, input.dialog),
     secret: isSensitiveFieldSignature({
       inputType: element.inputType,

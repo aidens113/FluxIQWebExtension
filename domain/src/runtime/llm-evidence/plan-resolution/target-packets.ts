@@ -522,7 +522,7 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
-    const identity = webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target), binding.dialogNames?.get(element.target));
+    const identity = webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target), binding.dialogNames?.get(element.target), binding.drawings?.get(element.target));
     const target: PageTarget = {
       selector,
       frameId: element.frameId,
@@ -672,6 +672,7 @@ function agreedIdentity(left: WebPlanElementIdentity, right: WebPlanElementIdent
     name: agreed(left.name, right.name),
     testId: agreed(left.testId, right.testId),
     attributes: agreed(left.attributes, right.attributes),
+    drawing: agreed(left.drawing, right.drawing),
     context: agreed(left.context, right.context)
   });
 }

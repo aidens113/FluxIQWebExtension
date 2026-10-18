@@ -6,11 +6,11 @@ type Row = [author: string, date: string, text: string, likes?: number, replies?
 
 /**
  * The rules, as the studio pinned them. Entries are judged on comments alone:
- * two friends tagged in one comment or reply, one entry per person counted at
+ * at least two friends tagged in one comment or reply, one entry per person counted at
  * their first qualifying comment, the studio and the commenter never counting
  * as friends, and nothing after 27 September.
  */
-export const GIVEAWAY_RULES = "How to enter: tag two friends in a comment on this post (replies count too). One entry per person, and only your first qualifying comment counts. Tagging us, or yourself, does not count as a friend. Entries close 27 September at 23:59. Winners are only ever announced from this account, and we will never ask you to pay or to click a link.";
+export const GIVEAWAY_RULES = "How to enter: tag at least two friends in a comment on this post (replies count too). One entry per person, and only your first qualifying comment counts. Tagging us, or yourself, does not count as a friend. Entries close 27 September at 23:59. Winners are only ever announced from this account, and we will never ask you to pay or to click a link.";
 
 /** The last day a comment can qualify on. */
 export const GIVEAWAY_CLOSES = "2026-09-27";

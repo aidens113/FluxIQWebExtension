@@ -263,6 +263,8 @@ export type ExtractionConfirmField = {
   selector?: string | undefined;
   attribute?: string | undefined;
   header?: string | undefined;
+  /** `true` on a `text` column read as a container of lines, each child's words joined (`content/extraction/field-reader.ts`). */
+  lines?: boolean | undefined;
   /** `false` marks the column optional: an item the page cannot read it from carries `null` for it (D16). */
   required?: boolean | undefined;
   /**

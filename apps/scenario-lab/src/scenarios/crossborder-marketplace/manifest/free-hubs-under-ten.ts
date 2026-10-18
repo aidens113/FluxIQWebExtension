@@ -35,8 +35,9 @@ function freeHubsUnderTenRecords(): Array<Record<string, string>> {
  * Narrow the search to free shipping and a 10 € ceiling with the site's own
  * filters, answer the traffic check the third results load brings, sort by
  * price, and read the cards that are not ads. Narrowed, the results fit on one
- * page; the three paid placements on it ignore the filters and are dearer than
- * the ceiling, so a read that keeps them is wrong by three rows.
+ * page of twelve cards; the two paid placements on it (the third slot falls past
+ * the last card) ignore the filters and are dearer than the ceiling, so a read
+ * that keeps them is wrong by two rows.
  */
 const SCRIPT: ScenarioWorkflow["recordingScript"] = [
   ...ARRIVE,

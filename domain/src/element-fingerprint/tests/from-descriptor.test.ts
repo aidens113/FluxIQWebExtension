@@ -54,6 +54,11 @@ test("a recorded secret control carries its label and structure and none of its 
   assert.equal(fingerprint?.id, "pw");
 });
 
+test("a recorded wordless icon keeps what it draws, so it is found by more than its tag and one class", () => {
+  const fingerprint = webElementFingerprintFromDescriptor({ tagName: "span", selector: "li > span.q8f2", classNames: ["q8f2"], drawing: "d1.1x9kq3", attributes: { class: "q8f2" } });
+  assert.equal(fingerprint?.drawing, "d1.1x9kq3");
+});
+
 test("a value that is no element is no fingerprint", () => {
   assert.equal(webElementFingerprintFromDescriptor(undefined), undefined);
   assert.equal(webElementFingerprintFromDescriptor("button"), undefined);

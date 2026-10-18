@@ -3,7 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import { LIVE_INSTRUCTION_TASKS, LIVE_REPAIR_TASKS } from "../../index.js";
 import { friendsTagged, giveawayEntries, mostLiked } from "../answers/index.js";
-import { COPIED_GIVEAWAY_COMMENTS, GIVEAWAY_COMMENTS, GIVEAWAY_POST, MOON_JAR_POST, STUDIO, STUDIO_POSTS, gridFor, initialCollections } from "../data/index.js";
+import { COPIED_GIVEAWAY_COMMENTS, GIVEAWAY_COMMENTS, GIVEAWAY_POST, GIVEAWAY_RULES, MOON_JAR_POST, STUDIO, STUDIO_POSTS, gridFor, initialCollections } from "../data/index.js";
 import { photoLook } from "../look/index.js";
 import { COLLECTIONS_AFTER, GLAZE_COLLECTION, PRICE_QUESTION } from "../manifest.js";
 import { compactCount } from "../pages/index.js";
@@ -55,6 +55,10 @@ test("each trap in the giveaway thread is one a rule excludes, not an accident o
   assert.deepEqual(friendsTagged(author("eli.park")[0]!), ["hana.sato"], "tagging the studio does not count");
   assert.equal(author("zara.qureshi")[0]!.date, "2026-09-28", "two friends, one day late");
   assert.equal(author("lena.moss").length, 2, "an entrant who entered twice counts once");
+  // Two entries tag three friends (omar.farouk, grace.adeyemi's first), so the pinned rules and the caption must say a third tag is allowed, or "tag two friends" read as exactly two gives another answer.
+  assert.match(GIVEAWAY_RULES, /tag at least two friends/u);
+  assert.match(GIVEAWAY_POST.caption, /tag at least two friends/u);
+  assert.ok(giveawayEntries(GIVEAWAY_COMMENTS).some(({ comment }) => friendsTagged({ author: "", text: comment }).length > 2));
   const entries = giveawayEntries(GIVEAWAY_COMMENTS);
   assert.equal(entries.find((entry) => entry.entrant === "lena.moss")?.date, "2026-09-21", "at her first qualifying comment");
   assert.equal(entries.find((entry) => entry.entrant === "grace.adeyemi")?.date, "2026-09-22");

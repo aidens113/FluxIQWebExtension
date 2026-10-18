@@ -6,8 +6,11 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { webAutomationExtractListRequestValue, type WebAutomationExtractField } from "@fluxiq-web-extension/domain/client";
 import { readField } from "../field-reader";
+import { normalizeExtractField } from "../field-spec";
 import { inferFields, proposedFieldSpec, type FieldSource } from "../infer-fields";
+import { itemFilterFor } from "../item-filter";
 import { fakeShadowDom } from "./fake-shadow-dom";
 
 const PRICE: FieldSource = { kind: "text", label: "product-price", selector: '[data-testid="product-price"]', sensitive: false };
@@ -198,4 +201,182 @@ test("a field read by its own class is labelled with the path most cards give it
   assert.equal(title[0]!.coverage, 1);
   assert.equal(title[0]!.spec.selector, ":scope span.title");
   assert.equal(title[0]!.label, "a.card > div:2 > span.title");
+});
+
+// A group of lines only a position can name is offered whole (`line-group/`).
+// Live run `run-mvcxvr3k-af919462` (step 0025): a results card listed its ways
+// to get the item as same-class sibling lines of one container, and not every
+// card had every line. Detection offered them only by position -- `div:1`,
+// `div:2`, `div:3` -- so on a card without a pickup line "Delivery" sat in
+// `div:1`, no column held the whole group, and a read asked for the items that
+// can be delivered kept every row.
+
+/** One card: a title, a price, and its lines in one container, each line with the same class. */
+function waysCard(title: string, lines: readonly string[], extra: readonly string[] = []): Element {
+  return dom.el("li", { class: "card" },
+    dom.el("span", { class: "title" }, title),
+    ...extra.map((text, index) => dom.el("span", { class: `extra-${index}` }, text)),
+    dom.el("div", { class: "price" }, "$9.99"),
+    dom.el("div", { class: "ways" }, ...lines.map((line) => dom.el("div", { class: "way" }, line))));
+}
+
+const WAYS_CARDS: ReadonlyArray<{ title: string; lines: readonly string[] }> = [
+  { title: "Six rolls", lines: ["Pickup today", "Delivery today", "Shipping, arrives Thu"] },
+  { title: "Twelve rolls", lines: ["Delivery tomorrow", "Shipping, arrives Fri"] },
+  { title: "Two rolls", lines: ["Pickup today"] },
+  { title: "Eight rolls", lines: ["Shipping, arrives Thu", "Pickup today"] },
+  { title: "Four rolls", lines: ["Delivery today"] }
+];
+
+function readRecord(item: Element, fields: Record<string, WebAutomationExtractField>): Record<string, string | null> {
+  return Object.fromEntries(Object.entries(fields).map(([key, field]) => {
+    const reader = normalizeExtractField(key, field);
+    return [key, reader === undefined ? null : readField(item, key, reader) ?? null];
+  }));
+}
+
+test("a container of positional lines is offered whole, and every row reads its own lines joined in order", () => {
+  const run = WAYS_CARDS.map(({ title, lines }) => waysCard(title, lines));
+  const fields = inferFields(run[0]!, run);
+  const group = fields.find((field) => field.spec.lines === true);
+  assert.ok(group, JSON.stringify(fields.map((field) => [field.label, field.spec])));
+  assert.equal(group.label, "div.ways (all lines)");
+  assert.deepEqual(group.spec, { kind: "text", selector: ":scope div.ways", lines: true, required: true });
+  assert.equal(group.coverage, 1);
+  // The positional lines are still offered exactly as before, beside the group.
+  const positional = fields.filter((field) => /div:nth-of-type\(\d\)$/u.test(field.spec.selector ?? "")).map((field) => field.spec.selector);
+  assert.deepEqual(positional, [1, 2, 3].map((index) => `:scope > div.ways > div:nth-of-type(${index})`));
+  assert.ok(fields.indexOf(group) < fields.findIndex((field) => field.spec.selector === positional[0]), "the group sits before its first line");
+  // Read at run time through the same normalizer the list reader uses.
+  const reader = normalizeExtractField(group.key, group.spec);
+  assert.deepEqual(reader, { kind: "text", selector: ":scope div.ways", required: true, lines: true });
+  assert.deepEqual(run.map((item) => readField(item, group.key, reader!)), [
+    "Pickup today · Delivery today · Shipping, arrives Thu",
+    "Delivery tomorrow · Shipping, arrives Fri",
+    "Pickup today",
+    "Shipping, arrives Thu · Pickup today",
+    "Delivery today"
+  ]);
+  // A plain text read of the same container runs the lines together.
+  assert.equal(readField(run[0]!, group.key, { kind: "text", selector: ":scope div.ways", required: true }), "Pickup todayDelivery todayShipping, arrives Thu");
+});
+
+test("where {field: <group key>, contains} keeps exactly the rows whose group has the line, through the domain's request reader", () => {
+  const run = WAYS_CARDS.map(({ title, lines }) => waysCard(title, lines));
+  const fields = inferFields(run[0]!, run);
+  const group = fields.find((field) => field.spec.lines === true)!;
+  const title = fields.find((field) => field.spec.selector === ":scope span.title")!;
+  assert.ok(title, JSON.stringify(fields.map((field) => field.spec.selector)));
+  const kept = (where: Array<Record<string, unknown>>): string[] => {
+    const request = webAutomationExtractListRequestValue({ item: "li.card", fields: Object.fromEntries(fields.map((field) => [field.key, field.spec])), where });
+    assert.ok(request, "the domain reads the request");
+    assert.deepEqual(request.fields[group.key], group.spec, "the group's spec survives the reader");
+    const filter = itemFilterFor(request)!;
+    return run.filter((item) => filter(item, readRecord(item, request.fields)).length === 0).map((item) => readField(item, "title", { kind: "text", selector: title.spec.selector!, required: true }) as string);
+  };
+  assert.deepEqual(kept([{ field: group.key, contains: "Delivery" }]), ["Six rolls", "Twelve rolls", "Four rolls"]);
+  assert.deepEqual(kept([{ field: group.key, contains: "Pickup" }]), ["Six rolls", "Two rolls", "Eight rolls"]);
+  // The first positional line is what a condition could name before, and it
+  // keeps a different set: "Delivery" sits in it only where no line comes first.
+  const first = fields.find((field) => field.spec.selector === ":scope > div.ways > div:nth-of-type(1)")!;
+  assert.deepEqual(kept([{ field: first.key, contains: "Delivery" }]), ["Twelve rolls", "Four rolls"]);
+});
+
+test("a container with one line, or lines named by their own class, offers no group", () => {
+  const single = ["A", "B", "C"].map((title) => waysCard(title, ["Pickup today"]));
+  assert.equal(inferFields(single[0]!, single).some((field) => field.spec.lines === true), false);
+  const named = ["A", "B", "C"].map((title) => dom.el("li", { class: "card" },
+    dom.el("span", { class: "title" }, title),
+    dom.el("div", { class: "ways" }, dom.el("div", { class: "pickup" }, "Pickup today"), dom.el("div", { class: "ship" }, "Shipping"))));
+  assert.equal(inferFields(named[0]!, named).some((field) => field.spec.lines === true), false);
+});
+
+test("where the bound has no room for both, the group is kept in place of the last of its own positional lines", () => {
+  // Thirty columns every card has come before the lines, so coverage alone
+  // spends the whole bound before reaching the group.
+  const extra = Array.from({ length: 30 }, (_, index) => `value ${index}`);
+  const run = WAYS_CARDS.map(({ title, lines }) => waysCard(title, lines, extra));
+  const fields = inferFields(run[0]!, run);
+  assert.equal(fields.length, 24, "the bound is unchanged");
+  const group = fields.find((field) => field.spec.lines === true);
+  assert.ok(group, JSON.stringify(fields.map((field) => field.label)));
+  const selectors = fields.map((field) => field.spec.selector);
+  // The partial lines are the ones the bound reserves places for; the last of them gave its place to the group.
+  assert.equal(selectors.includes(":scope > div.ways > div:nth-of-type(2)"), true);
+  assert.equal(selectors.includes(":scope > div.ways > div:nth-of-type(3)"), false);
+});
+
+// One list, two item templates (live run `run-mvczv4jn-1b61183c`, step 0021).
+// An entry by a person states `time · ...` under its title; an entry posted in
+// a group states `author · time · ...`, so the same position holds the time in
+// one template and the author in the other. A column keyed by the first item's
+// position read the author in every group entry, and the author's own column
+// existed only in personal entries. The time link shows a short age and states
+// the full date only in its `aria-label`. A shared entry quotes another post,
+// whose own time link sits in a box below the sharer's.
+
+type EntryValues = { author: string; time: string; date: string; group?: string; quoted?: { page: string; time: string } };
+
+const ENTRIES: readonly EntryValues[] = [
+  { author: "Aisha Khan", time: "1h", date: "Monday 21 September 2026 at 05:55" },
+  { author: "Elena Sokolova", time: "3h", date: "Monday 21 September 2026 at 03:10", group: "Seed Swap" },
+  { author: "Tom Becker", time: "5h", date: "Monday 21 September 2026 at 01:40" },
+  { author: "Priya Nair", time: "1d", date: "Sunday 20 September 2026 at 07:00", group: "Night Runners" },
+  { author: "Lena Vogt", time: "2d", date: "Saturday 19 September 2026 at 18:25" },
+  { author: "Marta Ruiz", time: "3d", date: "Friday 18 September 2026 at 09:00", quoted: { page: "Harbour News", time: "4d" } }
+];
+
+function entry(values: EntryValues, index: number): Element {
+  const author = () => dom.el("a", { class: "meta", href: `/people/p${index}/?ref=${index}a` }, values.author);
+  const time = dom.el("a", { class: "meta", href: `/posts/${index}/?ref=${index}t`, "aria-label": values.date }, dom.el("span", {}, values.time));
+  const dot = () => dom.el("span", { "aria-hidden": "true" }, " · ");
+  const title = values.group === undefined
+    ? dom.el("h3", { class: "title" }, dom.el("span", {}, dom.el("strong", {}, author())))
+    : dom.el("h3", { class: "title" }, dom.el("span", {}, dom.el("a", { class: "meta", href: `/groups/g${index}/` }, values.group)));
+  const byline = values.group === undefined
+    ? dom.el("div", { class: "byline" }, dom.el("span", {}, time), dot())
+    : dom.el("div", { class: "byline" }, dom.el("span", {}, author()), dot(), dom.el("span", {}, time), dot());
+  const quoted = values.quoted === undefined ? [] : [dom.el("div", { class: "box" },
+    dom.el("h4", {}, dom.el("a", { class: "meta", href: `/pages/q${index}/` }, values.quoted.page)),
+    dom.el("div", { class: "byline" }, dom.el("span", {}, dom.el("a", { class: "meta", href: `/posts/${index}q/`, "aria-label": "Thursday 17 September 2026 at 12:00" }, dom.el("span", {}, values.quoted.time)))))];
+  return dom.el("div", { class: "entry" },
+    dom.el("div", { class: "head" }, dom.el("a", { class: "avatar", href: `/people/p${index}/` }), dom.el("div", {}, title, byline)),
+    dom.el("div", { class: "message" }, `Message number ${index}`),
+    ...quoted);
+}
+
+/** Every proposed field's value on every item, read as a list read reads it. */
+function readAll(fields: ReturnType<typeof inferFields>, run: readonly Element[]): Array<{ field: ReturnType<typeof inferFields>[number]; values: Array<string | null> }> {
+  return fields.map((field) => ({ field, values: run.map((item) => readRecord(item, { [field.key]: field.spec })[field.key] ?? null) }));
+}
+
+test("a column means one kind of element in every item, whatever template the item uses", () => {
+  const run = ENTRIES.map(entry);
+  const fields = inferFields(run[0]!, run);
+  const read = readAll(fields, run);
+  const shown = JSON.stringify(read.map(({ field, values }) => [field.label, field.spec.selector, field.spec.attribute, values]));
+  const times = ENTRIES.map((values) => values.time);
+  const authors = ENTRIES.map((values) => values.author);
+  const time = read.filter(({ field, values }) => field.spec.kind === "text" && times.every((value, index) => values[index] === value));
+  assert.ok(time.length >= 1, `a text column reads the time in every item: ${shown}`);
+  // The first item's positional column is that column, so its key is the one a saved Flow already names.
+  assert.ok(time.some(({ field }) => /byline > span:1 > a\.meta$/u.test(field.label)), shown);
+  assert.ok(read.some(({ field, values }) => field.spec.kind === "text" && authors.every((value, index) => values[index] === value)), `a text column reads the author in every item: ${shown}`);
+  // No column reads a time in one item and an author in another.
+  for (const { field, values } of read) {
+    const mixes = values.some((value) => value !== null && times.includes(value)) && values.some((value) => value !== null && authors.includes(value));
+    assert.equal(mixes, false, `${field.label} mixes kinds: ${JSON.stringify(values)}`);
+  }
+});
+
+test("the full date a time link states only in its aria-label is offered as a column, and read in every item", () => {
+  const run = ENTRIES.map(entry);
+  const fields = inferFields(run[0]!, run);
+  const date = readAll(fields, run).filter(({ field }) => field.spec.kind === "attribute" && field.spec.attribute === "aria-label");
+  assert.ok(date.length >= 1, JSON.stringify(fields.map((field) => [field.label, field.spec])));
+  assert.deepEqual(date[0]!.values, ENTRIES.map((values) => values.date));
+  assert.equal(date[0]!.field.coverage, 1);
+  // The label is page structure: the path and the attribute's name, never the date (D3).
+  assert.match(date[0]!.field.label, / aria-label$/u);
+  assert.doesNotMatch(date[0]!.field.label, /September|2026/u);
 });

@@ -62,6 +62,21 @@
 // reports/v-matcher-calibration.md, which supersedes them -- the original floor
 // was calibrated against scores that Level 1 resolves before this module runs.
 //
+// **And what a wordless control draws** (`./drawing.ts`, lane 4 t567). Core's
+// matcher has no picture signal, so the drawing goes to Core in its
+// `attributes` slot (`./drawing-attribute.ts`), the one slot nothing else here
+// fills, at `DRAWING_WEIGHT` instead of the slot's default 6: a control with no
+// words is told apart by its picture as a worded one is by its label. And it is
+// handed over only for a candidate whose drawing *agrees*. A candidate that
+// draws nothing, or draws something else, is compared without it -- the
+// drawing neither supports nor contradicts it -- because a picture changes for
+// reasons a control does not: a state that swaps the icon file, a card whose
+// photo is its row's. So a matching drawing lifts the recorded icon above its
+// row's other icons, and a mismatch costs nothing a recording without one
+// would not have cost. Scoring each candidate against its own comparison means
+// Core is asked once per candidate, and the ranking is put in Core's own order
+// (`coreOrder`) rather than a new one.
+//
 // Nothing here invents a confidence. What the resolver reports is Core's own
 // `confidence` for the candidate it chose, so a Flow deciding whether to trust a
 // resolution is reading the same number Core would have produced had it scored
@@ -75,6 +90,7 @@ import {
 import { isVolatileIdentifier, quotedAnchors, selectorQuotesVolatileIdentifier } from "../selector";
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
+import { DRAWING_ATTRIBUTE } from "./drawing-attribute";
 import { pageTokens, type PageTokens } from "./page-tokens";
 import { agreesWithRecordedDialog } from "./dialog";
 import { agreesWithRecordedRecord, type RecordIdentity } from "./record";
@@ -140,6 +156,8 @@ export type RecordedIdentity = {
   selector?: string | undefined;
   classNames?: string[] | undefined;
   attributes?: Record<string, string> | undefined;
+  /** What a wordless control drew (`./drawing.ts`); compared where a candidate draws the same (header). */
+  drawing?: string | undefined;
 };
 
 /**
@@ -193,7 +211,15 @@ export const TARGET_SCORE_FLOOR = 0.35;
  */
 export const TARGET_SCORE_MARGIN = 0.2;
 
-const matcher = createAutomationStudioElementMatcher();
+/**
+ * The weight a drawing is compared at: a label's (20 of Core's scale), since a
+ * picture is what names a control that has no words. At the slot's default 6
+ * the recorded icon beside its row's other icons led by less than the margin
+ * once the selector both lack was charged; at 20 it leads by more than it.
+ */
+const DRAWING_WEIGHT = 20;
+
+const matcher = createAutomationStudioElementMatcher({ weights: { attributes: DRAWING_WEIGHT } });
 
 /**
  * Ranks the pool against the recorded control and says whether one of them is
@@ -218,18 +244,16 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   // the chat's "Close chat", and was pressed.
   const eligible = candidates.filter((candidate) => inRecordedPlace(target, candidate.element));
   if (!eligible.length) return { outcome: "unmatched", ranked: [] };
-  const elements = new Map(eligible.map((candidate) => [candidate.fingerprint, candidate.element]));
   const { fingerprint, dropped } = comparableFingerprint(target, eligible);
   const measured = dropped.length ? { dropped } : {};
-  if (!hasIdentitySignal(fingerprint)) return { outcome: "unmatched", ranked: [], ...measured };
-  const ranked = matcher
-    // Core drops anything below zero by default. The full ranking is kept so a
-    // refusal can report what it weighed; the floor below is what decides.
-    .scoreCandidates(fingerprint, eligible.map((candidate) => candidate.fingerprint), { minimumNormalizedScore: -1 })
-    .flatMap((score) => {
-      const element = elements.get(score.candidate);
-      return element ? [{ element, score }] : [];
-    });
+  if (!hasIdentitySignal(fingerprint, target.drawing)) return { outcome: "unmatched", ranked: [], ...measured };
+  // Each candidate against its own comparison, which differs from the shared one
+  // only by a drawing it agrees with (header). Core's `scoreCandidates` would
+  // drop anything below zero; every candidate is kept here so a refusal can
+  // report what it weighed, and the floor below is what decides.
+  const ranked = eligible
+    .map((candidate): ScoredCandidate => ({ element: candidate.element, score: matcher.scoreCandidate(withAgreeingDrawing(fingerprint, target.drawing, candidate), candidate.fingerprint) }))
+    .sort(coreOrder);
 
   const chosen = ranked[0];
   if (!chosen || chosen.score.normalizedScore < TARGET_SCORE_FLOOR) return { outcome: "unmatched", ranked, ...measured };
@@ -264,8 +288,8 @@ function inRecordedPlace(target: RecordedIdentity, element: Element): boolean {
  */
 export function scoreTargetCandidate(target: RecordedIdentity, candidate: TargetCandidate): ElementFingerprintScore | undefined {
   const { fingerprint } = comparableFingerprint(target, [candidate]);
-  if (!hasIdentitySignal(fingerprint)) return undefined;
-  return matcher.scoreCandidate(fingerprint, candidate.fingerprint);
+  if (!hasIdentitySignal(fingerprint, target.drawing)) return undefined;
+  return matcher.scoreCandidate(withAgreeingDrawing(fingerprint, target.drawing, candidate), candidate.fingerprint);
 }
 
 /**
@@ -364,11 +388,32 @@ const IDENTITY_SIGNALS = ["visibleText", "accessibleName", "label", "id", "testI
  * was chosen for sharing them, so scoring by them alone ranks the whole page
  * equal-first. That is a ranking with no information in it, and it must not
  * become a choice or a tie -- a target described only by its family was never
- * found, which is what the resolver already reports.
+ * found, which is what the resolver already reports. A drawing says which
+ * control as words do, so a recording that names only its family and its
+ * drawing is still worth scoring.
  */
-function hasIdentitySignal(fingerprint: ElementFingerprint): boolean {
+function hasIdentitySignal(fingerprint: ElementFingerprint, drawing: string | undefined): boolean {
+  if (drawing?.trim()) return true;
   return IDENTITY_SIGNALS.some((signal) => {
     const value = fingerprint[signal];
     return Array.isArray(value) ? value.length > 0 : Boolean(value);
   });
+}
+
+/**
+ * The comparison for one candidate: the shared one, plus the recorded drawing
+ * when the candidate draws exactly that (header). Nothing is added for a
+ * candidate that draws nothing or something else, so the drawing never counts
+ * against one.
+ */
+function withAgreeingDrawing(fingerprint: ElementFingerprint, drawing: string | undefined, candidate: TargetCandidate): ElementFingerprint {
+  if (!drawing?.trim() || candidate.fingerprint.attributes?.[DRAWING_ATTRIBUTE] !== drawing) return fingerprint;
+  return { ...fingerprint, attributes: { [DRAWING_ATTRIBUTE]: drawing } };
+}
+
+/** Core's own ranking order (`scoreElementFingerprintCandidates`): total, then normalized score, then candidate id. */
+function coreOrder(left: ScoredCandidate, right: ScoredCandidate): number {
+  return right.score.totalScore - left.score.totalScore
+    || right.score.normalizedScore - left.score.normalizedScore
+    || left.score.candidateId.localeCompare(right.score.candidateId);
 }

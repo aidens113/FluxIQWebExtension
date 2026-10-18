@@ -33,6 +33,8 @@ export type ExtractionFieldRow = {
   selector?: string | undefined;
   attribute?: string | undefined;
   header?: string | undefined;
+  /** `true` when the proposal reads this column's element line by line; kept only while the column reads text. */
+  lines?: boolean | undefined;
   required?: boolean | undefined;
   handling: ExtractionFieldHandling;
   /** The share of the run's items that have the field, from 0 to 1. */
@@ -110,6 +112,7 @@ function fieldRow(field: WebAutomationExtractionProposalField): ExtractionFieldR
     selector: field.spec.selector,
     attribute: field.spec.attribute,
     header: field.spec.header,
+    lines: field.spec.lines,
     required: field.spec.required,
     handling: sensitive ? "exclude" : "include",
     coverage: field.coverage,

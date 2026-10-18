@@ -9,7 +9,9 @@
 //    (`../detect-pagination.ts`, `nextControlOnPage`): a Next, the following
 //    page where Next leads to this same page or drops the list's narrowing
 //    (`by: "following"`, `./follow-next.ts`), a numbered page, Load more, or
-//    a scroll (`./step-page.ts`). A Next that drops the narrowing with no
+//    a scroll (`./step-page.ts`); where the list carried none and the page
+//    shows no Next, a scroll (`./found-way.ts`). A scroll waits on while the
+//    page shows the list still loading (`./list-loading.ts`). A Next that drops the narrowing with no
 //    following page that keeps it fails `page_fault`, pressing nothing.
 // 3. A disabled or absent control is never pressed: the list has ended, and the
 //    answer says why (`control_absent`, `control_disabled`,

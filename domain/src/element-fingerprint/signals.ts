@@ -12,9 +12,9 @@
 //
 // Only signals the page finds a control by are counted, because a signal
 // nothing compares cannot find the control when the others fail. The page
-// looks a control up by its id, test id, `name` attribute, class set and words
-// (`apps/extension/src/content/element-finder.ts`), and scores its words,
-// label, id, test id, role, tag and class names
+// looks a control up by its id, test id, `name` attribute, class set, drawing
+// and words (`apps/extension/src/content/element-finder.ts`), and scores its
+// words, label, id, test id, role, tag, class names and drawing
 // (`apps/extension/src/content/identity/score.ts`). So, each once:
 //
 // - **kind**: the tag, role, implied role and input type together. They say
@@ -32,6 +32,21 @@
 // - **classNames**: the class tokens, as one signal however many there are --
 //   they are one attribute the page wrote -- counted while one token the
 //   selector does not quote is left -- except a lone class beside a bare tag.
+// - **drawing**: what a control with no words draws -- its svg's `viewBox` and
+//   shape geometry, the symbol a `<use>` names, an image's source path, a
+//   background image on the control itself -- as the one digest the extension
+//   makes of it (`apps/extension/src/content/identity/drawing.ts`). One signal
+//   however many shapes it holds: it is one picture. Never its paint (fill,
+//   stroke, class, style), so a filled and an unfilled icon are the same
+//   drawing. The page looks controls up by it and weighs it where it agrees
+//   (`content/element-finder.ts`, `content/identity/score.ts`). It is how a
+//   person tells a row's save icon from its share icon, and it is not a class:
+//   the stylesheet's grouping says what an icon looks like among look-alikes,
+//   the picture says which icon it is. So a wordless `<span>` saved as its tag,
+//   its one hashed class and its drawing carries three signals -- kind,
+//   drawing, and the class, which counts once something besides the kind
+//   stands beside it -- while the same `<span>` without a drawing is still the
+//   one signal the rule below refuses.
 //
 // **A tag and one class are one signal, not two (t442, F5).** R4a and R4b saved
 // crossborder's coupon as `{div, class b}`: no words, label, name, role, id or
@@ -51,7 +66,7 @@
 import type { WebAutomationElementFingerprint } from "../actions/types";
 
 /** One independent signal of a saved identity; `words` repeats once per distinct wording. */
-export type WebElementIdentitySignal = "kind" | "words" | "id" | "testId" | "name" | "classNames";
+export type WebElementIdentitySignal = "kind" | "words" | "id" | "testId" | "name" | "drawing" | "classNames";
 
 /** The independent signals `fingerprint` carries besides its selector and xpath (header). */
 export function webElementIdentitySignals(fingerprint: WebAutomationElementFingerprint): WebElementIdentitySignal[] {
@@ -63,6 +78,8 @@ export function webElementIdentitySignals(fingerprint: WebAutomationElementFinge
   if (said(fingerprint.id) && !quoted.has(comparable(fingerprint.id))) signals.push("id");
   if (said(fingerprint.testId) && !quoted.has(comparable(fingerprint.testId))) signals.push("testId");
   if (said(fingerprint.name) && !quoted.has(comparable(fingerprint.name))) signals.push("name");
+  // Before the class rule reads `signals`: a drawing is a signal beside the kind (header).
+  if (said(fingerprint.drawing)) signals.push("drawing");
   const classes = (fingerprint.classNames ?? []).filter((token) => said(token) && !quoted.has(comparable(token)));
   // One class beside a bare tag is not a second signal (header, t442 F5).
   const loneClassOnBareTag = classes.length === 1 && signals.every((signal) => signal === "kind") && !said(fingerprint.role);

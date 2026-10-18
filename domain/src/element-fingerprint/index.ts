@@ -3,9 +3,12 @@
 // (`from-descriptor.ts`), and the save-time guard that refuses a control found
 // by one attribute alone (`signals.ts`, `shortfall.ts`). A packet element is
 // read in `runtime/llm-evidence/packet-fingerprint/`, beside the packet
-// it comes from, for a build's step and a runtime repair alike.
+// it comes from, for a build's step and a runtime repair alike. `drawing.ts`
+// says what a drawing token is -- the digest of what a wordless control draws,
+// which the extension computes -- so no path saves page text under that name.
 
 export { webElementFingerprint } from "./build";
+export { webElementDrawing } from "./drawing";
 export { webElementFingerprintFromDescriptor } from "./from-descriptor";
 export {
   WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS,
