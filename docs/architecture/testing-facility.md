@@ -1817,6 +1817,16 @@ run stored when it stored any; a run that stored none, such as a form task,
 is replayed on its goal alone, with zero provider calls
 (`flow-lane/repair/run-repair-lane.ts`).
 
+A clean created Flow also owes every requested replay. Both original whole-run
+verdicts must pass and its recovery record must contain no attempted recovery,
+intervention, patch, proposal or unsettled repair. The runner replays that saved
+Flow unchanged, reproduces its original ordered datasets and final state, and
+requires explicit zero provider/harness accounting. Its proof marks
+`replayOfUnchangedCreation`; this is reuse and does not count as adaptation.
+Missing replay receipts fail creation acceptance, including a creation that
+cannot safely qualify for a replay. No-proposal repair/refusal tasks retain
+their separate semantics.
+
 Core holds every re-author unapplied until the run's judged whole run settles
 it. The marker then says `applied: true`, or carries `notAppliedReason`, one of
 Core's closed codes (`refuted`, `run_failed`, `not_judged` and so on). The

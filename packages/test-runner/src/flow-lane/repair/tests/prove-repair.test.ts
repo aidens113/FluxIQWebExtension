@@ -35,6 +35,23 @@ test("a replay whose Flow succeeded and whose goal held passes", () => {
   assert.doesNotThrow(() => assertLiveRepairProof(proof([replay()])));
 });
 
+test("an unchanged creation must carry every requested replay receipt", () => {
+  const clean = { ...proof([]), adaptationIds: [], application: { outcome: "no_proposal" as const, adaptations: [] }, replayOfUnchangedCreation: true as const, replaysRequested: 1 };
+  assert.throws(() => assertLiveRepairProof(clean), /requested replay/u);
+});
+
+test("an unchanged creation still fails an exact dataset mismatch", () => {
+  const clean = { ...proof([replay({ datasetsReproduced: false })]), adaptationIds: [], application: { outcome: "no_proposal" as const, adaptations: [] }, replayOfUnchangedCreation: true as const };
+  assert.throws(() => assertLiveRepairProof(clean), /stored other rows/u);
+});
+
+test("an unchanged creation requires real zero provider and harness counts", () => {
+  for (const receipt of [replay({ providerCalls: 1 }), replay({ harnessActivations: 1 })]) {
+    const clean = { ...proof([receipt]), adaptationIds: [], application: { outcome: "no_proposal" as const, adaptations: [] }, replayOfUnchangedCreation: true as const };
+    assert.throws(() => assertLiveRepairProof(clean), /called the model/u);
+  }
+});
+
 test("a replay that reached the goal but whose Flow did not succeed is named as that, with its shortfall", () => {
   const failure = failureOf(proof([replay({ flowSucceeded: false, flowShortfall: "act_not_done" })]));
   assert.equal(failure.message, "The applied repair did not hold: 1 of 1 replay(s) ran a Flow that did not succeed (act_not_done)");
