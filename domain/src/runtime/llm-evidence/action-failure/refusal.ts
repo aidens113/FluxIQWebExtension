@@ -147,9 +147,14 @@ export function webActionFailureRefusal(result: WebFailedActionResult): WebActio
   const reason = typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
   const filtersDropped = droppedFilters(result);
   const withoutValue = parameterWithoutValue(result);
+  // This marker is the client's closed reason, never its field/page text.
+  const incompleteText = result.status !== "timed_out" && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED
+    && typeof result.failure.actual === "string" && result.failure.actual.startsWith("incomplete_text:");
   const refusal: WebActionRefusal = {
     code,
-    detail: shortfall !== undefined
+    detail: incompleteText
+      ? rejectionDetail({ reason: "incomplete_text", target: undefined, instead: undefined, missing: undefined, requestId: undefined })
+      : shortfall !== undefined
       ? readDetail(shortfall)
       : withoutValue !== undefined
         ? rejectionDetail({ reason: "parameter_has_no_value", target: undefined, instead: undefined, missing: [withoutValue], requestId: undefined })
