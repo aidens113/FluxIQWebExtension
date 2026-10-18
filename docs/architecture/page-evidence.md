@@ -754,6 +754,12 @@ entry is ranked, sampled or trimmed to make it fit. Spend, deadlines and call
 counts still bound how long a build runs, not which captured elements it sees.
 
 
+Control subject capture uses the same interactable-element predicate as captured
+control text, including pointer-only controls without a role, tab stop or own
+listener. Ordinary noninteractive wrappers gain no subject merely by containing
+a control. Existing bounded record lookup, ambiguity and sensitive-text rules
+still apply; this metadata does not grant permission or make an input executable.
+
 Reset ownership witnesses require a positively complete collection inventory.
 A semantic list must provide finite item cardinality and every distinct item
 position, with one unambiguous subject per row. A partial, loading or ordinary
