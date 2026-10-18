@@ -753,6 +753,15 @@ the run's action types and statuses, the extraction measurements
 count and SHA-256, so two replays can be shown to have stored the same rows in
 the same order. It holds counts, ids, origins and digests, never page content.
 
+A saved replay also starts the existing Lab person actor for the task's
+declared person checks before executing the Flow. It answers actual Core
+conversation asks and performs only the fixture's declared person steps; it
+does not proactively clear a challenge or grant permissions. The actor finishes
+before the browser and Core close, on success or failure, and writes
+`<runs>/replays/<replay-id>/person-hand-offs.json`. Failure to write that
+evidence fails the replay. Human participation remains distinct from model
+participation and does not relax zero-call or exact-dataset checks.
+
 The replay's browser starts through the same guarded session as `lab run`
 (`launchExtensionSession`; `saved-flow-replay/replay-browser.ts` launches
 nothing itself, which `guarded-browser/tests/launch-containment.test.ts` pins):
@@ -1816,6 +1825,16 @@ proposal, and is replayed directly. Its replays must reproduce the rows the
 run stored when it stored any; a run that stored none, such as a form task,
 is replayed on its goal alone, with zero provider calls
 (`flow-lane/repair/run-repair-lane.ts`).
+
+A clean created Flow also owes every requested replay. Both original whole-run
+verdicts must pass and its recovery record must contain no attempted recovery,
+intervention, patch, proposal or unsettled repair. The runner replays that saved
+Flow unchanged, reproduces its original ordered datasets and final state, and
+requires explicit zero provider/harness accounting. Its proof marks
+`replayOfUnchangedCreation`; this is reuse and does not count as adaptation.
+Missing replay receipts fail creation acceptance, including a creation that
+cannot safely qualify for a replay. No-proposal repair/refusal tasks retain
+their separate semantics.
 
 Core holds every re-author unapplied until the run's judged whole run settles
 it. The marker then says `applied: true`, or carries `notAppliedReason`, one of
