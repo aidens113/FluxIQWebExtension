@@ -250,6 +250,28 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Outcome: Partial. Firefox not installed here; the first automation stalled (likely Core C2/C3), about $0.01 spent
 - Follow-up: t707 fixes Core C1-C5 and reruns the first automation once
 
+### 2026-10-18 — Integration round 1: four lanes, install round 3, ten task audits
+- Agent: supervisor (lanes live-lane-1..4, install-core-lead, audit-<site> x10, integration-downstream, integration-core)
+- Changed: downstream `dev` merges t563, t565, t566, t567 (lane fixes: extraction lines and kind-stable columns,
+  runtime-cleared covers, pagers, split prices, scroll paging, row-bound clicks, icon-only controls and their
+  fingerprint signal), t707 (first-run C1-C5, G1, D2, P1), t708-t717 (audits), t718 (two old test failures);
+  `realistic-task-baseline.ts` follows 26 reworded original rows. Core `dev` merges the four lanes' Core branches
+  (builder retry after a repeat stop, covered-press advice, tool-call keys, stop reasons, parameter schemas at
+  submit, trial stops, no-progress repeats, adjacent repeats, plain-language endings) and, once integration-core
+  passes, t707 (C1-C5, G1, D1, P2, Studio domain, Get started styling).
+- Why: share every lane's fix with every lane; every task proven possible and unambiguous (user, 2026-10-17)
+- Validation: lanes' packet.ts/field-sample.ts conflict resolved by keeping both parameters (lines, page);
+  downstream (t718 worker, supervisor reran two): domain tsc both configs exit 0, `test-domain.mjs
+  runtime/llm-evidence output-nodes element-fingerprint actions client` 1623/1623, `runtime/tests` 114/114,
+  `test-extension.mjs content background panel shared` 2849/2849, `panel/chat panel/tests` 428/428,
+  scenario-lab check exit 0 and test 871/871, structure audit passed; shared corpus tests 30/30 after each
+  baseline update. Core on the integrated t707 tree: contracts/fluxiq/web checks exit 0, structure audit
+  passed, vitest on every touched runtime folder 1230/1234 files (3 failed: a new refusal code without words or
+  corpus case, and an order-dependent creation test), fixing in integration-core.
+- Outcome: Partial until integration-core passes and Core t707 merges
+- Follow-up: push both, sync lanes, resume them on one pass per site; R1 (site reset treats add-to-cart and
+  save-for-later as undoable never) next, then the install proof's create-and-zero-call rerun
+
 ## Open Questions
 
 None yet.
