@@ -31,6 +31,9 @@ import { webStatePlaceKey } from "./key";
 
 /** With the capture's own record and dialog of each handle, and what each and the page are about (Core t719), as `webTargetSpot` reads them. */
 export type WebStateSnapshotPlaces = Pick<WebLlmSnapshotBinding, "records" | "dialogNames" | "subjects" | "pageSubject"> & {
+  evidence?: WebLlmSnapshotBinding["evidence"];
+  selectors?: WebLlmSnapshotBinding["selectors"];
+  resetResource?: string;
   /** Each list the page shows, by its container's key and the shape down to its items: the items' tokens, in page order. */
   lists: ReadonlyMap<string, readonly string[]>;
   /** The handle of each element that sits in an item or a dialog, or that the page said what it is about (Core t719), by its frame and selector. */
@@ -88,7 +91,7 @@ export function webStateSnapshotPlaces(binding: WebLlmSnapshotBinding): WebState
     const key = keyOf(element.target);
     if (key !== undefined && !handles.has(key)) handles.set(key, element.target);
   }
-  return { lists, handles, records, dialogNames, ...(binding.subjects ? { subjects: binding.subjects } : {}), ...(binding.pageSubject !== undefined ? { pageSubject: binding.pageSubject } : {}) };
+  return { lists, handles, records, dialogNames, evidence, selectors, ...(binding.resetResource ? { resetResource: binding.resetResource } : {}), ...(binding.subjects ? { subjects: binding.subjects } : {}), ...(binding.pageSubject !== undefined ? { pageSubject: binding.pageSubject } : {}) };
 }
 
 /** A wrapper between a container and its item: its tag and its class (header). */

@@ -20,9 +20,9 @@ import { createHash } from "node:crypto";
 /** Hex characters kept of each digest: far past any collision a page could make. */
 const DIGEST_LENGTH = 32;
 /** Each kind's prefix, so a token says which kind it is and two kinds never collide. */
-const PREFIX = { item: "i", dialog: "d", subject: "s" } as const;
+const PREFIX = { item: "i", dialog: "d", subject: "s", scope: "p" } as const;
 
 /** The opaque token for a record address (`kind: "item"`), a dialog's name (`kind: "dialog"`), or what a control or page is about (`kind: "subject"`). */
-export function webControlSpotToken(kind: "item" | "dialog" | "subject", value: string): string {
+export function webControlSpotToken(kind: "item" | "dialog" | "subject" | "scope", value: string): string {
   return `${PREFIX[kind]}:${createHash("sha256").update(`${kind}\0${value}`).digest("hex").slice(0, DIGEST_LENGTH)}`;
 }

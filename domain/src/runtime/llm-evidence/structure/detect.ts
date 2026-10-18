@@ -1,3 +1,4 @@
+import { webResetResource } from "../control-spot";
 // `web.detect_repeating_structure`: find the list an authoring model wants to
 // extract, without showing the model a selector or a value.
 //
@@ -221,6 +222,7 @@ async function capturedDetection(
     drawings: sanitized.drawings,
     subjects: sanitized.subjects,
     pageSubject: sanitized.pageSubject,
+    resetResource: webResetResource(sessionId, payload.sourceId),
     stateDigest: states?.stateDigest,
     routeState: states?.routeState,
     pageQuery: sanitized.pageQuery

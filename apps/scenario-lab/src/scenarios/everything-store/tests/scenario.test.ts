@@ -284,3 +284,19 @@ test("the first-page task asks for the search results, and the widget under them
   assert.match(task.instruction, /every search result on the first page/u, "so the instruction names the results, not every product on the page");
   assert.doesNotMatch(task.instruction, /every product/u);
 });
+
+
+test("cart accessibility exposes truthful finite collection positions, including singleton lists", () => {
+  const state = passed();
+  for (const singleton of [false, true]) {
+    const current = singleton ? { ...state, cart: state.cart.slice(0, 1), saved: state.saved.slice(0, 1) } : state;
+    const reply = route(current, "cart");
+    assert.ok(reply);
+    assert.equal(reply.status, 200);
+    const html = markupOf(reply.body ?? "");
+    assert.match(html, /role="list" aria-label="Active Items"/u);
+    assert.match(html, /role="list" aria-label="Saved Items"/u);
+    const positions = [...html.matchAll(/role="listitem" aria-posinset="([0-9]+)" aria-setsize="([0-9]+)"/gu)].map((match) => [Number(match[1]), Number(match[2])]);
+    assert.deepEqual(positions, [...current.cart.map((_, index) => [index + 1, current.cart.length]), ...current.saved.map((_, index) => [index + 1, current.saved.length])]);
+  }
+});

@@ -70,6 +70,7 @@ test("a succeeded command dispatches to the paired client and reports ok with it
   const result = await dispatch({ commandId: "client.command.one", status: "succeeded", message: "Clicked Save.", payload: { clicked: true } });
   assert.deepEqual(executed, [{ sessionId: "session.one", actionType: "web.dom.click", parameters: { selector: "#save" } }]);
   assert.equal(result.ok, true);
+  assert.equal(result.metadata?.sessionId, "session.one", "the selected gateway session reaches private host-state resource binding");
   assert.equal(result.status, "succeeded");
   assert.equal(result.error, undefined, "a success never gains an error");
   assert.deepEqual(result.payload, { status: "succeeded", message: "Clicked Save.", result: { clicked: true } });

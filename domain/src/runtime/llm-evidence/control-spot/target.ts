@@ -19,21 +19,24 @@
 
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
+import { webResetCollections } from "./collection";
 import { webControlSpotToken } from "./token";
 
 /** The tokens of the record and dialog `handle` sits in on `page`, and of what it and the page are about. */
-export function webTargetSpot(page: Pick<WebLlmSnapshotBinding, "records" | "dialogNames" | "subjects" | "pageSubject">, handle: string | undefined): WebTargetSpot {
+export function webTargetSpot(page: Pick<WebLlmSnapshotBinding, "records" | "dialogNames" | "subjects" | "pageSubject"> & Partial<Pick<WebLlmSnapshotBinding, "evidence" | "selectors" | "resetResource">>, handle: string | undefined): WebTargetSpot {
   if (handle === undefined) return {};
   const record = page.records.get(handle);
   const dialog = page.dialogNames?.get(handle);
   const subject = page.subjects?.get(handle);
+  const collection = webResetCollections(page).controls.get(handle);
   return present<WebTargetSpot>({
     item: record ? webControlSpotToken("item", record) : undefined,
     dialog: dialog ? webControlSpotToken("dialog", dialog) : undefined,
     subject: subject ? webControlSpotToken("subject", subject) : undefined,
-    page: page.pageSubject ? webControlSpotToken("subject", page.pageSubject) : undefined
+    page: page.pageSubject ? webControlSpotToken("subject", page.pageSubject) : undefined,
+    scope: collection ?? (page.evidence?.location && page.resetResource ? webControlSpotToken("scope", `${page.resetResource}\0${page.evidence.location}`) : undefined)
   });
 }
 
 /** The opaque tokens of where a control sits and what it and its page are about; each absent where there is none. */
-type WebTargetSpot = { item?: string; dialog?: string; subject?: string; page?: string };
+type WebTargetSpot = { item?: string; dialog?: string; subject?: string; page?: string; scope?: string };

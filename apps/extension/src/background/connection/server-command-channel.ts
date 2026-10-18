@@ -321,7 +321,7 @@ export class ServerCommandChannel {
     const visualTarget = result.visualTarget ?? (result.element
       ? webAutomationActionVisualTargetFromElement(result.element as never)
       : undefined);
-    const gatewayResult = gatewayActionResultFromBrowserResult(result);
+    const gatewayResult = gatewayActionResultFromBrowserResult(result, { tabId, frameId });
     await this.deps.send("client.action_result", gatewayResult);
     // Sent or queued: the record is cleared, and a repeat of this id is answered with this result.
     await this.reconciliation.settled(gatewayResult).catch((error: unknown) => this.inFlightRecordFailed(error));

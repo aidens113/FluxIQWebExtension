@@ -21,6 +21,7 @@ import type { WebAutomationClearedCheckWait } from "../../actions/cleared-check-
 import { webActionFailureRefusal, webActionNeedsPerson, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
+import { webResetResource } from "./control-spot";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
 import { webLlmSnapshotStates } from "./state-digest";
 import {
@@ -570,6 +571,7 @@ export async function captureEvidence(
     drawings: sanitized.drawings,
     subjects: sanitized.subjects,
     pageSubject: sanitized.pageSubject,
+    resetResource: webResetResource(sessionId, payload.sourceId),
     stateDigest: states.stateDigest,
     routeState: states.routeState,
     pageQuery: sanitized.pageQuery

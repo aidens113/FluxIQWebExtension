@@ -15,7 +15,7 @@ function sellerOf(line: CartLine): string {
  * no role; at a quantity of one, the minus becomes a bin that deletes the
  * line. Delete, Save for later, Compare and Share are `span`s too.
  */
-function row(kit: PageKit, line: CartLine): string {
+function row(kit: PageKit, line: CartLine, position: number, total: number): string {
   const { css } = kit;
   const product = CATALOG.bySku(line.sku);
   if (!product) return "";
@@ -26,7 +26,7 @@ function row(kit: PageKit, line: CartLine): string {
   const decrease = line.quantity === 1
     ? `<span class="${css.qtyButton}" data-act="dec" aria-label="Delete">${TRASH}</span>`
     : `<span class="${css.qtyButton}" data-act="dec" aria-label="Decrease quantity by one">&minus;</span>`;
-  return `<div class="${css.cartRow}" data-line="${line.lineId}" data-sku="${line.sku}">
+  return `<div class="${css.cartRow}" data-line="${line.lineId}" data-sku="${line.sku}" role="listitem" aria-posinset="${position}" aria-setsize="${total}">
 <input class="${css.cartCheck}" type="checkbox"${line.selected ? " checked" : ""} aria-label="Select ${title}">
 <img src="${STORE_PATHS.image(line.sku)}" alt="" width="110" height="110">
 <div><a class="${css.cartTitle}" href="${STORE_PATHS.product(product)}"><span>${title}</span></a>
@@ -48,20 +48,20 @@ ${offer ? `<p class="${css.soldBy}">${escapeHtml(offer.condition)}</p>` : ""}${v
 export function cartMainMarkup(kit: PageKit): string {
   const { css, state } = kit;
   const allSelected = state.cart.length > 0 && state.cart.every((line) => line.selected);
-  const saved = state.saved.map((line) => {
+  const saved = state.saved.map((line, index) => {
     const product = CATALOG.bySku(line.sku);
     if (!product) return "";
-    return `<div class="${css.savedItem}" data-line="${line.lineId}" data-sku="${line.sku}"><a href="${STORE_PATHS.product(product)}"><img src="${STORE_PATHS.image(line.sku)}" alt="" width="90" height="90"><span>${escapeHtml(product.title)}</span></a><p>${formatMoney(product.priceCents)}</p><span class="${css.linkish}" data-action="move-to-cart" tabindex="0">Move to cart</span> <span class="${css.linkish}" data-action="delete" tabindex="0">Delete</span></div>`;
+    return `<div class="${css.savedItem}" data-line="${line.lineId}" data-sku="${line.sku}" role="listitem" aria-posinset="${index + 1}" aria-setsize="${state.saved.length}"><a href="${STORE_PATHS.product(product)}"><img src="${STORE_PATHS.image(line.sku)}" alt="" width="90" height="90"><span>${escapeHtml(product.title)}</span></a><p>${formatMoney(product.priceCents)}</p><span class="${css.linkish}" data-action="move-to-cart" tabindex="0">Move to cart</span> <span class="${css.linkish}" data-action="delete" tabindex="0">Delete</span></div>`;
   }).join("");
   const active = state.cart.length === 0
     ? `<p>Your Brightaisle Cart is empty.</p>`
-    : state.cart.map((line) => row(kit, line)).join("");
+    : state.cart.map((line, index) => row(kit, line, index + 1, state.cart.length)).join("");
   return `<div class="${css.cartMain}" data-name="Active Items">
 <h1>Shopping Cart</h1>
 ${state.cart.length === 0 ? "" : `<span class="${css.linkish}" data-action="${allSelected ? "deselect-all" : "select-all"}" tabindex="0">${allSelected ? "Deselect all items" : "Select all items"}</span>`}
 <p style="text-align:right">Price</p>
-${active}
+<div role="list" aria-label="Active Items">${active}</div>
 <p class="${css.subtotal}" data-testid="cart-subtotal">${cartSubtotalText(state)}</p>
 </div>
-<section class="${css.cartMain}" data-name="Saved Cart Items" aria-labelledby="saved-heading"><h2 id="saved-heading" data-testid="saved-heading">Saved for later (${state.saved.length} ${state.saved.length === 1 ? "item" : "items"})</h2><div class="${css.savedGrid}">${saved}</div></section>`;
+<section class="${css.cartMain}" data-name="Saved Cart Items" aria-labelledby="saved-heading"><h2 id="saved-heading" data-testid="saved-heading">Saved for later (${state.saved.length} ${state.saved.length === 1 ? "item" : "items"})</h2><div class="${css.savedGrid}" role="list" aria-label="Saved Items">${saved}</div></section>`;
 }

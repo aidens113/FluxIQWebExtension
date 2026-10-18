@@ -9,6 +9,7 @@ import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-st
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmSnapshotBinding } from "../sanitize";
+import { webResetCollections, webControlSpotToken } from "../control-spot";
 import { present } from "../present";
 import { boundedIdentifier } from "../untrusted-json";
 import { webStartStateChangedLines } from "./changed-lines";
@@ -46,9 +47,12 @@ export async function observeWebStartState(
     location: now.location,
     lines: start === undefined ? { gone: [], added: [] } : webStartStateChangedLines(start, now),
     // The items on the page by the tokens a declaration names a control's record by (Core t475).
-    items: now.items === undefined ? undefined : [...now.items]
+    items: now.items === undefined ? undefined : [...now.items],
+    subjects: captured.subjects === undefined ? undefined : [...new Set([...captured.subjects.values()].map((value) => webControlSpotToken("subject", value)))],
+    scope: captured.resetResource ? webControlSpotToken("scope", `${captured.resetResource}\0${now.location}`) : undefined,
+    collections: webResetCollections(captured).collections
   });
 }
 
 /** One answer to Core's `startState`; `items` absent when the read had no records. */
-type WebStartStateAnswer = { state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] }; items?: string[] };
+type WebStartStateAnswer = { state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }> };

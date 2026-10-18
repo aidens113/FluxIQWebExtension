@@ -498,5 +498,5 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken, and so does the query.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
 }

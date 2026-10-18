@@ -8,7 +8,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
 import { webAutomationOutputNodeId } from "../../output-nodes";
+import { createWebAutomationLlmEvidenceRuntime } from "../llm-evidence";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
 
 const CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
@@ -73,4 +75,28 @@ test("the page the previous step ended on keeps its places, a move to another do
   const blind = await boundary.inspectStateDiff!({ before: restored, after: { ...moved, stateRef: "web.state.98@saved:after_action" }, node, attemptId: "save.attempt.1" });
   assert.equal(blind.spot, undefined);
   assert.equal(blind.items, undefined);
+});
+
+
+test("trial and exploration scopes agree on trusted session/tab identity and never publish its raw metadata", async () => {
+  const snapshot: JsonObject = { url: "https://recipes.test/box", title: "Recipe box", interactiveElements: [
+    { tagName: "div", role: "list", selector: "#saved" },
+    { tagName: "div", role: "listitem", selector: "#row", parent: 0, attributes: { "aria-setsize": "1", "aria-posinset": "1" } },
+    { tagName: "button", selector: "#remove", parent: 1, visibleText: "Remove", context: { subject: "A recipe" } }
+  ] };
+  const answer = (sourceId: string): JsonObject => ({ ok: true, metadata: { sessionId: "session.one" }, payload: { result: { snapshot, sourceId } } });
+  const boundary = createWebAutomationHostRuntime(seam([answer("tab:1:frame:0"), answer("tab:1:frame:0"), answer("tab:2:frame:0"), answer("tab:2:frame:0")]));
+  const ownNode = { ...node, parameterValues: { selector: "#remove" } };
+  const first = await boundary.captureStateSnapshot!({ ...capture("before_action"), node: ownNode });
+  const second = await boundary.captureStateSnapshot!({ ...capture("after_action"), node: ownNode });
+  const diff = await boundary.inspectStateDiff!({ before: first, after: second, node: ownNode, attemptId: "save.attempt.1" });
+  const exploration = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => ["session.one"], executeAction: async () => ({ status: "succeeded", payload: { snapshot, sourceId: "tab:1:frame:0" } }) });
+  const observed = await exploration.startState!({ projectId: "project", flowId: "flow", callId: "look", permission: automationStudioActionPermissionDenied });
+  assert.equal((diff.spot as JsonObject).scope, observed!.collections![0]!.scope);
+  assert.match(String((diff.spot as JsonObject).scope), /^p:[0-9a-f]{32}$/u);
+  const third = await boundary.captureStateSnapshot!({ ...capture("before_action", "another"), node: ownNode });
+  const fourth = await boundary.captureStateSnapshot!({ ...capture("after_action", "another"), node: ownNode });
+  const other = await boundary.inspectStateDiff!({ before: third, after: fourth, node: ownNode, attemptId: "another" });
+  assert.notEqual((other.spot as JsonObject).scope, (diff.spot as JsonObject).scope);
+  assert.doesNotMatch(JSON.stringify(first.summary), /session\.one|tab:1:frame:0|sourceId|resetResource|p:[0-9a-f]{32}/u);
 });

@@ -9,7 +9,7 @@ import test from "node:test";
 import type { AutomationStudioActionDeclaration } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
-import { webControlSpotToken } from "..";
+import { webControlSpotToken, webResetResource } from "..";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -85,7 +85,7 @@ test("a press declares what its control and its page are about, so an add on a d
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_session, command) => {
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: shown() } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: shown(), sourceId: "tab:1:frame:0" } };
       if (command.actionType === "web.dom.click") pressed += 1;
       return { status: "succeeded", payload: { value: "ok" } };
     }
@@ -114,6 +114,9 @@ test("a press declares what its control and its page are about, so an add on a d
   // The page is about the kettle: its main heading outside the offer dialog.
   assert.deepEqual({ subject: add?.subject, page: add?.page, item: add?.item }, { subject: webControlSpotToken("subject", "Sold by Fernhill Goods"), page: webControlSpotToken("subject", KETTLE), item: undefined });
   assert.equal(kettle?.subject, add?.page);
+  assert.equal(kettle?.scope, webControlSpotToken("scope", `${webResetResource("session.one", "tab:1:frame:0")}\0https://shop.test/basket`));
+  assert.equal(add?.scope, webControlSpotToken("scope", `${webResetResource("session.one", "tab:1:frame:0")}\0https://shop.test/kettle`));
+  assert.notEqual(kettle?.scope, add?.scope);
   assert.notEqual(wraps?.subject, add?.page);
   assert.equal(kettle?.page, webControlSpotToken("subject", "Your basket"));
   assert.ok(!JSON.stringify(declared.map((declaration) => [declaration.control.subject, declaration.control.page])).match(/Kettle|Wraps|basket/u));

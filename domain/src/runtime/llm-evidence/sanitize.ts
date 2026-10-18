@@ -143,6 +143,8 @@ export type WebLlmSnapshotBinding = {
    */
   subjects?: Map<string, string>;
   pageSubject?: string;
+  /** Trusted session+tab identity; never included in model evidence. */
+  resetResource?: string;
   /**
    * The page's state digest, taken from the capture this binding was sanitized
    * from (`state-digest/snapshot-states.ts`). It is how a call reports the
@@ -290,7 +292,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
 /**
