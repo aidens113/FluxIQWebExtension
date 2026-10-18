@@ -97,7 +97,7 @@ import { screenedPageText } from "../withheld";
 import type { WebLlmEvidenceElement } from "../elements";
 import { webLlmViewTraits } from "../page-view";
 import { webLlmShownColumn } from "./field-sample";
-import { webLlmFirstItemElements, webLlmFirstItemHandles, type WebLlmFirstItemPages } from "./first-item";
+import { webLlmFirstItemElements, webLlmFirstItemHandles, webLlmFirstItemLines, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
 import { webLlmItemRow } from "./item-row";
 
@@ -311,10 +311,12 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
   const at = firstItem === undefined ? new Map<string, string>() : webLlmFirstItemHandles(proposal, firstItem);
   // Each column's element in the first item that has it, in the detection's own capture: its sample and readable label (`./field-sample.ts`).
   const elements = firstItem === undefined ? new Map<string, WebLlmEvidenceElement>() : webLlmFirstItemElements(proposal, firstItem.detected);
+  // A `lines` column's sample is its container's lines joined, as the page reads it.
+  const lines = firstItem === undefined ? new Map<string, readonly WebLlmEvidenceElement[]>() : webLlmFirstItemLines(proposal, firstItem.detected);
   return proposal.fields
     .filter((field) => field.spec.handling !== "exclude")
     .map((field) => {
-      const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec);
+      const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec, lines.get(field.key), firstItem?.detected.evidence.elements);
       const handle = at.get(field.key);
       return { key: field.key, spec: field.spec, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample) };
     });
@@ -390,6 +392,7 @@ function readableSpec(spec: WebAutomationExtractFieldSpec): WebAutomationExtract
     header: spec.header,
     required: spec.required,
     handling: undefined,
+    lines: spec.lines,
     element: undefined
   });
 }

@@ -6,6 +6,7 @@
 // read; a string shaped like a credential (`./withheld.ts`, `./location.ts`);
 // a selector; and an attribute map keyed by name (`./attributes.ts`).
 
+import { webElementDrawing } from "../../element-fingerprint";
 import { isSensitiveElementDescriptor } from "../../sensitivity";
 import { attributeRecord, publishedAttributes, rawAttributes, WEB_LLM_FRAME_ID_ATTRIBUTE } from "./attributes";
 import type { WebLlmLayerMarks } from "./layer-marks";
@@ -179,6 +180,14 @@ export type DescribedEvidenceElement = {
    * candidate in another dialog (t469).
    */
   dialog: string | undefined;
+  /**
+   * What it draws when it has no words: the extension's digest of its shapes
+   * and image sources (`apps/extension/src/content/identity/drawing.ts`).
+   * Never in the packet, as the dialog is not: a step saved on it carries it
+   * as an identity signal (`element-fingerprint/signals.ts`), and the model
+   * names an element only by its handle.
+   */
+  drawing: string | undefined;
 };
 
 /** Separates a record address's parts: a unit separator, which page keys and text do not use. */
@@ -298,7 +307,8 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     // look-alike measured in each would be put in the wrong order.
     position: documentPosition(raw.documentBounds),
     shadowHosts: shadowHostChain(raw.context),
-    dialog: dialogName(raw.context)
+    dialog: dialogName(raw.context),
+    drawing: webElementDrawing(raw.drawing)
   };
 }
 

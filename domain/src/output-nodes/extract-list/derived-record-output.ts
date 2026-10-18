@@ -85,7 +85,9 @@ function shapeDigest(request: WebAutomationExtractListRequest): string {
 
 function fieldShape(field: WebAutomationExtractField): string | (string | boolean | null)[] {
   if (typeof field === "string") return field;
-  return [field.kind, field.selector ?? null, field.attribute ?? null, field.header ?? null, field.required ?? null, field.handling ?? null];
+  // `lines` joins the shape only when set, so every field that never had it keeps the digest it had.
+  const shape = [field.kind, field.selector ?? null, field.attribute ?? null, field.header ?? null, field.required ?? null, field.handling ?? null];
+  return field.lines === true ? [...shape, true] : shape;
 }
 
 function fnv1a(text: string, seed: number): string {

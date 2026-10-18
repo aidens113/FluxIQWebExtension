@@ -325,6 +325,11 @@ assert.deepEqual(mapped("web.dom.scroll", { selector: "#row-40", scroll: { mode:
 assert.deepEqual(mapped("web.dom.scroll", { scroll: { mode: "untilStable", maxScrolls: 12, y: 800 } }).scroll, { mode: "untilStable", maxScrolls: 12, y: 800 });
 assert.equal(mapped("web.dom.scroll", { scroll: { mode: "untilStable" } }).scroll, undefined, "untilStable without maxScrolls would scroll forever");
 assert.equal(mapped("web.dom.scroll", { scroll: { mode: "down" } }).scroll, undefined);
+// Lane 3 (`run-mvcvzwk1-c1d869e4`): a key the request does not have refuses it
+// whole, as the closed schema does at submit; nothing is run as a guess.
+assert.equal(mapped("web.dom.scroll", { scroll: { mode: "by", y: 640, until: "stopsGrowing" } }).scroll, undefined, "an unknown key refuses the request");
+assert.equal(mapped("web.dom.scroll", { scroll: { until: "stopsGrowing" } }).scroll, undefined, "no mode is no request");
+assert.deepEqual(mapped("web.dom.scroll", { scroll: { until: "stopsGrowing" } }).options, { scroll: { until: "stopsGrowing" } }, "the unread request stays in options, where the verb refuses it");
 
 assert.deepEqual(mapped("web.dom.wait_for_selector", { selector: "#row", wait: { condition: "visible" } }).wait, { condition: "visible" });
 assert.deepEqual(mapped("web.dom.wait_for_selector", { selector: "#row", wait: { condition: "url", url: "https://example.test/done" } }).wait, { condition: "url", url: "https://example.test/done" });

@@ -347,8 +347,9 @@ function paginationControls(pagination: WebAutomationExtractionProposal["paginat
   return queryAll(pagination.next);
 }
 
+/** The fields a read may read, less any group of lines, which restates lines already counted (`line-group/`). */
 function readableFieldCount(proposal: WebAutomationExtractionProposal): number {
-  return proposal.fields.filter((field) => field.spec.handling !== "exclude").length;
+  return proposal.fields.filter((field) => field.spec.handling !== "exclude" && field.spec.lines !== true).length;
 }
 
 function refused(reason: Refusal["refused"]): Refusal {

@@ -131,7 +131,7 @@ test("5: a control with no words is named by the images it holds; a repeated alt
     { tag: "img", name: "", parent: "t3" },
     { tag: "div", cursor: "pointer" },
     { tag: "svg", parent: "t5" }
-  ]), ["t1 link \"lena.moss's profile picture\" ~/item", "t3 clickable \"Grey\"", "t5 clickable"]);
+  ]), ["t1 link \"lena.moss's profile picture\" ~/item", "t3 clickable \"Grey\"", "t5 clickable icon"]);
   assert.deepEqual(bodyLines([
     { tag: "a", href: LINK, item: { index: 1, total: 2 } },
     { tag: "img", name: "Kettle deluxe", parent: "t1", item: { index: 1, total: 2 } },

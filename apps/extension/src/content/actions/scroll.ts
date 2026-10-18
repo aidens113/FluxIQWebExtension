@@ -9,6 +9,16 @@
 // `coordinates` when the options carry none, and to where the page already is
 // for an axis neither names.
 //
+// A command that *sent* a scroll request the domain could not read -- no mode,
+// a mode it does not know, `untilStable` without its `maxScrolls` -- is refused
+// as INVALID_PARAMETER and moves nothing. The domain leaves such a request off
+// `action.scroll` and keeps it in `options.scroll` (`gateway-action-parameters.ts`),
+// and until lane 3 this verb took the absent request for the legacy move: Core
+// writes the node's `x: 0`/`y: 0` defaults on every scroll step, so
+// `scroll: {"until": "stopsGrowing"}` jumped the page to its top on every pass
+// of a 40-pass loop (`run-mvcvzwk1-c1d869e4`). A request is either one this
+// verb runs or no move at all.
+//
 // Every mode states a post-condition instead of assuming the page obeyed: the
 // position actually reached, clamped to what the document allows so a scroll
 // past the end is not a failure; whether the target ended up inside the
@@ -39,6 +49,12 @@
 // independently of how the dispatcher calls it. (Until 2026-09-11 the
 // dispatcher returned this promise unawaited, and the catch was load-bearing.)
 
+import {
+  WEB_AUTOMATION_FAILURE_CODES,
+  webAutomationFailureRecord,
+  type WebAutomationFailureCarrier,
+  type WebAutomationFailureRecord
+} from "@fluxiq-web-extension/domain/client";
 import type { ActionabilityReport } from "../action-runtime";
 import type {
   BrowserActionCommand,
@@ -62,9 +78,30 @@ const SMOOTH_SETTLE_MS = 1_000;
 /** Subpixel layout and rounding differences in a scroll position are not a failed post-condition. */
 const POSITION_TOLERANCE_PX = 2;
 
+/** The scroll request forms this verb runs, as a refusal names them. */
+const SCROLL_REQUEST_FORMS = "a scroll request with mode by (x, y), toElement, or untilStable (maxScrolls, y)";
+/** A key a refusal may name: identifier characters only, never a value. */
+const KEY_NAME = /^[A-Za-z0-9_.-]{1,64}$/u;
+
+/** A scroll request was sent and is not one the verb runs: INVALID_PARAMETER, nothing moved (header). */
+class UnreadableScrollRequest extends Error implements WebAutomationFailureCarrier {
+  readonly failure: WebAutomationFailureRecord;
+
+  constructor(sent: unknown) {
+    const keys = typeof sent === "object" && sent !== null && !Array.isArray(sent) ? Object.keys(sent).filter((key) => KEY_NAME.test(key)) : [];
+    const actual = `scroll: not a request this verb runs${keys.length ? ` (it names ${keys.join(", ")})` : ""}; the page was not moved`;
+    super(`The scroll request is not one this verb runs: ${SCROLL_REQUEST_FORMS}.`);
+    this.name = "UnreadableScrollRequest";
+    this.failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected: SCROLL_REQUEST_FORMS, actual });
+  }
+}
+
 export async function scrollAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   try {
     const request = action.scroll;
+    // Sent, but not read as a request (header): refused before anything moves.
+    const sent = action.options?.scroll;
+    if (request === undefined && sent !== undefined && sent !== null) return deps.failure(action, new UnreadableScrollRequest(sent), startedAt);
     if (request?.mode === "toElement") return scrollToElement(action, deps, startedAt);
     if (request?.mode === "untilStable") return await scrollUntilStable(action, request, deps, startedAt);
     return await scrollToPosition(action, requestedPosition(action, request), deps, startedAt);

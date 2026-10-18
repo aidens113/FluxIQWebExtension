@@ -1,6 +1,6 @@
 import type { LiveInstructionTask } from "../live-instructions.js";
 
-const SPAIN_HUBS = "On Farbazaar, search for \"usb c hub\" and collect every hub that ships from Spain, has free shipping and is rated 4.5 stars or higher, across all of the results. Leave out the ads and list each item only once, keeping the order the search ranks them in by default (Best Match), with columns title, store, price and rating, written exactly as the results show them.";
+const SPAIN_HUBS = "On Farbazaar, search for \"usb c hub\" and collect every item that ships from Spain, has free shipping and is rated 4.5 stars or higher, across all of the results. Leave out the ads and list each item only once, keeping the order the search ranks them in by default (Best Match), with columns title, store, price and rating, written exactly as the results show them.";
 const HUB_TO_CART = "On Farbazaar, put three of the Voltbay USB-C hub sold by Voltbay Official Store in my cart: Space Grey, the 7-in-1 version, shipped from Spain. Collect that store's coupon while you are on the item. Do not buy anything.";
 /**
  * The traffic screen replaces every search load once two have been made since
@@ -10,10 +10,10 @@ const HUB_TO_CART = "On Farbazaar, put three of the Voltbay USB-C hub sold by Vo
  */
 const TRAFFIC_SCREEN = { person: "completes", required: false, because: "Narrowing the search by the site's filters is the third results load, which the traffic screen replaces." } as const;
 const FREE_HUBS_UNDER_TEN = "On Farbazaar, search for \"usb c hub\" and collect every hub that costs 10,00 € or less and ships free on its own (not only above a minimum spend), across all of the results. Leave out the ads and list each item only once, cheapest first, with columns title, store, price and rating, written exactly as the results show them.";
-const FOLLOW_OFFICIAL_STORE = "On Farbazaar, follow Voltbay Official Store so I hear about its new listings. Keep following the stores I already follow, do not follow any other store, and do not put anything in my cart. Then give me a one-row table with column following containing exactly how my account lists the stores I follow.";
+const FOLLOW_OFFICIAL_STORE = "On Farbazaar, follow Voltbay Official Store so I hear about its new listings. Keep following the stores I already follow, do not follow any other store, and do not put anything in my cart. Then give me a one-row table with column following containing my account's \"Followed stores\" line exactly as the account writes it, label included.";
 const MINT_HUB_FALLBACK = "On Farbazaar, I want two of the Voltbay USB-C hub sold by Voltbay Official Store in Mint, the 10-in-1 version, shipped from Spain. If the Mint 10-in-1 is sold out, put two of the Mint 7-in-1 shipped from Spain in my cart instead. Add nothing else and do not buy anything. Then give me my cart as a table with columns store, item, options and quantity, written exactly as the cart page shows them.";
 const UK_EXPRESS_QUOTE = "I have moved to the United Kingdom. On Farbazaar, change the country I ship to to the United Kingdom, then find out what one Keelson USB C Hub 9 in 1 in Silver would cost me with express shipping, by taking it as far as the checkout and choosing express shipping there. Stop at the checkout and do not place the order. Give me the checkout summary as a one-row table with columns items, shipping and total, written exactly as the checkout shows them.";
-const BUY_HUB ="On Farbazaar, buy two of the Voltbay USB-C hub sold by Voltbay Official Store: Space Grey, the 7-in-1 version, shipped from Spain, with standard shipping. Collect and use that store's coupon, and pay with my saved Visa card. Then give me the order confirmation with columns order, item, options, quantity and total.";
+const BUY_HUB = "On Farbazaar, buy two of the Voltbay USB-C hub sold by Voltbay Official Store: Space Grey, the 7-in-1 version, shipped from Spain, with standard shipping. Collect and use that store's coupon, and pay with my saved Visa card. Then give me the order confirmation as a one-row table with columns order (its order ID), item, options, quantity and total (the total paid), written exactly as the confirmation shows them.";
 
 /**
  * The marketplace's live creation tasks. Each is a goal a buyer would type,
@@ -121,7 +121,7 @@ export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] 
     id: "crossborder-marketplace-collect-official-coupon-only",
     scenarioId: "crossborder-marketplace",
     kind: "navigate-and-extract",
-    instruction: "Collect the Voltbay Official Store coupon on Farbazaar for later. Collect only that coupon: leave the welcome/platform coupons alone and do not use VoltBay Store's coupon, put anything in my cart, start checkout or buy anything. Give me a one-row table with column coupon containing exactly how my account lists the collected store coupon.",
+    instruction: "Collect the Voltbay Official Store coupon on Farbazaar for later. Collect only that coupon: leave the welcome/platform coupons alone and do not collect VoltBay Store's coupon, put anything in my cart, start checkout or buy anything. Give me a one-row table with column coupon containing my account's \"Store coupons\" line exactly as the account writes it, label included.",
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-official-coupon-only",
   },

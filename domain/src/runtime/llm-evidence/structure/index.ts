@@ -10,6 +10,9 @@
 // re-exported: nothing outside this directory refuses a detection or names one.
 // `item-row.ts` says which item of a list a handle sits in, with its words: a
 // control column's `atItem`, and a press's `actedOn` in `../node-run/` (t504).
+// `container-words.ts` composes the words of a column's element that has none of
+// its own from its descendants, for that column's sample (`field-sample.ts`);
+// nothing outside this directory reads it.
 
 export { detectRepeatingStructure, type WebLlmStructureDetectionContext } from "./detect";
 export {

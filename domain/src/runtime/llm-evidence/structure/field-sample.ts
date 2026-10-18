@@ -26,14 +26,28 @@
 //   image, a price, a number, text -- with its sample: `link: 'Tom Becker'`,
 //   `text: '1 mutual friend'`. A label the page wrote in words (a header, a
 //   test id, a badge's name) is kept as it was.
+// - for a `lines` column -- a container whose lines are read each on its own
+//   and joined -- the sample is its lines joined the way the page joins them,
+//   and the readable label says it holds lines: `lines: 'Pickup today ·
+//   Delivery today'`. The container's own words run its lines together, so they
+//   are never the sample.
+// - for a text or table column whose element has no words of its own -- a
+//   price drawn as pieces "9" ",87" " €" in child spans -- the sample is its
+//   described descendants' words joined as the page reads them
+//   (`./container-words.ts`; live run `run-mvd0pbn9-bad36023`, step 0015), so
+//   the column reads `price: '9,87 €'` and not only its class path. A class
+//   path the page side closed with a note -- `(currency amount)`, `(number)`
+//   -- is still a class path, and is labelled the same way.
 //
 // Keys are not changed. A key is what an extraction writes its column under
 // (D16) and what a retained handle, a plan's `fields` map and a Flow already
 // authored name it by; renaming it would break every one of those for a word
 // the label now carries.
 
+import { WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR } from "../../../actions/extraction";
 import type { WebAutomationExtractionProposalFieldSpec } from "../../../extraction";
 import type { WebLlmEvidenceElement } from "../elements";
+import { webLlmContainerWords } from "./container-words";
 import { isWithheldText, screenedPageText } from "../withheld";
 
 /** The longest sample a column carries. */
@@ -46,13 +60,42 @@ const CLASS_PATH = /^[\w-]+(?:[.:][\w()-]+)+(?:\s*>\s*[\w-]+(?:[.:][\w()-]+)*)*$
 const PRICE = /^[$€£¥]\s?\d|^\d[\d.,\s]*\s?(?:[$€£¥]|USD|EUR|GBP)$/u;
 const NUMBER = /^[\d.,\s%]+$/u;
 
+/** A label's closing parenthetical, which the page side adds to say what a path column holds: `(currency amount)`, `(all lines)`. */
+const LABEL_NOTE = /\s*\([^()]*\)$/u;
+
 /**
  * A column as the model is shown it: its label, readable where the page's is
  * a generated class path, and its sample from the first item that has it.
+ * `lines` is a `lines` column's container's children in that item
+ * (`./first-item/`); `page` is the detection's capture, whose elements an
+ * element with no words of its own composes its sample from.
  */
-export function webLlmShownColumn(label: string, element: WebLlmEvidenceElement | undefined, spec: WebAutomationExtractionProposalFieldSpec): { label: string; sample: string | undefined } {
-  const sample = sampleOf(element, spec);
+export function webLlmShownColumn(
+  label: string,
+  element: WebLlmEvidenceElement | undefined,
+  spec: WebAutomationExtractionProposalFieldSpec,
+  lines?: readonly WebLlmEvidenceElement[],
+  page?: readonly WebLlmEvidenceElement[]
+): { label: string; sample: string | undefined } {
+  if (spec.lines === true) return linesColumn(label, element, lines);
+  const sample = sampleOf(element, spec) ?? composedSample(element, spec, page);
   return { label: readableLabel(label, element, sample), sample };
+}
+
+/**
+ * A `lines` column: its sample is each line's words joined as the page joins
+ * them, leaving out a line with none, and its label, where the page's is a
+ * class path, is `lines:` and that sample. No sample when its lines cannot be
+ * told or one of them is a form control, whose value is never shown.
+ */
+function linesColumn(label: string, element: WebLlmEvidenceElement | undefined, lines: readonly WebLlmEvidenceElement[] | undefined): { label: string; sample: string | undefined } {
+  if (element === undefined || lines === undefined || formControl(element) || lines.some(formControl)) return { label, sample: undefined };
+  const said = lines
+    .map((line) => screenedPageText(line.readable ?? line.text ?? line.name ?? line.ownText))
+    .flatMap((line) => line === undefined || isWithheldText(line) || line.trim() === "" ? [] : [line.replace(/\s+/gu, " ").trim()]);
+  const sample = bounded(said.join(WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR));
+  const path = label.replace(LABEL_NOTE, "");
+  return { label: sample !== undefined && generatedLabel(path) ? `lines: '${sample.replace(/'/gu, "’")}'` : label, sample };
 }
 
 /** The column's value in the first item that has it, or `undefined` when none may be shown. */
@@ -67,12 +110,25 @@ function sampleOf(element: WebLlmEvidenceElement | undefined, spec: WebAutomatio
 }
 
 /**
+ * A text or table column's sample from its element's described descendants,
+ * where the element has no words of its own; never for a form control, and
+ * never where the element has words, whose sample `sampleOf` already gave or
+ * withheld.
+ */
+function composedSample(element: WebLlmEvidenceElement | undefined, spec: WebAutomationExtractionProposalFieldSpec, page: readonly WebLlmEvidenceElement[] | undefined): string | undefined {
+  if (element === undefined || page === undefined || (spec.kind !== "text" && spec.kind !== "column") || formControl(element)) return undefined;
+  const own = element.readable ?? element.text ?? element.name ?? element.ownText;
+  if (own !== undefined && own.trim() !== "") return undefined;
+  return bounded(webLlmContainerWords(element, page));
+}
+
+/**
  * The label the model is shown: the page's own when it is words, else -- for
  * a generated class path -- what the element is and its sample, or the page's
  * label when neither can be told.
  */
 function readableLabel(label: string, element: WebLlmEvidenceElement | undefined, sample: string | undefined): string {
-  if (!generatedLabel(label) || element === undefined) return label;
+  if (!generatedLabel(label.replace(LABEL_NOTE, "")) || element === undefined) return label;
   const what = whatItIs(element, sample);
   return sample === undefined ? what ?? label : `${what ?? "text"}: '${sample.replace(/'/gu, "’")}'`;
 }
@@ -117,7 +173,7 @@ function bounded(text: string | undefined): string | undefined {
   if (line.length <= MAX_SAMPLE) return line;
   const room = line.slice(0, MAX_SAMPLE - 1);
   const space = room.lastIndexOf(" ");
-  return `${(space > MAX_SAMPLE / 2 ? room.slice(0, space) : room).replace(/[\s,;:.]+$/u, "")}…`;
+  return `${(space > MAX_SAMPLE / 2 ? room.slice(0, space) : room).replace(/[\s,;:.·]+$/u, "")}…`;
 }
 
 function attribute(element: WebLlmEvidenceElement, name: string): string | undefined {

@@ -21,7 +21,7 @@ export type WebLlmLineFact = {
   kind?: string;
   /** The words the line prints in quotes, withheld words already withheld; absent for a line with none. */
   words?: string;
-  /** The state tokens after the words, in the view's order, without the link target. */
+  /** The tokens after the words -- an icon's hints, then the state tokens -- in the view's order, without the link target. */
   tokens: string[];
 };
 
@@ -30,7 +30,7 @@ export function webLlmLineFacts(evidence: WebLlmPageEvidence): WebLlmLineFact[] 
   const tree = webLlmPageTree(evidence.elements);
   return chosenWebLlmLines(evidence.elements, tree).map((line) => {
     const kind = webLlmLineKind(line);
-    const fact: WebLlmLineFact = { handle: line.element.target, tokens: webLlmStateTokens(line.element, kind, undefined, line.words) };
+    const fact: WebLlmLineFact = { handle: line.element.target, tokens: [...(line.icon ?? []), ...webLlmStateTokens(line.element, kind, undefined, line.words)] };
     if (kind !== undefined) fact.kind = kind;
     if (line.words !== undefined) fact.words = line.words;
     return fact;

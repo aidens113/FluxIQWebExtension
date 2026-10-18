@@ -44,6 +44,13 @@ export type DomElementDescriptor = {
   implicitRole?: string | undefined;
   context?: DomElementContext | undefined;
   /**
+   * What an element with no words draws, as a digest of its own shapes and
+   * image sources and never of their paint (`content/identity/drawing.ts`,
+   * lane 4 t567): the identity signal of an icon control with no text, name or
+   * id. A token computed by the content script, never page text.
+   */
+  drawing?: string | undefined;
+  /**
    * The element's fingerprint differs from the previous snapshot of this frame
    * (Phase 1.4). Optional rather than `false` by default: the first snapshot of
    * a frame has nothing to have changed from, and a producer that does not
@@ -232,6 +239,13 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  *   words and paint. A replay finds its target by identity, not by these.
  * - `cursor` and `setApart` are how one capture found the element drawn (t229):
  *   a hover style or a chosen option changes them with the element unchanged.
+ * - `drawing` is an identity signal, and is left out for one reason only: the
+ *   projection that would carry it is `background/connection/gateway-payloads.ts`,
+ *   which lane 4's drawing brief (t567) could not edit. Until it writes
+ *   `drawing: element.drawing` and the name is struck from this list, a
+ *   recorded step carries no drawing, and the save-time floor counts what the
+ *   step really carries. A step built from a handle carries it through the
+ *   packet binding (`domain/.../sanitize.ts`), which does not cross here.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
@@ -241,7 +255,7 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
 type UnwiredElementField =
   | "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted"
   | "repeatCount" | "frontLayer" | "leadStatement" | "ownText" | "readableText" | "parent" | "hidden"
-  | "cursor" | "setApart";
+  | "cursor" | "setApart" | "drawing";
 
 /**
  * The recorded element's identity as it crosses the client gateway.

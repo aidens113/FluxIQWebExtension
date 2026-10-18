@@ -21,3 +21,10 @@ test('qualification: registered task names exact nonempty dataset and owns decla
   assert.ok(companyReviewWorkflow.recordingScript.some((step) => step.id === entry.step));
   assert.equal(task.permissionPoint?.control, undefined);
 });
+test('qualification: the review price is the whole Price line, and the instruction asks for exactly that (audit t716)', () => {
+  const record = companyReviewExpected.extracted![0]!.records![0]!;
+  const task = COMPANY_WEBSITE_LIVE_TASKS.find(({ id }) => id === 'company-website-review-service-without-booking')!;
+  // The review's Price line carries the payment note after the amount, so a bare "£95.00" is a different value.
+  assert.equal(record.price, '£95.00, paid after your visit, less the deposit');
+  assert.match(task.instruction, /the price being the whole of the review's Price line/u);
+});
