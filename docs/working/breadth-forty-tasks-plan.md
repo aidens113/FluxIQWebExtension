@@ -636,3 +636,32 @@ None yet.
 - Current shared Core HEAD contains dev e58e4cf9 and actual required library build passed (fluxiq50.701s, matching contracts/gateway). Optional provisioning web build is still running after successful105s compile; it is not a scraping-guard merge gate and no full-build success is claimed. Retain t721 worktree until its provisioning process and installed-proof report reader finish.
 - Before any browser/provider topology, realistic scraping tasks must name nonempty exact expected records; count-only, empty, variant-empty, inconsistent-count and scraping-with-goal-only requests refuse as fixture.invalid. Ordinary product empty searches remain valid. Empty job run is not accepted.
 - Required auction/debug and positive-result provenance reports committed3ff81e4f in t563; its current-Core libraries build53468 active before rerun. Canonical no-hook fresh workspace readiness verified, release follows latest downstream sync.
+
+### 2026-10-18 - Canonical changed-source release
+- Root synced idle t719 to downstream644b2009/Coree58e4cf9; accepted Core executable/library source unchanged from final combined gates, downstream now includes accepted positive-data guard/corpus. Explicit release: real extension project chat, slot2/bf-slot2, fresh r1-reset-kettle-t719-20261018-fixed, --model-reset-only, DeepSeek-flash, $0.25/250calls, judged whole plus one zero-call replay. No overrides, fixture reset, source mutation or independent builds during live. Authenticated startReset=false/fixtureResetBetweenTrials=false must be verified, no pass inferred.
+- Selected-card fix actual job-board content-harness browser passed one positive real-inference/read case after selected-card change;22 units/audit passed, final extension package check pending. Whole-run positive jobs acceptance remains pending.
+
+### Supervisor brief: installed proof scratch helpers
+- Worker: held_lane_review; continue own installed-proof-preparation report in t721. No product source edits or launches yet.
+- Owns NEW scratch codex-installed-proof-scripts/{serve.mjs,collect.mjs,controls.mjs} beside historical t707r3b-scripts; do not overwrite historical helpers/profiles/data. Report exact paths before writing.
+- Prepare current-path configurable isolated launcher from inspected serve helper; separate fresh roots/ports, environment isolation, hidden services, explicit browser ownership. Never copy old runtime roots or profile/storage.
+- Prepare structural-only normal UI/CDP control and read-only persisted-run collector: closed statuses/IDs/counts/cost/oracle booleans, explicit final accounting/verdict readiness. No raw page/chat text/URLs/tokens, secret-bearing output or guessed zero on missing accounting.
+- Creation must remain real installed Chrome/Edge Load-unpacked and extension chat. Replay selects normal UI No LLM intervention then Run. No API-created Flow or Lab-instrumented extension.
+- Reuse existing public/control read seams only; propose concrete endpoint/query/collector mechanism and exact data projection before execution. Never weaken fixture oracle to counts alone.
+- Shared Core now e58e4cf9 production web build passed269.905s; root will designate frozen current pair/release artifacts after selected-field source gates. No further whole build today.
+- Definition of done: concrete reviewable helpers, syntax checks and bounded redaction/unknown-accounting checks, exact start/stop procedure; zero services/browser/provider calls until supervisor review and explicit live release.
+- No shared plan/AGENTS/other report edits, commits/pushes, profile/state reads into output or task fixture changes.
+
+### Supervisor brief: changed-source auction monitoring
+- Worker: storage_comparison; READ-ONLY frozen t563 Core/downstream source. Root already launched session55563, log node_modules/codex-auction-positive-r3-live.log. Do not launch another run.
+- Owns only existing t563 codex-live-lane-1 report plus required new per-run debug after final exit. Root owns process session55563; worker may inspect safe log/metadata and report, never kill/relaunch/modify source/build.
+- Source: current Coree58e4cf9 and downstream positive guard/corpus644b2009 plus own committed failure reports; required library build53468/audit34744 passed. Fresh workspace codex-auction-positive-t563-20261018-r3, bf-slot1, DeepSeek flash/project/chat/judged whole/one zero-call replay/.25/250.
+- Task auction-marketplace-cheap-accessory-auctions has six exact positive records and unchanged-account oracle; no bid/buy/watch/save. Person handoff allowed when required. No oracle/guidance/permission changes or zero-row acceptance.
+- Report run ID, actual readiness/activity, failure cause or final oracle/reported verdict/dataset/replay/provider count/cost; missing accounting is unknown. Preserve failed receipts/debug before proposing new changed-source run. No raw page rows/credentials/profile state printed.
+- Existing selected-fields source is committed76e2cc56 in separate t567; supervisor independently22passed, combined browser/audit active there. Do not mutate that tree while supervisor readers run.
+
+### 2026-10-18 - Selected-field integration independently verified
+- Field fix committed76e2cc56 and merged after supervisor22/22 plus actual post-dev job-board browser1/1 (8.4s;1.6m total) on the newly positive shared fixture, and post-dev audit exit0. Worker final package check43.775s, unit22, exact-source browser1, audit all observed green. Actual read keeps matching rows after changing selected card; complete-run equivalence protects genuine optional/subtype/sensitive fields. Authored extension architecture updated.
+- Shared Core provisioning sync76997 actually exited0: library50.701s/web269.905s plus valid contracts/gateway stamps, e58e4cf9 current. Daily whole-build sweep allowance is exhausted; narrow affected checks/builds only for remaining fixes.
+- Canonical run-mvdhyf9k-3afd7eb6 allocated slot2 after126.982s preparation; read-only auction run-mvdi0946-d897f3cb allocated slot1. Neither has accepted outcome yet, totals stay nine completed517calls/$0.467974827. Both source trees frozen.
+- Root preparing positive read-only professional-network-kade-lead-contact on t566/slot3 and positive photo-social-august-over-1300 on t567/slot4 after current-source sync/currency. Existing browser audits prove positive data; no new pass inferred. Installed-proof scratch helpers in reviewable preparation, no installed live launch yet.
