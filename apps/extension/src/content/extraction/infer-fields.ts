@@ -115,6 +115,7 @@ import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensi
 import { badgeNaming, constantBadgeName } from "./badge-name";
 import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
+import { pruneEquivalentFieldPaths } from "./path-equivalence";
 import { keepLineGroups, positionalLine } from "./line-group";
 import { recordControlType } from "./record-control";
 import { statedAttributes } from "./stated-name";
@@ -327,9 +328,10 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
       collected.set(identity, { source, position, labels: new Map([[source.label, 1]]) });
     }
   }
-  return [...collected.values()]
+  const sources = [...collected.values()]
     .sort((left, right) => left.position - right.position)
     .map(({ source, labels }) => ({ ...source, label: mostGiven(labels) }));
+  return pruneEquivalentFieldPaths(sources, run.includes(item) ? run : [item, ...run]);
 }
 
 /** The label the most items gave a source, the first given on a tie. */
