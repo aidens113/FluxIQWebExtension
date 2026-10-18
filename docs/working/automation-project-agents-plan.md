@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Built, qualified and the product default; the cost gap is closed: `project` passed 10 of 10 on one frozen source at $0.028 a build (pair 8: `project` $0.108, `candidate` $0.067).
 Created: 2026-10-13
-Last updated: 2026-10-17
+Last updated: 2026-10-18
 Owner: Senior supervisor agent
 Scope: The browser side of FluxIQ's product-level agent system for building an automation project — a project supervisor agent that owns the task, structure, interfaces, case plan, budget and assembly, and spawns bounded subflow builders, validation and repair. This document owns host-action (tab) ownership, the chat presentation, Lab qualification and the extension wiring; the domain-neutral agent contracts are owned by the Core paired document.
 Paired document: `C:\Users\osrs_\FluxStuff\!FluxIQ\docs\working\automation-project-agents-plan.md`
@@ -12,6 +12,8 @@ Related: [MVP final month plan](./mvp-final-month-plan.md), [state-aware recover
 ---
 
 ## Current State
+
+**2026-10-18:** `project` mode ran every live build of the breadth round ([breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md)); its project-agent fixes from that round (a builder stopped for repeating may be briefed once more, the supervisor ending in plain words, a reset brief before ending) are merged on local `dev`. The rest of this section is as of 2026-10-17.
 
 **Built, qualified, the product default, and now cheaper than `candidate` (2026-10-17).** The system of agents the user
 asked for (a project supervisor that plans a Flow's subflows and spawns bounded subflow builders, the way this
