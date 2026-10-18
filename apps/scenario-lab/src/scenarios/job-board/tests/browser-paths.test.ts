@@ -72,18 +72,28 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
     } finally { await run.close(); }
   });
 
-  test("honest: in a quiet market the same search finds nothing, beside a page of recommendations", async () => {
-    const run = await session("quiet-market");
+  for (const afterCreation of [false, true]) test(`honest: quiet market retains one exact job${afterCreation ? " after creation" : ""}`, async () => {
+    const run = await session(afterCreation ? "baseline" : "quiet-market");
     try {
+      if (afterCreation) {
+        const initial = new Driver(run.context, run.page);
+        await initial.run(script("remote-rust-roles"));
+        assert.deepEqual(initial.extracted.get("extract-remote-rust-roles"), remoteRustRecords("baseline"));
+        const response = await fetch(`${run.lab.origin}/api/job-board/set-mode`, {
+          method: "POST", headers: { authorization: `Bearer ${run.lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify({ mode: "quiet-market" }),
+        });
+        assert.equal(response.ok, true);
+        await run.page.goto(`${run.lab.origin}/scenarios/job-board/`);
+      }
       const driver = new Driver(run.context, run.page);
-      const steps = script("remote-rust-roles");
-      const at = steps.findIndex((step) => step.id === "all-listed");
-      await driver.run(steps.slice(0, at));
-      await driver.active.waitForURL(/limit=50/u);
-      await driver.run(steps.slice(at + 1));
-      assert.deepEqual(driver.extracted.get("extract-remote-rust-roles"), []);
-      assert.ok(await driver.active.getByText("Jobs you might like").isVisible());
-      assert.ok(await driver.active.locator("article[data-jk]").count() >= 3);
+      await driver.run(script("remote-rust-roles"));
+      const read = driver.extracted.get("extract-remote-rust-roles");
+      assert.deepEqual(read, remoteRustRecords("quiet-market"));
+      assert.equal(read?.length, 1);
+      assert.equal(read?.[0]?.title, "Rust Platform Engineer");
+      assert.equal(read?.[0]?.company, "Verity Legal Tech");
+      assert.deepEqual((await run.finalState()).saved.sort(), ["13707d7b1e529572", "21184d1fa92f3741"]);
+      assert.deepEqual(run.errors, []);
     } finally { await run.close(); }
   });
 

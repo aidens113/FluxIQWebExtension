@@ -55,12 +55,12 @@ test("newest-likes: the three most recent studio posts sit after the pinned ones
   assert.notEqual(account(extra), finalAccount(newestLikesExpected.finalState), "an act nobody asked for fails");
 });
 
-test("august-over-1300: no studio post of August 2026 passed 1,300 likes, and each nearby misreading finds one", () => {
-  assert.deepEqual(records(augustOver1300Expected), []);
-  assert.equal(augustOver1300Expected.extracted![0]!.count, 0);
-  assert.equal(mostLiked("2026-08", 1)[0]!.likes, 1249);
+test("august-over-1300: one studio post of August 2026 passed1,300 likes; wrong years, accounts and plays are excluded", () => {
+  assert.deepEqual(records(augustOver1300Expected), [{ date: "August 21", likes: "1,349" }]);
+  assert.equal(augustOver1300Expected.extracted![0]!.count, 1);
+  assert.equal(mostLiked("2026-08", 1)[0]!.likes, 1349);
   const august2026 = gridFor(STUDIO).filter((post) => post.date.startsWith("2026-08-"));
-  assert.ok(august2026.every((post) => (post.likes ?? 0) <= 1300));
+  assert.deepEqual(august2026.filter((post) => (post.likes ?? 0) > 1300).map(({ date, likes }) => ({ date, likes })), [{ date: "2026-08-21", likes: 1349 }]);
   assert.ok(august2026.some((post) => post.kind === "reel" && post.plays > 1300), "the reel's grid count is plays, above the line");
   assert.ok(gridFor(STUDIO).some((post) => post.date.startsWith("2025-08-") && (post.likes ?? 0) > 1300), "the pinned post of August 2025 is above it");
   const otherAccounts = ALL_POSTS.filter((post) => post.author !== STUDIO && !post.sponsored && post.date.startsWith("2026-08-") && (post.likes ?? 0) > 1300).map(({ author }) => author).sort();

@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { resolveScenarioWorkflow, type ResolvedScenarioWorkflow, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
+import { isRealisticScenario } from "../../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
 import { loadLiveInstructionTasks } from "./instruction-catalog.js";
 import { selectLiveInstructionTask, type LiveInstructionTask } from "./instruction-task.js";
@@ -71,6 +72,9 @@ export function resolveCreatedFlowRequest(scenario: WebScenario, task: LiveInstr
   if (selection.variantId !== undefined && selection.variantId !== task.variantId) {
     throw refusal(task, task.variantId === undefined ? `names no variant, so --variant ${selection.variantId} does not apply` : `names variant ${task.variantId}, not --variant ${selection.variantId}`);
   }
+  if (isRealisticScenario(scenario.id) && (task.kind === "extract" || task.kind === "navigate-and-extract") && task.judgeBy !== "expected-dataset") {
+    throw refusal(task, "is a scraping task and must name an expected dataset with nonempty records");
+  }
   if (task.judgeBy === "playback-goal") {
     if (selection.workflowId !== undefined) throw refusal(task, "is judged on the scenario's primary workflow, so --workflow does not apply");
     const goal = scenario.playbackGoal;
@@ -93,6 +97,15 @@ export function resolveCreatedFlowRequest(scenario: WebScenario, task: LiveInstr
   const entry = workflow.expected.extracted?.find((candidate) => candidate.step === stepId);
   if (!entry) throw refusal(task, `names expected dataset ${stepId}, which its workflow expects nothing of`);
   if (entry.count === undefined && entry.records === undefined) throw refusal(task, `names expected dataset ${stepId}, whose expectation declares neither records nor a count to compare`);
+  // Browser scraping acceptance compares actual data, including the selected variant.
+  if (isRealisticScenario(scenario.id)) {
+    if (!Array.isArray(entry.records) || entry.records.length === 0 || entry.records.some((record) => Object.keys(record).length === 0)) {
+      throw refusal(task, `names expected dataset ${stepId}, which must declare nonempty record-by-record data for a realistic scraping task`);
+    }
+    if (entry.count !== undefined && entry.count !== entry.records.length) {
+      throw refusal(task, `names expected dataset ${stepId}, whose record count disagrees with its nonempty records`);
+    }
+  }
   const stepIndex = workflow.recordingScript.findIndex((step) => step.id === stepId);
   return Object.freeze({ task, workflowId: owner.id, variantId: task.variantId, judgement: Object.freeze({ judgeBy: "expected-dataset", stepId, stepIndex }) });
 }

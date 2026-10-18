@@ -114,13 +114,25 @@ export async function runScript(page: Page, steps: readonly ScenarioStep[]): Pro
 
 async function extract(page: Page, step: ScenarioStep): Promise<Array<Record<string, string>>> {
   const records: Array<Record<string, string>> = [];
-  for (const item of await locate(page, step.target!).all()) {
-    const record: Record<string, string> = {};
-    for (const [name, spec] of Object.entries(step.fields ?? {})) {
-      const value = spec.startsWith("column:") ? await column(item, spec.slice(7)) : await text(item.locator(spec).first());
-      if (value !== undefined) record[name] = value;
+  const pagination = step.pagination;
+  if (pagination && pagination.mode !== undefined && pagination.mode !== "next") throw new Error("site-driver extract only supports next pagination");
+  for (let pageNumber = 0; pageNumber < (pagination?.maxPages ?? 1); pageNumber += 1) {
+    for (const item of await locate(page, step.target!).all()) {
+      const record: Record<string, string> = {};
+      for (const [name, spec] of Object.entries(step.fields ?? {})) {
+        const attributeAt = spec.lastIndexOf("@");
+        const field = item.locator(attributeAt >= 0 ? spec.slice(0, attributeAt) : spec).first();
+        const value = spec.startsWith("column:") ? await column(item, spec.slice(7))
+          : attributeAt >= 0 ? (await field.count() ? await field.getAttribute(spec.slice(attributeAt + 1)) ?? undefined : undefined)
+          : await text(field);
+        if (value !== undefined) record[name] = value;
+      }
+      records.push(record);
     }
-    records.push(record);
+    if (!pagination || pageNumber + 1 >= pagination.maxPages) break;
+    const next = locate(page, pagination.next);
+    if (!await next.count() || !await next.isVisible() || await next.isDisabled()) break;
+    await next.click();
   }
   return records;
 }

@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed517calls/$0.467974827, two accepted passes/six failures/one unverified empty run. Positive-data guard and five corpus corrections are in validation. Company and social source pushed; numeric guard merged locally. Canonical reset correction passed actual-ledger browser proof; final combined build pending before paid rerun. Selected-card field defect assigned.
+Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed517calls/$0.467974827, two accepted passes/six failures/one unverified empty run. Positive-data guard and five corpus corrections passed unit/type/browser checks; final dependency integration active. Reset/numeric source pushed bothdev. Canonical no-hook rerun awaits current positive-data lane sync. Selected-card field fix passed22 units; actual extension browser/type gates pending.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -13,7 +13,7 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
-**Newest user requirement (2026-10-17): scraping tasks require actual matching data.** Audit of the current108-task run-scoped build found87 dataset tasks:82 positive,5 empty variants requiring revision. Empty-result allowance is revoked; no zero-row scraping acceptance or launch. Actual job empty run is unaccepted, and a transient selected-card selector defect has been found. Task/fixture/oracle/provider-free path and launch guard corrections are now required alongside ongoing reset/social work.
+**Newest user requirement (2026-10-17): scraping tasks require actual matching data.** Audit found87 dataset tasks among108 total, including5 empty variants. All5 are now revised and provider-free browser-proven, making all87 positive; guard/corpus integration is in progress. Empty-result allowance is revoked; no zero-row scraping acceptance or launch. Actual job empty run is unaccepted, and a transient selected-card selector defect has been found. Task/fixture/oracle/provider-free path and launch guard corrections passed focused checks; no new paid acceptance is implied.
 
 **Resumed by Codex on the user's go-ahead (client date 2026-10-17).** Historical wrap-up dates below are retained as recorded by Claude. This section is written to
 stand alone. The user's requests: 40 new tasks on the ten realistic sites, run live, debugged and fixed, fast
@@ -60,7 +60,7 @@ the lane trees until merged).
 - **Storage excluded:** held optional72abeeab and restorationc13c0a30 remain only t707. Supervisor verified482pass/2fail/4skip held versus484/0/4 baseline; timing causality unproved. No pooling delta enters dev.
 - **Remaining:** accepted full coverage for crossborder, auction, classifieds, photo and professional; owed store/jobs/social reruns; installed Chrome/Edge extension automation creation and zero-call rerun. Install/pairing already proven, Firefox unavailable. Lifetime Core build leases remain active; no source mutation in live lanes.
 
-**Next, in order:** correct model-reset-only defects and finish social recovery; continue independent conditional/no-write/read-only coverage from verified company integration; review fixes and run changed-source canonical proof; complete remaining sites and owed reruns; installed-extension create/replay. No user input needed.
+**Next, in order:** finish positive-data guard integration; sync/release changed-source no-hook canonical and read-only auction reruns; finish selected-card field browser gates; continue remaining site coverage and owed positive jobs/social/store reruns; installed-extension create/replay. No user input needed.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -613,3 +613,26 @@ None yet.
 - Numeric guard Core3fb6b891 and downstream report287c032e merged locally; supervisor independent10/10 observed. Last pushed downstream7abd7bfa/Coreb2721f85; later local numeric and forthcoming reset changes not yet pushed.
 - Supervisor assigned selected-card field inference in idle t567; no hardcoded fixture/style names, optional marks/templates/sensitive handling preserved; positive realistic browser proof required. Source proposal first.
 - Supervisor scope amendment: approved additional apps/extension/src/content/extraction/field-path-equivalence.ts (one exported structural pruning function actually called by infer-fields), plus existing extraction/index.ts if barrel convention requires it. Existing786-line infer-fields must remain under800-line budget. Owning tests continue through actual inference; no extract-and-drop.
+
+### Supervisor brief: installed-extension proof preparation (2026-10-18)
+- Worker: held_lane_review; read-only discovery in main/t566/t707/scratch helpers; own report only in t721 docs/working/breadth-forty-tasks-plan/reports/codex-installed-proof-preparation.md.
+- Objective: prepare exact existing safe launch/control procedure for installed Chrome155/Edge155 create+zero-call replay, beyond already-proven Load-unpacked/pairing.
+- Read existing install-core-live-r3b/install-package-lead reports selectively; older reports contain tokens. Never dump reports/raw profile/state or credentials. Locate existing t707r3b-scripts/serve.mjs helpers via narrow paths.
+- Identify real browser binaries, isolated profile/helper paths, current release build target, normal real extension-chat creation and replay controls, fresh scenario/host ports; no profile/server launch or writes yet.
+- Distinguish genuine installed transport from instrumented Lab Chromium; do not propose programmatic Flow creation as proof. Preserve user profiles and panel.
+- Determine whether existing helpers support a provider-free replay and collecting only structural success/provider-call counts; report gaps and exact next commands without executing them.
+- Must not edit source/shared plans/other reports, start servers/browsers, read secret contents into output, commit/push, or spend provider calls.
+- Report prerequisites, actual inspected evidence, unknowns and concrete safe next steps. At most40-line brief; no broad background reading.
+- Existing positive corpus source/gates frozen; no more changes there. Root owns its sync/build/integration.
+### 2026-10-18 — Source integration and positive path proofs
+- Reset/numeric coherent source pushed both dev branches: downstreamce720fc8/Coree58e4cf9, after final60/60/Corecheck64.082s/library88.071s and both post-integration audits. Lane worktrees retained intentionally for upcoming isolated live proof, no worktree cleanup during lane ownership.
+- All five revised scraping workflows/variants passed actual provider-free Chromium paths. Owning corpus70/70, root independent corpus+launch13/13, company whole owning browser12/12, corrected photo/extra-save3/3 and scenario/test-runner checks passed. Initial browser6/8 exposed wrong photo date and stale negative wait; fixes and actual passing reruns inspected, no failed log relabelled.
+- Positive-data unit committed5b0d2e2f in t721 and merged latest downstreamdev; final dependency currentness sync running. Its automatic shared Core full build includes web, counted as the second daily build sweep; no further whole build/check/test sweep today. Future lane dependencies use narrow library builds only.
+- Selected-field helper owner refined to extraction/path-equivalence/{prune.ts,index.ts}, replacing worker-created untracked field-path-equivalence.ts. Proof must cover complete actual run, discovery remains bounded; beyond-first12 conflict control required. Invalid generated selectors propagate. t567 synced latest paireddev before further narrow gates.
+
+
+### 2026-10-18 - Positive-data source accepted
+- Supervisor merged t721 after post-dev owning13/13 and audit exit0, source review, observed70 corpus/owning tests, scenario and test-runner package checks, all five positive realistic Chromium paths and company owning12/12. Existing87 dataset tasks are all positive with named expected fields; all108 task IDs retained.
+- Current shared Core HEAD contains dev e58e4cf9 and actual required library build passed (fluxiq50.701s, matching contracts/gateway). Optional provisioning web build is still running after successful105s compile; it is not a scraping-guard merge gate and no full-build success is claimed. Retain t721 worktree until its provisioning process and installed-proof report reader finish.
+- Before any browser/provider topology, realistic scraping tasks must name nonempty exact expected records; count-only, empty, variant-empty, inconsistent-count and scraping-with-goal-only requests refuse as fixture.invalid. Ordinary product empty searches remain valid. Empty job run is not accepted.
+- Required auction/debug and positive-result provenance reports committed3ff81e4f in t563; its current-Core libraries build53468 active before rerun. Canonical no-hook fresh workspace readiness verified, release follows latest downstream sync.

@@ -35,6 +35,39 @@ test("a dataset task finds the workflow whose script extracts its dataset, prima
   assert.equal(resolveCreatedFlowRequest(catalogScenario, datasetTask({ expectedDatasetId: "extract-all-pages" }), { workflowId: "paginated-extraction" }).workflowId, "paginated-extraction");
 });
 
+test("realistic scraping tasks require positive record-by-record expectations before browser startup", () => {
+  const scenario = { ...catalogScenario, id: "job-board" };
+  const task = datasetTask({ scenarioId: scenario.id });
+  assert.equal(resolveCreatedFlowRequest(scenario, task).judgement.judgeBy, "expected-dataset");
+  const invalid = [
+    { count: 0, records: [] },
+    { records: [] },
+    { count: 2 },
+    { count: 1, records: [{}] },
+    { count: 0, records: [{ name: "A matching role" }] },
+    { count: 2, records: [{ name: "A matching role" }] },
+  ];
+  for (const expected of invalid) {
+    const fixture = { ...scenario, expected: { extracted: [{ step: "extract-page-one", ...expected }] } };
+    assert.throws(() => resolveCreatedFlowRequest(fixture, task), (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid" && /nonempty|record count/u.test(error.message));
+    assert.throws(() => resolveCreatedFlowRequest(fixture, { ...task, kind: "form" }), /nonempty|record count/u, "a dataset task cannot bypass the data guard by using the form kind");
+  }
+});
+
+test("a realistic variant cannot replace positive scraping data with an empty expectation", () => {
+  const scenario = { ...catalogScenario, id: "job-board", variants: [{ id: "no-matches", description: "No matching rows", arm: { operation: "empty" }, expected: { extracted: [{ step: "extract-page-one", count: 0, records: [] }] } }] };
+  assert.throws(() => resolveCreatedFlowRequest(scenario, datasetTask({ scenarioId: scenario.id, variantId: "no-matches" })), /nonempty/u);
+});
+
+test("realistic scraping requires dataset judgement while pure action goals stay supported", () => {
+  const scenario = { ...catalogScenario, id: "job-board" };
+  const task = goalTask({ scenarioId: scenario.id });
+  assert.equal(resolveCreatedFlowRequest(scenario, task).judgement.judgeBy, "playback-goal");
+  for (const kind of ["extract", "navigate-and-extract"] as const) {
+    assert.throws(() => resolveCreatedFlowRequest(scenario, { ...task, kind }), /scraping.*expected dataset/u);
+  }
+});
+
 test("--variant is accepted only when it is the task's own variant", () => {
   assert.equal(resolveCreatedFlowRequest(catalogScenario, datasetTask({ variantId: "text-variant" }), { variantId: "text-variant" }).variantId, "text-variant");
   assert.throws(() => resolveCreatedFlowRequest(catalogScenario, datasetTask({ variantId: "text-variant" }), { variantId: "broken" }), /names variant text-variant, not --variant broken/u);

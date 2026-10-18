@@ -73,12 +73,13 @@ test("breadth: one sign-up leaves one subscription with its code; a second addre
   assert.doesNotMatch(page(createCompanyWebsiteState(), "newsletter"), /Your subscriptions/u);
 });
 
-test("breadth: Corve Bridge offers no Saturday slot in the calendar, and a branch that opens on Saturdays does", () => {
+test("breadth: Wrenfield has exactly two free Saturday slots across three weeks; Corve Bridge is closed", () => {
   const saturdays = (branchId: string) => slotsFor(branchId).filter(({ date }) => weekday(date) === 6);
   assert.deepEqual(saturdays("corve-bridge"), []);
   assert.equal(BRANCHES.find(({ id }) => id === "corve-bridge")!.hours.find(([days]) => days === "Saturday")![1], "Closed");
-  assert.ok(saturdays("wrenfield").some(({ date }) => date === "2026-10-17"), "the wrong branch has the column the read looks at");
-  assert.deepEqual(saturdayCertificateExpected.extracted![0], { step: "extract-saturday-certificate-slots", count: 0, records: [] });
+  const free = saturdays("wrenfield").filter(({ free }) => free).map(({ date, time }) => ({ date, time }));
+  assert.deepEqual(free, [{ date: "2026-10-03", time: "11:30" }, { date: "2026-10-17", time: "09:00" }]);
+  assert.deepEqual(saturdayCertificateExpected.extracted![0], { step: "extract-saturday-certificate-slots", count: 2, records: free });
   assert.equal(accountOf(saturdayCertificateExpected, "finalState"), companyReviewAccountFacts(createCompanyWebsiteState()));
 });
 

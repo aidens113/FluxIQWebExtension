@@ -69,12 +69,12 @@ test("each trap in the giveaway thread is one a rule excludes, not an accident o
   assert.notDeepEqual(giveawayEntries(COPIED_GIVEAWAY_COMMENTS), entries);
 });
 
-test("the three most-liked August posts can only be told apart on their own pages", () => {
+test("exact counts on opened posts distinguish the most-liked August posts", () => {
   const top = mostLiked("2026-08", 3);
-  assert.deepEqual(top.map(({ date, likes }) => [date, likes]), [["2026-08-21", 1249], ["2026-08-09", 1236], ["2026-08-03", 1212]]);
+  assert.deepEqual(top.map(({ date, likes }) => [date, likes]), [["2026-08-21", 1349], ["2026-08-09", 1236], ["2026-08-03", 1212]]);
   const augustPosts = gridFor(STUDIO).filter((post) => post.date.startsWith("2026-08-"));
   const reading12K = augustPosts.filter((post) => post.likes !== null && compactCount(post.likes) === "1.2K");
-  assert.equal(reading12K.length, 4, "four posts read 1.2K on the grid");
+  assert.equal(reading12K.length, 3, "three posts read 1.2K on the grid");
   assert.deepEqual(augustPosts.slice(0, 3).map(({ date }) => date), ["2026-08-30", "2026-08-27", "2026-08-24"], "the first three August cells are not the answer");
   const pinnedAugust = gridFor(STUDIO).find((post) => post.pinned && post.date.includes("-08-"))!;
   assert.equal(pinnedAugust.date, "2025-08-14");

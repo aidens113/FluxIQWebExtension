@@ -79,11 +79,24 @@ describe("breadth rows: a plausible wrong path fails the oracle", { concurrency:
     assert.deepEqual(await failedFacts(page, newsletterSignupWorkflow.expected.pageFacts ?? []), [], "the account is a first visit's again");
   }));
 
-  test("saturday-certificate: Wrenfield, which opens on Saturdays, is the wrong branch", TIMEOUT, () => withSite(async ({ page }) => {
-    const script = without(replace(saturdayCertificateWorkflow.recordingScript, "saturday-branch", { target: 'frame:Slotwise booking/div:has(> strong:text-is("Wrenfield"))' }), "saturday-first-week", "saturday-second-week", "saturday-third-week");
+  test("saturday-certificate: closed Corve Bridge is the wrong branch", TIMEOUT, () => withSite(async ({ page }) => {
+    const script = without(replace(saturdayCertificateWorkflow.recordingScript, "saturday-branch", { target: 'frame:Slotwise booking/div:has(> strong:text-is("Corve Bridge"))' }), "saturday-first-week", "saturday-second-week", "saturday-third-week");
     const rows = await runScript(page, script);
-    assert.ok((rows["extract-saturday-certificate-slots"]?.length ?? 0) > 0);
+    assert.equal(rows["extract-saturday-certificate-slots"]?.length, 0);
     assert.notDeepEqual(rows["extract-saturday-certificate-slots"], dataset(saturdayCertificateWorkflow).records);
+  }));
+
+  test("saturday-certificate: one week misses the later match and unavailable slots add wrong rows", TIMEOUT, () => withSite(async ({ page }) => {
+    const extract = saturdayCertificateWorkflow.recordingScript.find(({ id }) => id === "extract-saturday-certificate-slots")!;
+    const firstWeek = replace(saturdayCertificateWorkflow.recordingScript, extract.id, { pagination: { mode: "next", next: extract.pagination!.mode === "next" ? extract.pagination!.next : "", maxPages: 1 } });
+    const rows = await runScript(page, without(firstWeek, "saturday-third-week"));
+    assert.deepEqual(rows[extract.id], [{ date: "2026-10-03", time: "11:30" }]);
+    assert.notDeepEqual(rows[extract.id], dataset(saturdayCertificateWorkflow).records);
+    assert.equal(await page.frameLocator('iframe[title="Slotwise booking"]').locator('div[data-week="-1"]').count(), 0);
+    const unavailable = replace(saturdayCertificateWorkflow.recordingScript.slice(saturdayCertificateWorkflow.recordingScript.findIndex(({ id }) => id === extract.id)), extract.id, { target: extract.target!.replace('[aria-disabled="false"]', '') });
+    const all = await runScript(page, unavailable);
+    assert.equal(all[extract.id]?.length, 6);
+    assert.notDeepEqual(all[extract.id], dataset(saturdayCertificateWorkflow).records);
   }));
 
   test("heat-pump-quote: naming head office instead of the heat pump centre fails the final state", TIMEOUT, () => withSite(async ({ page }) => {

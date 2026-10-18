@@ -56,7 +56,7 @@ function stepTime() {
     let inner;
     if (iso === d.today) inner = '<div class="' + w.note + '">Today: please call the branch</div>';
     else if (!mine.length) inner = '<div class="' + w.note + '">' + (new Date(iso + 'T00:00:00Z').getUTCDay() === 0 ? 'Closed' : 'No online slots') + '</div>';
-    else inner = mine.map((slot) => '<div class="' + w.slot + (slot.free ? '' : ' ' + w.slotFull) + (s.slot && s.slot.date === slot.date && s.slot.time === slot.time ? ' ' + w.slotOn : '') + '" data-slot="' + slot.date + '|' + slot.time + '">' + slot.time + '</div>').join('');
+    else inner = mine.map((slot) => '<div class="' + w.slot + (slot.free ? '' : ' ' + w.slotFull) + (s.slot && s.slot.date === slot.date && s.slot.time === slot.time ? ' ' + w.slotOn : '') + '" role="button" aria-disabled="' + (!slot.free) + '" data-date="' + slot.date + '" data-slot="' + slot.date + '|' + slot.time + '">' + slot.time + '</div>').join('');
     return '<div class="' + w.day + '"><div class="' + w.dayHead + '">' + dayLabel(iso) + '</div>' + inner + '</div>';
   }).join('');
   const chosen = s.slot ? '<p>' + esc(s.slot.long) + ' at ' + s.slot.time + ' with ' + esc(s.slot.engineer) + '</p>' : '<p class="' + w.note + '">Choose a time.</p>';
