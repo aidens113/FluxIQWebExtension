@@ -1804,6 +1804,16 @@ and its displayed columns omit. Requested URL columns and raw `href`
 attribute reads retain their values; excluding a field from the read itself
 still prevents reading it.
 
+Field discovery samples a bounded set of items, then compares candidate paths
+against the complete observed run. A narrower path that adds ancestor classes
+is omitted only when a shared path retains a common ancestor class, has the
+same leaf and reading semantics, resolves to the identical element on every
+overlapping item, and covers additional items. Selection styling therefore
+cannot add a redundant partial copy of a shared column. Distinct subtype
+leaves, optional marks, ambiguous resolutions, sensitive exclusions and
+accessible-name behavior remain separate; no class names or text values are
+interpreted as selection state (`content/extraction/path-equivalence/`).
+
 A list extraction's text or table-column field containing a visible unexpanded text-disclosure
 button refuses the read with `incomplete_text` in existing validation feedback.
 The author first reads minimal nonempty stable row-context columns without the
