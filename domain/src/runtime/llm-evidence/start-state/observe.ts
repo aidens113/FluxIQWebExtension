@@ -49,10 +49,11 @@ export async function observeWebStartState(
     // The items on the page by the tokens a declaration names a control's record by (Core t475).
     items: now.items === undefined ? undefined : [...now.items],
     subjects: captured.subjects === undefined ? undefined : [...new Set([...captured.subjects.values()].map((value) => webControlSpotToken("subject", value)))],
+    resource: captured.resetResource,
     scope: captured.resetResource ? webControlSpotToken("scope", `${captured.resetResource}\0${now.location}`) : undefined,
     collections: webResetCollections(captured).collections
   });
 }
 
 /** One answer to Core's `startState`; `items` absent when the read had no records. */
-type WebStartStateAnswer = { state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }> };
+type WebStartStateAnswer = { state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; resource?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }> };

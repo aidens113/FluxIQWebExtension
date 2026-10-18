@@ -162,7 +162,7 @@ export type WebAutomationLlmEvidenceRuntime = {
   startState?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
     start?: JsonObject;
     permission: AutomationStudioActionPermissionCheck;
-  }): Promise<{ state: JsonObject; differs: string[]; location?: string; lines?: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }> } | undefined>;
+  }): Promise<{ state: JsonObject; differs: string[]; location?: string; lines?: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; resource?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }> } | undefined>;
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
   observedStateKeys: readonly string[];
