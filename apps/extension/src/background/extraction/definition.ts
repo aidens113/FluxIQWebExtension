@@ -164,6 +164,7 @@ function proposedColumns(proposal: WebAutomationExtractionProposal): ExtractionC
     ...(field.spec.selector !== undefined ? { selector: field.spec.selector } : {}),
     ...(field.spec.attribute !== undefined ? { attribute: field.spec.attribute } : {}),
     ...(field.spec.header !== undefined ? { header: field.spec.header } : {}),
+    ...(field.spec.lines === true ? { lines: true } : {}),
     ...(field.spec.required !== undefined ? { required: field.spec.required } : {}),
     handling: field.spec.handling ?? "include"
   }));
@@ -176,11 +177,11 @@ function proposedColumns(proposal: WebAutomationExtractionProposal): ExtractionC
  * and `header` likewise by `column` (`domain/src/actions/extraction/request.ts`).
  * A user who switches a table column to plain text would otherwise send a
  * request the reader refuses whole, so each is written only under the kind that
- * reads it.
+ * reads it. `lines` is read only by `text`, so it is written only there too.
  */
 function fieldSpec(
   kind: WebAutomationExtractFieldKind,
-  source: { selector?: string | undefined; attribute?: string | undefined; header?: string | undefined; required?: boolean | undefined },
+  source: { selector?: string | undefined; attribute?: string | undefined; header?: string | undefined; lines?: boolean | undefined; required?: boolean | undefined },
   handling: WebAutomationExtractFieldHandling
 ): WebAutomationExtractFieldSpec {
   return {
@@ -188,6 +189,7 @@ function fieldSpec(
     ...(source.selector !== undefined ? { selector: source.selector } : {}),
     ...(kind === "attribute" && source.attribute !== undefined ? { attribute: source.attribute } : {}),
     ...(kind === "column" && source.header !== undefined ? { header: source.header } : {}),
+    ...(kind === "text" && source.lines === true ? { lines: true } : {}),
     ...(source.required !== undefined ? { required: source.required } : {}),
     handling
   };

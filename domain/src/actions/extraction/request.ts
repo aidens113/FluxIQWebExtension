@@ -52,9 +52,30 @@ export type WebAutomationExtractFieldSpec = {
    */
   required?: boolean | undefined;
   handling?: WebAutomationExtractFieldHandling | undefined;
+  /**
+   * `true`, on a `text` field only: the element is a container of lines, and
+   * the field reads each of its children's text on its own, in document order,
+   * joined by `WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR`, leaving out a child with
+   * no words. Left behind on every other kind, as `attribute` and `header` are.
+   *
+   * A card that lists its options as sibling lines of one container -- one
+   * line per way to get the item, and not every card has every line -- has no
+   * line a path can name but by its position, so the lines are offered as
+   * `div:1`, `div:2`, `div:3`, and on a card without the first line every later
+   * one moves up a place: a condition on one of them tests whichever line sits
+   * there. This field holds the whole group, so a condition that `contains` a
+   * line's words keeps exactly the items whose group has that line, wherever it
+   * sits (`apps/extension/src/content/extraction/infer-fields.ts`). A plain text
+   * read of the container would run the lines together with nothing between
+   * them, since each line's words end where the next line's begin.
+   */
+  lines?: boolean | undefined;
   /** The element the field was picked from, as the one fingerprint normalizer describes it. */
   element?: WebAutomationElementFingerprint | undefined;
 };
+
+/** What a `lines` field puts between two of its container's lines. */
+export const WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR = " · ";
 
 /** One field: today's string grammar, or the structured spec. */
 export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;

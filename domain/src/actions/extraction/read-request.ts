@@ -357,7 +357,11 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   const required = optionalValue(spec.required, booleanValue);
   const handling = optionalValue(spec.handling, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS));
   const element = optionalValue(spec.element, fingerprintValue);
-  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED) return undefined;
+  // A container read line by line is a `text` read; on any other kind the
+  // member is left behind like a stray `header`. Only `true` is kept, so a
+  // field that says `false` is the plain field it always was.
+  const lines = kind === "text" ? optionalValue(spec.lines, booleanValue) : undefined;
+  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED) return undefined;
   const field: WebAutomationExtractFieldSpec = {
     kind,
     ...(selector !== undefined ? { selector } : {}),
@@ -365,6 +369,7 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
     ...(header !== undefined ? { header } : {}),
     ...(required !== undefined ? { required } : {}),
     ...(handling !== undefined ? { handling } : {}),
+    ...(lines === true ? { lines } : {}),
     ...(element !== undefined ? { element } : {})
   };
   return field;

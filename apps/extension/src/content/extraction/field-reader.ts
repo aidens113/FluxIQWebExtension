@@ -5,6 +5,14 @@
 //
 // What each kind reads, from the element its selector finds inside the item,
 // or from the item itself when it names none:
+// - `text` with `lines`: the element is a container of lines, and each of its
+//   children is read as `text` reads it, in document order -- a text node of
+//   its own as one line too -- and the lines with words are joined by the
+//   domain's `WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR`. A plain read of the
+//   container runs its lines together, since each line's words end where the
+//   next one's begin, and a condition on one of the positional lines tests
+//   whichever line sits at that place on that card (`infer-fields.ts`). A child
+//   that is a sensitive control, or a stylesheet or script, is no line;
 // - `text`: the page's own tightest statement of the value the element shows
 //   (`value-statement.ts`) and otherwise the element's whitespace-collapsed
 //   text, with the contents of every sensitive control inside it left out. The
@@ -42,7 +50,7 @@
 // itself. A `column` field on items that are not table rows cannot be
 // performed, so it throws.
 
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR, WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { ExtractFieldReader } from "./field-spec";
@@ -63,7 +71,7 @@ function readElement(item: Element, name: string, reader: ElementFieldReader): s
   if (isWithinSensitiveControl(element)) throw sensitiveFieldRefusal(name);
   switch (reader.kind) {
     case "text":
-      return readText(element);
+      return reader.lines === true ? readLines(element) : readText(element);
     case "attribute":
       return element.getAttribute(reader.attribute) ?? undefined;
     case "link":
@@ -92,6 +100,26 @@ function readColumn(item: Element, name: string, header: string): string | undef
 function readText(element: Element): string {
   return tightestStatedValue(element)
     ?? normalizeText(hostsOpenShadowRoot(element) ? drawnText(element) : textOutsideSensitiveControls(element));
+}
+
+/**
+ * A container's lines, each read on its own and joined in document order. The
+ * children are the ones the page draws (`drawnChildren`), so a container that
+ * hosts a shadow root reads the lines drawn there.
+ */
+function readLines(element: Element): string {
+  const lines: string[] = [];
+  for (const child of drawnChildren(element)) {
+    let line = "";
+    if (child.nodeType === Node.TEXT_NODE) line = normalizeText(child.nodeValue ?? "");
+    else if (child.nodeType === Node.ELEMENT_NODE) {
+      const inner = child as Element;
+      if (UNDRAWN_TAGS.has(inner.tagName.toUpperCase()) || isWithinSensitiveControl(inner)) continue;
+      line = readText(inner);
+    }
+    if (line !== "") lines.push(line);
+  }
+  return lines.join(WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR);
 }
 
 /**

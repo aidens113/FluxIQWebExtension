@@ -12,7 +12,9 @@
 // rating stars, its variant chips), not the records a person asks for.
 //
 // What counts: a field with a selector inside the item, or a table column.
-// What does not: the item's own `data-*` attributes (a statement *about* the
+// What does not: a group of lines read whole (`infer-fields.ts`), whose lines
+// are each counted already, so offering it changes no run's worth; the item's
+// own `data-*` attributes (a statement *about* the
 // item, useful beside content but never content alone), a sensitive field
 // proposed `exclude`, and a live control value, which is a form's state rather
 // than a record's data (`detect-structure.ts` passes a form's rows over for the
@@ -25,6 +27,7 @@ export function contentFieldCount(fields: readonly WebAutomationExtractionPropos
   return fields.filter((field) =>
     field.spec.handling !== "exclude"
     && field.spec.kind !== "value"
+    && field.spec.lines !== true
     && (field.spec.kind === "column" || field.spec.selector !== undefined)
     && field.coverage >= minCoverage).length;
 }

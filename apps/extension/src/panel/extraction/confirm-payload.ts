@@ -48,6 +48,7 @@ function confirmField(key: string, field: ExtractionFieldRow): ExtractionConfirm
     selector: field.selector,
     attribute: field.kind === "attribute" ? field.attribute : undefined,
     header: field.kind === "column" ? field.header : undefined,
+    lines: field.kind === "text" ? field.lines : undefined,
     required: field.required,
     handling: field.handling
   };
