@@ -1,5 +1,47 @@
 # Codex R1 reset review
 
+Status: Bounded successful-effect feedback implemented and supervisor-reviewed;
+current-dev merged-source narrow integration gates ALL passed. Worker source and
+HEADs frozen; root owns final integration/publication. No paid r6 release/run.
+
+## Current verified result
+
+The refused-reset feedback names exactly one independently witnessed later act
+on the same original item/scope/resource when fresh complete proof identifies
+it. The wrong explicit claim stays refused and dispatches nothing. A hint never
+reassigns, grants permission, consumes an inverse or marks an earlier act undone.
+The accepted inverse admission's extracted608-character condition is identical.
+Already-declared optional resource provenance is retained, not newly authorized.
+Generic refusal copy covers creates and modifications without fixture examples.
+
+Supervisor independently ran83 owning cases and reviewed source/resources and
+unchanged admission. Actual provider-free installed MV3 -> real gateway -> public
+project service browser passed on pre-integration heads Coreebd504be/downstream
+c8a3e7e7 with reviewed local changes later preserved as Core3747a319/downstreama739b415: wrongact2 refused/hint[act3]/click4->4; explicitcorrectact3 click4->5;
+originalcomplete2/2->3/2->retry2/3->ownDelete1/3->exact2/2, ordered original and
+restored hash9dff895713a9a2122d82. Dirtytrial blocked, cleantrial yes, no gateway
+errors. Root independently inspected actualreceipt/.last-run. This proves the
+bounded feedback delivery/inverse mechanism, not full-model canonical acceptance.
+
+Root preserved feedback Core3747a319/downstreama739b415 then merged accepted
+accounting/intermediate-output source. CURRENT CHECKED HEADS: Corecbd7dcb5 and
+downstream27fee9ff. All mechanical integration gates now actually native0:
+13 Core owning files206/206;3 intersecting domain files31/31; Core/domain/extension
+package checks; own3Core libraries; current domain build; both audits. Extension
+check includes tsconfig.test.json (the installed helper), source types and all
+in-memory browser bundles. No post-merge browser/paid claim. Exact logs and commands
+are in final current-dev integration section below. No source edits in this pass.
+
+Canonicalr5 run-mve8vn94-023a5213 remains FAILED/noFlow/nooracle/judge/replay;
+67calls/$0.043542330. Earlier paid failures and their debugs remain historical.
+Readiness correction supersedes older helper/proposal wording below: r5's actual
+authenticated running Core candidateTrial.startReset=false WAS observed. The
+requested --model-reset-only fixtureResetBetweenTrials=false policy was NOT an
+independently persisted actual candidateTrial fixture flag in that failed chat
+branch. A helper echo/source policy is not an observed runtime receipt. No actual
+fixture flag is claimed unless separately persisted/authenticated in a new run.
+
+## Historical opening (superseded; receipts retained)
 Status: Transfer and whole-trial original-authority integration implemented;
 source/tests frozen. Transfer/authority committed and both branches synced to
 latest dev. Final integrated gates are running; paid live proof awaits release.
@@ -1752,3 +1794,65 @@ output e2e/test-results/reset-retry-feedback-20261018/.last-run.json passed.
 All readers ended. No source/HEAD mutations, commits, merges, pushes or paidr6.
 Canonicalr5 FAILED remains unchanged; scripted actualtransport proof establishes
 feedback delivery and strict inverse behavior, not fullmodel canonical acceptance.
+### Current-dev feedback integration: final native gates
+
+Written main brief reset feedback current-dev integration gates executed.
+Frozen paired heads Corecbd7dcb5/downstream27fee9ff; both initially/finally clean.
+No source/HEAD edits; sole worker write is this report. All own readers terminal.
+Prior actualfeedback browser remains its pre-merge proof, not rerun/relabelled.
+
+Core owning89728 native0:13files206/206,113.75s. Package cwd command cacheoff:
+pnpm exec vitest run <the following13paths> --maxWorkers=2 --minWorkers=1.
+All paths relative to packages/fluxiq/:
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/ledger-subject.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/ledger.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/words.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/create-baselines.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/project-ledger.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/start-check.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/undoes-tool.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/site-reset/tests/trial-policy.test.ts
+- src/programs/automation-studio/runtime/flow-bootstrap/tests/action-permissions.test.ts
+- src/programs/automation-studio/runtime/service/project-build/tests/reset-calls.test.ts
+- src/programs/automation-studio/runtime/service/project-build/tests/project-build-reset.test.ts
+- src/programs/automation-studio/runtime/service/project-build/tests/project-build-brief-ports.test.ts
+- src/programs/automation-studio/runtime/service/project-build/tests/project-build-acts-record.test.ts
+Corepackagecheck61328 native0 actualcompile92814ms; package pnpm check cacheoff.
+Both audits native0: Core8024/downstream38274, each root node scripts/structure-audit.mjs.
+Root independently read206/check logs and accepted those receipts.
+
+After ALL Core source readers terminal, ownthree libraries31912 native0 cacheoff:
+node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build.
+All actualcompiled: contracts6225ms, fluxiq119461ms, gateway5175ms; no stamp reuse.
+
+Downstream merge actually intersects extract-list/dispatch and owning test paths.
+Domain32861 native0:31/31, labelled codex-reset-feedback-integration, exact domain
+cwd command cacheoff pnpm test one-page-read reconciled-record-output run-record-output.
+Selected owners:
+- domain/src/output-nodes/extract-list/tests/one-page-read.test.ts
+- domain/src/output-nodes/extract-list/tests/reconciled-record-output.test.ts
+- domain/src/runtime/llm-evidence/plan-resolution/extraction/tests/run-record-output.test.ts
+Domaincheck23319 native0 actualcompile41640ms, pnpm check domaincwd.
+Domainbuild99815 native0 actualcompile26924ms, pnpm build domaincwd; dist regenerated
+through owning script. Both began only after actual Corelibrary exit.
+
+Extensioncheck71864 native0 actual244780ms, pnpm check extensioncwd, cacheoff.
+Owning check-extension.mjs checks source and tsconfig.test.json installedhelper,
+then all browser entries write:false; no redundant separatehelper compilation.
+Extensioncheck began strictly AFTER actual domainbuild terminal/currentoutputs.
+No extension/Web/fullworkspace build, whole suite, browser, provider or paidrun.
+
+Log paths (all ignored, preserved):
+- Core/packages/fluxiq/node_modules/codex-reset-feedback-integration-owning.log
+- Core/packages/fluxiq/node_modules/codex-reset-feedback-integration-check.log
+- Core/node_modules/codex-reset-feedback-integration-audit.log
+- Core/node_modules/codex-reset-feedback-integration-libraries.log
+- downstream/node_modules/codex-reset-feedback-integration-downstream-audit.log
+- downstream/domain/node_modules/codex-reset-feedback-integration-domain-tests.log
+- downstream/domain/node_modules/codex-reset-feedback-integration-domain-check.log
+- downstream/domain/node_modules/codex-reset-feedback-integration-domain-build.log
+- downstream/apps/extension/node_modules/codex-reset-feedback-integration-extension-check.log
+
+Only report dirty after this write. No worker commits/merges/pushes; no paidr6.
+Canonical task intent/oracle unchanged. Root independent integration/publication
+and any explicit subsequent full canonical live release remain required.
