@@ -51,6 +51,8 @@ export type WebElementFingerprintSource = {
   testId?: string | undefined;
   /** The attributes the page wrote, by name. */
   attributes?: Readonly<Record<string, string>> | undefined;
+  /** What a control with no words draws, as the extension digested it (`WebAutomationElementFingerprint.drawing`). */
+  drawing?: string | undefined;
   /** Where the control sat: its form, its place in a list, its record, the shadow roots around it. */
   context?: WebAutomationElementContext | undefined;
   /**

@@ -15,7 +15,9 @@
 // **What it carries:** the tag, the role and the implied role, the input type,
 // the visible text, the label, the accessible name, the authored id, the `name`
 // attribute, each class token as its own entry, a test id, a link's
-// destination, and where the control sat. The selector and xpath ride as
+// destination, what a control with no words draws (its `drawing`, a digest the
+// extension computes and which holds no page text), and where the control
+// sat. The selector and xpath ride as
 // locators, never as the identity. Of the attributes the page wrote, only the
 // ones that say which control this is are kept (`IDENTITY_ATTRIBUTES`, the one
 // list every path uses): never the whole map, which holds a control's state
@@ -32,6 +34,7 @@
 // that could be its contents (`WebElementFingerprintSource.secret`).
 
 import type { WebAutomationElementFingerprint } from "../actions/types";
+import { webElementDrawing } from "./drawing";
 import type { WebElementFingerprintSource } from "./source";
 
 /**
@@ -80,6 +83,7 @@ export function webElementFingerprint(source: WebElementFingerprintSource): WebA
     value: words ? filled(source.value) : undefined,
     role: filled(source.role),
     implicitRole: filled(source.implicitRole),
+    drawing: webElementDrawing(source.drawing),
     name: filled(source.name) ?? filled(attributes?.name),
     href: filled(source.href),
     inputType,

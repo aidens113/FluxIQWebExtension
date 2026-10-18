@@ -32,8 +32,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findClosestFingerprint, xpathFor } from "../element-finder";
+import { findClosestFingerprint, stableFingerprintMatches, xpathFor } from "../element-finder";
+import { agreesWithRecordedRecord, elementDrawing } from "../identity";
 import { withSelectorMemo } from "../selector";
+import { el, installStubDocument, stubDocument, type StubElement, type StubRoot } from "./stub-dom";
 import { element, input } from "./stub-page";
 
 /** The element `tagName` in `attributes`, wrapped in the given ancestors, outermost first. */
@@ -191,4 +193,56 @@ test("inside a capture the xpath is the one written outside it, on a wide list a
   assert.equal(xpathFor(links[4]!), "/body[1]/nav[1]/a[3]");
   assert.equal(xpathFor(links[3]!), "/body[1]/nav[1]/span[2]");
   assert.equal(xpathFor(cells[9]!), "/body[1]/table[1]/tr[2]/td[2]");
+});
+
+// Lane 4 (`run-mvcwqwec-0aa4f98b`): a results list whose every row holds a save icon and a share icon, each a
+// wordless `<span>` of one hashed class around an unlabelled `<svg>`. A drawing names a set of controls as a class
+// set does -- every row draws its save icon alike -- so the finder answers with every element that draws the
+// recorded picture, `shared`, and the record gate the resolver applies next (`identity/record.ts`) leaves the one
+// in the recorded row. Rows built with `stub-dom.ts`, whose selector engine answers the class-set query.
+
+const SAVE_PATH = "M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z";
+const SHARE_PATH = "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7z";
+
+function rowIcon(className: string, d: string): StubElement {
+  return el("span", { class: className, style: "cursor:pointer" }, el("svg", { viewBox: "0 0 24 24" }, el("path", { d })));
+}
+
+/** Two rows keyed by the page, each with its title and its two icons; the icons' class is `className`. */
+function resultsPage(className: string): { root: StubRoot; save: StubElement[] } {
+  const save = [rowIcon(className, SAVE_PATH), rowIcon(className, SAVE_PATH)];
+  const root = stubDocument();
+  root.append(el("html", {}, el("body", {}, el("ul", {},
+    el("li", { "data-job-id": "j-101" }, el("h3", {}, "Line Cook"), el("div", {}, save[0]!, rowIcon(className, SHARE_PATH))),
+    el("li", { "data-job-id": "j-102" }, el("h3", {}, "Pastry Chef"), el("div", {}, save[1]!, rowIcon(className, SHARE_PATH)))))));
+  return { root, save };
+}
+
+test("a recorded icon's drawing finds every icon that draws it, and the record gate leaves the one in its row", (t) => {
+  const { root, save } = resultsPage("q8f2");
+  installStubDocument(t, root);
+  const drawing = elementDrawing(save[1] as unknown as Element);
+  assert.ok(drawing);
+  // The page renamed the class since the step was saved, and the positional selector now names the share icon's place in another layout.
+  const recorded = { tagName: "span", classNames: ["old1"], selector: "ol > li > span", drawing };
+  const found = stableFingerprintMatches(recorded, root as unknown as Document);
+  assert.equal(found.shared, true);
+  assert.deepEqual(found.matches, save, "the two save icons, and neither share icon");
+  const inRow = found.matches.filter((match) => agreesWithRecordedRecord({ keyAttribute: "data-job-id", key: "j-102" }, match));
+  assert.deepEqual(inRow, [save[1]]);
+});
+
+test("beside a class set every icon shares, the icons that draw the recorded picture come first and none is dropped", (t) => {
+  const { root, save } = resultsPage("q8f2");
+  installStubDocument(t, root);
+  const drawing = elementDrawing(save[0] as unknown as Element);
+  assert.ok(drawing);
+  const found = stableFingerprintMatches({ tagName: "span", classNames: ["q8f2"], drawing }, root as unknown as Document);
+  assert.equal(found.shared, true);
+  assert.equal(found.matches.length, 4);
+  assert.deepEqual(found.matches.slice(0, 2), save);
+  // Without a drawing the class set answers as it always has.
+  assert.equal(stableFingerprintMatches({ tagName: "span", classNames: ["q8f2"] }, root as unknown as Document).matches.length, 4);
+  // And a drawing nothing on the page draws finds nothing by itself.
+  assert.deepEqual(stableFingerprintMatches({ tagName: "span", classNames: ["old1"], drawing: "d1.0" }, root as unknown as Document), { matches: [], shared: false });
 });

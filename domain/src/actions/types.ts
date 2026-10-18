@@ -130,7 +130,7 @@ export type WebAutomationElementContext = {
  * domain already puts on the wire — it is not a third element-descriptor shape.
  * `output-nodes/targets.ts` `elementFingerprint` is the one producer, and its
  * output is exactly this: Core's signals plus `text`, `value`, `name`, `href`,
- * `inputType`, `implicitRole` and `context`. Core's matcher ignores the extras;
+ * `inputType`, `implicitRole`, `drawing` and `context`. Core's matcher ignores the extras;
  * the page does not, so declaring only Core's half would hide fields the
  * content script already reads (`content/element-finder.ts` matches on `name`,
  * and `resolve-target.ts` falls back to `implicitRole` for the candidate
@@ -149,6 +149,16 @@ export type WebAutomationElementFingerprint = ElementFingerprint & {
   checked?: boolean | undefined;
   /** The role the markup implies when no `role` attribute was authored. */
   implicitRole?: string | undefined;
+  /**
+   * What a control with no words draws: a versioned digest of its own shapes
+   * and image sources, never of their paint, so a filled and an unfilled icon
+   * carry the same one (`apps/extension/src/content/identity/drawing.ts`). The
+   * identity signal of an icon control with no text, name or id
+   * (`element-fingerprint/signals.ts`). Core's matcher has no picture signal;
+   * the page compares it (`content/identity/score.ts`) and looks controls up by
+   * it (`content/element-finder.ts`). Never shown to the model.
+   */
+  drawing?: string | undefined;
   /**
    * Where the element sat on the page. Core's matcher has no positional or
    * form signal and ignores this, but it crosses the wire on the recorded

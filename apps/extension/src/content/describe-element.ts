@@ -54,6 +54,15 @@
 // recorded step from `classNames`, a step built from a handle from the
 // packet's `attributes` (`domain/.../packet-fingerprint/from-packet.ts`). The
 // page view still says which option is chosen, as `marked`.
+//
+// `drawing` is what an element with no words draws (`identity/drawing.ts`,
+// lane 4 t567): a digest of its own shapes and image sources, never of their
+// paint, so a filled and an unfilled icon carry the same one. It is the
+// identity signal of an icon control that has no text, name or id -- one
+// computation for every path, because every save path reads it from here: a
+// step built from a handle through the packet binding, never the packet itself
+// (`domain/.../sanitize.ts`), and the page's finder and scorer read the live
+// element by the same function.
 
 import { xpathFor } from "./element-finder";
 import { visualDocumentBounds, visualViewportBounds } from "./visual-bounds";
@@ -65,7 +74,7 @@ import {
   isInteractableUiElement,
   isSemanticTextElement
 } from "./element-traits";
-import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
+import { accessibleNameFor, authoredNameAttribute, elementContext, elementDrawing, implicitRole, labelText } from "./identity";
 import { pageListensForPress } from "./page-press";
 // Past the barrel on purpose: `./evidence` leads back here (`evidence/controls.ts`).
 import { setApartClasses } from "./evidence/set-apart";
@@ -122,6 +131,8 @@ export function describeElement(element: Element): DomElementDescriptor {
   if (label) descriptor.label = label;
   const markupRole = implicitRole(element);
   if (markupRole) descriptor.implicitRole = markupRole;
+  const drawing = elementDrawing(element);
+  if (drawing) descriptor.drawing = drawing;
   const context = elementContext(element);
   if (context) descriptor.context = context;
   const select = selectState(element);

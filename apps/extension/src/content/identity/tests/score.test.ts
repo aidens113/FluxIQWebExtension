@@ -21,6 +21,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TargetCandidate } from "../candidates";
+import { DRAWING_ATTRIBUTE } from "../drawing-attribute";
 import { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidates } from "../score";
 
 /** A candidate whose element is a marker: `score.ts` compares it, never reads it. */
@@ -222,4 +223,44 @@ test("two uncorroborated candidates that tie are still reported as a tie", () =>
     tagName: "button", role: "button", visibleText: "Save changes and exit", accessibleName: "Save changes and exit", isVisibleOnViewport: true
   });
   assert.equal(scoreTargetCandidates(IDENTIFIER_LESS_SAVE, [EXIT_BARE, twin]).outcome, "ambiguous");
+});
+
+// Lane 4 (`run-mvcwqwec-0aa4f98b`): a list row holds two wordless icon controls of one hashed class -- save and
+// share -- that agree on every signal Core weighs but the picture. The recorded drawing goes to Core only for
+// the candidate that draws the same (`score.ts` header), at a label's weight, so it lifts the recorded icon
+// past the margin and corroborates it; the other icon is compared as if no drawing were recorded.
+
+const ROW_ICON_SELECTOR = "li:nth-of-type(2) > div > span:nth-of-type(1)";
+const SAVE_DRAWING = "d1.1x9kq3";
+const SHARE_DRAWING = "d1.7m2p0a";
+
+function rowIcon(candidateId: string, drawing: string | undefined): TargetCandidate {
+  return candidate(candidateId, {
+    tagName: "span", classNames: ["q8f2"], isVisibleOnViewport: true,
+    ...(drawing ? { attributes: { [DRAWING_ATTRIBUTE]: drawing } } : {})
+  });
+}
+
+test("of two icons alike in every other signal, the scorer chooses the one that draws what was recorded", () => {
+  const recorded = { tagName: "span", classNames: ["q8f2"], selector: ROW_ICON_SELECTOR, drawing: SAVE_DRAWING };
+  const selection = scoreTargetCandidates(recorded, [rowIcon("share", SHARE_DRAWING), rowIcon("save", SAVE_DRAWING)]);
+  assert.equal(selection.outcome, "resolved", JSON.stringify(selection.ranked.map((entry) => [entry.score.candidateId, entry.score.normalizedScore])));
+  if (selection.outcome !== "resolved") return;
+  assert.equal(elementId(selection.chosen.element), "save");
+  assert.ok(selection.chosen.score.normalizedScore - (selection.runnerUp?.score.normalizedScore ?? 0) >= TARGET_SCORE_MARGIN);
+  // The share icon is weighed without the drawing: nothing it does not draw is charged against it.
+  assert.equal(selection.runnerUp?.score.negativeContributions.some((contribution) => contribution.signalPath === "attributes"), false);
+
+  // Without the drawing the two cannot be told apart, which is what the recording said before.
+  const blind = scoreTargetCandidates({ ...recorded, drawing: undefined }, [rowIcon("share", SHARE_DRAWING), rowIcon("save", SAVE_DRAWING)]);
+  assert.notEqual(blind.outcome, "resolved");
+});
+
+test("an icon that draws nothing, or something else, scores exactly what it scored against a recording with no drawing", () => {
+  const recorded = { tagName: "span", classNames: ["q8f2"], selector: ROW_ICON_SELECTOR };
+  for (const other of [rowIcon("bare", undefined), rowIcon("other", SHARE_DRAWING)]) {
+    const without = scoreTargetCandidates(recorded, [other]).ranked[0]?.score.normalizedScore;
+    const withDrawing = scoreTargetCandidates({ ...recorded, drawing: SAVE_DRAWING }, [other]).ranked[0]?.score.normalizedScore;
+    assert.equal(withDrawing, without);
+  }
 });

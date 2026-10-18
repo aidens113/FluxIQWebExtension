@@ -1,7 +1,7 @@
 // The name a person would use for an element, computed in the order the
 // accessible-name calculation uses: `aria-labelledby`, `aria-label`, an
-// associated `<label>`, `title`/`alt`, `placeholder`, a button's value, then
-// the element's own text. Core's fingerprint weights `accessibleName` as
+// associated `<label>`, `title`/`alt`, an `<svg>`'s own `<title>` child,
+// `placeholder`, a button's value, then the element's own text. Core's fingerprint weights `accessibleName` as
 // heavily as a stable id (24 against testId's 28), so a control whose selector
 // drifts is still recognisable by its name (Phase 1.3).
 //
@@ -51,6 +51,7 @@ export function accessibleNameFor(element: Element): string | undefined {
     ?? normalizedText(element.getAttribute("aria-label"))
     ?? associatedLabel(element)
     ?? normalizedText(element.getAttribute("title") ?? element.getAttribute("alt"))
+    ?? svgTitle(element)
     ?? normalizedText(element.getAttribute("placeholder"))
     ?? buttonValueName(element)
     ?? nameFromContent(element);
@@ -82,6 +83,18 @@ function labelledByName(element: Element): string | undefined {
     return text ? [text] : [];
   });
   return normalizedText(parts.join(" "));
+}
+
+/**
+ * An `<svg>` is named by its own `<title>` child, as the accessible-name
+ * calculation names it: the one way an icon drawn inline says what it is.
+ */
+function svgTitle(element: Element): string | undefined {
+  if (element.tagName.toLowerCase() !== "svg") return undefined;
+  for (const child of Array.from(element.children)) {
+    if (child.tagName.toLowerCase() === "title") return normalizedText(child.textContent);
+  }
+  return undefined;
 }
 
 /** A push button's value is its label; a sensitive field's value is never a name. */

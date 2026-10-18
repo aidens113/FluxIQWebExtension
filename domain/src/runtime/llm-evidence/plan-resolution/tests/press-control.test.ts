@@ -241,3 +241,59 @@ test("exploration's own typing is not refused for it, and no other node is", asy
   }, stores);
   assert.equal(pressed.status, "resolved", JSON.stringify(pressed));
 });
+
+// A press on an icon-only control reaches it (lane 4, `run-mvcwf9u2-28bb44fd`).
+//
+// A pressable result card whose title is a link holds a `<span>` styled with a
+// pointer of its own and filled with an unlabelled `<svg>`. The card hears
+// presses but holds a link, so it is a delegate and no control; until the
+// capture read the span's pointer as its own (`apps/extension/src/content/
+// evidence/declared-cursor.ts`), nothing around the span was a control either,
+// and the view never printed it, so a candidate could not name it at all. With its cursor the span is a control: the view prints it as an icon
+// (`../../page-view/tests/icon-controls.test.ts`), and a candidate's press on
+// its handle resolves to the span's own selector. (A span the page names by
+// one class alone is still refused `web.handle.unidentifiable` at save, by the
+// identity floor of `element-fingerprint/signals.ts`; this one has two.)
+
+const ICON_PAGE = "https://listing.test/results?q=pumps";
+const ICON = "article.r1 > div > span:nth-child(2)";
+
+/** One result card, `parent` being each element's index in this list; the icon has its own cursor or not. */
+function iconCard(iconCursor: boolean): JsonObject[] {
+  const icon: JsonObject = { tagName: "span", selector: ICON, classNames: ["k3x", "fav"], attributes: { class: "k3x fav" }, parent: 1 };
+  if (iconCursor) icon.cursor = "pointer";
+  return [
+    { tagName: "article", selector: "article.r1", cursor: "pointer", attributes: { class: "card" } },
+    { tagName: "div", selector: "article.r1 .head", parent: 0 },
+    { tagName: "h2", selector: "article.r1 h2", visibleText: "Rotary Pump R2", ownText: "", parent: 1 },
+    { tagName: "a", selector: "article.r1 h2 > a", visibleText: "Rotary Pump R2", accessibleName: "Rotary Pump R2", href: "https://listing.test/item?id=r2", parent: 2 },
+    icon,
+    { tagName: "svg", selector: `${ICON} > svg`, attributes: { viewBox: "0 0 24 24", focusable: "false" }, parent: 4 },
+    { tagName: "path", selector: `${ICON} path`, parent: 5 },
+    { tagName: "div", selector: "article.r1 .company", visibleText: "Brookhaven Supply", parent: 0 }
+  ];
+}
+
+function iconPage(iconCursor: boolean) {
+  const targets = createWebLlmTargetPackets();
+  const capture = createWebLlmStableTargetHandles().restamp(SCOPE, sanitizeWebLlmSnapshotWithBindings({ url: ICON_PAGE, interactiveElements: iconCard(iconCursor) }));
+  targets.remember(SCOPE, capture);
+  const icon = capture.evidence.elements.find((element) => capture.selectors.get(element.target) === ICON);
+  if (icon === undefined) throw new Error("no handle for the icon");
+  return { capture, icon: icon.target, stores: { targets, extractions: createWebLlmExtractionHandles() } };
+}
+
+test("a candidate's press on an icon-only control's handle resolves to the icon itself", async () => {
+  const { capture, icon, stores } = iconPage(true);
+  assert.match(webLlmPageText(capture.evidence), new RegExp(`^${icon} clickable icon class="k3x fav"$`, "mu"));
+  const answer = await resolveWebPlanNodeParameters(press(icon, { handleReach: "view_history" }), stores);
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+  if (answer.status === "resolved") assert.equal(answer.parameters.selector, ICON);
+});
+
+test("without its own cursor the icon inside the card was never shown, and a candidate's press on its handle is refused as unknown", async () => {
+  const { icon, stores } = iconPage(false);
+  const answer = await resolveWebPlanNodeParameters(press(icon, { handleReach: "view_history" }), stores);
+  assert.equal(answer.status, "refused", JSON.stringify(answer));
+  if (answer.status === "refused") assert.equal(answer.issueCodes[0], "web.handle.unknown");
+});

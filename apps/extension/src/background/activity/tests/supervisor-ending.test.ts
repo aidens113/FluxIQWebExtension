@@ -103,3 +103,23 @@ test("a newer Core's last row says why itself: its whole sentence is said, and n
   pacer.accept(event({ phase: "failed", label: `${ENDED}: the item can't be had`, detail: { kind: "step", title: `${ENDED}: the item can't be had`, status: "failed", text: "The supervisor ended it because it could not finish the Flow: the item can't be had." }, final: true }, "b3"));
   assert.equal(pacer.display()?.detail, `${ENDED}: the item can't be had`, "a title that is whole is said as it is");
 });
+
+// t567 lane 4: a newer Core says the ending in a person's words, never "the supervisor": its row
+// "FluxIQ could not finish the Flow." and its last "Build failed: FluxIQ could not finish the Flow".
+// The ending is still known for what it is, and a time limit's words still are not.
+test("a newer Core's plain ending is still known as the supervisor's, and says why", () => {
+  const plainEnded = "Build failed: FluxIQ could not finish the Flow";
+  const ends = new SupervisorEnding();
+  ends.observe(finishing(SUPERVISOR, REASON), () => "");
+  assert.equal(why(ends, ending(plainEnded)), REASON);
+
+  const told = `${REASON} The build left no change on the site that it knows of.`;
+  ends.observe(event({ phase: "building", label: "FluxIQ could not finish the Flow.", detail: { kind: "note", title: "FluxIQ could not finish the Flow.", text: told, status: "failed" } }), () => "");
+  assert.equal(why(ends, ending(plainEnded)), told);
+
+  ends.observe(finishing(SUPERVISOR, REASON), () => "");
+  assert.equal(why(ends, ending("Build failed: FluxIQ stopped with the Flow only partly built")), REASON);
+
+  ends.observe(finishing(SUPERVISOR, REASON), () => "");
+  assert.equal(why(ends, ending("Build failed: it reached its time limit before a whole test of the Flow passed")), undefined, "a time limit says its own why");
+});

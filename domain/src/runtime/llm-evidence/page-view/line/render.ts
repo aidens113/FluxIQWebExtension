@@ -1,6 +1,9 @@
 // The chosen lines written out, with the markers between them (t223):
 //
-//   <handle> [<heading tag>] [<kind>] ["<words>"] [<state tokens>...] [group="<group>"]
+//   <handle> [<heading tag>] [<kind>] ["<words>"] [icon ...] [<state tokens>...] [group="<group>"]
+//
+// A control with no words drawn as an icon says so, with the class tokens and
+// symbols the page gave it (`../element/icon-hints.ts`).
 //
 // A line whose element sits under a heading that has no line of its own takes
 // that heading's tag before its kind, `t246 h2 link "..."`, so a card's title
@@ -36,7 +39,7 @@ export function renderedWebLlmLines(lines: readonly WebLlmViewLine[], tree: WebL
     const prefix = heading !== undefined && !lined.has(heading) ? heading.tag : undefined;
     const target = kind === "link" && element.href !== undefined ? linkTarget(element.target, element.href) : undefined;
     const group = line.role === "control" ? webLlmGroupToken(groups.groupOf(element)) : undefined;
-    const parts = [element.target, prefix, kind, line.words === undefined ? undefined : quotedWords(line.words), ...webLlmStateTokens(element, kind, target, line.words), group];
+    const parts = [element.target, prefix, kind, line.words === undefined ? undefined : quotedWords(line.words), ...(line.icon ?? []), ...webLlmStateTokens(element, kind, target, line.words), group];
     written.push(parts.filter((part): part is string => part !== undefined && part !== "").join(" "));
   }
   return written;

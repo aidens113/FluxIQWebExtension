@@ -11,6 +11,12 @@ export type WebLlmViewLine = {
   words: string | undefined;
   /** Only on a control line named by the alts of the images it holds (rule 5), whose words the image rule may take back. */
   imageWords?: true;
+  /**
+   * Only on a control line with no words that is drawn as an icon
+   * (`./element/icon-hints.ts`): `icon` and the class tokens and symbols the
+   * page gave it, printed after its kind.
+   */
+  icon?: readonly string[];
   /** Only on a line F4 made from a run of letterless fragments: the elements whose words it joined. */
   merged?: readonly WebLlmEvidenceElement[];
 };

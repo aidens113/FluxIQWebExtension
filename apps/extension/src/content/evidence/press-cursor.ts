@@ -15,13 +15,22 @@
 // whose composed parent shows another, set it for itself. A link's pointer
 // comes from the browser and is reported like any other: the reader decides
 // what a pointer on an element the browser already makes a control means.
+//
+// An element whose parent shows the same cursor still set it for itself when
+// the page's own styles give it that cursor (`./declared-cursor.ts`): an
+// icon-only control styled with a pointer inside a card that has one too. Read
+// as inheriting it, such a control had no line in the page view at all (lane
+// 4, `run-mvcwf9u2-28bb44fd`).
+
+import { declaresCursor } from "./declared-cursor";
 
 /** The cursor the element sets for itself, when it says "press here" or "this refuses a press"; `undefined` otherwise. */
 export function ownPressCursor(element: Element): "pointer" | "not-allowed" | undefined {
   const cursor = getComputedStyle(element).cursor;
   if (cursor !== "pointer" && cursor !== "not-allowed") return undefined;
   const parent = composedParent(element);
-  return parent !== null && getComputedStyle(parent).cursor === cursor ? undefined : cursor;
+  if (parent === null || getComputedStyle(parent).cursor !== cursor) return cursor;
+  return declaresCursor(element, cursor) ? cursor : undefined;
 }
 
 /** The element the cursor is inherited from: the slot that places it, its parent, or its shadow root's host. */
