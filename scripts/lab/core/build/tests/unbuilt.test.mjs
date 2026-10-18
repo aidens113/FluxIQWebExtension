@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync, spawn } from "node:child_process";
+import { chmod, cp, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -118,6 +118,16 @@ test("a malformed Core manifest is an error naming the file, not a quiet pass", 
 }));
 
 test("the Lab entry point refuses an unbuilt Core before it builds or runs anything, as a setup failure", { timeout: 60_000 }, () => withCore({ installed: false, packages: PACKAGES }, async (root) => {
+  // A supported current Core uses its own build locks even before its first
+  // build. Copy scripts only; this fixture has no real output or runtime data.
+  const repository = fileURLToPath(new URL("../../../../../", import.meta.url));
+  await cp(path.resolve(repository, "../!FluxIQ/scripts/build-cache"), path.join(root, "scripts/build-cache"), { recursive: true, filter: (source) => !source.split(path.sep).includes("tests") });
+  await writeFile(path.join(root, "pnpm-workspace.yaml"), 'packages:\n  - "packages/*"\n');
+  await writeFile(path.join(root, ".gitignore"), "node_modules/\n");
+  for (const [directory, manifest] of Object.entries(PACKAGES)) {
+    await writeFile(path.join(root, "packages", directory, "package.json"), JSON.stringify({ ...manifest, scripts: { build: "node ../../scripts/build-cache/cli.mjs" } }));
+  }
+  execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
   // A stand-in `pnpm` first on PATH records that it was reached and fails, so
   // a regression here fails this test rather than starting a real build or a
   // Lab run. The first thing `run-lab.mjs` does after its Core guards is call
