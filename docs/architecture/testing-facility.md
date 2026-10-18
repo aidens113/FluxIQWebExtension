@@ -1256,6 +1256,12 @@ instruction-led guidance. `--flow <flow-id>` remains a saved-Flow selector for
 existing/clone reuse; it does not reactivate trace conversion. Creation and
 saved replay use their own supported variant controls.
 
+### Positive data for scraping tasks
+
+Every realistic scraping or expected-dataset task must have actual matching fixture rows and a nonempty, record-by-record expected dataset. A zero-row result cannot qualify a scraping task. Before topology, browser or provider startup, the created-Flow request resolver rejects empty, count-only, empty-object or count-inconsistent expectations, including overrides from the selected variant. A scraping task cannot substitute a playback-goal judgement for its dataset. Pure action goals retain their normal judgement.
+
+The realistic corpus regression checks these expectations, and provider-free browser paths establish that the fixture can actually produce the expected rows through its controls. When a task is empty, revise its realistic data or its requested conditions while preserving intent; update instruction, workflow and oracle together. A model never receives fixture-shaped solving guidance, and a judge is never forced to accept a result. This test admission rule does not change ordinary product handling of genuinely empty user searches.
+
 ### The recording lane
 
 The runner opens the scenario's start page, checks its page facts, and pairs

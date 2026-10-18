@@ -10,7 +10,7 @@ const PRIYA_TAGS = "Priya Nair (@priya.nair) wants to know who tagged her under 
 
 const NEWEST_LIKES = "Like the three most recent posts the verified Harbourlight Studio account has published, reels included, and do not like, save, follow or message anything else. Then give me a table of the posts you liked, newest first, with one column, link, holding each post's address.";
 
-const AUGUST_OVER_1300 = "Did the verified Harbourlight Studio account get more than 1,300 likes on any post it published in August 2026? Give me every such post as a table with columns date and likes, where date is the day it was posted as YYYY-MM-DD and likes is the exact number of likes the post shows. If none did, an empty table is the right answer.";
+const AUGUST_OVER_1300 = "From the verified Harbourlight Studio account, give me every photo or carousel published in August 2026 with more than 1,300 likes, newest first, as a table with columns date and likes. Write date exactly as the opened post's date footer shows it (month name and day for a post from 2026), and likes as the exact count on the opened post, including its comma grouping. Do not use a reel's play count or a rounded grid count.";
 
 const KILN_NOTES = "In my saved posts, make a new collection called Kiln Theory notes that holds every post from the Kiln Theory account I have already saved, and nothing else. Don't unsave anything or change my other collections. Then show me all of my collections, leaving out All posts, as a table with columns collection and posts, where posts is how many posts each one holds, in the order my Saved page lists them.";
 
@@ -36,7 +36,7 @@ const KILN_NOTES = "In my saved posts, make a new collection called Kiln Theory 
  *   only what tags one person, and is judged record by record.
  * - `newest-likes` is a lasting act judged by the whole account: the grid's
  *   pinned posts come before the newest, so liking the first cells is wrong.
- * - `august-over-1300` is the conditional whose right answer is an empty
+ * - `august-over-1300` reads the qualifying August post as a positive
  *   table; the reel's play count, the 2025 pinned post, the impersonator and
  *   Kiln Theory each give a wrong row.
  * - `kiln-notes` is the longer journey: the Saved page, the new-collection

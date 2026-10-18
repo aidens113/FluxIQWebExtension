@@ -5,7 +5,7 @@ import { applicationReference, normaliseApplication, suggestPlaces } from "../at
 import { boardClasses } from "../board/index.js";
 import { POSTINGS, postingById } from "../catalog/index.js";
 import { APPLICATION_RECORD, CANDIDATE, EXPECTED_ANSWERS, EXPECTED_REFERENCE } from "../candidate.js";
-import { halvardWeek, remoteRustRecords, shortlistFacts } from "../expectations.js";
+import { halvardWeek, remoteRustRoles, remoteRustRecords, shortlistFacts } from "../expectations.js";
 import { JOB_BOARD_LIVE_TASKS } from "../live-tasks.js";
 import { jobBoardScenario as scenario } from "../scenario.js";
 import type { JobBoardMode, JobBoardState } from "../types.js";
@@ -79,7 +79,8 @@ test("the extraction oracle is the seven remote UK Rust roles paying £70,000 or
     "Principal Engineer (Rust, Distributed Systems) @ Orbisat",
     "Rust Platform Engineer @ Verity Legal Tech",
   ]);
-  assert.deepEqual(remoteRustRecords("quiet-market"), []);
+  assert.deepEqual(remoteRustRoles("quiet-market").map(({ id }) => id), ["m7"]);
+  assert.equal(remoteRustRecords("quiet-market").length, 1);
   // The traps a careless reading falls into are all on the board.
   const traps = ["£650 – £750 a day", "Up to £95,000 a year", "£69,500 – £90,000 a year", "€85.000 – €100.000 a year", "$150,000 – $175,000 a year"];
   for (const line of traps) assert.ok(POSTINGS.some((posting) => posting.salary.text === line && /Rust/u.test(posting.title)), line);

@@ -3,7 +3,7 @@ import { CANDIDATE } from "./candidate.js";
 
 const SAVE_HALVARD_WEEK = "Save every job Halvard Systems has posted on Rolefinch in the last 7 days to my saved jobs, without unsaving anything that is already there, and then open my saved jobs so the list is showing.";
 
-const REMOTE_RUST_ROLES = "On Rolefinch, find every job with Rust in its title that is fully remote and based in the UK, and whose advertised yearly salary starts at £70,000 or more. Go through every page of results and list each job once, even where the site shows it more than once, and leave out postings that give only a day rate, only an upper limit, or no salary at all. Give me a table with columns title, company, salary and link, where salary is written exactly as the posting shows it and link is the address of the job's own page on Rolefinch, newest posting first. If no job qualifies, an empty table is the right answer.";
+const REMOTE_RUST_ROLES = "On Rolefinch, find every job with Rust in its title that is fully remote and based in the UK, and whose advertised yearly salary starts at £70,000 or more. Go through every page of results and list each job once, even where the site shows it more than once, and leave out postings that give only a day rate, only an upper limit, or no salary at all. Give me a table with columns title, company, salary and link, where salary is written exactly as the posting shows it and link is the address of the job's own page on Rolefinch, newest posting first.";
 
 const CANDIDATE_DETAILS = `with these details: name ${CANDIDATE.firstName} ${CANDIDATE.lastName}, email ${CANDIDATE.email}, UK mobile ${CANDIDATE.phoneNational}, living in ${CANDIDATE.town}, website ${CANDIDATE.website}. For the CV, paste in the text between the quotation marks, without the marks: "${CANDIDATE.resume}" ${CANDIDATE.firstName} has the right to work in the UK, will not need visa sponsorship, has a one-month notice period, expects ${CANDIDATE.salary} pounds a year, and found the job on Rolefinch. Do not sign ${CANDIDATE.firstName} up to anything else along the way.`;
 
@@ -15,7 +15,7 @@ const REMOTE_EASY_APPLY = "On Rolefinch I only want jobs I can apply for through
 
 const SAVE_QUILLMARK_REMOTE = "Save every job Quillmark has on Rolefinch that is fully remote in the UK to my saved jobs. I mean Quillmark itself, not Quillmark Labs, and not its hybrid or office roles. Keep every job that is already saved, and do not follow companies, create job alerts or apply for anything. Then give me my saved jobs as a table with columns title, company and location, exactly as the saved list shows them.";
 
-const HALVARD_LABS_OFFICE_JOBS = "Check whether Halvard Labs (not Halvard Systems) has any job on Rolefinch that is hybrid or in the office rather than fully remote, and save each one you find to my saved jobs. If it has none, save nothing. Either way, do not unsave anything, follow companies or create job alerts. Give me a table of the jobs you saved this way with columns title, company and location; if there were none, an empty table is the right answer.";
+const HALVARD_LABS_OFFICE_JOBS = "Save every job Halvard Labs (not Halvard Systems) has on Rolefinch that is hybrid or in the office rather than fully remote. Keep every job already saved, and do not follow companies, create job alerts or apply for anything. Then give me only the jobs saved for this task as a table with columns title, company and location, written exactly as the saved list shows them, newest posting first.";
 
 const HALVARD_CAREERS_ROLES = "I want to see every role Halvard Systems advertises on its own careers site, and I want to get there from Rolefinch: search Rolefinch for its Site Reliability Engineer job by title with Leeds as the location, open that job and follow its link to apply on the company's own site, but do not apply for anything, save jobs or create job alerts. From the careers site, open its list of all open roles and give me a table of every role listed there with columns title, location and link, where link is the address of the role's page on the careers site, in the order the list shows them.";
 
@@ -28,8 +28,7 @@ const HALVARD_CAREERS_ROLES = "I want to see every role Halvard Systems advertis
  *   companies instead, so only a Flow repaired onto the More actions menu
  *   passes;
  * - collecting the remote UK Rust roles, judged record by record; after
- *   creation, the market goes quiet and the right table is empty, with a page
- *   full of recommendations in the same cards;
+ *   creation, the market goes quiet but one qualifying job remains;
  * - applying for one of them through the employer's ATS. The first task asks
  *   for the application to be sent and is judged by the confirmation, whose
  *   reference is derived from every answer. The second is the permission
@@ -41,8 +40,7 @@ const HALVARD_CAREERS_ROLES = "I want to see every role Halvard Systems advertis
  * The breadth round (t699) adds four with no variant, each judged by its
  * records and by the account read-out (`breadth/`): the quick-apply remote
  * jobs across every results page; saving one employer's remote jobs; a
- * conditional save whose right answer is an empty table and an untouched
- * account; and a journey from the search form to the employer's careers site
+ * conditional save of the matching hybrid job while keeping existing saves; and a journey from the search form to the employer's careers site
  * that applies for nothing. None asks a person: each saves to the account's
  * own list or only reads.
  */
