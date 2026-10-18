@@ -11,6 +11,11 @@
 // 1988 rewritten files. The Lab's build lock is repository-wide and could not
 // have helped: it serializes builds inside *this* repository.
 //
+// Historical design: three guards were considered before Core owned build
+// locks. The launcher now holds those real locks throughout each invocation
+// (`../build-lease/`); this scan remains a diagnostic for out-of-band writes.
+// The old quiescence-only tradeoff below is background, not today's policy.
+//
 // Three guards were considered.
 //
 // 1. A lock file inside the Core checkout. It is the only one that would
