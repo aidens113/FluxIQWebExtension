@@ -27,6 +27,7 @@ import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
 import { buildOrder, runStep } from "../build-cache/index.mjs";
 import { labScenarioRefusal } from "./scenario-guard/index.mjs";
 import { runStopCommand } from "./stop-run/index.mjs";
+import { acquireCoreBuildLease } from "./core/index.mjs";
 
 const args = process.argv.slice(2);
 
@@ -61,6 +62,10 @@ const instanced = paths.instance !== null;
 const READ_ONLY_COMMANDS = new Set(["inspect", "compare", "auth", "clone-cache"]);
 const loadsCore = !READ_ONLY_COMMANDS.has(args[0] ?? "");
 const timer = createStepTimer(note);
+const runtimeAbort = new AbortController();
+let coreLease = null;
+
+try {
 
 // The live-run waste guards, asked before anything else a live run does: an
 // empty provider balance, a relaunch loop, an undebugged previous
@@ -71,6 +76,17 @@ const timer = createStepTimer(note);
 // a note did not stop them. There is no flag past a refusal, only a file the
 // user creates (docs/architecture/testing-facility.md, "Live-run waste guards").
 const liveAdmission = await admitLiveRunOrExit();
+if (loadsCore) {
+  try {
+    coreLease = await timer.time("core-build-lease", () => acquireCoreBuildLease(coreRepositoryRoot(process.env, repositoryRoot), {
+      onAcquired: (step, waitedMs) => note({ lab: "core-build-lease", state: "held", step, waitedMs }),
+      onLost: (error) => runtimeAbort.abort(error)
+    }));
+  } catch (error) {
+    note({ lab: "core-build-lease", state: "refused", failure: "setup", why: error instanceof Error ? error.message : String(error) });
+    process.exit(1);
+  }
+}
 
 /** The Core scan this run started from; `null` when the run does not load Core. */
 let coreBefore = null;
@@ -222,6 +238,7 @@ const runEnvironment = {
 process.stderr.write(`${JSON.stringify({ lab: "paths", instance: paths.instance, extensionPath: paths.extensionPath, scenarioEntrypoint: paths.scenarioEntrypoint, hostModule: paths.hostModule, runsDirectory: process.env.FLUXIQ_TEST_RUNS_DIR ?? null })}\n`);
 
 timer.finish();
+coreLease?.assertHeld();
 const liveStart = liveAdmission === null ? null : await recordLiveRunStart(liveAdmission);
 process.exitCode = await run("node", [path.join(repositoryRoot, "packages", "test-runner", "dist", "cli.js"), ...args], runEnvironment, { tolerateFailure: true });
 if (liveStart !== null) await recordLiveFinish(liveAdmission, liveStart, process.exitCode);
@@ -244,6 +261,10 @@ if (coreBefore !== null) {
         : "FluxIQ Core was rebuilt while this run was in flight. A cross-repository build race is the first thing to rule out before treating this failure as a product defect.",
     });
   }
+}
+coreLease?.assertHeld();
+} finally {
+  await coreLease?.release();
 }
 
 /**
@@ -308,11 +329,31 @@ function iso(ms) { return ms > 0 ? new Date(ms).toISOString() : null; }
  * @returns {Promise<number>}
  */
 function run(command, commandArgs, env, options = {}) {
-  const child = spawn(process.execPath, commandArgs, { cwd: repositoryRoot, env, stdio: "inherit" });
+  runtimeAbort.signal.throwIfAborted();
+  const child = spawn(process.execPath, commandArgs, { cwd: repositoryRoot, env, stdio: "inherit", signal: runtimeAbort.signal });
+  // Keep the launcher (and hence the lease) alive until the runner finishes
+  // responding to interruption. A parent exiting first leaves a child using
+  // modules whose locks Core can already reclaim as a dead owner's.
+  let interrupted = null;
+  const interrupt = (signal) => {
+    interrupted = signal;
+    child.kill(signal);
+  };
+  const onInterrupt = () => interrupt("SIGINT");
+  const onTerminate = () => interrupt("SIGTERM");
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onTerminate);
   return new Promise((resolve, reject) => {
-    child.once("error", reject);
+    let spawnError = null;
+    child.once("error", (error) => { spawnError = error; });
     child.once("close", (code, signal) => {
-      const status = code ?? (signal ? 1 : 0);
+      process.off("SIGINT", onInterrupt);
+      process.off("SIGTERM", onTerminate);
+      if (spawnError !== null) {
+        reject(spawnError);
+        return;
+      }
+      const status = interrupted === "SIGINT" ? 130 : interrupted === "SIGTERM" ? 143 : code ?? (signal ? 1 : 0);
       if (status !== 0 && !options.tolerateFailure) {
         reject(new Error(`${command} ${commandArgs.join(" ")} exited with ${signal ?? status}`));
         return;
