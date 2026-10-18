@@ -26,6 +26,13 @@
 //   image, a price, a number, text -- with its sample: `link: 'Tom Becker'`,
 //   `text: '1 mutual friend'`. A label the page wrote in words (a header, a
 //   test id, a badge's name) is kept as it was.
+// - for a text or table column whose element has no words of its own -- a
+//   price drawn as pieces "9" ",87" " €" in child spans -- the sample is its
+//   described descendants' words joined as the page reads them
+//   (`./container-words.ts`; live run `run-mvd0pbn9-bad36023`, step 0015), so
+//   the column reads `price: '9,87 €'` and not only its class path. A class
+//   path the page side closed with a note -- `(currency amount)`, `(number)`
+//   -- is still a class path, and is labelled the same way.
 //
 // Keys are not changed. A key is what an extraction writes its column under
 // (D16) and what a retained handle, a plan's `fields` map and a Flow already
@@ -34,6 +41,7 @@
 
 import type { WebAutomationExtractionProposalFieldSpec } from "../../../extraction";
 import type { WebLlmEvidenceElement } from "../elements";
+import { webLlmContainerWords } from "./container-words";
 import { isWithheldText, screenedPageText } from "../withheld";
 
 /** The longest sample a column carries. */
@@ -46,12 +54,17 @@ const CLASS_PATH = /^[\w-]+(?:[.:][\w()-]+)+(?:\s*>\s*[\w-]+(?:[.:][\w()-]+)*)*$
 const PRICE = /^[$€£¥]\s?\d|^\d[\d.,\s]*\s?(?:[$€£¥]|USD|EUR|GBP)$/u;
 const NUMBER = /^[\d.,\s%]+$/u;
 
+/** A label's closing parenthetical, which the page side adds to say what a path column holds: `(currency amount)`, `(all lines)`. */
+const LABEL_NOTE = /\s*\([^()]*\)$/u;
+
 /**
  * A column as the model is shown it: its label, readable where the page's is
  * a generated class path, and its sample from the first item that has it.
+ * `page` is the detection's capture, whose elements an element with no words
+ * of its own composes its sample from.
  */
-export function webLlmShownColumn(label: string, element: WebLlmEvidenceElement | undefined, spec: WebAutomationExtractionProposalFieldSpec): { label: string; sample: string | undefined } {
-  const sample = sampleOf(element, spec);
+export function webLlmShownColumn(label: string, element: WebLlmEvidenceElement | undefined, spec: WebAutomationExtractionProposalFieldSpec, page?: readonly WebLlmEvidenceElement[]): { label: string; sample: string | undefined } {
+  const sample = sampleOf(element, spec) ?? composedSample(element, spec, page);
   return { label: readableLabel(label, element, sample), sample };
 }
 
@@ -67,12 +80,25 @@ function sampleOf(element: WebLlmEvidenceElement | undefined, spec: WebAutomatio
 }
 
 /**
+ * A text or table column's sample from its element's described descendants,
+ * where the element has no words of its own; never for a form control, and
+ * never where the element has words, whose sample `sampleOf` already gave or
+ * withheld.
+ */
+function composedSample(element: WebLlmEvidenceElement | undefined, spec: WebAutomationExtractionProposalFieldSpec, page: readonly WebLlmEvidenceElement[] | undefined): string | undefined {
+  if (element === undefined || page === undefined || (spec.kind !== "text" && spec.kind !== "column") || formControl(element)) return undefined;
+  const own = element.readable ?? element.text ?? element.name ?? element.ownText;
+  if (own !== undefined && own.trim() !== "") return undefined;
+  return bounded(webLlmContainerWords(element, page));
+}
+
+/**
  * The label the model is shown: the page's own when it is words, else -- for
  * a generated class path -- what the element is and its sample, or the page's
  * label when neither can be told.
  */
 function readableLabel(label: string, element: WebLlmEvidenceElement | undefined, sample: string | undefined): string {
-  if (!generatedLabel(label) || element === undefined) return label;
+  if (!generatedLabel(label.replace(LABEL_NOTE, "")) || element === undefined) return label;
   const what = whatItIs(element, sample);
   return sample === undefined ? what ?? label : `${what ?? "text"}: '${sample.replace(/'/gu, "’")}'`;
 }

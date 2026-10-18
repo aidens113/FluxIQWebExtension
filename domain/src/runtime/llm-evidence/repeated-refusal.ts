@@ -138,6 +138,11 @@ export function repeatedRejectionDetail(detail: WebLlmToolRejectionDetail | unde
     waitStoppedOn: detail?.waitStoppedOn,
     paginationStop: detail?.paginationStop,
     filtersDropped: detail?.filtersDropped,
+    // Left out until `run-mvcwem7d-34689f55`, 2026-10-17: the repeat of a
+    // covered press lost the layer's closers, and its next fell back to the
+    // wording for a layer with none, which the model read as naming the
+    // covered control itself.
+    closeWith: detail?.closeWith,
     repeatedAnswer
   });
 }

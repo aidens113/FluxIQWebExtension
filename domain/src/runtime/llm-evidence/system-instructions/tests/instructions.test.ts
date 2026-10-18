@@ -22,7 +22,7 @@ test("written instructions outrank optional untrusted demonstrations without fix
 
 test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-9");
+  assert.equal(version, "web-10");
 });
 
 test("the text holds no control character but a newline, and stays under 3,600 characters", () => {
@@ -48,10 +48,15 @@ test("site search is the site's own search field, and find_on_page reads only th
 
 // F34 (`run-muqiho5c-e830ce01`): told to close popups first, the model closed a
 // popup that was not over Add to cart, called that the add to cart, and never
-// pressed it. The press comes first; a refusal names the covering layer's closers.
-test("a covered control is pressed first, and only a refusal's closeWith closes the layer over it, then the press is made again", () => {
+// pressed it. The press comes first. `run-mvcxf4uz-64cd322c`: told to press a
+// refusal's closer and press again, the model pressed the covered control over
+// and over; the runtime now closes a layer it can dismiss itself, and only a
+// refusal with closeWith asks the model for a closer.
+test("a covered control is pressed first, the runtime closes a layer it can dismiss, and only a refusal's closeWith asks for a closer", () => {
   assert.match(text, /Press the control you want even when it is covered-by/u);
-  assert.match(text, /refused target_covered, and its closeWith names that layer's own close controls -- press one, then make the same press again/u);
+  assert.match(text, /a layer that can be dismissed is closed by the runtime first, and the press's read names it/u);
+  assert.match(text, /Only a refusal with closeWith needs a closer from you: press one, then make the same press again/u);
+  assert.doesNotMatch(text, /a press a layer would take is refused target_covered/u);
   assert.match(text, /never another popup's/u);
   assert.match(text, /Closing or declining a popup is never one of the acts you were asked for/u);
   assert.match(text, /consent banner may be accepted or dismissed/u);
