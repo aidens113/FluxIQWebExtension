@@ -412,6 +412,14 @@ live and provider-free Lab runs, ui:e2e, demo-workspace, and Playwright specs
 Other fixtures and synthetic pages are for unit tests that never open a
 browser. The Lab refuses other scenarios at its launch entries.
 
+**Every realistic task is achievable and unambiguous** (user, 2026-10-17): a person can do it on
+the site as built; its instruction alone leads to exactly the answer its oracle expects, naming
+every condition, column, order and value format the oracle checks in the site's own terms; and its
+honest path fits one Flow's purse. Whenever a run or an audit shows otherwise, change the task's
+wording, its oracle or its fixture to fit the site, keeping its intent, and never weaken an oracle
+to accept a wrong answer. Changing a task is not teaching to the test: the model's guidance stays
+generic.
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is

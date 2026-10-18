@@ -128,6 +128,34 @@ point is declared there, so asking fails the run and is a product defect); an em
   was not exercised.
 - Report to: `docs/working/breadth-forty-tasks-plan/reports/package-lead.md` in the worktree.
 
+### Brief: audit-<site> (ten copies, one per realistic site, dispatched as `worker-high`)
+- Repository: this repository, in the site's audit worktree only (`fxwork/t<NNN>-audit-<site>`, named at dispatch).
+- Task: prove every task of `<site>` in `REALISTIC_SITE_LIVE_TASKS` (originals, additions and variant rows) is
+  achievable and unambiguous, the AGENTS.md rule of 2026-10-17. For each task:
+  1. Possible: a person can do it on the site as built; a recording or browser-path test in `<site>/tests/`
+     reaches its oracle (add one where a task has none; for a variant row, on the variant).
+  2. Unambiguous: read only the instruction and the site. Does exactly the oracle's answer follow? Check every
+     term against the site's own labels and options (e.g. Delivery vs Shipping vs Pickup), every filter and
+     exclusion (sponsored, accessories, duplicates, lookalikes), the order, each value's format (as shown or
+     normalised), every column, what must be left untouched, and an empty right answer being stated as possible.
+  3. Judge-checkable: a judge given the instruction and the pages can confirm each row and act.
+  4. Fits the purse: count the pages and acts the honest path needs; flag one that is unlikely in a $0.25 build.
+  5. Fix what fails, keeping the task's intent: reword the instruction, correct the oracle, or add fixture
+     data; never weaken an oracle to accept a wrong answer. Rows sharing an instruction change together.
+  Live evidence: debug notes under `docs/working/language-driven-flow-loop-plan/debugs/` in the lane trees
+  `C:/Users/osrs_/FluxStuff/fxwork/{t563,t565,t566,t567}/!FluxIQWebExtension/` name tasks that failed on wording.
+- Required reads: this brief; the site's `live-tasks.ts`, `manifest.ts`, `qualification/` or `breadth/`, pages,
+  data and `tests/`; `scenarios/live-instructions.ts` lines 26-60.
+- Owns (may edit): `apps/scenario-lab/src/scenarios/<site>/**` in its worktree; its report.
+- Must not touch: `scenarios/tests/*`, `src/tests/*` (report the entries a change needs), other sites, Core,
+  extension, domain, any model guidance.
+- Definition of done: every task has a verdict; `node ../../scripts/build-cache/cli.mjs scenario-lab:build` then
+  `node --test dist/scenarios/<site>/**/*.test.js` in `apps/scenario-lab` passes (the site only, not the whole
+  suite, while live lanes run), `pnpm.cmd --filter @fluxiq-web-extension/scenario-lab check` exit 0, and
+  `node scripts/structure-audit.mjs` passes.
+- Report to: `docs/working/breadth-forty-tasks-plan/reports/audit-<site>.md`: per task id, the verdict (ok,
+  reworded with old and new text and why, oracle fixed, fixture fixed, or not possible and why), then tests run.
+
 ### Brief: install-core-lead (t707, dispatched as `lead`)
 - Repository: FluxIQ Core and this repository, in `C:/Users/osrs_/FluxStuff/fxwork/t707/` only (`!FluxIQ` on
   branch `task/t707-install-core-fixes`, `!FluxIQWebExtension` beside it). Follow Core's AGENTS.md there.
