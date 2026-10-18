@@ -238,3 +238,10 @@ test("a request's answer is read as kept, and another value is dropped and named
   }
   assert.equal(Object.hasOwn(webAutomationExtractListRequestValue(BASE) ?? {}, "answer"), false);
 });
+test("link identity mode is explicit, validated and never silently applied to another read kind", () => {
+  const make = (field: unknown) => webAutomationExtractListRequestValue({ item: "li", fields: { url: field } });
+  assert.equal((make({ kind: "link", selector: "a", identity: "tracking-free" })?.fields.url as { identity?: string })?.identity, "tracking-free");
+  assert.equal(make({ kind: "link", selector: "a", identity: "strip-query" }), undefined);
+  assert.equal(make({ kind: "attribute", selector: "a", attribute: "href", identity: "tracking-free" }), undefined);
+  assert.equal(make({ kind: "text", identity: "tracking-free" }), undefined);
+});

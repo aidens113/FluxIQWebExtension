@@ -43,6 +43,7 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       handling: { type: "string", label: "Column", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS] },
       // A `text` field only: each child line read on its own and joined (`./request.ts`).
       lines: { type: "boolean", label: "Every line" },
+      identity: { type: "string", label: "Link identity", enum: ["tracking-free"] },
       element: elementFingerprintSchema
     }
   } satisfies JsonObject;

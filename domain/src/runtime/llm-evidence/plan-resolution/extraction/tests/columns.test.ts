@@ -21,6 +21,15 @@ const DETECTED: Record<string, WebAutomationExtractField> = {
   badge: { kind: "text", selector: ".card > .badge", required: false }
 };
 
+test("an explicitly marked link keeps identity through required-field mapping, while a raw attribute does not", () => {
+  const detected: Record<string, WebAutomationExtractField> = { link: { kind: "link", selector: "a", identity: "tracking-free" } };
+  const result = keptWebExtractionColumns({ identity: { key: "link", required: true }, raw: "link@href" }, detected, ["fields"]);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.fields.identity, { kind: "link", selector: "a", required: true, identity: "tracking-free" });
+  assert.deepEqual(result.fields.raw, { kind: "attribute", selector: "a", attribute: "href" });
+});
+
 test("a column the detection saw on every item is not required by the read that names it", () => {
   assert.deepEqual(keptWebExtractionColumns({ name: "name", confirm: "Confirm", href: "profile@href", badge: "badge" }, DETECTED, ["fields"]), {
     ok: true,

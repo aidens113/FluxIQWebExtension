@@ -361,7 +361,9 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   // member is left behind like a stray `header`. Only `true` is kept, so a
   // field that says `false` is the plain field it always was.
   const lines = kind === "text" ? optionalValue(spec.lines, booleanValue) : undefined;
-  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED) return undefined;
+  const identity = optionalValue(spec.identity, (entry) => entry === "tracking-free" ? entry : undefined);
+  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED || identity === REFUSED) return undefined;
+  if (identity !== undefined && kind !== "link") return undefined;
   const field: WebAutomationExtractFieldSpec = {
     kind,
     ...(selector !== undefined ? { selector } : {}),
@@ -370,6 +372,7 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
     ...(required !== undefined ? { required } : {}),
     ...(handling !== undefined ? { handling } : {}),
     ...(lines === true ? { lines } : {}),
+    ...(identity !== undefined ? { identity } : {}),
     ...(element !== undefined ? { element } : {})
   };
   return field;
