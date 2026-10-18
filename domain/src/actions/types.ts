@@ -105,7 +105,11 @@ export type WebAutomationElementContext = {
      * `output-nodes/native-runtime.ts` from the node's `item` input, never by the
      * recorder. When present it takes precedence over `key` and `text`, which
      * name the row the Flow was *built* on: the page accepts a candidate only in
-     * a record that holds every one of these values.
+     * a record that holds every one of these values. Written for every recorded
+     * element on a pass, so a record holding values and nothing else -- no
+     * `key`, no `text`, beside no `listPosition` -- says the build never placed
+     * the control in a row, and the page decides whether it is one
+     * (`content/action-runtime/pass-row.ts`).
      */
     values?: string[] | undefined;
   } | undefined;

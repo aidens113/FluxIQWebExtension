@@ -171,6 +171,7 @@ import {
   type TargetMeasurement
 } from "../identity";
 import { isHiddenTie, isVisibleForResolution, passesResolutionGate } from "./resolution-gate";
+import { resolvedForPass, type PassOutcome } from "./pass-row";
 import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, DomElementContext, RectDescriptor } from "../types";
 
 /** The element an action will act on, with the measurement that chose it. */
@@ -264,13 +265,20 @@ export class TargetResolutionError extends Error implements WebAutomationFailure
  * measurement no caller can see is a measurement nobody will keep correct.
  */
 export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
-  const target = recordedTarget(action);
+  // A loop pass's row that arrived with no row the build saw is placed on the page (`pass-row/`).
+  const outcome = resolvedForPass(recordedTarget(action), (target) => resolution(action, target));
+  if ("failed" in outcome) throw outcome.failed;
+  return outcome.resolved;
+}
+
+/** One whole resolution of `target`, as its answer or the failure `resolveTarget` throws. */
+function resolution(action: BrowserActionCommand, target: RecordedTarget | undefined): PassOutcome<ResolvedTarget, TargetResolutionError> {
   // A target recorded inside a shadow root is looked for only in the roots its
   // recorded host chain reaches, by every strategy below and by scoring; any
   // other target in the document, as it always was (`selector/shadow/scope.ts`).
   const scope = resolveShadowScope(target?.context?.shadowHosts);
   const first = resolveIn(action, target, scope);
-  if (first.outcome !== "not_found") return settle(first);
+  if (first.outcome !== "not_found") return settled(first);
   // A target that names no host chain and that the document does not hold may
   // be a control inside an open shadow root, addressed the way the snapshot
   // addressed it: a selector written within that root, and the name the model
@@ -281,13 +289,13 @@ export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
   // light-document target resolves exactly as it always did; and every veto,
   // every count and the ambiguity rule apply in the roots as they do in the
   // document, so two widgets holding the same control are still refused.
-  if (scope.scoped || !first.misses.length) throw first.error;
+  if (scope.scoped || !first.misses.length) return { failed: first.error };
   const roots = composedRoots(document).slice(1);
-  if (!roots.length) throw first.error;
+  if (!roots.length) return { failed: first.error };
   const widened = resolveIn(action, target, { scoped: true, roots, description: "the page's open shadow roots" });
-  if (widened.outcome !== "not_found") return settle(widened);
+  if (widened.outcome !== "not_found") return settled(widened);
   const misses = [...first.misses, ...widened.misses];
-  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, first.nearby, first.decided);
+  return { failed: notFound(`No target resolved from ${misses.join(", ")}.`, misses, first.nearby, first.decided) };
 }
 
 /** One pass of the resolution, in one scope. A miss is returned rather than thrown so a wider pass can follow it. */
@@ -296,9 +304,8 @@ type ScopedResolution =
   | { outcome: "ambiguous"; error: TargetResolutionError }
   | { outcome: "not_found"; error: TargetResolutionError; misses: string[]; nearby: TargetCandidatePool; decided: CandidateSelection | undefined };
 
-function settle(resolution: Exclude<ScopedResolution, { outcome: "not_found" }>): ResolvedTarget {
-  if (resolution.outcome === "ambiguous") throw resolution.error;
-  return resolution.target;
+function settled(resolution: Exclude<ScopedResolution, { outcome: "not_found" }>): PassOutcome<ResolvedTarget, TargetResolutionError> {
+  return resolution.outcome === "ambiguous" ? { failed: resolution.error } : { resolved: resolution.target };
 }
 
 function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefined, scope: ShadowScope): ScopedResolution {

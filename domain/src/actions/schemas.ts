@@ -96,11 +96,18 @@ const optionSelectorSchema = {
   }
 } satisfies JsonObject;
 
-/** `WebAutomationScrollRequest`. `maxScrolls` is required by `untilStable`, so a feed cannot scroll forever. */
+/**
+ * `WebAutomationScrollRequest`. `maxScrolls` is required by `untilStable`, so a
+ * feed cannot scroll forever. Closed (`additionalProperties: false`): these are
+ * every key the request has, so Core refuses a step that writes another one at
+ * submit, naming the fields here, instead of the trial dispatching a scroll the
+ * page cannot read (lane 3, `run-mvcvzwk1-c1d869e4`).
+ */
 const scrollRequestSchema = {
   type: "object",
   label: "Scroll",
   required: ["mode"],
+  additionalProperties: false,
   properties: {
     mode: { type: "string", label: "Mode", enum: ["by", "toElement", "untilStable"] },
     x: { type: "number", label: "X delta" },

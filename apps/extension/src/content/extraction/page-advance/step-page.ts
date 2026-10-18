@@ -8,7 +8,8 @@
 // their bounds):
 // - `next`, which an absent mode also means: follow the Next control
 //   (`./follow-next.ts`). With no way at all -- a next-page step whose list
-//   carried no pagination -- the pager's Next is found from the list. A page
+//   carried no pagination -- the pager's Next is found from the list, and
+//   where the page shows none the list is scrolled for more (`./found-way.ts`). A page
 //   that shows items and no way forward is watched for one briefly before the
 //   list counts as ended. After a click the list must become a different list
 //   -- its first item detached or replaced, or its length changed -- within ten
@@ -24,7 +25,8 @@
 // - `loadMore`: press `control`, then wait for an item not shown before
 //   (`./load-more.ts`).
 // - `scroll`: scroll the list's scroller to its bottom and wait for an item
-//   not shown before (`./scroll-for-more.ts`).
+//   not shown before, waiting on while the page shows the list still loading
+//   (`./scroll-for-more.ts`).
 // - `numbered`: click the page control that follows the current page
 //   (`./numbered-page.ts`).
 //
@@ -39,18 +41,19 @@
 
 import type { WebAutomationNextPageWay } from "../../../shared/protocol";
 import { followNext } from "./follow-next";
+import { followFoundWay } from "./found-way";
 import { pressLoadMore } from "./load-more";
 import { visitNumberedPage } from "./numbered-page";
 import { scrollForMore } from "./scroll-for-more";
 import type { PageStep, PaginationProgress } from "./types";
 
 /**
- * Moves the list on by one page the way `way` says, or by the pager's Next
- * found from the list when `way` is absent. `bound` is the read's: pages for
+ * Moves the list on by one page the way `way` says, or, when `way` is absent,
+ * by the pager's Next found from the list or a scroll where it shows none. `bound` is the read's: pages for
  * every way but `scroll`, scrolls for `scroll`; a next-page step has none.
  */
 export async function stepPage(way: WebAutomationNextPageWay | undefined, progress: PaginationProgress, bound: number | undefined): Promise<PageStep> {
-  if (way === undefined) return await followNext(undefined, progress, bound);
+  if (way === undefined) return await followFoundWay(progress, bound);
   switch (way.mode) {
     case undefined:
     case "next":

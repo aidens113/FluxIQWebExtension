@@ -69,7 +69,7 @@ export { elementContext, landmarkRole } from "./context";
 export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
 export { agreesWithRecordedDialog, dialogName } from "./dialog";
-export { agreesWithRecordedRecord, isRecordElement, recordIdentity } from "./record";
+export { agreesWithRecordedRecord, isRecordElement, recordIdentity, sitsInRepeatedRow } from "./record";
 export { reportableText } from "./reportable-text";
 export { stableNameReading } from "./stable-name";
 export { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidate, scoreTargetCandidates } from "./score";
