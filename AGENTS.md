@@ -420,6 +420,13 @@ wording, its oracle or its fixture to fit the site, keeping its intent, and neve
 to accept a wrong answer. Changing a task is not teaching to the test: the model's guidance stays
 generic.
 
+**Data-scraping tasks must have data to verify** (user, 2026-10-17): every browser/Lab
+scraping or dataset task must have actual matching rows on its fixture and a nonempty,
+record-by-record expected dataset. An empty result does not qualify as scraping acceptance.
+Revise empty task/variant fixtures, instructions and honest workflow/oracle together before
+launch; never fabricate output, force a judge pass, weaken an oracle or teach guidance to the
+fixture. Prove the positive matching browser path provider-free before paid execution.
+
 **Only a few tasks run fully end to end** (user, 2026-10-17): a full live run (build from the
 extension chat, the judged whole run, a zero-call replay) is time-intensive, so a breadth round runs
 about one task per site end to end, plus reruns of tasks whose failures were fixed; every other task

@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed355calls/$0.301116189, two passes/five failures. Company source pushed both dev branches. Canonical model-reset-only failed; bounded ledger/feedback corrections active. Social supported disclosure proof active; conditional jobs and read-only auction coverage preparing in isolated lanes.
+Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed424calls/$0.357334143, two accepted passes/five failures/one unverified empty run. Positive-data corpus revision required. Company source pushed both dev branches. Canonical model-reset-only failed; bounded ledger/feedback corrections active. Social supported disclosure proof active; conditional jobs and read-only auction coverage preparing in isolated lanes.
 Created: 2026-10-17
 Last updated: 2026-10-17
 Owner: Senior supervisor agent
@@ -12,6 +12,8 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 ---
 
 ## Current State
+
+**Newest user requirement (2026-10-17): scraping tasks require actual matching data.** Audit of the current108-task run-scoped build found87 dataset tasks:82 positive,5 empty variants requiring revision. Empty-result allowance is revoked; no zero-row scraping acceptance or launch. Actual job empty run is unaccepted, and a transient selected-card selector defect has been found. Task/fixture/oracle/provider-free path and launch guard corrections are now required alongside ongoing reset/social work.
 
 **Resumed by Codex on the user's go-ahead (client date 2026-10-17).** Historical wrap-up dates below are retained as recorded by Claude. This section is written to
 stand alone. The user's requests: 40 new tasks on the ten realistic sites, run live, debugged and fixed, fast
@@ -54,7 +56,7 @@ the lane trees until merged).
 - **R1 source pushed, live proof failed:** prior push downstream72fb4d80/Corebb858c89 included original-inventory/transfer/reset ownership fixes and narrow/browser gates. Canonical run-mvdflu8o-d99d3100 used --model-reset-only and actual startReset=false, but failed53calls/$0.034600230, no Flow/whole judge/replay. Required debug inspected. Retry attribution, cross-page create accounting and permanently kept unresolved acts now have a bounded fix brief; no paid reset rerun until changed-source validation/review.
 - **Social recovery:** recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538. Worker is proving the supported explicit disclosure loop and closed incomplete-text feedback. No implicit clicks or truncated results accepted; generic guidance must not mirror fixture content.
 - **Other failures:** crossborder run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but later repair lacked two oracle state facts. Bigbox run-mvddx6wf-17e9eab0 matched its full oracle but failed stored-copy claim parsing. Generic query/judge/parser repairs are pushed; Bigbox rerun passed. Crossborder rerun remains owed.
-- **Continuation spend:** seven completed live runs, two passes/five failures,355calls/$0.301116189. Historical spend above is separate; install proof remains separate.
+- **Continuation spend:** eight completed live runs, two accepted passes/five failures/one unverified result,424calls/$0.357334143. Historical spend above is separate; install proof remains separate.
 - **Storage excluded:** held optional72abeeab and restorationc13c0a30 remain only t707. Supervisor verified482pass/2fail/4skip held versus484/0/4 baseline; timing causality unproved. No pooling delta enters dev.
 - **Remaining:** accepted full coverage for crossborder, auction, classifieds, photo and professional; owed store/jobs/social reruns; installed Chrome/Edge extension automation creation and zero-call rerun. Install/pairing already proven, Firefox unavailable. Lifetime Core build leases remain active; no source mutation in live lanes.
 
@@ -88,8 +90,7 @@ each site's `live-tasks.ts` and pinned in `scenarios/tests/live-instructions.tes
 | professional-network | `netherlands-data-engineers`, `connect-kade-senior-engineer` (send), `accept-messaged-invitations`, `kade-lead-contact` |
 
 Each id is `<site>-<task>`. Risks the authors named: a guard that asks at Like, Accept or Buy it now (no permission
-point is declared there, so asking fails the run and is a product defect); an empty right answer
-(`august-over-1300`, `halvard-labs-office-jobs`, `saturday-certificate`) if Core stores no zero-row dataset.
+point is declared there, so asking fails the run and is a product defect). The former empty-result allowance is retired: every scraping task now requires actual matching nonempty data.
 
 ## Worker Briefs
 
@@ -537,3 +538,21 @@ None yet.
 - Supervisor actual independent reset command59518 exited0,58/58 across ledger-subject, words, actual project reset and actual project facade;287.31s. Source review accepted existing-subject no-op/retry restoration and corrected strict trial accounting. New same-page createdItems and fingerprint fail-first62624 reproduced4 failures; bounded follow-up in progress, so no paid reset release yet.
 - Supervisor actual independent disclosure composition/refusal/next-sentence command10298 exited0,43/43; closed prefix/status/failure-code/redaction negatives reviewed. Compiler-derived supported browser route passed1/1. Final test-scaffolding type/contract-spread corrections and full3-case browser proof remain required before integration/live.
 - Auction run-mvdghd7e-267bcda3 reached real chat/browser, prior plan grammar failure absent; no result claimed. Conditional job run-mvdgaz8z-27ff3d1b remains live with trials/repair; no accepted pass yet. Main documentation commits do not mutate either frozen live lane.
+
+### Supervisor brief: codex-empty-result-review
+- Worker: storage_comparison, read-only investigation alongside monitoring its frozen auction lane.
+- Objective: explain run-mvdgaz8z-27ff3d1b's correct empty oracle but unverified product judge and missing replay; user observed it and asked.
+- Read: t567 required per-run debug, actual final judge0138/0139, actual authored graph/read accounts/earlier narrowing, relevant field/condition/evidence composition owners.
+- Owns: only t563 docs/working/breadth-forty-tasks-plan/reports/codex-empty-result-review.md. All product/source/run reads in either tree are read-only.
+- Establish: were company/mode fields correctly mapped, filters actually satisfied, full matching search covered and save loop correct? Did judge receive enough positive exclusion/coverage evidence? Is Lab passed label inconsistent with CLI exit1/unverified/no replay?
+- Root facts: expected0/observed0/account oracle passed; reported unverified; final unknown0.4 then no0.6;69calls/$0.056217954; replays[]; read accounts each8seen/0kept.
+- Must not touch: source, fixtures/oracles, live lane outputs, shared plans, other reports, profiles, credentials, commits/pushes. No rerun. Do not print raw rows/pages/tokens.
+- Definition of done: source-backed cause with exact receipts and proposed minimal source/test paths. Distinguish correct cautious judge from missing evidence or incorrect Flow; never force yes from empty output alone. Keep auction monitored; report final result independently.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-empty-result-review.md.
+
+### 2026-10-17 ? User requires positive verifiable scraping data
+- New binding direction: every data-scraping task must have actual matching rows, with nonempty record-by-record expected data. Empty-result tasks cannot count toward live scraping acceptance. AGENTS.md now records this rule; generic real-user handling of genuinely empty searches is not being changed by this test requirement.
+- Supervisor audited the actual latest run-scoped108-task scenario build:87 dataset/extraction tasks,82 positive and5 empty. A generic unlabelled dist copy had only68 old tasks and was discarded as stale reference, never used for the conclusion.
+- Revise five task variants before further launch: job-board-remote-rust-roles-quiet-market, its after-creation variant, job-board-halvard-labs-office-jobs, photo-social-august-over-1300, company-website-saturday-certificate. Keep intent and honest site behavior, adjust task/fixture/workflow/oracle together, prove positive paths provider-free, never force a judge yes.
+- Job run-mvdgaz8z-27ff3d1b is NOT accepted: actual CLI1, oracle0/0 passed but product unverified and requested replay not run;69calls/$0.056217954. Root debug written. This user direction supersedes every prior empty-result allowance in this plan and its historic audit reports.
+- Corpus nonempty regression and before-launch guard are required. Existing nonempty auction/social work continues; no additional zero-row scraping paid/browser launch.
