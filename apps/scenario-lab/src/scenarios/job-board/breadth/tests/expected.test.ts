@@ -76,20 +76,17 @@ test("save Quillmark remote: the account literal holds after the three saves in 
   assert.deepEqual(records(saveQuillmarkRemoteExpected), savedPostings(forward).map(({ title, company, location }) => ({ title, company, location })));
 });
 
-test("Halvard Labs office jobs: none exist, the board answers with lookalike recommendations, and saving one changes the account", () => {
-  const labs = POSTINGS.filter((posting) => posting.company === "Halvard Labs");
-  assert.ok(labs.length > 0 && labs.every((posting) => posting.workplace === "remote"));
-  assert.deepEqual(records(halvardLabsOfficeJobsExpected), []);
-  for (const wp of ["hybrid", "onsite"]) {
-    const { body } = serve(createJobBoardState(), "jobs", `q=Halvard+Labs&wp=${wp}`);
-    assert.match(body, /No jobs found for Halvard Labs jobs/u);
-    const recommended = organicCards(body);
-    assert.ok(recommended.some((card) => card.company === "Halvard Labs"), `${wp}: the Halvard Labs job is not among the recommendations`);
-    assert.ok(recommended.length >= 3, `${wp}: the recommendations trap is not armed`);
-  }
-  assert.equal(finalFact(halvardLabsOfficeJobsExpected), UNCHANGED_ACCOUNT);
-  assert.notEqual(closedJobsAccountFacts(save(createJobBoardState(), "hl1")), UNCHANGED_ACCOUNT);
-  assert.notEqual(closedJobsAccountFacts(save(createJobBoardState(), "hv1")), UNCHANGED_ACCOUNT);
+test("Halvard Labs office jobs: save the hybrid role while excluding remote Labs and Systems recommendations", () => {
+  const matches = POSTINGS.filter((posting) => posting.company === "Halvard Labs" && posting.workplace !== "remote");
+  assert.deepEqual(matches.map(({ id }) => id), ["hl2"]);
+  assert.deepEqual(records(halvardLabsOfficeJobsExpected), matches.map(({ title, company, location }) => ({ title, company, location })));
+  const saved = save(createJobBoardState(), "hl2");
+  assert.equal(finalFact(halvardLabsOfficeJobsExpected), closedJobsAccountFacts(saved));
+  assert.notEqual(closedJobsAccountFacts(save(saved, "hl1")), finalFact(halvardLabsOfficeJobsExpected));
+  assert.notEqual(closedJobsAccountFacts(save(saved, "hv1")), finalFact(halvardLabsOfficeJobsExpected));
+  const onsite = serve(createJobBoardState(), "jobs", "q=Halvard+Labs&wp=onsite").body;
+  assert.match(onsite, /No jobs found for Halvard Labs jobs/u);
+  assert.ok(organicCards(onsite).some(({ company }) => company === "Halvard Labs"));
 });
 
 test("Halvard careers roles: the records are the careers site's own list, and a read off Rolefinch's search is not", () => {

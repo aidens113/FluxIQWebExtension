@@ -26,11 +26,16 @@ test("the apply instructions name one posting: Quillmark's full-time remote UK S
   for (const instruction of applying) assert.match(instruction, /the full-time Senior Rust Engineer job at Quillmark that is fully remote in the UK/u);
 });
 
-test("the remote Rust roles instruction says an empty table can be right, which the quiet market's oracle is", () => {
-  assert.deepEqual(remoteRustRecords("quiet-market"), []);
+test("the quiet-market task has a positive record and explicit columns, formats and ordering", () => {
+  assert.equal(remoteRustRecords("quiet-market").length, 1);
   const rows = JOB_BOARD_LIVE_TASKS.filter((task) => task.expectedDatasetId === "extract-remote-rust-roles");
   assert.equal(rows.length, 3);
-  for (const task of rows) assert.match(task.instruction, /If no job qualifies, an empty table is the right answer\./u, task.id);
+  for (const task of rows) {
+    assert.match(task.instruction, /columns title, company, salary and link/u);
+    assert.match(task.instruction, /salary is written exactly/u);
+    assert.match(task.instruction, /newest posting first/u);
+    assert.doesNotMatch(task.instruction, /empty table/u);
+  }
 });
 
 test("remote easy apply: two answers share a posting date, and the tiebreak the instruction names -- the results' own order -- gives the oracle's order", () => {

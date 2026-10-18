@@ -123,7 +123,7 @@ export const jobBoardManifest = createScenarioManifest({
           operation: "extract",
           target: REMOTE_RUST_KEYS,
           fields: { title: "h2 a", company: ":scope > div:nth-of-type(2) > span:nth-of-type(1)", salary: ":scope > div:nth-of-type(3)", link: "h2 a@href" },
-          minItems: 0,
+          minItems: 1,
         },
         { id: "remote-rust-collected", operation: "checkpoint" },
       ],
@@ -134,9 +134,9 @@ export const jobBoardManifest = createScenarioManifest({
       },
       variants: [{
         id: "no-exact-matches",
-        description: "A week with no remote Rust hiring. The search answers with no exact matches and fills the page with jobs you might like -- Rust roles in offices and remote roles in other languages -- in the same cards real results use, with a sponsored Rust role above them. The right table is empty.",
+        description: "A quiet week retains one qualifying remote Rust job, with sponsored and nonmatching postings still excluded from the answer.",
         arm: { operation: "set-mode", payload: { mode: "quiet-market" } },
-        expected: { extracted: [{ step: "extract-remote-rust-roles", count: 0, records: remoteRustRecords("quiet-market") }] },
+        expected: { extracted: [{ step: "extract-remote-rust-roles", count: remoteRustRecords("quiet-market").length, records: remoteRustRecords("quiet-market") }] },
       }],
     },
     {

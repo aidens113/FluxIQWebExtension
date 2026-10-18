@@ -38,10 +38,13 @@ const DATASET_TASKS = REALISTIC_SITE_LIVE_TASKS.filter(({ judgeBy }) => judgeBy 
  * unfiltered first page can have exactly the right number of rows.
  */
 test("every realistic-site dataset task is judged record by record, never by a count alone", () => {
-  assert.ok(DATASET_TASKS.length > 0);
+  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 108);
+  assert.equal(DATASET_TASKS.length, 87);
   for (const task of DATASET_TASKS) {
     const dataset = datasetOf(task);
     assert.ok(Array.isArray(dataset.records), `${task.id}: dataset ${task.expectedDatasetId} declares no records, so a table of the right length with the wrong rows would pass`);
+    assert.ok(dataset.records.length > 0, `${task.id}: scraping requires actual matching rows`);
+    for (const record of dataset.records) assert.ok(Object.keys(record).some(key => key.trim().length > 0), `${task.id}: every expected row must contain a named field`);
     if (dataset.count !== undefined) assert.equal(dataset.count, dataset.records.length, `${task.id}: the declared count disagrees with the records`);
   }
 });

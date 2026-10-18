@@ -111,7 +111,7 @@ describe("breadth wrong paths: each plausible mistake fails an oracle", { concur
     } finally { await extra.close(); }
   });
 
-  it("august-over-1300: the reel's plays, the 2025 pinned post, the impersonator and Kiln Theory each make a row where there should be none", async () => {
+  it("august-over-1300: reel plays, the pinned2025 post and other accounts cannot replace the qualifying studio post", async () => {
     const { recordingScript } = workflow("august-over-1300");
     const anyKind = AUGUST_OVER_1300_CELLS.replace(`:not(:has(svg[aria-label="Clip"]))`, "");
     const anyYear = AUGUST_OVER_1300_CELLS.replace(`[alt*=", 2026."]`, "");
@@ -120,8 +120,15 @@ describe("breadth wrong paths: each plausible mistake fails an oracle", { concur
     for (const [label, target] of [["reel counted by its plays", anyKind], ["August of any year", anyYear]] as const) {
       const s = await session();
       try {
-        const read = (await runScript(s.page, s.lab.origin, retargeted(recordingScript, "extract-august-over-1300", target))).get("extract-august-over-1300")!;
+        const prefix = without(recordingScript, ["august-over-1300-open-post", "august-over-1300-post-ready", "extract-august-over-1300", "august-over-1300-read"]);
+        await runScript(s.page, s.lab.origin, prefix);
+        const wrongCells = s.page.locator(target).filter({ hasNot: s.page.locator('img[alt*="August 21, 2026."]') });
+        assert.equal(await wrongCells.count(), 1, label);
+        await wrongCells.click();
+        const suffix = recordingScript.slice(recordingScript.findIndex(({ id }) => id === "august-over-1300-post-ready"));
+        const read = (await runScript(s.page, s.lab.origin, suffix)).get("extract-august-over-1300")!;
         assert.equal(read.length, 1, label);
+        assert.notDeepEqual(read, dataset("august-over-1300").records, label);
       } finally { await s.close(); }
     }
     for (const handle of ["harbourlight.studios", "kiln.theory"]) {
@@ -131,6 +138,10 @@ describe("breadth wrong paths: each plausible mistake fails an oracle", { concur
         await s.page.goto(`${s.lab.origin}${ROOT}${handle}/`);
         await s.page.locator(`main a[role="link"][href*="/p/"]`).first().waitFor({ state: "visible" });
         assert.equal(await locate(s.page, AUGUST_OVER_1300_CELLS).count(), 1, `${handle}'s August post`);
+        await locate(s.page, AUGUST_OVER_1300_CELLS).click();
+        const suffix = recordingScript.slice(recordingScript.findIndex(({ id }) => id === "august-over-1300-post-ready"));
+        const read = (await runScript(s.page, s.lab.origin, suffix)).get("extract-august-over-1300")!;
+        assert.notDeepEqual(read, dataset("august-over-1300").records, handle);
       } finally { await s.close(); }
     }
   });

@@ -6,12 +6,12 @@ const TYPE_NAMES = { fulltime: "Full-time", contract: "Contract", parttime: "Par
 
 /**
  * Postings the board carries under a rendering. `quiet-market` is a week with
- * no remote Rust hiring, so every remote posting that a search for "rust"
- * would find -- by title, company or snippet, substring and all -- is gone.
+ * little remote Rust hiring: only one established matching posting remains.
+ * Other remote search matches, including misleading substrings, are gone.
  */
 export function availablePostings(mode: JobBoardMode): Posting[] {
   if (mode !== "quiet-market") return [...POSTINGS];
-  return POSTINGS.filter((posting) => !(posting.workplace === "remote" && haystack(posting).includes("rust")));
+  return POSTINGS.filter((posting) => posting.id === "m7" || !(posting.workplace === "remote" && haystack(posting).includes("rust")));
 }
 
 /**
