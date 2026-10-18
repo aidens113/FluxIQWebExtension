@@ -2124,6 +2124,8 @@ records leave out, from the run's own step log (`steps/*/meta.json`,
 count. Anything else the log saw is added as `unattributed`, never subtracted
 (`run-muqk713g-d08ad3dc`: 17 counted of 35 calls before this).
 
+Core canonical accounting can already include paid result checks. Lab assigns a check to the judge phase only when a unique, nonempty request ID matches uniquely on both sides; its canonical charged usage moves out of runtime intact, so the total counts it once. Legacy intervention-only accounting retains its fallback. Missing or ambiguous identity and pending or omitted usage remain conservative residuals; no deduction is guessed. An unknown cost is not a free call. Original run artifacts remain unchanged when a later read-only reconciliation corrects historical telemetry.
+
 The same reading also gives, for every run, `largestInputTokens`: the largest
 input, in tokens, of any one provider call, from each step's `meta.usage` --
 how big a single decision's context grew. A project build's steps name the

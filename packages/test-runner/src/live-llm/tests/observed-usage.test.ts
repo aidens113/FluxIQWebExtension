@@ -112,7 +112,8 @@ test("a figure the provider did not report stays unknown, while Core's charged t
   });
   const observed = liveLlmObservedUsage(detail(unreported, 4));
 
-  assert.deepEqual(observed.observedCalls[1], { requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", validationOk: true, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null });
+  assert.deepEqual(observed.observedCalls[1], { requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", validationOk: true, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null, charged: unreported[1]!.charged });
+  assert.notEqual(observed.observedCalls[1]?.charged, unreported[1]!.charged, "canonical provenance is copied, without replacing unknown reported usage");
   // Summed in Core's order, as its accounting was.
   const charged = [0.001, reserved, 0.001, 0.001].reduce((total, cost) => total + cost, 0);
   assert.equal(observed.totalEstimatedCostUsd, charged);

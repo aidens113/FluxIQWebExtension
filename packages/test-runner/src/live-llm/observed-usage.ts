@@ -25,6 +25,8 @@ export type LiveLlmObservedCall = {
   outputTokens: number | null;
   totalTokens: number | null;
   estimatedCostUsd: number | null;
+  /** Core's canonical charge and its provenance; absent on legacy intervention-only records. */
+  charged?: ExistingRunProviderCall["charged"];
 };
 
 /**
@@ -131,6 +133,7 @@ function fromProviderCall(line: ExistingRunProviderCall): LiveLlmObservedCall {
     outputTokens: line.outputTokens,
     totalTokens: line.totalTokens,
     estimatedCostUsd: line.estimatedCostUsd,
+    charged: { ...line.charged },
   };
 }
 
