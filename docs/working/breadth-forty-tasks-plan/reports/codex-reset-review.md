@@ -1332,3 +1332,53 @@ codex-create-baseline-{core,downstream}-audit-2.log. Browser-helper type failure
 is preserved in extension/node_modules/codex-create-baseline-helper-type.log;
 rerun required after approved Core declarations build. Worker sent freeze and
 review-ready notice; no library/build/browser launch yet. No paid acceptance.
+
+Post-review own-lane preparation (root120/120 independent/sourceaccepted):
+Frozen Core4ae19d30/downstreamc0b18aa8. Approved three-library command14119
+exited0: process FLUXIQ_BUILD_CACHE_DIR=off; node scripts/build-cache/cli.mjs
+contracts:build fluxiq:build client-gateway-websocket:build. Contracts reused
+312ms, FluxIQ built95957ms, gateway reused399ms. Core outputs current. No
+workspace/shared-Core/extension build or browser/provider launch.
+
+Affected downstream evidence owner tests passed30/30, native0,6098.372ms test
+execution, labelled codex-create-baseline-final. Current domain build native0,
+24096ms, rewrote2021specifiers/663files after removing1392old emittedfiles.
+Domain check native2 exposes a bounded real type omission: tools.ts165 public
+WebLlmEvidenceRuntime.startState return type lacks optional resource while
+observe.ts returns it and Core binding now retains it. Existing new assertions
+start-state.test.ts73/74 are fail-first TS2339, not a runtime failure. Root
+approved exactly resource?:string type alignment in tools.ts; no extra behavior.
+The installed helper typecheck was mistakenly run in parallel with domain
+clean/rebuild and saw temporarily missing domain/node (my dependency-ordering
+error). No product conclusion drawn; rerun after completed build required.
+A helper-only retry81511 is pending before the approved one-field source edit;
+then affected30/check/build/helpertype will run in dependency order. Native
+failures and logs retained. No browser release requested until gates pass.
+
+Approved one-field tools.ts return-type alignment applied only after helper81511
+exited0 against the completed initial domain build. Final affected owners rerun
+passed30/30 native0 (4256.2857ms), domaincheck66024 native0/29366ms,
+domainbuild60967 native0/21027ms. Final helper63509 started strictly AFTER that
+build completed and exited0. Downstream audit48735 exited0. No source/API
+behavior beyond approved opaque optional field type; current source heads remain
+Core4ae19d30/downstreamc0b18aa8 with only tools.ts + this report uncommitted.
+Logs are downstream/node_modules/codex-create-baseline-domain-{tests,check,build}-2.log,
+node_modules/codex-create-baseline-downstream-audit-3.log and extension/
+node_modules/codex-create-baseline-helper-type-final.log. All own readers ended.
+
+Proposed next proof, not launched: after supervisor review/commit/release, own
+lane extension test:e2e:build (cacheoff), then extension cwd:
+
+```
+pnpm exec playwright test -c e2e/playwright.config.ts e2e/site-reset/tests/installed-project.spec.ts --workers=1 --retries=0 --reporter=list --output=e2e/test-results/create-baseline-project-20261018
+```
+
+This preserves old proof output paths and installed Chrome state. Fresh headed
+MV3/profile and isolated real Core project use registered domain/native runtime,
+actual unchanged gateway and provider-disabled scripted provider. Assertions
+require refusal with actual click-dispatch count unchanged, safe real baseline
+observation -> issuedref -> retry -> own inverse -> exact original ordered
+whole inventory -> clean trial. No manual ledger/source/result seeding, hidden
+navigation, fixture reset, liveprovider launch or paid trial is authorized.
+First-unit scope remains exploratory preflight only; arbitrary unseen trial
+creates remain a separately identified exposure, not an acceptance claim.
