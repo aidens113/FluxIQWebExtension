@@ -58,6 +58,8 @@ export async function nextPageAction(action: BrowserActionCommand, deps: Content
   try {
     const answer = await deps.nextPage(request, { timeoutMs: action.timeoutMs });
     switch (answer.outcome) {
+      case "needs_person":
+        return deps.needsPerson(action, startedAt, answer.sighting);
       case "moved": {
         const page = answer.page === undefined ? "" : ` to page ${answer.page}`;
         const result = deps.success(action, startedAt, "The list moved to its next page.", { status: "passed", expected: EXPECTED, actual: `moved by ${answer.by}${page}` });

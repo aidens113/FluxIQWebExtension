@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Codex resumed execution; storage A/B, safe reset review, held-fix validation and Lab build lease are in progress; live coverage remains 6 passing tasks.
+Status detail: Storage comparison settled; judge fix, build lease and paging handoff integrated. Reset and social-read fixes are under validation; headed company-site launch is in prelude. Live coverage remains 6 passing tasks.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -49,14 +49,16 @@ $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; n
 the lane trees until merged).
 
 **Not done / held (each has a report under `reports/`):**
-- **Codex continuation in progress:** storage A/B in t707 (source and dist rebuilt for each half); R1 preservation review in t719; drawing/reveal gates in t567; paging person handoff in t565. No new paid run has launched yet.
+- **Codex continuation in progress:** R1 preservation validation in t719; social-feed dedupe/disclosure fixes in t566; generic preceding-navigation trial feedback in t563. t567 drawing/reveal gates passed, including 145 combined recovery/paging tests and extension check after merging the latest dev. Headed company-site launch is in prelude; no new paid call observed yet. An earlier launch refused at $0 because it lacked the latest paging merge; that merge is now included.
+- **Storage decision:** exclude the optional pooling proposal from this integration. Supervisor inspected both raw JSON results: held 482 passed/2 failed/4 skipped; baseline 484 passed/0 failed/4 skipped. Unaffected controls changed timing materially, so causality is unproved. Source and production dist were restored to baseline and independently verified against the build stamp. Original proposal `72abeeab` and baseline-restoration `c13c0a30` remain only on held Core branch t707; no storage delta enters dev.
 - **Codex integrated locally:** held judge fix Core t563 (4 files/41 tests, typecheck, audit passed) and Lab build lease t720 (supervisor reran 18 real-process/guard tests, audit passed). The lease holds Core's actual library-build locks throughout a run, blocking forced builds and cache restores. Direct commands bypassing Core's build cache are outside this protection.
+- **Classifieds feedback integrated locally:** Core t563 d5488b29 traces preceding context rather than assuming the failed step caused the failure. Supervisor source review and package-local candidate/subflow tests 12/12 passed; worker compiler check and audit passed. The original wrong-navigation run still needs live acceptance.
 - **R1 review found a blocking preservation defect:** subject equality alone admits removal of a pre-existing same-product line and can accept a partial quantity undo as complete. t719 is adding destination observations made before the act and positive completion evidence; unproved quantity inverses must fail closed. See `codex-reset-review` report when written.
 - **Core `dev` is green and pushed:** the `flow_script.repeat_over_twice` words and corpus case merged (Core
   `31f2ccdf`, pushed with `4d6fb8b6`).
 - **Storage change held:** the storage change, committed UNMERGED on Core branch `task/t707-storage-held` (`72abeeab`;
   `storage/canonical-authority/{whole-operation,owner-store}.ts`, `storage/sqlite-repository.ts`) (one SQLite open per operation, written to cure a creation-test timeout) left 7
-  storage tests timing out at 15-30 s under load; not merged until compared against `dev` (`reports/integration-core.md`).
+  storage tests timing out at 15-30 s under load; comparison now excludes it from this integration, as described above (`reports/codex-storage-comparison.md`).
 - **R1 site reset (t719, committed UNMERGED on `task/t719-site-reset-undoable-acts`, both repositories):** a
   build's own add-to-cart and save acts were never undone before re-runs (every undo refused `wrong_target`); the
   fix admits an undo by subject and page tokens for a reversing class. Narrow checks pass; needs review, one
@@ -68,14 +70,12 @@ the lane trees until merged).
   drawing identity on recording and repair paths (`task/t567-a8-lane-4b` downstream `83d883b4`, Core `4d90c6e7`;
   rebuild Core in the lane tree before a run). Lanes 2 and 3 have no unmerged code. Lane trees t563 and t567 are now
   ahead of `dev`, so they cannot fast-forward until round 2 merges them.
-- **Open product causes from the last runs:** a person check met by next_page arrival must hand off, not retry
-  (lane 2); dedupe across URLs that differ only by tracking parameters, and expanding an item's own "See more"
-  (lane 3); test-ride step 14 (lane 1); find_on_page shows a hidden control as an ordinary match (lane 4).
+- **Open product causes from the last runs:** tracking-only URL duplicates and unexpanded text disclosure (t566). The person-check handoff is integrated (t565). Classifieds evidence shows the draft opened a different listing from the one supplying its seller-read target; no identity loosening is justified. t563 is improving generic trial feedback to inspect preceding navigation/context. Hidden-control reveal and drawing identity are verified on t567 and awaiting live acceptance.
 - **Structural gap:** rebuilding Core in a lane tree while its run is live kills the run, and the Lab does not refuse
   it (it cost run-mvd8mcu6). Make the Lab hold a build lock per lane tree, or refuse a launch or a build while the
   other holds the tree.
 
-**Next, in order:** (1) settle the held storage change (run the storage tests with and without it under the same load);
+**Next, in order:** (1) storage comparison is settled for this round: optimization excluded, causal question retained separately;
 (2) review and merge R1 (t719) after one live everything-store round; (3) integration round 2: merge the unmerged lane branches above with narrow checks, sync and rebuild the lane
 trees (never during a live run), and build the Lab build lock; (4) finish one pass per remaining site and
 the owed reruns (office-checkout-review, save-quillmark-remote, halvard-labs-office-jobs, recent-group-posts,
@@ -113,6 +113,35 @@ point is declared there, so asking fails the run and is a product defect); an em
 (`august-over-1300`, `halvard-labs-office-jobs`, `saturday-certificate`) if Core stores no zero-row dataset.
 
 ## Worker Briefs
+
+### Brief: codex-lane-1-live-acceptance
+- Repository: paired t563 lane trees, task/t563-a8-lab-comparison; worker storage_comparison re-dispatched after its diagnosis.
+- Task: prepare frozen cache-off Core production build now; after explicit supervisor release, live bigbox-retail-rated-delivery-towels, local-classifieds-test-ride-question, then auction-marketplace-cheap-accessory-auctions if time permits. Goal is exact oracle/judges and zero-call replay, using chat entry.
+- Required reads: Current State; own classifieds report; live-lane-1 report and prior exact launch shapes. Verify slot-1 and isolated task workspaces; never expose credential values.
+- Owns: own report codex-classifieds-seller-read.md, own slot-1 run and debug evidence. No further source edits until proposed and supervisor assigns exact paths.
+- Validation: Core library build on t563 only, cache disabled; no build while its own run is live. Initial ceiling $0.25, maximum 250 calls; observe actual spend and result. Every failed run needs evidence-backed debug before changed-source rerun.
+- Must not touch: other trees, shared plans, scenario or oracle, user panel/profile. Never commit/merge/push. Paid launch remains gated on supervisor release after integration.
+- Report: own report in t563; send run ids, cost, outcomes and remaining causes, never raw recorded page data.
+
+### Brief: codex-classifieds-seller-read
+- Repository: paired lane trees `C:/Users/osrs_/FluxStuff/fxwork/t563/`, task/t563-a8-lab-comparison (supervisor syncs dev before dispatch).
+- Task: finish root-cause debug of local-classifieds-test-ride-question run-mvd9nlx5-1373850d, particularly trial step14 seller-name read versus the successful exploratory read. Establish whether wrong listing/navigation or lost identity caused it; then fix the owner and prove it before a rerun.
+- Required reads: Current State here; debugs/run-mvd9nlx5-1373850d.md under language-driven-flow-loop-plan; reports/live-lane-1.md; local run steps under C:/Users/osrs_/FluxStuff/lab-runs/2026-10-17/run-mvd9nlx5-1373850d. Inspect raw traces locally but report structural findings without dumping recorded page data/credentials.
+- Owns initially: only docs/working/breadth-forty-tasks-plan/reports/codex-classifieds-seller-read.md in t563. Read source as needed; send exact proposed source/test paths before edits so ongoing R1/social work stays partitioned.
+- Authorized expansion: Core flow-bootstrap/candidate/trial-stop.ts and candidate/tests/trial-stop.test.ts only. Generic failed-trial advice must inspect preceding context; no automatic retarget or weaker identity matching.
+- Must not touch: other trees, shared plans, scenario/oracle or model guidance shaped like scenario. Never commit/merge/push or launch paid runs before supervisor release. Core changes must stay generic; browser/selector behavior stays downstream.
+- Definition of done: evidenced cause from actual failed step, bounded regression and fix with narrow package/type/audit checks, and provider-free realistic browser proof if applicable. After integration/release, run this site task to a correct oracle/permission handoff and zero-call replay; debug every failure before changed-source rerun.
+- Report to: path above in t563.
+
+### Brief: codex-social-read-completion
+- Repository: paired lane trees `C:/Users/osrs_/FluxStuff/fxwork/t566/`, branch task/t566-a8-lane-4 (supervisor syncs dev before release).
+- Task: diagnose and fix the two remaining recent-group-posts causes from run-mvd94oxq-e2b9abb5: repeated post retained when its URL differs only by tracking data, and text cut at the item's own disclosure. Trace real run inputs/results to supported extraction contracts first; do not assume the debug's unverified explanation.
+- Required reads: Current State here; live-lane-3 report; language-driven-flow-loop-plan/debugs/run-mvd94oxq-e2b9abb5.md; source/test owners of the extraction/dedupe/disclosure code the actual run named. Read run artifacts locally, reporting structural conclusions without dumping page data or credentials.
+- Owns initially: only own report in t566; inspect source read-only and send exact proposed implementation/test paths before edits, then supervisor records file ownership. Never edit another tree or shared plan.
+- Authorized expansion: extension extraction link-identity/field-reader and text-disclosure helper with owning tests, list-reader and extract-list tests, realistic social-read-completion.spec.ts; domain extraction request/read-request/schema and explicit helper-dedupe dispatch paths with owning tests; Core result-verification/read-account/accounts.ts and owning tests; authored extension-client/Core generic architecture notes. Excluded dedupe helper links alone may use tracking-free identity. Disclosure must refuse positively incomplete fields and require explicit registered clicks; passive reads never click.
+- Must not touch: scenario task/oracle, model guidance shaped like scenario, legacy retired multi-page reader, unrelated source. Never strip arbitrary meaningful URL parameters or silently merge distinct records. Passive observations must not become implicit executable actions.
+- Definition of done: evidence-backed causes, bounded structural fixes with regression tests, narrow affected package checks/audits, and realistic provider-free browser proof where useful; no full suite. After supervisor integration/release, recent-group-posts rerun must reach exact oracle and judges, and hide-suggested-posts rerun must prove prior row-bound fix. No paid run until release.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-social-read-completion.md in t566.
 
 ### Brief: codex-paging-person-handoff
 - Repository: downstream `C:/Users/osrs_/FluxStuff/fxwork/t565/!FluxIQWebExtension`, task/t565-a8-lane-2 (dev synced). Its sibling Core is read-only until a specific generic gap is reported.
@@ -314,6 +343,21 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Validation: supervisor result-verification vitest 41/41, fluxiq:check exit 0, Core audit passed; lease and unbuilt-Core tests 18/18, downstream audit passed (208 warnings, 638 baselined); post-dev-merge working-docs check passed.
 - Outcome: Accepted locally. A premature t567 content-harness launch read incomplete rebuilding Core output and failed bundling; invalid as product evidence, rerun after Core build finishes. No paid run started.
 - Follow-up: storage A/B, safe R1 baseline checks, t567 build/harness, t565 paging handoff, then frozen live lanes. Push both dev branches together after coherent integration.
+
+### 2026-10-17 — Storage excluded; paging handoff and held-feature browser proofs
+- Agent: supervisor; storage_comparison and held_lane_review
+- Changed: held Core t707 restored to baseline locally; comparison report preserved here. t565 person-check handoff merged to local dev after supervisor source review and 66/66 changed-directory tests.
+- Why: baseline storage passes; optional pooling is not needed for live acceptance. Paging must ask a person rather than reload a robot check.
+- Validation: supervisor read raw with/without JSON -> 482/2/4 vs 484/0/4; cache-off baseline build -> reuse, matching inputs/outputs, exit 0. t565 audit passed (208 warnings, 638 baselined). Worker fail-first realistic browser reproduced old output_not_observed; restored code passed 1/1; extension check passed. t567 supervisor Chromium reveal harness 1/1, domain 232/232, extension 137/137, Core durable repair/reopen 4/4.
+- Outcome: Partial. Judge fix and lease previously pushed both dev branches (downstream d0f88a8d, Core d79b322e). Paging merge not pushed yet; R1 and t567 remain under validation. No paid run has started.
+- Follow-up: finish R1 browser/ownership proof and t567 final integrated gates, then live site coverage and install replay.
+
+### 2026-10-17 — Frozen live lanes preparing; reset preservation and extraction diagnosis
+- Agent: supervisor; reset_review, held_lane_review, storage_comparison
+- Changed: t567 synced latest paging merge, combined recovery/paging tests passed 145/145 and extension check passed. Company apprentices headed run run-mvddb1jn-a15ca13f is preparing its isolated Core web build. Crossborder slot-2 launcher started after its own Core production rebuild passed.
+- Validation: R1 worker reports 116 Core preservation tests and actual add-quantity-two/remove-own-line Chromium proof; supervisor reviewed collection/resource witnesses and ledger admission/completion source. Existing cart extraction fails identically with current, wrapper-free and original markup (24 columns, no price); generic discovered-column retention fix authorized, unchanged browser regressions required. Social disclosure/dedupe checks and generic classifieds feedback narrow checks remain in progress.
+- Outcome: Partial. No new paid call or live pass observed yet. Supervisor's first classifieds Vitest command ran from Core root and also selected staged .tmp copies; stopped that owned process and reran from packages/fluxiq. The stopped run is not accepted validation.
+- Follow-up: observe real headed run outcomes, integrate verified fixes, then complete remaining sites and owed reruns.
 
 ### 2026-10-17 — Plan written; Phase 1 dispatched
 - Agent: supervisor

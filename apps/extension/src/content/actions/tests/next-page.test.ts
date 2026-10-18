@@ -58,6 +58,10 @@ async function run(outcome: PageMoveOutcome | Error, command: BrowserActionComma
     success: (_action: unknown, _startedAt: unknown, message: string, validation: BrowserActionValidation) =>
       result(validation.status === "failed" ? "failed" : "succeeded", validation, message),
     timedOut: (_action: unknown, _startedAt: unknown, message: string, validation: BrowserActionValidation) => result("timed_out", validation, message),
+    needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: unknown) => {
+      asked.push({ person: sighting });
+      return failure(action, { failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, { actual: "captcha: the list move reached a person-only check" }) }, startedAt);
+    },
     failure
   } as unknown as ContentActionDependencies;
   return { result: await executeContentAction(command, deps), asked };
@@ -72,6 +76,16 @@ function wire(result: BrowserActionResult): ReturnType<typeof webAutomationActio
 test("a move is asked of the page with the command's request and time", async () => {
   const { asked } = await run({ outcome: "moved", by: "next", page: 2 });
   assert.deepEqual(asked, [{ request: COMMAND.nextPage, options: { timeoutMs: 30_000 } }]);
+});
+
+test("a list move that reached a person-only check uses the existing typed handoff, never a missing-list fault", async () => {
+  const sighting = { outcome: "person_only" as const, afterMs: 10, waitedMs: 0 };
+  const { result, asked } = await run({ outcome: "needs_person", sighting });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
+  assert.equal(wire(result).nextPage, undefined, "the payload never fabricates a moved or ended answer while its outer failure asks the person");
+  assert.deepEqual(asked[1], { person: sighting });
+  assert.equal(result.nextPage, undefined, "a check is not a fabricated moved or ended answer");
 });
 
 test("a list that moved succeeds with how it moved and the page it shows, and asks no route", async () => {

@@ -18,6 +18,7 @@ import { awaitPageRendered } from "../page-render";
 import { linkAddress, sameDocument } from "../pager-reading";
 import { PaginationFault } from "./pagination-fault";
 import type { PageStep, PaginationProgress } from "./types";
+import { PageMovePersonCheck } from "./person-check";
 
 /** How long the list has to change after a control was followed. */
 export const LIST_CHANGE_TIMEOUT_MS = 10_000;
@@ -73,6 +74,7 @@ export async function afterListChange(
   by: WebAutomationNextPageBy
 ): Promise<PageStep> {
   const { item, shown, deadline } = progress;
+  const movedAt = Date.now();
   // Capture before pressing: shown contains live Elements whose fields may be
   // replaced in place. Comparing those Elements after pressing loses page one.
   const previousRecords = shown.map(recordMeaning);
@@ -83,10 +85,15 @@ export async function afterListChange(
   let byAddress = false;
   try {
     const cancelled = clickNoticingCancel(control);
-    const changed = (): boolean => listChanged(item, shown, previousRecords);
+    await PageMovePersonCheck.awaitClear(movedAt, deadline);
+    const changed = (): boolean => {
+      PageMovePersonCheck.assertClear(movedAt);
+      return listChanged(item, shown, previousRecords);
+    };
     const firstWindow = cancelled && elsewhere !== undefined ? CANCELLED_LINK_WINDOW_MS : LIST_CHANGE_TIMEOUT_MS;
     outcome = await waitUntil(changed, firstWindow, LIST_CHANGE_POLL_MS, deadline);
     if (outcome === "unchanged" && elsewhere !== undefined && !leaving.started()) {
+      await PageMovePersonCheck.awaitClear(movedAt, deadline);
       byAddress = true;
       window.location.assign(elsewhere.href);
       outcome = await waitUntil(changed, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
@@ -95,12 +102,17 @@ export async function afterListChange(
   } finally {
     leaving.stop();
   }
+  await PageMovePersonCheck.awaitClear(movedAt, deadline);
   if (outcome === "unchanged") {
     const also = byAddress ? ", or of going to the address it links to" : "";
     throw new PaginationFault("list_unchanged", `The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of ${action}${also}.`);
   }
   if (outcome === "timed_out") return { outcome: "timed_out", stop: "deadline" };
-  return await awaitPageRendered(renderedAs(way), progress) === "arrived" ? { outcome: "advanced", by } : { outcome: "timed_out", stop: "deadline" };
+  const landing = { ...progress, hasUnreadItem: () => {
+    PageMovePersonCheck.assertClear(movedAt);
+    return progress.hasUnreadItem();
+  } };
+  return await awaitPageRendered(renderedAs(way), landing) === "arrived" ? { outcome: "advanced", by } : { outcome: "timed_out", stop: "deadline" };
 }
 
 /**

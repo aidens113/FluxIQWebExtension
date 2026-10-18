@@ -13,30 +13,38 @@ import { waitUntil } from "../list-wait";
 import { failedMove, type PageMoveOptions, type PageMoveOutcome } from "./move-outcome";
 import { pageShownNow } from "./shown-page";
 import { BROWSER_PAGE_HOST, pageRefusalOf, refusedPageWaitMs, type PageRefusal } from "./refused-page";
+import { PageMovePersonCheck } from "./person-check";
 
 /** How long the landing is given to show the list's first item: a page a press loaded may draw its results after it loads. */
 const ARRIVAL_WINDOW_MS = 10_000;
 const LIST_POLL_MS = 50;
 
 /** The items of `item` once at least one shows, `[]` when none does within `windowMs`, or `"timed_out"` when the deadline came first. */
-export async function awaitListItems(item: string, windowMs: number, deadline: number | undefined): Promise<Element[] | "timed_out"> {
-  const outcome = await waitUntil(() => document.querySelector(item) !== null, windowMs, LIST_POLL_MS, deadline);
+export async function awaitListItems(item: string, windowMs: number, deadline: number | undefined, movedAt?: number): Promise<Element[] | "timed_out"> {
+  const outcome = await waitUntil(() => {
+    if (movedAt !== undefined) PageMovePersonCheck.assertClear(movedAt);
+    return document.querySelector(item) !== null;
+  }, windowMs, LIST_POLL_MS, deadline);
   if (outcome === "timed_out") return "timed_out";
   return Array.from(document.querySelectorAll(item));
 }
 
 /** Answers for the press `resume` marks: see the header. */
 export async function arriveAfterMove(request: WebAutomationNextPageRequest, resume: PageMoveMark, deadline: number | undefined, options: PageMoveOptions): Promise<PageMoveOutcome> {
+  const movedAt = Date.now();
+  await PageMovePersonCheck.awaitClear(movedAt, deadline);
   const host = options.host ?? BROWSER_PAGE_HOST;
   const spent = { retries: resume.refusals?.retries ?? 0, rateLimits: resume.refusals?.rateLimits ?? 0 };
   // A landing the server refused, or that lost the list with no status to say
   // why, is reloaded while the step can afford it; the reload takes this script
   // with it, so this returns only when the step stops on the refused page.
   const refused = async (refusal: PageRefusal): Promise<PageMoveOutcome> => {
+    await PageMovePersonCheck.awaitClear(movedAt, deadline);
     const remaining = deadline === undefined ? undefined : deadline - Date.now();
     const waitMs = refusedPageWaitMs(refusal, spent, remaining, options.mark !== undefined);
     if (waitMs !== undefined && options.mark !== undefined) {
       await host.pause(waitMs);
+      await PageMovePersonCheck.awaitClear(movedAt, deadline);
       spent.retries += 1;
       if (refusal !== "unavailable") spent.rateLimits += 1;
       await options.mark({ by: resume.by, refusals: { ...spent } });
@@ -50,7 +58,7 @@ export async function arriveAfterMove(request: WebAutomationNextPageRequest, res
   // Unless the server refused the landing, which no wait for a list can change, the list is waited for.
   const known = status === undefined ? undefined : pageRefusalOf(status);
   if (known !== undefined) return await refused(known);
-  const items = await awaitListItems(request.item, ARRIVAL_WINDOW_MS, deadline);
+  const items = await awaitListItems(request.item, ARRIVAL_WINDOW_MS, deadline, movedAt);
   if (items === "timed_out") return { outcome: "timed_out", reason: "The time ran out before the page the list moved to showed it." };
   if (items.length > 0) {
     const page = pageShownNow(request.pagination, request.item);

@@ -3,5 +3,6 @@
 // What a robot check is, and who clears it, is read by `../challenge-evidence.ts`.
 
 export { watchRobotCheck } from "./robot-check-watch";
+export { robotCheckIn } from "../challenge-evidence";
 
 export type { RobotCheckProbe, RobotCheckSighting, RobotCheckWatch } from "./robot-check-watch";
