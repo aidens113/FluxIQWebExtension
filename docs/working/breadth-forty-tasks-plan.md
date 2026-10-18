@@ -1,9 +1,9 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed424calls/$0.357334143, two accepted passes/five failures/one unverified empty run. Positive-data corpus revision required. Company source pushed both dev branches. Canonical model-reset-only failed; bounded ledger/feedback corrections active. Social supported disclosure proof active; conditional jobs and read-only auction coverage preparing in isolated lanes.
+Status detail: Company and Bigbox accepted with exact oracle/judge and zero-call goal replay; eight passing tasks across five sites including historical results. Continuation completed517calls/$0.467974827, two accepted passes/six failures/one unverified empty run. Positive-data guard and five corpus corrections are in validation. Company and social source pushed; numeric guard merged locally. Canonical reset correction passed actual-ledger browser proof; final combined build pending before paid rerun. Selected-card field defect assigned.
 Created: 2026-10-17
-Last updated: 2026-10-17
+Last updated: 2026-10-18
 Owner: Senior supervisor agent
 Scope: Forty new tasks across ten realistic sites, all provider-free audited, selective full live acceptance per site and repaired failure, plus installed-extension creation and replay proof.
 Paired document: `breadth-forty-tasks-plan.md` in FluxIQ Core
@@ -41,7 +41,7 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
 | bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
 | crossborder-marketplace | free-hubs-under-ten: new run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but judge required exact search wording in titles and later repair left two oracle state facts unobserved. Generic judge guidance in final integrated gates; no full accepted pass. |
-| auction-marketplace | cheap-accessory-auctions failed once on plan grammar (fixed, proven live elsewhere); not rerun |
+| auction-marketplace | cheap-accessory-auctions run-mvdghd7e-267bcda3 failed93calls/$0.110640684, no Flow/oracle/replay. Negated digit-bearing text exclusion was falsely interpreted as a quantity range; generic guard fix independently passed10 cases and is merged locally. Rerun pending combined source gates. |
 | local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
 | company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
 | photo-social, professional-network | kiln-notes and connect-kade-senior-engineer not run |
@@ -56,7 +56,7 @@ the lane trees until merged).
 - **R1 source pushed, live proof failed:** prior push downstream72fb4d80/Corebb858c89 included original-inventory/transfer/reset ownership fixes and narrow/browser gates. Canonical run-mvdflu8o-d99d3100 used --model-reset-only and actual startReset=false, but failed53calls/$0.034600230, no Flow/whole judge/replay. Required debug inspected. Retry attribution, cross-page create accounting and permanently kept unresolved acts now have a bounded fix brief; no paid reset rerun until changed-source validation/review.
 - **Social recovery:** recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538. Worker is proving the supported explicit disclosure loop and closed incomplete-text feedback. No implicit clicks or truncated results accepted; generic guidance must not mirror fixture content.
 - **Other failures:** crossborder run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but later repair lacked two oracle state facts. Bigbox run-mvddx6wf-17e9eab0 matched its full oracle but failed stored-copy claim parsing. Generic query/judge/parser repairs are pushed; Bigbox rerun passed. Crossborder rerun remains owed.
-- **Continuation spend:** eight completed live runs, two accepted passes/five failures/one unverified result,424calls/$0.357334143. Historical spend above is separate; install proof remains separate.
+- **Continuation spend:** nine completed live runs, two accepted passes/six failures/one unverified result,517calls/$0.467974827. Historical spend above is separate; install proof remains separate.
 - **Storage excluded:** held optional72abeeab and restorationc13c0a30 remain only t707. Supervisor verified482pass/2fail/4skip held versus484/0/4 baseline; timing causality unproved. No pooling delta enters dev.
 - **Remaining:** accepted full coverage for crossborder, auction, classifieds, photo and professional; owed store/jobs/social reruns; installed Chrome/Edge extension automation creation and zero-call rerun. Install/pairing already proven, Firefox unavailable. Lifetime Core build leases remain active; no source mutation in live lanes.
 
@@ -593,3 +593,23 @@ None yet.
 - Worker source edit release waits for supervisor bootstrap15606 actual exit; root guard/tests/docs are already frozen for its automatic workspace build. This worktree initial provisioning ran one whole workspace build (including shared Core web) in background; count it against the daily sweep limit and do not request another full build/check/test suite for these fixes. Future commands cache off.
 - Social feedback committed ec9b8593 and merged e1ce99f4 after supervisor43 independent domain cases, source review and actual3-case Chromium proof/type/audit gates. Supervisor audit13269 also passed210/638. Root reset additional15-case reader passed after58 earlier; full latest owning67 cases passed, final downstream checks/browser pending.
 - Auction run-mvdghd7e-267bcda3 failed93calls/$0.110640684, no Flow/oracle/replay. Generic negated-digit text condition false quantity guard reproduced; t567 bounded Core source correction assigned. No paid rerun until debug, changed-source gates and supervisor release.
+
+### Supervisor brief: selected-card field inference (2026-10-18)
+- Worker: storage_comparison; source ONLY idle t567 downstream. Preserve frozen t563 evidence; no paid launch.
+- Objective: fix structural cause of job run-mvdgaz8z-27ff3d1b selecting transient selected-card-only field paths instead of stable full-coverage equivalents.
+- Read: own empty-result review, actual structural detection receipts, content/extraction/infer-fields.ts and existing owning unit/browser tests.
+- Owns: apps/extension/src/content/extraction/infer-fields.ts; its tests/infer-fields.test.ts; existing apps/extension/e2e/content/tests/extraction/tests/structure-detection.spec.ts; own reports/codex-selected-card-fields.md.
+- Before edits verify exact existing paths and propose generic mechanism; report any additional owner needed. No fixture, domain, Core, protocol or other worker file edits.
+- Fail-first reproduces selected ancestor class producing duplicate partial fields. Preserve legitimate optional marks, mixed templates, sensitive exclusions, semantic leaf selectors and bounded inference.
+- No hardcoded fixture names/classes, no teaching model which key to pick, no blanket deletion of partial fields or weakened read conditions.
+- Definition of done: owning unit regression plus negative controls, affected package check/audit, provider-free realistic job-board browser proof using actual inference/read with nonempty matching rows after selection changes.
+- No Core rebuild yet; final R1/numeric integration is in progress elsewhere. Source edits may proceed; coordinate final dependency sync/build with supervisor. Cache off, narrow checks only.
+- Report to: docs/working/breadth-forty-tasks-plan/reports/codex-selected-card-fields.md. No commits/pushes or shared document edits.
+
+### 2026-10-18 ? Positive-data enforcement and final combination gates
+- Root positive-data launch guard reproduced baseline empty acceptance fail-first, then passed9/9 owning tests and test-runner package check (actual exit0,26.162s). Realistic dataset tasks require nonempty record-by-record expectations after variant resolution, with count agreement; pure action goals remain valid. Ordinary real-user empty searches unchanged.
+- Worker revised five empty variants in t721; initial affected scenario corpus/instruction/oracle tests70/70 prove108 tasks/87 positive datasets. Actual Chromium path and package checks still running; source-calculated rows alone are not acceptance.
+- Reset correction frozen Corefe2d8422/downstreama173a02b passed final combined60/60 (ledger50/numeric10) and both audits. Earlier actual-ledger browser4/4, downstream111 and package checks retained; final Core library/check active, no paid launch.
+- Numeric guard Core3fb6b891 and downstream report287c032e merged locally; supervisor independent10/10 observed. Last pushed downstream7abd7bfa/Coreb2721f85; later local numeric and forthcoming reset changes not yet pushed.
+- Supervisor assigned selected-card field inference in idle t567; no hardcoded fixture/style names, optional marks/templates/sensitive handling preserved; positive realistic browser proof required. Source proposal first.
+- Supervisor scope amendment: approved additional apps/extension/src/content/extraction/field-path-equivalence.ts (one exported structural pruning function actually called by infer-fields), plus existing extraction/index.ts if barrel convention requires it. Existing786-line infer-fields must remain under800-line budget. Owning tests continue through actual inference; no extract-and-drop.
