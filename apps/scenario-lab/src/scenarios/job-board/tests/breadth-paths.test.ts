@@ -110,34 +110,29 @@ describe("the breadth tasks in a browser", { concurrency: true, timeout: 120_000
     }
   });
 
-  test("honest: Halvard Labs has no office or hybrid job, so the table is empty beside a page of recommendations", async () => {
+  test("honest: save the hybrid Halvard Labs job and read only the new saved match", async () => {
     const run = await openLabSession(browser);
     try {
       const driver = new Driver(run.context, run.page);
       await driver.run(halvardLabsOfficeJobsWorkflow.recordingScript);
-      assert.deepEqual(driver.extracted.get(stepOf(halvardLabsOfficeJobsWorkflow)), []);
-      assert.match(driver.active.url(), /wp=onsite/u);
-      assert.equal(await account(driver.active), UNCHANGED_ACCOUNT);
-      assert.ok(await driver.active.getByText("Jobs you might like").isVisible());
-      // Wrong path: the recommendations taken as results.
-      const recommended = await cards(driver.active);
-      assert.ok(recommended.some((card) => card.company === "Halvard Labs"), "the Halvard Labs job is not recommended");
-      assert.notDeepEqual(recommended, []);
+      const read = driver.extracted.get(stepOf(halvardLabsOfficeJobsWorkflow));
+      assert.deepEqual(read, recordsOf(halvardLabsOfficeJobsWorkflow));
+      assert.equal(read?.length, 1);
+      assert.match(driver.active.url(), /myjobs/u);
+      assert.equal(await account(driver.active), finalAccount(halvardLabsOfficeJobsWorkflow));
+      assert.deepEqual((await run.finalState()).saved.sort(), ["13707d7b1e529572", "21184d1fa92f3741", "864532f1fa5dbc8f"]);
       assert.deepEqual(run.errors, []);
-    } finally {
-      await run.close();
-    }
+    } finally { await run.close(); }
   });
 
-  test("naive: saving the recommended Halvard Labs job fails the untouched-account oracle", async () => {
+  test("naive: also saving the remote Halvard Labs job fails the exact saved-account oracle", async () => {
     const run = await openLabSession(browser);
     try {
       const heart = `article[data-jk="${postingById("hl1").key}"] h2 + span`;
       const driver = new Driver(run.context, run.page);
       await driver.run(halvardLabsOfficeJobsWorkflow.recordingScript);
+      await driver.active.goto(`${run.lab.origin}/scenarios/job-board/jobs?q=Halvard+Labs&wp=onsite`);
       await driver.run([
-        { id: "naive-chat-opened", operation: "waitForState", target: "rf-assistant .fa-min", timeoutMs: 9000 },
-        { id: "naive-minimise-chat", operation: "click", target: "rf-assistant .fa-min" },
         { id: "naive-save-first-try", operation: "click", target: heart },
         { id: "naive-save-refused", operation: "waitForState", target: "text=Couldn't save this job. Try again.", timeoutMs: 3000 },
         { id: "naive-save", operation: "click", target: heart },

@@ -40,7 +40,7 @@ const ROWS: readonly Row[] = [
   ["2026-08-30", "photo", 1, 1207, 0, "Tea bowl trials in three glazes.", STUDIO_HOME, "bowls"],
   ["2026-08-27", "carousel", 3, 874, 0, "Kiln unloading, as promised.", "", "kiln"],
   ["2026-08-24", "reel", 1, 640, 18312, "Throwing a moon jar in sixty seconds.", "", "pottery wheel"],
-  ["2026-08-21", "photo", 1, 1249, 0, "Glaze test tiles: celadon, tenmoku, shino and one happy accident.", STUDIO_HOME, "tiles"],
+  ["2026-08-21", "photo", 1, 1349, 0, "Glaze test tiles: celadon, tenmoku, shino and one happy accident.", STUDIO_HOME, "tiles"],
   ["2026-08-18", "photo", 1, 1121, 0, "Studio dog, supervising.", STUDIO_HOME, "dog"],
   ["2026-08-15", "carousel", 2, 956, 0, "The speckled clay body, fired and unfired.", "", "clay"],
   ["2026-08-12", "photo", 1, 1030, 0, "Workshop recap: twelve first bowls, all of them keepers.", STUDIO_HOME, "people"],

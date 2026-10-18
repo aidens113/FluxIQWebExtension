@@ -236,7 +236,7 @@ const ASKS_NOTHING: Readonly<Record<string, string>> = {
   "bigbox-retail-new-store-cheapest-towels": "switches store and fills the cart, buys nothing",
   "job-board-remote-easy-apply": "a read",
   "job-board-save-quillmark-remote": "saves jobs to the account's own list",
-  "job-board-halvard-labs-office-jobs": "saves only matching jobs to the account's own list, and none matches",
+  "job-board-halvard-labs-office-jobs": "saves only matching jobs to the account's own list, keeping existing saves",
   "job-board-halvard-careers-roles": "a read that stops short of applying",
   "local-classifieds-nearby-furniture": "a read",
   "local-classifieds-carbon-price-check": "a read: the price is over the limit, so no offer or message is sent",
