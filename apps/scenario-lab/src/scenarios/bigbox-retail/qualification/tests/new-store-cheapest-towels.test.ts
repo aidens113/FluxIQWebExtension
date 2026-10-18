@@ -27,6 +27,14 @@ test("the task names the workflow's one dataset and the manifest resolves it unc
   assert.equal(task.permissionPoint, undefined, "a store switch and an add move no money");
 });
 
+test("counting every size of every product, as the instruction says, the new store's lowest qualifying price is still the single roll", () => {
+  const sizes = PAPER_TOWELS.filter((product) => product.department === "Paper Towels" && product.rating >= 4.5)
+    .flatMap((product) => product.variants.filter((variant) => variant.pickup["4419"] === "today").map((variant) => ({ sku: variant.sku, cents: variant.priceCents })))
+    .sort((left, right) => left.cents - right.cents);
+  assert.equal(sizes[0]!.sku, "5510204");
+  assert.ok(sizes[1]!.cents > sizes[0]!.cents, "and nothing ties it");
+});
+
 test("the cheapest qualifying pack exists only at the new store: the home store's is another", () => {
   const atNewStore = cheapestAt("4419");
   assert.equal(atNewStore.id, "418830166");
