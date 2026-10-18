@@ -6,16 +6,21 @@
 // of these spend the pairing token and one decides where it is sent.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings, PanelRelayResponse } from "../../../shared/protocol";
 import { handlePanelControl, type PanelControlDeps } from "../panel-control";
 
-function installChrome() {
+// The fake is put back after the test: one left defined without `writable`
+// makes every later `globalThis.chrome = ...` in the same run throw "Cannot
+// assign to read only property 'chrome'" (the panel chat tests, t718).
+function installChrome(t: TestContext) {
   const runtime = { id: "extension-id", getURL: (path: string) => `chrome-extension://extension-id/${path}` };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "chrome");
   Object.defineProperty(globalThis, "chrome", { configurable: true, value: { runtime } });
+  t.after(() => { if (previous) Object.defineProperty(globalThis, "chrome", previous); else Reflect.deleteProperty(globalThis, "chrome"); });
 }
 
 const sidepanel = { id: "extension-id", url: "chrome-extension://extension-id/sidepanel/index.html" } as chrome.runtime.MessageSender;
@@ -103,8 +108,8 @@ function harness(settings: FluxIQSettings = baseSettings) {
   return { deps, touched, applied, opened, calls, overlays, stored: () => stored };
 }
 
-test("only the side panel and the popup may send any of the panel requests; every other sender is refused before anything is touched", async () => {
-  installChrome();
+test("only the side panel and the popup may send any of the panel requests; every other sender is refused before anything is touched", async (t) => {
+  installChrome(t);
   const senders = [
     { id: "extension-id", url: "https://shop.test/", tab: { id: 4 } },
     { id: "extension-id" },
@@ -122,16 +127,16 @@ test("only the side panel and the popup may send any of the panel requests; ever
   }
 });
 
-test("a message that is not one of the panel requests is left for the next handler", async () => {
-  installChrome();
+test("a message that is not one of the panel requests is left for the next handler", async (t) => {
+  installChrome(t);
   const h = harness();
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.getStatus }, sidepanel, h.deps), { handled: false });
   assert.deepEqual(await handlePanelControl({}, sidepanel, h.deps), { handled: false });
   assert.deepEqual(h.touched, []);
 });
 
-test("saving stores the known, well-typed fields, hands them to the connection, and never connects", async () => {
-  installChrome();
+test("saving stores the known, well-typed fields, hands them to the connection, and never connects", async (t) => {
+  installChrome(t);
   const h = harness();
   const result = await handlePanelControl({
     type: RUNTIME_MESSAGES.panelSaveSettings,
@@ -146,8 +151,8 @@ test("saving stores the known, well-typed fields, hands them to the connection, 
   assert.ok(!("token" in h.stored()));
 });
 
-test("Open FluxIQ opens the web panel's address from settings", async () => {
-  installChrome();
+test("Open FluxIQ opens the web panel's address from settings", async (t) => {
+  installChrome(t);
   const h = harness({ ...baseSettings, coreApiUrl: "http://127.0.0.1:4711" });
   const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ }, sidepanel, h.deps);
 
@@ -155,8 +160,8 @@ test("Open FluxIQ opens the web panel's address from settings", async () => {
   assert.deepEqual(result, { handled: true, response: { ok: true, url: "http://127.0.0.1:4711/" } });
 });
 
-test("Open FluxIQ never opens an address that is not http or https", async () => {
-  installChrome();
+test("Open FluxIQ never opens an address that is not http or https", async (t) => {
+  installChrome(t);
   for (const coreApiUrl of ["javascript:alert(1)", "file:///etc/passwd", "not a url"]) {
     const h = harness({ ...baseSettings, coreApiUrl });
     const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ }, sidepanel, h.deps);
@@ -165,8 +170,8 @@ test("Open FluxIQ never opens an address that is not http or https", async () =>
   }
 });
 
-test("opening an automation uses the paired project's Core deep link and encodes the Flow ID", async () => {
-  installChrome();
+test("opening an automation uses the paired project's Core deep link and encodes the Flow ID", async (t) => {
+  installChrome(t);
   const h = harness({ ...baseSettings, coreApiUrl: "https://core.test/old?view=stale#old" });
   await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: " flow/one?&project=other ", projectId: "other-project", token: "ignored" }, popup, h.deps);
   assert.equal(h.opened.length, 1);
@@ -178,8 +183,8 @@ test("opening an automation uses the paired project's Core deep link and encodes
   assert.deepEqual(h.calls, [], "opening the panel makes no authenticated program call");
 });
 
-test("a malformed automation ID is refused before settings or project context are read", async () => {
-  installChrome();
+test("a malformed automation ID is refused before settings or project context are read", async (t) => {
+  installChrome(t);
   for (const flowId of [null, "", "  ", 1, {}, "x".repeat(2049)]) {
     const h = harness();
     const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId }, sidepanel, h.deps);
@@ -188,8 +193,8 @@ test("a malformed automation ID is refused before settings or project context ar
   }
 });
 
-test("opening an automation without a paired project refuses instead of opening a different automation", async () => {
-  installChrome();
+test("opening an automation without a paired project refuses instead of opening a different automation", async (t) => {
+  installChrome(t);
   const h = harness();
   const deps = { ...h.deps, relay: { ...h.deps.relay, projectId: () => undefined } };
   const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: "flow-1", projectId: "other-project" }, sidepanel, deps);
@@ -198,8 +203,8 @@ test("opening an automation without a paired project refuses instead of opening 
   assert.deepEqual(h.touched, []);
 });
 
-test("automation deep links preserve the HTTP(S) restriction", async () => {
-  installChrome();
+test("automation deep links preserve the HTTP(S) restriction", async (t) => {
+  installChrome(t);
   for (const coreApiUrl of ["javascript:alert(1)", "file:///etc/passwd", "not a url"]) {
     const h = harness({ ...baseSettings, coreApiUrl });
     const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: "flow-1" }, sidepanel, h.deps);
@@ -208,8 +213,8 @@ test("automation deep links preserve the HTTP(S) restriction", async () => {
   }
 });
 
-test("the conversation and Stop messages reach Core through the relay, and Core's payload comes back unchanged", async () => {
-  installChrome();
+test("the conversation and Stop messages reach Core through the relay, and Core's payload comes back unchanged", async (t) => {
+  installChrome(t);
   const h = harness();
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationRead, kind: "list" }, sidepanel, h.deps), {
     handled: true, response: { ok: true, payload: { from: "list-conversations" } }
@@ -223,8 +228,8 @@ test("the conversation and Stop messages reach Core through the relay, and Core'
   assert.deepEqual(h.calls.map((entry) => entry.endpoint), ["list-conversations", "answer-ask", "cancel-runtime-session"]);
 });
 
-test("Take over and Hand back reach Core's pause and resume like Stop does, and Core's payload comes back unchanged", async () => {
-  installChrome();
+test("Take over and Hand back reach Core's pause and resume like Stop does, and Core's payload comes back unchanged", async (t) => {
+  installChrome(t);
   const h = harness();
   assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelTakeOverRun, runId: "run-1" }, sidepanel, h.deps), {
     handled: true, response: { ok: true, payload: { from: "pause-runtime-session" } }
@@ -238,8 +243,8 @@ test("Take over and Hand back reach Core's pause and resume like Stop does, and 
   ]);
 });
 
-test("the panel reads the live activity state and sets the overlay preference", async () => {
-  installChrome();
+test("the panel reads the live activity state and sets the overlay preference", async (t) => {
+  installChrome(t);
   const h = harness();
   assert.deepEqual(await handlePanelControl({ type: ACTIVITY_MESSAGES.read }, sidepanel, h.deps), {
     handled: true, response: { ok: true, state: { current: null, display: null, recent: [], overlay: "expanded", live: true } }
@@ -251,8 +256,8 @@ test("the panel reads the live activity state and sets the overlay preference", 
   assert.ok(!h.touched.includes("call"), "activity never reaches Core over HTTP");
 });
 
-test("an overlay preference that is not one of the three is refused without being stored", async () => {
-  installChrome();
+test("an overlay preference that is not one of the three is refused without being stored", async (t) => {
+  installChrome(t);
   for (const overlay of [undefined, "", "shown", 1, { overlay: "hidden" }]) {
     const h = harness();
     const result = await handlePanelControl({ type: ACTIVITY_MESSAGES.setOverlay, overlay }, sidepanel, h.deps);
@@ -264,8 +269,8 @@ test("an overlay preference that is not one of the three is refused without bein
 // D14 of the run-musp4h2f-72e8ed99 UI review: the person's message passes
 // through the activity relay's `sending`, which puts the starting status on
 // the page as it leaves. Opening a thread alone is not a message.
-test("a message the person sends runs under the activity's starting status; opening a thread and a refused sender do not", async () => {
-  installChrome();
+test("a message the person sends runs under the activity's starting status; opening a thread and a refused sender do not", async (t) => {
+  installChrome(t);
   const h = harness();
   const sends: string[] = [];
   const deps: PanelControlDeps = {

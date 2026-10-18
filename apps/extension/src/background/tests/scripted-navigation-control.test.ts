@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { handleScriptedNavigationControl } from "../scripted-navigation-control";
 import { FluxIQConnection } from "../connection";
 
-function installChrome() {
+// The fake is put back after the test: one left defined without `writable`
+// makes every later `globalThis.chrome = ...` in the same run throw "Cannot
+// assign to read only property 'chrome'" (the panel chat tests, t718).
+function installChrome(t: TestContext) {
   const runtime = {
     id: "extension-id",
     getURL: (path: string) => `chrome-extension://extension-id/${path}`
   };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "chrome");
   Object.defineProperty(globalThis, "chrome", { configurable: true, value: { runtime } });
+  t.after(() => { if (previous) Object.defineProperty(globalThis, "chrome", previous); else Reflect.deleteProperty(globalThis, "chrome"); });
 }
 
 function manager() {
@@ -27,8 +32,8 @@ function manager() {
 const sidepanel = { id: "extension-id", url: "chrome-extension://extension-id/sidepanel/index.html" } as chrome.runtime.MessageSender;
 const popup = { id: "extension-id", url: "chrome-extension://extension-id/popup/index.html" } as chrome.runtime.MessageSender;
 
-test("the runner's tab-hosted exact sidepanel page may arm scripted navigation", async () => {
-  installChrome();
+test("the runner's tab-hosted exact sidepanel page may arm scripted navigation", async (t) => {
+  installChrome(t);
   const h = manager();
   const runnerSidepanel = { ...sidepanel, tab: { id: 7 } } as chrome.runtime.MessageSender;
   assert.deepEqual(await handleScriptedNavigationControl({
@@ -40,8 +45,8 @@ test("the runner's tab-hosted exact sidepanel page may arm scripted navigation",
   assert.deepEqual(h.calls, [["arm", "http://localhost/final"]]);
 });
 
-test("the two extension control pages may arm, await, and idempotently cancel", async () => {
-  installChrome();
+test("the two extension control pages may arm, await, and idempotently cancel", async (t) => {
+  installChrome(t);
   const h = manager();
   assert.deepEqual(await handleScriptedNavigationControl({ type: "fluxiq.test.armScriptedNavigation", url: "http://localhost/final" }, sidepanel, h.value), {
     handled: true, response: { ok: true, intentId: "intent-1" }
@@ -57,8 +62,8 @@ test("the two extension control pages may arm, await, and idempotently cancel", 
   });
 });
 
-test("content, wrong-extension, and unrecognised messages cannot reach the manager", async () => {
-  installChrome();
+test("content, wrong-extension, and unrecognised messages cannot reach the manager", async (t) => {
+  installChrome(t);
   for (const sender of [
     { id: "extension-id", url: "http://127.0.0.1/scenario", tab: { id: 7 } },
     { ...sidepanel, id: "other-extension" },
@@ -77,8 +82,8 @@ test("content, wrong-extension, and unrecognised messages cannot reach the manag
   assert.deepEqual(await handleScriptedNavigationControl({ type: "fluxiq.getStatus" }, sidepanel, h.value), { handled: false });
 });
 
-test("unauthorized await and senders without an exact control-page URL are fixed forbidden responses", async () => {
-  installChrome();
+test("unauthorized await and senders without an exact control-page URL are fixed forbidden responses", async (t) => {
+  installChrome(t);
   for (const sender of [{ id: "extension-id" }, { id: "extension-id", url: "" }] as chrome.runtime.MessageSender[]) {
     const h = manager();
     assert.deepEqual(await handleScriptedNavigationControl({ type: "fluxiq.test.awaitScriptedNavigation", intentId: "intent-1" }, sender, h.value), {

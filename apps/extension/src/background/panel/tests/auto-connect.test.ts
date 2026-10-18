@@ -4,7 +4,7 @@
 // started again, which a Manifest V3 worker is after half a minute idle.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import type { ConnectionState } from "../../../shared/protocol";
 import { AutoConnect, shouldAutoConnect, workerDisconnectMemory } from "../auto-connect";
@@ -35,8 +35,8 @@ test("Disconnect holds it off until the person presses Connect again", async () 
   assert.equal(connects, 2);
 });
 
-test("the Disconnect survives the worker being stopped and started again", async () => {
-  installSessionStorage();
+test("the Disconnect survives the worker being stopped and started again", async (t) => {
+  installSessionStorage(t);
   let connects = 0;
   await new AutoConnect(async () => { connects += 1; }, sessionDisconnectMemory()).noteDisconnectedByPerson();
 
@@ -47,8 +47,8 @@ test("the Disconnect survives the worker being stopped and started again", async
   assert.equal(connects, 1);
 });
 
-test("without session storage the memory lasts as long as the worker", async () => {
-  Object.defineProperty(globalThis, "chrome", { configurable: true, value: { storage: {} } });
+test("without session storage the memory lasts as long as the worker", async (t) => {
+  installChrome(t, { storage: {} });
   const memory = sessionDisconnectMemory();
   assert.equal(await memory.read(), false);
   await memory.write(true);
@@ -61,11 +61,20 @@ test("a failed connection attempt is not rethrown: the connection reports its ow
   assert.equal(await auto.maybeConnect(down), true);
 });
 
-function installSessionStorage(): void {
+function installSessionStorage(t: TestContext): void {
   const stored: Record<string, unknown> = {};
   const session = {
     get: async (key: string) => (key in stored ? { [key]: stored[key] } : {}),
     set: async (items: Record<string, unknown>) => { Object.assign(stored, items); }
   };
-  Object.defineProperty(globalThis, "chrome", { configurable: true, value: { storage: { session } } });
+  installChrome(t, { storage: { session } });
+}
+
+// The fake is put back after the test: one left defined without `writable`
+// makes every later `globalThis.chrome = ...` in the same run throw "Cannot
+// assign to read only property 'chrome'" (the panel chat tests, t718).
+function installChrome(t: TestContext, value: unknown): void {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+  Object.defineProperty(globalThis, "chrome", { configurable: true, value });
+  t.after(() => { if (previous) Object.defineProperty(globalThis, "chrome", previous); else Reflect.deleteProperty(globalThis, "chrome"); });
 }
