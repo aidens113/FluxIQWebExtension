@@ -51,9 +51,21 @@ export type RecoveryAccount = {
    * being told to.
    */
   dismissed: number;
+  /**
+   * The loop's scrolling toward a target the page had not shown (`../reveal/`):
+   * how many scrolls moved the page, and whether the target was shown by the
+   * last attempt. Present only when a scroll moved the page, so an account
+   * that scrolled nothing reads as it always has. Counts and a flag, like
+   * `dismissed`, because it is the other move the runtime makes on the page
+   * without being told to, and a reader must be able to see it on its own.
+   */
+  reveal?: RecoveryRevealAccount | undefined;
   /** Which of the three states the defence ended in. */
   outcome: RecoveryOutcome;
 };
+
+/** Scrolls toward a target not shown that moved the page, and whether the target showed by the last attempt. */
+export type RecoveryRevealAccount = { scrolls: number; shown: boolean };
 
 /** Nothing absorbed, absorbed and got past it, or absorbed and ran out of budget. */
 export type RecoveryOutcome = "clean" | "recovered" | "exhausted";
@@ -83,7 +95,15 @@ export function recoveryAccountSentence(account: RecoveryAccount): string | unde
   const verdict = account.outcome === "recovered"
     ? `the execution recovered on attempt ${account.attempts}`
     : `the execution did not recover within its ${account.attempts} ${account.attempts === 1 ? "attempt" : "attempts"}`;
-  return `${verdict} after absorbing ${faults}${dismissalClause(account.dismissed)}, waiting ${account.waitedMs} ms`;
+  return `${verdict} after absorbing ${faults}${dismissalClause(account.dismissed)}${revealClause(account)}, waiting ${account.waitedMs} ms`;
+}
+
+/** What the loop scrolled, in a count and a closed phrase, and whether the target then showed; nothing when it scrolled nothing. */
+function revealClause(account: RecoveryAccount): string {
+  const reveal = account.reveal;
+  if (!reveal || reveal.scrolls <= 0) return "";
+  const times = `${reveal.scrolls} ${reveal.scrolls === 1 ? "time" : "times"}`;
+  return `, scrolling ${times} toward where the target would be, ${reveal.shown ? "which revealed it" : "which did not reveal it"}`;
 }
 
 /** What the loop pressed, in a count and a closed phrase, or nothing when it pressed nothing. */

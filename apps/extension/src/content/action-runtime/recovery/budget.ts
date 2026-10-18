@@ -78,14 +78,33 @@ export const RECOVERY_INTERFERENCE_BACKOFF_MS: readonly number[] = Object.freeze
  */
 export const RECOVERY_DISABLED_BACKOFF_MS: readonly number[] = Object.freeze([1_100, 1_100, 1_100, 1_100]);
 
+/**
+ * The pauses between attempts after the loop scrolled toward a target the page
+ * had not shown (`../reveal/`), and the scroll moved the page.
+ *
+ * Longer than the interference ladder, because what the scroll woke is the
+ * page's own loader -- a sentinel's observer, a scroll listener -- and what it
+ * waits for is a request and a render, the same thing the target ladder waits
+ * for. Three rungs, the interference ladder's length, so revealing changes how
+ * long an attempt waits and never how many attempts there are: the first
+ * attempt and three retries. Live, a team grid that loads eight cards per
+ * scroll behind a 450 ms skeleton, and refuses two requests closer than 900 ms,
+ * unhid its "Show more people" after two more loads; 400, 800 and 1600 ms --
+ * 2.8 s, inside `RECOVERY_BUDGET_MS` -- leave each load room to land and the
+ * next scroll room to be allowed.
+ */
+export const RECOVERY_REVEAL_BACKOFF_MS: readonly number[] = Object.freeze([400, 800, 1_600]);
+
 /** The whole defence's wall-clock budget, measured from the command's start. */
 export const RECOVERY_BUDGET_MS = 5_000;
 
 /**
  * The ladder a fault is waited on: the page's for a target, the dialog's for an obstruction, a tick at a time for a
- * disabled control, the short one for everything else.
+ * disabled control, the short one for everything else. An obstruction the loop scrolled toward (`revealing`) waits
+ * on the reveal ladder, since the page is now answering a scroll.
  */
-export function recoveryBackoffLadder(fault: RecoveryFault): readonly number[] {
+export function recoveryBackoffLadder(fault: RecoveryFault, revealing = false): readonly number[] {
+  if (revealing && fault === "obstructed_target") return RECOVERY_REVEAL_BACKOFF_MS;
   if (fault === "target_absent") return RECOVERY_TARGET_BACKOFF_MS;
   if (fault === "disabled_target") return RECOVERY_DISABLED_BACKOFF_MS;
   if (faultNeedsInterference(fault)) return RECOVERY_INTERFERENCE_BACKOFF_MS;
@@ -112,9 +131,10 @@ export function recoveryBackoffMs(
   absorbed: number,
   action: BrowserActionCommand,
   startedAt: number,
-  now: number
+  now: number,
+  revealing = false
 ): number | undefined {
-  const backoff = recoveryBackoffLadder(fault)[absorbed];
+  const backoff = recoveryBackoffLadder(fault, revealing)[absorbed];
   if (backoff === undefined) return undefined;
   const left = recoveryBudgetRemainingMs(action, startedAt, now);
   if (left <= 0) return undefined;

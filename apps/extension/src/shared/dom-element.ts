@@ -206,9 +206,9 @@ export type DomElementContext = {
 };
 
 /**
- * The five identity signals `DomElementDescriptor` groups above, named as a
- * union so both ends of the wire are joined to them by type rather than by
- * memory (Phase 1.3).
+ * The identity signals `DomElementDescriptor` declares above -- the five Phase
+ * 1.3 signals and the `drawing` digest (t567) -- named as a union so both ends
+ * of the wire are joined to them by type rather than by memory (Phase 1.3).
  *
  * They existed on the descriptor for a week without reaching the page: the
  * background worker's element projection was a hand-written key list, nobody
@@ -216,7 +216,7 @@ export type DomElementContext = {
  * that forgets a field compiles perfectly. The union and the two aliases below
  * are what make that failure a compile error instead.
  */
-export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "implicitRole" | "context";
+export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "implicitRole" | "context" | "drawing";
 
 /**
  * Descriptor fields the client-gateway element target deliberately does not
@@ -239,13 +239,6 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  *   words and paint. A replay finds its target by identity, not by these.
  * - `cursor` and `setApart` are how one capture found the element drawn (t229):
  *   a hover style or a chosen option changes them with the element unchanged.
- * - `drawing` is an identity signal, and is left out for one reason only: the
- *   projection that would carry it is `background/connection/gateway-payloads.ts`,
- *   which lane 4's drawing brief (t567) could not edit. Until it writes
- *   `drawing: element.drawing` and the name is struck from this list, a
- *   recorded step carries no drawing, and the save-time floor counts what the
- *   step really carries. A step built from a handle carries it through the
- *   packet binding (`domain/.../sanitize.ts`), which does not cross here.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
@@ -255,7 +248,7 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
 type UnwiredElementField =
   | "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted"
   | "repeatCount" | "frontLayer" | "leadStatement" | "ownText" | "readableText" | "parent" | "hidden"
-  | "cursor" | "setApart" | "drawing";
+  | "cursor" | "setApart";
 
 /**
  * The recorded element's identity as it crosses the client gateway.
