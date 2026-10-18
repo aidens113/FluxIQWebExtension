@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Storage comparison settled; judge fix, build lease, paging handoff, social extraction and generic trial feedback pushed. Three continuation live runs failed ($0.175897191 total). Company hybrid repair passed browser proof and its rerun is preparing; social live build is active. Reset project-baseline authority and two bounded judge repairs remain in validation. Live coverage remains 6 passing tasks.
+Status detail: Storage comparison settled; judge fix, build lease, paging handoff, social extraction and generic trial feedback pushed. Four continuation live runs failed ($0.223638729 total,252calls). Company hybrid repair passed browser proof and its rerun is preparing. Social expansion-loop failure is under diagnosis; reset authority and further judge repairs are committed locally with final integration gates pending. Live coverage remains 6 passing tasks.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -36,7 +36,7 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | --- | --- |
 | everything-store | PASS coupon-earbuds-rated-four, batteries-and-descaler, sage-small-kettle-if-in-stock; office-checkout-review failed x2 (reworded by the audit to name Buy Now; rerun owed) |
 | job-board | PASS remote-easy-apply, halvard-careers-roles; save-quillmark-remote and halvard-labs-office-jobs failed (causes fixed by lane 4 fixes 1-3; reruns owed) |
-| social-network-feed | PASS delete-stranger-requests. Recent-group-posts disclosure/opt-in helper identity fix pushed; live run-mvdec14t-5b320706 active, truthful incomplete-text refusal exercised, builder repairing. Hide-suggested-posts rerun owed. |
+| social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
 | bigbox-retail | rated-delivery-towels: new run-mvddx6wf-17e9eab0 full oracle passed16records/48fields/final state, but judges rejected stored copies with an unparsed "alone left out" claim. Bounded parser fix in final integrated gates; no full accepted pass. |
 | crossborder-marketplace | free-hubs-under-ten: new run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but judge required exact search wording in titles and later repair left two oracle state facts unobserved. Generic judge guidance in final integrated gates; no full accepted pass. |
 | auction-marketplace | cheap-accessory-auctions failed once on plan grammar (fixed, proven live elsewhere); not rerun |
@@ -49,7 +49,7 @@ $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; n
 the lane trees until merged).
 
 **Not done / held (each has a report under `reports/`):**
-- **Codex continuation in progress:** R1 new-line witness/transport and generic64-column repair checked and committed locally in t719; transfer browser proof passed, but supervisor found missing original authority in the actual whole-project trial owner. That ownership repair now has an actual service-path fail-first regression and is in validation. Social fixes pushed downstream1164196e/Core5add836b; headed recent-group-posts run-mvdec14t-5b320706 is active. Company hybrid paging repair committed locally2c529c60:69focused tests,48Core tests, domain/extension/Core checks, both audits and Chromium2/2 passed; fresh live rerun is preparing. No new accepted live pass yet.
+- **Codex continuation in progress:** R1 new-line witness/transport and generic64-column repair checked and committed locally in t719; transfer browser proof passed, but supervisor found missing original authority in the actual whole-project trial owner. That ownership repair now has an actual service-path fail-first regression; supervisor60/60 tests and frozen Core check/build passed. Transfer/authority commits Core8c638a46/downstream1282782d remain held for integrated gates and paid proof. Social fixes pushed downstream1164196e/Core5add836b; headed recent-group-posts run-mvdec14t-5b320706 failed, with expansion-loop diagnosis pending. Company hybrid paging repair committed locally2c529c60:69focused tests,48Core tests, domain/extension/Core checks, both audits and Chromium2/2 passed; fresh live rerun is preparing. No new accepted live pass yet.
 - **Other continuation live outcomes:** crossborder run-mvddq555-2804ed24 failed42calls/$0.054874467 after creating a Flow and successfully handing the person check to a person. Initial10-row/40-field result matched, but judge wrongly required literal search words in a title; reauthor then left two final-state oracle facts unobserved, so this was not a full oracle pass. Bigbox run-mvddx6wf-17e9eab0 failed33calls/$0.038557602 despite its complete16-record/48-field/final-state oracle pass: judge's "condition alone left out" claim about stored copies bypassed the parser. Both debugs authored in t563; bounded parser and generic retrieval-query guidance fixes passed worker86tests/typecheck/audit and await supervisor verification/integration. No oracle or conservative kind refutation guard is weakened.
 - **Storage decision:** exclude the optional pooling proposal from this integration. Supervisor inspected both raw JSON results: held 482 passed/2 failed/4 skipped; baseline 484 passed/0 failed/4 skipped. Unaffected controls changed timing materially, so causality is unproved. Source and production dist were restored to baseline and independently verified against the build stamp. Original proposal `72abeeab` and baseline-restoration `c13c0a30` remain only on held Core branch t707; no storage delta enters dev.
 - **Accepted and pushed:** settled-copy judge fix, lifetime Core build lease, person-check paging handoff, generic preceding-navigation trial feedback and social disclosure/opt-in identity fixes. Last observed push: downstream1164196e, Core5add836b. No optional storage optimization entered dev.
@@ -342,6 +342,13 @@ point is declared there, so asking fails the run and is a product defect); an em
 - Report to: `docs/working/breadth-forty-tasks-plan/reports/live-lane-<N>.md` in the lane tree.
 
 ## Work Ledger
+
+### 2026-10-17 — Judge repair integrated; reset authority independently verified
+- Agent: supervisor; storage_comparison and reset_review
+- Changed: t563 generic retrieval-query judge guidance and stored-copy "alone left out" parsing merged to paired dev; authored architecture and both failed-run debugs included. t719 transfer/original-project authority committed locally (Core8c638a46, downstream1282782d), then current dev merged into both task trees before final integrated gates.
+- Validation: supervisor judge45/45 changed-file tests; worker integrated111/111, Core library build/typecheck, downstream domain/extension checks and both audits passed; supervisor final Core audit passed. Reset supervisor60/60 across five owning files, worker136/136 and actual routed fail-first regression, prior realistic own-controls round trip, frozen Core typecheck/build passed. No full suite.
+- Outcome: Partial. Judge unit is ready for paired push/live rerun. R1 stays held for integrated gates and paid reset proof. Social run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: build clicked one disclosure before a page loop, then read collapsed text on later pages; no correctly authored per-row expansion loop was executed. Worker preparing exact debug and bounded generic feedback proposal. Company rerun run-mvdes30x-65848f60 is finishing its isolated host preparation.
+- Follow-up: push/release lane1, final R1 integrated gates, social supported-repair path, remaining live sites/owed reruns and installed-extension create/replay.
 
 ### 2026-10-17 — Codex continuation: isolated checks and preservation review
 - Agent: supervisor; workers storage_comparison, reset_review, held_lane_review
