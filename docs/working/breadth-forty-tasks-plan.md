@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: All87 scraping tasks require positive verifiable data; five formerly empty variants and selected-card extraction are fixed/browser-proven/pushed. Nine accepted tasks across six sites. Continuation14completed/921calls/$0.807907290:3accepted,9failed,1unverified empty run,1crossborder whole-run pass awaiting saved replay. Photo failed; diagnosis assigned. Clean-create replay runner correction and actual-transport reset diagnosis underway; installed Chrome package enabled, normal setup/create/replay pending.
+Status detail: All87 scraping expectations positive;9accepted tasks/6sites. Corrected no-hook reset run-mvdl5eg0-a56fdad7 and provider-free saved crossborder replay-mvdl3yxn-b1d9134d allocated. Installed Chrome exact creation/confirmed verdict and zero-call replay verified; strict creation accounting held. Isolated accounting design active; live source trees frozen.
 Created: 2026-10-17
 Last updated: 2026-10-18
 Owner: Senior supervisor agent
@@ -46,12 +46,12 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | job-board | PASS remote-easy-apply, halvard-careers-roles; save-quillmark-remote and halvard-labs-office-jobs failed (causes fixed by lane 4 fixes 1-3; reruns owed) |
 | social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
 | bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
-| crossborder-marketplace | run-mvdism0y-ba67f226 whole-run PASS exact10rows/40fields/oracle/judge,21calls/$0.024137868; saved replay-mvdjb3nf-5da28870 FAILED at declared person check,7of10rows/unknown accounting. Full acceptance incomplete; actor diagnosis active. |
-| auction-marketplace | run-mvdi0946-d897f3cb FAILED134calls/$0.148715013, no Flow/oracle/replay; optional approximation-only bound dropped direct-price records. Earlier numeric guard fix remains valid. Required debug integrated; no unchanged rerun. |
+| crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
+| auction-marketplace | `cheap-accessory-auctions`, `save-mark-ii-sellers`, `buy-it-now-quote`, `lens-hood-seller-shop` |
 | local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
 | company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
 | professional-network | PASS kade-lead-contact run-mvdi9e8u-678c35df: exact1record/2fields/account oracle and reported verdict passed,49calls/$0.029735034, automatic runtime repair revision1->2; one successful replay0calls/no model/harness. Connect task remains provider-free audited. |
-| photo-social | Positive august-over-1300 run-mvdi88yz-e444d594 FAILED146calls/$0.102284736, no Flow/oracle/replay. First candidates read only first12grid cells; later target/modal failures. Required debug integrated, diagnosis active. |
+| photo-social | `priya-tags`, `newest-likes`, `august-over-1300`, `kiln-notes` |
 
 Totals at the stop: 24 runs, 6 passed, 18 failed, $1.224 billed across the four lanes (lane 1 $0.545, lane 2
 $0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; no balance error. Every failure has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in
@@ -88,10 +88,10 @@ each site's `live-tasks.ts` and pinned in `scenarios/tests/live-instructions.tes
 | everything-store | `coupon-earbuds-rated-four`, `batteries-and-descaler`, `sage-small-kettle-if-in-stock`, `office-checkout-review` |
 | bigbox-retail | `rated-delivery-towels`, `napkins-for-delivery`, `checkout-quote-without-ordering`, `new-store-cheapest-towels` |
 | local-classifieds | `nearby-furniture`, `test-ride-question` (send), `carbon-price-check`, `bikes-within-alex-price` |
-| crossborder-marketplace | run-mvdism0y-ba67f226 whole-run PASS exact10rows/40fields/oracle/judge,21calls/$0.024137868; saved replay-mvdjb3nf-5da28870 FAILED at declared person check,7of10rows/unknown accounting. Full acceptance incomplete; actor diagnosis active. |
-| auction-marketplace | run-mvdi0946-d897f3cb FAILED134calls/$0.148715013, no Flow/oracle/replay; optional approximation-only bound dropped direct-price records. Earlier numeric guard fix remains valid. Required debug integrated; no unchanged rerun. |
+| crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
+| auction-marketplace | `cheap-accessory-auctions`, `save-mark-ii-sellers`, `buy-it-now-quote`, `lens-hood-seller-shop` |
 | social-network-feed | `recent-group-posts`, `hide-suggested-posts`, `delete-stranger-requests` (delete), `claim-found-key` (send) |
-| photo-social | Positive august-over-1300 run-mvdi88yz-e444d594 FAILED146calls/$0.102284736, no Flow/oracle/replay. First candidates read only first12grid cells; later target/modal failures. Required debug integrated, diagnosis active. |
+| photo-social | `priya-tags`, `newest-likes`, `august-over-1300`, `kiln-notes` |
 | job-board | `remote-easy-apply`, `save-quillmark-remote`, `halvard-labs-office-jobs`, `halvard-careers-roles` |
 | company-website | `apprentices`, `newsletter-signup`, `saturday-certificate`, `heat-pump-quote` (send, hand-off) |
 | professional-network | `netherlands-data-engineers`, `connect-kade-senior-engineer` (send), `accept-messaged-invitations`, `kade-lead-contact` |
@@ -170,6 +170,14 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Readonly trace owning Core caller-bound routine result-verification provider/usage persistence and normal run-detail aggregation on actuale58. Explain first missing accounting seam, exact minimal owner files/tests and how existing canonical accounting can be reused; no guessed defaults/schema/private state edits.
 - Report concrete evidence or remaining uncertainty before product changes. Core firstedit will require separate isolated tree/brief; sharedCore remainsread-only. Next Edgeproof held until coordination, no duplicatedChrome task/providercalls.
 
+### Supervisor brief: shared creation-accounting patch map
+- Worker held_lane_review, now isolated pairedt563 trees (rootfastforwarded57ad8dc2/2b13e40c). Existingt721 Chrome/profile/sharedCoree58 unchanged and leased; no source edits/builds/UIruns yet.
+- Own NEW downstream reports/codex-creation-accounting-fix.md only during this bounded readonly design. Read Core instructions/boundary/code-structure and prior actual diagnosis report in t721.
+- Root confirmed missing runBudget in run-outcome and paid gate write in run-record; in-run purse currently local to binder. Inspect exact5proposed owners plus typed verification/runtime contracts, canonical annotation writer and closest test harness to choose single shared run-owned ledger across runtime repairs/routine checks/rechecks.
+- Report exact minimal filemap including type/barrel/helper owners, module API and lifecycle, canonical gate merge preserving prior costs/diagnostics, bounded quota/pending/failure/cancellation semantics, concrete fail-first regression and public-detail roundtrip probe. No duplicated ledger math, no zero defaults, no public schema/protocol expansion or provider/authorization change.
+- Reuse canonical run-budget/harness reservation/settlement and current itemization. Existing limits apply to the whole run; resultcheck calls must not reset the purse or overwrite prior repair spend. Missing usage remains conservative.
+- No whole suites/builds (user twice-daily allowance consumed); no code until root approves concrete map. SharedCore and all live lanes frozen. Agent report afteractualsource/API evidence, then implementationbrief follows.
+
 ## Work Ledger
 
 ### 2026-10-18 - Continuation compaction and overnight instruction
@@ -177,10 +185,6 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Settled briefs, historical ledger and superseded detail moved verbatim to [continuation archive](./breadth-forty-tasks-plan/archive/2026-10-18-continuation-history.md). Current State retains source/acceptance distinctions and pending work.
 - Validation: archive-preservation script verified142main/679archived lines; initial working-docs audit refused missing validation bullet, now corrected for rerun.
 - Pushed downstream7e36ba3d/Core63c9a00b; latest Core changes docs only, executableCoree58 remains frozen for installed proof.
-
-## Open Questions
-
-None requiring user input.
 
 ### 2026-10-18 - Resumed agents and independent installed readback
 - All three existing agents resumed on explicit user instruction; Chrome chat was submitted once and persisted one main Flow. Root independently ran reviewed collect.mjs against whole05b40730: exact4orderedrecords/12fields/ownoracle/integrity/finalstate passed, explicit0calls/pending/itemized/omitted/harness; judged_creation false because verdictunverified.
@@ -191,3 +195,13 @@ None requiring user input.
 - Validation: root current-source66/66 after devmerge exit0; independently inspected final actualgateway structural receipt: positivebaseline2/2 ->3/2 ->2/2, same subject, exact digest restored, dirtyblocked/owninverseok/cleantrialyes, gatewayerrors0. Worker final helpertype/audit0, actualstrengthenedbrowser1/1passed. Product54325eb4 integrated; paidcanonical remainsunproven.
 - Validation: root Core25/25/person-service-port tests, downstream2/2lifecycle tests, both nativeaudits0. Core723e0ae8/downstream65be76e0 committed in pairedt566 only; library/probe release now authorized, no publicpaid call.
 - Root independently reran installed collectors: NoLLM d1fef089 exit0/prooftrue/exact4rows/12fields/finalstate/explicitallzero; judged b393bc01 exit1/prooffalse/confirmed/exactsame data but accountingunknown. Dedicated readonly accounting investigation, no gate relaxed.
+
+### 2026-10-18 - Allocated isolated live continuations
+- All three existing agents resumed. Canonical no-hook everything-store-kettle-to-cart run-mvdl5eg0-a56fdad7 allocated in t719/bf-slot2; actual readiness and terminal reset/oracle/replay receipts pending. Main HEAD allocation hold released; live lane remains frozen.
+- Same saved crossborder Flow provider-free replay-mvdl3yxn-b1d9134d allocated in t566/bf-slot3; owning production-host startup pending. Core723e0ae8/downstream65be76e0 remain task-only until actual fresh ask/exact10rows40fields/finalizedzero proof is independently inspected.
+- Isolated t563 agent maps one shared creation-check/recovery accounting purse before implementation. Existing installed Chrome proof/profile/sharedCoree58 lease remains unchanged. Missing paid accounting remains unknown, never zero.
+- Validation: supervisor inspected both main git statuses and actual worker allocation receipts; no terminal live acceptance claimed. Narrow source gates already recorded; no new whole suite or manual whole build.
+
+## Open Questions
+
+None requiring user input.
