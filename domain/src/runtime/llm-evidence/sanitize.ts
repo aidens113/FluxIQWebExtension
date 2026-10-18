@@ -134,6 +134,18 @@ export type WebLlmSnapshotBinding = {
    */
   drawings?: Map<string, string>;
   /**
+   * What an element is about, for the controls and headings the page said it
+   * of (`elements.ts`, FluxIQ Core t719), and `pageSubject`, what the page
+   * itself is about: the subject of its first main heading (`h1`) outside any
+   * dialog in the top frame. Like the dialog's name they never leave the domain
+   * as words: `./control-spot/` digests them into the place tokens Core ties an
+   * undo to its act by. Optional for the same reason as `shadowHosts`.
+   */
+  subjects?: Map<string, string>;
+  pageSubject?: string;
+  /** Trusted session+tab identity; never included in model evidence. */
+  resetResource?: string;
+  /**
    * The page's state digest, taken from the capture this binding was sanitized
    * from (`state-digest/snapshot-states.ts`). It is how a call reports the
    * state it found and left without another capture. Like the maps it never
@@ -197,6 +209,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const shadowHosts = new Map<string, readonly string[]>();
   const dialogNames = new Map<string, string>();
   const drawings = new Map<string, string>();
+  const subjects = new Map<string, string>();
+  let pageSubject: string | undefined;
   // What tells a look-alike apart, kept beside the packet and published only
   // on an element that needs it.
   const cues = new Map<string, WebLlmLookAlikeCues>();
@@ -232,6 +246,10 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     if (described.shadowHosts !== undefined) shadowHosts.set(described.element.target, described.shadowHosts);
     if (described.dialog !== undefined) dialogNames.set(described.element.target, described.dialog);
     if (described.drawing !== undefined) drawings.set(described.element.target, described.drawing);
+    if (described.subject !== undefined) subjects.set(described.element.target, described.subject);
+    // What the page is about: its first shown main heading, in the top frame and in no dialog (Core t719).
+    if (pageSubject === undefined && described.subject !== undefined && described.element.tag === "h1" && described.element.hidden !== true
+      && described.element.frameId === undefined && described.dialog === undefined && dialogOf(raw) === undefined) pageSubject = described.subject;
     layerSubjects.push({ element: described.element, selector: described.selector, raw });
     cues.set(described.element.target, present<WebLlmLookAlikeCues>({ within: described.within, dialog: dialogOf(raw), position: described.position }));
   }
@@ -274,7 +292,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
 /**

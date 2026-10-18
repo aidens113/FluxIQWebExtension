@@ -192,6 +192,18 @@ export type DomElementContext = {
     values?: string[] | undefined;
   } | undefined;
   /**
+   * What the element is about, in the words a person names it by
+   * (`content/identity/record.ts` `recordSubject`, FluxIQ Core t719): a heading's
+   * own words; a control's row title -- its record's, or the row its kind marks
+   * out -- where that title tells it from its neighbour's; for a control alone of
+   * its kind on the page, the title of the nearest part of the page around it.
+   * Written for controls and headings only. The domain digests it, and Core
+   * ties an undo of a build's act to the act by it where the act's effect shows
+   * elsewhere: an add on a detail page and the basket line it made are about
+   * the same thing. Never in the packet the model reads.
+   */
+  subject?: string | undefined;
+  /**
    * The open shadow roots the element sat inside, outermost first, each named
    * by its host's selector within the tree that host sits in
    * (`content/selector/shadow-host-chain.ts`). A selector for an element in a

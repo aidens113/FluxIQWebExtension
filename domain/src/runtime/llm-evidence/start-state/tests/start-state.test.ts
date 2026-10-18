@@ -49,7 +49,7 @@ function runtimeOver(...snapshots: Snapshot[]) {
   const gateway: WebLlmEvidenceGateway = { eligibleSessionIds: () => ["session"], executeAction: async (_session, command) => {
     commands.push(command as { actionType: string; parameters: unknown });
     const snapshot = snapshots[Math.min(commands.length - 1, snapshots.length - 1)]!;
-    return { status: "succeeded", payload: { snapshot: snapshot as JsonObject } };
+    return { status: "succeeded", payload: { snapshot: snapshot as JsonObject, sourceId: "tab:1:frame:0" } };
   } };
   return { runtime: createWebAutomationLlmEvidenceRuntime(gateway), commands };
 }
@@ -238,4 +238,17 @@ test("lists the items on the page by the tokens a declaration names a control's 
   assert.ok(after.includes(before[0]!), "the item that was there keeps its token");
   for (const item of after) assert.match(item, /^i:[0-9a-f]{32}$/);
   assert.ok(!JSON.stringify([start, now]).includes("Towels\u001f"), "the record's address never leaves the domain");
+});
+
+
+test("reset witnesses include singleton and hidden subjects and distinguish equal-heading destinations", async () => {
+  const subject = "An existing document";
+  const page = cart(1, [{ tagName: "button", selector: "#remove-existing", visibleText: "Remove", hidden: true, context: { subject } }]);
+  const { runtime } = runtimeOver(page, { ...page, url: "https://shop.test/another-cart" });
+  const first = await runtime.startState!(request);
+  const second = await runtime.startState!({ ...request, callId: "another" });
+  assert.ok(first?.subjects?.length, "a lone hidden item's title must survive the passive capture");
+  assert.ok(first?.scope);
+  assert.notEqual(first?.scope, second?.scope, "equal headings do not identify one destination");
+  assert.ok(!JSON.stringify(first?.subjects).includes(subject));
 });

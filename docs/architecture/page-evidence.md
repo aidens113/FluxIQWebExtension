@@ -42,6 +42,14 @@ handles. Those lines are read by `page-view/handle-free-lines.ts`, the same
 reading a state diff makes. Then come the non-rendered state rows a result
 check prints.
 
+The gateway action result also carries the background worker's `sourceId`,
+formed from its resolved tab and frame identifiers (frame zero when omitted).
+The page cannot supply it. Reset bindings combine this trusted context with
+the selected gateway session as an opaque `resetResource`. Collection scope
+digests include that resource, location, frame and collection selector;
+the raw identifiers are not part of the published page view. Missing or invalid
+source identifiers cannot establish a reset baseline for another resource.
+
 Left out of the state is whatever stands in front of the page: a dialog, a
 recognised cover or the front layer, everything described beneath one, and
 everything inside an open modal. An interruption is not the site's state. A
@@ -744,3 +752,24 @@ history; the domain declares `page` (and the packet's `elements`, `dialogs` and
 that exceeds it is refused before sending with its measured size; no page
 entry is ranked, sampled or trimmed to make it fit. Spend, deadlines and call
 counts still bound how long a build runs, not which captured elements it sees.
+
+
+Reset ownership witnesses require a positively complete collection inventory.
+A semantic list must provide finite item cardinality and every distinct item
+position, with one unambiguous subject per row. A partial, loading or ordinary
+page DOM cannot prove absence. Permission declarations and trial step spots
+carry the owning collection's resource-bound scope; Core compares only opaque
+scope and subject tokens. The complete baseline must precede the act before
+absence can establish that a later line was created by this build. Matching
+titles do not establish ownership of an existing line or quantity. A later
+complete read of that same collection must prove the new subject absent before
+deletion is accepted as restored. One removal may account for multiple adds
+by this build to the same new line; it never authorizes deleting a baseline line.
+
+
+Modern resource-scoped reversible acts require positive baseline restoration.
+If an unproved inverse is kept or named cannotUndo, Core refuses the next
+ordinary trial as candidate.trial_reset_unproved. It never measures leftovers
+as a successful reset. Irreversible effects and legacy no-subject contracts
+retain their existing semantics. Exact quantitative and saved-list inverse
+operations remain unsupported by this creation witness and fail honestly.

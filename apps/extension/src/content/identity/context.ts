@@ -39,7 +39,7 @@ import { textOutsideSensitiveControls } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { normalizedText } from "./normalized-text";
 import { dialogName } from "./dialog";
-import { recordIdentity } from "./record";
+import { recordIdentity, recordSubject } from "./record";
 
 const HEADING_SELECTOR = "h1,h2,h3,h4,h5,h6,[role='heading']";
 const LIST_ITEM_SELECTOR = "li,[role='listitem'],[role='option'],[role='treeitem']";
@@ -65,8 +65,14 @@ const LANDMARK_TAG_ROLES: Record<string, string> = {
 /** A landmark element and the role that makes it one. */
 type Landmark = { readonly element: Element; readonly role: string };
 
-/** The element's surroundings, or `undefined` when it has none worth reporting. */
-export function elementContext(element: Element): DomElementContext | undefined {
+/**
+ * The element's surroundings, or `undefined` when it has none worth reporting.
+ * `subject`: also say what it is about (`record.ts` `recordSubject`, FluxIQ
+ * Core t719), which the caller asks of controls and headings only, since only
+ * those are acted on or name a page, and the walk is not worth running for
+ * every wrapper and word of a page.
+ */
+export function elementContext(element: Element, options: { subject?: boolean } = {}): DomElementContext | undefined {
   const form = owningForm(element);
   const landmark = nearestLandmark(element);
   // Every key of the contract, written out. The three form fields are read
@@ -92,6 +98,9 @@ export function elementContext(element: Element): DomElementContext | undefined 
     // identical row actions, and the one a replay checks its answer against
     // before acting (`record.ts`).
     record: recordIdentity(element),
+    // What it is about, so Core can tie an undo elsewhere -- the basket line
+    // an add on a detail page made -- to the act (`record.ts`, Core t719).
+    subject: options.subject === true ? recordSubject(element) : undefined,
     // Which shadow roots the element sat inside. Its selector is written within
     // the innermost of them, so without this a replay looks for it in the light
     // document, where the selector names something else or nothing

@@ -276,3 +276,12 @@ test("the column header leaves out what a sensitive control inside it holds", ()
   const cell = tablePart("cell", { cellIndex: 0 }, { tr: row });
   assert.deepStrictEqual(elementContext(stub({ closest: { "td,th": cell } })), { tablePosition: { row: 2, column: 1, columnHeader: "Card" } });
 })));
+
+// FluxIQ Core t719: what an element is about (`record.ts` `recordSubject`), said
+// only when the caller asks -- of controls and headings -- so a page's wrappers
+// and words carry nothing new on the wire.
+test("a heading asked what it is about says its own words, and says nothing unless asked (Core t719)", () => withContext((elementContext) => {
+  const heading = { ...stub({ tagName: "H1" }), localName: "h1", childNodes: [{ nodeType: 3, nodeValue: "Copper  Pour-Over Kettle 1 L", childNodes: [] }] } as unknown as Element;
+  assert.deepStrictEqual(elementContext(heading, { subject: true }), { subject: "Copper Pour-Over Kettle 1 L" });
+  assert.equal(elementContext(heading), undefined);
+}));

@@ -1,9 +1,10 @@
 // What a state diff says of a step's places (t609, for FluxIQ Core t598):
 //
-// - `spot`: `{ item?, dialog? }`, the opaque tokens of the item and dialog the
-//   step's control sat in on the page before it -- `webTargetSpot` of the
+// - `spot`: `{ item?, dialog?, subject?, page? }`, the opaque tokens of the
+//   item and dialog the step's control sat in on the page before it, and of
+//   what it and that page are about (Core t719) -- `webTargetSpot` of the
 //   element the node's selector addresses there. Absent when the node names no
-//   selector, the page before held no such element, or it sat in neither.
+//   selector, the page before held no such element, or it gave none of them.
 // - `items`: `{ before, after }`, the tokens of the items of the lists the diff
 //   vouches for, on each page. Core counts an item the step created when it is
 //   in `after` and not in `before` (`service/candidate-trial/landed-acts.ts`).
@@ -40,6 +41,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { webTargetSpot } from "../../llm-evidence";
+import { webResetCollections } from "../../llm-evidence/control-spot";
 import { webNodeTargetPlaceKey } from "./node-target";
 import type { WebStateSnapshotPlaces } from "./snapshot";
 
@@ -55,7 +57,12 @@ export function webStateDiffPlaces(
 ): JsonObject {
   const spot = before ? spotOf(before, node) : undefined;
   const items = before && after && !documentChanged ? vouched(before, after) : undefined;
-  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}) };
+  const was = before && !documentChanged ? webResetCollections(before).collections : [];
+  const now = after && !documentChanged ? webResetCollections(after).collections : [];
+  const groups = new Set(was.map((collection) => collection.group));
+  const collections = was.length && now.length && now.every((collection) => groups.has(collection.group))
+    ? { before: was, after: now } : undefined;
+  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}), ...(collections ? { collections } : {}) };
 }
 
 function spotOf(before: WebStateSnapshotPlaces, node: { definitionId: string; parameterValues?: JsonObject | undefined }): JsonObject | undefined {
@@ -63,7 +70,7 @@ function spotOf(before: WebStateSnapshotPlaces, node: { definitionId: string; pa
   const handle = key === undefined ? undefined : before.handles.get(key);
   if (handle === undefined) return undefined;
   const spot = webTargetSpot(before, handle);
-  return spot.item !== undefined || spot.dialog !== undefined ? spot : undefined;
+  return Object.keys(spot).length > 0 ? spot : undefined;
 }
 
 /** The items of every list both pages show, on each side; none when no list is (header). */

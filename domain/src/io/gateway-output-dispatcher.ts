@@ -72,6 +72,7 @@ export async function dispatchWebAutomationOutput(
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
       ok: succeeded,
       outputId: request.outputId,
+      metadata: { sessionId },
       status,
       payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, clearedLayers }),
       // Core's IO path builds the node message from `error` alone
