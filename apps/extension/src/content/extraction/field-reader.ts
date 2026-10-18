@@ -56,32 +56,35 @@ import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensi
 import type { ExtractFieldReader } from "./field-spec";
 import { recordControlType } from "./record-control";
 import { tightestStatedValue } from "./value-statement";
+import { trackingFreeLinkIdentity } from "./link-identity";
+import { assertTextDisclosed } from "./text-disclosure";
 
 type ElementFieldReader = Exclude<ExtractFieldReader, { kind: "column" }>;
 
-export function readField(item: Element, name: string, reader: ExtractFieldReader): string | null | undefined {
-  const value = reader.kind === "column" ? readColumn(item, name, reader.header) : readElement(item, name, reader);
+export function readField(item: Element, name: string, reader: ExtractFieldReader, completeness: "visible" | "complete" = "visible"): string | null | undefined {
+  const value = reader.kind === "column" ? readColumn(item, name, reader.header, completeness) : readElement(item, name, reader, completeness);
   if (value !== undefined) return value;
   return reader.required ? undefined : null;
 }
 
-function readElement(item: Element, name: string, reader: ElementFieldReader): string | undefined {
+function readElement(item: Element, name: string, reader: ElementFieldReader, completeness: "visible" | "complete"): string | undefined {
   const element = reader.selector ? item.querySelector(reader.selector) : item;
   if (!element) return undefined;
   if (isWithinSensitiveControl(element)) throw sensitiveFieldRefusal(name);
   switch (reader.kind) {
     case "text":
+      if (completeness === "complete") assertTextDisclosed(element, name);
       return reader.lines === true ? readLines(element) : readText(element);
     case "attribute":
       return element.getAttribute(reader.attribute) ?? undefined;
     case "link":
-      return linkTarget(element);
+      return linkTarget(element, reader.identity);
     case "value":
       return controlValue(element);
   }
 }
 
-function readColumn(item: Element, name: string, header: string): string | undefined {
+function readColumn(item: Element, name: string, header: string, completeness: "visible" | "complete"): string | undefined {
   const row = item as HTMLTableRowElement;
   const table = row.tagName === "TR" ? row.closest("table") : null;
   if (!table) throw new Error("A column field needs extract_list items that are table rows.");
@@ -94,6 +97,7 @@ function readColumn(item: Element, name: string, header: string): string | undef
   const cell = row.cells[index];
   if (!cell) return undefined;
   if (isWithinSensitiveControl(cell)) throw sensitiveFieldRefusal(name);
+  if (completeness === "complete") assertTextDisclosed(cell, name);
   return readText(cell);
 }
 
@@ -190,12 +194,13 @@ function drawnChildren(element: Element): readonly Node[] {
 }
 
 /** The `href` as an absolute http(s) URL, or `undefined` when there is none or it is not one. */
-function linkTarget(element: Element): string | undefined {
+function linkTarget(element: Element, identity?: "tracking-free"): string | undefined {
   const href = element.getAttribute("href");
   if (href === null) return undefined;
   try {
     const url = new URL(href, element.baseURI);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    return identity === "tracking-free" ? trackingFreeLinkIdentity(url) : url.href;
   } catch {
     return undefined;
   }

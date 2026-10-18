@@ -393,6 +393,7 @@ function readableSpec(spec: WebAutomationExtractFieldSpec): WebAutomationExtract
     required: spec.required,
     handling: undefined,
     lines: spec.lines,
+    identity: spec.identity,
     element: undefined
   });
 }
