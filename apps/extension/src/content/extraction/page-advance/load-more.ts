@@ -3,10 +3,11 @@
 // offered a Retry beside the control has it pressed, at most twice
 // (`../load-retry.ts`).
 //
-// An absent, disabled or `aria-disabled="true"` control is the list ending,
-// and so is one still in the page but not rendered -- the `hidden` attribute,
-// or no box at all -- once it has stayed so for a second, for a page that
-// hides it only while it settles. Guildline's Sent invitations keeps its "Show
+// A disabled or `aria-disabled="true"` control is the list ending. An absent
+// or unrendered control is first watched briefly, then the list is scrolled
+// within its ordinary bound: some lists expose the button after initial
+// scroll-loaded batches. No growth and no revealed control ends the list.
+// Guildline's Sent invitations keeps its "Show
 // more" with `hidden` after the last page; until 2026-10-01 every read of it
 // either stopped truncated at its page bound or pressed the hidden control and
 // failed ten seconds later as a page that ignored it. A live control that
@@ -19,6 +20,7 @@ import { isDisabled } from "../pager-reading";
 import { PAGER_POLL_MS } from "./follow-next";
 import { clickable, LIST_CHANGE_POLL_MS, LIST_CHANGE_TIMEOUT_MS, pastDeadline } from "./list-change";
 import { PaginationFault } from "./pagination-fault";
+import { scrollForMore } from "./scroll-for-more";
 import type { PageStep, PaginationProgress } from "./types";
 
 /** How many times one load-more press may have its failure retried through the Retry the page offered. */
@@ -32,9 +34,19 @@ const HIDDEN_CONTROL_GRACE_MS = 1_000;
 
 /** Presses the way's load-more control; `bound`, when there is one, is the pages the read may read. */
 export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mode: "loadMore" }>, progress: PaginationProgress, bound: number | undefined): Promise<PageStep> {
-  const found = await renderedLoadMore(way.control, progress);
+  let found = await renderedLoadMore(way.control, progress);
   if (found === "timed_out") return { outcome: "timed_out", stop: "deadline" };
-  if (!found) return { outcome: "ended", stop: "control_absent" };
+  if (!found) {
+    // Some lists load on scroll before exposing their button. Its absence is
+    // not proof that the list ended; a bounded scroll may bring another batch
+    // or reveal the button. Visible controls still take precedence below.
+    if (bound !== undefined && progress.pagesRead >= bound) return { outcome: "truncated", stop: "page_limit" };
+    const scrolled = await scrollForMore(progress, undefined);
+    if (scrolled.outcome !== "ended") return scrolled;
+    const now = document.querySelector(way.control);
+    if (!now || !isRendered(now)) return { outcome: "ended", stop: "control_absent" };
+    found = now;
+  }
   if (isDisabled(found)) return { outcome: "ended", stop: "control_disabled" };
   if (bound !== undefined && progress.pagesRead >= bound) return { outcome: "truncated", stop: "page_limit" };
   const control = clickable(found, way.control);

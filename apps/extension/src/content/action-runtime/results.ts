@@ -61,6 +61,7 @@ import type {
 import type { ActionabilityRejectionCode } from "./actionability";
 import { blockingDialog } from "./blocking-dialog";
 import { noteRefusedControl } from "./recovery";
+import { noteUnshownTarget } from "./reveal";
 import { challengeIn } from "./challenge-evidence";
 import type { RateLimitNotice } from "./rate-limit-notice";
 import type { RobotCheckSighting } from "./robot-check";
@@ -219,6 +220,9 @@ export function success(
 /** The gate's reason word for a control the page will not let anything use yet (`actionability.ts`). */
 const DISABLED_REASON = "disabled";
 
+/** The gate's reason word for a target that is there and not shown (`actionability.ts`). */
+const HIDDEN_REASON = "hidden";
+
 /**
  * The reasons that are the page's state rather than a refusal anyone decided:
  * the actionability gate's three (`actionability.ts`), each with its code.
@@ -298,6 +302,12 @@ export function actionRejected(
   // shows it is changing, so how it looked is noted beside the result -- as a
   // fingerprint, in this frame, never on the record (`recovery/refused-control.ts`).
   if (evidence.refusedBeforeDispatch && reason === DISABLED_REASON && evidence.target) noteRefusedControl(result, evidence.target);
+  // A target refused as not shown: recovery scrolls toward where it would be
+  // before the next attempt, as a person would, so a page that draws it once
+  // it is scrolled to gets that scroll (`reveal/`). The element is kept beside
+  // the result, in this frame, never on the record. A scroll repeats no act,
+  // so this does not wait for `refusedBeforeDispatch`.
+  if (reason === HIDDEN_REASON && evidence.target) noteUnshownTarget(result, evidence.target);
   return result;
 }
 

@@ -83,7 +83,8 @@ export function validateWebRuntimeTargetOverrideEvidence(
   evidence: WebLlmPageEvidence,
   target: AutomationStudioRuntimeTargetOverrideTarget,
   failedAction: AutomationStudioRuntimeTargetOverrideFailedAction,
-  selectors?: ReadonlyMap<string, string>
+  selectors?: ReadonlyMap<string, string>,
+  drawings?: ReadonlyMap<string, string>
 ): AutomationStudioRuntimeTargetOverrideEvidenceValidation {
   const definitionId = webFailedActionDefinitionId(failedAction);
   const declared = definitionId === undefined ? [] : webRepairableParameters(definitionId);
@@ -129,7 +130,11 @@ export function validateWebRuntimeTargetOverrideEvidence(
   // ever declared before something reads it -- and such an action has nothing
   // this contract can re-point, which is what the refusal says.
   if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
-  const fingerprint = webPacketElementFingerprint(element, { selector: selectors?.get(element.target) });
+  // The drawing comes from the binding beside the packet, as the selector does
+  // (`../sanitize.ts` `drawings`): the model never sees it, and a repair of a
+  // wordless control saves it as a build's step does, so the floor below
+  // counts the identity the repair really saves.
+  const fingerprint = webPacketElementFingerprint(element, { selector: selectors?.get(element.target), drawing: drawings?.get(element.target) });
   // The save-time guard (t425): a repair is saved onto the Flow by
   // `edit_action_target`, so a control it could find by one attribute alone is
   // refused here, as one that cannot be told apart. Core's closed vocabulary has
@@ -186,8 +191,8 @@ function proposedHandles(target: AutomationStudioRuntimeTargetOverrideTarget): R
  *
  * Its signals are the full fingerprint the builder makes of the packet element
  * (`../packet-fingerprint/`): the tag, role and input type, the words, the
- * label, the authored id, `name`, class tokens and test id, and the attributes
- * that describe the control. Not where it sat: the record the recording named
+ * label, the authored id, `name`, class tokens and test id, the attributes
+ * that describe the control, and the drawing the binding kept for it. Not where it sat: the record the recording named
  * stays the node's (`output-nodes/targets/targets.ts` `withRecordedRecord`), so
  * no `context` is written, and the list position rides in `metadata` as it
  * always has.
@@ -216,6 +221,12 @@ type WebResolvedRepairTarget = {
   testId?: string;
   inputType?: string;
   attributes?: Record<string, string>;
+  /**
+   * What a wordless control draws, as the binding kept it. Core keeps it as an
+   * opaque token through its element-target normalizer and never reads it; the
+   * page's finder and scorer compare it (`content/identity/drawing.ts`).
+   */
+  drawing?: string;
   /** A hint, not the identity, and absent where the binding is gone. Only valid inside `metadata.browserFrameId`'s frame. */
   selector?: string;
   metadata?: WebRepairElementMetadata;
@@ -264,6 +275,7 @@ function resolvedTarget(resolved: WebLlmEvidenceElement, fingerprint: WebAutomat
     testId: fingerprint.testId,
     inputType: fingerprint.inputType,
     attributes: fingerprint.attributes,
+    drawing: fingerprint.drawing,
     // The hint, and only where the caller still holds the binding that issued
     // the handle. The packet has not carried a selector since `.v2`, so a repair
     // resolved from a packet alone is fingerprint-only -- which is weaker, not

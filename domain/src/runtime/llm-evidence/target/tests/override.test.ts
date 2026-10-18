@@ -3,6 +3,8 @@ import test from "node:test";
 import { sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import type { AutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation-studio";
+import { webElementIdentityShortfall } from "../../../../element-fingerprint";
+import { elementFingerprint } from "../../../../output-nodes/targets";
 
 const target = (handles: Record<string, string>): AutomationStudioRuntimeTargetOverrideTarget => ({ handles });
 const NOT_REPAIRABLE = { status: "absent", reason: "action_not_repairable" } as const;
@@ -385,4 +387,48 @@ test("a Set Checked override with a shown handle resolves, whether its node or a
     assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
     assert.equal(resolved.status === "resolved" ? (resolved.target as { selector?: string }).selector : undefined, "#gift");
   }
+});
+
+// A wordless icon control: a `<button>` with no words, no id and no role, one
+// hashed class and an unlabelled picture. Its drawing is kept in the binding beside the selector,
+// never in the packet, and a repair onto it has to save it as a build's step
+// does -- or it saves a weaker identity, and the floor would refuse the
+// tag-and-class remainder that a build of the same control was allowed. The
+// icon is the only control in the recorded form, which is what anchors a
+// repair onto a control with no words (`../equivalence.ts`).
+const ICON_DRAWING = "d1.7kq3x2";
+const iconBinding = (drawing: string | undefined): ReturnType<typeof sanitizeWebLlmSnapshotWithBindings> => {
+  const icon: Record<string, unknown> = { tagName: "button", selector: "li:nth-of-type(1) > div > button", classNames: ["z4m1"], attributes: { class: "z4m1" }, cursor: "pointer", hasClickHandler: true, context: { formId: "listing-tools" } };
+  if (drawing !== undefined) icon.drawing = drawing;
+  return sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/listing",
+    interactiveElements: [
+      { tagName: "a", selector: "li:nth-of-type(1) h3 > a", visibleText: "Pastry chef", accessibleName: "Pastry chef", href: "https://example.test/pastry" },
+      icon,
+    ],
+  });
+};
+const iconClick = { nodeId: "mark", definitionId: "web.output.dom-click", recordedTarget: { element: { tagName: "button", classNames: ["z4m1"], drawing: ICON_DRAWING, context: { formId: "listing-tools" } } } };
+
+test("a repair onto a wordless icon keeps the drawing the binding kept, and passes the identity floor with it", () => {
+  const { evidence, selectors, drawings } = iconBinding(ICON_DRAWING);
+  assert.equal(JSON.stringify(evidence).includes(ICON_DRAWING), false, "the model's packet never carries the drawing");
+  const repaired = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t2" }), iconClick, selectors, drawings);
+  assert.equal(repaired.status, "resolved", JSON.stringify(repaired));
+  if (repaired.status !== "resolved") return;
+  const saved = repaired.target as Record<string, unknown>;
+  assert.equal(saved.drawing, ICON_DRAWING);
+  assert.equal(saved.tagName, "button");
+  assert.deepEqual(saved.classNames, ["z4m1"]);
+  // What the page is handed is read off this flat target by the domain's own reader.
+  assert.equal(elementFingerprint(saved)?.drawing, ICON_DRAWING);
+  assert.equal(webElementIdentityShortfall(elementFingerprint(saved)!), undefined, "kind, drawing and class pass the floor");
+});
+
+test("without the drawing the same repair is the tag and one class, and the floor still refuses it", () => {
+  const { evidence, selectors } = iconBinding(undefined);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t2" }), iconClick, selectors), { status: "ambiguous", reason: "target_indistinguishable" });
+  // And a binding that kept a drawing, from a caller that does not pass it, is no stronger than one that did not.
+  const drawn = iconBinding(ICON_DRAWING);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(drawn.evidence, target({ element: "t2" }), iconClick, drawn.selectors), { status: "ambiguous", reason: "target_indistinguishable" });
 });

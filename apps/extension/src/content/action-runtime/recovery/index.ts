@@ -5,18 +5,19 @@
 // `actions/execute.ts` is the only caller of the loop, and `results.ts` notes a
 // disabled control's state for it (`refused-control.ts` reads the element it is
 // handed, and nothing else). Nothing here touches the DOM itself:
-// the one move that does -- pressing a blocking dialog's own way out -- is
-// `action-runtime/interference/`, injected into the loop and defaulted there, so
-// all of this still runs in a Node test.
+// the two moves that do -- pressing a blocking dialog's own way out, and
+// scrolling toward a target the page has not shown -- are
+// `action-runtime/interference/` and `action-runtime/reveal/`, injected into
+// the loop and defaulted there, so all of this still runs in a Node test.
 
 export { runWithRecovery } from "./attempt";
 export { recordRecovery } from "./record";
 export { recoverableFault, faultNeedsInterference, faultMayHideBehindLayer, webActionReadsOnly, RECOVERY_FAULT_BY_CODE, RECOVERY_OBSTRUCTION_FAULTS, RECOVERY_KNOWN_ACTION_TYPES } from "./fault";
-export { recoveryBackoffMs, recoveryBackoffLadder, RECOVERY_TARGET_BACKOFF_MS, RECOVERY_BLIP_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_BUDGET_MS } from "./budget";
+export { recoveryBackoffMs, recoveryBackoffLadder, RECOVERY_TARGET_BACKOFF_MS, RECOVERY_BLIP_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_REVEAL_BACKOFF_MS, RECOVERY_BUDGET_MS } from "./budget";
 export { noteRefusedControl, refusedControl, refusedControlChanging } from "./refused-control";
 export { recoveryAccountSentence, CLEAN_RECOVERY_ACCOUNT } from "./account";
 
-export type { RecoveredExecution, RecoveryPause, RecoveryIntervention, RecoveryLayerProbe } from "./attempt";
-export type { RecoveryAccount, RecoveryOutcome } from "./account";
+export type { RecoveredExecution, RecoveryPause, RecoveryIntervention, RecoveryLayerProbe, RecoveryReveal } from "./attempt";
+export type { RecoveryAccount, RecoveryOutcome, RecoveryRevealAccount } from "./account";
 export type { RecoveryFault } from "./fault";
 export type { RefusedControlState } from "./refused-control";
