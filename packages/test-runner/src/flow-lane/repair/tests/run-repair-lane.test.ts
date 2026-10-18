@@ -414,6 +414,66 @@ test("a re-author Core applied in the run whose record shows no change to the Fl
  */
 const ABSORBED: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
 
+function cleanCreation(fake: ReturnType<typeof lane>): LiveRepairLaneInput {
+  return { ...fake.input, live: { repairsFlow: true, describeRepair: () => ({ task: "create-flow", purpose: "explore_and_adapt" }) },
+    lane: { ...fake.input.lane, observation: { oracleVerdict: "passed", reportedVerdict: "passed" }, run: { harnessRecovery: ABSORBED, extracted: JUDGED } } };
+}
+
+test("a clean passed creation replays its exact positive datasets without counting as an adaptation", async (t) => {
+  const fake = lane({ replays: 1, recovery: ABSORBED, replayRows: () => JUDGED_ROWS });
+  t.after(fake.restore);
+  const result = await runLiveRepairLane(fake.control, cleanCreation(fake));
+  assert.equal(result?.replays.length, 1);
+  assert.equal(result?.replays[0]?.datasetsReproduced, true);
+  assert.equal(result?.replays[0]?.providerCalls, 0);
+  assert.equal(result?.replays[0]?.harnessActivations, 0);
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: false, reason: "no_recovery_attempted" });
+  assert.equal(fake.reset.length, 1);
+  assert.equal(fake.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false);
+});
+
+test("a clean creation replay with other positive rows fails", async (t) => {
+  const fake = lane({ replays: 1, recovery: ABSORBED, replayRows: () => [{ name: "Other" }] });
+  t.after(fake.restore);
+  await assert.rejects(runLiveRepairLane(fake.control, cleanCreation(fake)), /stored other rows/u);
+});
+
+test("a clean creation cannot bypass missing provider accounting", async (t) => {
+  const fake = lane({ replays: 1, recovery: ABSORBED, accounting: false, replayRows: () => JUDGED_ROWS });
+  t.after(fake.restore);
+  await assert.rejects(runLiveRepairLane(fake.control, cleanCreation(fake)), /accounting/u);
+});
+
+test("attempted or unsettled recovery and unverified creation never qualify as a clean replay", async (t) => {
+  const fake = lane({ replays: 1, recovery: ABSORBED, replayRows: () => JUDGED_ROWS });
+  t.after(fake.restore);
+  const unsettled: RunHarnessRecovery[] = [REFUSED, { ...ABSORBED, interventions: REFUSED.interventions },
+    { ...ABSORBED, runtimePatchAttempts: RECOVERED.runtimePatchAttempts }, { ...ABSORBED, changeProposalIds: ["proposal.pending"] },
+    { ...ABSORBED, refusalCode: "llm.gate.manual_intervention" },
+    { ...ABSORBED, resultRepair: { attempted: true, nodeId: "node.one", code: null, phase: "reauthoring" } }];
+  for (const recovery of unsettled) {
+    const input = cleanCreation(fake);
+    await assert.rejects(runLiveRepairLane(fake.control, { ...input, lane: { ...input.lane, run: { ...input.lane.run, harnessRecovery: recovery } } }), /requested replay/u);
+    assert.deepEqual(fake.written.at(-1)?.value.replays, []);
+    assert.deepEqual(fake.published.at(-1)?.replays, []);
+  }
+  for (const observation of [{ oracleVerdict: "passed", reportedVerdict: "unverified" }, { oracleVerdict: "failed", reportedVerdict: "passed" }, { oracleVerdict: "passed", reportedVerdict: "failed" }] as const) {
+    const input = cleanCreation(fake);
+    await assert.rejects(runLiveRepairLane(fake.control, { ...input, lane: { ...input.lane, observation } }), /requested replay/u);
+    assert.deepEqual(fake.written.at(-1)?.value.replays, []);
+    assert.deepEqual(fake.published.at(-1)?.replays, []);
+  }
+});
+
+test("a creation that repaired its Flow uses the applied-repair path rather than the clean bypass", async (t) => {
+  const fake = lane({ replays: 1, recovery: RECOVERED });
+  t.after(fake.restore);
+  const input = cleanCreation(fake);
+  const result = await runLiveRepairLane(fake.control, { ...input, lane: { ...input.lane, run: { harnessRecovery: RECOVERED } } });
+  assert.equal(result?.application.outcome, "applied");
+  assert.equal(result?.replayOfUnchangedCreation, undefined);
+});
+
 test("a drift absorbed or never met is recorded and published as not counting toward the gate", async (t) => {
   const fake = lane({ replays: 1, recovery: ABSORBED });
   t.after(fake.restore);
