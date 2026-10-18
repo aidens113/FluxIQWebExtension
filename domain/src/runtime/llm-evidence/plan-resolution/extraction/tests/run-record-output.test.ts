@@ -84,6 +84,24 @@ async function resolve(shown: WebAutomationLlmEvidenceRuntime, parameters: JsonO
   return await shown.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: EXTRACT_NODE, parameters, declaredConsequences: NOTHING_LASTING });
 }
 
+test("resolved extraction preserves explicit intermediate purpose without deriving it for ordinary reads", async () => {
+  const { runtime: shown, handle } = await detected();
+  const parameters: JsonObject = { extractList: auctionList(handle), recordOutput: { datasetId: "working", purpose: "intermediate", writeMode: "append" } };
+  const resolved = await resolve(shown, parameters);
+  assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+  if (resolved.status !== "resolved") throw new Error("expected resolved intermediate");
+  assert.equal((resolved.parameters.recordOutput as JsonObject).purpose, "intermediate");
+  assert.deepEqual(automationStudioFlowBootstrapRecordOutputIssues(DEFINITION, resolved.parameters.recordOutput), []);
+  for (let pass = 0; pass < 2; pass += 1) {
+    const dispatch = webAutomationExtractListDispatch(resolved.parameters);
+    assert.equal(dispatch.ok, true, JSON.stringify(dispatch));
+    if (dispatch.ok) assert.deepEqual(dispatch.payload.recordOutput, resolved.parameters.recordOutput);
+  }
+  const ordinary = await resolve(shown, { extractList: auctionList(handle), recordOutput: { datasetId: "ordinary", writeMode: "append" } });
+  assert.equal(ordinary.status, "resolved", JSON.stringify(ordinary));
+  if (ordinary.status === "resolved") assert.equal(Object.hasOwn(ordinary.parameters.recordOutput as object, "purpose"), false);
+});
+
 test("the auction run's 0022 and 0024 resolve at submit with the record output the dispatch runs, which Core accepts", async () => {
   const { runtime: shown, handle } = await detected();
   for (const sortField of ["endsAt", "ends"]) {
