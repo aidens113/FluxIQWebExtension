@@ -103,7 +103,7 @@ function revealClause(account: RecoveryAccount): string {
   const reveal = account.reveal;
   if (!reveal || reveal.scrolls <= 0) return "";
   const times = `${reveal.scrolls} ${reveal.scrolls === 1 ? "time" : "times"}`;
-  return `, scrolling ${times} toward where the target would be, ${reveal.shown ? "which revealed it" : "which did not reveal it"}`;
+  return `, scrolling ${times} toward where the target would be, ${reveal.shown ? "which revealed it" : "without a confirmed reveal"}`;
 }
 
 /** What the loop pressed, in a count and a closed phrase, or nothing when it pressed nothing. */

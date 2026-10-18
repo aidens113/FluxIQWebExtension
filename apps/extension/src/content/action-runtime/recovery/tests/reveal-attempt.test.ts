@@ -108,7 +108,15 @@ test("a target scrolling does not reveal: the attempts are the same four, and th
   assert.deepEqual(account.reveal, { scrolls: 3, shown: false });
   assert.equal(site.log.filter((step) => step === "scroll").length, 3, "no scroll after the last attempt, which has no retry to answer it");
   const reported = recordRecovery(result, account);
-  assert.match(reported.failure?.actual ?? "", /^hidden: the element's display is none; the execution did not recover within its 4 attempts after absorbing obstructed_target, obstructed_target, obstructed_target, obstructed_target, scrolling 3 times toward where the target would be, which did not reveal it, waiting 2800 ms$/u);
+  assert.match(reported.failure?.actual ?? "", /^hidden: the element's display is none; the execution did not recover within its 4 attempts after absorbing obstructed_target, obstructed_target, obstructed_target, obstructed_target, scrolling 3 times toward where the target would be, without a confirmed reveal, waiting 2800 ms$/u);
+});
+
+test("a target removed after scrolling is never reported as revealed", async () => {
+  const site = page([notShown(), failed(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, "no element matched")], true);
+  const { result, account } = await runWithRecovery(CLICK, Date.now(), site.attempt, site.pause, Date.now, site.intervene, () => false, site.reveal(true));
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  assert.deepEqual(account.reveal, { scrolls: 1, shown: false });
+  assert.match(recordRecovery(result, account).failure?.actual ?? "", /without a confirmed reveal/u);
 });
 
 test("a scroll that moved nothing woke nothing: the wait is the interference ladder and the account mentions no scrolling", async () => {

@@ -181,7 +181,8 @@ const NOT_SEEN = Symbol("no disabled refusal at the previous attempt");
 function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs: number, dismissed: number, revealed: number, last: BrowserActionResult): RecoveryAccount {
   if (absorbed.length === 0) return attempts === 1 ? CLEAN_RECOVERY_ACCOUNT : { attempts, absorbed: [], waitedMs, dismissed, outcome: "clean" };
   const found: RecoveryAccount = { attempts, absorbed: [...absorbed], waitedMs, dismissed, outcome: outcomeOf(attempts, absorbed.length) };
-  if (revealed > 0) found.reveal = { scrolls: revealed, shown: last.failure?.code !== WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN };
+  // A different refusal can mean the target disappeared, not that scrolling revealed it.
+  if (revealed > 0) found.reveal = { scrolls: revealed, shown: last.status === "succeeded" };
   return found;
 }
 
