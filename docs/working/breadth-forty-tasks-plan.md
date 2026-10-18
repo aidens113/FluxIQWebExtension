@@ -48,7 +48,7 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
 | crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
 | auction-marketplace | `cheap-accessory-auctions`, `save-mark-ii-sellers`, `buy-it-now-quote`, `lens-hood-seller-shop` |
-| local-classifieds | test-ride-question run-mvd9nlx5 failed, no Flow, nothing sent: trial step 14 "read the seller's name" target not found x4; cause not yet debugged |
+| local-classifieds | test-ride-question run-mvd9nlx5 failed/noFlow/nothingSent. First divergence: radius omitted, wronglisting clicked; seller/formtargets copied from different directexploration. Runtime identity refusal correct; no new sourcebug proven. |
 | company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
 | professional-network | PASS kade-lead-contact run-mvdi9e8u-678c35df: exact1record/2fields/account oracle and reported verdict passed,49calls/$0.029735034, automatic runtime repair revision1->2; one successful replay0calls/no model/harness. Connect task remains provider-free audited. |
 | photo-social | `priya-tags`, `newest-likes`, `august-over-1300`, `kiln-notes` |
@@ -197,6 +197,14 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Exact rootread owners already consulted: view/card.ts, view/listing.ts, script/results.ts, script/opening.ts. Follow actual owner references narrowly; do not reread broad plans. Existing cheapest qualifying oracle remains unchanged.
 - Report first causal divergence, evidence versus uncertainty, bounded generic fix/proposed files and meaningful regression/live probe before sourceauthorization. No unchanged paid retry or fixture weakening. No source/build/mainplan/commits/pushes.
 
+### Supervisor brief: owed social changed-source live preparation
+- Worker storage_comparison AFTER finishing bounded classifieds report; operate idle pairedt567 only. Root committed oldphoto readonly findings8db2b486 and merged latest main downstreamdaf3c7d6/Core3dd56610 into t567. SharedCore/Chrome/t563/t719 untouched.
+- Own NEW reports/codex-social-positive-rerun.md only. No source/fixture/oracle/guidance edits. Read social failedrun debug run-mvdec14t-5b320706 and accepted43domain/3browser disclosure recovery notes in currentplan/archive. Changedsourceec9b8593/e1ce99f4 already integrated, meaningful gates observed.
+- Prepare exactly social-network-feed-recent-group-posts, slot4/bf-slot4/persistent-isolated, fresh codex-social-positive-t567-20261018-r2, realproject extensionchat DeepSeekflash, requestedreplays1, .25USD/250calls/48000000tokens. Read current audited instruction/positive exactdataset/finalstate expectations; no oracle to model. Normalguards/nooverrides. Do not reuse failedworkspace or spend before rootrelease.
+- Build only ownCore contracts/fluxiq/client-gateway-websocket libraries cacheoff, then normal runner-required narrowcurrentness artifacts. No manualCoreWeb/fullbuild, whole suites or sharedCorebuild. Owning live launcher may prepare its necessary isolated productionhost afterrelease.
+- Send exact proposed owning launchcommand plus positive expectedrecord/field counts, currentHEADs and observedbuildexits. Waitrootrelease beforepaidlaunch. Root holds mainHEADs during allocation if needed.
+- Onrelease run one actual changed-source build/judgedwhole/zero-call replay, freezeHEAD/source/buildthroughcompletion. Inspect exactorderedpositiveoracle/reportedverdict/finalstate/explicitfinalized0provider+model+harnessreplay, normalrealextensionchat entry; missingaccountunknown. Recordactualspend/calls/receipts and requireddebugbeforeanyretry. No commits/pushes/mainplanedits or panelmanagement.
+
 ## Work Ledger
 
 ### 2026-10-18 - Continuation compaction and overnight instruction
@@ -228,6 +236,11 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Validation: after currentdevdocs merged into pairedt566, root independently reran Core15person tests and downstream2lifecycle tests, bothnative0; both actualstructureaudits native0. Downstream-first/Core-own-repository noff integration completed. Lane/task stays active for assigned readonly classifieds diagnosis; persistent evidence retained, no lifecycle deletion while breadth work continues.
 - Root independently inspected reset run-mvdl5eg0-a56fdad7 terminalevaluation: failed/runtime.behavior, noFlow,263342ms; readiness confirms startResetfalse and fixtureResetBetweenTrialsfalse.53calls/$0.032546700; firstdestinationbaseline read occurred after lastingAdd, unlike positivegateway diagnostic. Requireddebug written, no blindretry; explicit preactdestination admission design underway.
 - Accounting worker authorized isolated failfirst+sharedcanonicalpurse implementation with validated settledreceipt restoration; unknown/malformed/pendingpaid history failclosed. No sharedCore/Chrome mutation or whole suite/build authorization.
+
+### 2026-10-18 - Classifieds first cause established; owed social preparation
+- Validation: root independently checked unchanged fixture diff against recorded48cdbfee, actual mixedcandidatehandles, unique catalogue seller hash0027ec8fd27a present in directnavigate0119/0135 and absent all four t932click packets. Worker exactradius/cardidentity trace recorded; optionalchatclose is not listingclose. Historical run omittedradius then mixedtargetcontexts; no new product defect proven. Existing generic preceding-context guidance already integrated after that run.
+- Integrated authored classifieds report/debug and photo first-gridcoverage findings without source/fixture/oracle/guidance changes. Photo later targetprovenance remains open; no blindpaidretry.
+- Storage agent proceeds to owed changed-source socialrecent preparation in isolatedt567. Prior generic disclosure fixec9b8593/e1ce99f4 is independently43domain/3browser proven; actualpositiveoracle/judge/0callreplay still owed. No paidlaunch before source/build/count/command review.
 
 ## Open Questions
 
