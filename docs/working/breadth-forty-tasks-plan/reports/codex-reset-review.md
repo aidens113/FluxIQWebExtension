@@ -1382,3 +1382,77 @@ whole inventory -> clean trial. No manual ledger/source/result seeding, hidden
 navigation, fixture reset, liveprovider launch or paid trial is authorized.
 First-unit scope remains exploratory preflight only; arbitrary unseen trial
 creates remain a separately identified exposure, not an acceptance claim.
+
+## First exploratory-baseline unit: actual installed proof accepted
+
+Frozen source pair for proof: Core4ae19d30/downstream9595c615. Released own-lane
+extension test:e2e:build92336 native0/88681ms; e2e-chromium22files verified.
+Only owning extension bundle was rebuilt; sharedCore/Chrome/Web/workspace were
+untouched. Exact released Playwright command above ran40781 native0:1/1passed,
+54.1s actualcase/2.7m total. Fresh headed persistent MV3 profile, real gateway,
+registered domain/native runtime, actual public project-build service and
+provider-disabled scripted decisions. No fixture reset or manually seeded ledger.
+
+Closed actual evidence: ending proposed; missing-ref create received
+candidate.create_baseline_required, click dispatches0 before/0after; original
+complete collection sizes2/2 (4subjects), post-Add3/2 (5subjects), restored2/2.
+Original/restored exact ordered fingerprint b4113b7bd79302114756; same2scopes/
+1group persisted. Actual dirty-trial candidate.trial_reset_required, admitted
+own inverse ok, final clean trial yes. Actual target one match, pointer span,
+positive subject; actual Add/inverse same positive subject, absent original and
+present post-Add (asserted in test). Gateway errors0. Root independently read
+log, closed receipt and .last-run passed and accepted first-unit transport proof.
+This remains scripted mechanism acceptance, not whole canonical model acceptance.
+
+Allowlisted artifacts (relative to owning extension):
+- node_modules/codex-create-baseline-installed-browser.log: actual structural
+  console receipt + terminal1passed; SHA256
+  474CC747472B7DD5309257AF8D29EA400FF2B4764ECDEB8652A76CF65E4618CD.
+- node_modules/codex-create-baseline-installed-closed.json: generated closed
+  count/hash/code projection; SHA256
+  9C3F8B169847C1EF4F0BFD25E8F00F899E02795FE14E98E0F07FECA3A34FA178.
+- e2e/test-results/create-baseline-project-20261018/.last-run.json: passed.
+  The list reporter did not persist testInfo attachments on pass; structural
+  receipt is retained in the actual log, not claimed as a separate attachment.
+- Downstream node_modules/codex-create-baseline-extension-build.log: build0.
+Older Chrome/profiles/logs/proofs are preserved. No active own source reader or
+browser/build process remains, no worker commits/merges/pushes.
+
+## Read-only prepared canonical r5 (NOT LAUNCHED)
+
+Required previous debug exists:
+docs/working/language-driven-flow-loop-plan/debugs/run-mvdl5eg0-a56fdad7.md.
+Previous failure native1/53calls/$0.032546700 is retained unchanged. New source
+actually changes the first identified exploratory create admission and trusted
+transport; it does not invent an original state after effect. Root must first
+integrate currentdev, run required narrow integration checks and push/release
+BOTH repositories. Do not assume proof heads4ae19d30/9595c615 are final liveheads.
+
+Exact normal proposed command (run from owning downstream root only after explicit
+paid release, process env FLUXIQ_LAB_INSTANCE=bf-slot-2 and
+FLUXIQ_BUILD_CACHE_DIR=off; no overrides):
+
+```
+pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode project --llm-task create-flow --instruction-task everything-store-kettle-to-cart --target persistent-isolated --workspace codex-reset-positive-t719-20261018-r5 --model-reset-only --replays 1 --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
+```
+
+Task intent remains exactly canonical: two specified sage1.7litre store-sold
+kettles in Cart, existing phonecase moved to Save for later, final Cart-only
+table in task format. No task/fixture/oracle change to avoid transfer. Fresh
+workspace path did not exist when checked. Slot2 owner still t719/reset-review/
+bf-slot-2 with pidnull; verify free/normal ownership again at actual launch.
+Normal launcher performs waste/balance/debug/changed-source/behind-dev guards,
+Core entries/stamps/quiet/currentcurrency, guarded no-hook admission and own
+run-scoped preparation. No dry-run or guard mutation was done during prep.
+
+After allocation require actual authenticated candidateTrial.startReset=false
+AND candidateTrial.fixtureResetBetweenTrials=false, not merely commandflag.
+Inspect receipts for complete positive original destination observation before
+first successful identified create; rejected precondition must have no lasting
+mutation. Track all owned effects/reset receipts and original ordered baseline
+preservation before trials/whole run. Required acceptance remains real extension
+project chat -> judged whole run/oracle -> one zero-call replay, with terminal
+cost/calls/pending/breach accounting and required debug on failure. First-unit
+proof explicitly excludes arbitrary previously unseen/dynamic trial creates;
+whole canonical quantity+transfer behavior remains UNPROVEN until real run.
+No paid launch/retry is authorized by this preparation.
