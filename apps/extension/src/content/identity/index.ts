@@ -43,6 +43,10 @@
 // `<div>` -- by the control's own kind: the largest ancestor holding it and no
 // other control alike to it. `record.ts` names such a row by its title and
 // checks a replay's candidate against it (t463).
+// `own-run.ts` finds the row a control *is*: a gallery's tile, one of a run of
+// same-shaped siblings that carry and differ in content. `record.ts` gates a
+// loop pass's values on the tile itself, and `../action-runtime/pass-row/`
+// moves a pass's press to the tile holding its row.
 //
 // `corroboration.ts` is the one test both acting paths put to Core's score
 // before acting on it: something that says which control this is -- the text,
@@ -77,6 +81,7 @@ export { elementContext, landmarkRole } from "./context";
 export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
 export { agreesWithRecordedDialog, dialogName } from "./dialog";
+export { ownRun } from "./own-run";
 export { agreesWithRecordedRecord, isRecordElement, recordIdentity, sitsInRepeatedRow } from "./record";
 export { reportableText } from "./reportable-text";
 export { stableNameReading } from "./stable-name";

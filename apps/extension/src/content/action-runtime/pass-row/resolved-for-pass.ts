@@ -26,12 +26,22 @@
 //    pass's own row -- whatever an earlier pass did to another row, since the
 //    row is found by what it holds, never by where it is -- and a row that holds
 //    no such control fails as not found rather than pressing another row's.
+// 3. Where that finds nothing and the first answer is itself a tile -- one of
+//    a run of same-shaped siblings, each the control and each naming itself
+//    by its own content -- the pass's tile is the one member of that run that
+//    holds the row (`run-member.ts`). A tile names nothing another tile
+//    shares, so the gated resolution can never corroborate it; the run and
+//    the row's values place it instead (photo newest-likes r1,
+//    `run-mvecxeci-1c2cc227`: every pass opened the first tile). It is
+//    reported as the first answer's resolution with the pass's tile in place
+//    of the build's: the strategy that found the run, applied in the row.
 //
 // The first resolution's answer in another row is never acted on, and its
 // failure is never reported: the pass's row is what the step was asked about.
 
 import { sitsInRepeatedRow } from "../../identity";
 import type { DomElementContext } from "../../types";
+import { runMemberForRow } from "./run-member";
 
 /** One resolution's answer, or the failure it would report. */
 export type PassOutcome<Resolved, Failure> = { resolved: Resolved } | { failed: Failure };
@@ -52,7 +62,10 @@ export function resolvedForPass<Target extends Placed, Resolved extends { elemen
   if (!rowsAside) return resolve(target);
   const anywhere = resolve(rowsAside);
   if ("resolved" in anywhere && !sitsInRepeatedRow(anywhere.resolved.element)) return anywhere;
-  return resolve(target);
+  const inRow = resolve(target);
+  if ("resolved" in inRow || !("resolved" in anywhere)) return inRow;
+  const member = runMemberForRow(anywhere.resolved.element, target?.context?.record);
+  return member ? { resolved: { ...anywhere.resolved, element: member } } : inRow;
 }
 
 /**
