@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: 11 tasks accepted across 8 sites; auction seller-shop passed its whole run and awaits its zero-call replay. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
+Status detail: 12 tasks accepted across 9 sites (auction seller-shop accepted 2026-10-19); photo-social has no pass yet. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
 Created: 2026-10-17
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
@@ -47,7 +47,7 @@ are actually possible" (both now AGENTS.md rules, Automated Testing Facility Bou
 | social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Changed-source run-mvdln2dd-6bc98e25 failed47calls/$0.058921614: finaltrial not_judged for missing exclusion evidence, no promotedFlow. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
 | bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
 | crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
-| auction-marketplace | `cheap-accessory-auctions`, `save-mark-ii-sellers`, `buy-it-now-quote`, `lens-hood-seller-shop` |
+| auction-marketplace | PASS lens-hood-seller-shop run-mvecxd6w-ed72a1ca (8/8 rows, 16/16 fields, reported pass, $0.0316) and zero-call replay replay-mvfllkon-e7a35190 (0 calls, $0, harness 0, Flow hash unchanged). The Flow opens the shop at a fixed address because page-read navigation was refused (brief R5). buy-it-now-quote failed earlier. |
 | local-classifieds | PASS nearby-furniture run-mvebbnwm-47169b0d exactordered7records/28values/accountoracle/reportedpass/harness0; separate replay-mvebxqrj-11dfde69 exactsamegoal/explicit0provider/noharness/hashunchanged/keyspreserved. Prior test-ride/pricecheck failures retained. |
 | company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
 | professional-network | PASS kade-lead-contact run-mvdi9e8u-678c35df: exact1record/2fields/account oracle and reported verdict passed,49calls/$0.029735034, automatic runtime repair revision1->2; one successful replay0calls/no model/harness. Connect task remains provider-free audited. |
@@ -74,7 +74,7 @@ on 2026-10-18 that all finished by 15:04 but were never recorded. Their outcomes
 
 | Run | Task | Result |
 | --- | --- | --- |
-| run-mvecxd6w-ed72a1ca | auction lens-hood-seller-shop | Passed: Flow built, 8/8 rows and 16/16 fields, reported pass, $0.0316; runtime repair 1 -> 2. Zero-call replay not yet run. |
+| run-mvecxd6w-ed72a1ca | auction lens-hood-seller-shop | Accepted: 8/8 rows and 16/16 fields, reported pass, $0.0316; zero-call replay passed 2026-10-19. |
 | run-mved5pro-91998cc2 | everything-store office-checkout-review | Failed: chat build failed ("could not build"), 27 steps, $0.0208. |
 | run-mvecxeci-1c2cc227 | photo newest-likes | Failed: candidate trial judged "no", no Flow, $0.0462. |
 | run-mvectfld-c2f5d958 | job save-quillmark-remote | Failed: four trials could not find the saved click target, then an unprovable undo; no Flow, 125 calls, $0.0692. |
@@ -114,6 +114,19 @@ Each id is `<site>-<task>`. Risks the authors named: a guard that asks at Like, 
 point is declared there, so asking fails the run and is a product defect). The former empty-result allowance is retired: every scraping task now requires actual matching nonempty data.
 
 ## Worker Briefs
+
+### Brief R5 (2026-10-19): navigation to a page-read address refused - t566
+- In accepted run `lab-runs/2026-10-18/run-mvecxd6w-ed72a1ca` (auction seller-shop) every navigation to the
+  seller-shop address the model read from the page was refused `web.browser.permission_denied` (steps
+  0035, 0060, 0064, 0089), so the saved Flow opens the shop at a fixed address and does not work out the
+  seller when it runs. A person would follow that link; the user's rule is that only genuinely risky acts
+  (delete, money, send) and secret screening are gated.
+- Own in `fxwork/t566/!FluxIQWebExtension` only: append a "Page-read navigation refusal" section to
+  `reports/codex-auction-seller-shop.md`.
+- Find which owner refused (Core gateway/policy in `fxwork/t566/!FluxIQ`, extension background, or the Lab's
+  network guard), what condition it applied (origin, port, address provenance, grant), whether the
+  address the model used was correct, and whether the refusal is a defect or a correct guard. Propose the
+  least general fix and its test seam. Read-only; no paid runs, source edits or commits.
 
 ### Brief R1 (2026-10-19): auction seller-shop replay and acceptance record - t566, slot-3
 - Run `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-18/run-mvecxd6w-ed72a1ca` (task
@@ -709,6 +722,19 @@ point is declared there, so asking fails the run and is a product defect). The f
 - Lane trees left uncommitted by Codex: t563, t719 and t567 reports modified, t566 auction report and t719 job
   debug untracked. Workers R1-R4 own those files now.
 - Dispatched R1 (worker), R2-R4 (worker-high), all read-only on source and unpaid.
+
+### 2026-10-19 - Auction seller-shop accepted
+
+- Validation: supervisor read the replay record in
+  `fxwork/t566/!FluxIQWebExtension/node_modules/codex-auction-shop-r1-replay.log` (result file
+  `test-runs/instances/bf-slot-3/replays/replay-mvfllkon-e7a35190.json`): `verdict passed`, `reasons []`,
+  `flowContentHash.before` = `after` = `e831225d...0facc`, `coreProviderCallCount 0`, `accountedCalls 0`,
+  `harnessActivations 0`, `llmGate.invoked false`, `run.status succeeded`, extraction 8/8 records,
+  `playbackGoalHeld true`. Accepted: 12 tasks across 9 sites.
+- Finding (R1): the run's two harness activations were the after-run check ("nothing to change") and a
+  revision bump with unchanged Flow hashes, not a repair. The Flow opens the seller shop at a fixed address
+  because every navigation to the page-read address was refused `web.browser.permission_denied`; R5
+  diagnoses that refusal. Merged as c6d8748a.
 
 ## Open Questions
 
