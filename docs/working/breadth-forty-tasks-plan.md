@@ -428,6 +428,22 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   `result.counts_look_right` code misleads, and a targeted scroll without a mode reported success at the
   list's end. Dispatched F8 (list-continues fact, t566 pair) and F9 (targeted scroll, t563 domain).
 
+### 2026-10-19 - Fixes F4, F6, F7, F9 verified and committed on lane branches
+
+- Validation: supervisor reran each worker's tests in its tree. F7 (t566 f8f59955):
+  `EXTENSION_TEST_BUILD_LABEL=f7-verify node scripts/test-extension.mjs src/runtime/navigation/tests/address.test.ts
+  src/runtime/tests/action-runner.test.ts src/runtime/tests/navigate-action.test.ts` -> tests 76, pass 76, fail 0.
+  F6 (t567 d1d5823b): `EXTENSION_TEST_BUILD_LABEL=f6-verify node scripts/test-extension.mjs
+  content/extraction/tests/infer-fields` -> tests 25, pass 25, fail 0. F4 (t563 42be3e24): `node --test` on
+  `dist/live-llm/tests/{max-cost-within-ceiling,cost-ceiling-env,cost-ceiling-reach,live-llm-run,live-llm-plan}.test.js`
+  -> tests 66, pass 66, fail 0. F9 (t563 b9c008eb): `DOMAIN_TEST_BUILD_LABEL=f9-verify node scripts/test-domain.mjs
+  src/client/tests` -> tests 44, pass 44, fail 0. Workers also reported typecheck exit 0 and structure audit passed.
+- Finding: `content/extraction/tests/pagination` fails 3 of 34 on `dev` itself (hidden load-more cases 28-30;
+  `EXTENSION_TEST_BUILD_LABEL=dev-pagination ...` in the main checkout), so it predates F6. Queued as a fix-forward
+  after F8, which works in the same folder.
+- Note on F4: the refusal sits in `beginLiveLlmRun`, after `run-lab.mjs` has taken its Core lease and build phase
+  but before any credential, topology or provider call ($0).
+
 ## Open Questions
 
 None requiring user input.
