@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: 12 tasks accepted across 9 sites (auction seller-shop accepted 2026-10-19); photo-social has no pass yet. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
+Status detail: Paused 2026-10-19 for traces and the boundary move plan; 12 tasks accepted across 9 sites, photo-social has no pass; reset redesign L1 (t724) in flight. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
 Created: 2026-10-17
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
@@ -57,15 +57,19 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
-**Now (2026-10-19):** fixes F1-F9 and the dev-sweep fixes are on `dev` in both repos. Rerun round 1 went 0 of 4
-($0.234): three builds died in the site-reset ledger (photo, office, job); social reached the exact answer but a
-split judge and the deadline lost it (R10). Lead L1 (t724) is redesigning reset settlement as one observed-state
-model with a regression corpus of all seven failure shapes; t725 (judge split, time honesty, scroll schema, social
-wording) is on `dev` in both repos.
+**Now (2026-10-19, handoff):** paused by the user for two larger efforts run from
+[trace-offline-trials-plan.md](./trace-offline-trials-plan.md): Core traces and offline trials, and the
+extension/Core boundary audit's move plan. Fixes F1-F9, the dev-sweep fixes (t723) and t725 (judge split, time
+honesty, scroll schema, social wording) are on `dev` in both repos. Rerun round 1 went 0 of 4 ($0.234): reset
+settlement blocked photo, office and job; social reached the exact answer but lost it to a split judge and the
+deadline (now fixed). Lead L1 (reset settlement redesign, t724) was still running at handoff, uncommitted; its report
+is `fxwork/t724/!FluxIQWebExtension/docs/working/breadth-forty-tasks-plan/reports/l1-reset-settlement.md`.
 
-**Next, in order:** review and integrate L1; sync the lanes and rebuild their Core; rerun
-office checkout, job save, photo newest likes and social group posts on fresh workspaces; then the owed reruns
-(job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
+**Next, in order:** finish and integrate L1 (see the hub document's "Next"); then rerun office checkout, job save,
+photo newest likes and social group posts on fresh workspaces, supervised; then the owed reruns (job
+halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries. Lane trees must merge `dev` and rebuild
+their Core (`pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build`) before
+any launch, or the Lab refuses at $0 as stale.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -659,6 +663,15 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   `maxScrolls` refused at submit through the scroll node's parameter contract, and the run-time refusal names the
   key; G4 the social task says plainly that posts outside a group and from unjoined groups are left out.
 - Not covered: G2's time check in candidate (non-project) mode; an end-to-end test from a cut test to the chat.
+
+### 2026-10-19 - Handoff: breadth round paused for traces and the boundary move plan
+
+- Validation: `git status --short` and `git rev-list --left-right --count origin/dev...dev` in both main checkouts
+  -> clean and 0/0 (only the user's `.clinerules/fluxiq.md` edit, not ours, is uncommitted downstream). t724 (L1)
+  worktrees -> Core 52 and downstream 34 uncommitted files; lead running; sub-reports l1-c1, c2, c3, c5, c6, d1, d2
+  present, C4 and D3 not yet.
+- Decision: the user paused the breadth round; the next session runs the lanes in `trace-offline-trials-plan.md`
+  and finishes L1 first.
 
 ## Open Questions
 

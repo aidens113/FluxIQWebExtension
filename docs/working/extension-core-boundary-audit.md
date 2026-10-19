@@ -1,7 +1,7 @@
 # Extension And Core Boundary Audit
 
 Status: Active
-Status detail: Audit complete: no model calls downstream; twelve findings and a six-phase move plan await the user's approval.
+Status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S created (t726-t728), not yet dispatched.
 Created: 2026-10-19
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
@@ -34,8 +34,13 @@ transport; the offline queue keeps recorded page data across browser restarts an
 the domain's system instructions carry framework rules; several modules are hand-synced twins of Core code; and the
 build-cache and task tooling are unchecked, drifted copies of Core's. Ranked list and phased plan below.
 
-**Next:** the user approves (or edits) the move plan; then a paired Core document is opened and Phase 0 starts.
-Nothing has been moved; this effort is planning only.
+**Approved (user, 2026-10-19):** implement the move plan with subagents, including the tooling recommendation
+(Core owns the build-cache engine and the shared task rules; this repository imports them; drift checks on any copy
+left). Execution is run from [trace-offline-trials-plan.md](./trace-offline-trials-plan.md) (lanes table): lane G
+(t726) phases 1 and 3, lane H (t727) phases 0 and 5, lane S (t728) phases 2 and 4. Branches exist; nothing is
+implemented yet. A paired Core document is opened by the first lane that edits Core.
+
+**Next:** dispatch lanes G, H and S from the lane table (briefs written here under Worker Briefs first).
 
 ## Worker Briefs
 
@@ -131,9 +136,15 @@ working document before its first Core edit.
 - Outcome: Accepted (planning)
 - Follow-up: user approval of the move plan.
 
+### 2026-10-19 - Move plan approved; lanes created
+- Agent: supervisor
+- Changed: this document's Current State; lanes recorded in `trace-offline-trials-plan.md`
+- Why: the user approved implementing the move plan with subagents.
+- Validation: `pnpm task start <slug> --worktree --core` -> t726 gateway-client-into-core, t727 guards-and-tooling,
+  t728 single-sources-telemetry created; their worktrees `git status --short` -> 0 lines.
+- Outcome: Partial (nothing implemented yet)
+- Follow-up: dispatch lanes G, H, S.
+
 ## Open Questions
 
-- Approve, edit or reorder the move plan (user). Recommended: Phase 0 and Phase 1 first; they are small and
-  downstream only.
-- Tooling policy for `scripts/build-cache` and `scripts/task` (user): recommended that Core owns them and this
-  repository imports them, with drift checks on any copy that remains.
+None requiring user input (the move plan and the tooling policy were approved on 2026-10-19).
