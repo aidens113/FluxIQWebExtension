@@ -13,83 +13,68 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
-**Scraping requires actual data (user, 2026-10-18).** All87 dataset tasks among108 now have positive record-by-record expectations. Five formerly empty fixture/task/oracle paths are revised and browser-proven. Launch guards reject empty/absent/count-only/inconsistent expectations; selected-card field discovery is fixed with independent positive browser proof. Ordinary real-user empty searches retain normal behavior.
+**What the user asked (2026-10-17 onward):** forty new tasks on the ten realistic sites (four each), run live,
+debugged and fixed, fast; an installed-extension proof; only about one task per site run fully end to end, plus
+reruns of repaired failures; every task possible and unambiguous; every scraping task with real data to verify
+(AGENTS.md, Automated Testing Facility Boundary). Claude ran it to 2026-10-17 21:10, Codex continued until
+2026-10-18 15:04, Claude resumed on 2026-10-19.
 
-**Current acceptance:**11accepted tasks across8sites. Continuation23completed/1391rawcalls/reportedestimated$1.208560434:5accepted,16failed,1unverifiedempty,1held resetr6. Raw telemetry preserves historical duplicates; auction same-input reconciliation removes1call/$0.001041924 (23calls/$0.016103250). Three known duplicates total4calls/$0.003966408; correcting only these gives1387calls/$1.204594026, not invoice or global complete-itemization proof. Empty job run never accepted; installed proofs/costs separate.
+**Done:**
+- 40 new tasks (t696-t705, table under "The Forty Tasks"); the corpus is 108 tasks, 82 workflows.
+- All 108 tasks audited provider-free (`reports/audit-<site>.md`): about 40 reworded so the instruction alone
+  gives the oracle's answer; three fixture additions; no oracle weakened.
+- All 87 scraping tasks have nonempty record-by-record expectations; five formerly empty ones were revised and
+  browser-proven; the launch guard refuses empty, count-only or inconsistent expectations.
+- Installed proof: Chrome 155 and Edge 155 load the packaged 0.1.0 extension through the real Load-unpacked
+  steps, pair, build a Flow from the real chat with an exact ordered 4-record / 12-value answer, pass a paid
+  whole run (about $0.0021 each) and a separate zero-call replay. 13 first-run defects fixed. Firefox is not
+  installed on this machine.
 
-**Current defects/work:** Canonicalr5 failed because model claimed failedact10 rather than witnessedretryact11. Generic readonly hint now proven through installed gateway: wrongclaim0dispatch, exactretryhint, explicitly corrected inverse restores exactoriginal2/2 and cleantrial. Feedback integrated Core14c448f9/downstream94090104 after237targetedcases/types/libraries/bothaudits; pairedpublication observed native0 down42de21f6/Corea62d3330, canonicalr6 terminal exactdata/zero replay but paidjuryunverified, acceptanceheld. Socialr3 failed61calls/$0.071908062/incompletecoverage, noFlow; classifiedsprice failed13calls/$0.009410094/unconditional authored send correctlyblocked. No blind retries or acceptance inferred.
+**Accepted: 12 tasks across 9 sites.** Each has an exact oracle match, a reported pass and a zero-call replay.
 
-**Installed proof:** Chrome155 and Edge155 genuine nativeinstalled verified0.1.0/package5e00078 on frozen t563cb704f47/ce53486f independently passed realchat creation, exactordered4records/12values/ownoracle/finalstate, canonicalpaidwhole and separateallzero replay. Chrome judged18311e53 cost$0.002081724; Edge3235be49 cost$0.002078274, onefullyitemizedcall/pending0/omitted0 each. Zero replays eb6df4a5/8d20ce19 retain honest productunverified goalproof. Originalinstructions/fullFlowhashes unchanged. OwnChrome2636/Edge35316 stopped/preserved after rootverification. Old6404/sharedCoree58 unchanged/paidunknownheld; Firefox unavailable. Accounting integrated Coreb561fb6e/downstreamdf7f44d0 after230targetedcases/affectedchecks/bothaudits; pairedpublication observed native0 downstream97a28451/Core868d541e. No exactmergedbuildliveclaim.
-
-**Resumed by Codex on the user's go-ahead (client date 2026-10-17).** Historical wrap-up dates below are retained as recorded by Claude. This section is written to
-stand alone. The user's requests: 40 new tasks on the ten realistic sites, run live, debugged and fixed, fast
-(2026-10-17); the install-package proof; then "only a few tests fully end to end" and "make 100% sure ALL TESTS
-are actually possible" (both now AGENTS.md rules, Automated Testing Facility Boundary).
-
-**Done (all on local `dev` in both repositories; push state is in the last ledger entry):**
-- 40 new tasks, four per site (t696-t705), table under "## The Forty Tasks"; corpus 108 tasks, 82 workflows.
-- All 108 tasks audited provider-free (t708-t717, reports `reports/audit-<site>.md`): about 40 rows reworded so the
-  instruction alone yields exactly the oracle's answer (order, value formats, the site's own labels); three
-  fixture additions (social timestamps readable, professional-network weekly-limit notice, photo-social "at
-  least two" tags); no oracle weakened. `realistic-task-baseline.ts` follows 26 reworded original rows.
-- Integration round 1 (ledger 2026-10-18): four lanes' fixes, install fixes t706/t707, audits, t718's two old
-  test failures, and web-11 (FluxIQ declines optional cookies by default; user 2026-10-18).
-- Install proof: Chrome 155 and Edge 155 install through the real Load-unpacked steps and pair (slow approval,
-  dropped-socket guard proven live); 13 first-run defects fixed (pairing keepalive, C1-C5, G1, D1, D2, P1, P2,
-  Studio domain, Get started styling). Firefox is not installed on this machine.
-
-**Live results (one full pass per site was the goal; the user's scope change):**
-
-| Site | Result |
-| --- | --- |
-| everything-store | PASS coupon-earbuds-rated-four, batteries-and-descaler, sage-small-kettle-if-in-stock; office-checkout-review failed x2 (reworded by the audit to name Buy Now; rerun owed) |
-| job-board | PASS remote-easy-apply, halvard-careers-roles; save-quillmark-remote and halvard-labs-office-jobs failed (causes fixed by lane 4 fixes 1-3; reruns owed) |
-| social-network-feed | PASS delete-stranger-requests. Recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538, no Flow: explicit expansion attempts did not clear incomplete-text refusals. Changed-source run-mvdln2dd-6bc98e25 failed47calls/$0.058921614: finaltrial not_judged for missing exclusion evidence, no promotedFlow. Diagnosis active; no implicit click or truncated result accepted. Hide-suggested-posts rerun owed. |
-| bigbox-retail | PASS rated-delivery-towels run-mvdf5nlp-4878758e: exact ordered16records/48fields/final-state oracle, Core answers-request verdict; one successful goal replay with0provider calls/no model or harness activation.29calls/$0.026501940. Prior stored-copy parser failure repaired. |
-| crossborder-marketplace | `free-hubs-under-ten`, `follow-official-store`, `mint-hub-fallback`, `uk-express-quote` |
-| auction-marketplace | PASS lens-hood-seller-shop run-mvecxd6w-ed72a1ca (8/8 rows, 16/16 fields, reported pass, $0.0316) and zero-call replay replay-mvfllkon-e7a35190 (0 calls, $0, harness 0, Flow hash unchanged). The Flow opens the shop at a fixed address because page-read navigation was refused (brief R5). buy-it-now-quote failed earlier. |
-| local-classifieds | PASS nearby-furniture run-mvebbnwm-47169b0d exactordered7records/28values/accountoracle/reportedpass/harness0; separate replay-mvebxqrj-11dfde69 exactsamegoal/explicit0provider/noharness/hashunchanged/keyspreserved. Prior test-ride/pricecheck failures retained. |
-| company-website | PASS apprentices run-mvdes30x-65848f60: real chat build, final exact oracle4records/12fields, reported pass, one goal-passing replay with0provider calls; automatic runtime repair applied revision1->2.21calls/$0.016375290. Prior run's hidden-loadMore failure fixed in t567; source integrated and pushed after combined checks. |
-| professional-network | PASS kade-lead-contact run-mvdi9e8u-678c35df: exact1record/2fields/account oracle and reported verdict passed,49calls/$0.029735034, automatic runtime repair revision1->2; one successful replay0calls/no model/harness. Connect task remains provider-free audited. |
-| photo-social | `priya-tags`, `newest-likes`, `august-over-1300`, `kiln-notes` |
-
-Totals at the stop: 24 runs, 6 passed, 18 failed, $1.224 billed across the four lanes (lane 1 $0.545, lane 2
-$0.138, lane 3 $0.416, lane 4 $0.125), plus about $0.31 for the install proof; no balance error. Every failure has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in
-the lane trees until merged).
-
-**Continuation status:**
-- **Accepted live passes:** company apprentices run-mvdes30x-65848f60, bigbox rated-delivery-towels run-mvdf5nlp-4878758e and professional lead-contact run-mvdi9e8u-678c35df, all full exact oracle/judge and successful zero-provider-call goal replay. Classifieds furniture adds a fourth continuation site pass; with historical results: eleven accepted tasks across eight sites.
-- **Company source integrated and pushed:** merges downstream3b40df41/Corea4faf79f include drawing normalization, durable repair/reopen, bounded reveal and hybrid paging. Final combined Core52/domain32/extension147 tests, Core library/check, both downstream package checks and both audits passed. Pushed downstream02982452/Coreeff2657b.
-- **R1 source pushed, live proof failed:** prior push downstream72fb4d80/Corebb858c89 included original-inventory/transfer/reset ownership fixes and narrow/browser gates. Canonical run-mvdflu8o-d99d3100 used --model-reset-only and actual startReset=false, but failed53calls/$0.034600230, no Flow/whole judge/replay. Required debug inspected. Retry attribution, cross-page create accounting and permanently kept unresolved acts now have a bounded fix brief; no paid reset rerun until changed-source validation/review.
-- **Social recovery:** recent-group-posts run-mvdec14t-5b320706 failed59calls/$0.047741538. Supported explicit disclosure loop and closed incomplete-text feedback are accepted/pushed after43 independent domain cases, package checks/audits and actual3-case Chromium proof; paid rerun run-mvdln2dd-6bc98e25 failed47calls/$0.058921614: missing exclusion evidence, no promotedFlow. Diagnosis active. No implicit clicks or truncated results accepted; generic guidance must not mirror fixture content.
-- **Other failures:** crossborder run-mvddq555-2804ed24 created a Flow and proved person handoff; initial10rows/40fields matched, but later repair lacked two oracle state facts. Bigbox run-mvddx6wf-17e9eab0 matched its full oracle but failed stored-copy claim parsing. Generic query/judge/parser repairs are pushed; Bigbox rerun passed. Crossborder rerun remains owed.
-- **Continuation spend:**23completed/1391rawcalls/reportedestimated$1.208560434:5accepted,16failed,1unverifiedempty,1heldreset. Historical raw judgeoverlaps retained; not invoice/completeness proof. Historical and installed spend separate.
-- **Storage excluded:** held optional72abeeab and restorationc13c0a30 remain only t707. Supervisor verified482pass/2fail/4skip held versus484/0/4 baseline; timing causality unproved. No pooling delta enters dev.
-- **Remaining:** accepted coverage auction/photo and owed store/jobs/social reruns. Classifieds furniture accepted; accounting/reset feedback published. R6 exact data/zero replay but paidjury disagreement held. GenuineChrome/Edge proof complete; Firefox unavailable. Old sharedCoree58 lease retained.
-
-**Resumed by Claude, 2026-10-19.** Codex's last list (integrate the paid-check fix, preserve the audits, release
-auction seller-shop and photo newest-likes) was done, and it went further: it launched four runs at 14:45-14:55
-on 2026-10-18 that all finished by 15:04 but were never recorded. Their outcomes, from each run's
-`summary.json`/`evaluation.json` and the spend ledger:
-
-| Run | Task | Result |
+| Site | Accepted | Failed or owed |
 | --- | --- | --- |
-| run-mvecxd6w-ed72a1ca | auction lens-hood-seller-shop | Accepted: 8/8 rows and 16/16 fields, reported pass, $0.0316; zero-call replay passed 2026-10-19. |
-| run-mved5pro-91998cc2 | everything-store office-checkout-review | Failed: chat build failed ("could not build"), 27 steps, $0.0208. |
-| run-mvecxeci-1c2cc227 | photo newest-likes | Failed: candidate trial judged "no", no Flow, $0.0462. |
-| run-mvectfld-c2f5d958 | job save-quillmark-remote | Failed: four trials could not find the saved click target, then an unprovable undo; no Flow, 125 calls, $0.0692. |
+| everything-store | coupon-earbuds-rated-four, batteries-and-descaler, sage-small-kettle-if-in-stock | office-checkout-review failed 3 times (latest run-mved5pro-91998cc2, R2); canonical reset r6 held |
+| job-board | remote-easy-apply, halvard-careers-roles | save-quillmark-remote failed again (run-mvectfld-c2f5d958, R4); halvard-labs-office-jobs rerun owed |
+| social-network-feed | delete-stranger-requests | recent-group-posts failed 3 times (latest run-mveaaqxn-d0be9888, R6); hide-suggested-posts rerun owed |
+| bigbox-retail | rated-delivery-towels | - |
+| crossborder-marketplace | free-hubs-under-ten | - |
+| auction-marketplace | lens-hood-seller-shop (2026-10-19) | cheap-accessory-auctions and buy-it-now-quote failed; page-read navigation refused (R5) |
+| local-classifieds | nearby-furniture | test-ride and price-check failed (price-check's unconditional send was correctly blocked) |
+| company-website | apprentices | - |
+| professional-network | kade-lead-contact | - |
+| photo-social | none | priya-tags failed (90 calls, no full answer); newest-likes failed (run-mvecxeci-1c2cc227, R3) |
 
-**Next, in order:** briefs R1-R4 (dispatched 2026-10-19): auction zero-call replay and acceptance; root causes
-and debugs for the three failures. Then fix the causes on the lane branches, integrate to `dev`, sync the lane
-trees, and release one rerun per repaired failure. Reset r6 stays held; no unchanged retries.
+Every failed run has a debug note at `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` (in its
+lane tree until merged); the Lab refuses a lane's next launch without one.
+
+**Spend:** the continuation up to the afternoon of 2026-10-18: 23 runs, 1,391 raw calls, $1.208560434 reported
+estimate (three known duplicate judge charges, 4 calls / $0.003966408, stay in the raw telemetry). The four
+evening runs of 2026-10-18 added $0.167710428. The install proof is counted separately. No balance error.
+
+**Reset (canonical everything-store reset task):** r5 failed because the model claimed a failed act instead of
+its successful retry; a generic hint fixed that, proven through the installed gateway and published (downstream
+42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
+judged the whole run unverified, so acceptance is held. No unchanged retry.
+
+**Now (2026-10-19):** read-only diagnoses, briefs R2-R6: office checkout (t563, done: Core reset-ledger defect),
+photo newest-likes (t567), job save-quillmark (t719), the page-read navigation refusal (t566), and what the
+build model is told after a judged-no trial (t567; the pattern recurs in social r2/r3 and photo).
+
+**Next, in order:** read R2-R6; fix the causes on the lane branches (paired Core branches where needed) with
+tests beside the changed files; integrate to `dev` on narrow checks, publish both repositories and sync the lane
+trees; then release one rerun per repaired failure, the owed reruns (job halvard-labs-office-jobs, social
+hide-suggested-posts), and photo-social tasks until that site has a pass. No unchanged retries.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
 simulate the website side locally in a test repository first, tenancy as an enterprise feature with permissions
 modelled on AWS IAM, and a faster schedule. Planning only; nothing implemented.
 
-**Blocked:** nothing needs the user. Lab: up to four lanes, one per `lab-slots/slot-N`, lane trees t563, t719, t566,
-t567 under `C:/Users/osrs_/FluxStuff/fxwork/`; launch shape in `automation-project-agents-plan.md` ("A8 Run Plan").
+**Blocked:** nothing needs the user. Lab: up to four lanes, one per `lab-slots/slot-N`, lane trees t563, t719,
+t566 and t567 under `C:/Users/osrs_/FluxStuff/fxwork/`; launch shape in `automation-project-agents-plan.md`
+("A8 Run Plan"). Held and untouched: the storage-pooling change on t707 (482 pass / 2 fail versus a 484 / 0
+baseline), an old instance 6404 and a shared-Core lease e58.
 
 ## The Forty Tasks
 
@@ -114,6 +99,49 @@ Each id is `<site>-<task>`. Risks the authors named: a guard that asks at Like, 
 point is declared there, so asking fails the run and is a product defect). The former empty-result allowance is retired: every scraping task now requires actual matching nonempty data.
 
 ## Worker Briefs
+
+### Fix briefs F1-F7 (2026-10-19), from diagnoses R2-R5
+Each worker edits only its listed owners plus their `tests/` folders, validates with the tests beside the change,
+the touched package's typecheck and the structure audit, and never commits. Model-facing words stay generic.
+- **F1, t719 Core, reset ledger:** an act whose destination has a complete fresh read after the act equal to its
+  original baseline needs no proven undo; the trial runs with the act listed as left (no change seen) and the
+  judge is told. Still refuse: destination changed, partial or stale read, no baseline. Covers office r1
+  (create_new Buy Now, cart unchanged) and job r1 (site-failed saves, My jobs unchanged). Owners Core
+  `flow-bootstrap/site-reset/**`, `flow-bootstrap/action-permissions.ts` (destination pass-through only).
+- **F2, t719 extension, row identity:** `content/identity/record.ts` `holdsRowValues` accepts a separator-joined
+  value when each part is in the same record (job r1); `sitsInRepeatedRow` / `action-runtime/pass-row/**` treat
+  a control that is itself one of a run of same-shaped siblings as its own row (photo r1: 24 passes opened one
+  post).
+- **F3, t563 Core, reset-brief preflight:** reproduce provider-free the reset brief's first request failing
+  `provider_evidence_loop_context_invalid` (office r1 0060/0061), fix the wrong side, and end the build
+  honestly instead of throwing `post_provider_validation_failed`. Owners `runtime/llm/deepseek/preflight.ts`,
+  `runtime/llm/harness/request-evidence-check.ts`, the reset-brief composer and build ending path; not
+  `site-reset/**`.
+- **F4, t563 Lab, cost ceiling:** refuse, before allocation, a live launch whose `--llm-max-cost-usd` exceeds the
+  resolved Core ceiling (`FLUXIQ_LLM_RUN_COST_CEILING_USD` / `--llm-cost-ceiling-usd`). Codex's 2026-10-18
+  launches passed only the flag, so 12 runs ran at $0.10 instead of $0.25 and photo ran out of budget.
+- **F5, t567 Core, first-N rows:** `repeat over` with `repeat most: N` means act on the first N rows and stop
+  successfully (photo r1: `authoring/draft-routing.ts` `scriptSpan` refused it); a For Each stop-after-N option
+  beside the failing safety limit; one generic clause in `plan/flow-script-format.ts`.
+- **F6, t567 extension, link column:** `content/extraction/infer-fields.ts` offers an item's own absolute href as
+  a link column when the item is itself a link (photo r1 could not return links).
+- **F7, t566 extension, navigation address:** resolve a relative navigation address against the Flow's current
+  web page before `chrome.tabs.update`/`create` (new `runtime/navigation/address.ts`, called from
+  `runtime/action-runner.ts`); with no web page, or for the extension's own address, fail as an invalid
+  parameter, never `permission_denied` (auction: root-relative shop link landed on `chrome-extension://`).
+
+### Brief R6 (2026-10-19): what the model is told after a judged-no trial - t567, read-only
+- Social r3 `lab-runs/2026-10-18/run-mveaaqxn-d0be9888` failed: trials 0047 and 0095 ran cleanly but kept 1
+  row of 5 seen where the task needs 3 records over 3 groups; both judges said `answersRequest=no`, and the
+  model never fixed coverage in 3 trials. The same pattern (judged no, revision does not fix it) recurs in
+  social r2, photo priya and possibly photo newest-likes.
+- Own in `fxwork/t567/!FluxIQWebExtension` only: append a "Judged-no feedback" section to
+  `reports/codex-social-positive-rerun.md` and to the debug `debugs/run-mveaaqxn-d0be9888.md`.
+- From steps 0047-0049, 0063-0065, 0095-0097 and the next provider requests, quote (closed, no page data)
+  what the trial result and judge reasons the model received, and whether they named the missing groups
+  or rows. Find the Core owner that composes trial feedback for the build model. Decide whether the model
+  had enough to fix it; if not, propose the least general fix (judge reasons carried into feedback, an
+  answer-coverage check, ...) and its test seam. Read-only; no paid runs, edits or commits.
 
 ### Brief R5 (2026-10-19): navigation to a page-read address refused - t566
 - In accepted run `lab-runs/2026-10-18/run-mvecxd6w-ed72a1ca` (auction seller-shop) every navigation to the
@@ -735,6 +763,33 @@ point is declared there, so asking fails the run and is a product defect). The f
   revision bump with unchanged Flow hashes, not a repair. The Flow opens the seller shop at a fixed address
   because every navigation to the page-read address was refused `web.browser.permission_denied`; R5
   diagnoses that refusal. Merged as c6d8748a.
+
+### 2026-10-19 - Diagnoses R2-R5 and fix dispatch
+
+- R2 office checkout r1 (`debugs/run-mved5pro-91998cc2.md`, t563 8c6580a1): the reworded task worked (Buy Now,
+  checkout, cart unchanged at 2). Core defect: the model declared Buy Now `create_new` into the cart; fresh
+  cart reads at 0049/0053 equalled the original, yet `site-reset/ledger.ts` `beforeTrial` answered
+  `candidate.trial_reset_unproved` (0051/0055). Second Core defect: the reset brief's first request was refused
+  in preflight `provider_evidence_loop_context_invalid` before any call, and the build threw
+  `post_provider_validation_failed`.
+- R3 photo newest-likes r1 (`debugs/run-mvecxeci-1c2cc227.md`, t567 90680516): judge correct (24 like presses,
+  all on one pinned post; no link column). Defects: the read cannot offer an item's own href
+  (`infer-fields.ts`); Core refused `repeat most: N` beside `repeat over` (`draft-routing.ts` `scriptSpan`), so
+  the loop became unbounded; the open press was not moved to each pass's row (`pass-row/resolved-for-pass.ts`
+  via `identity/record.ts` `sitsInRepeatedRow`). Model mistake: took the pinned post as newest. The build ran
+  at $0.10, not $0.25, and ended `run_budget_cost_exhausted`.
+- R4 job save r1 (`debugs/run-mvectfld-c2f5d958.md`, t719 072c2468): the target was found but the For Each row
+  gate (`identity/record.ts` `holdsRowValues`) refused it because a " · "-joined `lines` value is not on the
+  page as one string; and the ledger could not settle site-failed saves although My jobs was unchanged before
+  and after. Earlier icon-visibility hypothesis refuted.
+- R5 navigation refusal (t566 7456338a): not a permission rule. A root-relative page-read address went
+  unresolved to `chrome.tabs.update`, landed on `chrome-extension://.../scenarios/...` (ERR_FILE_NOT_FOUND), and
+  `browser-api.ts` labelled it `permission_denied`. The model read the right link.
+- Validation of budget finding: `spend-ledger.jsonl` finish events by day and `buildCeilingUsd`: 2026-10-12 to
+  2026-10-17 all launches at 0.25 (except nine at 0.1 on 2026-10-12 before the change); 2026-10-18: 12 at 0.1,
+  20 at 0.25. Codex's later launch commands set the flag but not `FLUXIQ_LLM_RUN_COST_CEILING_USD`, which the
+  A8 launch shape (`automation-project-agents-plan.md`) requires.
+- Dispatched fix briefs F1-F7 (see Worker Briefs), partitioned by lane tree and file. R6 still running.
 
 ## Open Questions
 
