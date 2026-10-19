@@ -496,6 +496,18 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   inside a pass it must match the row's values (fails closed). The live reruns will show whether a page-level
   control inside a loop body is ever caught by it.
 
+### 2026-10-19 - F5 verified; drafted paths extended
+
+- Validation: t567 Core 9b6b5b1b rerun by the supervisor: `npx vitest run` over `flow-bootstrap/candidate/tests`,
+  `authoring/tests`, `script-statements/tests`, `nodes/control-flow/tests`, `flow-draft/tests` and
+  `executor/tests/graph-run.test.ts` -> 83 files, 813 tests passed. Worker: repeat-bound tests 5 failed before
+  the fix, drafted tests 2 failed before; package check exit 0; structure audit passed. The format clause's
+  example is a recipe site's bookmarks (generic).
+- Finding: photo r1's exact script (the bound on each of three merged steps) now builds For Each `stopAfter: 3`.
+  Still dropping the bound: drafted amendments (`amendment/route.ts`, `schema.ts`), the evidence-loop decision,
+  `entry.ts` `routingLine`, the dry run and `draft-from-flow.ts`. F5 resumed to close them, splitting
+  `draft-routing.ts` (798/800) first if it must change.
+
 ## Open Questions
 
 None requiring user input.
