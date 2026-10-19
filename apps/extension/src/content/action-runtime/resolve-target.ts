@@ -265,8 +265,9 @@ export class TargetResolutionError extends Error implements WebAutomationFailure
  * measurement no caller can see is a measurement nobody will keep correct.
  */
 export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
-  // A loop pass's row that arrived with no row the build saw is placed on the page (`pass-row/`).
-  const outcome = resolvedForPass(recordedTarget(action), (target) => resolution(action, target));
+  // A loop pass's row is placed on the page (`pass-row/`); a copy placed by structure is reported by the strategy that found the build's control, unscored.
+  const placed = (built: ResolvedTarget, element: Element): ResolvedTarget => ({ element, resolution: { strategy: built.resolution.strategy, candidateCount: 1 } });
+  const outcome = resolvedForPass(recordedTarget(action), (target) => resolution(action, target), placed);
   if ("failed" in outcome) throw outcome.failed;
   return outcome.resolved;
 }

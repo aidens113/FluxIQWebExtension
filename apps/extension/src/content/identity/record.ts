@@ -513,25 +513,38 @@ export function isRecordElement(element: Element): boolean {
 }
 
 /**
- * Whether the element sits in one row of several like it: in a record with a
- * sibling of its own tag, or -- a control in no record -- in the row its own
- * kind marks out, whose twin row has the same shape (`controlRowIdentity`'s
- * rule), or as a row itself, one of a run of same-shaped siblings that carry
- * and differ in content -- a gallery's tile (`own-run.ts`). A loop pass asks
- * it of the answer a control resolved to anywhere on the page
+ * Whether the element sits in one row of several like it (`repeatedRowOf`). A
+ * loop pass asks it of the answer a control resolved to anywhere on the page
  * (`../action-runtime/pass-row/`): an answer in another row of a list is
  * another row's control, not a page-level one the pass may act on as it is.
+ */
+export function sitsInRepeatedRow(element: Element): boolean {
+  return repeatedRowOf(element) !== undefined;
+}
+
+/**
+ * The row of several like it that the element sits in, or `undefined` when it
+ * sits in none: the nearest record at or above it, within the record depth
+ * bound, that has a sibling of its own tag -- a card's `article` alone in its
+ * `li` is not that row, the `li` beside the other `li`s is (F2 note 2) -- or,
+ * for a control in no such record, the row its own kind marks out, whose twin
+ * row has the same shape (`controlRowIdentity`'s rule), or the control itself
+ * as one of a run of same-shaped siblings that carry and differ in content --
+ * a gallery's tile (`own-run.ts`).
  *
  * Read on the page as it is now, by the same rules a recording names a record
  * by, so a control a recording would have placed in a row is in one here.
  */
-export function sitsInRepeatedRow(element: Element): boolean {
-  const record = enclosingRecord(element);
-  if (record && repeatedAtCapture(record)) return true;
-  if (!isRowControl(element)) return false;
+export function repeatedRowOf(element: Element): Element | undefined {
+  let current: Element | null = element;
+  for (let depth = 0; current && depth < MAX_RECORD_DEPTH; depth += 1) {
+    if (isRecordElement(current) && repeatedAtCapture(current)) return current;
+    current = current.parentElement;
+  }
+  if (!isRowControl(element)) return undefined;
   const found = controlRow(element);
-  if (found !== undefined && sameShape(found.row, found.twinRow)) return true;
-  return ownRun(element) !== undefined;
+  if (found !== undefined && sameShape(found.row, found.twinRow)) return found.row;
+  return ownRun(element) ? element : undefined;
 }
 
 /** The control itself as its own row, when it is a control and one of a run of same-shaped siblings (`own-run.ts`). */

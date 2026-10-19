@@ -100,3 +100,91 @@ All were run from `apps/extension` with `EXTENSION_TEST_BUILD_LABEL=f2-row-ident
 3. Photo r1 read 24 rows, but the grid draws 12 before a load. With this fix, passes 13 to 24 fail as
    not_found rather than acting on another tile, which is the intended fail-closed behaviour. F5 (first N
    rows) is still needed for that task.
+
+## Continuation (2026-10-19): notes 1 and 2
+
+### Outcome
+
+Done. Both notes are fixed, with the reproduction written first.
+
+### What changed and why
+
+1. **Row data no longer refuses a pass row's copy (note 1).** The fix is in `action-runtime/pass-row/`.
+   - `resolved-for-pass.ts` now handles every target that carries pass-row values, not only unplaced ones.
+     The as-built resolution and the gated resolution run as before. When the gated resolution fails, the
+     build's control is resolved as recorded, with only the values taken off; key, text and list position
+     stay. It is then placed by structure.
+   - New `row-slot.ts` exports `placedInPassRow`. It takes `repeatedRowOf(built)` as the build's row and
+     computes the slot: the path from the row root to the control, each step a tag plus its index among
+     same-tag siblings. For each row of that tag in the same list, it follows the slot. It keeps a copy only
+     when:
+     - `agreesWithRecordedRecord({ values })` holds;
+     - and `differsOnlyByRowData(built, copy, values)` holds.
+
+     Exactly one copy must qualify; otherwise the gated failure stands.
+   - New `row-data.ts` exports `differsOnlyByRowData`. These must be equal:
+     - tag;
+     - `role`, `type`, `name`, `data-testid`, `data-test-id`, `data-qa`;
+     - the class set.
+
+     These may differ only as row data:
+     - the accessible name, when it equals, contains or is contained in one of the pass row's values;
+     - the id, when both ids share one stem up to their last separator (`title-` + code);
+     - the href, when both have the same origin, the same segment count with the first segment equal, and
+       the same query keys.
+
+     A signal present on one control and missing on the other refuses.
+   - The superseded `run-member.ts` is deleted. The gallery tile is now the empty-slot case of the same rule.
+   - `resolve-target.ts` passes a `placed` reporter. A placed copy is reported with the strategy that found
+     the build's control and `candidateCount: 1`, and carries no score because nothing scored the copy. This
+     replaces the earlier swap, which reported the build's tile's measurement.
+   - The saved fingerprint is still used in full: it is what finds the build's control. Only the copy's
+     row-varying signals are discounted, and only through `placedInPassRow` inside a pass with values.
+2. **Nested records (note 2).** `record.ts` gets a new export, `repeatedRowOf(element)`, also in the
+   identity barrel. It climbs every record at or above the element, within the record depth bound, and
+   returns the first one that has a same-tag sibling. Only after that does it fall back to the control-row
+   rule, then to the own-run rule. `sitsInRepeatedRow` is now `repeatedRowOf(...) !== undefined`. Result: a
+   link in an `article` that is alone in its `li` sits in the `li` row.
+
+### Commands run and observed results
+
+All were run from `apps/extension` with `EXTENSION_TEST_BUILD_LABEL=f2-row-identity`, unless noted.
+
+- **Reproduction on 12b910ca code:** `node scripts/test-extension.mjs pass-row-row-data`.
+  - Test 1 ("each pass opens its own card's title ...") failed: `No target resolved from selector ... (refused
+    a#title-k3x9 "Pear galette" in another record), element fingerprint (refused ...)`.
+  - Test 2 (nested records, no list position) failed: it resolved card 1's link, the page-level answer.
+  - Tests 3 to 6, the refusals, passed.
+- `node scripts/test-extension.mjs pass-row`: `# tests 17`, `# pass 17`, `# fail 0`.
+- `node scripts/test-extension.mjs content/identity/tests content/action-runtime/tests content/actions/tests
+  content/action-runtime/pass-row/tests`: `# tests 498`, `# pass 498`, `# fail 0`.
+  - New in this round: `action-runtime/tests/pass-row-row-data.test.ts` (6),
+    `action-runtime/pass-row/tests/row-data.test.ts` (6) and `identity/tests/record-repeated-row.test.ts` (3).
+- `npx tsc -p tsconfig.json --noEmit` exited 0 with no output. `npx tsc -p tsconfig.test.json --noEmit` also
+  exited 0 with no output.
+- From the repo root, `node scripts/structure-audit.mjs` exited 0:
+  `structure-audit: passed (213 warning(s), 638 baselined)`.
+  - The first run failed: `resolve-target.ts: 807 lines exceeds the 800-line limit`. I inlined the reporter,
+    which brought it to 799 lines.
+  - Advisories on touched files: `record.ts` is 731 lines, `identity/` has 21 files, `identity/tests/` has
+    17 files.
+
+### Not verified
+
+- No browser, Lab or paid run. The fix is proven on the stub DOM only.
+- Placement assumes the pass's row is a same-tag sibling of the build's row in one list container. A list
+  split across several containers is not placed, and fails closed.
+- The name rule accepts any name that contains or is contained in a row value. A short value such as "9"
+  makes this weak, so the slot and template checks carry the decision.
+
+### Open questions or contradictions found
+
+1. **HEAD 01f72745 is inconsistent on its own, caused by me.** During this round I ran
+   `git rm --cached run-member.ts`, which staged the deletion. Your docs commit 01f72745 ("F1 reset
+   destination report") swept that deletion in. HEAD's `resolved-for-pass.ts` still imports `./run-member`,
+   so HEAD alone does not compile. The working tree is consistent: `resolved-for-pass.ts` no longer imports
+   it. Commit this round's changes together, and I will not touch the index again.
+2. `repeatedRowOf` now treats a control as row-scoped when any record within 12 levels above it has a
+   same-tag sibling, for example a page with two sibling `article`s. Inside a pass, such a control is now
+   values-gated instead of acted on as page-level. This fails closed, and none of the existing 498 tests
+   changed result.
