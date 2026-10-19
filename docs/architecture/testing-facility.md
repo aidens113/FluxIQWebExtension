@@ -3484,6 +3484,8 @@ variable moves it.
 
 There is no time-of-day rule: the user removed the peak-hours guard on 2026-10-09 ("that should not be a constraint of any kind"). A run's cost is still counted in billed dollars against its $0.10 ceiling.
 
+A `--llm-max-cost-usd` above the per-build ceiling the run's Core resolves (`liveLlmBuildCostCeilingUsd`: `--llm-cost-ceiling-usd`, then `FLUXIQ_LLM_RUN_COST_CEILING_USD`, then `.env`/`.env.local`) is refused by the runner before its credential is read and before any topology, build or provider call (`packages/test-runner/src/live-llm/max-cost-within-ceiling.ts`), naming both amounts and telling the operator to raise the ceiling with `FLUXIQ_LLM_RUN_COST_CEILING_USD`, where it used to be clamped in silence (twelve launches on 2026-10-18 typed 0.25 and were held to the lower default).
+
 `unchanged` compares runs in one authoring mode only. Every ledger `start` and
 `finish` records the launch's `authoringMode`: its `--authoring-mode`, or the
 Lab's own default `legacy` when it names none. A failed `project` build says

@@ -27,6 +27,7 @@ import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnre
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationReadActionParameters } from "./gateway-action-parameters";
+import { webAutomationTargetedScrollRequest } from "./targeted-scroll-request";
 
 export type WebAutomationRecordedPayload = {
   kind: string;
@@ -184,10 +185,15 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: encryptedFieldMessage(encrypted), failure: encryptedFieldFailure(encrypted) };
   }
   const target = command.target ?? {};
+  const selector = stringValue(target.selector) ?? stringValue(parameters.selector);
+  const element = commandElementFingerprint(target, parameters);
+  // A scroll that names an element and no mode scrolls to it, so the verb
+  // resolves the target rather than moving to a position under its name.
+  const scroll = webAutomationTargetedScrollRequest(normalized.actionType, lifted.scroll, parameters.scroll, selector !== undefined || element !== undefined);
   return compactJsonObject({
     commandId: command.commandId,
     actionType: normalized.actionType,
-    selector: stringValue(target.selector) ?? stringValue(parameters.selector),
+    selector,
     text: stringValue(parameters.text),
     value: stringValue(parameters.value),
     key: stringValue(parameters.key),
@@ -196,8 +202,9 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     checkWaitMs: numberValue(parameters.checkWaitMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
-    element: commandElementFingerprint(target, parameters),
+    element,
     ...lifted,
+    scroll,
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }
