@@ -18,7 +18,8 @@ test("every kind of continuing list is copied as sent", () => {
     { kind: "next_page", evidence: "next_control" },
     { kind: "next_page", evidence: "following_page_number" },
     { kind: "load_more", evidence: "load_more_control" },
-    { kind: "infinite_scroll", evidence: "declared_feed" }
+    { kind: "infinite_scroll", evidence: "declared_feed" },
+    { kind: "infinite_scroll", evidence: "still_growing" }
   ];
   for (const listContinues of facts) {
     assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, listContinues }), { ...SUMMARY, listContinues }, JSON.stringify(listContinues));

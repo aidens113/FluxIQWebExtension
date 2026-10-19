@@ -53,16 +53,34 @@ test("an enabled Load more says more of the list can be loaded; a disabled one s
   assert.equal(on(el("body", {}, [el("main", {}, [spent.list, el("button", { class: "more", disabled: "" }, "Load more")])]), () => listContinuesPast(asElements(spent.cards))), undefined);
 });
 
-test("a list the page declares a feed, with no control beside it, continues as it is scrolled", () => {
+test("a list the page declares a feed, still growing when the read's reveal ran out, continues as it is scrolled", () => {
   const { list, cards } = recipes({ role: "feed" });
-  assert.deepEqual(on(el("body", {}, [el("main", {}, [list])]), () => listContinuesPast(asElements(cards))), { kind: "infinite_scroll", evidence: "declared_feed" });
+  assert.deepEqual(on(el("body", {}, [el("main", {}, [list])]), () => listContinuesPast(asElements(cards), true)), { kind: "infinite_scroll", evidence: "declared_feed" });
 });
 
-test("a declared row count above the rows shown continues; one equal to them does not", () => {
+test("a declared feed that stopped growing showed its end, and says nothing", () => {
+  const { list, cards } = recipes({ role: "feed" });
+  const marker = el("p", { class: "feedEnd" }, "That is every recipe for now");
+  assert.equal(on(el("body", {}, [el("main", {}, [list, marker])]), () => listContinuesPast(asElements(cards), false)), undefined);
+});
+
+test("an undeclared list still growing when the reveal ran out continues, said by its growth alone", () => {
+  const { list, cards } = recipes();
+  assert.deepEqual(on(el("body", {}, [el("main", {}, [list])]), () => listContinuesPast(asElements(cards), true)), { kind: "infinite_scroll", evidence: "still_growing" });
+});
+
+test("a declared row count above the rows shown continues while it grows; one equal to them is said by its growth alone", () => {
   const longer = recipes({ "aria-rowcount": "40" });
-  assert.deepEqual(on(el("body", {}, [el("main", {}, [longer.list])]), () => listContinuesPast(asElements(longer.cards))), { kind: "infinite_scroll", evidence: "declared_feed" });
+  assert.deepEqual(on(el("body", {}, [el("main", {}, [longer.list])]), () => listContinuesPast(asElements(longer.cards), true)), { kind: "infinite_scroll", evidence: "declared_feed" });
+  assert.equal(on(el("body", {}, [el("main", {}, [longer.list])]), () => listContinuesPast(asElements(longer.cards), false)), undefined);
   const whole = recipes({ "aria-rowcount": "4" });
-  assert.equal(on(el("body", {}, [el("main", {}, [whole.list])]), () => listContinuesPast(asElements(whole.cards))), undefined);
+  assert.deepEqual(on(el("body", {}, [el("main", {}, [whole.list])]), () => listContinuesPast(asElements(whole.cards), true)), { kind: "infinite_scroll", evidence: "still_growing" });
+});
+
+test("a pager's own word outranks growth: a disabled Next ends the list however it grew", () => {
+  const { list, cards } = recipes();
+  const body = el("body", {}, [el("main", {}, [list, el("nav", {}, [el("span", { "aria-disabled": "true" }, "Next")])])]);
+  assert.equal(on(body, () => listContinuesPast(asElements(cards), true)), undefined);
 });
 
 test("an ordinary list with no way on, and a read that saw no item, say nothing", () => {

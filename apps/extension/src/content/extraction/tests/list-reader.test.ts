@@ -14,7 +14,7 @@ import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../sh
 import type { WebAutomationExtractListRequest } from "../../types";
 import { nthPagerLink, PAGE_ITEM, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "./store-pager";
 import { fakeShadowDom } from "./fake-shadow-dom";
-import { el as pageEl, page as standPage, type PageElement } from "./selector-page";
+import { el as pageEl, page as standPage, PageElement } from "./selector-page";
 
 test("an incomplete field refuses the entire list instead of being swallowed as an item fault or stored partial row", async () => {
   const dom = fakeShadowDom();
@@ -660,4 +660,80 @@ test("a read of one page whose list offers more says it continues, and the same 
   const ended = await readArchive(archive("spent"));
   assert.equal(ended.records.length, 4);
   assert.equal(ended.listContinues, undefined);
+});
+
+// And a feed the read reveals by scrolling (`list-wait.ts`): a declared feed
+// says it continues only where it was still growing when the read ran out of
+// reveals. One that stopped growing -- nothing more, or an end note under its
+// last post -- showed its end, and says nothing (F8). The feed is made up: posts
+// one row of 100 px each, a 200 px viewport, and a batch of five more arriving
+// 50 ms after a scroll brings the last post into view, while batches last.
+
+const feedView = { scrollY: 0, onScroll: (): void => {} };
+
+/** A feed row: where it stands on the page, and a scroll that brings its bottom into view. */
+class FeedRow extends PageElement {
+  getBoundingClientRect(): { top: number } {
+    return { top: (this.parentElement?.children.indexOf(this) ?? 0) * 100 - feedView.scrollY };
+  }
+
+  scrollIntoView(): void {
+    const scrollY = Math.max(0, ((this.parentElement?.children.indexOf(this) ?? 0) + 1) * 100 - 200);
+    if (scrollY === feedView.scrollY) return;
+    feedView.scrollY = scrollY;
+    feedView.onScroll();
+  }
+}
+
+/** Reads a feed of five posts with `batches` more to come, declared a feed, ending in an end note when `marker`. */
+async function readFeed(batches: number, marker: boolean) {
+  let next = 0;
+  const posts = () => Array.from({ length: 5 }, () => new FeedRow("li", { class: "post", "data-name": `Post ${++next}` }, `Post ${next}`));
+  const feed = pageEl("ul", { role: "feed" }, posts());
+  const add = (rows: PageElement[]): void => {
+    for (const row of rows) {
+      row.parentElement = feed;
+      feed.children.push(row);
+    }
+  };
+  let left = batches;
+  feedView.scrollY = 0;
+  feedView.onScroll = () => {
+    if (left > 0) {
+      left -= 1;
+      setTimeout(() => add(posts()), 50);
+    } else if (marker && !feed.querySelector("li.feedEnd")) {
+      add([new FeedRow("li", { class: "feedEnd" }, "That is everything for now")]);
+    }
+  };
+  const stood = standPage(pageEl("body", {}, [pageEl("main", {}, [feed])]));
+  stood.document.readyState = "complete";
+  const global = globalThis as Record<string, unknown>;
+  const observer = global.MutationObserver;
+  global.MutationObserver = class { observe(): void {} disconnect(): void {} };
+  try {
+    return await extractList({ item: "li.post", fields: { name: { kind: "attribute", attribute: "data-name" } } }, { timeoutMs: 15_000 });
+  } finally {
+    global.MutationObserver = observer;
+    feedView.onScroll = () => {};
+    stood.restore();
+  }
+}
+
+test("a declared feed still growing when the read ran out of reveals continues", async () => {
+  const outcome = await readFeed(10, false);
+  assert.equal(outcome.records.length, 25, "five posts and a batch for each of the four reveals");
+  assert.deepEqual(outcome.listContinues, { kind: "infinite_scroll", evidence: "declared_feed" });
+});
+
+test("a declared feed whose growth stopped before the reveals ran out ended, and says nothing", async () => {
+  const outcome = await readFeed(1, false);
+  assert.equal(outcome.records.length, 10);
+  assert.equal(outcome.listContinues, undefined);
+});
+
+test("a declared feed that shows an end note under its last post ended, and says nothing", async () => {
+  const outcome = await readFeed(1, true);
+  assert.equal(outcome.records.length, 10);
+  assert.equal(outcome.listContinues, undefined);
 });

@@ -356,6 +356,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let revealCutShort = false;
   let paginationStop: PaginationStop | undefined;
   let listContinues: ListContinues | undefined;
+  let stillGrowing = false; // whether a read of one page ran out of reveals while its list still grew (`list-wait.ts`)
   // In the modes that move to another page: the content of every item any
   // earlier page showed, kept or not, so a page that shows nothing else is known
   // for the repeat it is. A continued read starts from the records it carried,
@@ -506,7 +507,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // without scrolling the page a person is looking at.
       // Nor can a read that dedupes or sorts: a duplicate takes no place under
       // the bound, and a sort has to see every row.
-      revealCutShort = await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline, progress.listRetries) === "timed_out";
+      const completion = await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline, progress.listRetries);
+      revealCutShort = completion === "timed_out";
+      stillGrowing = completion === "growing";
       if (required > 1) {
         // Two waits on one page, reported as one: the second's answer, and both
         // their time, so the account's `waitedMs` is what the read actually
@@ -676,7 +679,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
 
   // A read of one page says whether its list visibly goes on past what it read (`read-coverage/`).
-  if (paginate === undefined) listContinues = listContinuesPast(Array.from(document.querySelectorAll(item)));
+  if (paginate === undefined) listContinues = listContinuesPast(Array.from(document.querySelectorAll(item)), stillGrowing);
   return outcome({ timedOut });
 }
 

@@ -128,3 +128,96 @@ Tests (generic made-up recipe lists), written before the code on both sides:
   I read them as "the mapping file that carries list-read results" and kept each edit additive. Please confirm.
 - The judge path (`build-test/judge.ts`) still sends findings as bare codes. The plain words reach the model through
   the read entry's `listContinues` and the added `fix` line, not through the code.
+
+## Continuation (2026-10-19): no false "continues", judges see the same fact, pagination test fix
+
+### Outcome
+
+Done. Uncommitted, on top of 4f405f3d (downstream) and 9009a53c (Core).
+
+### What changed and why
+
+1. **A list is reported as continuing only when the page shows it continuing.**
+   - `apps/extension/src/content/extraction/list-wait.ts`: `ListCompletion` gains `"growing"`. `awaitListComplete`
+     returns it when every one of its `LIST_REVEALS` (4) reveals grew the list, the last one included. Before, it
+     returned `"complete"` for that case. Every caller compares only against `"timed_out"`, so no other behaviour
+     changes.
+   - `list-reader.ts`: a one-page read keeps `stillGrowing` from that result and passes it to `listContinuesPast`
+     (now 794 lines).
+   - `read-coverage/list-continues.ts`: with no pager or Load more, the list is reported as continuing only when it was
+     still growing. The evidence word is `declared_feed` if the page declares a feed, otherwise the new word
+     `still_growing`.
+     - A declared feed that stopped growing reports nothing, whether nothing more loaded or an end note appeared under
+       its last item.
+     - A pager's own state still decides first. For example, a disabled Next means the list ended, whatever the growth.
+   - The extension code knows no generic end-of-list wording (searched: none), so none was added and growth is the only
+     signal. `detect-pagination.ts` needed no change.
+   - Domain `list-continues.ts` and Core `extraction-summary.ts` admit the new word `still_growing`.
+
+   Tests, all made-up feeds:
+   - Appended to `content/extraction/tests/list-reader.test.ts`: real `extractList` runs on a scrolling fake feed. A feed
+     still growing when the reveals ran out gives 25 records and `declared_feed`. A feed that stopped growing gives 10
+     records and nothing. A feed that ended with an end note gives 10 records and nothing.
+   - `read-coverage/tests/list-continues.test.ts` updated: a declared feed that is not growing reports nothing; an
+     undeclared growing list reports `still_growing`; a disabled Next outranks growth.
+2. **The judges see the same account as the builder.**
+   - The judges' per-read words are the `paging` sentence from
+     `packages/fluxiq/src/programs/automation-studio/runtime/result-verification/read-account/judge-paging.ts`. For a
+     continuing read it now appends Core's same sentence, for example "Read 1 page. Step X read one part of a list that
+     goes on past it (...)".
+   - The read sentence in `.../read-account/sentence.ts` (used for the run observation and the re-author brief) carries
+     it too: "its list goes on past what it read" in the brief form, and the whole sentence in the full form.
+   - `.../read-account/list-continues.ts` words the two growth evidences.
+   - Tests are in `read-account/tests/list-continues.test.ts`. The expected strings in `paging-feedback.test.ts` and the
+     `extraction-summary` test were updated.
+3. **3 of the 31 tests in `content/extraction/tests/pagination.test.ts` were failing; the tests were wrong, not the code.**
+   - Commit 2c529c60 (t567, "Continue hybrid lists before their load-more control appears") changed `page-advance/load-more.ts`:
+     - A missing or hidden control is now scrolled for more before the list counts as ended.
+     - At the page bound the read stops truncated without scrolling.
+     - Both behaviours are documented in `docs/architecture/web-capabilities.md` and pinned by
+       `page-advance/tests/scroll-loaded-list.test.ts` ("a hidden Load more cannot scroll beyond a read's requested page
+       limit").
+   - The old pagination tests were never updated:
+     - Their document stub had no `window`, which caused `scrollTo` of undefined in cases 25 and 26.
+     - Case 27 still expected `ended`/`control_absent` at the bound, which contradicts that newer pinned contract.
+   - I fixed the test stub: it now has a window that is already at its bottom, `querySelectorAll`, and a scroll counter.
+   - Expectations now:
+     - A hidden control is ended unpressed after the grace period plus one scroll that brought nothing, in 1.8 s to 4 s.
+     - At the bound it is truncated/`page_limit`, unpressed and unscrolled.
+   - No production code changed for this item.
+
+### Commands run and observed results
+
+- Downstream unit tests:
+  - `EXTENSION_TEST_BUILD_LABEL=f8-ext node scripts/test-extension.mjs content/extraction/tests content/extraction/read-coverage content/extraction/page-advance content/actions/tests/extract-list`
+    (`apps/extension`) gave `# tests 361 # pass 361 # fail 0`. This includes `pagination.test` at 31/31,
+    `list-wait-ordering`, `load-retry` and `scroll-loaded-list`.
+  - `DOMAIN_TEST_BUILD_LABEL=f8-domain node scripts/test-domain.mjs actions/extraction/tests` gave
+    `# tests 91 # pass 91 # fail 0`.
+- Downstream typechecks, `npx tsc -p <config> --noEmit`, all exited 0:
+  - `apps/extension`: `tsconfig.json` and `tsconfig.test.json`.
+  - `domain`: `tsconfig.json` and `tsconfig.test.json`.
+- Core typecheck: `npx tsc --noEmit` in `packages/fluxiq` exited 0. A first run failed on a test-only cast in
+  `read-account/tests/list-continues.test.ts`; I fixed the cast and reran it.
+- Core tests:
+  - `npx vitest run <runtime>/result-verification/read-account/tests <runtime>/result-verification/tests <runtime>/service/candidate-trial/tests <runtime>/service/summaries/tests/extraction-summary <runtime>/recovery/refuted-result`
+    gave `Test Files 83 passed (83)`, `Tests 786 passed (786)`.
+  - After the cast fix, the `list-continues` test file alone gave 6 passed.
+- Core library rebuild: `node scripts/build-cache/cli.mjs fluxiq:build` exited 0. The downstream
+  `node scripts/check/core-build.mjs` then reported the build "current with its source".
+- Structure audits:
+  - Downstream: passed (212 warnings, 638 baselined). One statement-packing failure in my new test helper was fixed
+    first.
+  - Core: passed (407 warnings, 1152 baselined).
+
+### Not verified
+
+- No browser or Lab run. The growth gate is unproven on the real social feed. Its batch delay of 350 ms against the
+  900 ms window suggests every reveal grows the list, which would now report `declared_feed`, but that is not measured.
+- A virtualised grid that declares `aria-rowcount` and recycles rows without growing now reports nothing; before, it
+  reported `declared_feed`. Separating the row-count declaration would need `feed-signal.ts`, which I do not own.
+
+### Open questions
+
+- Should a declared row count above the mounted rows count as continuing even without growth? It is a stated total
+  rather than a feed. It is currently gated by growth, like any other declared feed.
