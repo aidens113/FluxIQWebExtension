@@ -450,6 +450,21 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
 - Note on F4: the refusal sits in `beginLiveLlmRun`, after `run-lab.mjs` has taken its Core lease and build phase
   but before any credential, topology or provider call ($0).
 
+### 2026-10-19 - F2 verified; F2 and F5 extended
+
+- Validation: F2 (t719 12b910ca) rerun by the supervisor: `EXTENSION_TEST_BUILD_LABEL=f2-verify node
+  scripts/test-extension.mjs content/identity/tests content/action-runtime/tests` -> tests 300, pass 300, fail 0.
+  Worker: 6 of 15 new tests failed before the fix; both tsc passes exit 0; structure audit passed.
+- Finding (F2): the job loop would still fail on pass 2, because per-row title links carry their own id and
+  name and the scorer refuses the pass card's link; nested records (a control in an `article` in an `li`)
+  are missed. F2 resumed to fix both (discount row-varying signals only inside a resolved pass row).
+- Finding (F5, partial): `repeat over` + `repeat most: N` now builds a For Each with `stopAfter` (t567 Core,
+  uncommitted; worker: 551 tests across candidate/authoring/script-statements/control-flow passed), but the
+  photo r1 script wrote the bound on each of three merged steps and `script-statements/repeat-bound.ts` still
+  refuses that. F5 resumed with that file, the drafted path (`flow-draft/routing.ts`) and a replay test.
+  Core plan tests `extraction-vocabulary` (4394 > 4000) and `issue-feedback` fail on the lane HEAD without F5
+  (worker check); expected in the sweep.
+
 ## Open Questions
 
 None requiring user input.
