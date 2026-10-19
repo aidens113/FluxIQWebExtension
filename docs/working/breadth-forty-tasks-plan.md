@@ -57,9 +57,9 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
-**Now (2026-10-19):** read-only diagnoses, briefs R2-R6: office checkout (t563, done: Core reset-ledger defect),
-photo newest-likes (t567), job save-quillmark (t719), the page-read navigation refusal (t566), and what the
-build model is told after a judged-no trial (t567; the pattern recurs in social r2/r3 and photo).
+**Now (2026-10-19):** nine fixes (F1-F9) and their integration (t722) are on `dev` in both repos; rerun round 1
+is live on all four slots (office checkout, job save, social group posts, photo newest likes). Sweep fixes for
+failures already on `dev` are on t723 (S2 done, S3 running).
 
 **Next, in order:** read R2-R6; fix the causes on the lane branches (paired Core branches where needed) with
 tests beside the changed files; integrate to `dev` on narrow checks, publish both repositories and sync the lane
@@ -577,6 +577,27 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   changed folder's tests ran. Follow-up after this round: make the narrow gate run the prompt pin and budget
   tests whenever model-facing text owners change.
 - t566 merged into t722 in both repos (Core c453fda9, downstream 7152a58d). F10 still running in t722 Core.
+
+### 2026-10-19 - t722 integrated and published; rerun round 1 launched
+
+- Validation: t722 Core broad run, supervisor, on the merged tree: `npx vitest run` over `runtime/flow-bootstrap`,
+  `flow-draft`, `llm`, `project-agents`, `service/project-build/tests`, `service/candidate-trial/tests`,
+  `service/summaries/tests`, `result-verification`, `nodes/control-flow/tests`, `executor/tests` -> 740 files,
+  7202 passed, 8 failed, 2 skipped; the 8 are `ask-activity` (6) and `kept-condition-advice` (2), both failing on
+  Core dev a22b3a0f already (sweep S1) and owned by S3. `pnpm --filter ./packages/fluxiq check` exit 0; audit passed.
+  Supervisor applied F10's one-line `reset-repeated.test.ts` fix (name act-1 under cannotUndo before the whole test).
+- Validation: t722 downstream after a Core library rebuild (`core-build` current): extension
+  `EXTENSION_TEST_BUILD_LABEL=t722b` over identity, action-runtime, actions, pass-row, extraction, read-coverage,
+  page-advance, runtime navigation and action-runner tests -> 913/913; domain client, extraction and adapter tests
+  -> 160/161, the one being the adapter `sessionId` test that fails on dev and is fixed in t723 (S4); test-runner
+  `node --test dist/live-llm/tests/*.test.js` -> 159/159; extension and domain `check` exit 0; audit passed.
+- Published: `pnpm task finish t722` downstream (structure audit passed) -> 79fbbb7a; in Core (`pnpm check`
+  passed) -> e11549a8. Both `dev` branches pushed. All four lane trees merged `dev` in both repos (0 behind).
+- Launched round 1 at 2026-10-19, process `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` plus `--llm-max-cost-usd 0.25`,
+  headed, `--model-reset-only`, fresh workspaces: slot-1 office-checkout-review (`claude-office-checkout-t563-20261019-r2`),
+  slot-2 job save-quillmark-remote (`claude-job-save-t719-20261019-r2`), slot-3 social recent-group-posts
+  (`claude-social-groups-t566-20261019-r4`), slot-4 photo newest-likes (`claude-photo-likes-t567-20261019-r2`).
+  Live guard admitted slots 1-3 (`"state":"admitted"`); slot 4 still in its prelude at the first check.
 
 ## Open Questions
 
