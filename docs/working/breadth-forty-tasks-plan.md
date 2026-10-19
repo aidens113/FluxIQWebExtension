@@ -60,10 +60,10 @@ judged the whole run unverified, so acceptance is held. No unchanged retry.
 **Now (2026-10-19):** fixes F1-F9 and the dev-sweep fixes are on `dev` in both repos. Rerun round 1 went 0 of 4
 ($0.234): three builds died in the site-reset ledger (photo, office, job); social reached the exact answer but a
 split judge and the deadline lost it (R10). Lead L1 (t724) is redesigning reset settlement as one observed-state
-model with a regression corpus of all seven failure shapes; t725 (G1-G4) fixes the judge split, time honesty,
-the scroll schema and the social task wording.
+model with a regression corpus of all seven failure shapes; t725 (judge split, time honesty, scroll schema, social
+wording) is on `dev` in both repos.
 
-**Next, in order:** review and integrate L1 and t725; sync the lanes and rebuild their Core; rerun
+**Next, in order:** review and integrate L1; sync the lanes and rebuild their Core; rerun
 office checkout, job save, photo newest likes and social group posts on fresh workspaces; then the owed reruns
 (job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
 
@@ -642,6 +642,23 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   group are plainly left out, keeping intent and oracle (catalog and baseline).
 - Validation: not validated yet; workers running. L1 (reset redesign, t724) running in parallel; G1's trial-gate
   edit is wording only to keep the overlap with L1 small.
+
+### 2026-10-19 - t725 (judge split, time honesty, scroll schema, social wording) published
+
+- Validation: supervisor on t725 Core after G1+G2: `npx vitest run` over result-verification, flow-bootstrap
+  candidate and subflow-candidate, candidate-trial, project-agents, project-build, activity, conversations and the
+  three prompt contract tests -> 363 files, 2822 passed; `pnpm --filter ./packages/fluxiq check` exit 0; audit
+  passed. Downstream after merging dev and rebuilding Core: domain actions/output-nodes/client -> 332/332;
+  extension `content/actions/tests` -> 185/185; scenario-lab live-task tests -> 33/33; `pnpm check` exit 0.
+- Published: `pnpm task finish t725` downstream (audit passed) -> bda526b4; Core (`pnpm check` plus the new
+  contract gate, `"contracts":{"ran":true}`) -> 762372b1. Both pushed.
+- Changes: G1 a split's no is re-asked once and must name a wrongly kept or left-out row or a wrong value, else it
+  counts as yes with advice (every split now costs a third judge call; seven tests updated); G2 a whole trial is
+  refused (`project.trial_out_of_time`) when the time left is below the last comparable test plus 20%, a draft
+  reports its latest finished test, and a draft ends "Build ended: no Flow was built"; G3 `untilStable` without
+  `maxScrolls` refused at submit through the scroll node's parameter contract, and the run-time refusal names the
+  key; G4 the social task says plainly that posts outside a group and from unjoined groups are left out.
+- Not covered: G2's time check in candidate (non-project) mode; an end-to-end test from a cut test to the chat.
 
 ## Open Questions
 
