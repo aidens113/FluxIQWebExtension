@@ -484,3 +484,75 @@ None of these changes an oracle or a judge, adds a model vote, or puts this task
 - **Why the trial's read saw exactly 5 items** despite the read's own bounded reveal (`LIST_REVEALS = 4`, with a 900 ms growth window against the feed's 350 ms batch delay). No per-step validation detail for the scroll or the read survives in the run's step folders or in `logs/core.log`.
 - **Where the target-only scroll actually moved the page.**
 - **Whether the build's authored read node already carries the detected `pagination`.** If it does, Core could state that the list continues without the downstream change. Not checked.
+
+## Terminal r4 failure (brief R10, 2026-10-19)
+
+This was a read-only review: no source edit, build, paid run, browser run or commit. The full note is at `docs/working/language-driven-flow-loop-plan/debugs/run-mvfq957o-40103539.md`.
+
+- **Run:** `run-mvfq957o-40103539`.
+- **Source:** downstream 79fbbb7a, Core e11549a8, which carries F8 and F9.
+- **Setup:** real extension chat, $0.25 ceiling.
+- **Spend:** $0.0648 over 51 calls. No Flow was built.
+
+### What happened
+
+**The build found the exact answer and lost it.**
+
+- Revision 9 (trial 0083, 337 s) stored exactly the 3 oracle records. All 15 values and their order match `expected.ts`.
+- Its judges split:
+  - Call 1 said no (confidence 0.6). Its own reading says the kept rows are correct, and every row it names it also calls rightly excluded. Its only objection is hypothetical: the condition lists three group names, so other joined groups "would be dropped".
+  - Call 2 said yes, and its exclusion recheck said yes again.
+- Core made this `model_disagreed`, and so unsure, with `retestAdvised` false. The gate told the builder that a retest would "likely be judged the same way" and to change what the no named.
+- The builder followed that advice (revision 10, 303 s). The new revision kept groups the person has not joined and was correctly judged no.
+- The builder then reverted to revision 9 and re-tested it. The build's 25-minute work deadline (30-minute limit minus a 5-minute ending reserve) cancelled that test after 150 s.
+
+**How the 25 minutes went:**
+
+- Seven whole trials took about 20.5 minutes of the 25.
+- Two earlier trials failed on the product side:
+  - An `untilStable` scroll without `maxScrolls` passed submit, then was refused at run time with the unclear message "it names mode".
+  - Two reads failed on unexpanded post text.
+
+**Site reset was not involved.** There were no lasting acts, every trial was `not_reset` with no start hook, and there were no reset refusals.
+
+**The ending told the person the wrong thing.** It said "never test-run from the start", which is false. It also showed a "Your Flow is ready" toast although no Flow was built.
+
+### Cause
+
+The cause is a judge mistake that the product should have caught. A split's no that names no defect in the result was allowed to block an evidenced yes. Core's gate then steered the builder to act on that no. The 25-minute work deadline and slow trials turned the mistake into the build's end.
+
+- **First divergent step:** 0084.
+- **Owners:** `result-verification/agreement/agree.ts` and `reask-contradicted.ts`, and the unsure instruction in `flow-bootstrap/subflow-candidate/subflow-trial-gate.ts`.
+
+### F8 and F9
+
+**F8 appeared and was accurate.**
+
+- The row-source read saw 30 of 34 rows, got `listContinues`, and revision 10's feedback carried `result.read_list_continues`.
+- The final read was not flagged.
+- It neither helped nor hurt this run.
+
+**F9 was not exercised.** Every scroll named a mode.
+
+### Proposed fixes
+
+1. **Re-ask a split's no once with evidence words** (the primary fix).
+   - The words: name a wrongly left-out or wrongly kept row, or a wrong column or value, with the request's words quoted; otherwise answer yes and give the concern as advice.
+   - This mirrors the yes's exclusion recheck. It goes in a new branch of `reask-contradicted.ts`.
+   - Tests go in `result-verification/agreement/tests/`, using a non-realistic fake list.
+2. **Drop "likely to be judged the same way"** from the unsure instruction when the unsure came from a split.
+3. **Time honesty.**
+   - Do not start a trial that the time left cannot cover, and say so.
+   - The time-limit ending (`service/project-build/run.ts` `timeLimitWords()` and `conversations/commands/build.ts`) reports the latest finished test of the same digest.
+   - No "Your Flow is ready" toast for a draft (`activity/build.ts`).
+4. **Enforce `untilStable` requires `maxScrolls` at submit** (`domain/src/actions/schemas.ts`), and name the missing key in the run-time refusal (`apps/extension/src/content/actions/scroll.ts`).
+5. **Optional wording change.** 3 of 7 judge calls read "Leave out posts from groups I haven't joined" as keeping personal posts. Say plainly that posts not written in a group are left out, keeping the intent and the oracle.
+
+No oracle, guidance or task-shaped example is involved.
+
+### Not verified
+
+- **Per-step trial timings.** None survive in the run, so the slow For Each over 30 optional "See more" clicks is an inference.
+- **Whether Core's validator supports a conditional requirement** for fix 4.
+- **Whether the cancelled retest would have passed.**
+- **Where the "Flow ready" toast was emitted.**
