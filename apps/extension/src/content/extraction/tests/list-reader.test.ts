@@ -14,6 +14,7 @@ import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../sh
 import type { WebAutomationExtractListRequest } from "../../types";
 import { nthPagerLink, PAGE_ITEM, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "./store-pager";
 import { fakeShadowDom } from "./fake-shadow-dom";
+import { el as pageEl, page as standPage, type PageElement } from "./selector-page";
 
 test("an incomplete field refuses the entire list instead of being swallowed as an item fault or stored partial row", async () => {
   const dom = fakeShadowDom();
@@ -621,4 +622,42 @@ test("a continued read handed no repeat count reports none and hands none on, ra
   } finally {
     page.restore();
   }
+});
+
+// And whether a read of one page says its list goes on past what it read
+// (`listContinues`, from `../read-coverage/`), on a made-up recipe archive with a
+// real selector matcher (`selector-page.ts`): the same list read while its Load
+// more is offered continues, and read once the control is spent it does not.
+// Live run `run-mveaaqxn-d0be9888` read 5 items of a list that went on, and
+// nothing in its read said so. The rule alone is `../read-coverage/tests/`.
+
+/** The archive's first four recipes, and a Load more under them that is offered or spent. */
+function archive(more: "offered" | "spent"): PageElement {
+  const cards = ["Lentil soup", "Barley salad", "Plum cake", "Leek pie"].map((name) => pageEl("li", { class: "recipe", "data-name": name }, name));
+  const control = pageEl("button", { class: "more", ...(more === "spent" ? { disabled: "" } : {}) }, "Load more");
+  return pageEl("body", {}, [pageEl("main", {}, [pageEl("ul", { class: "recipes" }, cards), control])]);
+}
+
+/** Reads the archive's recipes on `body`, with a document that has finished loading and a mutation observer that never fires. */
+async function readArchive(body: PageElement) {
+  const stood = standPage(body);
+  stood.document.readyState = "complete";
+  const global = globalThis as Record<string, unknown>;
+  const observer = global.MutationObserver;
+  global.MutationObserver = class { observe(): void {} disconnect(): void {} };
+  try {
+    return await extractList({ item: "li.recipe", fields: { name: { kind: "attribute", attribute: "data-name" } } }, { timeoutMs: 8_000 });
+  } finally {
+    global.MutationObserver = observer;
+    stood.restore();
+  }
+}
+
+test("a read of one page whose list offers more says it continues, and the same list spent says nothing", async () => {
+  const open = await readArchive(archive("offered"));
+  assert.equal(open.records.length, 4);
+  assert.deepEqual(open.listContinues, { kind: "load_more", evidence: "load_more_control" });
+  const ended = await readArchive(archive("spent"));
+  assert.equal(ended.records.length, 4);
+  assert.equal(ended.listContinues, undefined);
 });

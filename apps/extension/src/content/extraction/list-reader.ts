@@ -132,6 +132,7 @@ import { itemFilterFor } from "./item-filter";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
+import { listContinuesPast, type ListContinues } from "./read-coverage";
 import { rejectedSamplesFor } from "./rejected-samples";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
 import {
@@ -256,6 +257,8 @@ export type ListExtractionOutcome = {
   order?: ListExtractionOrderReport | undefined;
   /** Kept rows a `next` or numbered read left out as repeats of an earlier page's (the domain's `earlierPageRepeats`), across every document, as `itemsSeen` is; absent from any other read, and from a continued one whose checkpoint did not carry a count. */
   earlierPageRepeats?: number | undefined;
+  /** How the list a read of one page read goes on past it, from the reader's own detection (`read-coverage/`); absent for a read that paged or a list that ended. */
+  listContinues?: ListContinues | undefined;
 };
 
 /**
@@ -352,6 +355,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // Whether the deadline cut a reveal short, so the page read was not all of its page (`list-wait.ts`).
   let revealCutShort = false;
   let paginationStop: PaginationStop | undefined;
+  let listContinues: ListContinues | undefined;
   // In the modes that move to another page: the content of every item any
   // earlier page showed, kept or not, so a page that shows nothing else is known
   // for the repeat it is. A continued read starts from the records it carried,
@@ -433,7 +437,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
       ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } }),
-      ...(repeats === undefined ? {} : { earlierPageRepeats: repeats })
+      ...(repeats === undefined ? {} : { earlierPageRepeats: repeats }),
+      ...(listContinues === undefined ? {} : { listContinues })
     };
   };
 
@@ -670,6 +675,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     break;
   }
 
+  // A read of one page says whether its list visibly goes on past what it read (`read-coverage/`).
+  if (paginate === undefined) listContinues = listContinuesPast(Array.from(document.querySelectorAll(item)));
   return outcome({ timedOut });
 }
 
