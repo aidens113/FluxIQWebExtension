@@ -17,6 +17,7 @@
 import { webAutomationExtractionConditionKeptValuesValue, type WebAutomationExtractionConditionKeptValues } from "./kept-values";
 import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
 import { isWebAutomationExtractFieldKey } from "./field-key";
+import { webAutomationExtractionListContinuesValue, type WebAutomationExtractionListContinues } from "./list-continues";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
 import { webAutomationExtractionRejectedSamplesAloneValue, webAutomationExtractionRejectedSamplesValue, webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectedRow, type WebAutomationExtractionRejectionObservation } from "./rejected-samples";
 
@@ -103,6 +104,12 @@ export type WebAutomationExtractionSummary = {
    * unknown, never zero.
    */
   earlierPageRepeats?: number | undefined;
+  /**
+   * How the list a read of one page read goes on past it, or absent for a read
+   * that paged and for one whose list ended (`./list-continues.ts`). Optional,
+   * so a page build that predates it still sends a summary that arrives whole.
+   */
+  listContinues?: WebAutomationExtractionListContinues | undefined;
 };
 
 /**
@@ -365,6 +372,9 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // The repeats of earlier pages the read left out, held to the rule every count is.
   const earlierPageRepeats = countValue(summary.earlierPageRepeats);
   if (summary.earlierPageRepeats !== undefined && earlierPageRepeats === undefined) return undefined;
+  // Whether the list goes on past a read of one page: two closed words, held to the rule every word here is.
+  const listContinues = summary.listContinues === undefined ? undefined : webAutomationExtractionListContinuesValue(summary.listContinues);
+  if (summary.listContinues !== undefined && listContinues === undefined) return undefined;
   // No cross-check against `recordCount`, unlike `kept > applied` below: a
   // continued read carries its predecessor's records, so `recordCount` above
   // `itemsSeen` is a legitimate read, and dropping the account would lose the
@@ -385,7 +395,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(rejectedObservations !== undefined ? { rejectedObservations } : {}),
     ...(paginationStop !== undefined ? { paginationStop } : {}),
     ...(order !== undefined ? { order } : {}),
-    ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {})
+    ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {}),
+    ...(listContinues !== undefined ? { listContinues } : {})
   };
 }
 

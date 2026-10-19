@@ -394,3 +394,93 @@ Actual authenticated Core startReset=false receipt retained. All3persistedtrial 
 Final live-llm observed61/samecost/unrecorded0/perCallRecords=recorded; runSpend61/samecost/uncountedPhases[]. observed.accounting=null: no finalized canonical runtime accounting claim for this unpromoted build. Required goalstate/exactordered3rows15values oracle was never reached. All rawvalues/pages/credentials retained privately; none copied to authored reports/debug.
 
 Source/HEADs stayed frozen downstream59832522/Corec74af911. Only ownreport/newdebug changed; launcher/readiness probe terminal. No retry, source/build edit, commit/merge/push. Await supervisor evidence review and a new bounded assignment.
+
+## Judged-no feedback (brief R6, 2026-10-19)
+
+This is a read-only review of what the build model was told after each judged trial of social r3 (run-mveaaqxn-d0be9888), and whether that was enough to close the coverage gap. No source edit, build, paid run or browser run. The evidence is the run's step folders. Core was read in the t567 Core worktree (HEAD 903ebb58). That HEAD contains the run's Core c74af911, and its 18 later commits touch none of the files named below except some recovery budget lines.
+
+### What the model was told
+
+- **Trial 0047** (subflow revision 2, whole-test revision 1) returned verdict `no` with code `candidate.trial_judged_no` and the instruction "The judge found this subflow did not do what its parts ask. Read the feedback, change the subflow to fix it ...". Its feedback carried:
+  - stored rows 1, refused 0, missing required 0;
+  - one read that "saw 5 rows and kept 1", with rejection counts for each condition;
+  - all 20 steps marked `succeeded`, including step 9, "scroll to the end of the feed", which names the control "You're all caught up";
+  - four later "See more" clicks marked skipped because "Its control was not on the page";
+  - the findings `result.counts_look_right` and `result.summary_withheld`, sent as bare codes with no detail and no `fix` lines.
+- **The judges' reasons reached the model in full.** Both calls' `expected`, `observed` and `advice` were carried word for word under `feedback.judge`, labelled "Judge call 1:" and "Judge call 2:". The same text appears in the next provider request (0050 request.txt) and again in 0098.
+  - They named the gap concretely: "The read saw 5 items on 1 page and never paged", and "the read ran before reaching" the end-of-feed marker, so later member-group posts were never read.
+  - Their advice was to make the read loop over the feed until the marker, removing duplicates.
+  - They named missing rows and groups by example. They named no missing field, which was correct: missingRequired was 0.
+  - Trial 1's judges also claimed, wrongly, that the group condition dropped a member group; the condition did list that group. Trial 3's judges withdrew the claim ("Keep condition 1").
+- **Trial 0065** (whole-test revision 2) was the one revision that added a Next-page loop. Its execution failed: step 11's read returned `web.validation.output_not_observed` because post text was still collapsed ("unexpanded"). Core sent its generic recipe: "first read stable row-context columns ..., use For Each with ... row-bound clicks, then read full text; repeat this order after each Next page move". The trial was not judged.
+- **Trial 0095** (whole-test revision 3) repeated trial 1 exactly:
+  - seen 5, kept 1, with the same two conditions;
+  - the scroll step `succeeded`, naming the same control;
+  - three of the four named "See more" clicks were skipped as absent;
+  - the same two bare finding codes.
+
+  Both judges (0096/0097) again said `answersRequest=no` and again named the unread rest of the feed. Step 0098 shows the model understood: "The feed read only saw the first screenful".
+
+### Where Core composes it
+
+- **Merging the two judge readings into one labelled judgement:** `packages/fluxiq/src/programs/automation-studio/runtime/result-verification/agreement/both-readings.ts`, `bothReadings()`.
+- **The trial feedback object** (reads, steps, judge, findings, fix): `runtime/service/candidate-trial/feedback.ts`, `Feedback.judged()`. The judge block is built in the `judged.verdict === "no"` branch. A read of a single page gets no paging words, because `withPaging()` holds that "A read that never pages is left as it was".
+- **The read accounts that the feedback and the judges see:** `runtime/result-verification/read-account/accounts.ts`, `account()`. The account has no field for "the list continued past what this read saw".
+- **Findings:** `runtime/result-verification/repair-directive.ts`, `automationStudioResultRepairFindings()`. It emits `result.counts_look_right` ("No count is wrong on its own, so what is wrong is which rows, or which values, were kept") whenever no other count finding fires.
+- **The instruction to the builder after a no:** `runtime/flow-bootstrap/subflow-candidate/subflow-trial-gate.ts`, `instructionFor()`, which returns the `no` text quoted above.
+
+### Did the model have enough?
+
+The judges told the model what was missing, and it understood. What it lacked was a correct account, drawn from Core's own evidence, of why the read saw only 5 rows. Two of Core's own facts pointed the wrong way, and two useful facts were never stated:
+
+1. **The scroll step reported `succeeded` beside the control "You're all caught up", but it never went there.** Revision 1 (0045) and revision 3 (0093) both author `web.dom-scroll` with only `target: t1695` and no `scroll` mode.
+   - In the downstream domain, `scrollRequestValue()` in `domain/src/client/gateway-action-parameters.ts` returns no scroll request when there is no `mode`.
+   - Without a request, `scrollAction()` in `apps/extension/src/content/actions/scroll.ts` makes "the legacy absolute move" to `options.x/y` and never resolves the target.
+   - So the step meant to load the feed could not reach a marker that exists only after the last batch loads, yet it still reported `succeeded` under that control's name. The only trace was the later "See more" clicks being skipped as absent. (The run's evidence does not record the exact position it moved to.)
+2. **`result.counts_look_right` pointed the repair the wrong way.** Sent as a bare code, it says the counts are fine and the fault is which rows were kept. That steers the repair toward conditions, the opposite of the judges' finding that rows were never read.
+3. **Nothing told the model that the read's list continues.**
+   - Its own `detect_repeating_structure` probes said `pagination: infinite_scroll` (0053, 0057, 0069, 0116).
+   - Its own exploration reads of the same list, taken on a page already scrolled down, returned 30 to 34 records (0079, 0101). The trial's read saw 5.
+   - From those probes the model drew the wrong conclusion, "The feed's own list read already returns every post down to 'You're all caught up'" (0104), and dropped the paging loop it had tried in revision 2.
+   - Core never put the trial's count beside the list's own continuation.
+4. **No note said that revision 3's read repeated revision 1's judged-no outcome exactly.** The gate refused only the byte-identical resubmission (0105, `candidate.unchanged_after_no`).
+
+**Conclusion:** the judges' reasons were never the gap, because they already arrive whole. The gap is Core's own coverage evidence. One part was missing: that the list continues and the read did not page. Two parts were misleading: the scroll step "succeeded" at a named control it never resolved, and `counts_look_right` said the counts were fine.
+
+### Proposed fix (smallest, most general)
+
+**Primary: a generic coverage fact on the read**, using no task, site or answer words.
+
+- **Downstream,** `apps/extension/src/content/extraction/list-reader.ts`: when a read covers one page and was not asked to page, report in its extraction metadata whether its list continues, for example `listContinues: "infinite_scroll" | "next" | "load_more"`. The evidence would be either of:
+  - the list's own `detectPagination()` result from `detect-pagination.ts`;
+  - the bounded reveal in `list-wait.ts` `awaitListComplete()` stopping at its reveal limit while the list was still growing.
+- **Core,** `result-verification/read-account/accounts.ts` `account()`: carry it as an optional read-account field, with the contract in `result-verification/contracts/read-account.ts`.
+- **Core,** `service/candidate-trial/feedback.ts` (`withPaging()`, or `./reads.ts`): for such a read, add one generic sentence, for example: "This read read one page of a list that continues (<kind>); items past it were never seen. Page it with Next page on the same list and repeat the read, as the read node's description says."
+- **Core,** `result-verification/repair-directive.ts` `automationStudioResultRepairFindings()`: emit a new finding for that read, for example `result.read_list_continues`. This also stops `result.counts_look_right` from being sent when missing coverage is the cause.
+
+**Secondary: an honest scroll step.** A `web.dom-scroll` step that names a target but no `scroll` mode should do one of two things:
+- run as `toElement` (in `domain/src/client/gateway-action-parameters.ts`, either `scrollRequestValue()` or its caller); or
+- be refused at submit, with the refusal naming the valid modes.
+
+Either way, a scroll toward a control that is not on the page then fails honestly instead of reporting `succeeded` under that control's name. This needs its own check that no saved Flow relies on the target-plus-position form.
+
+**Optional, Core only:** in `subflow-trial-gate.ts`, when a new revision's read accounts match those of an earlier judged-no revision (same seen, kept and condition counts), add one generic line saying the change did not reach what that no named. This targets the general pattern where a judged-no trial is followed by a revision that does not fix it.
+
+None of these changes an oracle or a judge, adds a model vote, or puts this task's words into the model's guidance.
+
+### Tests that would prove it
+
+- **Extension:** `apps/extension/src/content/extraction/tests/list-reader.test.ts`. On a non-realistic fake page (for example a recipe archive), a one-page read of a list that loads lazily reports `listContinues`, and the same list read after it has ended does not.
+- **Core:**
+  - `runtime/result-verification/read-account/tests/accounts.test.ts`: the account carries the new field.
+  - `runtime/service/candidate-trial/tests/paging-feedback.test.ts`: a judged-no trial with one non-paging read over a continuing list gets the sentence; a read whose list ended gets none.
+  - `runtime/result-verification/tests/repair-directive.test.ts`: the new finding replaces `counts_look_right`.
+- **Scroll:**
+  - `domain/src/client/tests/gateway-command-parameters.test.ts`: a target with no mode maps to `toElement`, or is refused.
+  - `apps/extension/src/content/actions/tests/scroll.test.ts`: a `toElement` scroll to an absent target fails instead of moving.
+
+### Not verified
+
+- **Why the trial's read saw exactly 5 items** despite the read's own bounded reveal (`LIST_REVEALS = 4`, with a 900 ms growth window against the feed's 350 ms batch delay). No per-step validation detail for the scroll or the read survives in the run's step folders or in `logs/core.log`.
+- **Where the target-only scroll actually moved the page.**
+- **Whether the build's authored read node already carries the detected `pagination`.** If it does, Core could state that the list continues without the downstream change. Not checked.

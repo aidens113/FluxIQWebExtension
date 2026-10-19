@@ -115,6 +115,7 @@ import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensi
 import { badgeNaming, constantBadgeName } from "./badge-name";
 import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
+import { offersOwnLink } from "./item-link";
 import { pruneEquivalentFieldPaths } from "./path-equivalence";
 import { keepLineGroups, positionalLine } from "./line-group";
 import { recordControlType } from "./record-control";
@@ -356,13 +357,15 @@ function mostGiven(labels: ReadonlyMap<string, number>): string {
  * `data-adid` on the auction marketplace's. It is also the one label a model
  * can read on a page whose class names are hashed -- the attribute's own name,
  * which the page's author wrote, and never a value read inside the item (D3).
+ * An item that is itself a link also offers its own address (`item-link/`).
  */
 function itemAttributeSources(item: Element): FieldSource[] {
   const sensitive = isWithinSensitiveControl(item);
-  return Array.from(item.attributes)
+  const ownLink = offersOwnLink(item) ? [{ kind: "link" as const, label: `item ${LINK_LABEL_SUFFIX}`, sensitive }] : [];
+  return [...ownLink, ...Array.from(item.attributes)
     .filter((attribute) => ITEM_ATTRIBUTE.test(attribute.name) && !IDENTITY_ATTRIBUTES.has(attribute.name))
     .slice(0, MAX_ITEM_ATTRIBUTES)
-    .map((attribute) => ({ kind: "attribute" as const, label: attribute.name, attribute: attribute.name, sensitive }));
+    .map((attribute) => ({ kind: "attribute" as const, label: attribute.name, attribute: attribute.name, sensitive }))];
 }
 
 /**
