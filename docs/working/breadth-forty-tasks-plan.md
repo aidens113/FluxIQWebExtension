@@ -465,6 +465,23 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   Core plan tests `extraction-vocabulary` (4394 > 4000) and `issue-feedback` fail on the lane HEAD without F5
   (worker check); expected in the sweep.
 
+### 2026-10-19 - F1 and F3 verified; F1 narrowed
+
+- Validation: F3 (t563 Core e3a6ea5c) rerun by the supervisor: `npx vitest run .../project-build-reset.test.ts
+  .../project-agents/dispatch/tests .../project-build-brief-ports.test.ts` -> 20 files, 121 tests passed. F1
+  (t719 Core 133c9ebe): `npx vitest run .../flow-bootstrap/site-reset/tests .../flow-bootstrap/tests/action-permissions.test.ts`
+  -> 11 files, 217 tests passed. Workers: F3's new test failed before the fix with the live code
+  `provider_evidence_loop_context_invalid`, calls 0; F1's 4 positive cases failed before; package checks and
+  structure audits passed.
+- Finding (F3): the reset loop built its decision schema from its own copy of the completion schema while the
+  request carried `brief-ports.ts`' copy; 4bb74570 (2026-10-17) reworded only one, so every reset brief since
+  then was refused before the wire. One shared `reset-completion.ts` now. The build's blocked ending was
+  already honest (`post_provider_validation_failed` is how `run.ts` names a blocked ending without a candidate).
+- Decision: F1's fallback for a control in no list ("every group read complete before the act") could pass an
+  act whose effect lands somewhere never read, letting a trial run on leftovers. F1 resumed to require a
+  model-named destination (`resetDestination`) instead, and to make a whole trial refuse while a reversible act
+  is neither undone nor settled (F3 saw one run with two acts left after a blocked reset).
+
 ## Open Questions
 
 None requiring user input.
