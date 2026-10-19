@@ -138,6 +138,12 @@ the touched package's typecheck and the structure audit, and never commits. Mode
 - **F9, t563 domain, targeted scroll:** a scroll with a target and no mode scrolls to that element (or is refused
   as an invalid parameter), never reports success without moving to it (`domain/src/client/gateway-action-parameters.ts`).
 
+### Brief S1 (2026-10-19): first daily full sweep of `dev`
+- Detached worktrees of both repositories at `origin/dev` under `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019/`
+  (Core sibling to the downstream checkout); `pnpm install` both; Core `pnpm build`, `pnpm check`, `pnpm test`;
+  downstream `pnpm check`, `pnpm test`, `pnpm build`. Record each command, exit code, totals and the names of
+  failing tests in `reports/sweep-1019.md` (main checkout). No fixes, commits or live runs.
+
 ### Brief R6 (2026-10-19): what the model is told after a judged-no trial - t567, read-only
 - Social r3 `lab-runs/2026-10-18/run-mveaaqxn-d0be9888` failed: trials 0047 and 0095 ran cleanly but kept 1
   row of 5 seen where the task needs 3 records over 3 groups; both judges said `answersRequest=no`, and the
