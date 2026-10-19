@@ -208,3 +208,93 @@ drafted tests failed first (2 failed), then passed. The graph-run test passed wh
   - Reading a saved Flow back as a draft (`llm/node-tools/draft-from-flow.ts`) does not carry For Each's
     `stopAfter` into the draft's routing.
 - Not tested: a parked run that resumes mid-loop with the cut list (the seeded `items`).
+
+## Continuation 2 (2026-10-19): every authoring and replay path agrees on the first-N bound
+
+Brief: the coordinator's third F5 message. Base: `9b6b5b1b` on `task/t567-a8-lane-4b`. Nothing committed.
+
+### Outcome
+
+Done. The bound now holds in every place a drafted repeat is written, shown, read back or tested:
+- An `amend_draft` repeat over a listing can carry `most`.
+- The draft step's line shows it.
+- A saved Flow whose For Each has `stopAfter` reads back as a repeat with `most`, and assembles to the same For Each again.
+- The build's test (dry run) of a drafted repeat with `most` runs only the first N rows.
+
+`draft-routing.ts` needed no change, so it was not split. It is untouched since `9b6b5b1b`, at 798 lines.
+
+### What changed and why
+
+- **`runtime/llm/evidence-loop-decision.ts`** (`readAmendment` only)
+  - `most` is now read beside a repeat without `while`, which is a repeat over a listing or over the step
+    before it. The range there is 1 to 10,000, For Each's `stopAfter` range. With `while` it is still 1 to
+    500.
+  - `most` on a change that is not a repeat is still left out. Its comment is updated.
+- **`runtime/flow-draft/amendment/route.ts`**: the repeat-over branch keeps `amendment.most` on the routing.
+  Over a check, the assembler refuses it (`draft-routing.ts`, already in place).
+- **`runtime/flow-draft/amendment/schema.ts`** (model-facing): `most` maximum is now 10,000. Its description
+  reads: "repeat only: with while, the most passes, 1 to 500, default 50; over a listing, only its first
+  this many rows, in their order, then the Flow goes on." It is generic, with no page-turning words, as the
+  existing test requires.
+- **`runtime/flow-draft/entry.ts`** (`routingLine`): a repeat over a listing with `most` reads "repeats
+  through step X, over step Y, on its first N rows". It says "row" when N is 1.
+- **`runtime/llm/node-tools/draft-from-flow.ts`**
+  - A For Each whose `stopAfter` is a whole number in the node's own range is read back as the repeat over
+    its listing with `most`.
+  - The loop reader `./seeded-loops.ts` accepts only a For Each carrying default settings. So it is shown
+    the node with the stop set aside, and the stop is put back on the repeat it returns, matched by the For
+    Each's id in the loop's framing.
+  - A stop that is not a valid whole number, or a stop beside another non-default setting, leaves the For
+    Each a plain step, as before.
+  - I did this here rather than in `seeded-loops.ts`, which I do not own. That module is the more natural
+    home if its owner wants it moved.
+  - The file is now 430 lines: one new advisory warning (over 400), no budget breach.
+- **Dry-run owner, `runtime/llm/node-tools/replay-span.ts`** (`automationStudioFlowDraftReplaySpanPlan`)
+  - A list plan with `most` keeps only the first `most` rows, and their labels, so the test runs N passes,
+    as the Flow will.
+  - The For Each safety bound then counts the rows taken, so a 150-row list cut to 3 runs, matching
+    `for-each.ts`. The header comment says so.
+- **Tests, written first: all 6 new or changed tests failed on the code before the fix.**
+  - `llm/tests/evidence-loop.test.ts`: `most` beside `over`, or with no `over`, is read; 10,000 is read; 0,
+    10,001, 2.5, "5" and -1 are left out; `most` on a non-repeat change is left out. The two old
+    expectations that rejected `most` without `while` were removed.
+  - `flow-draft/tests/routing.test.ts`: the amendment keeps `most`, and the entry line shows "on its first 2
+    rows". Without `most`, both are unchanged.
+  - `flow-draft/amendment/tests/apply.test.ts`: the schema bound and wording.
+  - `llm/node-tools/tests/draft-from-flow.test.ts`:
+    - `stopAfter: 2` reads back as `most: 2`, assembles to For Each `stopAfter: 2`, and reads back the same
+      again.
+    - Invalid stops (0, 2.5, "2", 10,001) and stop plus `maxIterations` stay a plain For Each step.
+  - `llm/node-tools/tests/replay-draft-loop.test.ts`:
+    - With 3 rows and `most: 2`, only the passes for rows 1 and 2 are sent, and each observation says it is
+      pass n of 2.
+    - 150 rows with `most: 3` run 3 passes and do not hit the loop bound.
+
+### Commands run and observed results
+
+- `npx vitest run` on the five changed test files, before the fix: 6 failed, 174 passed. After the fix:
+  5 files, 180 tests passed.
+- `npx vitest run` on the earlier folders plus the new ones:
+  `runtime/flow-bootstrap/candidate/tests/`, `authoring/tests/`, `script-statements/tests/`,
+  `nodes/control-flow/tests/`, `runtime/flow-draft/` (all of it), `runtime/executor/tests/graph-run.test.ts`,
+  `runtime/llm/tests/` and `runtime/llm/node-tools/tests/`.
+  Result: 147 files, 1713 tests passed.
+- `npx vitest run src/programs/automation-studio/runtime/llm/` (all of it): 218 files passed, 1 failed;
+  2102 tests passed, 4 failed.
+  - All 4 are in `llm/deepseek/tests/system-prompt.test.ts`: the "byte-identical to the pre-change
+    message" pins for `loop_verification` and `loop_verification_build_test`.
+  - They are already failing before F5. With every non-test source file changed since `903ebb58` (11 files,
+    across both F5 rounds) restored to its `903ebb58` version, the same 4 still failed. I then put my
+    versions back; the diff is the same 11 files, +136 / -18.
+- `pnpm --filter ./packages/fluxiq check`: exit 0, no `error TS`.
+- `node scripts/structure-audit.mjs`: `structure-audit: passed (406 warning(s), 1152 baselined).` The one new
+  warning is the advisory line count of `draft-from-flow.ts`.
+
+### Not verified
+
+- No live, browser or paid run.
+- The 4 pinned system-prompt failures already on the branch are not mine and were not touched.
+- `runtime/flow-draft/amendment/types.ts` still says "`repeat` with `while` only" in its doc comment for
+  `most`. It is a comment only and not in my ownership.
+- `activity/decision-answer/edit-words.ts` writes `most` as "at most N times". It reads acceptably for both
+  kinds of repeat, and I did not change it.
