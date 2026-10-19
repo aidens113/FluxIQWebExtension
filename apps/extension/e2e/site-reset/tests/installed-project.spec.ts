@@ -5,7 +5,7 @@ import path from "node:path";
 import { FluxIQ } from "fluxiq";
 import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, registerWebAutomationDomain, createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle, WEB_AUTOMATION_RUNTIME_PERMISSIONS, WEB_AUTOMATION_RUNTIME_CAPABILITIES } from "@fluxiq-web-extension/domain/node";
+import { createWebAutomationLlmEvidenceRuntime, registerWebAutomationDomain, createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle, WEB_AUTOMATION_RUNTIME_PERMISSIONS, WEB_AUTOMATION_RUNTIME_CAPABILITIES } from "@fluxiq-web-extension/domain";
 import { startScenarioLab } from "../../../../scenario-lab/src/server.js";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, restartServiceWorker, test } from "../../fixtures/extension-context";

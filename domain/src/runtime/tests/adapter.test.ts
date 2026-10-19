@@ -84,7 +84,9 @@ test("a succeeded command keeps its status and promotes the client's message", a
   assert.equal(result.message, "Option selected.", "the post-condition the client reported reaches the runtime result");
   assert.equal(result.error, undefined, "a success never gains an error");
   assert.deepEqual(result.payload, { status: "succeeded", message: "Option selected.", result: { value: "team" } });
-  assert.deepEqual(result.metadata, { outputId: "web.dom.click" });
+  // The dispatcher names the session it drove (e8b2d7fd, for reset-resource
+  // binding), and the adapter carries the dispatcher's metadata through.
+  assert.deepEqual(result.metadata, { outputId: "web.dom.click", sessionId: "session.one" });
 });
 
 test("a timed out command stays timed_out rather than flattening to failed", async () => {
