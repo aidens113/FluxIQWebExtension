@@ -100,6 +100,17 @@ point is declared there, so asking fails the run and is a product defect). The f
 
 ## Worker Briefs
 
+### Integration and sweep briefs (2026-10-19)
+- **t722 integration** (`fxwork/t722`, both repos, branch task/t722-f-round-integration): lanes t563, t567, t719
+  merged; t566 joins when F8 finishes. **F10** updates the three Core tests that encoded the removed
+  trial-on-leftovers admission (trial-gate-reset, whole-trial, project-build-reset), the stale headers of
+  `whole-trial.ts`/`reset-loop.ts`, and the site-reset-build/-calls wording tests. **F11** fixes the
+  plan/prompt tests (extraction-vocabulary budget, issue-feedback, system-prompt pins) against F5's format.
+- **t723 sweep fixes** (`fxwork/t723`, from dev): **S2** Core `apps/web` (core-contract 54, architecture-contract,
+  coverage excuse list); **S3** Core `packages/fluxiq` (ask-activity 6, kept-condition-advice 2,
+  failed-step-reauthor; timeouts rerun alone); **S4** downstream (installed-project.spec TS7006, domain adapter
+  test, extension package tests). Each fixes the side that is wrong, never by loosening acceptance.
+
 ### Fix briefs F1-F7 (2026-10-19), from diagnoses R2-R5
 Each worker edits only its listed owners plus their `tests/` folders, validates with the tests beside the change,
 the touched package's typecheck and the structure audit, and never commits. Model-facing words stay generic.
@@ -532,6 +543,20 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   `flow-draft/amendment/types.ts` in the same commit.
 - Finding: `llm/deepseek/tests/system-prompt.test.ts` fails 4 pinned-prompt checks on the lane base 903ebb58
   without F5 (worker check); expected in the sweep, not caused here.
+
+### 2026-10-19 - First daily sweep; t722 integration; t723 sweep fixes
+
+- Validation: sweep S1 (`reports/sweep-1019.md`, Core a22b3a0f, downstream bb92ad17): Core `pnpm build` 0,
+  `pnpm check` 0, `pnpm test` 1 (fluxiq 29 failed / 12741 passed; web 56 failed / 3067 passed); downstream
+  `pnpm check` 1 (2 TS7006), `pnpm test` 1 (domain 1 failed / 2165 passed; extension tests not reached),
+  `pnpm build` 0. All predate today's lane fixes (dev had none of them merged).
+- Validation: t722 downstream on the merged tree, Core libraries rebuilt (`core-build` current):
+  `EXTENSION_TEST_BUILD_LABEL=t722 node scripts/test-extension.mjs content/identity/tests
+  content/action-runtime/tests content/actions/tests content/action-runtime/pass-row/tests
+  content/extraction/tests/infer-fields runtime/navigation/tests runtime/tests/action-runner.test.ts
+  runtime/tests/navigate-action.test.ts` -> tests 606, pass 606, fail 0; `DOMAIN_TEST_BUILD_LABEL=t722 node
+  scripts/test-domain.mjs src/client/tests` -> tests 44, pass 44, fail 0. Lane merges were clean in both repos.
+- F10 stopped once on an API 522 (server side) and was resumed. Briefs F10, F11, S2-S4 under Worker Briefs.
 
 ## Open Questions
 
