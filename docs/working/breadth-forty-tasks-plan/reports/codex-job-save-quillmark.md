@@ -103,3 +103,81 @@ Do not touch old6404/profiles or otherlanes. R6 remains oracle/replaypassed but
 paidjuryunverified/HELD; this newtask never substitutes for resetacceptance.
 All preparationreaders ended, sole newwrite thisreport; no paid/prelude/build/
 browser/source/commit/merge/push occurred. Await supervisor refreshedsourcehandoff.
+## Actual released run (ongoing; no acceptance)
+
+Root actualpairedpush down8d23851b/Core903ebb58 observed0, preservedprep6a0b2fc0,
+then refreshed owncleanheads downb3b8d71d/Core903ebb58. Workerverified exactheads
+and readonlyCorecurrency native0 CURRENT; no manualCorelibrarybuild. ReleasedONE
+normal owning command above launched12341 cacheoff/modelresetonly/.25/250/48M/
+repairreplays1. Normalprelude completedbuildlock49140ms/reposstaleness201ms and
+currentartifact preparation. AllocatedID run-mvectfld-c2f5d958 from exactfresh
+workspace.sessions. Source/HEADs frozen throughrun.
+
+Independent authenticated runningCore readiness captured atstepcount1:
+candidateTrial capabilitypresent/startResetFALSE. Requestedfixturefalse is
+policyonly, no actualpersistedfixtureflag claimed. Proof ownnode_modules/
+codex-job-save-quillmark-r1-readiness.json. Launcherlog ownnode_modules/
+codex-job-save-quillmark-r1.log; structuraltools projection sameprefix-tools-closed.json.
+Atlatest89steps, model continues navigation/describing/finding; no lasting
+DECLARATION observed yet, no passingtrial/Flow/oracle/replay. That statement does
+not infer actualaccountstate from declarations. No intervention/sourcechange/
+additionalpaidlaunch. Terminalresults andrequireddebug stillpending.
+Closed progress at252steps: first trial119 and revision123 execution_failed/
+candidate.execution_incomplete. Later trial0232 candidate.trial_reset_required
+with2acts. Explicit act-21 modify_existing inverse0234/0236 target_unobserved;
+0240 candidate.undo_unproved, then supervisor redispatch0250. No trial/whole
+acceptance claimed. Early36 matching retained pages lacked the narrow icon
+patterns checked; visibility recurrence is a hypothesis, not established DOM
+absence. Exact cause/accounting/terminal debug remain pending.
+
+## Terminal failure (supersedes preparation and ongoing status)
+
+Launcher12341 native1; runtime.behavior/flowCreatedfalse,125calls/$0.069212346,
+703049ms,harness0. No wholeoracle/reportedverdict/Flow/replay. Requireddebug
+run-mvectfld-c2f5d958.md created; readonly firstcause continues. Four actual
+trials0119/0123/0129/0139 fail dom-click web.target.not_found atstep9/8 before
+later trial0232 resetrefusal. No productbug yet established or paidretry.
+
+## Root cause (2026-10-19, read-only diagnosis, brief R4)
+
+Two product defects, one in each repository, decided this run. Task wording, fixture
+and oracle are not implicated and stay unchanged. Full evidence is in
+`docs/working/language-driven-flow-loop-plan/debugs/run-mvectfld-c2f5d958.md`.
+
+1. **The For Each row gate can never match a card when the read has a `lines` field
+   (product defect, this repo).** The saved "open the job" target was on the page in
+   every trial, found by both its selector and its fingerprint, and refused "in another
+   record". On each pass the domain sends the row's extracted values as
+   `context.record.values`, and `apps/extension/src/content/identity/record.ts`
+   `holdsRowValues` accepts only a record that contains every value. The read included
+   `lines` fields, which `field-reader.ts` `readLines` joins with " · " (for example
+   "company · location"); that joined text is drawn nowhere on the page, so no card
+   qualifies and every pass fails. Retries ran (4 attempts plus actionability waits)
+   and could not help, because the refusal is deterministic. The gate (t195, 2026-09-29)
+   predates `lines` fields (2026-10-17) and was never taught them. Fix: in
+   `holdsRowValues`, a value containing `WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR` is found
+   when each of its parts is found in the same record. Tests:
+   `apps/extension/src/content/identity/tests/record.test.ts` (own card accepted,
+   neighbour with a shared part refused) and a field-reader-to-gate case in
+   `apps/extension/src/content/tests/`, on a non-job example.
+2. **A press that truly failed cannot be settled when its control sat outside any
+   list (product defect, Core).** Acts 21 and 23 pressed the heart in the side pane and
+   on the job page; the site answered "Couldn't save this job. Try again." (the fixture
+   fails the first save of each page load), and My jobs, read in full before and after,
+   was unchanged. Core's ledger
+   (`packages/fluxiq/.../flow-bootstrap/site-reset/ledger.ts`) recognises a truly
+   failed press only when the act's own control sat in an observed collection
+   (`originalGroupRestored`), and refuses `cannotUndo` for strict acts, so the reset had
+   no honest exit. Fix: also settle a strict act with a subject and no own scope when
+   every collection group read completely before the act has been read again after it
+   and is exactly restored, and at least one of them lacked the act's subject before and
+   still does. Test: `.../site-reset/tests/ledger-subject.test.ts`, beside "settles a
+   truly failed declared press", with the negatives listed in the debug.
+
+Model mistakes, all caught or not reached: undo calls on stale handles (0234, 0236;
+nothing pressed); an attempt to unsave a job saved before the build (0240; refused
+`candidate.undo_unproved`, correctly); a "Remote" filter press that only opened its
+menu; and a `contains "Quillmark"` condition that also keeps the similarly named
+employer, which would have failed the oracle had a trial finished. The earlier
+icon-visibility hypothesis is refuted: every heart is in the page view. No source was
+edited, nothing was built or run, and no paid retry is proposed until both fixes are in.
