@@ -7,6 +7,7 @@ export * from "./parameter-contracts";
 export * from "./payloads";
 export * from "./recorded-element-key";
 export * from "./registry";
+export * from "./scroll";
 export * from "./secret-binding";
 export * from "./targets";
 export * from "./upload-binding";

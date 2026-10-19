@@ -10,19 +10,22 @@ import { webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from ".
 import { webAutomationExtractParameterContract } from "../extract";
 import { webAutomationExtractListParameterContract } from "../extract-list";
 import { webAutomationOutputNodeParameterContracts } from "../parameter-contracts";
+import { webAutomationScrollParameterContract } from "../scroll";
 
 const extractListNodeId = webAutomationOutputNodeId("web.dom.extract_list");
 const extractNodeId = webAutomationOutputNodeId("web.dom.extract");
+const scrollNodeId = webAutomationOutputNodeId("web.dom.scroll");
 
-test("only the two extraction nodes have a contract, and each names a registered node", () => {
-  assert.deepEqual(Object.keys(webAutomationOutputNodeParameterContracts).sort(), [extractNodeId, extractListNodeId].sort());
-  for (const id of [extractNodeId, extractListNodeId]) {
+test("only the two extraction nodes and the scroll have a contract, and each names a registered node", () => {
+  assert.deepEqual(Object.keys(webAutomationOutputNodeParameterContracts).sort(), [extractNodeId, extractListNodeId, scrollNodeId].sort());
+  for (const id of [extractNodeId, extractListNodeId, scrollNodeId]) {
     const node = webAutomationOutputNodeDefinitions.find((definition) => definition.id === id);
     // Core refuses to bind a contract to a built-in or unregistered node.
     assert.equal(node?.source.kind, "importer", id);
   }
   assert.equal(webAutomationOutputNodeParameterContracts[extractListNodeId], webAutomationExtractListParameterContract);
   assert.equal(webAutomationOutputNodeParameterContracts[extractNodeId], webAutomationExtractParameterContract);
+  assert.equal(webAutomationOutputNodeParameterContracts[scrollNodeId], webAutomationScrollParameterContract);
 });
 
 test("the contract checks extractList and nothing else", () => {
@@ -70,8 +73,8 @@ test("the implementation bundle hands Core the extraction contract, so a bad pla
   const id = webAutomationOutputNodeId("web.dom.extract_list");
   assert.equal(bundle.parameterContracts?.[id], webAutomationExtractListParameterContract);
   assert.equal(bundle.parameterContracts?.[webAutomationOutputNodeId("web.dom.extract")], webAutomationExtractParameterContract);
-  // Only the two extractions declare one; nothing else is silently bound.
-  assert.deepEqual(Object.keys(bundle.parameterContracts ?? {}).sort(), [webAutomationOutputNodeId("web.dom.extract"), id].sort());
+  // Only the two extractions and the scroll declare one; nothing else is silently bound.
+  assert.deepEqual(Object.keys(bundle.parameterContracts ?? {}).sort(), [webAutomationOutputNodeId("web.dom.extract"), id, webAutomationOutputNodeId("web.dom.scroll")].sort());
   // A host extension may add to the bundle, but the contracts are still there.
   assert.equal(createWebAutomationOutputNodeImplementationBundle({}).parameterContracts?.[id], webAutomationExtractListParameterContract);
 });
