@@ -29,8 +29,9 @@ import { readLandedPage } from "./landed-challenge";
 import type { LandedTabAccess } from "./landed-check-wait";
 import { lookAcrossFrames, type MergeFrameSnapshots } from "./look-across-frames";
 import { metNavigatingPage } from "./navigating-page";
-import { navigationTargetTab, verifyNavigationLanding } from "./navigation";
+import { navigationAddress, navigationTargetTab, verifyNavigationLanding } from "./navigation";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
+import { parsedUrl } from "../shared/parsed-url";
 
 export type BrowserActionRunRequest = {
   action: BrowserActionCommand;
@@ -81,7 +82,7 @@ const TOP_FRAME_ID = 0;
 const LANDED_TAB_ACCESS: LandedTabAccess = { send: sendToTab, settle: waitForTabReady };
 
 export async function runBrowserActionCommand(request: BrowserActionRunRequest): Promise<BrowserActionRunResult> {
-  const action = request.action;
+  let action = request.action;
 
   // Tab and download act on the browser, not on a document. They run before any
   // tab is resolved -- so opening a tab does not first create an automation tab
@@ -102,6 +103,13 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   const startedAt = Date.now();
   if (action.actionType === "web.browser.navigate" && !hasNavigationValue(action.url)) {
     return withTarget(navigateWithoutValueFailure(action, startedAt), currentAutomationTabId(), undefined);
+  }
+  // Resolved before the pace, the tab request and the landing check, so all
+  // three see the address the tab is actually driven to.
+  if (action.actionType === "web.browser.navigate" && typeof action.url === "string") {
+    const address = navigationAddress(action.url, { pages: await navigationBasePages(action, request), ownOrigins: request.ownOrigins ?? [], extensionUrl: extensionBaseUrl() });
+    if ("refused" in address) return withTarget(navigationAddressFailure(action, startedAt, address.refused), currentAutomationTabId(), undefined);
+    action = { ...action, url: address.url };
   }
   const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
   // Booked and waited out before the tab is driven, since driving it is the load.
@@ -300,6 +308,46 @@ function navigateWithoutValueFailure(action: BrowserActionCommand, startedAt: nu
   return workerActionResult(action, startedAt, {
     status: "failed",
     message: "The navigate step had no value for its url when it ran, so nothing was sent to the browser.",
+    validation: { status: "failed", expected, actual },
+    failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected, actual })
+  });
+}
+
+/**
+ * The pages a relative navigation address may be resolved against, most
+ * specific first: the tab the action names, the leased automation tab, the tab
+ * in front, then the tab last driven (`navigation/address.ts` takes the first
+ * web page). Read only for an address that does not parse on its own, so an
+ * absolute navigation reads no tab it did not read before.
+ */
+async function navigationBasePages(action: BrowserActionCommand, request: BrowserActionRunRequest): Promise<Array<string | undefined>> {
+  if (typeof action.url !== "string" || parsedUrl(action.url.trim()) !== undefined) return [];
+  const tabIds = [tabIdForAction(action), await leasedTab(request), request.activeTabId, currentAutomationTabId()];
+  const pages: Array<string | undefined> = [];
+  for (const tabId of new Set(tabIds)) {
+    if (tabId !== undefined) pages.push(await readTabUrl(tabId));
+  }
+  return pages;
+}
+
+/** The extension's own base address; undefined where the runtime cannot say (a unit test's stub). */
+function extensionBaseUrl(): string | undefined {
+  const getURL = (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome?.runtime?.getURL;
+  return typeof getURL === "function" ? getURL("") : undefined;
+}
+
+/**
+ * A navigate whose address cannot be driven to: relative with no web page to
+ * resolve it against, or the extension's own address (F7). INVALID_PARAMETER,
+ * like a navigate with no url, and answered before anything is sent: left to the
+ * browser, a relative address lands on a missing extension file whose refusal
+ * read as a permission (`web.browser.permission_denied`), which it never was.
+ */
+function navigationAddressFailure(action: BrowserActionCommand, startedAt: number, actual: string): BrowserActionResult {
+  const expected = "url to be a web address, or a path on the web page the Flow is on";
+  return workerActionResult(action, startedAt, {
+    status: "failed",
+    message: `The navigate step's url could not be driven to: ${actual}.`,
     validation: { status: "failed", expected, actual },
     failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected, actual })
   });
