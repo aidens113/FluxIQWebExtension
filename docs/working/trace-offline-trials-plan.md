@@ -1,7 +1,7 @@
 # Traces And Offline Trials (Extension Side)
 
 Status: Active
-Status detail: User approved implementing both this plan and the boundary audit's move plan with subagents (2026-10-19). Lanes G, H, S, T have task branches t726-t729, not yet dispatched; L1 (reset redesign, t724) is still running.
+Status detail: User approved implementing both this plan and the boundary audit's move plan with subagents (2026-10-19). Lanes G, H, S, T (t726-t729) dispatched 2026-10-19; L1 (reset redesign, t724) is still running.
 Created: 2026-10-19
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
@@ -14,7 +14,11 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 ## Current State
 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
-progress. Get it done." Then: hand off first and continue in a new chat. Nothing in the lanes below has started.
+progress. Get it done." Then: hand off first and continue in a new chat.
+
+**Dispatched 2026-10-19 16:25:** lanes G, H, S and T running (briefs under "Worker Briefs"), each branch fast-forwarded
+to `dev` first. L1 still running (C4 reset-words report landed; D3 installed-gateway proof remained). Core paired
+document for the boundary moves: Core `docs/working/extension-boundary-moves.md`.
 
 **Plans being executed:**
 - Traces and offline trials: Core `docs/working/trace-offline-trials-plan.md` (decisions, tiers, phases P0-P7,
@@ -70,7 +74,117 @@ repair phases, never during exploration; the final judged whole run stays live w
 
 ## Worker Briefs
 
-None dispatched yet; write them from the lane table before dispatch.
+Dispatched 2026-10-19 (lanes G, H, S implement the boundary audit's phases; lane T the Core plan's P0-P1). L1 (t724)
+was still running at dispatch and is excluded below by its own file list.
+
+**Shared lane rules (every brief).**
+- Work only in your lane's two worktrees, `C:/Users/osrs_/FluxStuff/fxwork/<tNNN>/!FluxIQWebExtension` and
+  `.../<tNNN>/!FluxIQ`, both on `task/<tNNN>-<slug>`. Never edit the main checkouts or another lane's tree.
+- Follow both repositories' AGENTS.md (structure, one export per file, barrels, tests in `tests/` beside the subject,
+  budgets, never extract-and-drop: callers switch in the same unit). Core code downstream consumes is rebuilt in your
+  Core worktree before downstream uses it.
+- Tests first. Narrow checks only: tests beside each change, touched packages' typechecks, both structure audits, and
+  Core's prompt contract tests when model-facing text changes. No full suites.
+- No paid or live Lab runs. Browser tests only on the ten realistic scenarios, headed, provider-free.
+- Model guidance never mirrors a realistic task, site, product or answer.
+- No commits, merges or pushes. Do not edit `docs/working/README.md` or any plan's Current State or ledger; the
+  supervisor owns them and the Core paired documents.
+- Never put pairing tokens, keys, recorded page data or typed values in logs, reports or tests.
+- Must not touch any file in L1's list: `git -C C:/Users/osrs_/FluxStuff/fxwork/t724/<repo> status --short` (Core
+  site-reset, candidate, candidate-trial, evidence-loop, repeat policy, action-permissions, project-agents dispatch;
+  downstream control-spot, start-state, state-diff places, llm-evidence elements, dom-snapshot, read-coverage). If you
+  must, stop and report.
+- Progress log: append a dated entry to your report after each unit: what changed, the check command and its observed
+  output. End a commit-sized unit with `UNIT READY: <files>` so the supervisor can commit it while you continue.
+- Dispatch workers (`worker-low`, `worker`, `worker-high`) partitioned by file, in the foreground when you need the
+  result, and verify every worker claim yourself.
+- Final message: the return contract (at most 12 lines: Outcome, Changed, Validation, Not verified, Report, Notes).
+
+### Brief: lane-g (lead-xhigh, t726 gateway-client-into-core)
+- Task 1, audit phase 1 (finding 2): the offline event queue (`fluxiq.queuedEvents`, `background/storage.ts`;
+  `send`/`flushQueue` in `background/gateway-session.ts`) lives for one browser session only (session storage, Firefox
+  parity), each entry tagged with its gateway session, project and recording; a flush delivers only matching entries,
+  in order, and drops the rest; any queue left in persistent storage is discarded on upgrade; the cap stays.
+- Task 2, audit phase 3 (finding 1): Core's `client-gateway-websocket` client gains reconnect with backoff,
+  heartbeat, the queue semantics above, command reconciliation, lease epoch fencing (`domain/src/client/host-lease.ts`)
+  and one session-picking rule replacing the three; the domain keeps only the web adapter. Core tests use a fake
+  socket, no browser concept. Wire changes stay synchronized across protocol types, background routing, domain
+  mappings, capabilities, tests and `docs/architecture/`.
+- Required reads: audit findings 1-2; reports `extension-core-boundary-audit/reports/a2-persistence.md`,
+  `a3-framework-logic.md`; the files named.
+- Owns: `apps/extension/src/background/` gateway, session and storage modules; `domain/src/client/**`; Core's
+  `client-gateway-websocket` package and its exports; tests beside each; the gateway architecture docs.
+- Must not touch: lane S's areas (Core prompt, run accounting, activity, record-sets, secret screen), `scripts/**`.
+- Done: both units ready; the built extension exercised headed against a provider-free realistic scenario (connect,
+  drop, reconnect, queue flush, lease takeover) with what was and was not exercised stated.
+- Report: `docs/working/extension-core-boundary-audit/reports/lane-g.md` (downstream t726 tree).
+
+### Brief: lane-h (lead, t727 guards-and-tooling)
+- Task 1, audit phase 0, first: (a) a structure-audit rule that fails on provider hosts, provider SDK imports and
+  provider key reads anywhere downstream outside an explicit allowlist of the Lab's Core-driving code (finding 12);
+  if the mirrored engine needs a new rule kind, change Core's `scripts/structure-audit*` first, then mirror;
+  (b) a check in `pnpm check` that fails when any remaining mirror of Core code differs from Core's copy (structure
+  audit first); (c) delete `packages/agent-orchestrator` and `reusable-evidence-coordinator.ts` after proving no
+  caller; (d) one provider key list (`scripts/provider-secret-environment.mjs`, `packages/test-runner/src/environment.ts`)
+  and the stale "$0.10" comment in `packages/test-contracts/src/llm.ts`; (e) trace the three "To verify" suspicions,
+  fixing any confirmed violation in your files or reporting it with evidence. Mark phase 0 `UNIT READY`, continue.
+- Task 2, audit phase 5, last (finding 5): Core owns the build-cache engine and the shared task rules (id allocation,
+  refs, branch naming, git runner) as importable modules, with Core's later build-cache fixes (output replay,
+  git-visible fingerprinting); downstream `scripts/build-cache` and `scripts/task` import them and keep only
+  repository config; the drift check covers any copy left. `pnpm task start|finish|abandon|prune` stays
+  CLI-compatible (flags, ids, branch names, JSON output): other lanes use it concurrently. Exercise it only through
+  its tests or a throwaway task, never on t724-t729.
+- Required reads: audit findings 5, 9-12 and "To verify"; reports `a1-model-calls.md`, `a4-packages-scripts.md`.
+- Owns: `scripts/structure-audit/config.mjs`, new check scripts, `scripts/build-cache/**`, `scripts/task/**`,
+  `scripts/provider-secret-environment.mjs`, `packages/agent-orchestrator/**`, `packages/test-runner/src/environment.ts`,
+  `packages/test-contracts/src/llm.ts`, `packages/test-matrix/**`, root workspace files and lockfile; Core
+  `scripts/structure-audit*`, `scripts/build-cache/**`, `scripts/task/**` and their exports.
+- Must not touch: `packages/test-runner/src/live-llm/**` (lane S); lanes G and S areas.
+- Done: the provider rule fails on a planted provider URL and passes on the tree; the drift check fails on a planted
+  one-byte difference; both units ready.
+- Report: `docs/working/extension-core-boundary-audit/reports/lane-h.md` (downstream t727 tree).
+
+### Brief: lane-s (lead, t728 single-sources-telemetry)
+- Task 1, audit phase 2 (findings 6, 8): Core publishes run accounting (total spend, missing ledger calls,
+  consequences on failed builds, empty-balance errors) and the build lifecycle through its existing API and events;
+  `packages/test-runner/src/live-llm/*` reads them and drops its reconstruction; the domain's build memories and
+  `cleared-way-outs` key off the published lifecycle (no `initial.<toolId>` parsing), durable state in Core.
+- Task 2, audit phase 4 (findings 3, 4, 7, 9): one Core source each for the activity headline, pacer and wording;
+  `where` and number reading (drop the parity test once single); dedupe and sort (`content/extraction/order-rows.ts`,
+  bundle-safe for the content script). Generic rules out of `WEB_LLM_SYSTEM_INSTRUCTIONS` (recordings versus
+  instructions, permissions, loop grammar, the cost line) into Core's prompt, the domain keeping web-only wording, the
+  contract pins updated deliberately. Recording-capture switches and `requestsEnabled` policy owned by Core, the
+  extension enforcing what Core says. The card-number screen into Core's secret screen; Core's activity reads the
+  repeated-answer marker's reason from its constant.
+- Required reads: audit findings 3, 4, 6-9; reports `a1-model-calls.md`, `a2-persistence.md`, `a3-framework-logic.md`.
+- Owns: the modules those findings name in both repositories and their tests; the affected architecture docs.
+- Must not touch: `background/gateway-session.ts`, `background/storage.ts`, `domain/src/client/**`, Core's gateway
+  client (lane G); `scripts/**`, `reusable-evidence-coordinator.ts`, `packages/test-runner/src/environment.ts` (lane H).
+- Done: both units ready; extension build passes for the content-script import; the chat's activity headline checked
+  headed on a provider-free realistic scenario.
+- Report: `docs/working/extension-core-boundary-audit/reports/lane-s.md` (downstream t728 tree).
+
+### Brief: lane-t (lead-xhigh, t729 traces-offline-trials)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` (read it whole) and the consultant source beside
+  it for test ids T01-T24.
+- Task 1, P0, in parallel: (a) baseline from the Lab's per-step run files (`steps/NNNN-*/`, about 25 recent live runs
+  in `test-runs/` of the main checkout and lane slots, read-only): share of build wall time in live trials, resets,
+  exploration and model calls, per run and overall, computed by a Lab script with tests; (b) inventory of every
+  client message type Core's client gateway accepts, what it carries, everything Core dereferences later, and any
+  read bypassing the gateway, ending in a proposed capture-boundary decision; (c) the page-snapshot spike: capture
+  pages in a provider-free run (compare page capture/MHTML with DOM serialization), reload each in a sandboxed headed
+  browser with scripts and network off, run the extension's own extraction and target code, and measure agreement
+  with the live result on at least three realistic sites, with snapshot sizes and what did not survive. Spike code
+  stays in Lab or test infrastructure.
+- Task 2, P1 (Core): trace manifest, event envelope and completeness status; the result contract; one environment
+  port; a non-browser fixture adapter in unit tests proving no web field. Wiring the port into the executor and
+  `llm/evidence-loop.ts` waits for L1: if `git -C C:/Users/osrs_/FluxStuff/!FluxIQ log dev --oneline` has no
+  "Merge task t724", stop there and report Partial with the remaining wiring listed; the supervisor merges `dev` into
+  your branches and resumes you.
+- Owns: new Core trace modules (placed per Core's code structure) and tests; the downstream Lab baseline script and
+  spike under `packages/test-runner/` or `scripts/lab/`, with tests.
+- Must not touch: lanes G, S, H areas; L1's files until resumed after its merge.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t.md` (downstream t729 tree).
 
 ## Work Ledger
 
@@ -92,6 +206,17 @@ None dispatched yet; write them from the lane table before dispatch.
   each of the eight worktrees -> 0 lines. t724 (L1) -> Core 52 and downstream 34 uncommitted files, lead still running.
 - Outcome: Partial (nothing implemented yet)
 - Follow-up: the "Next, in order" list above.
+
+### 2026-10-19 - Lanes G, H, S, T dispatched
+- Agent: supervisor
+- Changed: this document (Worker Briefs); Core `docs/working/extension-boundary-moves.md` (new paired document)
+- Why: execute both plans; L1 still running, and none of the four lanes touches its files.
+- Validation: `git merge --ff-only dev` in all eight lane worktrees -> each fast-forwarded (4 files downstream, 2 in
+  Core); `git -C fxwork/t724/<repo> status --short` -> Core 52 files (site-reset, candidate, evidence-loop, repeat
+  policy, action-permissions, dispatch), downstream 35 (control-spot, start-state, state-diff places, dom-snapshot,
+  read-coverage), none in any lane's owned area.
+- Outcome: Partial (lanes running)
+- Follow-up: commit each `UNIT READY` as it lands; finish L1.
 
 ## Open Questions
 

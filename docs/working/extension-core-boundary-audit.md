@@ -1,12 +1,12 @@
 # Extension And Core Boundary Audit
 
 Status: Active
-Status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S created (t726-t728), not yet dispatched.
+Status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S (t726-t728) dispatched 2026-10-19.
 Created: 2026-10-19
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
 Scope: Find anything in this repository that belongs in FluxIQ Core (model calls, prompts, judging, generic framework or gateway behaviour, durable ownership of projects, policies and recordings) and plan the moves. Planning only; no code moves in this effort until the user approves the plan.
-Paired document: none yet (a Core-side document is owed if moves are approved)
+Paired document: `docs/working/extension-boundary-moves.md` in FluxIQ Core
 Related: [AGENTS.md](../../AGENTS.md) ("Repository Boundaries", "Automated Testing Facility Boundary"), [repository layout](../architecture/repository-layout.md), [breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md)
 
 ---
@@ -40,7 +40,12 @@ left). Execution is run from [trace-offline-trials-plan.md](./trace-offline-tria
 (t726) phases 1 and 3, lane H (t727) phases 0 and 5, lane S (t728) phases 2 and 4. Branches exist; nothing is
 implemented yet. A paired Core document is opened by the first lane that edits Core.
 
-**Next:** dispatch lanes G, H and S from the lane table (briefs written here under Worker Briefs first).
+**Dispatched 2026-10-19:** lanes G, H and S are running; their briefs are in
+[trace-offline-trials-plan.md](./trace-offline-trials-plan.md) under "Worker Briefs" (lane-g, lane-h, lane-s), and
+each lane's running log is `extension-core-boundary-audit/reports/lane-<g|h|s>.md` in its own worktree. Core's paired
+document is `docs/working/extension-boundary-moves.md` in FluxIQ Core.
+
+**Next:** commit each lane's units as they land; record the checks in this ledger.
 
 ## Worker Briefs
 
