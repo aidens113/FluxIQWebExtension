@@ -57,14 +57,14 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
-**Now (2026-10-19):** nine fixes (F1-F9) and their integration (t722) are on `dev` in both repos; rerun round 1
-is live on all four slots (office checkout, job save, social group posts, photo newest likes). Sweep fixes for
-failures already on `dev` are on t723 (S2 done, S3 running).
+**Now (2026-10-19):** fixes F1-F9 and the dev-sweep fixes are on `dev` in both repos. Rerun round 1 went 0 of 4
+($0.234): three builds died in the site-reset ledger (photo, office, job), social is being diagnosed (R10). Lead
+L1 (t724) is redesigning reset settlement as one observed-state model with a regression corpus of all seven
+failure shapes.
 
-**Next, in order:** read R2-R6; fix the causes on the lane branches (paired Core branches where needed) with
-tests beside the changed files; integrate to `dev` on narrow checks, publish both repositories and sync the lane
-trees; then release one rerun per repaired failure, the owed reruns (job halvard-labs-office-jobs, social
-hide-suggested-posts), and photo-social tasks until that site has a pass. No unchanged retries.
+**Next, in order:** review and integrate L1; fix whatever R10 finds; sync the lanes and rebuild their Core; rerun
+office checkout, job save, photo newest likes and social group posts on fresh workspaces; then the owed reruns
+(job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -598,6 +598,31 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   slot-2 job save-quillmark-remote (`claude-job-save-t719-20261019-r2`), slot-3 social recent-group-posts
   (`claude-social-groups-t566-20261019-r4`), slot-4 photo newest-likes (`claude-photo-likes-t567-20261019-r2`).
   Live guard admitted slots 1-3 (`"state":"admitted"`); slot 4 still in its prelude at the first check.
+
+### 2026-10-19 - Rerun round 1: 0 of 4; site reset is the common blocker
+
+- Validation: first launch refused at $0 in the prelude on all four slots (`"state":"stale"`: lane Core builds
+  behind source after the dev merge; no ledger entries written). Rebuilt Core libraries per lane
+  (`core-build` current x4) and relaunched. Spend-ledger finish records: photo `run-mvfq959u-b7afdf80` failed
+  $0.039545478; office `run-mvfq94ff-c8c21493` failed $0.06946167; job `run-mvfq94fg-64e82826` failed
+  $0.059999844; social `run-mvfq957o-40103539` failed $0.064833378; all `buildCeilingUsd 0.25`, none over.
+  Round total $0.233840370; no balance error. No Flow in any run.
+- Findings: R7 photo (t567 876a3af8): F6/F2/F5 behaved at read and submit, but an Unlike undoing an exploration
+  Like was refused `undo_unproved` at 0067, so no trial ran. R8 office (t563 ef1c07dd): F3 held (the reset
+  brief ran), F1 settled exploration presses, but the trial's own Buy Now got no destination (`ledger.ts
+  trialRan`), a retest after a settling look was answered `already_answered` 7 times, and the reset wording is
+  wrong for trial acts. R9 job (t719 3fa223dc): settlement needs a complete-list record that the domain only
+  grants with aria-setsize/posinset (`control-spot/collection.ts webResetCollections`), which 8 of 10 realistic
+  sites lack; F2's joined value worked live. R10 (social) running.
+- Decision: reset failures have now recurred in seven shapes; stop patching instances. Lead L1 (t724, paired,
+  lead-xhigh) redesigns settlement on observed state (control state plus generically complete destination,
+  inverse undo on the same page, trial acts inheriting the explored act's destination, a retest reaching the
+  ledger), keeps every invariant, and turns all seven shapes into a provider-free regression corpus.
+- Validation: t723 sweep fixes finished in both repos (downstream audit passed; Core `pnpm check` passed) and
+  pushed. Before finishing, supervisor checks on merged t723: Core `npx vitest run` over the three contract tests,
+  executor, result-verification, refuted-result, authoring-mode, handlers and conversations -> 228 files, 1980
+  passed; S5 `node --test scripts/task/tests/*.test.mjs` -> 32/32; web capabilities/tests/authoring/instructions
+  -> 245/245, web tsc exit 0; downstream adapter + client tests 70/70, pagination 34/34, `pnpm check` exit 0.
 
 ## Open Questions
 
