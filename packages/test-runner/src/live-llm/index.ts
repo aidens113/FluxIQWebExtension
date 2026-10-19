@@ -12,6 +12,7 @@ export { assertProviderCallsAsDeclared, declaredProviderCalls, type DeclaredProv
 export { liveLlmExplorationRecord, readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord, type LiveLlmExplorationSource } from "./exploration-record.js";
 export { configureFlowLiveLlmExecution, type LiveLlmFlowSettingsControl } from "./flow-settings.js";
 export { planLiveLlmExecution, type LiveLlmPlan, type LiveLlmPurpose } from "./live-llm-plan.js";
+export { assertLlmMaxCostWithinCeiling } from "./max-cost-within-ceiling.js";
 export { beginLiveLlmRun, LiveLlmRun, type LiveLlmRunBundle, type LiveLlmRunCredentials } from "./live-llm-run.js";
 export { liveLlmObservedUsage, type LiveLlmObservedCall, type LiveLlmObservedUsage } from "./observed-usage.js";
 export { readLiveLlmReauthor, type LiveLlmReauthorAttempt, type LiveLlmReauthorCallsSource, type LiveLlmReauthorEnding, type LiveLlmReauthorRecord } from "./reauthor-record.js";
