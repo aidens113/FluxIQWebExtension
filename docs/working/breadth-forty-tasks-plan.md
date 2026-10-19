@@ -57,9 +57,9 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
-**Now (2026-10-19):** read-only diagnoses, briefs R2-R6: office checkout (t563, done: Core reset-ledger defect),
-photo newest-likes (t567), job save-quillmark (t719), the page-read navigation refusal (t566), and what the
-build model is told after a judged-no trial (t567; the pattern recurs in social r2/r3 and photo).
+**Now (2026-10-19):** nine fixes (F1-F9) and their integration (t722) are on `dev` in both repos; rerun round 1
+is live on all four slots (office checkout, job save, social group posts, photo newest likes). Sweep fixes for
+failures already on `dev` are on t723 (S2 done, S3 running).
 
 **Next, in order:** read R2-R6; fix the causes on the lane branches (paired Core branches where needed) with
 tests beside the changed files; integrate to `dev` on narrow checks, publish both repositories and sync the lane
@@ -99,6 +99,17 @@ Each id is `<site>-<task>`. Risks the authors named: a guard that asks at Like, 
 point is declared there, so asking fails the run and is a product defect). The former empty-result allowance is retired: every scraping task now requires actual matching nonempty data.
 
 ## Worker Briefs
+
+### Integration and sweep briefs (2026-10-19)
+- **t722 integration** (`fxwork/t722`, both repos, branch task/t722-f-round-integration): lanes t563, t567, t719
+  merged; t566 joins when F8 finishes. **F10** updates the three Core tests that encoded the removed
+  trial-on-leftovers admission (trial-gate-reset, whole-trial, project-build-reset), the stale headers of
+  `whole-trial.ts`/`reset-loop.ts`, and the site-reset-build/-calls wording tests. **F11** fixes the
+  plan/prompt tests (extraction-vocabulary budget, issue-feedback, system-prompt pins) against F5's format.
+- **t723 sweep fixes** (`fxwork/t723`, from dev): **S2** Core `apps/web` (core-contract 54, architecture-contract,
+  coverage excuse list); **S3** Core `packages/fluxiq` (ask-activity 6, kept-condition-advice 2,
+  failed-step-reauthor; timeouts rerun alone); **S4** downstream (installed-project.spec TS7006, domain adapter
+  test, extension package tests). Each fixes the side that is wrong, never by loosening acceptance.
 
 ### Fix briefs F1-F7 (2026-10-19), from diagnoses R2-R5
 Each worker edits only its listed owners plus their `tests/` folders, validates with the tests beside the change,
@@ -532,6 +543,61 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   `flow-draft/amendment/types.ts` in the same commit.
 - Finding: `llm/deepseek/tests/system-prompt.test.ts` fails 4 pinned-prompt checks on the lane base 903ebb58
   without F5 (worker check); expected in the sweep, not caused here.
+
+### 2026-10-19 - First daily sweep; t722 integration; t723 sweep fixes
+
+- Validation: sweep S1 (`reports/sweep-1019.md`, Core a22b3a0f, downstream bb92ad17): Core `pnpm build` 0,
+  `pnpm check` 0, `pnpm test` 1 (fluxiq 29 failed / 12741 passed; web 56 failed / 3067 passed); downstream
+  `pnpm check` 1 (2 TS7006), `pnpm test` 1 (domain 1 failed / 2165 passed; extension tests not reached),
+  `pnpm build` 0. All predate today's lane fixes (dev had none of them merged).
+- Validation: t722 downstream on the merged tree, Core libraries rebuilt (`core-build` current):
+  `EXTENSION_TEST_BUILD_LABEL=t722 node scripts/test-extension.mjs content/identity/tests
+  content/action-runtime/tests content/actions/tests content/action-runtime/pass-row/tests
+  content/extraction/tests/infer-fields runtime/navigation/tests runtime/tests/action-runner.test.ts
+  runtime/tests/navigate-action.test.ts` -> tests 606, pass 606, fail 0; `DOMAIN_TEST_BUILD_LABEL=t722 node
+  scripts/test-domain.mjs src/client/tests` -> tests 44, pass 44, fail 0. Lane merges were clean in both repos.
+- F10 stopped once on an API 522 (server side) and was resumed. Briefs F10, F11, S2-S4 under Worker Briefs.
+
+### 2026-10-19 - F8 and F11 done; all four lanes in t722
+
+- Validation: F8 continuation (t566 d02e068d / Core 1e2accc3) rerun by the supervisor: extension
+  `EXTENSION_TEST_BUILD_LABEL=f8b-verify node scripts/test-extension.mjs content/extraction/tests
+  content/extraction/read-coverage content/extraction/page-advance content/actions/tests/extract-list` -> tests 361,
+  pass 361, fail 0; domain `actions/extraction/tests` -> 91/91; Core `npx vitest run` over `result-verification`,
+  `candidate-trial/tests`, `summaries/tests` -> 1406 passed, 2 failed, both in `kept-condition-advice.test.ts`,
+  which the dev sweep already lists (S3 owns it).
+- Decision: accepted F8's `pagination.test` update. 2c529c60 (t567, "Continue hybrid lists before their
+  load-more control appears") gives a hidden load-more one scroll and ends truncated at the page bound, which is
+  the honest answer; no production code changed for it.
+- Validation: F11 (t722 Core c79027bd), worker: `npx vitest run` over `flow-bootstrap/plan/tests`,
+  `llm/deepseek/tests`, `llm/tests` -> 61 files, 862 passed; check exit 0; audit passed. All six were tests behind
+  deliberate changes (5a652d4a judge sentences; aa04a943 `purpose` key); the vocabulary bound moved 4,000 -> 4,400
+  with commit and bytes in the test.
+- Finding (structural): prompt-text changes have twice broken pins/budgets in other folders because only the
+  changed folder's tests ran. Follow-up after this round: make the narrow gate run the prompt pin and budget
+  tests whenever model-facing text owners change.
+- t566 merged into t722 in both repos (Core c453fda9, downstream 7152a58d). F10 still running in t722 Core.
+
+### 2026-10-19 - t722 integrated and published; rerun round 1 launched
+
+- Validation: t722 Core broad run, supervisor, on the merged tree: `npx vitest run` over `runtime/flow-bootstrap`,
+  `flow-draft`, `llm`, `project-agents`, `service/project-build/tests`, `service/candidate-trial/tests`,
+  `service/summaries/tests`, `result-verification`, `nodes/control-flow/tests`, `executor/tests` -> 740 files,
+  7202 passed, 8 failed, 2 skipped; the 8 are `ask-activity` (6) and `kept-condition-advice` (2), both failing on
+  Core dev a22b3a0f already (sweep S1) and owned by S3. `pnpm --filter ./packages/fluxiq check` exit 0; audit passed.
+  Supervisor applied F10's one-line `reset-repeated.test.ts` fix (name act-1 under cannotUndo before the whole test).
+- Validation: t722 downstream after a Core library rebuild (`core-build` current): extension
+  `EXTENSION_TEST_BUILD_LABEL=t722b` over identity, action-runtime, actions, pass-row, extraction, read-coverage,
+  page-advance, runtime navigation and action-runner tests -> 913/913; domain client, extraction and adapter tests
+  -> 160/161, the one being the adapter `sessionId` test that fails on dev and is fixed in t723 (S4); test-runner
+  `node --test dist/live-llm/tests/*.test.js` -> 159/159; extension and domain `check` exit 0; audit passed.
+- Published: `pnpm task finish t722` downstream (structure audit passed) -> 79fbbb7a; in Core (`pnpm check`
+  passed) -> e11549a8. Both `dev` branches pushed. All four lane trees merged `dev` in both repos (0 behind).
+- Launched round 1 at 2026-10-19, process `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` plus `--llm-max-cost-usd 0.25`,
+  headed, `--model-reset-only`, fresh workspaces: slot-1 office-checkout-review (`claude-office-checkout-t563-20261019-r2`),
+  slot-2 job save-quillmark-remote (`claude-job-save-t719-20261019-r2`), slot-3 social recent-group-posts
+  (`claude-social-groups-t566-20261019-r4`), slot-4 photo newest-likes (`claude-photo-likes-t567-20261019-r2`).
+  Live guard admitted slots 1-3 (`"state":"admitted"`); slot 4 still in its prelude at the first check.
 
 ## Open Questions
 

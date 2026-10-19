@@ -26,6 +26,7 @@ import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { browserActionFailure, runBrowserActionCommand } from "../action-runner";
 import { browserActionFromGatewayCommand } from "../result-mapping";
+import { forgetAutomationTab } from "../automation-tab";
 import type { ListedFrame } from "../frame-address";
 
 test("a failure is reported against its command, finished the moment it started", (t) => {
@@ -678,4 +679,98 @@ test("a navigate with no url value is answered as a parameter with no value, and
     assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
     assert.doesNotMatch(JSON.stringify(run.result), /permission|policy|unsupported/u);
   }
+});
+
+// F7 (auction seller-shop run): a navigate bound to a link read off the page got
+// the root-relative `/scenarios/.../str/...`, `chrome.tabs.update` resolved it
+// against the extension's own origin, the tab landed on a missing extension
+// file, and the step was told to the build as a permission refusal. The runner
+// now resolves the address against the web page the Flow is on first.
+const LISTING = "http://127.0.0.1:58327/scenarios/auction-marketplace/itm/hood";
+const EXTENSION_BASE = "chrome-extension://ojijcpdhndjbpooecgfhaeoloheeeigk/";
+
+/** Tabs a navigation drives, with every `tabs.update` and `tabs.create` url recorded. */
+function installAddressStub(tabs: Record<number, { url: string | undefined; document?: number }>): { updated: string[]; created: string[] } {
+  const calls = { updated: [] as string[], created: [] as string[] };
+  const read = (tabId: number) => tabs[tabId] ? Promise.resolve({ id: tabId, url: tabs[tabId]!.url, status: "complete" }) : Promise.reject(new Error(`No tab with id: ${tabId}.`));
+  (globalThis as { chrome?: unknown }).chrome = {
+    runtime: { getURL: (path: string) => `${EXTENSION_BASE}${path}` },
+    tabs: {
+      get: read,
+      update: (tabId: number, properties: { url?: string }) => {
+        if (properties.url !== undefined) {
+          calls.updated.push(properties.url);
+          tabs[tabId] = { url: properties.url, document: (tabs[tabId]?.document ?? 0) + 1 };
+        }
+        return read(tabId);
+      },
+      reload: () => Promise.resolve(),
+      create: (properties: { url: string }) => {
+        calls.created.push(properties.url);
+        tabs[900] = { url: properties.url, document: 1 };
+        return read(900);
+      },
+      onUpdated: { addListener: () => undefined, removeListener: () => undefined },
+      sendMessage: (_tabId: number, _message: unknown, _options: unknown, callback: (response: unknown) => void) => callback({ challenge: null })
+    },
+    scripting: { executeScript: () => Promise.resolve([{ frameId: 0, result: 200 }]) },
+    webNavigation: {
+      getAllFrames: (details: { tabId: number }, callback: (found: unknown[]) => void) =>
+        callback([{ frameId: 0, errorOccurred: false, documentId: `document.${tabs[details.tabId]?.document ?? 0}` }])
+    }
+  };
+  return calls;
+}
+
+async function navigateTo(url: string, activeTabId: number | undefined, extra: Partial<BrowserActionCommand> = {}): Promise<Awaited<ReturnType<typeof runBrowserActionCommand>>> {
+  try {
+    return await runBrowserActionCommand({
+      action: { commandId: "c-nav-address", actionType: "web.browser.navigate", url, ...extra },
+      ...(activeTabId !== undefined ? { activeTabId } : {}),
+      attachTabForRecording: () => Promise.resolve()
+    });
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  }
+}
+
+test("a root-relative navigate drives the tab to the same-origin absolute address, never the relative string", async () => {
+  forgetAutomationTab();
+  const calls = installAddressStub({ 41: { url: LISTING } });
+  const run = await navigateTo("/scenarios/auction-marketplace/str/the_camera_loft", 41);
+  assert.deepEqual(calls.updated, ["http://127.0.0.1:58327/scenarios/auction-marketplace/str/the_camera_loft"]);
+  assert.deepEqual(calls.created, []);
+  assert.equal(run.result.status, "succeeded");
+  assert.equal(run.result.url, "http://127.0.0.1:58327/scenarios/auction-marketplace/str/the_camera_loft");
+});
+
+test("a relative navigate into a new tab resolves against the page the Flow is on", async () => {
+  forgetAutomationTab();
+  const calls = installAddressStub({ 41: { url: LISTING } });
+  await navigateTo("../str/the_camera_loft", 41, { newTab: true });
+  assert.deepEqual(calls.created, ["http://127.0.0.1:58327/scenarios/auction-marketplace/str/the_camera_loft"]);
+});
+
+test("a relative navigate with no web page to resolve against fails as an invalid parameter, and nothing is driven", async () => {
+  for (const tabs of [{}, { 41: { url: "about:blank" } }, { 41: { url: `${EXTENSION_BASE}sidepanel.html` } }]) {
+    forgetAutomationTab();
+    const calls = installAddressStub(tabs);
+    const run = await navigateTo("/scenarios/auction-marketplace/str/the_camera_loft", 41);
+    assert.deepEqual(calls, { updated: [], created: [] });
+    assert.equal(run.result.status, "failed");
+    assert.equal(run.result.failure?.code, "web.action.invalid_parameter");
+    assert.match(run.result.failure?.actual ?? "", /is relative and there is no web page to resolve it against/u);
+    assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
+    assert.doesNotMatch(JSON.stringify(run.result), /permission|policy/u);
+  }
+});
+
+test("a navigate to the extension's own address is refused as an invalid parameter, and nothing is driven", async () => {
+  forgetAutomationTab();
+  const calls = installAddressStub({ 41: { url: LISTING } });
+  const run = await navigateTo(`${EXTENSION_BASE}scenarios/auction-marketplace/str/the_camera_loft`, 41);
+  assert.deepEqual(calls, { updated: [], created: [] });
+  assert.equal(run.result.failure?.code, "web.action.invalid_parameter");
+  assert.match(run.result.failure?.actual ?? "", /the extension's own address/u);
+  assert.doesNotMatch(JSON.stringify(run.result), /permission|policy/u);
 });

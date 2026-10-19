@@ -334,8 +334,13 @@ test("a numbered read on a pager that marks no page current, whose Previous shar
 // And a load-more control the page keeps after its last page, hidden
 // (t195-w19c R1): Guildline's Sent invitations sets `hidden` on its "Show more"
 // once the last page is in (`professional-network/network/manager-client.ts`).
-// A hidden control is the list's ordinary end, read before the page bound, and
-// is never pressed.
+// A hidden control is never pressed. Below the page bound the list is first
+// scrolled for more, since a list that loads on scroll may expose its control
+// only after a batch (`page-advance/load-more.ts`, t567); nothing new and the
+// control still hidden is the list's ordinary end. At the page bound no scroll
+// may move the list, and a hidden control cannot be told from one a scroll
+// would expose, so the read stops truncated, unpressed and unscrolled, as
+// `page-advance/tests/scroll-loaded-list.test.ts` holds for the hybrid list.
 
 /** A load-more control, hidden by attribute or by having no box, that counts its presses. */
 function loadMoreControl(options: { hidden?: boolean; boxes?: number } = {}) {
@@ -354,26 +359,41 @@ function loadMoreControl(options: { hidden?: boolean; boxes?: number } = {}) {
   return control;
 }
 
-/** One `loadMore` advance with `control` as the page's only control, from `pagesRead` pages read of `maxPages`. */
-async function pressFrom(control: ReturnType<typeof loadMoreControl>, pagesRead: number, maxPages: number): Promise<{ advance: Awaited<ReturnType<typeof advancePage>>; tookMs: number }> {
-  const saved = (globalThis as Record<string, unknown>).document;
-  (globalThis as Record<string, unknown>).document = { querySelector: (selector: string) => (selector === ".more" ? control : null) };
+/**
+ * One `loadMore` advance with `control` as the page's only control, from
+ * `pagesRead` pages read of `maxPages`, on a page whose window is already at its
+ * bottom and grows nothing: the scroll a hidden control is given brings no item.
+ * `scrolls` counts the window's scrolls.
+ */
+async function pressFrom(control: ReturnType<typeof loadMoreControl>, pagesRead: number, maxPages: number): Promise<{ advance: Awaited<ReturnType<typeof advancePage>>; tookMs: number; scrolls: number }> {
+  const global = globalThis as Record<string, unknown>;
+  const saved = { document: global.document, window: global.window };
+  let scrolls = 0;
+  global.document = {
+    querySelector: (selector: string) => (selector === ".more" ? control : null),
+    querySelectorAll: () => [],
+    documentElement: { scrollHeight: 800 },
+    body: { scrollHeight: 800 }
+  };
+  global.window = { scrollX: 0, scrollY: 0, innerHeight: 800, scrollTo: () => { scrolls += 1; } };
   try {
     const progress: PaginationProgress = { item: ".row", shown: [], pagesRead, scrolls: 0, deadline: Date.now() + 20_000, hasUnreadItem: () => false };
     const startedAt = Date.now();
     const advance = await advancePage({ mode: "loadMore", control: ".more", maxPages }, progress);
-    return { advance, tookMs: Date.now() - startedAt };
+    return { advance, tookMs: Date.now() - startedAt, scrolls };
   } finally {
-    (globalThis as Record<string, unknown>).document = saved;
+    global.document = saved.document;
+    global.window = saved.window;
   }
 }
 
-test("a load-more control that is present and hidden ends the list, unpressed, after a short grace", async () => {
+test("a load-more control that is present and hidden ends the list, unpressed, after a short grace and a scroll that brought nothing", async () => {
   const control = loadMoreControl({ hidden: true });
-  const { advance, tookMs } = await pressFrom(control, 2, 10);
+  const { advance, tookMs, scrolls } = await pressFrom(control, 2, 10);
   assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
   assert.equal(control.clicks, 0);
-  assert.ok(tookMs >= 900 && tookMs < 3_000, `waited ${tookMs} ms`);
+  assert.equal(scrolls, 1);
+  assert.ok(tookMs >= 1_800 && tookMs < 4_000, `waited ${tookMs} ms`);
 });
 
 test("a load-more control with no box is hidden too", async () => {
@@ -383,10 +403,12 @@ test("a load-more control with no box is hidden too", async () => {
   assert.equal(control.clicks, 0);
 });
 
-test("at the page bound a hidden load-more control ends the list rather than truncating it", async () => {
+test("at the page bound a hidden load-more control stops the read truncated, unpressed and unscrolled", async () => {
   const control = loadMoreControl({ hidden: true });
-  const { advance } = await pressFrom(control, 3, 3);
-  assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
+  const { advance, scrolls } = await pressFrom(control, 3, 3);
+  assert.deepEqual(advance, { outcome: "truncated", stop: "page_limit" });
+  assert.equal(control.clicks, 0);
+  assert.equal(scrolls, 0);
 });
 
 test("at the page bound a visible load-more control is still truncation", async () => {

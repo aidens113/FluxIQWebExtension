@@ -189,7 +189,9 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
     ...(outcome.order ? { order: { duplicates: outcome.order.duplicates, unsortable: outcome.order.unsortable } } : {}),
     // The kept rows a page-by-page read left out as repeats of an earlier page's,
     // so kept rows above stored ones say why (`extraction/list-reader.ts`).
-    ...(outcome.earlierPageRepeats === undefined ? {} : { earlierPageRepeats: outcome.earlierPageRepeats })
+    ...(outcome.earlierPageRepeats === undefined ? {} : { earlierPageRepeats: outcome.earlierPageRepeats }),
+    // Whether a read of one page saw its list go on past it: two closed words (`extraction/read-coverage/`).
+    ...(outcome.listContinues ? { listContinues: { kind: outcome.listContinues.kind, evidence: outcome.listContinues.evidence } } : {})
   };
 }
 

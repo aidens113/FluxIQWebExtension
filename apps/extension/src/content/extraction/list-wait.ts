@@ -48,6 +48,16 @@
 // control is a whole page like the first, and so is one reached in a new
 // document through the worker's checkpoint.
 //
+// **A reveal that ran out while the list still grew says so (`"growing"`).**
+// `LIST_REVEALS` keeps a read of one page from sweeping an endless feed, so the
+// last reveal growing the list is the page showing that the list goes on past
+// what the read will read; a reveal that brought nothing is the list's end as
+// far as the page shows it. The read reports the first as its list continuing
+// (`read-coverage/`, F8) -- a declared feed that stopped growing reports
+// nothing, since the declaration alone cannot say the list has not ended.
+// Every other caller reads `"growing"` as complete: it is the whole of what
+// this read of one page reads.
+//
 // A reveal the command's deadline cut short says so (`"timed_out"`), and the
 // read then ends as any read the deadline ends -- `timedOut`, with the
 // `deadline` stop -- rather than reading the part of the page it saw as the
@@ -70,8 +80,12 @@ import { newRetryBudget, offeredListRetry, RETRY_GROWTH_WINDOW_MS, spendRetry, t
 /** What a wait saw: its condition, nothing within its window, or the command's deadline. */
 export type WaitOutcome = "changed" | "unchanged" | "timed_out";
 
-/** Whether a reveal finished -- nothing more came, or nothing more was wanted -- or the command's deadline cut it short. */
-export type ListCompletion = "complete" | "timed_out";
+/**
+ * Whether a reveal finished -- nothing more came, or nothing more was wanted --
+ * ran out of reveals while the list was still growing, or was cut short by the
+ * command's deadline. See the header.
+ */
+export type ListCompletion = "complete" | "growing" | "timed_out";
 
 /** How long a revealed list has to grow: the window `pagination.ts` gives a lazy feed after a scroll. */
 const LIST_GROWTH_WINDOW_MS = 900;
@@ -105,9 +119,9 @@ export async function waitUntil(condition: () => boolean, windowMs: number, poll
 /**
  * Brings the whole of a page's list onto the page: reveals its end and waits
  * for what that brings, until a reveal brings nothing, nothing moves, the list
- * holds as many items as the read can use, the reveals run out, or the
- * command's deadline passes -- the one ending that answers `"timed_out"`. See
- * the header.
+ * holds as many items as the read can use, the reveals run out -- `"growing"`,
+ * the last of them having grown it -- or the command's deadline passes -- the
+ * one ending that answers `"timed_out"`. See the header.
  *
  * `wanted` is how many items the read could still use. A read that already sees
  * its own `maxItems` has nothing to gain by revealing more and does not touch
@@ -139,7 +153,8 @@ export async function awaitListComplete(item: string, wanted: number, actionDead
       if (matchCount(item) <= before) return "complete";
     }
   }
-  return "complete";
+  // Every reveal grew the list, the last included: it goes on past what this read reads (header).
+  return "growing";
 }
 
 /**

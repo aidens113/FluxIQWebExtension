@@ -422,3 +422,54 @@ test("the full date a time link states only in its aria-label is offered as a co
   assert.match(date[0]!.field.label, / aria-label$/u);
   assert.doesNotMatch(date[0]!.field.label, /September|2026/u);
 });
+
+// A grid whose items are themselves links (live run `run-mvecxeci-1c2cc227`,
+// step 0017): each tile is an `<a href>` holding an image and a count, so no
+// column inside it holds its address, and a read asked for each item's link had
+// no column to read it by. The item's own address is now offered as a link
+// column read off the item itself, absolute as every link column reads.
+
+const TILE_BASE = "https://gallery.example/browse/";
+
+function tile(id: number, count: string): Element {
+  const item = dom.el("a", { class: "tile", href: `/view/${id}/` },
+    dom.el("img", { class: "thumb", src: `/thumbs/${id}.svg`, alt: "" }),
+    dom.el("span", { class: "count" }, count));
+  Object.assign(item, { baseURI: TILE_BASE });
+  return item;
+}
+
+test("an item that is itself a link offers its own address as a link column, read absolute off the item", () => {
+  const run = [tile(11, "40"), tile(12, "31"), tile(13, "27")];
+  const fields = inferFields(run[0]!, run);
+  const own = fields.filter((field) => field.spec.kind === "link" && field.spec.selector === undefined);
+  assert.equal(own.length, 1, JSON.stringify(fields.map((field) => [field.label, field.spec])));
+  assert.equal(own[0]!.coverage, 1);
+  assert.equal(own[0]!.spec.required, true);
+  // The label is page structure, never the address (D3), and its key is its own.
+  assert.doesNotMatch(own[0]!.label, /view|gallery/u);
+  assert.equal(new Set(fields.map((field) => field.key)).size, fields.length);
+  const values = run.map((item) => readRecord(item, { [own[0]!.key]: own[0]!.spec })[own[0]!.key]);
+  assert.deepEqual(values, ["https://gallery.example/view/11/", "https://gallery.example/view/12/", "https://gallery.example/view/13/"]);
+  // What the tile holds is still offered as before.
+  assert.equal(holding(fields, run, ["40", "31", "27"]).length, 1);
+});
+
+test("an item that is not a link offers no address of its own, and a link inside it keeps its own column", () => {
+  const run = [11, 12].map((id) => {
+    const link = dom.el("a", { class: "open", href: `/view/${id}/` }, dom.el("span", { class: "name" }, `Item ${id}`));
+    Object.assign(link, { baseURI: TILE_BASE });
+    return dom.el("div", { class: "card" }, link);
+  });
+  const fields = inferFields(run[0]!, run);
+  const links = fields.filter((field) => field.spec.kind === "link");
+  assert.equal(links.length, 1, JSON.stringify(fields.map((field) => [field.label, field.spec])));
+  assert.notEqual(links[0]!.spec.selector, undefined);
+  assert.match(links[0]!.label, / url$/u);
+});
+
+test("an anchor item with no href offers no address of its own", () => {
+  const run = [11, 12].map((id) => dom.el("a", { class: "tile" }, dom.el("span", { class: "count" }, String(id))));
+  const fields = inferFields(run[0]!, run);
+  assert.equal(fields.some((field) => field.spec.kind === "link"), false, JSON.stringify(fields.map((field) => [field.label, field.spec])));
+});

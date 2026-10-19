@@ -22,6 +22,7 @@ import { liveLlmCoreDefaultModel } from "./core-default-model.js";
 import { labAuthoringModeValue } from "./authoring-mode-env.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
 import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
+import { assertLlmMaxCostWithinCeiling } from "./max-cost-within-ceiling.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
@@ -67,7 +68,10 @@ export async function beginLiveLlmRun(input: {
   costCeilingSources?: { args: readonly string[]; environment: NodeJS.ProcessEnv };
 }): Promise<LiveLlmRun> {
   const sources = input.costCeilingSources ?? { args: process.argv, environment: process.env };
-  const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment), liveLlmCoreDefaultModel(sources.args), labAuthoringModeValue(sources.args));
+  const buildCostCeilingUsd = liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment);
+  // A typed --llm-max-cost-usd above that ceiling is refused, never clamped in silence.
+  assertLlmMaxCostWithinCeiling(sources.args, buildCostCeilingUsd);
+  const plan = planLiveLlmExecution(input.profile, buildCostCeilingUsd, liveLlmCoreDefaultModel(sources.args), labAuthoringModeValue(sources.args));
   assertLiveLlmLaunchable(plan);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);
