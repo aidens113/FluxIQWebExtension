@@ -482,6 +482,20 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   model-named destination (`resetDestination`) instead, and to make a whole trial refuse while a reversible act
   is neither undone nor settled (F3 saw one run with two acts left after a blocked reset).
 
+### 2026-10-19 - F2 continuation verified; lane t719 build restored
+
+- Validation: t719 66ceefeb rerun by the supervisor: `EXTENSION_TEST_BUILD_LABEL=f2b-verify node
+  scripts/test-extension.mjs content/identity/tests content/action-runtime/tests content/actions/tests
+  content/action-runtime/pass-row/tests` -> tests 498, pass 498, fail 0; `npx tsc -p tsconfig.json --noEmit`
+  -> exit 0. Worker: both new cases failed on 12b910ca first (card title refused "in another record"; nested
+  record opened card 1).
+- Finding: commit 01f72745 (supervisor's F1 report commit on t719) also carried a worker's staged deletion of
+  `pass-row/run-member.ts`, so that commit alone did not compile; 66ceefeb restores it. Supervisor report
+  commits now commit by explicit path only.
+- Risk noted: a control is now in a row when any record within 12 levels above it has a same-tag sibling, so
+  inside a pass it must match the row's values (fails closed). The live reruns will show whether a page-level
+  control inside a loop body is ever caught by it.
+
 ## Open Questions
 
 None requiring user input.
