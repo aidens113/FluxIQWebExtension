@@ -1,7 +1,7 @@
 # Extension And Core Boundary Audit
 
 Status: Active
-Status detail: Four read-only audit workers (A1-A4) dispatched 2026-10-19; findings and a move plan follow their reports.
+Status detail: Audit complete: no model calls downstream; twelve findings and a six-phase move plan await the user's approval.
 Created: 2026-10-19
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
@@ -23,11 +23,19 @@ Core, not extension-local storage. The extension may import domain contracts; do
 or browser modules. Test infrastructure stays here unless it remains coherent with every browser, DOM, URL,
 selector, tab, extension and web-automation concept removed and at least two real domain consumers need it.
 
-**Now:** A1-A4 running (briefs below), read-only on `dev` in the main checkout. Each writes
-`extension-core-boundary-audit/reports/a<N>-<area>.md`.
+**Answer (2026-10-19):** no model is called from this repository. The extension, the domain and the Lab make no
+provider requests, import no provider SDK, read no provider key and estimate no tokens; the extension only calls
+Core's program API with its pairing token, and the Lab only drives Core. Core owns projects, Flows, recordings,
+policies and grants. Flow walking, retry policy, budgets, judging and site reset are already in Core.
 
-**Next:** consolidate findings into a severity-ranked table and a phased move plan here, then ask the user to
-approve the moves.
+**What is in the wrong place:** the client side of Core's gateway protocol (reconnect, heartbeat, offline queue,
+command reconciliation, lease fencing, session picking) lives downstream because Core's socket client is a thin
+transport; the offline queue keeps recorded page data across browser restarts and replays it to any later session;
+the domain's system instructions carry framework rules; several modules are hand-synced twins of Core code; and the
+build-cache and task tooling are unchecked, drifted copies of Core's. Ranked list and phased plan below.
+
+**Next:** the user approves (or edits) the move plan; then a paired Core document is opened and Phase 0 starts.
+Nothing has been moved; this effort is planning only.
 
 ## Worker Briefs
 
@@ -56,7 +64,49 @@ the Core seam it would use. Separate confirmed findings from suspicions. Never c
 
 ## Findings
 
-Pending A1-A4.
+Reports: [A1 model calls](./extension-core-boundary-audit/reports/a1-model-calls.md),
+[A2 persistence](./extension-core-boundary-audit/reports/a2-persistence.md),
+[A3 framework logic](./extension-core-boundary-audit/reports/a3-framework-logic.md),
+[A4 packages and scripts](./extension-core-boundary-audit/reports/a4-packages-scripts.md).
+
+| # | Severity | Finding | Where | Proposed owner |
+| --- | --- | --- | --- | --- |
+| 1 | High | The client half of Core's gateway protocols lives downstream: reconnect with backoff, heartbeat, offline queue, command reconciliation, lease epoch fencing (`domain/src/client/host-lease.ts` has no web concept), and session picking, done in three places with two different rules. | `apps/extension/src/background/gateway-session.ts`, `domain/src/client/*` | Core `client-gateway-websocket` client; the domain keeps only the web adapter (A3) |
+| 2 | High | The offline event queue (`fluxiq.queuedEvents`) keeps up to 1,000 DOM snapshots, typed values and action results in persistent extension storage across browser restarts and replays them to whichever session connects next. | `background/storage.ts`, `gateway-session.ts` `send`/`flushQueue` | Stays downstream, but with browser-session lifetime and each entry tied to its session, project and recording; queue semantics follow item 1 (A2) |
+| 3 | High | `WEB_LLM_SYSTEM_INSTRUCTIONS` uses Core's intended seam but carries framework rules: recordings versus instructions, permissions, loop grammar, and a cost line copied from Core. | domain web instructions | Generic rules into Core's prompt; the domain keeps only web-specific wording (A1) |
+| 4 | Medium | Hand-synced twins: the activity headline, pacer and wording exist in both the extension and Core `apps/web`; `where`-condition and number reading exist in both the domain and `@fluxiq/contracts` record-sets (held equal by a parity test); the content script's `order-rows.ts` re-implements Core's dedupe and sort. | extension activity, domain record-set readers, content order-rows | One Core source each, imported downstream (A3) |
+| 5 | Medium | Drifted tooling copies with no check: `scripts/build-cache` (30 of 40 shared files differ; missing Core's later fixes such as output replay and git-visible fingerprinting), `scripts/task` (id allocation, refs, branch naming and git runner overlap Core's, kept in step by comment only); the structure-audit mirror is in sync but unchecked. | `scripts/build-cache`, `scripts/task`, `scripts/structure-audit*` | Core owns the build-cache engine and shared task rules and this repository imports them; any copy that remains gets a mechanical drift check (A4) |
+| 6 | Medium | The Lab reconstructs figures Core does not publish: total spend, missing ledger calls, consequences on failed builds, empty-balance errors. | `packages/test-runner/src/live-llm/*` | Core publishes run accounting; the Lab reads it (A1) |
+| 7 | Medium | Policy decided outside Core, though both are off today: the recording capture switches, and `requestsEnabled` (forced off in the extension, with a separate request policy in the domain). | extension settings, `domain/src/requests` | Core owns the policy; the extension enforces what Core says (A2) |
+| 8 | Medium | The domain keeps way-out references and per-build memories in process memory (lost on a Core restart), and works out when a build starts by parsing Core's `initial.<toolId>` call ids. | `domain/src/cleared-way-outs`, build memories | Core exposes the build lifecycle; durable state in Core (A2, A3) |
+| 9 | Low | Generic helpers in the domain: `swapped-name.ts`; a card-number screen missing from Core's secret screen; `reusable-evidence-coordinator.ts` with no production caller. Core's activity hard-codes the repeated-answer marker's reason string. | domain helpers | Screen into Core; delete the unused coordinator; helpers to Core if reused (A3) |
+| 10 | Low | `packages/agent-orchestrator` has no consumer but is built and tested by `pnpm -r`. | `packages/agent-orchestrator` | Delete (A4) |
+| 11 | Low | The provider key variable list is defined twice (identical today); a stale "$0.10 default" comment in `test-contracts/src/llm.ts` (Core's default is $0.25; $0.10 is the test default). | `scripts/provider-secret-environment.mjs`, `test-runner/src/environment.ts`, `test-contracts/src/llm.ts` | One list; fix the comment (A4) |
+| 12 | Low | Nothing mechanically stops a future provider call downstream. | structure audit config | A structure-audit rule that fails on provider hosts, SDKs or key reads outside the Lab's Core-driving code (A1) |
+
+To verify (suspected, not traced): `packages/test-runner/src/core-web-build/` runs its own production build of Core's
+web panel although Core has `web:build`; `scripts/lab/core/build/` judges Core staleness by modification times rather
+than Core's build cache; `packages/test-matrix` may select synthetic scenarios for CI browser checks, which would
+break the ten-realistic-scenarios rule if those jobs open a browser.
+
+## Move Plan (proposed, awaiting approval)
+
+- **Phase 0, guards and cleanup (downstream only, small):** item 12's provider-call rule; drift checks for every
+  remaining mirror of Core code (the structure audit first); delete `agent-orchestrator` and the unused
+  coordinator; one provider key list and the comment fix; trace the three suspicions.
+- **Phase 1, privacy fix (downstream):** item 2, the offline queue scoped to its browser session, project and
+  recording.
+- **Phase 2, Core publishes what downstream reconstructs:** run accounting (item 6) and the build lifecycle
+  (item 8); the Lab and domain switch to them and drop their parsers.
+- **Phase 3, the gateway client into Core:** item 1; Core's socket client gains reconnect, heartbeat, queue,
+  reconciliation, lease fencing and one session-picking rule; the domain keeps the web adapter.
+- **Phase 4, single sources:** item 4's twins, item 3's generic prompt rules, item 7's policy switches and item 9's
+  secret screen move to Core and are imported here.
+- **Phase 5, tooling:** item 5; Core owns the build-cache engine and the shared task rules, and this repository
+  imports them.
+
+Each phase is a paired task with tests beside every change and both repositories' narrow checks, and opens a Core
+working document before its first Core edit.
 
 ## Work Ledger
 
@@ -68,6 +118,22 @@ Pending A1-A4.
 - Outcome: Partial
 - Follow-up: consolidate A1-A4.
 
+### 2026-10-19 - A1-A4 reports consolidated
+- Agent: supervisor (A1-A4 read-only workers)
+- Changed: this document; `extension-core-boundary-audit/reports/a1` to `a4`
+- Why: findings and a phased move plan for the user's approval.
+- Validation: worker searches, not supervisor reruns (read-only audit): A1 `git grep` over extension, domain,
+  packages, Lab and scripts for provider hosts, SDKs, keys, prompts and cost -> no provider call in production or Lab
+  code; A2 searches for every storage API and module-level state -> only the stores in its table; A3 header survey
+  of 394 domain and 159 extension files, about 45 read in depth; A4 `diff --strip-trailing-cr` against Core ->
+  structure audit 55 of 56 files identical (config is per-repository), build-cache 10 identical / 30 differ /
+  11 here only / 17 Core only, task 0 identical / 17 differ.
+- Outcome: Accepted (planning)
+- Follow-up: user approval of the move plan.
+
 ## Open Questions
 
-None yet.
+- Approve, edit or reorder the move plan (user). Recommended: Phase 0 and Phase 1 first; they are small and
+  downstream only.
+- Tooling policy for `scripts/build-cache` and `scripts/task` (user): recommended that Core owns them and this
+  repository imports them, with drift checks on any copy that remains.
