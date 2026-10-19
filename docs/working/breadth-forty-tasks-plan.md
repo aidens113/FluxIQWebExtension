@@ -785,7 +785,7 @@ the touched package's typecheck and the structure audit, and never commits. Mode
 - R5 navigation refusal (t566 7456338a): not a permission rule. A root-relative page-read address went
   unresolved to `chrome.tabs.update`, landed on `chrome-extension://.../scenarios/...` (ERR_FILE_NOT_FOUND), and
   `browser-api.ts` labelled it `permission_denied`. The model read the right link.
-- Validation of budget finding: `spend-ledger.jsonl` finish events by day and `buildCeilingUsd`: 2026-10-12 to
+- Validation: budget finding from `spend-ledger.jsonl` finish events by day and `buildCeilingUsd`: 2026-10-12 to
   2026-10-17 all launches at 0.25 (except nine at 0.1 on 2026-10-12 before the change); 2026-10-18: 12 at 0.1,
   20 at 0.25. Codex's later launch commands set the flag but not `FLUXIQ_LLM_RUN_COST_CEILING_USD`, which the
   A8 launch shape (`automation-project-agents-plan.md`) requires.
