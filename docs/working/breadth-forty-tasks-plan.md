@@ -508,6 +508,21 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   `entry.ts` `routingLine`, the dry run and `draft-from-flow.ts`. F5 resumed to close them, splitting
   `draft-routing.ts` (798/800) first if it must change.
 
+### 2026-10-19 - F8 verified; ended-feed case extended
+
+- Validation: t566 4f405f3d / Core 9009a53c rerun by the supervisor: extension `EXTENSION_TEST_BUILD_LABEL=f8-verify
+  node scripts/test-extension.mjs content/extraction/tests/list-reader read-coverage/tests
+  content/actions/tests/extract-list content/extraction/tests/detect-pagination content/extraction/tests/feed-signal`
+  -> tests 106, pass 106, fail 0; domain `DOMAIN_TEST_BUILD_LABEL=f8-verify node scripts/test-domain.mjs
+  actions/extraction/tests` -> tests 91, pass 91, fail 0; Core `npx vitest run` over read-account/tests,
+  repair-directive, candidate-trial/tests and the extraction-summary test -> 43 files, 328 tests passed. Worker:
+  7 new Core tests failed before; typechecks exit 0; both audits passed.
+- Decision: accepted the four pass-through edits outside the brief (extension `actions/extract-list.ts`, domain
+  `extraction/summary.ts`, Core `extraction-summary.ts`, `contracts/read-account.ts`); each only carries the field.
+- Finding: a declared feed that really ended can still report "continues" (the reveal/growth signal in
+  `list-wait.ts` is unused), and the judges' read sentence does not state the fact. F8 resumed to fix both and
+  the 3 `pagination` test failures on `dev`.
+
 ## Open Questions
 
 None requiring user input.
