@@ -52,3 +52,65 @@ Cause class: product defects, with a model mistake and a launch budget setting a
 Shared with priya-tags: not the root cause (priya failed on read completeness in a stalled loop), but the budget factor is shared: priya also ran on a $0.0998 purse and also ended on `flow_bootstrap.run_budget_cost_exhausted`.
 
 Proposed fixes and tests, none naming this site or its answer: Core For Each bound for `repeat over` plus script-format clause (tests: `nodes/control-flow/tests/for-each.test.ts`, draft-routing tests under `flow-bootstrap/authoring/tests/`); item-own link column (`extraction/tests/infer-fields.test.ts`); row scoping for a control that is the item (`action-runtime/tests/pass-row-resolution.test.ts`); set the ceiling variable for Lab builds. No task, fixture or oracle change. A rerun needs a fresh workspace: this one holds 24 recorded like presses whose final state was not inspected. No retry, source change or commit was made.
+
+## Terminal r2 failure
+
+Run run-mvfq959u-b7afdf80 failed with no Flow: 72 calls, $0.0395, about 12 minutes. It ran on downstream
+79fbbb7a and Core e11549a8, with the $0.25 purse, which was not the limit. Full debug:
+`docs/working/language-driven-flow-loop-plan/debugs/run-mvfq959u-b7afdf80.md` (brief R7, read-only diagnosis).
+
+What happened:
+
+- The builder explored by liking. It took the pinned first grid tile to be the newest post (step 0022)
+  and liked tiles 1 and 2, both pinned (0029, 0033). It declared a plain link press on tile 3 as lasting
+  (0043).
+- Core accepted revision 2 (0059), which used `repeat over` with `repeat most: 3`.
+- The trial gate then demanded that the exploration likes be undone first (0061). The builder opened
+  the liked post's own page and pressed its Unlike button under `undoes` (0066). Core refused it unrun
+  as `candidate.undo_unproved` (0067), and the repeat guard ended the brief.
+- A resent brief re-explored and stalled. A reset brief hit the same refusal. The supervisor ended
+  blocked, and no revision was ever tested.
+
+Cause class: product defect (terminal) in Core
+`flow-bootstrap/site-reset/ledger.ts`. The domain gives every control a scope token, so every lasting
+act is strict.
+
+- `target()` admits an undo of a strict `modify_existing` act only on an equal item and dialog token, a
+  transfer witness or a create-then-delete subject proof.
+- `beforeTrial()` clears a strict act only through a complete ARIA-list baseline.
+
+A like button on a post page is in no list, and the like was pressed in the post's modal while the
+unlike was on the standalone page. So no in-place toggle explored on a site without a start hook can
+ever be reset, and such a build can never trial. The Core test "requires exact restoration for modern
+scope-only controls with no usable title" pins this.
+
+Contributors:
+
+- Model mistakes that a trial and judge would have caught: the pinned tiles were treated as newest, the
+  like step targets a pinned comment's Like (`t1085`), the dialog is closed before liking, the column
+  is named `item_url` not `link`, and a navigation was declared `modify_existing`.
+- In this repository, the page view shows grid tiles only as their counts and drops the pin icon's
+  label, which the read offered only as a class-named column.
+
+Fixes exercised:
+
+- F6: the link column was offered (`item_url`, coverage 1) and used.
+- F2: the grid gave 12 tile rows, each tile its own item.
+- F5: `repeat most` beside `repeat over` was accepted.
+- None of F6, F2 or F5 ran in a trial.
+- r1's pass scoping was not exercised.
+- F8 was not observed: both reads reported `pagination: none`.
+
+Proposed fix: an in-place toggle witness in the Core ledger, with no site or task named.
+
+- `act-places.ts` records the pressed control's own state before and after a `modify_existing` press
+  that left the control on the same location.
+- `target()` admits an undo on the same scope and subject whose control is in the witnessed after-state.
+- `beforeTrial()` settles the act only when a fresh look at that location shows the before-state and
+  none of the act's changed lines.
+
+Tests go in `site-reset/tests/ledger-subject.test.ts` and `act-places.test.ts`. Also recommended: show
+an item's icon labels on its page-view line. No task, fixture or oracle change.
+
+The workspace still holds likes on two pinned posts, so a rerun needs a fresh workspace and should
+wait for the ledger fix. No retry, source change or commit was made.
