@@ -523,6 +523,16 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   `list-wait.ts` is unused), and the judges' read sentence does not state the fact. F8 resumed to fix both and
   the 3 `pagination` test failures on `dev`.
 
+### 2026-10-19 - F5 complete
+
+- Validation: t567 Core 944942b2 rerun by the supervisor: `npx vitest run` over `llm/tests/evidence-loop.test.ts`,
+  `flow-draft`, `llm/node-tools/tests`, `flow-bootstrap/authoring/tests`, `script-statements/tests`,
+  `nodes/control-flow/tests`, `executor/tests/graph-run.test.ts` -> 94 files, 1095 tests passed. Worker: 6 of the
+  new cases failed before; package check exit 0; audit passed. Supervisor corrected the stale `most` comment in
+  `flow-draft/amendment/types.ts` in the same commit.
+- Finding: `llm/deepseek/tests/system-prompt.test.ts` fails 4 pinned-prompt checks on the lane base 903ebb58
+  without F5 (worker check); expected in the sweep, not caused here.
+
 ## Open Questions
 
 None requiring user input.
