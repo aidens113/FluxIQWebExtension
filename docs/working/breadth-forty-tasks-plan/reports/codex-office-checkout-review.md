@@ -38,3 +38,52 @@ pnpm.cmd lab run everything-store --live-llm --llm-profile lab-create-flow --llm
 Acceptance requires actual real-extension-chat creation, judged whole run, exact positive one-row/four-field oracle and account/checkout obligations, plus a separate explicit0calls/cost/noharness replay with unchanged saved Flow. Report paid accounting and repair/hash evidence honestly. Failure requires preserved first divergence and a new terminal debug; no second unchanged paid retry. No acceptance or live startup is claimed here.
 
 Only this NEW report is authored for preparation. Readers exited; ready for root preservation/refresh/release.
+
+## Released r1 execution
+
+Supervisor preserved preparation2def8820 and explicitly released one run after paired refresh. Frozen heads verified clean: downstream fbc5411cc89b5efb7ab8575db93654bfdb5162a3 / Core ff4c1d11428fd1f9e0264050d0bf795a779b1f3c. Workspace absence rechecked; owning Core currentness guard native0. No library rebuild.
+
+Started the exact command above once; retained owning session54202 and private log node_modules/codex-office-checkout-live-20261018-r1.log. Normal prelude holds all three own Core library step leases. Initial test-contracts/scenario-lab registry preparation reused valid stamps. Allocation/authenticated readiness/terminal outcome are not yet claimed. Source/HEAD/profile protections remain in force; no provider guidance or override was added.
+
+## Terminal r1 failure
+
+Run `run-mved5pro-91998cc2` (bf-slot-1, real extension chat) failed with
+`lab.chat_build_failed`: no Flow was created, $0.0208, about 8 minutes. The full
+debug is `docs/working/language-driven-flow-loop-plan/debugs/run-mved5pro-91998cc2.md`.
+This was a read-only analysis: no source edit, build, browser or paid run.
+
+- The reworded task worked. The model chose Buy Now, reached
+  `Checkout (1 item)`, and the cart stayed at 2 items. The wording is not the
+  cause.
+- First divergent step: 0039. `core.test_subflow` asked for act-5 (the Buy Now
+  press, declared `create_new`) to be undone. On this site Buy Now opens a
+  checkout session that the next Buy Now replaces, and no control closes it.
+  Fresh cart reads after the act (0049, 0053) proved the cart, the destination
+  the model named under the create precondition, was exactly as found. Core's
+  reset ledger has no rule that uses that evidence. A strict create_new is
+  settled only by deleting its subject from the destination, and a kept strict
+  act refuses every trial (`candidate.trial_reset_unproved`, 0051 and 0055). The
+  build had no way forward and ended blocked.
+- Cause class: a Core product defect in
+  `site-reset/ledger.ts` `AutomationStudioSiteResetLedger.beforeTrial` /
+  `unprovedReset`. A contributing model mistake (Buy Now declared `create_new`,
+  with the cart as its destination) is one the product should recover from.
+- Proposed fix: record the destination a create_new was admitted against
+  (`site-reset/create-baselines.ts` `check`, carried through
+  `flow-bootstrap/action-permissions.ts`, stored by `ledger.ts` `record`). In
+  `beforeTrial`, when a complete fresh read of that group after the act is
+  exactly the original and the subject is absent, drop the act's strictness. It
+  then follows the existing honest cannotUndo path: the trial runs with
+  `startedWith.cannotUndo` and the judge is told. Add one generic sentence to
+  `site-reset/words.ts`. The tests go in `site-reset/tests/ledger.test.ts` (admit
+  case plus three still-refused cases) and `create-baselines.test.ts`. No
+  change to the task, the oracle or model guidance about this site.
+- Secondary: the reset brief threw `flow_bootstrap.provider_evidence_loop_context_invalid`
+  in provider preflight before any model call
+  (`runtime/llm/deepseek/preflight.ts`), and the build ended with a thrown
+  `post_provider_validation_failed`. It needs its own provider-free
+  reproduction.
+- Also noted: revision 2 had no step that sets the office address, so the oracle
+  would have failed at trial. That is normal loop work, but it was not reached.
+- Do not run an unchanged paid retry. Rerun once after the ledger fix lands and
+  the trees are synced.
