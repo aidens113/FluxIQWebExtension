@@ -2,6 +2,7 @@ export * from "../constants";
 export { webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectionObservation } from "../actions/extraction";
 export * from "../actions/types";
 export * from "../actions/schemas";
+export * from "../actions/scroll-request-issues";
 export * from "../actions/capabilities";
 export * from "../actions/fact-check";
 export * from "../actions/check-wait";

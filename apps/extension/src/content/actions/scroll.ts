@@ -11,7 +11,12 @@
 //
 // A command that *sent* a scroll request the domain could not read -- no mode,
 // a mode it does not know, `untilStable` without its `maxScrolls` -- is refused
-// as INVALID_PARAMETER and moves nothing. The domain leaves such a request off
+// as INVALID_PARAMETER and moves nothing, and the refusal names each key that
+// made it unreadable (`webAutomationScrollRequestIssues`): "maxScrolls is
+// missing; untilStable needs it", not the keys it carried (social r4,
+// `run-mvfq957o-40103539`, was refused "it names mode"). Submit refuses the same
+// `untilStable` through the scroll node's parameter contract, so this is the
+// refusal of a request that reached the page some other way. The domain leaves such a request off
 // `action.scroll` and keeps it in `options.scroll` (`gateway-action-parameters.ts`),
 // and until lane 3 this verb took the absent request for the legacy move: Core
 // writes the node's `x: 0`/`y: 0` defaults on every scroll step, so
@@ -52,7 +57,9 @@
 import {
   WEB_AUTOMATION_FAILURE_CODES,
   webAutomationFailureRecord,
+  webAutomationScrollRequestIssues,
   type WebAutomationFailureCarrier,
+  type WebAutomationScrollRequestIssue,
   type WebAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
 import type { ActionabilityReport } from "../action-runtime";
@@ -88,12 +95,23 @@ class UnreadableScrollRequest extends Error implements WebAutomationFailureCarri
   readonly failure: WebAutomationFailureRecord;
 
   constructor(sent: unknown) {
-    const keys = typeof sent === "object" && sent !== null && !Array.isArray(sent) ? Object.keys(sent).filter((key) => KEY_NAME.test(key)) : [];
-    const actual = `scroll: not a request this verb runs${keys.length ? ` (it names ${keys.join(", ")})` : ""}; the page was not moved`;
+    const reasons = webAutomationScrollRequestIssues(sent).map(issueText);
+    const actual = `scroll: not a request this verb runs${reasons.length ? ` (${reasons.join("; ")})` : ""}; the page was not moved`;
     super(`The scroll request is not one this verb runs: ${SCROLL_REQUEST_FORMS}.`);
     this.name = "UnreadableScrollRequest";
     this.failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, { expected: SCROLL_REQUEST_FORMS, actual });
   }
+}
+
+/** One key's reason, quoting the key only when it is an identifier and never a value. */
+function issueText(issue: WebAutomationScrollRequestIssue): string {
+  if (issue.key === "maxScrolls") {
+    return issue.problem === "missing" ? "maxScrolls is missing; untilStable needs it" : "maxScrolls must be a positive whole number";
+  }
+  if (issue.key === "mode") return issue.problem === "missing" ? "mode is missing" : "mode is not by, toElement or untilStable";
+  if (issue.key === "scroll") return "the request is not an object";
+  const key = KEY_NAME.test(issue.key) ? issue.key : "a key";
+  return issue.problem === "unknown" ? `${key} is not a key a scroll request has` : `${key} cannot be read`;
 }
 
 export async function scrollAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {

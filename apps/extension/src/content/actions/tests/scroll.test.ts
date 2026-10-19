@@ -89,11 +89,19 @@ for (const [name, scroll] of [
   });
 }
 
-test("the refusal names the keys the unread request carried", async () => {
+test("the refusal names each key that made the request unreadable", async () => {
   page(0);
-  const result = await scrollAction(command({ scroll: { until: "stopsGrowing" } }), deps, 1);
+  const unread = await scrollAction(command({ scroll: { until: "stopsGrowing" } }), deps, 1);
+  assert.match(unread.failure?.actual ?? "", /mode is missing; until is not a key a scroll request has/u);
 
-  assert.match(result.failure?.actual ?? "", /it names until/u);
+  // social r4 (`run-mvfq957o-40103539`): refused "it names mode", which named nothing missing.
+  const missing = await scrollAction(command({ x: 0, y: 0, smooth: false, scroll: { mode: "untilStable" } }), deps, 1);
+  assert.match(missing.failure?.actual ?? "", /maxScrolls is missing; untilStable needs it/u);
+  assert.doesNotMatch(missing.failure?.actual ?? "", /it names/u);
+
+  const invalid = await scrollAction(command({ scroll: { mode: "untilStable", maxScrolls: 0 } }), deps, 1);
+  assert.match(invalid.failure?.actual ?? "", /maxScrolls must be a positive whole number/u);
+  assert.match((await scrollAction(command({ scroll: { mode: "down" } }), deps, 1)).failure?.actual ?? "", /mode is not by, toElement or untilStable/u);
 });
 
 test("a command that sent no scroll request still makes the legacy absolute move", async () => {

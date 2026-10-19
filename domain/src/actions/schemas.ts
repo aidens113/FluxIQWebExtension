@@ -98,7 +98,11 @@ const optionSelectorSchema = {
 
 /**
  * `WebAutomationScrollRequest`. `maxScrolls` is required by `untilStable`, so a
- * feed cannot scroll forever. Closed (`additionalProperties: false`): these are
+ * feed cannot scroll forever. That requirement is conditional, which Core's
+ * schema reader cannot read, so the scroll node's parameter contract enforces
+ * it at submit with a code naming `maxScrolls`
+ * (`output-nodes/scroll/parameter-contract.ts`; social r4,
+ * `run-mvfq957o-40103539`, where this comment alone let it pass). Closed (`additionalProperties: false`): these are
  * every key the request has, so Core refuses a step that writes another one at
  * submit, naming the fields here, instead of the trial dispatching a scroll the
  * page cannot read (lane 3, `run-mvcvzwk1-c1d869e4`).
