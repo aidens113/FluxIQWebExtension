@@ -558,6 +558,26 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   scripts/test-domain.mjs src/client/tests` -> tests 44, pass 44, fail 0. Lane merges were clean in both repos.
 - F10 stopped once on an API 522 (server side) and was resumed. Briefs F10, F11, S2-S4 under Worker Briefs.
 
+### 2026-10-19 - F8 and F11 done; all four lanes in t722
+
+- Validation: F8 continuation (t566 d02e068d / Core 1e2accc3) rerun by the supervisor: extension
+  `EXTENSION_TEST_BUILD_LABEL=f8b-verify node scripts/test-extension.mjs content/extraction/tests
+  content/extraction/read-coverage content/extraction/page-advance content/actions/tests/extract-list` -> tests 361,
+  pass 361, fail 0; domain `actions/extraction/tests` -> 91/91; Core `npx vitest run` over `result-verification`,
+  `candidate-trial/tests`, `summaries/tests` -> 1406 passed, 2 failed, both in `kept-condition-advice.test.ts`,
+  which the dev sweep already lists (S3 owns it).
+- Decision: accepted F8's `pagination.test` update. 2c529c60 (t567, "Continue hybrid lists before their
+  load-more control appears") gives a hidden load-more one scroll and ends truncated at the page bound, which is
+  the honest answer; no production code changed for it.
+- Validation: F11 (t722 Core c79027bd), worker: `npx vitest run` over `flow-bootstrap/plan/tests`,
+  `llm/deepseek/tests`, `llm/tests` -> 61 files, 862 passed; check exit 0; audit passed. All six were tests behind
+  deliberate changes (5a652d4a judge sentences; aa04a943 `purpose` key); the vocabulary bound moved 4,000 -> 4,400
+  with commit and bytes in the test.
+- Finding (structural): prompt-text changes have twice broken pins/budgets in other folders because only the
+  changed folder's tests ran. Follow-up after this round: make the narrow gate run the prompt pin and budget
+  tests whenever model-facing text owners change.
+- t566 merged into t722 in both repos (Core c453fda9, downstream 7152a58d). F10 still running in t722 Core.
+
 ## Open Questions
 
 None requiring user input.
