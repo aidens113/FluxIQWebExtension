@@ -129,6 +129,14 @@ the touched package's typecheck and the structure audit, and never commits. Mode
   web page before `chrome.tabs.update`/`create` (new `runtime/navigation/address.ts`, called from
   `runtime/action-runner.ts`); with no web page, or for the extension's own address, fail as an invalid
   parameter, never `permission_denied` (auction: root-relative shop link landed on `chrome-extension://`).
+- **F8, t566 extension + Core, list continues:** a one-page list read reports a generic `listContinues` fact
+  (from the reader's existing pagination/infinite-list detection); Core carries it into the read account and
+  trial feedback, replacing the misleading `result.counts_look_right` with a finding that the list goes on
+  past what was read (social r3: read saw 5 of a longer feed, judges said so, model never paged). Owners:
+  extension `content/extraction/list-reader.ts` (+ detection helpers), Core `read-account/accounts.ts`,
+  `service/candidate-trial/feedback.ts`, `repair-directive.ts`. Diagnosis: t567 `reports/codex-social-positive-rerun.md`.
+- **F9, t563 domain, targeted scroll:** a scroll with a target and no mode scrolls to that element (or is refused
+  as an invalid parameter), never reports success without moving to it (`domain/src/client/gateway-action-parameters.ts`).
 
 ### Brief R6 (2026-10-19): what the model is told after a judged-no trial - t567, read-only
 - Social r3 `lab-runs/2026-10-18/run-mveaaqxn-d0be9888` failed: trials 0047 and 0095 ran cleanly but kept 1
@@ -789,7 +797,11 @@ the touched package's typecheck and the structure audit, and never commits. Mode
   2026-10-17 all launches at 0.25 (except nine at 0.1 on 2026-10-12 before the change); 2026-10-18: 12 at 0.1,
   20 at 0.25. Codex's later launch commands set the flag but not `FLUXIQ_LLM_RUN_COST_CEILING_USD`, which the
   A8 launch shape (`automation-project-agents-plan.md`) requires.
-- Dispatched fix briefs F1-F7 (see Worker Briefs), partitioned by lane tree and file. R6 still running.
+- Dispatched fix briefs F1-F7 (see Worker Briefs), partitioned by lane tree and file.
+- R6 judged-no feedback (t567 5b8e6dd8): the judges' own reasons do reach the build model in full ("saw 5 items
+  on 1 page and never paged"); the gap is that nothing in the read result says the list continues, the bare
+  `result.counts_look_right` code misleads, and a targeted scroll without a mode reported success at the
+  list's end. Dispatched F8 (list-continues fact, t566 pair) and F9 (targeted scroll, t563 domain).
 
 ## Open Questions
 
