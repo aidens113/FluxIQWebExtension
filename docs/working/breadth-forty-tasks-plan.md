@@ -58,11 +58,12 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
 **Now (2026-10-19):** fixes F1-F9 and the dev-sweep fixes are on `dev` in both repos. Rerun round 1 went 0 of 4
-($0.234): three builds died in the site-reset ledger (photo, office, job), social is being diagnosed (R10). Lead
-L1 (t724) is redesigning reset settlement as one observed-state model with a regression corpus of all seven
-failure shapes.
+($0.234): three builds died in the site-reset ledger (photo, office, job); social reached the exact answer but a
+split judge and the deadline lost it (R10). Lead L1 (t724) is redesigning reset settlement as one observed-state
+model with a regression corpus of all seven failure shapes; t725 (G1-G4) fixes the judge split, time honesty,
+the scroll schema and the social task wording.
 
-**Next, in order:** review and integrate L1; fix whatever R10 finds; sync the lanes and rebuild their Core; rerun
+**Next, in order:** review and integrate L1 and t725; sync the lanes and rebuild their Core; rerun
 office checkout, job save, photo newest likes and social group posts on fresh workspaces; then the owed reruns
 (job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
 
@@ -623,6 +624,24 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   executor, result-verification, refuted-result, authoring-mode, handlers and conversations -> 228 files, 1980
   passed; S5 `node --test scripts/task/tests/*.test.mjs` -> 32/32; web capabilities/tests/authoring/instructions
   -> 245/245, web tsc exit 0; downstream adapter + client tests 70/70, pagination 34/34, `pnpm check` exit 0.
+
+### 2026-10-19 - Social r4 diagnosed (R10); t725 fixes dispatched
+
+- Finding (R10, t566 e91de996): not a reset failure. Revision 9 (trial 0083) stored exactly the three expected
+  records (a comparison against `expected.ts` printed True for every value). Judge call 1 said no (0.6) without
+  naming any wrong row; call 2 said yes. Core made it unsure, the gate said a retest would "likely be judged the
+  same way", the builder broke the answer (revision 10, correctly judged no), reverted, and the deadline cancelled
+  the retest (last test 337 s, about 150 s left). The ending then said "never tested from its start" and a
+  "Your Flow is ready" toast showed with no Flow. F8 fired accurately; F9 was not exercised. An `untilStable`
+  scroll without `maxScrolls` passed submit and failed at run time with "it names mode".
+- Dispatched t725 (paired, from dev): G1 re-ask a split's no once for a named defect, else it counts as yes with
+  advice; no "likely judged the same" for a split (Core `result-verification/agreement`, trial-gate wording). G2
+  no trial the remaining time cannot cover; truthful time-limit ending; no success toast for a draft (Core
+  project-build run, conversation build command, activity). G3 `untilStable` needs `maxScrolls` at submit, and a
+  run-time message naming the key (domain schemas, extension scroll). G4 reword the social task so posts not in a
+  group are plainly left out, keeping intent and oracle (catalog and baseline).
+- Validation: not validated yet; workers running. L1 (reset redesign, t724) running in parallel; G1's trial-gate
+  edit is wording only to keep the overlap with L1 small.
 
 ## Open Questions
 
