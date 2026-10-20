@@ -271,6 +271,33 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t738-rerun2-fixes (lead-xhigh, t738 rerun2-fixes)
+- Why: breadth rerun round 2 went 0 of 4, every cause a product defect (debug notes, one per lane tree, under
+  `docs/working/language-driven-flow-loop-plan/debugs/`: t719 run-mvgf4pk5-55343613 job, t563 run-mvgf04kw-310fc169
+  office, t566 run-mvgf7ij5-a9747575 social, t567 run-mvgf801u-cc23575e photo). Read all four first.
+- Unit A, reset witnesses and trial acts (Core `flow-bootstrap/site-reset/**`, `service/candidate-trial/landed-acts.ts`):
+  before the seal, refuse without running any reversible press with no witness (no complete list it sits in, no
+  stated control state, no issued reference), as `create_new` already is (job; office's address step); settle words
+  never ask for a reference that cannot exist and never print "[withheld]"; an invented `resetDestination` is refused
+  explicitly, not ignored; trial acts are built from the in-memory trace before withholding (photo).
+- Unit B, script format (Core `nodes/data` write-records, `flow-bootstrap/authoring/locate-issue.ts`,
+  `draft-routing.ts`): write-records takes a `records` parameter of `$step` values with a derived schema and a generic
+  example; key-named node issues point at their own step; the loop-in-loop refusal points at the inner loop and names
+  the `NO_ROW_LOOP_IN_PAGE_LOOP` alternative (office, social).
+- Unit C, loop feedback and trial views (Core `llm/repeat-guard/candidate-feedback.ts`, `subflow-candidate/builder-loop.ts`,
+  activity/chat wording): "test it" for an unchanged submission; `core.test_subflow` answers wrapped in the
+  candidate-trial view so they carry the page; a refused test says where it moved the tab; trace and fix
+  `unexpected_input_keys` on later briefs' opening calls (office); the final chat message and "one more change" tell
+  the truth (office, job).
+- Unit D, downstream (`rejection-next/next-sentence.ts`, `output-nodes/definitions.ts`, the refusal that drops keys):
+  the cut-short hint says "load every row first, then loop over one read"; `scroll` gets a description and example;
+  the refusal names the bad keys (social).
+- Rules: model guidance never mirrors a realistic task, site, product or answer (examples use another kind of site);
+  prompt contract gate tests when model-facing text changes; provider-free reproductions of each shape (the
+  site-reset installed-gateway specs with a scripted provider where the shape is a reset one); usual lane rules; no
+  paid runs (the supervisor reruns live).
+- Report: `docs/working/trace-offline-trials-plan/reports/t738-rerun2-fixes.md` in the t738 downstream tree.
+
 ### Brief: t736-trace-capture (lane T lead, t736 trace-capture)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P2, with decisions D1-D7 in `reports/lane-t.md`.
 - Task: Core lane: capture at the client gateway into the workspace's existing store, through the same intake it uses
