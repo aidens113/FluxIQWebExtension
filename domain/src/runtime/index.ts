@@ -8,6 +8,5 @@ export * from "./lasting-act-statement";
 export * from "./state-diff";
 export * from "./llm-evidence";
 export * from "./reusable-evidence";
-export * from "./reusable-evidence-coordinator";
 export * from "./route-state";
 export * from "./service";

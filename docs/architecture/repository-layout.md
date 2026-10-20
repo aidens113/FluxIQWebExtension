@@ -444,7 +444,15 @@ structure audit's `browser-imports` rule walks from.
 ### Build And Check Cache
 
 `scripts/build-cache/` is a content-fingerprinted stamp-and-skip cache for
-every package's `build` and `check`. Each such script runs
+every package's `build` and `check`. The engine is FluxIQ Core's
+(`scripts/build-cache/` there, loaded from the Core beside the checkout through
+`scripts/core-scripts`); this repository keeps only its configuration: the step
+registry, its step resolver and Core-package resolution, and the esbuild input
+listing. The engine fingerprints only the files git can see and runs a step
+uncached where git cannot list them; it replays a step's printed output on reuse.
+`pnpm check` also runs `scripts/check/core-mirror.mjs`, which fails when a file
+this repository still mirrors from Core (today the structure audit, all but
+`config.mjs`) differs from Core's copy. Each such script runs
 `node <path-to>/scripts/build-cache/cli.mjs <step> -- "<command>"`, where
 `<step>` is a name in the registry `scripts/build-cache/steps.mjs`
 (`domain:build`, `extension:check`, `test-runner:build` and so on). The CLI
@@ -773,9 +781,13 @@ t598, and t616, abandoned and re-allocated seconds apart), and a reused id names
 two units of work in trailers, ledgers and reports. The ref is created only if
 it does not exist, so two starts racing for one number cannot both take it: the
 second is refused before it creates anything. A fresh clone has no refs and
-still clears every merged id from history. Core's own `pnpm task start` applies
-the same rule (`scripts/task/task-id.mjs` and `record-task-id.mjs` in each
-repository); keep the two in step.
+still clears every merged id from history. Both repositories run one implementation of
+that rule: FluxIQ Core owns the shared task rules (id allocation, id refs, branch
+naming, the git runner, path identity) in its `scripts/task/`, and this
+repository's `scripts/task` and `scripts/worktree` load them from the Core
+beside the checkout through `scripts/core-scripts` (`importCoreScript`),
+keeping only the worktree and Core-pairing half here. A Core that predates a
+shared rule fails with a message saying to merge Core's `dev` into it.
 
 ## Panel Commands
 

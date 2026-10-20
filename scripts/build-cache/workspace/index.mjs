@@ -1,10 +1,9 @@
-// The workspace a step lives in: its packages, the FluxIQ Core packages they
-// link, a registry entry resolved to absolute input roots and outputs, and the
-// paths a TypeScript project names; and a FluxIQ Core library package
-// resolved as a step of its own.
+// This repository's side of resolving a step: a registry entry resolved to
+// absolute input roots and outputs for Core's engine, the FluxIQ Core packages
+// a step links, a FluxIQ Core library package resolved as a step of its own,
+// and the build-cache sources every fingerprint covers.
 
 export { linkedCorePackages } from "./core-packages.mjs";
+export { engineSourceRoots } from "./engine-sources.mjs";
 export { resolveCoreLibrary } from "./resolve-core-library.mjs";
-export { resolveStep } from "./resolve-step.mjs";
-export { tsconfigReferences } from "./tsconfig-references.mjs";
-export { readWorkspacePackages } from "./workspace-packages.mjs";
+export { resolveExtensionStep } from "./resolve-step.mjs";

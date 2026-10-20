@@ -224,8 +224,7 @@ This repository contains a working, finite FluxIQ web testing facility. Its
 components are intentionally private, downstream web-automation
 infrastructure: deterministic fixture websites, isolated Chromium and Core
 topology, an authenticated production-extension path, attested evidence,
-changed-capability selection, bounded-agent workflow contracts, and real-site
-policy validation.
+changed-capability selection, and real-site policy validation.
 
 The browser suite and the four facility target modes must not be conflated:
 
@@ -284,7 +283,6 @@ browser extension and the `web-automation` domain.
 | Run directories, ports, owned child processes, isolated Core startup, existing-Core attachment, and authenticated control client | `packages/test-runner` | Concrete topology spanning this checkout and its Core sibling; an attached installation remains externally owned. |
 | Screenshot policy, artifact hashing, redaction, and human-readable reports | `packages/test-evidence` | Private facility implementation; browser bytes enter through adapters. |
 | Change-to-scenario selection | `packages/test-matrix` | Repository-path and web-capability knowledge. |
-| Bounded task/review/audit contracts | `packages/agent-orchestrator` | Human-triggered facility workflow; it does not invoke agents. |
 | Real-site allowlist and operational review checks | `packages/real-site-policy` | Web-specific safety policy; it does not browse or execute probes. |
 | Pairing, authorization, durable projects/recordings, generic gateway, runs, attempts, and runtime events | sibling FluxIQ Core | Domain-neutral framework ownership. |
 
@@ -3191,36 +3189,6 @@ the workflow, but those Linux commands have not been executed in this local
 Windows validation and must remain an explicit CI verification item. The
 nightly three-repeat baseline likewise awaits an actual scheduled run.
 
-## Bounded agent workflow
-
-`packages/agent-orchestrator` provides vendor-neutral, human-triggered workflow
-primitives. It does not dispatch an agent, create or mutate a worktree, execute
-a command, merge, publish, or deploy.
-
-Its task packet records the human approval reference, role, objective, one
-repository, exact allowed roots, scenario/seed/argv, baseline artifact hash,
-protected and failing invariants, budgets, prohibited actions, required checks,
-and a structured JSON response contract. Policies distinguish coordinator,
-scenario author, read-only diagnosis, Core repair, extension repair, and
-reviewer roles.
-
-Review primitives enforce repository/path and changed-byte/file limits,
-reported budget use, required checks, independently observed versus
-agent-reported edits, invariant definition equality, candidate evaluation,
-safety status, evidence completeness, and comparison verdict. A passing gate
-returns `approve-for-human-review`, never permission to merge. Workflow events
-can be appended to a serialized SHA-256 hash-chained NDJSON audit log, which
-detects later mutation.
-
-Edit authorization is checked against a trusted observed-diff input. The pure
-worktree planner requires absolute repository, main-workspace, disposable-base,
-and candidate roots; rejects overlap with the repository/main workspace; and
-requires affirmative symlink-resolution and reparse-point-absence attestations.
-It emits argv-only Git create/inspect/remove command plans but executes none of
-them. The audit writer serializes one writer instance; it is not a
-multi-process locking service. Phase 6 still has no automatic agent invocation,
-worktree mutation, merge, publish, or deployment path.
-
 ## Core promotion decision
 
 No testing-facility code has been promoted to FluxIQ Core. Promotion remains
@@ -3337,15 +3305,11 @@ execution and produce machine-readable results:
 
 ```powershell
 pnpm boundary:audit
-pnpm agent:orchestrator worktree plan <worktree-request.json>
-pnpm agent:orchestrator result validate <packet.json> <response.json> <observed-edits.json>
 pnpm real-site:policy <policy.json>
 ```
 
-The worktree command only validates roots/attestations and returns argv; the
-result command validates against trusted observed edits; the boundary audit
-currently returns the Core-promotion defer decision; and the real-site command
-does not execute a probe.
+The boundary audit currently returns the Core-promotion defer decision, and the
+real-site command does not execute a probe.
 
 ### Core library builds during a Lab run
 
@@ -3398,7 +3362,6 @@ pnpm --dir packages/test-contracts test
 pnpm --dir packages/test-runner test
 pnpm --dir packages/test-evidence test
 pnpm --dir packages/test-matrix test
-pnpm --dir packages/agent-orchestrator test
 pnpm --dir packages/real-site-policy test
 ```
 

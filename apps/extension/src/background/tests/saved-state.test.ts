@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY } from "fluxiq/automation-studio/nodes";
 import type { FluxIQSettings } from "../../shared/protocol";
-import { readSavedClientId, readSavedQueue, readSavedSession, readSavedSettings } from "../saved-state";
+import { readSavedClientId, readSavedOutbox, readSavedSession, readSavedSettings } from "../saved-state";
 
 const defaults: FluxIQSettings = {
   gatewayUrl: "ws://127.0.0.1:4777/client",
@@ -38,11 +38,35 @@ test("a session keeps its well-formed fields and drops the rest", () => {
   assert.deepEqual(readSavedSession({ token: "t" }, "fallback").value, { clientId: "fallback", token: "t" });
 });
 
-test("the offline queue keeps messages that name their type", () => {
-  const good = { type: "client.recording_event", payload: {} };
-  assert.deepEqual(readSavedQueue([good, null, { payload: {} }, "x"]), { value: [good], repaired: ["queuedEvents"] });
-  assert.deepEqual(readSavedQueue({ not: "a list" }), { value: [], repaired: ["queuedEvents"] });
-  assert.deepEqual(readSavedQueue([good]), { value: [good], repaired: [] });
+test("the offline queue keeps its lineage and each entry with a whole binding and a typed message", () => {
+  const good = { binding: { session: "lineage-1", projectId: "project-1", recordingId: null }, message: { type: "client.recording_event", payload: {} } };
+  const unbound = { binding: { session: "lineage-1", projectId: 7, recordingId: null }, message: { type: "client.recording_event", payload: {} } };
+  const untyped = { binding: { session: "lineage-1", projectId: null, recordingId: "rec-1" }, message: { payload: {} } };
+  assert.deepEqual(readSavedOutbox({ lineage: "lineage-1", entries: [good] }), { value: { lineage: "lineage-1", entries: [good] }, repaired: [] });
+  assert.deepEqual(readSavedOutbox({ lineage: "lineage-1", entries: [good, null, unbound, untyped, "x"] }), { value: { lineage: "lineage-1", entries: [good] }, repaired: ["outbox.entries"] });
+  assert.deepEqual(readSavedOutbox(undefined), { value: { entries: [] }, repaired: [] });
+});
+
+test("an offline queue of the wrong shape is repaired, never thrown", () => {
+  assert.deepEqual(readSavedOutbox("garbage"), { value: { entries: [] }, repaired: ["outbox"] });
+  assert.deepEqual(readSavedOutbox([1, 2]), { value: { entries: [] }, repaired: ["outbox"] });
+  assert.deepEqual(readSavedOutbox({ lineage: 12, entries: { not: "a list" } }), { value: { entries: [] }, repaired: ["outbox.lineage", "outbox.entries"] });
+  assert.deepEqual(readSavedOutbox({ lineage: "  ", entries: [] }), { value: { entries: [] }, repaired: ["outbox.lineage"] });
+});
+
+test("the offline queue keeps its loss record and each entry's recorded size, so the next flush still reports the loss", () => {
+  const sized = { binding: { session: "lineage-1", projectId: null, recordingId: null }, message: { type: "client.state_update", payload: {} }, bytes: 120 };
+  const lost = { count: 3, byReason: { count_limit: 1, byte_budget: 2 } };
+  assert.deepEqual(readSavedOutbox({ lineage: "lineage-1", entries: [sized], lost }), { value: { lineage: "lineage-1", entries: [sized], lost }, repaired: [] });
+});
+
+test("a malformed loss record keeps the counts it can read under Core's reasons, and a size that is not a byte count is dropped", () => {
+  const entry = { binding: { session: "lineage-1", projectId: null, recordingId: null }, message: { type: "client.state_update", payload: {} } };
+  assert.deepEqual(
+    readSavedOutbox({ entries: [{ ...entry, bytes: -4 }], lost: { count: 9, byReason: { count_limit: 2, invented: 7 } } }),
+    { value: { entries: [entry], lost: { count: 2, byReason: { count_limit: 2 } } }, repaired: ["outbox.lost"] }
+  );
+  assert.deepEqual(readSavedOutbox({ entries: [], lost: "lots" }), { value: { entries: [] }, repaired: ["outbox.lost"] });
 });
 
 test("a client id must be a non-blank string", () => {

@@ -5,21 +5,50 @@
 // what they actually load, is `prove-inputs.mjs`.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { buildOrder, isInsideRoots, pathSpellings, readWorkspacePackages, REPOSITORY_ROOT, resolveStep, STEPS, tsconfigReferences } from "../index.mjs";
+import { buildOrder, coversPath, pathSpellings, readWorkspacePackages, REPOSITORY_ROOT, resolveStep, STEPS, tsconfigReferences } from "../index.mjs";
 
 const relative = (file) => path.relative(REPOSITORY_ROOT, file).split(path.sep).join("/");
+const insideRepository = (file) => !relative(file).startsWith("../") && !path.isAbsolute(relative(file));
+
+/** The paths git ignores, of those given (absolute, inside the repository). */
+function ignoredByGit(files) {
+  const asked = [...new Set(files.filter(insideRepository).map(relative))];
+  if (asked.length === 0) return new Set();
+  try {
+    const out = execFileSync("git", ["-C", REPOSITORY_ROOT, "check-ignore", "--stdin", "--no-index"], { input: asked.join("\n"), encoding: "utf8" });
+    return new Set(out.split(/\r?\n/u).filter(Boolean));
+  } catch (error) {
+    // check-ignore exits 1 when none of the paths is ignored.
+    if (error.status === 1) return new Set();
+    throw error;
+  }
+}
+
+/**
+ * Whether a path is inside a resolved step's fingerprint. A git root lists
+ * only what git shows, so a path git ignores, or one outside this checkout,
+ * is covered only by a walked root: a dependency's generated directory, a
+ * linked Core package, the installed lockfile.
+ */
+function fingerprints(resolved, targets) {
+  const ignored = ignoredByGit(targets);
+  const walked = { roots: resolved.roots.filter((root) => root.kind === "walk") };
+  return (target) => (!insideRepository(target) || ignored.has(relative(target)) ? coversPath(target, walked) : coversPath(target, resolved));
+}
 const packages = [...readWorkspacePackages(REPOSITORY_ROOT).values()].map((pkg) => ({ ...pkg, relative: relative(pkg.dir) }));
 const CLI_CALL = /node (\S*scripts\/build-cache\/cli\.mjs) (\S+)(?: -- "([^"]*)")?/gu;
 
-test("every registered step resolves, and names projects that exist", () => {
+test("every registered step resolves, names projects that exist, and stamps in this repository's directory, apart from Core's", () => {
   for (const [name, step] of Object.entries(STEPS)) {
     const resolved = resolveStep(name, { env: {} });
     assert.ok(existsSync(resolved.packageDir), `${name}: ${step.package} does not exist`);
     for (const config of resolved.tsconfigs) assert.ok(existsSync(config), `${name}: ${relative(config)} does not exist`);
+    assert.match(relative(resolved.stampPath), /node_modules\/\.cache\/fluxiq-build\//u, name);
   }
 });
 
@@ -28,8 +57,10 @@ test("every tsconfig path a step's projects name is inside that step's fingerpri
   for (const name of Object.keys(STEPS)) {
     const resolved = resolveStep(name, { env: {} });
     for (const config of resolved.tsconfigs) {
-      for (const reference of tsconfigReferences(config)) {
-        if (!isInsideRoots(reference.path, resolved)) outside.push(`${name}: ${relative(reference.config)} ${reference.field} "${reference.value}" -> ${reference.path}`);
+      const references = tsconfigReferences(config);
+      const covered = fingerprints(resolved, references.map((reference) => reference.path));
+      for (const reference of references) {
+        if (!covered(reference.path)) outside.push(`${name}: ${relative(reference.config)} ${reference.field} "${reference.value}" -> ${reference.path}`);
       }
     }
   }
@@ -50,8 +81,8 @@ test("every esbuild entry and alias target is inside the bundling steps' fingerp
   for (const file of sources) assert.ok(existsSync(file), `bundle source ${file} does not exist`);
   for (const [name, step] of Object.entries(STEPS)) {
     if (!step.bundles) continue;
-    const resolved = resolveStep(name, { env: {} });
-    for (const file of sources) assert.ok(isInsideRoots(file, resolved), `${name}: esbuild reads ${file}, which no input root covers`);
+    const covered = fingerprints(resolveStep(name, { env: {} }), sources);
+    for (const file of sources) assert.ok(covered(file), `${name}: esbuild reads ${file}, which no input root covers`);
   }
 });
 
@@ -95,11 +126,12 @@ test("domain's host:build script runs the host step, which no dependant's finger
   const scripts = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, "domain", "package.json"), "utf8")).scripts;
   assert.equal(scripts["host:build"], `node ../scripts/build-cache/cli.mjs domain:host-build -- "${STEPS["domain:host-build"].command}"`);
   const host = path.join(REPOSITORY_ROOT, "domain", "dist", "host", "web-panel-host.mjs");
-  assert.equal(isInsideRoots(host, resolveStep("domain:host-build", { env: {} })), false, "the host step's own output is not its input");
+  const declarations = path.join(REPOSITORY_ROOT, "domain", "dist", "index.d.ts");
+  assert.equal(fingerprints(resolveStep("domain:host-build", { env: {} }), [host])(host), false, "the host step's own output is not its input");
   for (const dependant of ["extension:build", "extension:check", "test-runner:build", "test-runner:check"]) {
-    const resolved = resolveStep(dependant, { env: {} });
-    assert.equal(isInsideRoots(host, resolved), false, `${dependant} fingerprints the host bundle`);
-    assert.equal(isInsideRoots(path.join(REPOSITORY_ROOT, "domain", "dist", "index.d.ts"), resolved), true, `${dependant} no longer fingerprints domain's dist`);
+    const covered = fingerprints(resolveStep(dependant, { env: {} }), [host, declarations]);
+    assert.equal(covered(host), false, `${dependant} fingerprints the host bundle`);
+    assert.equal(covered(declarations), true, `${dependant} no longer fingerprints domain's dist`);
   }
   assert.ok(!buildOrder("test-runner:build").includes("domain:host-build"), "pnpm build does not run the host step");
 });

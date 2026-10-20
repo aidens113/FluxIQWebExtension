@@ -37,11 +37,12 @@ import type {
 import type { ActivityDisplay, ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
-import { DEFAULT_CORE_API_URL } from "../shared/constants";
+import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
 import { RecordedStepIndex } from "./recorded-steps";
+import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
 import { CapturePolicySource, effectiveSettings } from "./capture-policy/index";
-import { clearQueuedEvents, queueEvent, readQueuedEvents, removeQueuedRecordingEvent, writeSession } from "./storage";
+import { reportSavedStateRepair, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are
 // siblings of the same name: "./connection" would resolve back to this file.
 import {
@@ -52,6 +53,8 @@ import {
   compactObject,
   ContentAttachment,
   EventSequence,
+  extensionOutboxByteBudget,
+  extensionOutboxStore,
   fetchCoreRecordings,
   GatewaySession,
   NavigationRecorder,
@@ -67,6 +70,7 @@ import {
   type CoreApiCredentials,
   type TabSnapshotTransport
 } from "./connection/index";
+import { inFlightRecordArea } from "./connection/in-flight/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
 type ActivityDisplayListener = (display: ActivityDisplay | null) => void;
@@ -139,7 +143,16 @@ export class FluxIQConnection {
       reportError: (message) => { this.lastError = message; },
       clearError: () => { this.lastError = undefined; },
       beforeConnect: () => this.page.refresh(),
-      queue: { queueEvent, readQueuedEvents, clearQueuedEvents },
+      // Session storage (worker memory without it): queued page data never
+      // outlives the browser session that recorded it.
+      outbox: new ClientGatewayOutbox(
+        extensionOutboxStore(inFlightRecordArea(), { onRepaired: (fields) => reportSavedStateRepair("offline queue", fields) }),
+        { limit: MAX_EVENT_QUEUE_SIZE, byteBudget: extensionOutboxByteBudget() }
+      ),
+      queueContext: () => ({
+        projectId: this.projects.activeRecordingProject() ?? this.session.projectId ?? null,
+        recordingId: this.recording.recordingId() ?? null
+      }),
       handlers: {
         onServerMessage: (message) => void this.commands.handleMessage(message),
         onPairingRequired: (referenceCode, reason) => {
@@ -154,6 +167,12 @@ export class FluxIQConnection {
         },
         onCommand: (payload, messageId) => void this.commands.handleCommand(payload, messageId),
         onHeartbeat: () => void this.page.sendBrowserState(),
+        onQueueLoss: (loss) => this.addActivity(
+          "connection",
+          "Some offline messages were lost",
+          `${loss.count} queued ${loss.count === 1 ? "message" : "messages"} could not be kept while FluxIQ was unreachable; FluxIQ was told.`,
+          "warning"
+        ),
         // Any extension API call resets the MV3 idle timer (Chrome 110+), so the
         // worker outlives a person's approval; reading lastError keeps it quiet.
         keepAlive: () => chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError)
@@ -380,6 +399,11 @@ export class FluxIQConnection {
     await this.gateway.connect();
   }
 
+  /** The offline queue's size, read from the stored queue a restarted worker inherits (`GatewaySession.refreshQueueSize`). */
+  refreshQueueSize(): Promise<number> {
+    return this.gateway.refreshQueueSize();
+  }
+
   /** Retries a dropped connection now instead of when its backoff ends (`GatewaySession.retryNow`). */
   retryConnection(): boolean {
     return this.gateway.retryNow();
@@ -404,7 +428,7 @@ export class FluxIQConnection {
   async removeRecordedStep(activityId: string): Promise<PanelRelayResponse<{ removedFrom: "queue" | "fluxiq"; removedCount: number }>> {
     const step = this.recordedSteps.lookup(activityId);
     if (!step) return { ok: false, code: "invalid_request", error: "That step can no longer be removed from here." };
-    const dequeued = await removeQueuedRecordingEvent(step.eventId);
+    const dequeued = await this.gateway.removeQueuedRecordingEvent(step.eventId);
     if (dequeued > 0) {
       this.forgetRecordedStep(activityId);
       return { ok: true, payload: { removedFrom: "queue", removedCount: dequeued } };

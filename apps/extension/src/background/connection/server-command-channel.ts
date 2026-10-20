@@ -7,6 +7,7 @@
 // event as well as a reply -- so the methods that start a command and the
 // methods that report its outcome only make sense beside each other.
 
+import type { ClientGatewayCommandReconciliation, ClientGatewayHostLeaseLedger } from "@fluxiq/client-gateway-websocket";
 import {
   createWebAutomationRecordingEvent,
   webAutomationActionResultPayload,
@@ -36,8 +37,8 @@ import type { ContentAttachment } from "./content-attachment";
 import { captureMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
-import { HostLeaseLedger } from "./host-lease/index";
-import { CommandReconciliation, frameDocumentId, inFlightRecordArea, InFlightRecordStore, SeenCommandStore } from "./in-flight/index";
+import { sessionHostLeaseLedger } from "./host-lease/index";
+import { frameDocumentId, inFlightRecordArea, webCommandReconciliation } from "./in-flight/index";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
 import { classifyRecordingStartRefusal } from "./recording-start/index";
 import {
@@ -79,22 +80,22 @@ export type ServerCommandChannelDeps = {
    * The in-flight record and the answer to a repeated command id (plan B3).
    * Absent, the channel keeps its own in the browser's session storage.
    */
-  readonly reconciliation?: CommandReconciliation;
+  readonly reconciliation?: ClientGatewayCommandReconciliation;
   /**
    * The highest host lease seen per resource, which a leased command is judged
    * against (automation-project-agents plan). Absent, the channel keeps its own
    * in the browser's session storage.
    */
-  readonly hostLeases?: HostLeaseLedger;
+  readonly hostLeases?: ClientGatewayHostLeaseLedger;
 };
 
 export class ServerCommandChannel {
-  private readonly reconciliation: CommandReconciliation;
-  private readonly hostLeases: HostLeaseLedger;
+  private readonly reconciliation: ClientGatewayCommandReconciliation;
+  private readonly hostLeases: ClientGatewayHostLeaseLedger;
 
   constructor(private readonly deps: ServerCommandChannelDeps) {
     this.reconciliation = deps.reconciliation ?? ownReconciliation(deps);
-    this.hostLeases = deps.hostLeases ?? new HostLeaseLedger(inFlightRecordArea());
+    this.hostLeases = deps.hostLeases ?? sessionHostLeaseLedger();
   }
 
   async handleMessage(message: ClientGatewayServerMessage): Promise<void> {
@@ -226,7 +227,7 @@ export class ServerCommandChannel {
       const commandId = payload.action.commandId;
       // A command id this worker already has an answer for -- still running,
       // just answered, queued, or lost by an earlier worker -- is answered with
-      // it and never acted on twice (`in-flight/command-reconciliation.ts`).
+      // it and never acted on twice (`in-flight/web-reconciliation.ts`).
       if (await this.reconciliation.answerRepeat(commandId) !== undefined) return;
       // A command under a lease that moved is answered with the refusal alone
       // -- no runtime status, no recorded event -- and settled, so a repeat of
@@ -241,7 +242,13 @@ export class ServerCommandChannel {
         }
         return;
       }
-      await this.reconciliation.begin(payload.action, this.deps.page.tabId()).catch((error: unknown) => this.inFlightRecordFailed(error));
+      // The record names the command, whether it commits (decided from its
+      // options, which are never kept) and the tab it is meant for.
+      const tabId = this.deps.page.tabId();
+      await this.reconciliation.begin(
+        { commandId, actionType: payload.action.actionType, parameters: payload.action.options as JsonObject | undefined },
+        tabId === undefined ? undefined : { tabId }
+      ).catch((error: unknown) => this.inFlightRecordFailed(error));
       try {
         this.applyStart(this.deps.runtimeStatus.startAction(payload.action));
         await this.deps.captureActionBoundary("before", payload.action);
@@ -274,6 +281,12 @@ export class ServerCommandChannel {
     await this.deps.send("client.reconcile_result", answer);
   }
 
+  /** Names the tab, and the document its frame holds when the browser says, that a command is being sent to, just before it is. */
+  private async noteDispatch(commandId: string, tabId: number, frameId: number): Promise<void> {
+    const documentId = await frameDocumentId(tabId, frameId);
+    await this.reconciliation.placed(commandId, documentId === undefined ? { tabId } : { tabId, documentId });
+  }
+
   /**
    * The in-flight record could not be written or read. The command still runs
    * -- refusing it over its own bookkeeping would fail a step that can work --
@@ -295,7 +308,7 @@ export class ServerCommandChannel {
       sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId),
       sendGatewayResult: (result) => this.deps.send("client.action_result", result),
       noteDispatch: async (commandId, tabId, frameId) => {
-        await this.reconciliation.dispatched(commandId, tabId, frameId).catch((error: unknown) => this.inFlightRecordFailed(error));
+        await this.noteDispatch(commandId, tabId, frameId).catch((error: unknown) => this.inFlightRecordFailed(error));
       },
       // The look takes in every frame (t200), merged exactly as a recorded
       // event's snapshot is, around the top frame's own capture.
@@ -401,13 +414,10 @@ export class ServerCommandChannel {
 }
 
 /** The channel's own reconciliation, over the browser's session storage: records, received ids, and the offline queue. */
-function ownReconciliation(deps: ServerCommandChannelDeps): CommandReconciliation {
-  const area = inFlightRecordArea();
-  return new CommandReconciliation({
-    store: new InFlightRecordStore(area),
-    seen: new SeenCommandStore(area),
+function ownReconciliation(deps: ServerCommandChannelDeps): ClientGatewayCommandReconciliation {
+  return webCommandReconciliation({
+    area: inFlightRecordArea(),
     queuedResult: async (commandId) => await deps.gateway.queuedActionResult(commandId),
-    send: async (result) => await deps.send("client.action_result", result),
-    documentOf: frameDocumentId
+    send: async (result) => await deps.send("client.action_result", result)
   });
 }
