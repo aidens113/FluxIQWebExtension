@@ -268,6 +268,19 @@ was still running at dispatch and is excluded below by its own file list.
   directories; fluxiq `tsc`; both audits; prompt contract tests if any model-facing text moves.
 - Report: `docs/working/trace-offline-trials-plan/reports/lane-t-u7.md` in the t734 downstream tree.
 
+### Brief: t735-sync-core-bootstrap (worker-high, t735 sync-core-bootstrap)
+- Why: since t727, `pnpm task sync-core`, whose purpose is to move an outdated shared Core to Core's dev, fails on
+  exactly that Core ("has no scripts/build-cache/build-cache-for.mjs: that Core predates the shared tooling"),
+  thrown at import time from `scripts/core-scripts/import-core-script.mjs` via `scripts/build-cache/core-engine.mjs`;
+  the supervisor moved the shared Core by hand. The four live-lane trees' Cores predate t727 too.
+- Task: every command that brings a Core up to date (sync-core, the shared-Core move in `task start --worktree`) works
+  against a Core that predates the imported tooling: no Core engine import before the move; the move uses only code
+  shipped downstream or the moved Core's own scripts afterwards; every other command keeps the "predates" refusal.
+  Tests first, including sync-core against a fixture Core lacking `build-cache-for.mjs`.
+- Owns: `scripts/task/**`, `scripts/worktree/**`, `scripts/core-scripts/**`, the bootstrap path in
+  `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
+- Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
+
 ### Brief: sweep-1019b (worker-low, second daily full sweep of `dev`)
 - Detached worktrees of both repositories at `origin/dev` (downstream cedd46af, Core 4077d0a0) under
   `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019b/` (Core sibling to the downstream checkout); `pnpm install` both;
