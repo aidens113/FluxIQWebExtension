@@ -16,44 +16,34 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
 progress. Get it done."
 
-**Merged to `dev` and pushed (both repositories), 2026-10-19 evening:**
-- t726 lane G: offline queue scoped to session/project/recording with a byte budget and explicit loss marker; the
-  gateway client protocol (reconnect, heartbeat, outbox, reconciliation, lease fencing, one session pick) in Core's
-  `client-gateway-websocket`; the extension's gateway session is a web adapter over it.
-- t727 lane H: provider-call structure rule, Core-mirror drift check in `pnpm check`, agent-orchestrator and the
-  unused coordinator deleted, one provider key list, test-matrix realistic-only; Core owns the build-cache engine,
-  task rules and a web-build seam, imported here; Core staleness by Core's `decideStep`.
-- t729 lane T: P0 (build-time baseline: live trials 49.8% of build time; capture-boundary inventory; snapshot spike:
-  DOM serialization + resource map reloads faithfully, MHTML does not) and P1 to the L1 stop point (trace contract,
-  result contract, gateway channel scope, environment port, trace-fed fixture). No live behaviour changed.
-- t724 L1: one site-reset settlement model grounded in observed state; both browser-proof defects fixed (build-wide
-  repeat matching; icon-only control names); six headed site-reset cases pass.
-- t732: card security codes and group-marked controls withheld on every capture path (headed probe proved the leak
-  closed); inert file input reports `not_shown`; a blank text wait is refused at once.
+**Boundary audit move plan: complete.** All six phases are merged to `dev` and pushed in both repositories: t726
+lane G (phases 1, 3), t727 lane H (0, 5), t728 lane S (2, 4). Ledger in
+[extension-core-boundary-audit.md](./extension-core-boundary-audit.md).
 
-**In flight:**
-- t728 lane S (phases 2 and 4) committed on its branch and merged with `dev`; the lead is doing five follow-ups
-  before merge (panel wording in Core's own panel, the largestInputTokens/byRole diagnostics, the chat check that
-  folded an earlier turn into the instruction, the Lab's balance codes, requestsEnabled and the hello's capture flags).
-- t730 realistic-only browser specs: all workers done, tree committed and merged with `dev`; shared Core being moved
-  to `dev`; then the lead's combined headed run, baseline, green scan and disposition table.
-- t731 sweep fixes: reran each failing file on the recovered machine; re-applying fixes only where a file still fails.
-- New: the identity-capture cost regression (`content/identity/control-row.ts`: a 6,000-anchor page takes 372 s,
-  about 4 s in September) plus the wire sensitive marker for group-marked controls; and trace U7 consumer wiring.
+**Trace plan: P0 and P1 complete** (t729, t734): the baseline (live trials 49.8% of build time), the capture-boundary
+inventory, the snapshot spike (DOM serialization plus resource map reloads faithfully), the trace and result
+contracts, the gateway channel scope and the run environment that the executor, evidence loop and trial runners now
+go through (live is the default; an offline pass never completes a build). **Next: P2 capture** (t736).
 
-**Next, in order:** merge t728 after its follow-ups; merge t730 and t731; land the identity-capture fix; sync the four
-live lane trees (t563, t719, t566, t567: both repos to `dev`, Core rebuilt); then rerun the breadth round's four
-repaired tasks (office checkout, job save, photo newest likes, social group posts) on fresh workspaces, supervised,
-$0.25 each via both `FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`. Live runs wait for every agreed
-change (lane S changes model-facing prompt rules).
+**Also merged on 2026-10-19/20:** t724 L1 reset settlement redesign; t730 browser specs run only on the ten realistic
+scenarios (a guard and a repository scan enforce it; 26 realistic-site test modes); t731 sweep test fixes; t732 card
+security codes withheld on every capture path; t733 identity capture back to seconds (a 6,000-link snapshot 304 s ->
+3.9 s), the group sensitive marker on the wire, in-place clicks wait for busy regions; t735 sync-core works against an
+outdated Core; lane S's follow-ups (host-aware wording, spend diagnostics restored, and the chat defect since
+2026-10-07 that folded earlier turns into a build's instruction).
 
-**Open defects found this session (owners above):** reconnect.spec.ts `:85`/`:122` flake on the shared extension
-fixture (teardown over 30 s under load; an intermittent missing hello after a worker restart), pre-existing before
-lane G; photo-social `web.dom.extract_list` stalls (likely the identity-capture regression); a job-board
-in-place-filters `aria-busy` race in click.spec.
+**In flight:** lane-sync-1020 (the four live lane trees t563, t719, t566, t567 to `dev`, Core rebuilt), then the
+breadth round's four repaired tasks rerun on fresh workspaces, supervised ($0.25 each via both
+`FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`): office checkout, job save, photo newest likes, social
+group posts. t736 trace P2 capture (lane T lead). t737 session follow-ups.
 
-**Environment:** OneDrive.Sync.Service had leaked to 14.4 GB (machine has 12 GB); restarted with the user's approval
-at ~19:50; a monitor alerts above 4 GB. Results recorded between ~14:34 and 19:50 were rerun before use.
+**Open follow-ups (t737):** reconnect.spec.ts `:85`/`:122` flake on the shared extension fixture (teardown over 30 s
+under load; an intermittent missing hello after a worker restart; pre-existing); `shown-addresses` can exceed Core's
+64 KiB per-value limit; `summarize-task.mjs:39` may double-count repair calls; the repository scan covers only the two
+Playwright trees and Scenario Lab source; Core emits no reset span inside trials.
+
+**Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
+monitor alerts above 4 GB or under 4 GB free commit.
 
 **Blocked:** nothing needs the user.
 
@@ -280,6 +270,30 @@ was still running at dispatch and is excluded below by its own file list.
 - Owns: `scripts/task/**`, `scripts/worktree/**`, `scripts/core-scripts/**`, the bootstrap path in
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
+
+### Brief: t736-trace-capture (lane T lead, t736 trace-capture)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P2, with decisions D1-D7 in `reports/lane-t.md`.
+- Task: Core lane: capture at the client gateway into the workspace's existing store, through the same intake it uses
+  live, with indexed reads and explicit completeness, secret screening before storage, and capture of the ingress that
+  bypasses the gateway (D1: chat, asks, run control, screenshot upload, start hook) where Core accepts it. Extension
+  lane: in-band artifacts for anything Core later dereferences; page snapshots by DOM serialization plus resource map at
+  each observation and read in tracing mode, Chrome and Edge first; the offline queue's flush carries each entry's
+  original envelope id and timestamp. The Lab turns tracing on for every live run. Gate: source tests T01-T04, T11,
+  T14, and overhead measured provider-free on four realistic tasks.
+- Rules: traces never feed model guidance; no recorded page data, tokens or typed secrets in logs or reports; the
+  usual lane rules; narrow checks; no paid runs.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p2.md` in the t736 downstream tree.
+
+### Brief: t737-session-followups (lead, t737 session-followups)
+- Task, one unit each, partitioned by file: (1) the shared extension fixture's teardown and the missing hello after a
+  service-worker restart (`apps/extension/e2e/fixtures/extension-context.ts`, background start path): root-cause both
+  (lane G's evidence in `extension-core-boundary-audit/reports/lane-g.md`) and make reconnect.spec.ts `:85`/`:122` green
+  five runs in a row, without raising waits; (2) `shown-addresses` values that exceed Core's 64 KiB per-value limit are
+  stored durably (split or bounded), never kept only in process; (3) `scripts/lab/**/summarize-task.mjs:39`'s repair
+  call count, with a test; (4) the repository scan covers every browser test in the repository (packages included);
+  (5) Core emits a reset span inside `core.test_subflow`/`core.test_candidate` so the build-time baseline can measure
+  resets inside trials.
+- Report: `docs/working/trace-offline-trials-plan/reports/t737-followups.md` in the t737 downstream tree.
 
 ### Brief: lane-sync-1020 (worker-low, live lane trees to dev before the breadth rerun)
 - Trees: `C:/Users/osrs_/FluxStuff/fxwork/{t563,t719,t566,t567}/{!FluxIQWebExtension,!FluxIQ}`, each on its own lane
