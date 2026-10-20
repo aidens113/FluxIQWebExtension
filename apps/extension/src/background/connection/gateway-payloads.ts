@@ -148,6 +148,9 @@ function elementTarget(element: DomElementDescriptor): JsonObject {
     href: element.href,
     inputType: element.inputType,
     checked: secret ? undefined : element.checked,
+    // The producer's marker for a control sensitive through its group (t733):
+    // it crosses so the stored target answers the rule as this check did.
+    sensitive: element.sensitive,
     bounds: element.bounds,
     documentBounds: element.documentBounds,
     isVisibleOnViewport: element.isVisibleOnViewport,

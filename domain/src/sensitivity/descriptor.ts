@@ -31,7 +31,9 @@ export function sensitiveFieldSignatureOfDescriptor(descriptor: unknown): Sensit
     inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
-    dataSensitive: stringField(attributes["data-sensitive"]),
+    // The producer's own marker for a control sensitive through its group
+    // (`DomElementDescriptor.sensitive`, t733) reads as the attribute would.
+    dataSensitive: record.sensitive === true ? "true" : stringField(attributes["data-sensitive"]),
     names: stringFields([attributes.name, attributes.id, record.id]),
     labels: stringFields([record.label, record.accessibleName, attributes["aria-label"], attributes.placeholder])
   };

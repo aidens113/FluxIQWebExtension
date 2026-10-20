@@ -30,7 +30,34 @@ for text-entry inputs only, its names and labels, and returns a verdict:
 A control inside an element the rule marks is withheld too: every capture path,
 the type, clear and select verbs' validations, the forms producer's `sensitive`
 flag and the fact page's checkbox state ask the rule of the element and each
-ancestor (`content/sensitive-text.ts` `isWithinSensitiveControl`).
+ancestor (`content/sensitive-text.ts` `isWithinSensitiveControl`). A push
+button's `value` is not its accessible name inside such a group either
+(`content/identity/accessible-name.ts`).
+
+**The group marker on the wire.** A control sensitive only through its group
+carries nothing on its own attributes that says so, so a reader of its
+serialized descriptor could not tell. The descriptor therefore carries the
+answer itself: `DomElementDescriptor.sensitive`
+([`apps/extension/src/shared/dom-element.ts`](../../apps/extension/src/shared/dom-element.ts)),
+present and `true` only when `isWithinSensitiveControl` holds, set by
+`describeElement` (`content/describe-element.ts`) on every descriptor it builds.
+
+- **Who reads it.** `sensitiveFieldSignatureOfDescriptor`
+  (`domain/src/sensitivity/descriptor.ts`) reads `sensitive: true` as it reads
+  `data-sensitive="true"`, so every caller of `isSensitiveElementDescriptor`
+  sees it: the gateway projection, the recording reducer and state values,
+  the action-target and fingerprint builders, the gateway's comparison guard,
+  and the service worker's runtime confirmation
+  (`background/connection/runtime-status.ts`, which asks the domain's reader
+  rather than keeping a copy of the rule).
+- **Core stores it.** The gateway projection
+  (`background/connection/gateway-payloads.ts` `elementTarget`) carries
+  `sensitive` onto the wire target, which is what Core stores on a recording
+  timeline entry, so a stored target is judged by the same rule later as the
+  producer judged it (and its contents are already withheld there).
+- **Not an attribute.** It is a field of its own rather than a written
+  `data-sensitive`, because saved fingerprints and selectors read
+  `attributes`, and a marker there would change a control's identity.
 
 `autocomplete` is a space-separated token list, so every token is checked:
 `billing cc-number` is what a real card field carries, and matching the whole
@@ -50,7 +77,7 @@ in the directory:
 - `sensitiveFieldSignatureOfDescriptor` / `isSensitiveElementDescriptor`
   (`sensitivity/descriptor.ts`) ask the same question of a serialized element
   descriptor, whose attribute allowlist already carries `type`, `autocomplete`
-  and `data-sensitive`. The input is `unknown` on purpose: a descriptor
+  and `data-sensitive`, and which carries the group marker `sensitive` (above). The input is `unknown` on purpose: a descriptor
   arrives from a page, over a wire, or out of stored state.
 - `isSensitiveFormControl`
   (`apps/extension/src/content/element-traits.ts`) asks it of a live DOM
@@ -143,7 +170,8 @@ Withholding is unconditional and does not depend on a setting.
   password field alone does not show the leak.
 - **Runtime confirmations.** `confirmedValue`
   (`background/connection/runtime-status.ts`) reads the value off the wire
-  descriptor and withholds it for a sensitive control. Only the `type` and
+  descriptor and withholds it for a control the domain's descriptor reader
+  calls sensitive, group marker included. Only the `type` and
   `select` confirmations read a value, and `clear` carries `""`. The `check`
   and `upload` confirmations carry none, and a tab confirmation carries only
   its operation and a pathname.

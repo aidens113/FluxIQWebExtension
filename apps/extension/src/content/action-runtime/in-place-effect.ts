@@ -28,6 +28,27 @@
 // toggles a class whether or not the click then does anything; only a lasting
 // change to the link itself -- it now reads as the active filter, say -- counts.
 //
+// **A region the click set loading holds the content answer.** A filter that
+// fetches its results often answers in two steps, and only the second is the
+// answer. On job-board's in-place filters the press closes the pill menu --
+// text and structure both change at once -- and marks the results column
+// `aria-busy="true"`; the fetch lands 400 ms or more later, the rows are
+// swapped in and the flag is cleared. The menu closing met both halves of the
+// content rule before the rows arrived, so the click was answered while the
+// next step would still read the old rows (t730's in-place click row,
+// intermittently; t733). So while a region the watch saw change is still busy
+// -- connected, and a busy region by the snapshot's own rule
+// (`../evidence/busy-region.ts`: `aria-busy="true"` and painted) -- the content
+// answer waits, and once every such region has cleared the text is compared at
+// that moment as usual. "Saw change" is an element outside the link whose
+// `aria-busy` changed since the press, or one added since the press, or inside
+// an element added since, that carries the attribute. A region already busy at
+// the press that never changes holds nothing, so a perpetual spinner does not
+// stall every click; a busy flag inside the link is the link's own. The hold
+// lasts only within the settle window: at the deadline a region still busy is
+// ignored and the content rule answers as it did before the hold, so a slow
+// page is no worse off than it was. The address answer never waits.
+//
 // The baseline is taken when the watch is made, which the click verb does after
 // the hover events and just before the press, so what hovering alone does is
 // not counted as the click's effect.
@@ -52,6 +73,7 @@
 // image), one inside a closed shadow root, and one in another tab or window
 // are not seen, and such a click still fails as it did.
 
+import { isBusyRegion } from "../evidence";
 import { composedContains, composedRoots, openRootsWithin } from "../shadow-dom";
 import { composedRenderedText } from "./composed-rendered-text";
 
@@ -62,6 +84,9 @@ const CHECK_INTERVAL_MS = 100;
 const ROOT_RESCAN_MS = 500;
 
 const ELEMENT_NODE = 1;
+
+/** The attribute a region that is still loading carries. */
+const BUSY_ATTRIBUTE = "aria-busy";
 
 /** What is observed in the document and in every open root. */
 const OBSERVED: MutationObserverInit = { childList: true, subtree: true, attributes: true, characterData: true };
@@ -99,6 +124,13 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
   let dirty = false;
   /** When the page was last walked for open roots; `undefined` until the first check. */
   let lastRescan: number | undefined;
+  /**
+   * Elements outside the link whose `aria-busy` changed, or that arrived
+   * carrying one, since the press: the regions that may hold the content answer.
+   */
+  const busyCandidates = new Set<Element>();
+  /** Whether a region the watch saw change is still on the page and busy. */
+  const stillBusy = (): boolean => [...busyCandidates].some((element) => element.isConnected && isBusyRegion(element));
 
   const observer = new MutationObserver((records) => note(records));
   /** Observes a root found since the press. One outside the link is structure that moved. */
@@ -115,11 +147,19 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
       const where = structuralChange(record, link);
       if (where === "page") structureMoved = true;
       else if (where === "link") linkTouched = true;
+      if (record.type === "attributes") {
+        if (where === "page" && record.attributeName === BUSY_ATTRIBUTE) busyCandidates.add(record.target as Element);
+        continue;
+      }
       if (record.type !== "childList") continue;
       // An element added since the press may carry open roots of its own: a
       // component inserted already upgraded, or a subtree holding several.
+      // Outside the link, it and its descendants may carry a busy flag.
       for (const node of record.addedNodes) {
-        if (node.nodeType === ELEMENT_NODE) openRootsWithin(node as Element).forEach(adopt);
+        if (node.nodeType !== ELEMENT_NODE) continue;
+        const element = node as Element;
+        openRootsWithin(element).forEach(adopt);
+        if (where === "page") busyArrivals(element).forEach((arrival) => busyCandidates.add(arrival));
       }
     }
   };
@@ -153,6 +193,10 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
     // Read only once the structure has moved and something changed since the
     // last read, so a quiet page, or one only a clock moves, costs no layout.
     if (!structureMoved || !dirty) return undefined;
+    // Held while a region the click set loading is still busy, leaving `dirty`
+    // set so the text is read once it clears. Not at the deadline: there the
+    // answer is what it would have been without the hold.
+    if (!final && stillBusy()) return undefined;
     dirty = false;
     return composedRenderedText(document, roots) !== text ? { kind: "content", afterMs } : undefined;
   };
@@ -187,6 +231,11 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
 /** The open shadow roots beneath the document, nested ones included. */
 function openRoots(document: Document): ShadowRoot[] {
   return composedRoots(document).filter((root): root is ShadowRoot => root !== document);
+}
+
+/** The element added since the press, and its descendants, that carry a busy flag of any value. */
+function busyArrivals(element: Element): Element[] {
+  return [element, ...element.querySelectorAll(`[${BUSY_ATTRIBUTE}]`)].filter((candidate) => candidate.hasAttribute(BUSY_ATTRIBUTE));
 }
 
 /**

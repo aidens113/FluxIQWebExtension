@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { element, withStubPage } from "../../tests/stub-page";
+import { element, input, withStubPage } from "../../tests/stub-page";
 
 type NameFor = (target: Element) => string | undefined;
 
@@ -164,5 +164,16 @@ test("a drawing inside a sensitive control lends no name, and a sensitive contro
     assert.equal(nameFor(inside), undefined);
     assert.equal(nameFor(beside), "Note");
     assert.equal(nameFor(wrapped), "Note");
+  });
+});
+
+test("a push-button input inside a marked group takes no name from its value; outside one it still does", async () => {
+  const marked = input("submit", "SYNTHETIC_BUTTON_VALUE");
+  const group = element("div", { "data-sensitive": "true" }, marked);
+  const ordinary = input("submit", "Continue");
+  const form = element("form", {}, ordinary);
+  await withNamedPage([group, form], (nameFor) => {
+    assert.equal(nameFor(marked), undefined);
+    assert.equal(nameFor(ordinary), "Continue");
   });
 });

@@ -2,15 +2,13 @@
 // panel shows for it. Holds status only; the caller decides what side effects
 // a transition has.
 
-import { WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_INPUT_IDS, isSensitiveElementDescriptor } from "@fluxiq-web-extension/domain/client";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
-  DomElementDescriptor,
   RecordingEventPayload,
   RuntimeCommandStatus
 } from "../../shared/protocol";
-import { isSensitiveFieldSignature } from "../../shared/sensitive-field";
 import { recordablePageAddress } from "./recordable-page-address";
 
 export class RuntimeStatusTracker {
@@ -157,21 +155,14 @@ function tabConfirmation(
 // The value is read from the result's element descriptor, which the content
 // script fills from the field after the action ran and only while input-value
 // capture is on -- so a recording that withholds input values withholds this
-// one too.
+// one too. Whether the field is sensitive is the domain's descriptor reader's
+// answer (`domain/src/sensitivity/descriptor.ts`), the one the gateway projection
+// asks, so names, labels and the group marker (`sensitive`, t733) count here as
+// they do there; the worker never sees the element.
 function confirmedValue(result: BrowserActionResult): { inputValue?: string } {
   const element = result.element;
   if (!element || element.value === undefined || isSensitiveElementDescriptor(element)) return {};
   return { inputValue: element.value };
-}
-
-// The recorder's sensitivity rule, shared with the content script, read from
-// the wire descriptor because the worker never sees the element.
-function isSensitiveElementDescriptor(element: DomElementDescriptor): boolean {
-  return isSensitiveFieldSignature({
-    inputType: element.inputType,
-    autocomplete: element.attributes?.autocomplete,
-    dataSensitive: element.attributes?.["data-sensitive"]
-  });
 }
 
 /** The most characters of a human name the panel is given. */
