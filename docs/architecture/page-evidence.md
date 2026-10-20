@@ -69,6 +69,88 @@ trial comes back to that act's page by navigating to `location` and looks for
 what the act changed there. It compares the lines only for equality, so it can
 tell which act changed which line without reading the domain's words.
 
+An answer also carries, as opaque tokens only, the page's `scope` and trusted
+`resource`, the `items` and `subjects` on it, the page's positively complete
+lists and tables as `collections` (`{ scope, group, subjects, states }`), and
+its stateful controls as `controls` (`{ [place]: { [state]: count } }`), each
+absent when empty. Both are described in the next section. Core settles a
+build's acts against them (Core `llm-flow-bootstrap.md`, "How an act
+settles"); they never reach a model.
+
+## Complete Lists And Control States For A Reset
+
+Core's site reset (L1 reset settlement, t724) settles an act when fresh reads
+show what it could change as the build found it. Two facts on a passive read
+are its evidence, both built in `domain/src/runtime/llm-evidence/control-spot/`.
+
+**Complete lists and tables** (`collection.ts`, `webResetCollections`). Only
+a list the page positively vouches is whole can witness that an item is gone;
+DOM absence alone never does. A container is a list (`list` role, written or
+implied) or a table (`table` or `grid`); its items are its own `listitem`s, or
+its `row`s less header rows (a row in `thead`, or one whose every cell is a
+`columnheader`). It vouches one of two ways:
+
+- **ARIA set sizes.** When any item carries `aria-setsize`, the list is read
+  by set sizes alone: every item states the same size, equal to the number of
+  items, and every position from 1 to that size appears exactly once. A table
+  whose rows carry set sizes is never reported.
+- **Native.** Otherwise the capture must not be truncated (neither
+  `elements.truncated` nor `captureTruncated`), the container must hold at
+  least one item, must not be `aria-busy="true"`, and must carry
+  `listWayOn: "none"`. That fact is set per container by the extension's
+  snapshot (`content/dom-snapshot.ts`) from
+  `content/extraction/read-coverage/list-way-on.ts`, which asks the read's own
+  continuation detection (`list-continues.ts`) about the list's items with
+  nothing scrolled: a pager's Next or a following page says `next_page`, a
+  Load more says `load_more`, a list the page declares a feed
+  (`isDeclaredFeed`: `role="feed"`, an unknown set size, or more rows declared
+  than mounted) says `feed`, and anything else `none`. A disabled way on, or a
+  pager on its last page, is a list that ended. An absent fact is not `none`,
+  so such a list is not complete. The domain reads the word into
+  `WebLlmEvidenceElement.listWayOn` (`elements.ts`); it is never printed in the
+  page view or a description.
+
+Either way each item must hold exactly one subject token and no two items the
+same one, or the list is not reported. A complete list's `scope` digests the
+trusted resource, location, frame and the list's selector; its `group` the
+resource, location and frame; each row's `states` value digests the row's and
+its descendants' semantic fields (tag, role, implied role, name, text, value,
+checked, selected, disabled).
+
+**Control places and states** (`stateful.ts`, `place.ts`, `state.ts`,
+`states.ts`). A stateful control is a visible element whose role (written, or
+implied by its tag; `role.ts`) is `button`, `checkbox`, `switch`, `radio`,
+`menuitemcheckbox`, `menuitemradio`, `option` or `tab`, or any visible element
+carrying `aria-pressed`, `aria-checked` or `aria-selected`.
+
+- Its **place** (`webControlPlace`) is one opaque token of the trusted
+  resource, the page's location, its role, and the subject of the record it
+  sits in (a record whose row names nothing gets a record place of its own
+  kind; a control in no record gets ""). Its words are no part of it, since a
+  toggle's words change with its state, so the same control shown in a dialog
+  over a page and on that page itself shares one place. A page with no trusted
+  resource has no places.
+- Its **state** (`webControlState`) digests its name, `aria-pressed`, its
+  checked state (`checked`, else `aria-checked`) and `aria-selected`.
+- A read's **`controls`** (`webControlStates`) counts, at each place, how many
+  visible controls show each state. A read with more than 2,000 places (Core's
+  bound) reports none.
+
+Where they travel:
+
+- The **start-state answer** carries `controls` and `collections`
+  (`start-state/observe.ts`).
+- A **permission declaration**'s `control` carries the acted control's `place`
+  and `state` just before the action (`permission.ts`, from `webTargetSpot` in
+  `control-spot/target.ts`), beside `item`, `dialog`, `subject`, `page`,
+  `scope` and `resource`.
+- A **step diff**'s `spot` carries the same tokens, and for a step whose
+  control has a place and that stayed on its document the diff adds
+  `controls: { page, before, after }`: the page's scope token and that place's
+  counts on the page before and after the step (`state-diff/places/diff.ts`).
+  Core reads from it a toggle a trial pressed, and from later reads the press
+  that turns it back.
+
 ## One Contract, In The Domain
 
 The wire shape is declared **once**, in
@@ -307,8 +389,11 @@ as a dialog's Close, is dispatched unchanged on every pass.
   The diff also carries two keys Core ties a trial's lasting act to its own
   item by (t609, Core t598), both opaque tokens of the kind a permission
   declaration's `control.item` and a start-state read's `items` take
-  (`llm-evidence/control-spot/`): `spot`, `{ item?, dialog? }`, where the
-  element the node's selector addresses sat on the page before the step; and
+  (`llm-evidence/control-spot/`): `spot`, `{ item?, dialog?, subject?, page?,
+  scope?, resource?, place?, state? }`, where the element the node's selector
+  addresses sat on the page before the step and, for a stateful control, its
+  place and state there (see "Complete Lists And Control States For A Reset");
+  and
   `items`, `{ before, after }`, the items of the lists both pages show. A list
   is a container with the shape of the way down to its items
   (`state-diff/places/snapshot.ts`), and it counts only when the page before
@@ -319,8 +404,12 @@ as a dialog's Close, is dispatched unchanged on every pass.
   selectors, which a summary must not carry, so the host runtime keeps each
   capture's places in memory by `stateRef` for its last few snapshots
   (`state-diff/places/memo.ts`) and a diff of refs it no longer holds names
-  neither key. Like the rest of the diff, both stay under Core's withholding of
-  `stateDiff` in a saved trace.
+  neither key. Two more keys come from the same places, on a step that stayed
+  on its document: `collections`, `{ before, after }`, the complete lists of
+  each page when every group after was also there before; and `controls`,
+  `{ page, before, after }`, the counts at the step control's place. Like the
+  rest of the diff, all of them stay under Core's withholding of `stateDiff` in
+  a saved trace.
 
 ## What A Model Reads: The Compact Page View
 
@@ -379,7 +468,7 @@ Every page leaves the domain as `web-llm-page.v3`
   points at has a line, or a legend around it or inside it says the same
   words. The sanitizer writes the same resolved group into the packet's
   `group` field once every parent is known (`sanitize.ts`, `writeGroups`), so
-  the packet, the state digest (`web-state.v6`) and the look-alike
+  the packet, the state digest (`web-state.v7`) and the look-alike
   descriptions name the group the view prints: two "None" radios in two ARIA
   groups are told apart by their group.
 - **Structure markers** on lines of their own: `[landmark]` (with frame, modal
@@ -687,11 +776,14 @@ What still never reaches a model:
 - **An address.** No selector, xpath or record key is published; the opaque
   `tN` handle is the only way to name an element.
 
-The state digest (`state-digest/state-digest.ts`, `web-state.v6`) and the
+The state digest (`state-digest/state-digest.ts`, `web-state.v7`) and the
 route state (`route-state/project.ts`) are read off the same whole packet, with
 a search capture's hidden elements left out, so a call's own capture answers
 for them exactly as `captureStateDigest` and `observeRouteState` would, and a
-search reads as the same state as a look. The route state names every dialog,
+search reads as the same state as a look. `v7` (t724) names an element's
+`listWayOn` as a left-out field, so every element's projection gained one
+empty field; the version moved so that projection change does not read as a
+state change. The route state names every dialog,
 every blocker and every control.
 
 A Flow node keeps a route signature of the page it started on and the page it
@@ -760,10 +852,11 @@ listener. Ordinary noninteractive wrappers gain no subject merely by containing
 a control. Existing bounded record lookup, ambiguity and sensitive-text rules
 still apply; this metadata does not grant permission or make an input executable.
 
-Reset ownership witnesses require a positively complete collection inventory.
-A semantic list must provide finite item cardinality and every distinct item
-position, with one unambiguous subject per row. A partial, loading or ordinary
-page DOM cannot prove absence. Permission declarations and trial step spots
+Reset ownership witnesses require a positively complete collection inventory:
+a list vouched whole by ARIA set sizes or, natively, by the capture's
+`listWayOn: "none"` (see "Complete Lists And Control States For A Reset"),
+with one unambiguous subject per row. A partial, continued, busy, truncated or
+merely rendered list cannot prove absence. Permission declarations and trial step spots
 carry the owning collection's resource-bound scope; Core compares only opaque
 scope and subject tokens. The complete baseline must precede the act before
 absence can establish that a later line was created by this build. Matching
@@ -788,9 +881,10 @@ finalized-run permissions. Updated Core and domain must ship together because
 older declaration parsers reject the added resource field; browser transport is
 unchanged.
 
-Modern resource-scoped reversible acts require positive baseline restoration.
-If an unproved inverse is kept or named cannotUndo, Core refuses the next
-ordinary trial as candidate.trial_reset_unproved. It never measures leftovers
+Modern resource-scoped reversible acts settle only when fresh complete reads
+show their witnesses (complete lists, and a toggled control's state) as the
+build found them. If such an act is kept or named cannotUndo while still open,
+Core refuses the next ordinary trial as candidate.trial_reset_unproved. It never measures leftovers
 as a successful reset. Irreversible effects and legacy no-subject contracts
 retain their existing semantics. Exact quantitative and saved-list inverse
 operations remain unsupported by this creation witness and fail honestly.

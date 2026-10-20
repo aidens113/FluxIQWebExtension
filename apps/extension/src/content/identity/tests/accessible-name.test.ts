@@ -120,3 +120,49 @@ test("an inline svg is named by its own title child, and an svg without one by n
     assert.equal(nameFor(labelled), "Settings");
   });
 });
+
+// l1 D5: a control that only draws its icon is named by the drawing, as the
+// accessible-name calculation names an embedded graphic, so a toggle whose
+// icon's label flips has a name in each state. The fixture is a reading app's
+// bookmark toggle, drawn as a `div[role=button]` holding one svg.
+test("a control whose only content is a labelled svg, or an svg with a title, is named by it; an aria-hidden svg names nothing", async () => {
+  const icon = (attributes: Record<string, string>, ...children: Element[]) =>
+    element("svg", { viewBox: "0 0 24 24", ...attributes }, ...children, element("path", { d: "M0 0" }));
+  const marked = element("div", { role: "button", tabindex: "0" }, icon({ "aria-label": "Bookmark", role: "img" }));
+  const unmarked = element("div", { role: "button", tabindex: "0" }, icon({ "aria-label": "Remove bookmark", role: "img" }));
+  const titled = element("button", {}, icon({}, element("title", {}, " Open  menu ")));
+  // The svg's own name wins over its title, as it does for the svg alone.
+  const both = element("button", {}, icon({ "aria-label": "Settings" }, element("title", {}, "Gear")));
+  const hidden = element("button", {}, icon({ "aria-hidden": "true" }, element("title", {}, "Decorative")));
+  const hiddenLabelled = element("div", { role: "button" }, icon({ "aria-hidden": "true", "aria-label": "Decorative" }));
+  const hiddenWrapper = element("button", {}, element("span", { "aria-hidden": "true" }, icon({ "aria-label": "Decorative" })));
+  // Drawings and words together read in document order; a hidden icon beside words gives only the words.
+  const mixed = element("button", {}, icon({ "aria-label": "Cart" }), element("span", {}, "3 items"));
+  const worded = element("button", {}, icon({ "aria-hidden": "true" }, element("title", {}, "Decorative")), "Save");
+  // A container still takes no name from content, drawing or not.
+  const container = element("div", {}, icon({ "aria-label": "Bookmark" }));
+  await withNamedPage([marked, unmarked, titled, both, hidden, hiddenLabelled, hiddenWrapper, mixed, worded, container], (nameFor) => {
+    assert.equal(nameFor(marked), "Bookmark");
+    assert.equal(nameFor(unmarked), "Remove bookmark");
+    assert.equal(nameFor(titled), "Open menu");
+    assert.equal(nameFor(both), "Settings");
+    assert.equal(nameFor(hidden), undefined);
+    assert.equal(nameFor(hiddenLabelled), undefined);
+    assert.equal(nameFor(hiddenWrapper), undefined);
+    assert.equal(nameFor(mixed), "Cart 3 items");
+    assert.equal(nameFor(worded), "Save");
+    assert.equal(nameFor(container), undefined);
+  });
+});
+
+test("a drawing inside a sensitive control lends no name, and a sensitive control beside a drawing keeps its contents out", async () => {
+  const icon = (label: string) => element("svg", { "aria-label": label }, element("path", { d: "M0 0" }));
+  const inside = element("div", { role: "button", "data-sensitive": "true" }, icon("SYNTHETIC_ICON_NAME"));
+  const beside = element("label", {}, icon("Note"), element("textarea", { "data-sensitive": "true" }, "SYNTHETIC_NAME_NOTE"));
+  const wrapped = element("label", {}, element("span", {}, icon("Note"), element("textarea", { "data-sensitive": "true" }, "SYNTHETIC_NAME_NOTE")));
+  await withNamedPage([inside, beside, wrapped], (nameFor) => {
+    assert.equal(nameFor(inside), undefined);
+    assert.equal(nameFor(beside), "Note");
+    assert.equal(nameFor(wrapped), "Note");
+  });
+});
