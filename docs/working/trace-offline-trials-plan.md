@@ -271,6 +271,20 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t739-sweep-1020-fixes (lead, t739 sweep-1020-fixes)
+- Why: sweep-1020 (`reports/sweep-1020.md`, logs `fxwork/sweep-1020/logs/`, Core ca23a8ba, downstream 6dd2d724).
+- Task, partitioned by file, root causes only (never raise a timeout or loosen an assertion): (1) scenario-lab
+  photo-social: the newest-likes scenario test fails a real assertion (the liked list misses one expected post) and
+  the Glaze collection test times out on a close-dialog click; find whether a recent change (t730's photo-social
+  `saved-logins` mode, t733, L1) or the test is wrong, and fix that side. This gates rerun round 3, since
+  photo-social-newest-likes is one of its tasks. (2) Core fluxiq: four new 15 s timeouts (controller,
+  command-execution service, provider-unavailable, flow-index-read): rerun each alone and in its directory, fix
+  real causes, record environmental ones with evidence. (3) downstream `scripts/build-cache/tests/registry.test.mjs`:
+  `git check-ignore` "empty string is not a valid pathspec"; fix if real, show it is worktree-specific if not.
+  (4) Run the extension package tests (cut off in the sweep) and agent-orchestrator's absence is expected (deleted in
+  t727); fix anything that fails.
+- Report: `docs/working/trace-offline-trials-plan/reports/t739-sweep-fixes.md` in the t739 downstream tree.
+
 ### Brief: t738-rerun2-fixes (lead-xhigh, t738 rerun2-fixes)
 - Why: breadth rerun round 2 went 0 of 4, every cause a product defect (debug notes, one per lane tree, under
   `docs/working/language-driven-flow-loop-plan/debugs/`: t719 run-mvgf4pk5-55343613 job, t563 run-mvgf04kw-310fc169
@@ -486,6 +500,19 @@ was still running at dispatch and is excluded below by its own file list.
   twice (the flaky `:85`/`:122` included); scan -> 9 passed.
 - Outcome: Accepted (merges); Partial (live)
 - Follow-up: t738 (four rerun causes), then rerun round 3; t736 P2 capture; sweep-1020.
+
+### 2026-10-20 - First daily sweep (sweep-1020)
+- Agent: supervisor (worker sweep-1020)
+- Changed: `reports/sweep-1020.md`; worktrees `fxwork/sweep-1020/` (Core ca23a8ba, downstream 6dd2d724).
+- Validation: worker's runs, not rerun by the supervisor: installs, Core build and check, downstream build -> 0; Core
+  `pnpm test` -> 1 (fluxiq 13310 passed, 4 failed: new 15 s timeouts in controller, command-execution service,
+  provider-unavailable, flow-index-read; contracts 250/250; client-gateway-websocket 179/179; apps/web 3129/3129);
+  downstream `pnpm check` -> 1 (build-cache registry.test.mjs: `git check-ignore` empty pathspec; audit and `pnpm -r
+  check` not reached); downstream `pnpm test` -> 1 (scenario-lab 996 passed, 2 failed, both photo-social: newest-likes
+  assertion, Glaze close-dialog timeout; domain 2212/2212; extension cut off without totals). All 10 Core failures
+  and the crossborder failure of sweep-1019b are gone; no out-of-memory error.
+- Outcome: Partial (fix forward in t739)
+- Follow-up: t739; the photo-social fixture result gates rerun round 3.
 
 ## Open Questions
 
