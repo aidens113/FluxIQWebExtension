@@ -33,6 +33,13 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 // fact check reads the page as it stands. It is addressed as `executeAction`
 // is, because the worker sends each frame only that frame's claims.
 //
+// `fluxiq.tracePageCapture` (`shared/trace-page-capture.ts`) is top frame only
+// and addressed as `executeAction` is: a traced command captures the page the
+// person is looking at, and the top document's capture carries its
+// same-origin frames itself (`./trace-capture/`). It answers asynchronously
+// -- the resources are fetched -- and always answers: a capture that fails
+// says so with `ok: false`, so the command's own result is never held by it.
+//
 // The activity overlay's message (`content/activity-overlay/`) is top frame
 // only for the same reason: there is one status for the page the person is
 // watching. It is a display, so it is answered at once and changes nothing
@@ -48,10 +55,12 @@ import { isTopFrame } from "./frame-geometry";
 import { extractionContentMessage, handleExtractionMessage } from "./picker";
 import { activityContentMessage, showActivityOverlay } from "./activity-overlay";
 import { domFactPage, evaluateFactBatch } from "./facts";
+import { captureTracePage } from "./trace-capture";
 import { webAutomationFactCheckRequestValue } from "@fluxiq-web-extension/domain/client";
 import { FACT_CHECK_MESSAGE, type FactCheckContentResponse } from "../shared/fact-check-message";
 import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../shared/extraction-messages";
 import { PAGE_CHALLENGE_MESSAGE, type PageChallengeResponse } from "../shared/page-challenge-message";
+import { TRACE_PAGE_CAPTURE_MESSAGE, type TracePageCaptureResponse } from "../shared/trace-page-capture";
 import type { BrowserActionCommand } from "./types";
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
@@ -152,6 +161,11 @@ export function installMessageHandler(): void {
       sendResponse(reply);
       return false;
     }
+    if (typed.type === TRACE_PAGE_CAPTURE_MESSAGE) {
+      if (!isTopFrame() || !isAddressedToThisFrame(typed)) return false;
+      void captureTracePage().then(sendResponse, (error: unknown) => sendResponse(tracePageCaptureFailure(error)));
+      return true;
+    }
     if (typed.type === PAGE_CHALLENGE_MESSAGE) {
       if (!isTopFrame()) return false;
       // The read is synchronous. A document still being parsed -- a click's
@@ -185,6 +199,11 @@ export function installMessageHandler(): void {
     }
     return false;
   });
+}
+
+/** The reply when the capture itself rejected, which it is written never to do: its kind only, never its message. */
+function tracePageCaptureFailure(error: unknown): TracePageCaptureResponse {
+  return { ok: false, reason: `The page capture failed: ${error instanceof Error ? error.name : typeof error}.` };
 }
 
 /** What this page, as a whole, asks for that only a person can give, and who clears a robot check on it. */

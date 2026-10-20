@@ -15,7 +15,7 @@ import type { AddressInfo } from "node:net";
 import test, { type TestContext } from "node:test";
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
-import { callCoreProgram, fetchProjectIdFromCoreSnapshot } from "../core-api";
+import { callCoreProgram, fetchProjectIdFromCoreSnapshot, uploadTraceArtifact } from "../core-api";
 import { ProjectContext } from "../project-context";
 
 const TOKEN = "secret-pairing-token";
@@ -379,4 +379,65 @@ test("closed instruction diagnostics survive relay while arbitrary diagnostics s
   assert.deepEqual(await callCoreProgram(credentials, "run-runtime-session", {}), first);
   body = { ok: false, error: "Failed", payload: { diagnostic: { code: "private.detail", details: "not forwarded" } } };
   assert.deepEqual(await callCoreProgram(credentials, "run-runtime-session", {}), { ok: false, code: "failed", httpStatus: 400, error: "Failed" });
+});
+
+// uploadTraceArtifact in core-api.ts: one PUT to Core's trace
+// artifact route under the digest, the pairing token as bearer and no cookie,
+// the artifact's media type as the content type, the bytes as the body, held
+// to its time limit; any answer but a success rejects naming only the status,
+// never the token.
+
+const DIGEST = "0123456789abcdef".repeat(4);
+
+function stubTraceFetch(t: TestContext, respond: (init: RequestInit) => Response | Promise<Response>) {
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return await respond(init ?? {});
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = original; });
+  return requests;
+}
+
+test("PUTs the bytes to the trace artifact route under the digest, with the bearer token, no cookie and the media type", async (t) => {
+  const requests = stubTraceFetch(t, () => new Response(JSON.stringify({ ok: true }), { status: 201 }));
+  const bytes = new TextEncoder().encode("<!doctype html>");
+  await uploadTraceArtifact(credentials, DIGEST, bytes, "text/html", 1_000);
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.url, `http://127.0.0.1:3000/api/client-gateway/trace-artifacts/${DIGEST}`);
+  assert.equal(requests[0]?.init.method, "PUT");
+  assert.equal(requests[0]?.init.credentials, "omit");
+  assert.deepEqual(requests[0]?.init.headers, { "content-type": "text/html", authorization: `Bearer ${TOKEN}` });
+  assert.equal(requests[0]?.init.body, bytes);
+  assert.ok(requests[0]?.init.signal instanceof AbortSignal, "the request is held to a time limit");
+});
+
+test("an answer that is not a success rejects with the status and never the token", async (t) => {
+  let status = 0;
+  // One stub for the whole test: stubs stacked in a loop would restore one another, not the real fetch.
+  stubTraceFetch(t, () => new Response(`{"ok":false,"error":"no ${TOKEN}"}`, { status }));
+  for (status of [400, 401, 409, 413, 415, 500]) {
+    await assert.rejects(uploadTraceArtifact(credentials, DIGEST, new Uint8Array([1]), "image/png", 1_000), (error: Error) => {
+      assert.equal(error.message, `FluxIQ trace artifact upload failed (${status}).`);
+      assert.doesNotMatch(error.message, new RegExp(TOKEN, "u"));
+      return true;
+    });
+  }
+});
+
+test("a request past its time limit is aborted and rejects", async (t) => {
+  stubTraceFetch(t, (init) => new Promise((_resolve, reject) => {
+    init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+  }));
+  const started = Date.now();
+  await assert.rejects(uploadTraceArtifact(credentials, DIGEST, new Uint8Array([1]), "image/png", 20), (error: Error) => error.name === "TimeoutError");
+  assert.ok(Date.now() - started < 1_000);
+});
+
+test("without a token nothing is sent", async (t) => {
+  const requests = stubTraceFetch(t, () => new Response(null, { status: 201 }));
+  await assert.rejects(uploadTraceArtifact({ coreApiUrl: credentials.coreApiUrl, token: undefined }, DIGEST, new Uint8Array([1]), "image/png", 1_000));
+  assert.equal(requests.length, 0);
 });

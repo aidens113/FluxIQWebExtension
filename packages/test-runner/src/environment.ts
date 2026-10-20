@@ -61,7 +61,16 @@ export type TopologyPaths = {
    * (`flow-lane/creation/readiness.ts` `labCandidateTrialFixtureReset`).
    */
   candidateTrialFixtureReset?: boolean;
+  /**
+   * Whether Core captures client gateway traces (`FLUXIQ_CLIENT_GATEWAY_TRACE`,
+   * decision D11): true, or absent, turns it on; false turns it off, for the
+   * tracing-overhead measurement.
+   */
+  tracing?: boolean;
 };
+
+/** Core's client gateway trace switch, read once at start (`programs/_shared/runtime.ts` in Core). */
+const CLIENT_GATEWAY_TRACE_ENV = "FLUXIQ_CLIENT_GATEWAY_TRACE";
 
 export function buildScenarioEnvironment(allocation: RunAllocation, seed: number, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return {
@@ -127,6 +136,10 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * own controls, and a fixture reset between trials would hide whether that
  * reset works. Every other candidate build, live or not, keeps the hook. The
  * fixture still starts seeded, and the lane still resets it before playback.
+ *
+ * `FLUXIQ_CLIENT_GATEWAY_TRACE` is "1" for every Core the Lab starts, set
+ * after the inherited environment so a launcher's value cannot switch it off
+ * (decision D11); only `paths.tracing` false gives "0".
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
@@ -142,6 +155,7 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...inherited,
+    [CLIENT_GATEWAY_TRACE_ENV]: paths.tracing === false ? "0" : "1",
     [LAB_COST_CEILING_ENV]: costCeiling,
     [LAB_COST_CEILING_SCOPE_ENV]: "test",
     ...labBuildCallLimitEnvironment(paths.buildCallLimit),

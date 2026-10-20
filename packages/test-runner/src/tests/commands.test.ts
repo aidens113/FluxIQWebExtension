@@ -344,3 +344,16 @@ test("--authoring-mode names the mode of a live run's Core, and only a live run'
   assert.throws(() => parseLabCommand([...live, "--authoring-mode", "legacy", "--authoring-mode", "candidate"]), /only be specified once/u);
   assert.throws(() => parseLabCommand(["run", "basic-form", "--authoring-mode", "legacy"]), /LLM options require explicit --live-llm/u);
 });
+
+const tracedReplay = ["replay", "everything-store", "--workspace", "saved", "--flow", "flow.saved"];
+
+test("replay --no-tracing asks for Core with client gateway tracing off; absent, tracing stays on", () => {
+  assert.deepEqual(parseLabCommand([...tracedReplay, "--no-tracing"]), { command: "replay", scenarioId: "everything-store", workspace: "saved", flowId: "flow.saved", tracing: false });
+  assert.deepEqual(parseLabCommand(tracedReplay), { command: "replay", scenarioId: "everything-store", workspace: "saved", flowId: "flow.saved" });
+});
+
+test("--no-tracing takes no value, may come before the scenario, and is given once", () => {
+  assert.deepEqual(parseLabCommand(["replay", "--no-tracing", "everything-store", "--workspace", "saved", "--flow", "flow.saved", "--seed", "7"]), { command: "replay", scenarioId: "everything-store", workspace: "saved", flowId: "flow.saved", seed: 7, tracing: false });
+  assert.throws(() => parseLabCommand([...tracedReplay, "--no-tracing", "--no-tracing"]), /--no-tracing may only be specified once/);
+  assert.throws(() => parseLabCommand(["run", "everything-store", "--no-tracing"]), /Unknown option: --no-tracing/);
+});
