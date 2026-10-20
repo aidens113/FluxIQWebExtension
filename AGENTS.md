@@ -217,11 +217,15 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
   ownership / layer / feature / kind, a shared filename prefix becomes a
   directory, one exported thing per file, a barrel in every directory, and
   never extract-and-drop. The same budgets and checks apply here:
-  `scripts/structure-audit.mjs` — mirrored from Core, change it there first —
-  runs first in `pnpm check` with this repository's own
+  `scripts/structure-audit.mjs` — mirrored from Core, change it there first;
+  `scripts/check/core-mirror.mjs` fails `pnpm check` when the copy drifts —
+  runs in `pnpm check` with this repository's own
   `.structure-baseline.json` and `scripts/structure-audit/config.mjs`, which
-  additionally enforces that `domain/src` never imports `apps/extension/src`.
-  Run `pnpm structure:baseline` after removing a violation.
+  additionally enforces that `domain/src` never imports `apps/extension/src`
+  and that nothing here names a model provider's host, SDK or key outside the
+  Lab's allow list: every model call goes through Core.
+  Run `pnpm structure:baseline` after removing a violation. The task tooling
+  and the build-cache engine are Core's, imported, not copied.
 
 ## Generated Data
 

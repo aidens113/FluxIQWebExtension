@@ -5,7 +5,9 @@
 // checkout, which is the ordinary case.
 
 import { runGit, samePath } from "../worktree/index.mjs";
-import { parseTaskBranch } from "./branch-name.mjs";
+import { importCoreScript } from "../core-scripts/index.mjs";
+
+const { parseTaskBranch } = await importCoreScript("scripts/task/branch-name.mjs");
 
 export async function listWorktrees(repositoryRoot) {
   const stdout = await runGit(repositoryRoot, ["worktree", "list", "--porcelain"]);

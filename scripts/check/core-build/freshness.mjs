@@ -10,7 +10,7 @@
 //
 // The questions are the Lab's own, asked through the Lab's own modules
 // (scripts/lab/core/build/): is Core built at all (`coreBuildMissing`), and is
-// its build older than its source (`coreBuildStaleness`). Only the words
+// its build what its source says, by Core's own build cache (`coreBuildCurrency`). Only the words
 // differ, because the consequence differs: here it is a check that proves
 // nothing, rather than a run that measures the wrong thing.
 //
@@ -22,33 +22,30 @@
 // repository's output, never Core's.
 
 import { CORE_PACKAGES } from "../../worktree/index.mjs";
-import { coreBuildMissing, coreBuildStaleness, scanCoreBuildEntries, scanCoreOutput, scanCoreSources } from "../../lab/core/index.mjs";
+import { coreBuildCurrency, coreBuildMissing, scanCoreBuildEntries } from "../../lab/core/index.mjs";
 
 /** Core's libraries, in build order: what the extension bundle and the domain load. */
 export const CORE_REBUILD_COMMAND = `pnpm ${CORE_PACKAGES.map((item) => `--filter ${item.filter}`).join(" ")} build`;
 
 /**
  * @param {string} coreRoot
- * @param {{ entries?: typeof scanCoreBuildEntries, sources?: typeof scanCoreSources, output?: typeof scanCoreOutput }} [scanners] replaced by tests
- * @param {{ gate?: string }} [options] the command being refused, as the reader typed it (`gate-name.mjs`)
+ * @param {{ entries?: typeof scanCoreBuildEntries, currency?: typeof coreBuildCurrency }} [checks] replaced by tests
+ * @param {{ gate?: string, env?: NodeJS.ProcessEnv }} [options] the command being refused, as the reader typed it (`gate-name.mjs`)
  * @returns {Promise<{ fresh: boolean, message: string | null }>}
  */
-export async function coreBuildFreshness(coreRoot, scanners = {}, { gate = "pnpm check" } = {}) {
-  const { entries = scanCoreBuildEntries, sources = scanCoreSources, output = scanCoreOutput } = scanners;
+export async function coreBuildFreshness(coreRoot, checks = {}, { gate = "pnpm check", env = process.env } = {}) {
+  const { entries = scanCoreBuildEntries, currency = coreBuildCurrency } = checks;
   const built = coreBuildMissing(await entries(coreRoot));
   if (!built.built) {
     return { fresh: false, message: `${gate}: refused before compiling or bundling against FluxIQ Core. ${built.message}` };
   }
-  const newestSource = await sources(coreRoot);
-  const newestOutput = await output(coreRoot);
-  const verdict = coreBuildStaleness(newestSource, newestOutput);
+  const verdict = await currency(coreRoot, { env });
   if (!verdict.stale) return { fresh: true, message: null };
-  const minutes = Math.round(verdict.behindMs / 60_000);
   return {
     fresh: false,
     message: [
-      `${gate}: FluxIQ Core's build at ${coreRoot} is ${minutes === 0 ? "less than a minute" : `${minutes} minute(s)`} behind its source.`,
-      `  Stale: ${newestSource.newestPath} is newer than anything in Core's dist (newest built file: ${newestOutput.newestPath}).`,
+      `${gate}: FluxIQ Core's build at ${coreRoot} is not current with its source.`,
+      ...verdict.steps.map((item) => `  Stale: Core's build cache would rebuild ${item.step}: ${item.reason}.`),
       "  It compiles or bundles against Core's COMPILED dist, so it would pass or fail on the old Core, not the one that will ship.",
       `  Rebuild Core's libraries, then run ${gate} again: ${CORE_REBUILD_COMMAND} (in ${coreRoot}).`
     ].join("\n")

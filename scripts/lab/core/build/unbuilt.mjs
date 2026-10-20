@@ -1,6 +1,6 @@
 // The verdict a caller acts on: has FluxIQ Core been built at all?
 //
-// A different question from `stale.mjs`, and deliberately a different function.
+// A different question from `currency.mjs`, and deliberately a different function.
 // Staleness compares two builds' ages and has no answer for a build that does
 // not exist, which is why it says "not stale" when `dist` is absent. This one
 // answers exactly that case, so the two together cover a Core that is missing,

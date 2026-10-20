@@ -20,6 +20,10 @@ const scripts = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, "package.json
 // before that screen failed three Lab tests in the sweep).
 const BUILD_FIRST = ["node scripts/check/core-build.mjs", "node scripts/build-cache/cli.mjs test-contracts:build"];
 
+// `pnpm check` also refuses a drifted mirror of Core's code right after the
+// Core build gate, before anything else spends time (scripts/check/core-mirror.mjs).
+const CHECK_FIRST = ["node scripts/check/core-build.mjs", "node scripts/check/core-mirror.mjs", "node scripts/build-cache/cli.mjs test-contracts:build"];
+
 /** A script's one `node --test` step. */
 function testStep(command) {
   const step = command.split(" && ").find((part) => part.startsWith("node --test "));
@@ -34,7 +38,7 @@ function globsOf(command) {
 test("pnpm check builds what its tests import, then one node --test over exactly the suites' globs", () => {
   const steps = scripts.check.split(" && ");
   const at = steps.indexOf(testStep(scripts.check));
-  assert.deepEqual(steps.slice(0, at), BUILD_FIRST);
+  assert.deepEqual(steps.slice(0, at), CHECK_FIRST);
   assert.deepEqual(globsOf(scripts.check), SUITES.flatMap((suite) => globsOf(scripts[suite])));
   // The Core build gate also stands before `pnpm -r check` bundles the extension
   // against Core's dist (scripts/check/core-build.mjs).

@@ -16,18 +16,22 @@ import { stat } from "node:fs/promises";
 
 import { applyMove, assertDisposable, buildCore, copyEnvLocal, coreDistPaths, createWorktree, planSharedCoreMove, readSideState, runGit, runPnpm, writeMarker } from "../worktree/index.mjs";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
-import { taskBranchName } from "./branch-name.mjs";
+import { importCoreScript } from "../core-scripts/index.mjs";
 import { checkCoreCurrent } from "./core-currency.mjs";
-import { recordTaskId } from "./record-task-id.mjs";
 import { resolveTaskRoots } from "./roots.mjs";
-import { nextTaskId } from "./task-id.mjs";
+
+const { taskBranchName } = await importCoreScript("scripts/task/branch-name.mjs");
+const { recordTaskId } = await importCoreScript("scripts/task/record-task-id.mjs");
+const { allocateTaskId } = await importCoreScript("scripts/task/task-id.mjs");
 
 export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, worktree = false, core = false, base, from = "dev", coreFrom = "dev", allowRunning = false, dryRun = false }) {
   if (!slug) throw new Error('Name the work: pnpm task start <slug>, for example "flow-editor-cleanup".');
   if (core && !worktree) throw new Error("--core needs --worktree: a Core-paired task takes a nested worktree with a Core of its own, because the shared Core is detached and every other task builds against it.");
   if (core && !coreRepositoryRoot) throw new Error("--core needs a Core checkout beside this one; none was resolved, so the paired branch has nowhere to be created.");
 
-  const id = await nextTaskId(repositoryRoot, { integrationBranch: from, ...core ? { coreRepositoryRoot, coreIntegrationBranch: coreFrom } : {} });
+  // One id for the unit of work in both histories: a paired start allocates
+  // against Core as well, through Core's own allocator (`task-id.mjs` there).
+  const id = await allocateTaskId({ repositoryRoot, integrationBranch: from, pairedRepositories: core ? [{ repositoryRoot: coreRepositoryRoot, integrationBranch: coreFrom }] : [] });
   const branch = taskBranchName(id, slug);
 
   const existing = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", branch]);
@@ -58,7 +62,7 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
 
   // The id is spent from here on, whatever happens next: a start that fails
   // half-way, or a task later abandoned, must not see its number handed out
-  // again (`task-id.mjs`). A paired task's id is spent in Core too.
+  // again (Core's `scripts/task/task-id.mjs`). A paired task's id is spent in Core too.
   await recordTaskId(repositoryRoot, id, from);
   if (core) await recordTaskId(coreRepositoryRoot, id, coreFrom);
 

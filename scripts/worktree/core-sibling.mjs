@@ -23,12 +23,11 @@
 // comes from `checkout-repository.mjs` rather than from git directly; that
 // file says what goes wrong without it.
 
-import { readFile, stat } from "node:fs/promises";
-import path from "node:path";
+import { stat } from "node:fs/promises";
+import { coreRootOf, importCoreScript } from "../core-scripts/index.mjs";
 import { checkoutRepository } from "./checkout-repository.mjs";
-import { samePath } from "./path-identity.mjs";
 
-const LINK = /^link:(.+)$/u;
+const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /**
  * @param {string} extRoot a worktree of this repository
@@ -36,21 +35,7 @@ const LINK = /^link:(.+)$/u;
  * @returns {Promise<{ root: string, present: boolean, verified: boolean }>}
  */
 export async function resolveCoreSibling(extRoot, options = {}) {
-  const manifestPath = path.join(extRoot, "domain", "package.json");
-  let manifest;
-  try {
-    manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  } catch (error) {
-    throw new Error(`${extRoot} is not a checkout of this repository: ${manifestPath} could not be read`, { cause: error });
-  }
-  const spec = manifest?.dependencies?.fluxiq;
-  const match = typeof spec === "string" ? LINK.exec(spec) : null;
-  if (!match) throw new Error(`${manifestPath} does not depend on fluxiq through link: (found ${JSON.stringify(spec ?? null)})`);
-  const packageDir = path.resolve(extRoot, "domain", match[1]);
-  if (path.basename(packageDir) !== "fluxiq" || path.basename(path.dirname(packageDir)) !== "packages") {
-    throw new Error(`${manifestPath} links fluxiq to ${packageDir}, which is not <core>/packages/fluxiq`);
-  }
-  const root = path.dirname(path.dirname(packageDir));
+  const root = coreRootOf(extRoot);
   if (!await isDirectory(root)) return { root, present: false, verified: false };
   const { coreRepositoryRoot } = options;
   if (coreRepositoryRoot === undefined) return { root, present: true, verified: false };

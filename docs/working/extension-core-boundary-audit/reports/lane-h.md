@@ -86,3 +86,96 @@ UNIT READY: EXT `package.json`, `pnpm-lock.yaml`, `.structure-baseline.json`, `R
 `packages/test-contracts/src/llm.ts`, `packages/test-matrix/src/**`, reports `lane-h*.md`;
 Core `scripts/structure-audit/config.mjs`, `scripts/structure-audit/rules/restricted-references.mjs`,
 `scripts/structure-audit/rules/tests/restricted-references.test.mjs`, `docs/architecture/code-structure.md`.
+
+### 2026-10-19 - Phase 5 landed (H5 build-cache, H6 task rules, lead integration)
+
+What changed:
+
+- **Shared loader (lead).** `scripts/core-scripts/` (`coreRootOf`, `importCoreScript`, test): every EXT import of
+  Core tooling goes through it; a Core sibling that is missing or predates the module fails with what to do.
+  `scripts/worktree/core-sibling.mjs` now takes its path rule from `coreRootOf` (no second copy).
+- **Build cache (H5).** Core `scripts/build-cache` takes a repository configuration (`buildCacheFor`,
+  `repository/` with `CORE_REPOSITORY`, store namespace `core`); Core's own CLI unchanged. EXT
+  `scripts/build-cache` binds Core's engine to its configuration (`core-engine.mjs`, `bound-engine.mjs`,
+  `repository.mjs`) and keeps only its registry, resolver, Core-package resolution and esbuild listing; the
+  forked engine and its generic tests are deleted (about 2,290 lines out). EXT gains Core's output replay,
+  git-visible fingerprinting, stale-only touching, rooted entries and parallel scheduling. CLI, JSON lines,
+  `prove-inputs` and the `index.mjs` names consumers use are unchanged.
+- **Task rules (H6).** Core `scripts/task` exports the shared rules side-effect free (`allocateTaskId` with a
+  `pairedRepositories` option, id refs, branch naming, `runGit`, new `git-answered-no.mjs`, `path-inside.mjs`,
+  `path-identity.mjs`). EXT deleted its copies (`task/{task-id,task-id-ref-prefix,record-task-id,branch-name}.mjs`,
+  `worktree/{git-command,path-identity}.mjs` and their tests) and loads Core's; `worktree/index.mjs` still exports
+  the same names for the Lab callers. New CLI-pinning tests (`task/tests/start.test.mjs`, `command-line.test.mjs`)
+  also pass against the old scripts.
+- **Lead fixes.** `scripts/build-cache/tests/check-prefix.test.mjs` pinned the old `pnpm check` prefix and failed
+  since phase 0 added the mirror gate (a phase-0 miss, now fixed); `scripts/core-scripts/tests` added to the
+  `task:test` and `check` globs; `scripts/lab/prelude/tests/build-phase.test.mjs` fixture made a git checkout
+  (Core's engine runs uncached where git cannot list files); `docs/architecture/repository-layout.md` says Core
+  owns the engine and the task rules.
+- **No mirror left** besides the structure audit: H5 and H6 each report no byte-identical copy, so
+  `core-mirror/mirrors.mjs` is unchanged.
+
+Merge order (supervisor): EXT now needs a Core with this change beside it. Merge Core's t727 into Core `dev` first
+(its side is additive for `scripts/task`; `scripts/build-cache` keeps Core's CLI), update the main checkout's Core
+and the shared `fxwork/!FluxIQ` / `fxlab` Cores, then merge EXT; lanes with their own Core branch (t726, t728)
+merge Core `dev` into it when they next merge EXT `dev`. Until then they get the "Core predates" message, never a
+wrong id or a corrupted store.
+
+Decisions and items for the supervisor:
+
+- Host-identity inventories (`domain/scripts/host-build-identity/inventory.mjs`, test-runner `host-identity/inventory.ts`)
+  hash EXT `scripts/build-cache/*.mjs`; the engine is now in Core, so an engine change no longer moves that
+  identity. Left as is: the receipt detects a stale host bundle, and the engine does not change bundle content.
+- Core `AGENTS.md` still says to keep `task-id.mjs`/`record-task-id.mjs` "in step on both sides" (line 287), and
+  phase 0's worker had proposed a `restricted-references` sentence there; both are the supervisor's call.
+
+Checks run by the lead (observed):
+
+- EXT `node --test` over every `check` glob (structure-audit, lab, task, worktree, core-scripts, build-cache,
+  check) -> `pass 664, fail 0`
+- EXT `node scripts/structure-audit.mjs` -> `passed (213 warning(s), 635 baselined)`; `node scripts/check/core-mirror.mjs`
+  -> `1 mirror set(s) match ... structure-audit (58 files)`; `node scripts/build-cache/prove-inputs.mjs` ->
+  `inputs proved complete for 31 listing(s)`; `node scripts/task/run-task.mjs list` -> exit 0
+- Core `node --test` task, build-cache, structure-audit and `scripts/tests` -> `pass 394, fail 0`; Core
+  `node scripts/structure-audit.mjs` -> `passed (409 warning(s), 1152 baselined)`
+- Real package checks through the new engine: `pnpm --filter @fluxiq-web-extension/<pkg> check` for domain,
+  test-runner (with `domain:build`), extension and test-contracts -> each `"build-cache":"build"` with reason
+  `inputs changed: core:scripts/build-cache, ...` (Core's engine is fingerprinted), exit 0; domain again ->
+  `"reuse" ... "inputs and outputs match the stamp"`
+
+UNIT READY: EXT `package.json`, `docs/architecture/repository-layout.md`, `scripts/core-scripts/**`,
+`scripts/build-cache/**`, `scripts/task/**`, `scripts/worktree/**`, `scripts/lab/prelude/tests/build-phase.test.mjs`,
+reports `lane-h.md`, `lane-h-h5.md`, `lane-h-h6.md`; Core `scripts/build-cache/**`, `scripts/task/**`.
+
+### 2026-10-19 - Core build staleness asked of Core's build cache (supervisor addition 1; lead, no worker)
+
+The concurrent-subagent limit was reached (other lanes' workers), so the lead did this one directly.
+
+What changed: new `scripts/lab/core/build/currency.mjs` (`coreBuildCurrency`): for each Core library build step
+(`contracts:build`, `fluxiq:build`, `client-gateway-websocket:build`, from `CORE_PACKAGES`) it asks
+`decideStep` from the exact Core checkout's `scripts/build-cache/index.mjs` (as the build lease loads Core's
+locks), with `FLUXIQ_BUILD_FORCE` removed from the environment; any `build` decision is stale, reported with the
+step and Core's own reason. `scripts/check/core-build/freshness.mjs` (the `pnpm check` / package gate) and
+`scripts/lab/run-lab.mjs` (the Lab's refusal, `FLUXIQ_LAB_ALLOW_STALE_CORE=1` override kept) switched to it;
+`stale.mjs` (`coreBuildStaleness`) and `scanCoreSources` deleted with their tests; `staleness.mjs` keeps only
+`scanNewest`, which this repository's own builds still use (`domain-build-staleness.mjs`). "Never built"
+(`unbuilt.mjs`) and "changing under a run" (`watch.mjs`) are unchanged. Comments in `unbuilt.mjs` and
+`worktree/shared-core-move.mjs` updated.
+
+Downstream readers of Core's `dist` by modification time that remain: only `watch.mjs` (quiescence during a run).
+Core's `touch-stale-outputs.mjs` existed for the staleness comparison this removes; a Core follow-up can drop it
+once every downstream tree has this change (older lane trees still run the mtime guard against shared Cores).
+
+Checks (observed):
+
+- `node --test "scripts/lab/**/tests/*.test.mjs" "scripts/check/**/tests/*.test.mjs" "scripts/worktree/tests/*.test.mjs"` -> `pass 318, fail 0`
+- Real probe `node scripts/check/core-build.mjs` -> `not current ... Core's build cache would rebuild contracts:build: inputs changed: scripts/build-cache` (and the other two), exit 1: true, the t727 Core libraries were stamped before phase 5 changed Core's engine, an input of every step; the old mtime guard had reported this Core "current". After `pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build` in the t727 Core (three builds, `inputs changed: scripts/build-cache`) -> `core-build: ... is current with its source.`, exit 0, twice
+- `node scripts/structure-audit.mjs` -> passed; `--update` -> `1 removed` (freshness test packing entry)
+
+Consequence for integration: every Core that takes phase 5 rebuilds its three libraries once (their stamps name
+the old engine); the gate says so by step and reason.
+
+UNIT READY: EXT `scripts/lab/core/build/**` (`currency.mjs`, `tests/currency.test.mjs`, `tests/staleness.test.mjs`
+new; `stale.mjs`, `tests/stale.test.mjs` deleted; `index.mjs`, `staleness.mjs`, `unbuilt.mjs`,
+`tests/unbuilt.test.mjs`), `scripts/check/core-build/freshness.mjs`, `scripts/check/core-build/tests/freshness.test.mjs`,
+`scripts/lab/run-lab.mjs`, `scripts/worktree/shared-core-move.mjs`, `.structure-baseline.json`, `lane-h.md`.

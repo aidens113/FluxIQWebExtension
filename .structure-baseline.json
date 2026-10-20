@@ -608,7 +608,6 @@
       "packages/test-runner/src/ui-e2e/journey-selection.ts": 1,
       "packages/test-runner/src/ui-e2e/tests/topology.test.ts": 1,
       "packages/test-runner/src/windows-acl.ts": 1,
-      "scripts/check/core-build/tests/freshness.test.mjs": 1,
       "scripts/lab/live-campaign/command-line.mjs": 1,
       "scripts/lab/live-campaign/lab-run/output.mjs": 1,
       "scripts/lab/live-campaign/lab-run/tests/ram-fault.test.mjs": 1,

@@ -1,28 +1,39 @@
-// One registry entry turned into absolute paths: the roots its fingerprint
-// hashes, the outputs its digest covers, the files a reuse requires and where
-// its stamp lives. Everything the cache decides is decided from this.
+// One registry entry of this repository turned into what Core's engine decides
+// from: the roots its fingerprint hashes, the outputs its digest covers, the
+// files a reuse requires and where its stamp lives, in the shape Core's
+// `scripts/build-cache/workspace/resolve-step.mjs` documents. This is the
+// resolver `repository.mjs` hands the engine; the engine passes it the root
+// and registry to use.
 //
 // Input roots, in the order they are labelled:
-//   - the package directory, minus the directories its own builds generate
-//     and minus this step's resolved outputs;
-//   - every workspace package it depends on, transitively, whole -- their
-//     outputs are exactly what this step reads -- and every package the
-//     registry says it `reads` without declaring it, with theirs;
+//   - the package's git-visible files, minus the directories its own builds
+//     generate and minus this step's resolved outputs;
+//   - every workspace package it depends on, transitively, and every package
+//     the registry says it `reads` without declaring it, with theirs: the
+//     package's git-visible files, and the generated directories its steps
+//     write (`dist/` when none is registered), walked on disk because git
+//     ignores them and they are exactly what this step reads of it;
 //   - every FluxIQ Core package it links, transitively (`core-packages.mjs`):
 //     `src`, `dist`, `package.json` and `tsconfig*.json`, plus Core's root
 //     `package.json`, `tsconfig*.json`, `pnpm-lock.yaml` and installed
 //     `node_modules/.pnpm/lock.yaml`;
 //   - this repository's `package.json`, `pnpm-workspace.yaml`,
-//     `pnpm-lock.yaml`, `tsconfig.base.json` and `node_modules/.pnpm/lock.yaml`;
-//   - the build-cache sources themselves, so a change to how a fingerprint is
-//     taken invalidates every stamp taken the old way;
+//     `pnpm-lock.yaml`, `tsconfig.base.json` and installed
+//     `node_modules/.pnpm/lock.yaml`;
 //   - for a step marked `structureAudit`, the structure audit's configuration
 //     and rules (`scripts/structure-audit/`, minus its tests) in this
 //     repository and in every Core it links. `extension:check` holds the
 //     browser-imports rule's entry lists in both `config.mjs` files to the
-//     bundle, so an edit to either alone has to rerun it.
+//     bundle, so an edit to either alone has to rerun it;
+//   - the build-cache sources, this repository's and Core's engine
+//     (`engine-sources.mjs`).
 // Installed packages are not walked; the two lockfiles stand for them, which
 // is what `pnpm install --frozen-lockfile` guarantees.
+//
+// Git-visible means tracked, or untracked and not ignored, so the run data,
+// test builds and Lab instances written into ignored directories of a package
+// never reach a fingerprint. Anything outside this checkout -- a linked Core,
+// the engine -- is walked, and labelled by its place in its own tree.
 //
 // A dependency's outputs that a registry step marks `unreadByDependants` (the
 // web panel host bundle, which only a running Lab loads) are left out of its
@@ -34,39 +45,40 @@
 // checkout sits: the same inputs in two checkouts give the same fingerprint,
 // which is what lets the shared store hand one tree's result to another.
 // `relocationRoots` are the absolute directories an output must not mention
-// to be stored there: this checkout and the Core roots it links.
+// to be stored for any tree: this checkout and the Core roots it links, whose
+// installs `installRoots` also names for the coverage proof.
 
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { coreEngine } from "../core-engine.mjs";
 import { linkedCorePackages } from "./core-packages.mjs";
-import { REPOSITORY_ROOT } from "../repository-root.mjs";
-import { STAMP_VERSION } from "../stamp/index.mjs";
-import { STEPS } from "../steps.mjs";
-import { readWorkspacePackages } from "./workspace-packages.mjs";
+import { engineSourceRoots } from "./engine-sources.mjs";
 
-const REPOSITORY_FILES = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json", "node_modules/.pnpm/lock.yaml"];
+const REPOSITORY_FILES = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json"];
+const INSTALLED_LOCKFILE = "node_modules/.pnpm/lock.yaml";
 const CORE_ROOT_FILES = ["package.json", "pnpm-lock.yaml", "node_modules/.pnpm/lock.yaml"];
 const STRUCTURE_AUDIT = ["scripts", "structure-audit"];
 const STRUCTURE_AUDIT_TESTS = [["tests"], ["rules", "tests"]];
+const DEFAULT_GENERATED = ["dist"];
 const TSCONFIG = /^tsconfig.*\.json$/u;
 const CACHE_DIRECTORY = path.join("node_modules", ".cache", "fluxiq-build");
 const STAT_CACHE_FILE = "stat-cache.json";
 
 /**
  * @param {string} stepName a key of the registry, e.g. "domain:build"
- * @param {{ repoRoot?: string, env?: NodeJS.ProcessEnv, steps?: Record<string, object> }} [options]
+ * @param {{ repoRoot: string, steps: Record<string, object>, env?: NodeJS.ProcessEnv }} options
  */
-export function resolveStep(stepName, options = {}) {
-  const repoRoot = path.resolve(options.repoRoot ?? REPOSITORY_ROOT);
+export function resolveExtensionStep(stepName, options) {
+  const repoRoot = path.resolve(options.repoRoot);
   const env = options.env ?? process.env;
-  const steps = options.steps ?? STEPS;
+  const steps = options.steps;
   const step = Object.hasOwn(steps, stepName) ? steps[stepName] : undefined;
   if (step === undefined) throw new Error(`build-cache: unknown step "${stepName}"; registered steps are ${Object.keys(steps).join(", ")}`);
   if (step.command.includes('"')) throw new Error(`build-cache: the command of "${stepName}" contains a double quote, which cannot pass through the package.json script as one argument`);
 
   const packageDir = path.join(repoRoot, step.package);
-  const packages = readWorkspacePackages(repoRoot);
+  const packages = coreEngine.readWorkspacePackages(repoRoot);
   const own = [...packages.values()].find((candidate) => samePath(candidate.dir, packageDir));
   if (own === undefined) throw new Error(`build-cache: "${stepName}" names ${step.package}, which is not a package of the workspace at ${repoRoot}`);
 
@@ -74,11 +86,16 @@ export function resolveStep(stepName, options = {}) {
   const outputs = (step.outputs ?? []).map((output) => ({
     label: label(repoRoot, path.join(outputBase.dir, output.path)),
     path: path.join(outputBase.dir, output.path),
+    exclude: [],
     match: output.match ?? null
   }));
-  const ownExcluded = [...(step.generated ?? []).map((dir) => path.join(packageDir, dir)), ...outputs.map((output) => output.path)];
 
-  const roots = [{ label: label(repoRoot, packageDir), path: packageDir, exclude: ownExcluded }];
+  const roots = [];
+  const git = (target, exclude = []) => roots.push({ kind: "git", label: label(repoRoot, target), path: target, exclude });
+  const walk = (target, extra = {}) =>
+    roots.push({ kind: "walk", label: extra.labelBase ?? label(repoRoot, target), path: target, exclude: extra.exclude ?? [], ...(extra.labelBase === undefined ? {} : { labelBase: extra.labelBase }) });
+
+  git(packageDir, [...(step.generated ?? []).map((dir) => path.join(packageDir, dir)), ...outputs.map((output) => output.path)]);
   const reads = (step.reads ?? []).map((dir) => {
     const read = [...packages.values()].find((candidate) => samePath(candidate.dir, path.join(repoRoot, dir)));
     if (read === undefined) throw new Error(`build-cache: "${stepName}" reads ${dir}, which is not a package of the workspace at ${repoRoot}`);
@@ -87,37 +104,40 @@ export function resolveStep(stepName, options = {}) {
   const dependencies = transitiveDependencies(own, packages, reads);
   const unread = unreadOutputs(steps, repoRoot);
   for (const dependency of dependencies) {
-    const exclude = unread.filter((output) => samePath(output.packageDir, dependency.dir)).map((output) => output.path);
-    roots.push({ label: label(repoRoot, dependency.dir), path: dependency.dir, exclude });
+    const unreadHere = unread.filter((output) => samePath(output.packageDir, dependency.dir)).map((output) => output.path);
+    git(dependency.dir, unreadHere);
+    for (const generated of generatedOf(steps, repoRoot, dependency.dir)) walk(generated, { exclude: unreadHere });
   }
 
-  const links = [own, ...dependencies].flatMap((item) => item.links);
-  const corePackages = linkedCorePackages(links);
+  const corePackages = linkedCorePackages([own, ...dependencies].flatMap((item) => item.links));
   const coreRoots = new Set();
   for (const core of corePackages) {
     const base = core.coreRoot ?? path.dirname(core.dir);
     const prefix = core.coreRoot === null ? "link:" : "core:";
     for (const entry of ["src", "dist", "package.json", ...tsconfigsIn(core.dir)]) {
-      roots.push({ label: `${prefix}${label(base, path.join(core.dir, entry))}`, path: path.join(core.dir, entry), exclude: [] });
+      const target = path.join(core.dir, entry);
+      walk(target, { labelBase: `${prefix}${label(base, target)}` });
     }
     if (core.coreRoot !== null) coreRoots.add(core.coreRoot);
   }
-  for (const coreRoot of [...coreRoots].sort()) {
-    for (const file of [...CORE_ROOT_FILES, ...tsconfigsIn(coreRoot)]) {
-      roots.push({ label: `core:${file}`, path: path.join(coreRoot, file), exclude: [] });
+  const sortedCoreRoots = [...coreRoots].sort();
+  for (const coreRoot of sortedCoreRoots) {
+    for (const file of [...CORE_ROOT_FILES, ...tsconfigsIn(coreRoot)]) walk(path.join(coreRoot, file), { labelBase: `core:${file}` });
+  }
+  for (const file of REPOSITORY_FILES) git(path.join(repoRoot, file));
+  walk(path.join(repoRoot, INSTALLED_LOCKFILE));
+  if (step.structureAudit === true) {
+    const audit = path.join(repoRoot, ...STRUCTURE_AUDIT);
+    git(audit, auditTests(audit));
+    for (const coreRoot of sortedCoreRoots) {
+      const coreAudit = path.join(coreRoot, ...STRUCTURE_AUDIT);
+      walk(coreAudit, { labelBase: `core:${STRUCTURE_AUDIT.join("/")}`, exclude: auditTests(coreAudit) });
     }
   }
-  for (const file of REPOSITORY_FILES) roots.push({ label: file, path: path.join(repoRoot, file), exclude: [] });
-  if (step.structureAudit === true) {
-    roots.push(structureAuditRoot(repoRoot, ""));
-    for (const coreRoot of [...coreRoots].sort()) roots.push(structureAuditRoot(coreRoot, "core:"));
-  }
-  const cacheSources = path.join(repoRoot, "scripts", "build-cache");
-  roots.push({ label: label(repoRoot, cacheSources), path: cacheSources, exclude: [path.join(cacheSources, "tests")] });
+  roots.push(...engineSourceRoots());
 
   const stepPart = stepName.slice(stepName.indexOf(":") + 1);
   const suffix = outputBase.isDefault ? "" : `-${createHash("sha256").update(label(repoRoot, outputBase.dir)).digest("hex").slice(0, 12)}`;
-  const stampPath = path.join(packageDir, CACHE_DIRECTORY, `${stepPart}${suffix}.json`);
 
   return {
     name: stepName,
@@ -125,17 +145,22 @@ export function resolveStep(stepName, options = {}) {
     command: step.command,
     repoRoot,
     packageDir,
+    packageName: own.name,
+    dependencies: dependencies.map((dependency) => dependency.name),
     roots,
     outputs,
     outputBase: outputBase.dir,
     required: (step.required ?? []).map((file) => path.join(outputBase.dir, file)),
     tsconfigs: (step.tsconfigs ?? []).map((file) => path.join(packageDir, file)),
     bundles: step.bundles === true,
-    stampPath,
+    traces: false,
+    replayOutput: false,
+    stampPath: path.join(packageDir, CACHE_DIRECTORY, `${stepPart}${suffix}.json`),
     statCachePath: path.join(repoRoot, CACHE_DIRECTORY, STAT_CACHE_FILE),
-    relocationRoots: [repoRoot, ...[...coreRoots].sort()],
+    relocationRoots: [repoRoot, ...sortedCoreRoots],
+    installRoots: [repoRoot, ...sortedCoreRoots],
     meta: {
-      version: STAMP_VERSION,
+      version: coreEngine.STAMP_VERSION,
       step: stepName,
       command: step.command,
       node: process.version,
@@ -153,6 +178,16 @@ function resolveOutputBase(step, packageDir, env) {
   const value = typeof raw === "string" && base.trim ? raw.trim() : raw;
   const dir = typeof value === "string" && value.trim() !== "" ? path.resolve(packageDir, value) : fallback;
   return { dir, isDefault: samePath(dir, fallback) };
+}
+
+/** The directories a package's registered steps generate, at their default location. */
+function generatedOf(steps, repoRoot, packageDir) {
+  const found = new Set();
+  for (const step of Object.values(steps)) {
+    if (!samePath(path.join(repoRoot, step.package), packageDir)) continue;
+    for (const dir of step.generated ?? []) found.add(dir);
+  }
+  return [...(found.size === 0 ? DEFAULT_GENERATED : [...found].sort())].map((dir) => path.join(packageDir, dir));
 }
 
 /** The default-location outputs of every step whose outputs no dependant reads. */
@@ -190,10 +225,9 @@ function transitiveDependencies(own, packages, reads) {
   return [...found.values()].sort((left, right) => (left.dir < right.dir ? -1 : left.dir > right.dir ? 1 : 0));
 }
 
-/** A root's structure-audit sources: configuration, rules and their helpers, not their tests. */
-function structureAuditRoot(root, prefix) {
-  const dir = path.join(root, ...STRUCTURE_AUDIT);
-  return { label: `${prefix}${STRUCTURE_AUDIT.join("/")}`, path: dir, exclude: STRUCTURE_AUDIT_TESTS.map((parts) => path.join(dir, ...parts)) };
+/** A structure audit's tests, which no step reads. */
+function auditTests(dir) {
+  return STRUCTURE_AUDIT_TESTS.map((parts) => path.join(dir, ...parts));
 }
 
 function tsconfigsIn(dir) {
@@ -206,8 +240,7 @@ function tsconfigsIn(dir) {
 
 function label(base, target) {
   const relative = path.relative(base, target);
-  const shown = relative === "" ? "." : relative;
-  return shown.split(path.sep).join("/");
+  return (relative === "" ? "." : relative).split(path.sep).join("/");
 }
 
 function samePath(left, right) {
