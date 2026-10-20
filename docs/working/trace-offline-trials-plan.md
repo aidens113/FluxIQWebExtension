@@ -543,6 +543,24 @@ was still running at dispatch and is excluded below by its own file list.
 - Outcome: Accepted
 - Follow-up: sql-test-pool (structural fix for the recurring sweep timeouts).
 
+### 2026-10-20 - t738 merged: the four rerun round 2 causes fixed
+- Agent: supervisor (t738 lead and workers)
+- Changed: Core and downstream merged and pushed: reset witnesses required before a lasting reversible press; real
+  trial-act addresses; an invented reset destination refused; write-records takes step-value records; issue placement
+  and the loop-in-loop alternative; "test it" for an unchanged submission; trial answers carry their page; a refused
+  test says where the tab went; one lifecycle store per process (since t728 the domain never saw Core's call frame,
+  so later briefs' opening calls were refused); truthful endings; the downstream load-every-row-first hint, scroll
+  description and named bad keys. The supervisor updated one text-disclosure test that pinned the old hint wording.
+- Validation: supervisor reruns in t738: Core `vitest run` over flow-bootstrap, llm, service, nodes, project-agents,
+  ui -> 724 files, 7003 passed; fluxiq `tsc` 0; downstream checks 0; domain runtime/io/client -> pass 1848; extension
+  content+background -> 1990 pass, 1 fail (`text-disclosure.test.ts` pinned the old hint; updated to the new
+  structure, the folder then pass 2 fail 0); headed `e2e/site-reset` -> 6 passed (3.7m); after merging dev, gated:
+  Core 632 files, 6173 passed; extension 1992 pass; domain 1855 pass; audits passed; finish merged both sides.
+- Open (lead): the ending filter that drops part-level test claims is broad; the reset-witness rule does not cover
+  unscoped presses or a lone `create_new`; the rewritten job spec no longer checks the wrong-job undo.
+- Outcome: Accepted
+- Follow-up: rerun round 3 on synced lane trees; then the open points.
+
 ## Open Questions
 
 None requiring user input.
