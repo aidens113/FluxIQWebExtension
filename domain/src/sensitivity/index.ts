@@ -1,7 +1,9 @@
 // The one sensitivity rule, and the one adapter over it.
 //
-// `signature.ts` decides, from three attributes, whether a control holds a
-// secret. `descriptor.ts` reads those three attributes off a serialized
+// `signature.ts` decides, from what a control is -- type, `autocomplete`,
+// `data-sensitive`, names and labels -- whether it holds a secret, asking
+// `card-security-code.ts` of the names and labels. `descriptor.ts` reads those
+// signals off a serialized
 // element descriptor. `redaction.ts` holds what a withholding caller says
 // instead of the values, and how a producer declares it withheld them already.
 // Nothing else belongs here: a caller holding a live DOM

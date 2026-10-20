@@ -132,6 +132,18 @@ export type DomElementDescriptor = {
    * Snapshot-scoped, like `ownText`.
    */
   setApart?: true | undefined;
+  /**
+   * On a list or table (`ul`, `ol`, `role="list"`, `table`, `role="table"` or
+   * `"grid"`) holding at least one item: how it goes on past what the capture
+   * shows, by the read's own detectors asked with nothing scrolled
+   * (`content/extraction/read-coverage/list-way-on.ts`, l1 D1) -- a Next or a
+   * following page number, a Load more, a declared feed, or none. A closed
+   * word and never page text. Absent says nothing, which the domain reads as
+   * "may go on": only `none` lets it treat the list as whole
+   * (`domain/src/runtime/llm-evidence/control-spot/collection.ts`).
+   * Snapshot-scoped, like `repeatCount`.
+   */
+  listWayOn?: "none" | "next_page" | "load_more" | "feed" | undefined;
 };
 
 /**
@@ -251,6 +263,8 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  *   words and paint. A replay finds its target by identity, not by these.
  * - `cursor` and `setApart` are how one capture found the element drawn (t229):
  *   a hover style or a chosen option changes them with the element unchanged.
+ * - `listWayOn` is how one capture found a list going on (l1 D1): a page
+ *   loading more of it changes it with the list element unchanged.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
@@ -260,7 +274,7 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
 type UnwiredElementField =
   | "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted"
   | "repeatCount" | "frontLayer" | "leadStatement" | "ownText" | "readableText" | "parent" | "hidden"
-  | "cursor" | "setApart";
+  | "cursor" | "setApart" | "listWayOn";
 
 /**
  * The recorded element's identity as it crosses the client gateway.

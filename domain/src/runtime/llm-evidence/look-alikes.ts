@@ -204,7 +204,9 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     kind: undefined,
     coveredBy: undefined,
     frontLayer: undefined,
-    statement: undefined
+    statement: undefined,
+    // How a list goes on (l1 D1): a fact of the list, never shown, so no cue a person reads.
+    listWayOn: undefined
   };
   return JSON.stringify(Object.values(parts));
 }

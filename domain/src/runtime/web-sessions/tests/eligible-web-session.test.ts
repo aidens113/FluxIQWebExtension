@@ -31,6 +31,10 @@ test("a client that is not the extension is not eligible", () => {
   assert.equal(isEligibleWebSession(session({ clientType: "cli" } as Partial<ClientGatewaySession>)), false);
 });
 
+test("a session that has disconnected is not eligible", () => {
+  assert.equal(isEligibleWebSession(session({ disconnectedAt: 2 })), false);
+});
+
 test("a recording session is not eligible", () => {
   assert.equal(isEligibleWebSession(session({ activeRecordingId: "rec-1" })), false);
 });

@@ -18,7 +18,7 @@ async function dispatchAnswered(outputId: string, payload: JsonObject, clientCom
     programs: {
       clientGateway: {
         snapshot: () => ({
-          sessions: [{ sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension", capabilities: [{ id: "web.actions", actionTypes: [outputId] }] }]
+          sessions: [{ sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension", capabilities: [{ id: "web.actions", actionTypes: [outputId], metadata: { domainId: "web-automation" } }] }]
         })
       },
       automationStudioClientGateway: { executeAction: async () => answer }

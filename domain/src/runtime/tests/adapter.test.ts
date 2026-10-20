@@ -46,7 +46,7 @@ const readySession = {
   clientId: "client.one",
   status: "ready",
   clientType: "extension",
-  capabilities: [{ id: "web.actions", actionTypes: ["web.dom.click"] }]
+  capabilities: [{ id: "web.actions", actionTypes: ["web.dom.click"], metadata: { domainId: "web-automation" } }]
 };
 
 const clickCommand: FluxIQRuntimeCommand = {

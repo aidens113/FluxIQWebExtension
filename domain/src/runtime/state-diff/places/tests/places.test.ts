@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, webResetResource, type WebLlmSnapshotBinding } from "../../../llm-evidence";
+import { sanitizeWebLlmSnapshotWithBindings, webControlSpotToken, webControlStates, webResetResource, type WebLlmSnapshotBinding } from "../../../llm-evidence";
 import { webResetCollections } from "../../../llm-evidence/control-spot";
 import { createWebStatePlacesMemo, webStateDiffPlaces, webStateSnapshotPlaces } from "..";
 
@@ -184,4 +184,42 @@ test("trial diffs preserve immediate complete resource-bound inventories without
   assert.equal(webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(after), { definitionId: "web.output.dom-click" }, true).collections, undefined);
   const different = captured("Other document", "3", "tab:2:frame:0");
   assert.equal(webStateDiffPlaces(webStateSnapshotPlaces(before), webStateSnapshotPlaces(different), { definitionId: "web.output.dom-click" }, false).collections, undefined);
+});
+
+// L1 reset settlement: a step whose control is a stateful one carries that
+// control's place and state on its spot, and how many controls at that place
+// showed each state before and after it, so Core reads a toggle the trial
+// pressed and the press that turns it back.
+test("a step pressing a toggle carries its place and state, and the counts at that place before and after", () => {
+  const titlePage = (held: boolean, source = "tab:1:frame:0") => {
+    const binding = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/titles/ivanhoe", title: "Library", interactiveElements: [
+      { tagName: "main", selector: "main" },
+      { tagName: "div", role: "button", selector: "main > div.hold", name: held ? "Cancel hold" : "Place hold", attributes: { "aria-pressed": String(held) }, parent: 0 },
+      { tagName: "div", role: "button", selector: "main > div.share", name: "Share", parent: 0 }
+    ] });
+    binding.resetResource = webResetResource("session.one", source)!;
+    return binding;
+  };
+  const before = titlePage(false), after = titlePage(true);
+  const hold = { definitionId: "web.output.dom-click", parameterValues: { selector: "main > div.hold" } };
+  const diff = step(before, after, hold);
+  const spot = diff.spot as { place?: string; state?: string; scope?: string };
+  assert.ok(spot.place && spot.state, "a toggle in no record, dialog or subject still has a spot");
+  const resource = webResetResource("session.one", "tab:1:frame:0");
+  const controls = diff.controls as { page: string; location: string; before: Record<string, number>; after: Record<string, number> };
+  assert.equal(controls.page, webControlSpotToken("scope", `${resource}\0https://library.test/titles/ivanhoe`), "the page's scope as a start-state read names it");
+  assert.equal(controls.page, spot.scope);
+  // And the location that scope is built from, as a start-state read carries `location` beside `scope` (L1 d7).
+  assert.equal(controls.location, "https://library.test/titles/ivanhoe");
+  assert.deepEqual(controls.before, webControlStates(before)[spot.place]);
+  assert.deepEqual(controls.after, webControlStates(after)[spot.place]);
+  assert.equal(controls.before[spot.state], 1, "the hold showed the state it was pressed in");
+  assert.equal(controls.after[spot.state], undefined, "and no longer shows it");
+  assert.equal(Object.values(controls.after).reduce((sum, count) => sum + count, 0), 2, "the hold and the share button share the page's place");
+  // Only the location names the page in words; nothing else the diff carries does.
+  const { location: _location, ...opaque } = controls;
+  assert.doesNotMatch(JSON.stringify({ ...diff, controls: opaque }), /hold|Share|ivanhoe/u);
+  // A step that moved to another document carries no counts, and a control with no state has no place.
+  assert.equal(step(before, after, hold, true).controls, undefined);
+  assert.equal(step(before, after, press("main")).controls, undefined);
 });

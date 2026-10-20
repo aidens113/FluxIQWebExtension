@@ -5,8 +5,8 @@ import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wai
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
 import { webAutomationClearedWayOutsOf } from "../cleared-way-outs";
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
-import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
+import { pickWebAutomationSession } from "../runtime/web-sessions";
 
 export async function dispatchWebAutomationOutput(
   fluxiq: FluxIQ,
@@ -126,18 +126,9 @@ function unansweredResult(outputId: string): OutputDispatchResult<JsonObject> {
   };
 }
 
+/** The session an output is sent to: the requested one when it is eligible, else the only eligible one (`../runtime/web-sessions/pick-web-session.ts`). */
 function targetSessionId(fluxiq: FluxIQ, metadata: JsonObject | undefined): string | undefined {
-  const requested = stringValue(metadata?.sessionId);
-  const eligible = fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
-    (session.status === "connected" || session.status === "ready") &&
-    session.clientType === "extension" &&
-    session.capabilities.some((capability) =>
-      capability.id === "web.actions" &&
-      (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.some((actionType) => actionType.startsWith("web.")))
-    )
-  );
-  if (requested) return eligible.some((session) => session.sessionId === requested) ? requested : undefined;
-  return eligible.length === 1 ? eligible[0]?.sessionId : undefined;
+  return pickWebAutomationSession(fluxiq.programs.clientGateway.snapshot().sessions, stringValue(metadata?.sessionId) || undefined)?.sessionId;
 }
 
 function compact(value: Record<string, unknown>): JsonObject {
