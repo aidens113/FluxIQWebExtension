@@ -75,3 +75,12 @@ test("a non-string attribute cannot pass the data-sensitive test", () => {
   assert.equal(isSensitiveElementDescriptor({ attributes: { "data-sensitive": true } }), false);
   assert.equal(isSensitiveElementDescriptor({ attributes: { autocomplete: ["cc-number"] } }), false);
 });
+
+test("a descriptor the content side marks sensitive is sensitive, the marker alone and only when true", () => {
+  // A field sensitive only through its marked group (t733 u2): nothing on the descriptor's own attributes says so.
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", sensitive: true, attributes: { name: "note" } }), true);
+  assert.equal(sensitiveFieldSignatureOfDescriptor({ tagName: "input", sensitive: true }).dataSensitive, "true");
+  // Only the literal `true` the producer writes counts; anything else a page sent is not read.
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", sensitive: "true" }), false);
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", sensitive: false }), false);
+});

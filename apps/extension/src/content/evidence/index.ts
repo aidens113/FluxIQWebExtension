@@ -26,6 +26,7 @@
 // covering layer is (`kind`) comes from the interference classifiers
 // (`action-runtime/interference/layer-kind.ts`).
 
+export { isBusyRegion } from "./busy-region";
 export { markElementActivity, forgetElementActivity, type SnapshotElementEntry } from "./changes";
 export { isDrawnControl } from "./controls";
 export { dialogEvidence } from "./dialogs";
