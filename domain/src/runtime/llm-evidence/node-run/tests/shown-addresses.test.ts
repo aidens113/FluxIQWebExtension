@@ -9,9 +9,13 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
-import type { JsonObject } from "fluxiq/core";
+import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import type { WebLlmSnapshotBinding } from "../../sanitize";
+import { createWebNodeBuildStatePersistence, type WebNodeBuildKey } from "../build-state";
+import type { WebRunnableNode } from "../catalog";
+import { createWebNodeShownAddresses, type WebNodeShownAddresses } from "../shown-addresses";
 import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 import { coreBuildStateStore } from "../build-state/tests/core-store";
 
@@ -453,3 +457,113 @@ function library() {
     at: (url: string) => { location = url; }
   };
 }
+
+// What a build was shown, as Core's store keeps it across a restart (t728),
+// within Core's 64 KiB bound on one value (t737).
+//
+// Before t737 the whole set was written as one value; a build shown more than
+// 64 KiB of addresses had every later write refused, so a restarted host knew
+// only what the build had been shown before it crossed the bound. The stored
+// copy now keeps the texts the build typed and its most recently shown
+// addresses within a byte budget under that bound. Synthetic addresses only.
+
+const SHOP_BUILD: WebNodeBuildKey = { projectId: "project.shop", flowId: "flow.shop", buildId: "build.one", callScope: undefined };
+const SHOP_SCOPE = { projectId: "project.shop", flowId: "flow.shop", buildId: "build.one" };
+const SHOP = "https://shop.test";
+const SHOP_START = `${SHOP}/catalog`;
+const SHOP_NAVIGATE = { actionType: "web.browser.navigate" } as WebRunnableNode;
+const SHOP_TYPE = "web.dom.type";
+const SHOP_SLUG = "synthetic-product-name-".repeat(3);
+
+type ShopStore = ReturnType<typeof coreBuildStateStore>;
+
+/** A process over `store`: its own memory and its own queue of writes, as a restarted host has. */
+function shopHost(store: ShopStore) {
+  const persistence = createWebNodeBuildStatePersistence(() => store);
+  return { addresses: createWebNodeShownAddresses(persistence), persistence };
+}
+
+/** A packet whose page is `location` and which links to each of `links`. */
+function shopPage(location: string, links: string[]): WebLlmSnapshotBinding {
+  // The packet carries the page's query beside its location, as `../../location.ts` gives it.
+  return { evidence: { location, elements: links.map((href) => ({ href })) }, pageQuery: [...new URL(location).searchParams] } as unknown as WebLlmSnapshotBinding;
+}
+
+/** A synthetic item link, long enough that a page of them passes the bound quickly. */
+function shopItem(index: number): string {
+  return `${SHOP}/catalog/item/${SHOP_SLUG}${index}/${100_000 + index}`;
+}
+
+function shopGoes(addresses: WebNodeShownAddresses, url: string): boolean {
+  return !addresses.refuses(SHOP_BUILD, SHOP_NAVIGATE, { url } as JsonObject, { location: SHOP_START, startLocation: SHOP_START });
+}
+
+const storedBytes = (value: JsonValue | undefined): number => new TextEncoder().encode(JSON.stringify(value)).length;
+
+test("an ordinary build is stored whole, in the shape it always had, and read back unchanged after a restart", async () => {
+  const store = coreBuildStateStore();
+  const first = shopHost(store);
+  first.addresses.saw(SHOP_BUILD, shopPage(SHOP_START, [shopItem(1), shopItem(2)]));
+  first.addresses.ran(SHOP_BUILD, { actionType: SHOP_TYPE, parameters: { text: "Blue Mug" }, read: undefined, location: SHOP_START });
+  await first.persistence.settled();
+
+  assert.deepEqual(await store.get(SHOP_SCOPE, "web.shown-addresses"), {
+    addresses: [
+      [`${SHOP}/catalog/item/${SHOP_SLUG}1/100001`, []],
+      [`${SHOP}/catalog/item/${SHOP_SLUG}2/100002`, []],
+      [`${SHOP}/catalog`, []]
+    ],
+    typed: ["blue mug"]
+  });
+
+  const restarted = shopHost(store);
+  await restarted.addresses.restore(SHOP_BUILD);
+  assert.equal(shopGoes(restarted.addresses, shopItem(1)), true);
+  assert.equal(shopGoes(restarted.addresses, shopItem(2)), true);
+  assert.equal(shopGoes(restarted.addresses, `${SHOP}/catalog/item/made-up/999`), false);
+});
+
+test("a build shown more than 64 KiB of addresses still stores its newest ones, and a restarted shopHost may follow them", async () => {
+  const store = coreBuildStateStore();
+  const first = shopHost(store);
+  first.addresses.ran(SHOP_BUILD, { actionType: SHOP_TYPE, parameters: { text: "mug" }, read: undefined, location: SHOP_START });
+  // Two pages, together far past Core's bound on one value.
+  first.addresses.saw(SHOP_BUILD, shopPage(SHOP_START, Array.from({ length: 600 }, (_unused, index) => shopItem(index))));
+  first.addresses.saw(SHOP_BUILD, shopPage(`${SHOP}/catalog?q=mug`, Array.from({ length: 600 }, (_unused, index) => shopItem(1_000 + index))));
+  await first.persistence.settled();
+  // The process itself forgets nothing.
+  assert.equal(shopGoes(first.addresses, shopItem(0)), true);
+
+  const stored = await store.get(SHOP_SCOPE, "web.shown-addresses");
+  assert.notEqual(stored, undefined);
+  // Within three quarters of Core's bound on one value, the share this memory takes (`../shown-addresses.ts`).
+  assert.ok(storedBytes(stored) <= (AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS.maxValueBytes * 3) / 4);
+
+  const restarted = shopHost(store);
+  await restarted.addresses.restore(SHOP_BUILD);
+  // The newest page and its links survive the restart, and so does the typed text: the search may run again with other words.
+  assert.equal(shopGoes(restarted.addresses, shopItem(1_599)), true);
+  assert.equal(shopGoes(restarted.addresses, shopItem(1_300)), true);
+  assert.equal(shopGoes(restarted.addresses, `${SHOP}/catalog?q=mug`), true);
+  assert.equal(shopGoes(restarted.addresses, `${SHOP}/catalog?q=cup`), true);
+  assert.equal(shopGoes(restarted.addresses, `${SHOP}/catalog?sort=price`), false);
+  // The oldest were left out of the stored copy: refused, never wrongly allowed.
+  assert.equal(shopGoes(restarted.addresses, shopItem(0)), false);
+  assert.equal(shopGoes(restarted.addresses, `${SHOP}/catalog/item/made-up/999`), false);
+});
+
+test("an address shown again counts as newly shown, so a shopPage the build keeps returning to is kept", async () => {
+  const store = coreBuildStateStore();
+  const first = shopHost(store);
+  first.addresses.saw(SHOP_BUILD, shopPage(SHOP_START, [shopItem(0)]));
+  first.addresses.saw(SHOP_BUILD, shopPage(SHOP_START, Array.from({ length: 1_200 }, (_unused, index) => shopItem(1 + index))));
+  // Back on the first page, which shows its one link again beside a new one.
+  first.addresses.saw(SHOP_BUILD, shopPage(SHOP_START, [shopItem(0), shopItem(5_000)]));
+  await first.persistence.settled();
+
+  const restarted = shopHost(store);
+  await restarted.addresses.restore(SHOP_BUILD);
+  assert.equal(shopGoes(restarted.addresses, shopItem(0)), true);
+  assert.equal(shopGoes(restarted.addresses, shopItem(5_000)), true);
+  assert.equal(shopGoes(restarted.addresses, shopItem(1)), false);
+});

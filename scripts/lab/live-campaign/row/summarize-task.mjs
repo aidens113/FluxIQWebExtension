@@ -33,10 +33,7 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
   const declaredFailure = evaluation?.automationFailureExpected ?? null;
   const declaredSpend = liveLlm?.expectedProviderCalls ?? null;
   const oracleVerdict = evaluation?.oracleVerdict ?? result?.observation?.oracleVerdict ?? null;
-  // A created Flow's repair is counted beside its build in the same record the row's tokens and dollars come from;
-  // `evaluation.llm.calls`, the fallback, already counts both.
-  const observedCalls = liveLlm?.observed?.calls;
-  const providerCalls = typeof observedCalls === "number" ? observedCalls + (liveLlm?.repair?.observed?.calls ?? 0) : evaluation?.llm?.calls ?? null;
+  const providerCalls = providerCallsOf(liveLlm, evaluation);
   const repairing = task.kind === "repair";
   // What `--replays` did, for either kind: a creation task's Flow runs with the model taking part too.
   const repairLane = replaySummary(bundle.repairLane);
@@ -220,6 +217,21 @@ function permissionStopOf(result, evaluation) {
 /** What a permission stop did, for the row's reader: not a pass, and why. */
 function describePermissionStop({ consequence, control }) {
   return `stopped for permission${consequence ? ` to ${consequence}` : ""}${control ? ` (control ${control})` : ""}; no Flow was built, so this is not a pass`;
+}
+
+/**
+ * Every provider call the run made, once each. Where Core's purse was read
+ * (`live-llm.json` `runSpend.calls`), `observed.calls` is that whole-run count,
+ * the repair's calls already in it, and adding `repair.observed.calls` again
+ * counted them twice. A snapshot from before the purse kept the build's count
+ * there, with the repair's beside it, so the two are summed. With no live
+ * record, `evaluation.llm.calls`, which already counts both.
+ */
+function providerCallsOf(liveLlm, evaluation) {
+  const observedCalls = liveLlm?.observed?.calls;
+  if (typeof observedCalls !== "number") return evaluation?.llm?.calls ?? null;
+  if (typeof liveLlm?.runSpend?.calls === "number") return observedCalls;
+  return observedCalls + (liveLlm?.repair?.observed?.calls ?? 0);
 }
 
 function textOrNull(value) {
