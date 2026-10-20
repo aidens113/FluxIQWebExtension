@@ -24,6 +24,28 @@ const RATED_45 = [90, 92, 94, 96, 98, 100].map((width) => `[style="width:${width
 const GOAL = [...NOTHING_BOUGHT, ...HUB_IN_CART];
 const FLASH = 'text="⚡ Flash Deal"';
 
+/**
+ * What each page showed as its document finished parsing (DOMContentLoaded), recorded by the page itself. A promotion
+ * armed at load is stamped by the storefront's module script, which runs before that event, so it is there then or
+ * the site is wrong; the welcome coupons come on a two-second timer after it. Asking afterwards with a timed wait
+ * measured the test's own round trips to the browser instead: on a saturated machine (2026-10-20 sweep, reproduced
+ * under CPU stress) the promotion was in the page at DOMContentLoaded and a 1000 ms `waitFor` still ran out, and the
+ * welcome's timer could fire before a later check asked whether it was there yet.
+ */
+const RECORD_AT_LOAD = String.raw`addEventListener('DOMContentLoaded', () => {
+  const shown = (text) => [...document.body.querySelectorAll('*')].some((node) => {
+    if (node.textContent.replace(/\s+/g, ' ').trim() !== text) return false;
+    const box = node.getBoundingClientRect();
+    return box.width > 0 && box.height > 0 && getComputedStyle(node).visibility !== 'hidden';
+  });
+  window.__shownAtLoad = { flash: shown('⚡ Flash Deal'), welcome: shown('Welcome back, Mara!') };
+});`;
+/** Makes every page the session opens from here on record what it showed at DOMContentLoaded. */
+const recordAtLoad = (session: Session) => session.context.addInitScript(RECORD_AT_LOAD);
+/** What the active tab recorded at DOMContentLoaded, waiting for that event if it has not fired yet, never on a clock. */
+const shownAtLoad = (session: Session) => session.page.evaluate(`new Promise((resolve) => window.__shownAtLoad
+  ? resolve(window.__shownAtLoad) : addEventListener('DOMContentLoaded', () => resolve(window.__shownAtLoad), { once: true }))`) as Promise<{ flash: boolean; welcome: boolean }>;
+
 const upTo = (script: readonly ScenarioStep[], lastId: string) => script.slice(0, script.findIndex((step) => step.id === lastId) + 1);
 /** Console and page errors the manifest does not allow, judged as the Lab's console watch judges them; failed responses are kept for diagnosis only. */
 const unexpectedErrors = (session: Session) => session.errors.filter((error) => !error.startsWith("http ") && !ALLOWED.some((allowed) => error.includes(allowed)));
@@ -241,9 +263,10 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
   test("flash-deal-on-arrival: the promotion is over the home page as it loads, before any step, and closing it is enough", async () => {
     await withSession(async (session) => {
       await session.armVariant("flash-deal-on-arrival");
+      await recordAtLoad(session);
       await session.page.reload({ waitUntil: "domcontentloaded" });
-      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
-      assert.equal(await session.page.locator('text="Welcome back, Mara!"').count(), 0, "it is there before the welcome coupons, the first thing the recorded path waits for");
+      // There as the page finishes parsing, before the welcome coupons, the first thing the recorded path waits for.
+      assert.deepEqual(await shownAtLoad(session), { flash: true, welcome: false });
       assert.equal(await hitAt(session, await centreOf(session, 'text="Accept all"')), "scrim", "the consent banner, the first thing pressed, is under it");
       // The welcome coupons land on top of the promotion two seconds after load, the site's own timer. Closing the
       // promotion first raced that timer: on a loaded machine the click came later and the welcome's scrim took it
@@ -263,8 +286,9 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
       await session.page.reload();
       await session.run(upTo(CART_SCRIPT, "chat-arrives"));
       assert.equal(await locate(session.page, FLASH).count(), 0, "the first pass is clear");
+      await recordAtLoad(session);
       await session.page.reload({ waitUntil: "domcontentloaded" });
-      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      assert.equal((await shownAtLoad(session)).flash, true, "the second load carries it as it loads");
       const from = CART_SCRIPT.findIndex((step) => step.id === "chat-arrives");
       await session.run([{ id: "close-flash", operation: "click", target: '[title="Close"]' }, ...CART_SCRIPT.slice(from)]);
       assert.deepEqual(await session.failingFacts(GOAL), []);
@@ -275,15 +299,16 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
   test("flash-deal-stuck: the close glyph takes the click and nothing happens, the buy bar stays covered, and a reload brings it back", async () => {
     await withSession(async (session) => {
       await session.armVariant("flash-deal-stuck");
+      await recordAtLoad(session);
       await session.page.reload();
       await session.run(upTo(CART_SCRIPT, "listing-tab"));
-      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      assert.equal((await shownAtLoad(session)).flash, true, "the first product page carries it as it loads");
       for (let press = 0; press < 3; press += 1) await locate(session.page, '[title="Close"]').click();
       await session.page.waitForTimeout(500);
       assert.equal(await locate(session.page, FLASH).isVisible(), true, "three presses later it is still there");
       assert.equal(await hitAt(session, await centreOf(session, "testid:add-to-cart")), "scrim", "Add to cart stays covered");
       await session.page.reload({ waitUntil: "domcontentloaded" });
-      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      assert.equal((await shownAtLoad(session)).flash, true, "a reload brings it back as the page loads");
       const state = (await session.finalState()) as unknown as MarketState;
       assert.deepEqual([state.cart, state.interruption?.status], [[], "waiting"]);
       assert.deepEqual(unexpectedErrors(session), []);
