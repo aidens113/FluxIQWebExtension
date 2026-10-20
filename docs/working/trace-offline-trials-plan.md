@@ -297,6 +297,30 @@ was still running at dispatch and is excluded below by its own file list.
 - Outcome: Partial (fix forward)
 - Follow-up: brief sweep-1019b-fixes.
 
+### 2026-10-19 - Machine out of commit memory; OneDrive restarted with the user's approval
+- Agent: supervisor (found by lane G while tracing its spec flakes)
+- Changed: nothing in either repository; OneDrive restarted (`OneDrive.exe /shutdown`, then `/background`).
+- Why: OneDrive.Sync.Service (started 14:34) held 14,451 MB private memory on a 12,220 MB machine; Playwright
+  workers died with "Fatal process out of memory: Zone", a run exited 127, a page rendered blank. Every browser and
+  test result between about 14:34 and 19:50 may be affected, the 17:00 sweep included.
+- Validation: `Get-CimInstance Win32_OperatingSystem` -> free commit 3,192 MB before, 14,599 MB after; `Get-Process`
+  -> OneDrive 28 MB after restart. A monitor alerts if the sync service passes 4 GB or free commit drops under 4 GB.
+- Outcome: Accepted (environment)
+- Follow-up: lanes G, L1, T, t730 and t731 told to rerun pre-19:50 failures before acting on them.
+
+### 2026-10-19 - Lane G unit 2b held: headed specs flaky
+- Agent: supervisor
+- Changed: nothing committed; lane G resumed.
+- Validation: supervisor reruns in t726: Core package vitest -> 27 files, 179 tests passed, `tsc` 0; extension `tsc`
+  src and test 0; `EXTENSION_TEST_BUILD_LABEL=sup-g3 node apps/extension/scripts/test-extension.mjs
+  background/connection` -> pass 313 fail 0; headed `npx playwright test -c e2e/playwright.config.ts e2e/gateway-session
+  e2e/reconnect.spec.ts [lease/tests/stale-holder.spec.ts]` four times -> 3/2, all pass, 4/0, 3/1 (queue-across-
+  reconnects, worker-restart reconnect, saved-settings reconnect), all before the memory fix.
+- Recording start marker (g-recording-start-marker.md): by design; it crosses as a `client.state_update`
+  (`browser.tab`, `recordingState: started`) and Core needs no marker; the new spec will assert that.
+- Outcome: Partial
+- Follow-up: lane G reruns on the recovered machine, compares with pre-G sweep-1019b, fixes any race, five green runs.
+
 ## Open Questions
 
 None requiring user input.

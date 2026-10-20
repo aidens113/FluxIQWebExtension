@@ -184,6 +184,28 @@ working document before its first Core edit.
 - Follow-up: the session-storage byte risk (~10 MB) sent back to lane G as a fix (byte budget, explicit counted
   loss, write failure degrades instead of throwing).
 
+### 2026-10-19 - Lane G units 1+2a and lane H phase 5 committed on their branches
+- Agent: supervisor (lane-g workers W-A to W-G; lane-h workers H5, H6 and the lead)
+- Changed: t726 Core 3ccb50b2 (`client-gateway-websocket`: reconnecting connection, outbox with lineage binding,
+  count cap, byte budget, closed loss marker and write-failure degradation, reconciliation, lease fencing, one
+  session pick) and downstream bca31a06 (queue on Core's outbox in session storage, old queue discarded at start,
+  downstream reconciliation, ledgers and domain host-lease replaced by Core's, one web session pick). t727 Core
+  f748af1a (build-cache engine and task rules exported; AGENTS.md says downstream imports them) and downstream
+  0725def0 (imports them; Core staleness by Core's `decideStep`, not modification times; AGENTS.md names the
+  provider guard, mirror check and imported tooling).
+- Validation: supervisor reruns. t726: Core package `npx vitest run` -> 27 files, 178 tests passed; `tsc` 0; domain
+  and extension `tsc` src and test -> 0; `DOMAIN_TEST_BUILD_LABEL=sup-g2 node domain/scripts/test-domain.mjs client/
+  web-sessions host-resources runtime/tests/adapter io/tests/gateway-output-dispatcher llm-evidence/tests/tools` ->
+  pass 181 fail 0; extension gateway, outbox, saved-state, in-flight, host-lease, server-command-channel,
+  connection-status -> pass 73 fail 0; audits passed. t727: Core `node --test` task, build-cache, structure-audit,
+  scripts/tests -> pass 394 fail 0; downstream `node --test` over every `check` glob plus core-scripts -> tests 667,
+  pass 666, fail 0; `node scripts/build-cache/prove-inputs.mjs` -> `inputs proved complete for 31 listing(s)`;
+  audits passed (634 baselined).
+- Merge order (t727): Core first, then the main checkout's and shared Cores, then downstream; every Core that takes
+  phase 5 rebuilds its three libraries once.
+- Outcome: Accepted (units)
+- Follow-up: lane G unit 2b (gateway adapter), Core docs, headed browser spec; lane H's core-web-build seam.
+
 ## Open Questions
 
 None requiring user input (the move plan and the tooling policy were approved on 2026-10-19).
