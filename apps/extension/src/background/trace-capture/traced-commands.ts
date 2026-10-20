@@ -1,5 +1,5 @@
-// The command ids Core asked this worker to trace, noted from the raw server
-// message and taken once, when the command's result is about to go out.
+// The command ids Core asked this worker to trace, with each request's scope,
+// noted from the raw server message and taken once, when the command's result is about to go out.
 //
 // The request rides in the command's `metadata`, which the gateway session's
 // action mapping drops (it keeps only the fields an action has). The socket
@@ -13,29 +13,33 @@
 // refused before it ran) is forgotten once newer ones push it out.
 
 import type { ClientGatewayServerMessage } from "../../shared/protocol";
-import { isTraceRequest } from "./is-trace-request";
+import { readTraceRequest } from "./read-trace-request";
+import type { TraceRequest } from "./types";
 
 /** How many traced ids are kept waiting for their result at once. */
 const TRACED_COMMAND_LIMIT = 256;
 
 export class TracedCommands {
-  private readonly ids = new Set<string>();
+  private readonly requests = new Map<string, TraceRequest>();
 
   /** Notes the command a server message carries when Core asked for it to be traced. */
   note(message: ClientGatewayServerMessage): void {
     if (message.type !== "server.execute_action") return;
     const { commandId, metadata } = message.payload;
-    if (typeof commandId !== "string" || !isTraceRequest(metadata)) return;
-    this.ids.delete(commandId);
-    this.ids.add(commandId);
-    while (this.ids.size > TRACED_COMMAND_LIMIT) {
-      const oldest = this.ids.values().next().value as string;
-      this.ids.delete(oldest);
+    const request = readTraceRequest(metadata);
+    if (typeof commandId !== "string" || request === undefined) return;
+    this.requests.delete(commandId);
+    this.requests.set(commandId, request);
+    while (this.requests.size > TRACED_COMMAND_LIMIT) {
+      const oldest = this.requests.keys().next().value as string;
+      this.requests.delete(oldest);
     }
   }
 
-  /** Whether the command was asked to be traced; true at most once per noting. */
-  take(commandId: string): boolean {
-    return this.ids.delete(commandId);
+  /** The command's trace request when it was asked to be traced, at most once per noting; `undefined` otherwise. */
+  take(commandId: string): TraceRequest | undefined {
+    const request = this.requests.get(commandId);
+    this.requests.delete(commandId);
+    return request;
   }
 }

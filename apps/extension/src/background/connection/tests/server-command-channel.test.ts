@@ -374,6 +374,7 @@ function traceHarness(capture: TraceCapture["capture"] | undefined = async () =>
   const sent: Array<{ type: string; payload: unknown }> = [];
   const recorded: RecordingEventPayload[] = [];
   const captures: Array<number | undefined> = [];
+  const scopes: Array<string | undefined> = [];
   const activities: string[] = [];
   const runtimeStatus = new RuntimeStatusTracker();
   const deps: ServerCommandChannelDeps = {
@@ -404,15 +405,16 @@ function traceHarness(capture: TraceCapture["capture"] | undefined = async () =>
     disconnect: () => undefined,
     ...(capture === undefined ? {} : {
       traceCapture: {
-        capture: async (tabId: number | undefined) => {
+        capture: async (tabId: number | undefined, scope?: string) => {
           captures.push(tabId);
-          return await capture(tabId);
+          scopes.push(scope);
+          return await capture(tabId, scope);
         }
       }
     })
   };
   const channel = new ServerCommandChannel(deps);
-  return { channel, reply: channel as unknown as TraceReply, sent, recorded, captures, activities, runtimeStatus };
+  return { channel, reply: channel as unknown as TraceReply, sent, recorded, captures, scopes, activities, runtimeStatus };
 }
 
 /** The raw message as the socket hands it to `handleMessage`, before the typed dispatch. */
@@ -492,6 +494,15 @@ test("a trace mark is used once: a second result for the same id is untraced", a
   const [first, second] = actionResults(h.sent);
   assert.ok(first?.metadata?.trace !== undefined);
   assert.equal(second?.metadata, undefined);
+});
+
+test("the request's scope reaches the capture, and a request without one captures with none", async () => {
+  const h = traceHarness();
+  await h.channel.handleMessage(executeAction("c-s1", { trace: { artifacts: true, scope: "trace-trial" } }));
+  await h.channel.handleMessage(executeAction("c-s2", { trace: { artifacts: true } }));
+  await h.reply.sendActionResult(browserResult("c-s1"), 4, 0);
+  await h.reply.sendActionResult(browserResult("c-s2"), 4, 0);
+  assert.deepEqual(h.scopes, ["trace-trial", undefined]);
 });
 
 test("a traced result with no tab named is captured from the page's tab", async () => {

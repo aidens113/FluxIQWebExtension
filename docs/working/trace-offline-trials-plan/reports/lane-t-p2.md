@@ -1,7 +1,14 @@
 # Report: lane-t-p2 (t736 trace-capture)
 
 ## Outcome
-In progress (lead started 2026-10-20 after U7, lane S, L1 and t733 merged: Core ca23a8ba, downstream 1e851216/628cc737).
+Done (2026-10-20). Core captures what it receives at the client gateway (and the HTTP ingress that bypasses it) into
+each project's SQLite store through the same intake, with indexed reads, explicit completeness (now including the
+artifacts results reference), secret screening and credential redaction before storage; the extension captures page
+snapshots (DOM serialization plus resource map) for traced commands and uploads them content-addressed to a new
+trace-artifact route; the offline queue keeps original envelopes; the Lab turns tracing on for every Core it starts.
+Gate T01-T04, T11, T14 covered (table below); overhead measured provider-free on four realistic tasks (+11.5% run
+time). A defect in the lead's process-wide installation (empty traces under the web host's two-instance start) was
+found by the measurement and fixed, and proven with a default-settings replay.
 
 ## Plan
 
@@ -210,6 +217,106 @@ Steps:
   and their tests, `apps/extension/src/background/connection.ts`, `apps/extension/src/content/trace-capture/carry-resources.ts`
   and its test, the wave-B reports.
 
+### 2026-10-20 - M end-to-end and overhead (worker-high), and the defect it found
+- M (downstream test-runner): `lab replay --no-tracing` (`cli.ts`, `commands.ts`, test); the replay receipt carries
+  timings and a trace read-back (`saved-flow-replay/{replay-saved-flow,index,extension-session-token,stored-traces}.ts`,
+  `tests/replay-tracing.test.ts`); new `trace-inspection/**` reading traces through Core's store API, with a secret
+  scan. Four realistic tasks with saved Flows (crossborder hub-to-cart, bigbox pickup-cart, everything-store
+  earbuds-under-50, social-feed confirm-requests), workspaces copied from the idle non-lane tree `fxwork/t565` into this
+  tree's ignored `test-runs/persistent-isolated/t736m-*` (the main checkout and `lab-runs` hold none). 36 headed,
+  model-free replays, all `passed`, same attempts and dataset digests off and on; no lab slot claimed, no lane tree
+  touched. Report `reports/lane-t-p2-m-overhead.md`.
+- Defect found (the lead's design): the process-wide installation refused a second one. The web host builds a
+  domain-less FluxIQ instance and then, when one domain is registered, a second it serves from, abandoning the first
+  (`apps/web/src/lib/fluxiq.ts:171-179`). So the serving runtime's gateway got no source while its runs wrote empty
+  traces through the abandoned instance. With `FLUXIQ_DOMAIN_ID=web-automation` set as a run setting, capture worked,
+  which is how M measured.
+- D19 fix (lead): `installation.ts` installs in place of any earlier installation (the newest runtime is the serving
+  one; a reload closes the old first), and each uninstall removes only its own; `wiring/host.ts` no longer refuses.
+  New `wiring/tests/host.test.ts` reproduces the web host's two builds: the serving runtime's gateway captures the
+  episodes its service opens, the abandoned one's does not; W1's test that pinned the refusal now expects the
+  replacement. Check: `pnpm exec vitest run src/programs/automation-studio/runtime/gateway-trace` -> `Test Files 8
+  passed (8)  Tests 62 passed (62)`; `tsc --noEmit` -> `0`.
+- Measured (sweep D, tracing capturing; mean of 2 pairs per task): run time +11.5% overall (crossborder +10.2%, bigbox
+  +8.3%, store +18.2%, social +6.6%), about 80-360 ms per traced command; control sweep (nothing stored) +0.4%. Stored
+  161-835 KB per traced command; event JSON (raw action results and state updates) is 92-96% of it (33.7 MB per store
+  run); page-snapshot artifacts about 33 KB per command after dedupe. Every traced run complete, 0 issues; 0 secret hits
+  (the Lab's controller token, the Core password and the extension's gateway token, UTF-8 and UTF-16LE).
+
+### 2026-10-20 - X1 referenced artifacts in completeness, X2 dedupe per trace (workers), verified by the lead
+- Why: the extension uploaded a digest once per Core, so a trace opened after an upload (a trial after its build) could
+  reference a snapshot it never received, and completeness never checked result references: such a trace read
+  complete. D20: Core stamps `metadata.trace.scope` = the trace id (wire type extended by the lead,
+  `ClientGatewayTraceRequest = { artifacts: true; scope?: string }`); the extension keeps one upload record per Core and
+  scope (64 at most, least recently used dropped); the event envelope gains `referencedDigests` (the tap fills it from
+  the stripped result metadata) and the evaluator reports `missing_artifact` / `broken_correlation` for a referenced
+  digest the trace does not hold by then. A sink whose status cannot be read gets no stamp (an unscoped stamp would let
+  the client skip an upload). The screening sink used to drop digests when it screened; it keeps them now.
+- X1 changed (Core): `client-gateway/trace/{types,recorder,evaluate-completeness}.ts` + tests; `service/trace-tap/{tap,
+  action-stamp,index}.ts`, new `referenced-digests.ts` + test; `client-gateway/tests/trace-tap.test.ts` (3 assertions
+  that pinned the old stamp now expect a scope), new `trace-tap-references.test.ts`; `AS/runtime/gateway-trace/screening-sink.ts`
+  + test; `storage/project/gateway-trace/tests/store-persistence.test.ts`. Report `reports/lane-t-p2-x1-referenced-artifacts.md`.
+- X2 changed (downstream): `background/trace-capture/{read-trace-request,stored-digests,remembered-scopes}.ts` (new),
+  `is-trace-request.ts`, `traced-commands.ts`, `page-capturer.ts`, `types.ts`, `index.ts` + tests;
+  `connection/server-command-channel.ts` + test. Report `reports/lane-t-p2-x2-dedupe-per-scope.md`.
+
+### 2026-10-20 - Default-settings proof after the fixes (lead)
+- Core rebuilt (`build exit 0`), `node scripts/check/core-build.mjs` -> current, extension rebuilt (`ext build exit 0`).
+- `FLUXIQ_TEST_ENV_FILES=none node scripts/lab/run-lab.mjs replay crossborder-marketplace --workspace
+  t736m-crossborder-hub --flow flow.77711719-... --project e2d231e3-... --instruction-task
+  crossborder-marketplace-hub-to-cart` (tracing on, NO `FLUXIQ_DOMAIN_ID`, headed, provider-free) -> `exit 0`,
+  receipt `replay-mvgpr5a9-e2b04e5f`: verdict `passed`, 0 model calls, `runMs` 26,971; one trace, activity
+  `execution`, episode = the run id, `terminationReason: completed`, completeness `complete`, `issues: []`; 127 events
+  (outbound 25, inbound 40, dispositions 40, artifacts 22); 25/25 commands answered, all 25 results with references (25
+  primary, 126 resource), 22 distinct digests all held, `unavailable` 0; secret scan 0 event and 0 artifact hits; the
+  log has 0 "already installed" lines.
+- Whole-unit checks: Core `vitest run` over client-gateway, AS client-gateway, environment, gateway-trace, storage
+  gateway-trace, candidate-trial, subflow-trial, project-build, service/tests, api, parking and the transport test ->
+  `Test Files 149 passed (149)  Tests 977 passed | 1 skipped (978)`; fluxiq `tsc --noEmit` -> `0`; Core audit ->
+  `passed (421 warning(s), 1152 baselined)` ("1 baseline entries can be lowered": `service.ts` 4318 -> 4316). Downstream:
+  extension `tsc` (both configs) -> `0`/`0`; `test-extension.mjs src/background/trace-capture/tests
+  src/background/connection/tests src/content/trace-capture/tests src/background/tests` -> `# tests 416 # pass 416 #
+  fail 0`; test-runner `tsc` -> `0`, `node --test` trace-inspection, saved-flow-replay, commands, environment,
+  coordinator-existing -> `# tests 109 # pass 109 # fail 0`; downstream audit -> `passed (214 warning(s), 618 baselined).`
+- UNIT READY (Core): `packages/contracts/src/client-gateway.ts`, `packages/fluxiq/src/client-gateway/trace/**`,
+  `packages/fluxiq/src/client-gateway/service/trace-tap/**`, `packages/fluxiq/src/client-gateway/tests/trace-tap*.ts`,
+  `packages/fluxiq/src/programs/automation-studio/runtime/gateway-trace/**`, `packages/fluxiq/src/programs/automation-studio/storage/project/gateway-trace/tests/**`.
+  Downstream: `packages/test-runner/src/{cli,commands}.ts`, `packages/test-runner/src/tests/commands.test.ts`,
+  `packages/test-runner/src/saved-flow-replay/**`, `packages/test-runner/src/trace-inspection/**`,
+  `apps/extension/src/background/trace-capture/**`, `apps/extension/src/background/connection/server-command-channel.ts`
+  and its test, `reports/lane-t-p2-{m-overhead,x1-referenced-artifacts,x2-dedupe-per-scope}.md`, this report.
+
+## Gate (plan P2: source tests T01-T04, T11, T14; overhead on four realistic tasks)
+
+| Gate | Where it is proven |
+| --- | --- |
+| T01 field fidelity | G: raw frames with nested, extension, empty, null and absent fields recorded byte for byte, and replaying the recorded text into a fresh gateway's `receiveRaw` gives the same decoded events and settles (`client-gateway/tests/trace-tap*.ts`); U4 contract tests |
+| T02 tracing on/off equivalent, overhead measured | W1 unit (same outcome and outbound sequence, timing printed); M: 36 headed replays on four realistic tasks, same verdicts, attempts and dataset digests; +11.5% run time with tracing capturing |
+| T03 exploration, test, execution through one contract | W1 (`wiring/tests/gateway-tap-episodes.test.ts`, `service/tests/trial-episodes.test.ts`) |
+| T04 mutation after acceptance | G (an in-process message mutated after receive leaves the trace unchanged); U4 |
+| T11 source gone, artifact still readable | S store tests; W2 end to end (a screenshot stays readable after the legacy prune; content object removed -> `missing_artifact`) |
+| T14 truncated, broken, missing, incompatible | U4 evaluator; S store-level truncation, gap and artifact removal; X1 referenced digest not held |
+
 ## Not verified
 
+- No paid or live build run (none allowed): the end-to-end proof is provider-free saved-Flow replays, which open
+  execution episodes only; exploration and test episodes are proven by Core tests, not in a live build.
+- Chromium only (the Lab's browser); Edge and Firefox not run.
+- Credential redaction of `client.hello` / `server.session_ready` inside a run trace: pairing happens before any
+  episode opens, so no run trace held them; covered by G's gateway tests only.
+- An unprepared candidate start hook runs inside `candidate-trial/run.ts` (lane t737's file), so its answer lands in
+  the trial's trace, not the build's.
+- The top document's own `<style>` `url()` references are not yet counted as unavailable (`content/trace-capture/capture-page.ts`).
+
 ## Open questions or contradictions found
+
+1. Bytes: event JSON is 92-96% of stored bytes (a store run 33.7 MB; repeated page views in raw action results and
+   state updates). Storing repeated payload content once (or compressing it) is the obvious P3/P7 follow-up; the
+   page-snapshot artifacts themselves are small after dedupe.
+2. Overhead +11.5% run time (up to +18% on the store task, capture_snapshot 0.8-1.1 s with tracing) is with tracing on
+   for every command; the P7 rollout decision should weigh it, and the in-page capture could be skipped for commands
+   whose page did not change.
+3. `pnpm structure:baseline` can lower `service.ts` file-lines 4318 -> 4316 (the supervisor owns the baseline).
+4. Two traces claiming one session both record unsolicited inbound (P2a open question 3), accepted as is.
+5. Plan text: D1's "start hook captured where Core accepts it" means the build's trace (it runs in the build's context
+   before the trial exists), correlated by candidate, revision and digest.

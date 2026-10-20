@@ -37,6 +37,8 @@ import { replayErrorOf } from "./receipt-error.js";
 import { replayWorkflowSelection } from "./workflow-selection.js";
 import { savedNavigationOrigins } from "./saved-navigation-origins.js";
 import { selectReplayProject } from "./project-selection.js";
+import { readExtensionSessionToken } from "./extension-session-token.js";
+import { inspectReplayTraces, type ReplayTraceInspection } from "./stored-traces.js";
 
 export type SavedFlowReplayOptions = {
   repositoryRoot: string;
@@ -57,7 +59,23 @@ export type SavedFlowReplayOptions = {
   environment: NodeJS.ProcessEnv;
   /** Every environment a credential could have reached this process through, checked before anything starts. */
   credentialSources: readonly NodeJS.ProcessEnv[];
+  /** `--no-tracing` is false: Core starts with client gateway tracing off, for the overhead measurement. Absent, on (D11). */
+  tracing?: boolean;
 };
+
+/**
+ * Wall-clock phases of the replay in milliseconds, measured in this process.
+ * `totalMs` runs from the start of the topology to the end of teardown; the
+ * trace read afterwards is `traceInspectionMs`, outside it.
+ */
+export type ReplayTimings = Readonly<{
+  totalMs: number | null;
+  topologyMs: number | null;
+  browserMs: number | null;
+  runMs: number | null;
+  teardownMs: number | null;
+  traceInspectionMs: number | null;
+}>;
 
 /** Core's own account of what the run spent on a model, beside what was done to make sure it could spend nothing. */
 export type ReplayModelAccounting = Readonly<{
@@ -92,7 +110,8 @@ export type SavedFlowReplayResult = Readonly<{
   task: Readonly<{ taskId: string; scenarioId: string; workflowId: string | null; variantId: string | null; judgeBy: string; stepId: string | null }> | null;
   address: Readonly<{ scenarioOrigin: string | null; scenarioPortRetained: boolean | null; savedNavigationOrigins: readonly string[]; servedAtSavedAddress: boolean | null }>;
   model: ReplayModelAccounting;
-  run: Readonly<{ runtimeRunId: string; status: string; actions: readonly Readonly<{ actionType: string; status: string }>[]; failure: Readonly<{ category: string; code?: string }> | null; route: FlowRunRoute | null }> | null;
+  /** Each attempt as Core timed it: the node it ran (a Core-generated id), its order, and its duration. */
+  run: Readonly<{ runtimeRunId: string; status: string; actions: readonly Readonly<{ actionType: string; status: string; nodeId: string | null; attemptIndex: number; durationMs: number | null }>[]; failure: Readonly<{ category: string; code?: string }> | null; route: FlowRunRoute | null }> | null;
   /** Counts only, per judged extract step: `matchedRecords` against `expectedRecords` is the answer. */
   extraction: readonly Readonly<Record<string, unknown>>[] | null;
   /**
@@ -104,6 +123,11 @@ export type SavedFlowReplayResult = Readonly<{
   playbackGoalHeld: boolean | null;
   /** Why the replay could not complete; for a failed extension start, `details` is its closed projection (stage, timings, worker count). */
   error: ReturnType<typeof replayErrorOf> | null;
+  /** Whether Core ran with client gateway tracing on. */
+  tracing: boolean;
+  timings: ReplayTimings;
+  /** The traces this replay left in the project store, as counts; `null` when no Core started. */
+  traces: ReplayTraceInspection | null;
   resultPath: string;
 }>;
 
@@ -113,7 +137,10 @@ type ReplayState = {
   origins: string[]; servedAtSavedAddress: boolean | null; keys: ReturnType<typeof replayKeyPreservation> | null;
   run: PersistedFlowRunOutcome | null; usage: ReturnType<typeof liveLlmObservedUsage> | null; coreProviderCallCount: number | null;
   extraction: Record<string, unknown>[] | null; playbackGoalHeld: boolean | null; error: SavedFlowReplayResult["error"];
+  timings: { -readonly [K in keyof ReplayTimings]: ReplayTimings[K] }; traces: ReplayTraceInspection | null;
 };
+
+const elapsedSince = (startedAt: number): number => Date.now() - startedAt;
 
 /**
  * Runs the saved Flow once and writes the result to
@@ -122,7 +149,8 @@ type ReplayState = {
  * only a replay refused before it started throws.
  */
 const replayDependencies = {
-  resolveLabPaths, loadScenarioManifest, loadCreatedFlowRequest, resolveScenarioWorkflow, startTopology, selectReplayProject, readFlowNodes, replayKeyIdentities, openReplayBrowser, resetScenarioLab, armScenarioVariant, runProviderFreeReplayFlow, removeRunOwnedTopologyState, startLabPerson
+  resolveLabPaths, loadScenarioManifest, loadCreatedFlowRequest, resolveScenarioWorkflow, startTopology, selectReplayProject, readFlowNodes, replayKeyIdentities, openReplayBrowser, resetScenarioLab, armScenarioVariant, runProviderFreeReplayFlow, removeRunOwnedTopologyState, startLabPerson,
+  readExtensionSessionToken, inspectReplayTraces
 };
 
 export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Partial<typeof replayDependencies> = {}): Promise<SavedFlowReplayResult> {
@@ -135,7 +163,16 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     throw new RunnerFailure("fixture.invalid", `A saved-Flow replay runs with no model provider credential in its environment; unset ${environmentCredentialVariables.join(", ")} and replay again`);
   }
   const reasons: string[] = [];
-  const state: ReplayState = { projectId: null, hashBefore: null, hashAfter: null, task: null, scenarioOrigin: null, scenarioPortRetained: null, origins: [], servedAtSavedAddress: null, keys: null, run: null, usage: null, coreProviderCallCount: null, extraction: null, playbackGoalHeld: null, error: null };
+  const state: ReplayState = {
+    projectId: null, hashBefore: null, hashAfter: null, task: null, scenarioOrigin: null, scenarioPortRetained: null, origins: [], servedAtSavedAddress: null, keys: null, run: null, usage: null, coreProviderCallCount: null, extraction: null, playbackGoalHeld: null, error: null,
+    timings: { totalMs: null, topologyMs: null, browserMs: null, runMs: null, teardownMs: null, traceInspectionMs: null }, traces: null,
+  };
+  const tracing = options.tracing !== false;
+  // Before the topology, so every trace this replay's Core opens starts at or after it.
+  const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
+  // Gateway tokens Core issued the extension, held in memory for the trace secret search only.
+  const sessionTokens = { values: new Set<string>(), readFailures: 0 };
   let topology: RunningTopology | undefined;
   let browser: ReplayBrowser | undefined;
   let person: LabPerson | undefined;
@@ -152,14 +189,16 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     state.task = { taskId: request.task.id, scenarioId: request.task.scenarioId, workflowId: request.workflowId ?? null, variantId: selection.variantId ?? null, judgeBy: judgement.judgeBy, stepId: judgement.judgeBy === "expected-dataset" ? judgement.stepId : null };
 
     const credentials = options.target.credentials;
+    const topologyStartedAt = Date.now();
     topology = await dependencies.startTopology({
       repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
       runsDirectory: options.runsDirectory, runId: replayId,
       seed: options.seed ?? scenario.seed, target: options.target,
       scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath,
-      ...(labPaths.hostPrebuilt ? { prepareHost: false } : {}), bootstrapIdentity: true, modelProvidersEnabled: false,
+      ...(labPaths.hostPrebuilt ? { prepareHost: false } : {}), bootstrapIdentity: true, modelProvidersEnabled: false, tracing,
       ...(credentials ? { credentials: { username: credentials.username, password: credentials.password, ...(credentials.authorizationPin ? { pin: credentials.authorizationPin } : {}), ...(credentials.totp ? { totp: credentials.totp } : {}) } } : {}),
     });
+    state.timings.topologyMs = elapsedSince(topologyStartedAt);
     const { control, authorizationPassword, scenarioOrigin } = topology;
     if (!control || !topology.projectId || !authorizationPassword) throw new RunnerFailure("environment.missing", "The persistent workspace's Core did not authenticate, so its saved Flows cannot be read");
     state.projectId = options.projectId ?? topology.projectId;
@@ -186,7 +225,10 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     // The extension start's local diagnostic, screened for everything secret this replay holds; written beside the receipt whatever happens.
     const traceSecrets = [topology.allocation.controllerToken, authorizationPassword, credentials?.password, credentials?.authorizationPin, credentials?.totp, ...Object.values(secretInputs)].filter((value): value is string => typeof value === "string" && value.length > 0);
     startTrace = { trace: new ExtensionStartTrace({ secrets: traceSecrets }), secrets: traceSecrets };
+    const browserStartedAt = Date.now();
     browser = await dependencies.openReplayBrowser(topology, { extensionPath: labPaths.extensionPath, startPath: scenario.startPath, trace: startTrace.trace });
+    state.timings.browserMs = elapsedSince(browserStartedAt);
+    await collectSessionToken(dependencies.readExtensionSessionToken, browser, sessionTokens);
     await dependencies.resetScenarioLab(scenarioOrigin, topology.allocation.controllerToken);
     if (workflow.variant) await dependencies.armScenarioVariant(scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     await browser.openStart();
@@ -203,7 +245,9 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
       publish: async () => undefined,
     });
     // No `llmExecution`: `runPersistedFlow` then asks Core for `adaptiveMode: "deterministic"`.
+    const runStartedAt = Date.now();
     const run = await dependencies.runProviderFreeReplayFlow(control, { projectId, flowId: options.flowId, facilityRunId: replayId, actionTypes, inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId: replayId } });
+    state.timings.runMs = elapsedSince(runStartedAt);
     state.run = run;
     const detail = await control.getRunDetail(projectId, run.runId);
     state.usage = liveLlmObservedUsage(detail);
@@ -230,6 +274,9 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     state.error = replayErrorOf(error);
     reasons.push("the replay did not complete");
   } finally {
+    const teardownStartedAt = Date.now();
+    // Before the close: a reconnect during the run may have rotated the token the search must look for.
+    if (browser) await collectSessionToken(dependencies.readExtensionSessionToken, browser, sessionTokens);
     // Finish while both the fixture browser and Core conversation still exist.
     await person?.finish();
     if (person?.writeFailure) reasons.push("The replay person hand-off evidence could not be written");
@@ -250,14 +297,22 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     }
     await topology?.close().catch(/* best-effort: the result is already decided */ () => undefined);
     if (topology) await dependencies.removeRunOwnedTopologyState(topology).catch(/* best-effort: only this invocation's session directory */ () => undefined);
+    state.timings.teardownMs = elapsedSince(teardownStartedAt);
+    state.timings.totalMs = elapsedSince(startedAt);
   }
-  const result = resultOf({ replayId, resultPath, options, state, environmentCredentialVariables, reasons });
+  // After Core has stopped, so nothing is writing the store it reads; with tracing off it shows the run stored none.
+  if (topology && state.projectId) {
+    const inspectionStartedAt = Date.now();
+    state.traces = await dependencies.inspectReplayTraces({ storageDir: topology.allocation.storageDir, projectId: state.projectId, startedAt: startedAtIso, replaySecrets: startTrace?.secrets ?? [], sessionTokens: [...sessionTokens.values], sessionTokenReadFailures: sessionTokens.readFailures });
+    state.timings.traceInspectionMs = elapsedSince(inspectionStartedAt);
+  }
+  const result = resultOf({ replayId, resultPath, options, state, environmentCredentialVariables, reasons, tracing });
   await mkdir(path.dirname(resultPath), { recursive: true });
   await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   return result;
 }
 
-function resultOf(input: { replayId: string; resultPath: string; options: SavedFlowReplayOptions; state: ReplayState; environmentCredentialVariables: string[]; reasons: string[] }): SavedFlowReplayResult {
+function resultOf(input: { replayId: string; resultPath: string; options: SavedFlowReplayOptions; state: ReplayState; environmentCredentialVariables: string[]; reasons: string[]; tracing: boolean }): SavedFlowReplayResult {
   const { state, reasons } = input;
   const { run, usage } = state;
   return Object.freeze({
@@ -273,15 +328,32 @@ function resultOf(input: { replayId: string; resultPath: string; options: SavedF
     },
     run: run ? {
       runtimeRunId: run.runId, status: run.status,
-      actions: run.actions.map(action => ({ actionType: action.actionType, status: action.status })),
+      actions: run.actions.map(action => ({ actionType: action.actionType, status: action.status, nodeId: action.nodeId ?? null, attemptIndex: action.attemptIndex, durationMs: action.durationMs ?? null })),
       failure: run.failure ? { category: run.failure.category, ...(run.failure.code === undefined ? {} : { code: run.failure.code }) } : null,
       // Which route the saved Flow's Router took on this rendering, and why: ids and Core's matcher reasons, no observed values.
       route: run.route,
     } : null,
     extraction: state.extraction,
     datasets: run ? run.extracted.map(dataset => ({ records: dataset.records.length, sha256: rowsDigest(dataset.records) })) : null,
-    playbackGoalHeld: state.playbackGoalHeld, error: state.error, resultPath: input.resultPath,
+    playbackGoalHeld: state.playbackGoalHeld, error: state.error,
+    tracing: input.tracing, timings: Object.freeze({ ...state.timings }), traces: state.traces,
+    resultPath: input.resultPath,
   });
+}
+
+/**
+ * Adds the extension's current gateway token to `tokens.values`. A read that
+ * fails is counted in `tokens.readFailures`, which the receipt reports, so a
+ * secret search that could not include the token says so.
+ */
+async function collectSessionToken(read: typeof readExtensionSessionToken, browser: ReplayBrowser, tokens: { values: Set<string>; readFailures: number }): Promise<void> {
+  try {
+    const token = await read(browser.context);
+    if (token !== null) tokens.values.add(token);
+  } catch {
+    // Recorded, not dropped: the receipt's `traces.secretSources.sessionTokenReadFailures`.
+    tokens.readFailures += 1;
+  }
 }
 
 /** The rows as canonical JSON (each record's keys sorted, rows in order), hashed. */

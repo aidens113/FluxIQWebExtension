@@ -385,9 +385,10 @@ export class ServerCommandChannel {
 
   /** The trace references for a command Core asked to trace, or `undefined` -- and no work at all -- for any other. */
   private async traceFor(commandId: string, tabId: () => number | undefined): Promise<ClientGatewayTraceResultMetadata | undefined> {
-    if (!this.traced.take(commandId) || this.deps.traceCapture === undefined) return undefined;
+    const request = this.traced.take(commandId);
+    if (request === undefined || this.deps.traceCapture === undefined) return undefined;
     try {
-      return await this.deps.traceCapture.capture(tabId());
+      return await this.deps.traceCapture.capture(tabId(), request.scope);
     } catch (error) {
       // The capture answers its own failures as counts; one that throws all
       // the same still never costs the command its result.

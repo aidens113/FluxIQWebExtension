@@ -6,9 +6,16 @@
 import type { ClientGatewayTraceArtifactRole, ClientGatewayTraceResultMetadata } from "fluxiq/client-gateway";
 import type { CoreApiCredentials } from "../connection/index";
 
-/** What the channel awaits for a traced command: the references to put on its result, never a failure. */
+/**
+ * A traced command's request as the capture uses it (`read-trace-request.ts`).
+ * `scope` is Core's `ClientGatewayTraceRequest.scope`, written here because
+ * the built Core contracts this package compiles against do not carry it yet.
+ */
+export type TraceRequest = { scope?: string };
+
+/** What the channel awaits for a traced command: the references to put on its result, never a failure. `scope` keys what is already uploaded. */
 export type TraceCapture = {
-  capture(tabId: number | undefined): Promise<ClientGatewayTraceResultMetadata>;
+  capture(tabId: number | undefined, scope?: string): Promise<ClientGatewayTraceResultMetadata>;
 };
 
 /** The time and concurrency a capture and its uploads are held to (`upload-bounds.ts`). */

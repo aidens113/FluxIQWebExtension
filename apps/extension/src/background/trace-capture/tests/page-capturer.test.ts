@@ -194,3 +194,64 @@ test("without a pairing token nothing is uploaded and every part is counted", as
   assert.deepEqual(trace, { artifacts: [], unavailable: 3 });
   assert.equal(uploads.length, 0);
 });
+
+// Per-scope records (`metadata.trace.scope`, the trace a command is recorded
+// into): each trace must hold every artifact its results reference, so a
+// digest stored for one scope is uploaded again for another, once per scope.
+
+test("two scopes each upload a shared digest once; a later command in either scope uploads nothing", async () => {
+  const uploads: Upload[] = [];
+  const subject = capturer(sender(capture()), uploader(uploads));
+  const build = await subject.capture(7, "trace-build");
+  const trial = await subject.capture(7, "trace-trial");
+  assert.equal(uploads.length, 6, "each scope gets the three digests");
+  assert.deepEqual(uploads.slice(0, 3).map((upload) => upload.sha256).sort(), uploads.slice(3).map((upload) => upload.sha256).sort());
+  assert.equal(build.artifacts.length, 3);
+  assert.equal(trial.artifacts.length, 3);
+  assert.equal(trial.unavailable, 0);
+
+  await subject.capture(7, "trace-build");
+  await subject.capture(7, "trace-trial");
+  assert.equal(uploads.length, 6, "a scope never uploads a digest twice");
+});
+
+test("the same scope uploads a digest once across commands, and a scope is kept apart per Core", async () => {
+  const uploads: Upload[] = [];
+  let credentials = CREDENTIALS;
+  const subject = capturer(sender(capture()), uploader(uploads), () => credentials);
+  await subject.capture(7, "trace-1");
+  const second = await subject.capture(7, "trace-1");
+  assert.equal(uploads.length, 3);
+  assert.equal(second.artifacts.length, 3);
+
+  credentials = { coreApiUrl: "http://other-core.test", token: "pairing-token" };
+  await subject.capture(7, "trace-1");
+  assert.equal(uploads.length, 6, "the same scope name at another Core is another record");
+});
+
+test("a command with no scope keeps the per-Core record, apart from every scope", async () => {
+  const uploads: Upload[] = [];
+  const subject = capturer(sender(capture()), uploader(uploads));
+  await subject.capture(7);
+  await subject.capture(7, undefined);
+  assert.equal(uploads.length, 3, "no scope: once per Core, as before");
+  await subject.capture(7, "trace-1");
+  assert.equal(uploads.length, 6, "a scope is not served by the unscoped record");
+  await subject.capture(7);
+  assert.equal(uploads.length, 6, "nor the unscoped record changed by a scope");
+});
+
+test("only the most recently used scopes are remembered; the oldest is dropped and uploads again", async () => {
+  const uploads: Upload[] = [];
+  const subject = new TracePageCapturer({ credentials: () => CREDENTIALS, send: sender(capture()), upload: uploader(uploads), bounds: BOUNDS, rememberedScopes: 2 });
+  await subject.capture(7, "a");
+  await subject.capture(7, "b");
+  await subject.capture(7, "a");
+  assert.equal(uploads.length, 6, "a used again, so b is now the oldest");
+  await subject.capture(7, "c");
+  assert.equal(uploads.length, 9);
+  await subject.capture(7, "a");
+  assert.equal(uploads.length, 9, "a was kept");
+  await subject.capture(7, "b");
+  assert.equal(uploads.length, 12, "b was dropped, so its digests go again");
+});
