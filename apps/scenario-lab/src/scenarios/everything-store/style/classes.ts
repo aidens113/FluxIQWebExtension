@@ -26,6 +26,8 @@ const ROLES = [
   "checkoutLayout", "section", "sectionHead", "changeLink", "optionList", "optionRow", "upsell", "summary", "summaryRow",
   "summaryTotal", "placeButton", "paymentFrame", "confirmBox", "confirmLine", "challengePage", "challengeBox",
   "captchaCanvas", "challengeError", "hero", "heroSlide", "tiles", "tile2", "tileHead",
+  "promptSheet", "promptWords", "promptHead", "promptActions", "promptAllow", "promptQuiet",
+  "helpOffers", "helpTabs", "faqBox", "faqList", "faqQuestion", "faqBar", "claimLink", "pressed", "ripple",
 ] as const;
 
 export type StoreClassRole = (typeof ROLES)[number];

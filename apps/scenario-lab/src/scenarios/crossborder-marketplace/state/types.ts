@@ -16,8 +16,17 @@ import type { Interruption } from "./interruption.js";
  * - `list-layout` -- the results page ships its list layout: one wide row per
  *   result, the same data in a different arrangement, and the store name moved
  *   from under the title to beside the price.
+ * - `cart-add-ons` -- the cart ships its rebuilt lines. Each line starts
+ *   unselected behind a native Select box that the cart's own state controls
+ *   (a press changes the selection, and the box is then set from it, as a
+ *   React-style cart renders it), and offers three add-on boxes the cart can
+ *   take back: gift wrap, which the store does not offer, is unticked as it is
+ *   ticked; the extended warranty is unticked once its quote comes back from
+ *   cache, a microtask later; shipping insurance re-renders as a fresh,
+ *   unticked box. No manifest variant arms it; it is reached through
+ *   `set-mode` alone.
  */
-export const marketModes = ["baseline", "basket-redesign", "flash-deal", "list-layout"] as const;
+export const marketModes = ["baseline", "basket-redesign", "flash-deal", "list-layout", "cart-add-ons"] as const;
 export type MarketMode = (typeof marketModes)[number];
 
 export type CartLine = { id: string; listingId: string; choice: SkuChoice; quantity: number };

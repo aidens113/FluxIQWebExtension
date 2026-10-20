@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, test as base, type BrowserContext, type Page, type Worker } from "@playwright/test";
 import { compareBuildInfo } from "../../scripts/release/index.mjs";
+import { installRealisticScenarioGuard, type RealisticScenarioGuard } from "../../../scenario-lab/e2e/realistic-scenario-guard/index.js";
 import { installDeterministicNetworkGuard, type DeterministicNetworkGuard } from "./network-policy.js";
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -26,6 +27,8 @@ export type ExtensionSession = {
   profilePath: string;
   metadata: ExtensionMetadata;
   networkGuard: DeterministicNetworkGuard;
+  /** Refuses every Scenario Lab scenario outside the ten realistic ones on this session's browser (AGENTS.md). */
+  scenarioGuard: RealisticScenarioGuard;
 };
 
 type ExtensionFixtures = {
@@ -44,6 +47,7 @@ export const test = base.extend<ExtensionFixtures>({
     } finally {
       let networkError: unknown;
       try { session.networkGuard.assertClean(); } catch (error) { networkError = error; }
+      try { session.scenarioGuard.assertClean(); } catch (error) { networkError ??= error; }
       await closeExtensionSession(session);
       if (networkError) throw networkError;
     }
@@ -78,6 +82,7 @@ export async function launchExtensionSession(label = "run"): Promise<ExtensionSe
       ]
     });
     const networkGuard = await installDeterministicNetworkGuard(context);
+    const scenarioGuard = await installRealisticScenarioGuard(context, "extension e2e session");
     const worker = await waitForServiceWorker(context);
     const id = extensionIdFromWorker(worker);
     const extensionPage = await context.newPage();
@@ -89,6 +94,7 @@ export async function launchExtensionSession(label = "run"): Promise<ExtensionSe
       extensionPage,
       profilePath,
       networkGuard,
+      scenarioGuard,
       metadata: {
         id,
         name: manifest.name,

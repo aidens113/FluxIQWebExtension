@@ -1,4 +1,4 @@
-import { bookableServiceById, BRANCHES, CONTACT_OPTIONS, DEPOSIT_PENCE, QUOTE_SERVICES, referenceCode, slotsFor } from "./data/index.js";
+import { bookableServiceById, BRANCHES, CONTACT_OPTIONS, DEPOSIT_PENCE, INTERSTITIALS, QUOTE_SERVICES, referenceCode, slotsFor } from "./data/index.js";
 import { siteModes, type Booking, type CompanyWebsiteState, type QuoteRequest, type SiteMode } from "./types.js";
 
 /** A visitor who has never been here, on a rendering. Nothing reads the lab seed: the seed only renames classes and ids. */
@@ -6,9 +6,10 @@ export function createCompanyWebsiteState(mode: SiteMode = "baseline"): CompanyW
   return {
     mode,
     consent: "pending",
-    newsletter: { dismissed: false, subscribers: [] },
+    newsletter: { dismissed: false, subscribers: [], unsubscribePrompts: { accepted: 0, dismissed: 0 } },
     chat: { greetingDismissed: false, opened: 0 },
     notice: { dismissed: false },
+    interstitial: { pressed: null },
     team: { batchRequests: 0, lastBatchAtMs: 0, throttled: 0 },
     quotes: [],
     discarded: { honeypot: 0, unverified: 0, invalid: 0 },
@@ -43,12 +44,22 @@ export function mutateCompanyWebsiteState(state: CompanyWebsiteState, operation:
       if (!email.includes("@")) return state;
       // A mailing list keeps an address once: signing up again with it changes nothing but the offer's dismissal.
       const subscribers = state.newsletter.subscribers.includes(email) ? state.newsletter.subscribers : [...state.newsletter.subscribers, email];
-      return { ...state, newsletter: { dismissed: true, subscribers } };
+      return { ...state, newsletter: { ...state.newsletter, dismissed: true, subscribers } };
     }
     case "unsubscribe-newsletter": {
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       if (!state.newsletter.subscribers.includes(email)) return state;
-      return { ...state, newsletter: { ...state.newsletter, subscribers: state.newsletter.subscribers.filter((entry) => entry !== email) } };
+      // With the confirmation armed, the page only posts this once the visitor has said yes to it.
+      const prompts = state.newsletter.unsubscribePrompts;
+      const unsubscribePrompts = state.mode === "confirm-unsubscribe" ? { ...prompts, accepted: prompts.accepted + 1 } : prompts;
+      return { ...state, newsletter: { ...state.newsletter, subscribers: state.newsletter.subscribers.filter((entry) => entry !== email), unsubscribePrompts } };
+    }
+    case "unsubscribe-declined": {
+      // The visitor said no to the confirmation: the address stays, and only the answer is recorded.
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      if (state.mode !== "confirm-unsubscribe" || !state.newsletter.subscribers.includes(email)) return state;
+      const prompts = state.newsletter.unsubscribePrompts;
+      return { ...state, newsletter: { ...state.newsletter, unsubscribePrompts: { ...prompts, dismissed: prompts.dismissed + 1 } } };
     }
     case "dismiss-chat-greeting":
       return { ...state, chat: { ...state.chat, greetingDismissed: true } };
@@ -56,6 +67,12 @@ export function mutateCompanyWebsiteState(state: CompanyWebsiteState, operation:
       return { ...state, chat: { greetingDismissed: true, opened: state.chat.opened + 1 } };
     case "dismiss-notice":
       return { ...state, notice: { dismissed: true } };
+    case "answer-interstitial": {
+      // Only a button of the dialog the mode opens, and only while it is still open.
+      const controls = INTERSTITIALS[state.mode]?.controls ?? [];
+      const control = controls.find((candidate) => candidate === body.control);
+      return control === undefined || state.interstitial.pressed !== null ? state : { ...state, interstitial: { pressed: control } };
+    }
     case "record-team-batch":
       return typeof body.atMs === "number" ? { ...state, team: { ...state.team, batchRequests: state.team.batchRequests + 1, lastBatchAtMs: body.atMs } } : state;
     case "throttle-team-batch":

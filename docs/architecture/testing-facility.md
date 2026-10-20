@@ -282,7 +282,7 @@ browser extension and the `web-automation` domain.
 | Scenario, run, evidence, and evaluation types | `packages/test-contracts` | Private repository-local contracts, not Core API. |
 | Run directories, ports, owned child processes, isolated Core startup, existing-Core attachment, and authenticated control client | `packages/test-runner` | Concrete topology spanning this checkout and its Core sibling; an attached installation remains externally owned. |
 | Screenshot policy, artifact hashing, redaction, and human-readable reports | `packages/test-evidence` | Private facility implementation; browser bytes enter through adapters. |
-| Change-to-scenario selection | `packages/test-matrix` | Repository-path and web-capability knowledge. |
+| Change-to-scenario selection | `packages/test-matrix` | Repository-path and web-capability knowledge; it hands out only the ten realistic scenarios. |
 | Real-site allowlist and operational review checks | `packages/real-site-policy` | Web-specific safety policy; it does not browse or execute probes. |
 | Pairing, authorization, durable projects/recordings, generic gateway, runs, attempts, and runtime events | sibling FluxIQ Core | Domain-neutral framework ownership. |
 
@@ -1035,10 +1035,38 @@ with a message that names the entry, the refused scenario, the rule and the ten:
 | `pnpm panel:golden` | `scripts/run/panel-golden-path.mjs`, on `FLUXIQ_LLM_SCENARIO_ID` (default `instruction-only-form`, refused) before Core starts |
 | Demo workspace browser sessions (`demo:*`, and every `ui:e2e` journey) | `withDemoBrowser`, before the scenario lab or a browser starts; its default page is `basic-form`, so a demo lane that names no realistic page is refused |
 | The extension chat check | `runExtensionChatCheck`, before the topology starts |
+| Scenario Lab Playwright specs (`apps/scenario-lab/e2e`) | `e2e/lab-fixture.ts`: an automatic `realisticScenarioGuard` fixture on every test aborts, in the browser, any request for another scenario's page (`/scenarios/<id>`), mutation (`/api/<id>/...`) or oracle (`/__control/...?scenario=<id>`), so the page never loads, and fails the test naming the rule; `readFinalState` and `armVariant` refuse before they fetch |
+| The content-script harness (`apps/extension/e2e/content`) | `openContentHarness` refuses another id before a lab starts, and guards the page's browser context the same way; `close()` throws any refusal |
+| Real-extension Playwright sessions (`apps/extension/e2e`) | `launchExtensionSession` installs the same guard on every session's context; the session fixture fails the test on a refusal |
 
 The Lab's `.mjs` launchers import that barrel from source, before the runner is
 built; Node strips its types. The file therefore imports nothing and uses only
-erasable TypeScript.
+erasable TypeScript. The Playwright guards import it from source too
+(`apps/scenario-lab/e2e/realistic-scenario-guard/`, whose `tsconfig.e2e.json`
+root is the repository for that reason).
+
+The browser guard is the runtime half. The static half is
+`realistic-scenario-guard/tests/browser-specs-scan.spec.ts`, which runs with the
+Scenario Lab's Playwright suite and fails on any source under
+`apps/scenario-lab/e2e` or `apps/extension/e2e`, or any Scenario Lab unit test or
+test kit under a `tests` folder that launches a browser (imports Playwright),
+that opens a synthetic scenario
+(a `/scenarios/<id>` path, `openHarness("<id>")`, `scenarioId: "<id>"`, the
+oracle helpers, or an import from a synthetic scenario's source) or serves a
+page of its own (`setContent`, a `data:text/html` URL, or an HTTP server that
+answers `text/html`). Comments are not scanned, so a comment may name a retired
+fixture.
+
+Where a browser spec needs a construct no realistic site shows by default (a
+native `confirm()`, sensitive-marked controls, a closed shadow root, rows
+fetched in place), the realistic site gains a **test mode**, switched on by the
+site's own `set-mode` mutation, that adds it in the site's own style. The
+default site, its manifest, its live tasks and its person checks are unchanged,
+and no manifest variant is added, so no Lab row sees a mode. A test-authored
+element injected into a realistic page is a last resort, kept only where no
+realistic site has the shape and a mode would be out of proportion (supervisor
+ruling, 2026-10-19). The modes are listed under
+[Realistic-site test modes](#realistic-site-test-modes).
 
 The lab binds only to `127.0.0.1`, rejects foreign `Host` headers, applies a
 same-origin content security policy, and keeps state in memory per server
@@ -1228,22 +1256,57 @@ target-drift control oracle. Each corpus fixture adds its own
 `tests/scenario.test.ts` for manifest validity, deterministic state, every
 mutate operation and variant arm, and every route response.
 
-The page specs in `apps/scenario-lab/e2e/` drive the fixtures with plain
-Playwright in headless Chromium. `scenario-pages.spec.ts` covers eleven of the
-twelve foundational fixtures (all but `instruction-only-form`); its
-target-drift test proves baseline success, persistent missing-target failure
-across reload, renamed-target state, and restore. Each corpus fixture has its
-own `<id>.spec.ts` that runs every workflow, asserts the final state, then arms
-each variant and asserts the behavior its corpus row describes. The three
-application fixtures have their own `<id>.spec.ts` too.
-`negative-variants.spec.ts` proves that the armed pages of W10 `broken-link`,
-W25 `too-slow`, W26 `no-context` and W27's three variants really fail the way
-their manifests declare; the failure code a run reports is not pinned there.
-Every spec takes its `test` object from `e2e/lab-fixture.ts`, which provides an
-in-process lab (`lab`, on seed 42 unless the spec sets `labSeed` with
-`test.use`), the loopback-only network guard (`networkGuard`), and
+The synthetic fixtures are not opened in a browser. Their in-browser page specs
+(`scenario-pages`, `negative-variants` and one spec per synthetic corpus or
+application fixture) were removed on 2026-10-19 (t730); every server-side check
+they made (final-state oracles, `/api` mutations, variant arming, secrets not
+kept in state, routes) moved to that fixture's `tests/scenario.test.ts` or
+`tests/lab-server.test.ts`, which drive the lab over HTTP without a browser. The
+per-test record is in
+[the t730 reports](../working/trace-offline-trials-plan/reports/t730-realistic-specs.md).
+
+The page specs left in `apps/scenario-lab/e2e/` drive realistic sites with plain
+Playwright in Chromium: `local-classifieds.spec.ts` and
+`social-network-feed.spec.ts` run each site's workflows, oracles and traps, and
+`realistic-keyboard-platform.spec.ts` holds the platform evidence the
+extension's key emulation relies on (an untrusted Enter never submits, and so
+on), on realistic forms. Every spec takes its `test` object from
+`e2e/lab-fixture.ts`, which provides an in-process lab (`lab`, on seed 42 unless
+the spec sets `labSeed` with `test.use`), the loopback-only network guard
+(`networkGuard`), the realistic-scenario guard (automatic), and
 `readFinalState(lab, scenarioId)` for the `/__control/final-state` oracle.
 These are fixture tests, not extension-to-Core E2E tests.
+
+### Realistic-site test modes
+
+Two Lab hooks serve browser specs as well. A scenario route may answer with its
+own `Content-Security-Policy` (the Lab's same-origin policy stays the default):
+everything-store's printable order receipt (`/gp/css/summary/print.html?orderID=`)
+is served with `default-src 'none'; script-src 'none'` and an inline script whose
+missing side effect shows page scripts did not run. And the run-token-protected
+`GET /__control/requests?path=<path>` reports how many requests reached a path (and
+query) since the last reset. The gated user-script probe
+(`apps/extension/e2e/user-script-feasibility`, `FLUXIQ_USER_SCRIPT_PROBE=1`) uses both.
+
+| Scenario | Mode (`set-mode`) | What it adds | Used by (`apps/extension/e2e`) |
+| --- | --- | --- | --- |
+| `bigbox-retail` | `account-recovery` | A "Forgot password?" panel on the checkout sign-in wall with sensitive-marked controls (group, select, textarea, checkbox) beside ordinary ones | `sensitive-names`, `extract-list-sensitive`, `identity-signals` |
+| `bigbox-retail` | `partner-widgets` | Product-page partner widgets: an offer in a closed shadow root, a delivery estimate inserted on click, review highlights whose root attaches late | `shadow-root-in-place` |
+| `company-website` | `confirm-unsubscribe` | Newsletter Unsubscribe asks a native `window.confirm`; answers are counted in the oracle | `upload-dialog`, `evidence/live-page` |
+| `company-website` | `reworded-quote-submit` | The quote drawer's Send request keeps its accessible name while its text, id, classes and test id change | `identity-resolution` |
+| `company-website` | `quote-footer-redesign` | A redeploy of the quote drawer's footer that reorders and restyles its controls | `identity-veto` |
+| `company-website` | `security-check`, `captcha-check`, `sign-in-again`, `sign-in-code`, `card-on-file`, `deposit-authorisation` | One interstitial dialog each (robot check, captcha frame, password, one-time code, card form, payment confirmation), recording the pressed button | `dialog-refusal` |
+| `company-website` | `account-move` | A dialog whose dismissal-worded controls name acts on the person's data | `dialog-dismissal` |
+| `company-website` | `quotes-paused`, `phone-quotes` | The quote drawer's Send request replaced by another action in its slot (requests paused, or quotes by phone) | `identity-veto` |
+| `crossborder-marketplace` | `cart-add-ons` | Cart line selection and add-on boxes a React-style shop renders: a controlled box, boxes the site unticks itself (at once and after a microtask), a box replaced by an unticked clone | `runtime/typed-browser-readiness` |
+| `everything-store` | `keyboard-suggestions` | Header search suggestions driven by arrow keys, with an Enter the page cancels inside the form | `keyboard` |
+| `everything-store` | `reworded-prompt` | The notifications prompt's "Not now" drawn as other words while its accessible name stays | `large-page-resolution` |
+| `everything-store` | `help-and-offers` | A help and offers area on the cart page: in-page tabs, a filter strip, promo links (one broken, one that only flags busy), a sticky banner over a control | `click` |
+| `job-board` | `in-place-filters` | A results filter fetches and swaps rows in place under `aria-busy` without moving the address | `click` |
+| `job-board` | `extended-application` | An extended application step on the ATS form: native date, time, month, week, datetime-local and number fields, a numeric-only field, a referral code the site rejects and reverts, a read-only job reference, a leave-without-saving dialog | `runtime/sanitized-field-typing` |
+| `photo-social` | `saved-logins` | The login page on a device that remembers its accounts: pre-filled form, password hint, security answer, saved accounts, backup codes | `actions`, `extraction/inference`, `extraction/structure-detection` |
+| `professional-network` | `in-place-paging` | People-search Next patches each existing row in place (same elements, new text and href), then disables | `runtime/typed-browser-readiness` |
+
 
 ## Recording lane and Flow lane
 

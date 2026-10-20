@@ -11,4 +11,5 @@ export type { PageKit } from "./page-kit.js";
 export { renderPaymentFrame } from "./payment-frame.js";
 export { renderProductPage } from "./product.js";
 export { productImageSvg } from "./product-image.js";
+export { receiptResponse } from "./receipt.js";
 export { renderMoreResults, renderSearchPage, resultCard } from "./results/index.js";

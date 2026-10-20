@@ -43,7 +43,7 @@ export function renderPeoplePage(kit: ShellKit, query: PeopleQuery): string {
   const offer = upsell(kit);
   const main = `${bar.markup}<section id="${resultsId}" class="${c.card}" aria-label="Search results">${skeletonMarkup(kit)}</section>`;
   const right = `<section class="${c.card}" style="padding:16px"><h2 style="font-size:16px;margin:0 0 8px">Are these results helpful?</h2><p class="${c.muted} ${c.small}">Your feedback helps us improve search results.</p></section>${newsRail(kit)}`;
-  const script = peopleClientScript(kit, { query, resultsId, bar: bar.ids, upsell: offer?.ids, skeleton: skeletonMarkup(kit) });
+  const script = peopleClientScript(kit, { query, resultsId, bar: bar.ids, upsell: offer?.ids, skeleton: skeletonMarkup(kit), inPlace: kit.state.mode === "in-place-paging" });
   return renderShellPage(kit, {
     title: `${query.keywords || "People"} | Search | Guildline`,
     active: "none",

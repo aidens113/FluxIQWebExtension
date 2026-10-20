@@ -81,3 +81,54 @@ test("a read across a shadow root is bounded, so a huge component cannot make on
   const value = readField(dom.el("li", {}, host), "huge", TEXT) ?? "";
   assert.ok(value.length > 0 && value.length < words.join("").length, String(value.length));
 });
+
+// T1 coverage of a `column` field's header lookup (`field-reader.ts`,
+// `readColumn`): the cell is found by the header's position in the table's own
+// header row, so the same table drawn in another column order reads the same
+// values, and a header the table lacks reads nothing rather than another column.
+//
+// This was the data-table fixture's column-reorder variant in
+// `e2e/content/tests/extraction/tests/extract-list-table.spec.ts`. Browser specs
+// open only the ten realistic scenarios, and none of them draws one table in two
+// column orders; the lookup itself needs no browser, so it is proven here. The
+// header-row read on a real table is that spec's company-website rows.
+//
+// The rows are built with `fake-shadow-dom.ts`, which gives elements text and
+// attributes; the table-row surface `readColumn` asks of a row (`tagName`,
+// `closest("table")`, `cells`) and of a table (`tHead.rows`, `rows`) is added
+// here, since that fake has no tables.
+
+/** One price-list row as two tables draw it: the same three values under headers in different orders. */
+const HEADERS = ["Service", "What is included", "Price"] as const;
+const VALUES: Record<(typeof HEADERS)[number], string> = {
+  Service: "Annual boiler service (combi)",
+  "What is included": "Full service, flue gas analysis and a written report.",
+  Price: "£95.00"
+};
+
+/** A table whose header row lists `order`, and its one body row with each value under its own header. */
+function tableRow(order: ReadonlyArray<(typeof HEADERS)[number]>): Element {
+  const headerCells = order.map((header) => dom.el("th", {}, header));
+  const bodyCells = order.map((header) => dom.el(header === "Service" ? "th" : "td", {}, VALUES[header]));
+  const headerRow = Object.assign(dom.el("tr", {}, ...headerCells), { cells: headerCells });
+  const row = Object.assign(dom.el("tr", {}, ...bodyCells), { cells: bodyCells });
+  const table = { tHead: { rows: [headerRow] }, rows: [headerRow, row] };
+  return Object.assign(row, { closest: (selector: string) => (selector === "table" ? table : null) });
+}
+
+const column = (header: string) => ({ kind: "column", header, required: false }) as const;
+
+test("a column field reads the cell under its header in either column order", () => {
+  const authored = tableRow(HEADERS);
+  const reordered = tableRow(["Price", "Service", "What is included"]);
+  for (const header of HEADERS) {
+    assert.equal(readField(authored, header, column(header)), VALUES[header]);
+    // By position this would read the service's name as its price.
+    assert.equal(readField(reordered, header, column(header)), VALUES[header], `${header} after the reorder`);
+  }
+});
+
+test("a header the table does not have reads null, never a neighbouring column", () => {
+  assert.equal(readField(tableRow(HEADERS), "duration", column("Duration")), null);
+  assert.equal(readField(tableRow(["Price", "Service", "What is included"]), "duration", column("Duration")), null);
+});

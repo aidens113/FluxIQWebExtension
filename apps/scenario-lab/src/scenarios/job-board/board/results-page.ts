@@ -39,6 +39,9 @@ const FILTERS: readonly Filter[] = [
  *
  * The pager's Next link is broken past page one: from page two on it points at
  * the page it is on. The numbered links work.
+ *
+ * Under `in-place-filters` the results column carries `aria-busy`, because the
+ * page's script swaps filtered results into it instead of loading a new page.
  */
 export function renderResultsPage(state: JobBoardState, query: SearchQuery, context: RenderContext, freshLive: boolean): string {
   const c = classesFor(context);
@@ -62,7 +65,7 @@ export function renderResultsPage(state: JobBoardState, query: SearchQuery, cont
 <div class="${c.filters}">${FILTERS.map((filter) => filterMarkup(c, query, filter)).join("")}</div>
 <div class="${c.meta}"><h1 class="${c.metaTitle}">${escapeHtml(describe(query))}</h1><span class="${c.count}">${results.length === 0 ? "0 jobs" : `Page ${page} of ${cached} jobs`}</span>
 <span class="${c.sort}">Sort by: ${query.sort === "relevance" ? "<b>relevance</b>" : `<a href="${searchHref(query, { sort: "relevance", page: 1 })}">relevance</a>`} - ${query.sort === "date" ? "<b>date</b>" : `<a href="${searchHref(query, { sort: "date", page: 1 })}">date</a>`}</span></div>
-<div class="${c.layout}"><div class="${c.left}">${listing}
+<div class="${c.layout}"><div class="${c.left}"${state.mode === "in-place-filters" ? ` aria-busy="false"` : ""}>${listing}
 <label class="${c.perPage}">Jobs per page <select name="limit">${[10, 25, 50].map((limit) => `<option value="${limit}"${limit === query.limit ? " selected" : ""}>${limit}</option>`).join("")}</select></label></div>
 <aside class="${c.pane}"><div class="${c.paneEmpty}">Select a job to see its details</div></aside></div>`;
   const data = {

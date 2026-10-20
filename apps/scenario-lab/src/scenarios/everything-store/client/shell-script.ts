@@ -1,5 +1,7 @@
 import type { StoreClasses, StoreIds } from "../style/index.js";
 import type { StoreState } from "../state/index.js";
+import { REWORDED_PROMPT_BODY } from "./reworded-prompt-script.js";
+import { SUGGESTION_KEYS_BODY } from "./suggestion-keys-script.js";
 import { STORE_TIMINGS } from "./timings.js";
 
 const SUGGESTIONS = [
@@ -17,7 +19,11 @@ const SUGGESTIONS = [
  *   flow, and everything below it moves down 64 pixels. Its close control is a
  *   `div` whose only name is a `title`.
  * - Four seconds in, a notifications prompt opens as a modal and the whole
- *   page behind it goes inert until it is answered.
+ *   page behind it goes inert until it is answered. The answer is reported
+ *   with which button gave it. `reworded-prompt` draws the redesigned prompt
+ *   instead (`reworded-prompt-script.ts`).
+ * - `keyboard-suggestions` adds arrow-key handling to the suggestion list
+ *   (`suggestion-keys-script.ts`).
  * - The support chat lives in a shadow root. On a product page it opens
  *   itself five seconds in, and its panel sits over the buy box. Left open,
  *   it is open again on the next page.
@@ -34,8 +40,9 @@ export function shellScript(state: StoreState, css: StoreClasses, ids: StoreIds,
     css, ids, suggestions: SUGGESTIONS, timings: STORE_TIMINGS, mode: state.mode,
     nudges: state.nudges, autoOpenChat: options.autoOpenChat,
   };
+  const armed = state.mode === "keyboard-suggestions" ? SUGGESTION_KEYS_BODY : state.mode === "reworded-prompt" ? REWORDED_PROMPT_BODY : "";
   return `const SHELL = ${JSON.stringify(config)};
-${SHELL_BODY}`;
+${SHELL_BODY}${armed}`;
 }
 
 const SHELL_BODY = String.raw`
@@ -90,19 +97,23 @@ if (SHELL.nudges.appBanner === 'pending') {
   }, SHELL.timings.appBanner);
 }
 
-function openNotifications() {
-  if (window.storeModals.busy()) { setTimeout(openNotifications, 1500); return; }
+function shippedPrompt() {
   const scrim = el('div', CLS.scrim, { id: IDS.notify });
   scrim.innerHTML = '<div class="' + CLS.dialog + '" role="dialog" aria-modal="true" aria-labelledby="' + IDS.notify + 'h">'
     + '<p class="' + CLS.dialogHead + '" id="' + IDS.notify + 'h">Never miss a deal</p>'
     + '<div class="' + CLS.dialogBody + '">Brightaisle would like to send you notifications about price drops, deliveries and Lightning Deals.</div>'
     + '<div class="' + CLS.dialogFoot + '"><button type="button" class="' + CLS.button + '" data-choice="later">Not now</button>'
     + '<button type="button" class="' + CLS.button + ' ' + CLS.buttonPrimary + '" data-choice="allow">Allow notifications</button></div></div>';
+  return { scrim, answers: [...scrim.querySelectorAll('[data-choice]')].map((button) => [button, button.dataset.choice]) };
+}
+function openNotifications() {
+  if (window.storeModals.busy()) { setTimeout(openNotifications, 1500); return; }
+  const { scrim, answers } = SHELL.mode === 'reworded-prompt' ? rewordedPrompt() : shippedPrompt();
   openModal('notifications', scrim);
-  for (const button of scrim.querySelectorAll('[data-choice]')) {
+  for (const [button, choice] of answers) {
     button.addEventListener('click', async () => {
       closeModal('notifications', scrim);
-      await mutate('dismiss-nudge', { nudge: 'notifications' });
+      await mutate('dismiss-nudge', { nudge: 'notifications', choice });
     });
   }
 }

@@ -67,8 +67,8 @@ test("the start document embeds both frames and the fixture state stays the two 
   assert.ok(html.includes(`title="Cross-origin checkout" data-testid="cross-frame" src="${context.alternateOrigin}/scenarios/iframe-checkout/cross-frame"`));
   assert.equal(lineCount(html), 0, "the order lines live in the frame, not in the top document");
 
-  // The state shape is asserted exactly by e2e/scenario-pages.spec.ts, so
-  // reading the order lines must not add a field to it.
+  // The state shape is the final-state oracle a run reads, so reading the
+  // order lines must not add a field to it.
   const state = scenario.createState(105);
   assert.deepEqual(state, { sameOriginClicks: 0, crossOriginClicks: 0 });
   assert.deepEqual(scenario.mutate(state, "same", {}), { sameOriginClicks: 1, crossOriginClicks: 0 });

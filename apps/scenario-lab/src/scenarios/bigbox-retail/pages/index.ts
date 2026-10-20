@@ -1,7 +1,9 @@
+export { accountRecoveryPanel, ACCOUNT_RECOVERY_VALUES } from "./account-recovery/index.js";
 export { renderCartPage } from "./cart-page.js";
 export { renderCheckoutPage } from "./checkout-page.js";
 export { renderHomePage } from "./home-page.js";
 export { renderOrderPage } from "./order-page.js";
+export { PARTNER_WIDGETS, partnerWidgetsStrip } from "./partner-widgets/index.js";
 export { PAYMENT_FRAME_CSP, renderPaymentFrame } from "./payment-frame-page.js";
 export { pickupSlotsFragment } from "./pickup-slots-fragment.js";
 export { renderProductPage } from "./product-page.js";

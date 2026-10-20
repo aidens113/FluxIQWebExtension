@@ -255,3 +255,18 @@ test("fresh actual fixture child processes never reuse the prior owner epoch", a
   const first = await run(), restarted = await run();
   assert.equal(first.generation, 1); assert.equal(restarted.generation, 1); assert.notEqual(first.epoch, restarted.epoch);
 });
+
+test("a scenario route may answer with its own content security policy, and every other page keeps the lab's", async () => withLab(async lab => {
+  const strict = "default-src 'none'; script-src 'none'; connect-src 'none'; img-src 'self'";
+  const receipt = `${lab.origin}/scenarios/everything-store/gp/css/summary/print.html?orderID=114-0000000-0000000`;
+  for (const method of ["GET", "HEAD"]) {
+    const response = await fetch(receipt, { method });
+    // No such order: the store's own "not found" receipt, under the receipt's policy all the same.
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("content-security-policy"), strict, `${method} receipt`);
+  }
+  const labPolicy = (await fetch(`${lab.origin}/scenarios/everything-store/`)).headers.get("content-security-policy") ?? "";
+  assert.match(labPolicy, /script-src 'unsafe-inline'/);
+  assert.equal((await fetch(`${lab.origin}/scenarios/everything-store/cart`)).headers.get("content-security-policy"), labPolicy);
+  assert.equal((await fetch(`${lab.origin}/scenarios/everything-store/no-such-page`)).headers.get("content-security-policy"), labPolicy);
+}));

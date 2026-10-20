@@ -14,8 +14,31 @@
  * - `robot-check` -- the store has decided this session looks automated and
  *   answers every page with its type-the-characters challenge, which only a
  *   person can pass.
+ * - `keyboard-suggestions` -- the header's suggestion list was rebuilt as an
+ *   accessible combobox: the arrow keys move a highlight through the
+ *   suggestions, and Enter on a highlighted one puts it in the search box
+ *   for the shopper to refine, without searching. Enter with nothing
+ *   highlighted searches as before.
+ * - `reworded-prompt` -- the notifications prompt was redesigned and its copy
+ *   rewritten: "Not now" now reads "Not right now", on a new component with new
+ *   classes and ids, and the old words were left behind in the button's
+ *   `aria-label`, a label-in-name mismatch stores really ship.
+ * - `help-and-offers` -- the cart page gained a "Help and offers" area, built
+ *   by other teams and shipped with their rough edges: help topics as in-page
+ *   tabs, a scrolling list of delivery questions whose "Still need help?" bar
+ *   is pinned over the last question, a lightning deal (for a cart holding
+ *   the descaler) with a ticking clock and a "Claim deal" link that only
+ *   ripples, a deals strip whose filters
+ *   answer in place, a promo whose terms link is cancelled by a handler with
+ *   nothing behind it, and an also-viewed pager that raises its busy flag and
+ *   never loads.
+ *
+ * No workflow variant arms the last three; they are renderings a browser test
+ * arms with `set-mode` to meet a real storefront's keyboard handling, a
+ * control whose words changed while its name stood, and links a page answers
+ * in place, or fails to answer at all.
  */
-export const storeModes = ["baseline", "redesigned-header", "deal-wheel", "robot-check"] as const;
+export const storeModes = ["baseline", "redesigned-header", "deal-wheel", "robot-check", "keyboard-suggestions", "reworded-prompt", "help-and-offers"] as const;
 
 export type StoreMode = (typeof storeModes)[number];
 

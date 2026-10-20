@@ -7,17 +7,20 @@ import type { BigboxState } from "../types.js";
 import { elementId } from "../theme/index.js";
 import { renderShell } from "../shell/index.js";
 import type { BigboxClasses } from "../theme/index.js";
+import { accountRecoveryPanel } from "./account-recovery/index.js";
 
 const field = (c: BigboxClasses, id: string, label: string, name: string, type: string, autocomplete: string) =>
   `<div class="${c.field}"><label class="${c.label}" for="${id}">${label}</label><input class="${c.input}" id="${id}" name="${name}" type="${type}" autocomplete="${autocomplete}"></div>`;
 
+/** The sign-in wall; the `account-recovery` rendering opens the "Forgot your password?" panel beside its card. */
 function signInWall(state: BigboxState, context: RenderContext, c: BigboxClasses): string {
   const error = state.checkoutError === "" ? "" : `<p class="${c.errorBanner}" role="alert">${escapeHtml(state.checkoutError)}</p>`;
-  return `<div class="${c.wall}"><div class="${c.wallCard}"><h1>Sign in or create your account</h1>${error}
+  const recovering = state.mode === "account-recovery";
+  return `<div class="${recovering ? `${c.wall} ${c.wallStack}` : c.wall}"><div class="${c.wallCard}"><h1>Sign in or create your account</h1>${error}
 ${field(c, elementId(context.seed, "wall-email"), "Email address", "email", "email", "username")}
 ${field(c, elementId(context.seed, "wall-password"), "Password", "password", "password", "current-password")}
 <button type="button" class="${c.btn} ${c.btnPrimary}">Continue</button>
-<p>New to ValueRidge? <a href="#">Create an account</a></p><hr><small><a href="#" class="${c.btnLink}">Continue without an account</a></small></div></div>`;
+<p>New to ValueRidge? <a href="#">Create an account</a></p><hr><small><a href="#" class="${c.btnLink}">Continue without an account</a></small></div>${recovering ? accountRecoveryPanel(context, c) : ""}</div>`;
 }
 
 function guestCheckout(state: BigboxState, context: RenderContext, c: BigboxClasses): string {

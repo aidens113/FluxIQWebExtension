@@ -160,6 +160,13 @@ body{max-width:none;margin:0;padding:0;font:14px/1.45 system-ui,-apple-system,"S
 .${c.checkoutLayout}{display:grid;grid-template-columns:1fr 340px;gap:26px}
 .${c.wall}{display:flex;justify-content:center;padding:30px 0}
 .${c.wallCard}{width:min(420px,94vw);border:1px solid #e3e3e3;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.${c.wallStack}{flex-wrap:wrap;align-items:flex-start;gap:20px}
+.${c.recoveryCard}{width:min(520px,94vw);border:1px solid #e3e3e3;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.${c.recoveryCard} form{display:flex;flex-direction:column;gap:14px}
+.${c.recoveryGroup}{border:1px solid #ececec;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.${c.recoveryRow}{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.${c.recoveryTable}{border-collapse:collapse;width:100%}
+.${c.recoveryTable} th{text-align:left;font-size:13px;padding:4px 0;border-bottom:1px solid #eee}
 .${c.fieldRow}{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .${c.field}{display:flex;flex-direction:column;gap:4px}
 .${c.input}{border:1px solid #999;border-radius:6px;padding:9px 10px;font:inherit}

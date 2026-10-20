@@ -6,5 +6,6 @@ export { discoverPage, leavingPage, loginPage, productPage, subscribePage, unava
 export { feedBatch, feedPosts, homePage } from "./feed.js";
 export { GRID_BATCH, GRID_BEFORE_SESSION_CHECK, gridBatch, profilePage } from "./profile.js";
 export { collectionPage, savedPage } from "./saved.js";
+export { SAVED_LOGINS_VALUES, savedLoginFormExtras, savedLoginPanels } from "./saved-logins/index.js";
 export { RECENT_SEARCHES, searchResults } from "./search.js";
 export { compactCount, exactCount, ROOT } from "./text.js";

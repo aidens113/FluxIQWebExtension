@@ -13,12 +13,28 @@
 // not one field, so a value that reappears somewhere unexpected -- an attribute,
 // a snapshot, a validation string -- still fails the row.
 //
-// Redaction has to stay targeted, so most rows carry a control on the fixture's
-// ordinary email field, and the last row pins the other direction outright: an
-// action on a field that is not sensitive still quotes what was sent and what
-// the field kept, because a validation that cannot say whether the value
-// matched is worthless. For a sensitive field the same rows require the
-// validation to say whether it matched -- in words, never by quoting it.
+// The pages are bigbox-retail's checkout, the one realistic site with both
+// kinds of secret a shopper types (t730):
+// - the sign-in wall, whose "Password" field is `type="password"` and whose
+//   "Email address" field (`autocomplete="username"`) is the ordinary control
+//   beside it;
+// - guest checkout, whose card form is the payment provider's cross-origin
+//   frame "Secure card entry". Its "Card number" field is sensitive because it
+//   carries `autocomplete="cc-number"`, as a real one does. The guest contact
+//   "Email address" on the page around it is the ordinary control.
+// The site pre-fills nothing, so a "pre-filled" value is one written into the
+// field before the recorder started, and every value is synthetic.
+//
+// The harness answers through the top frame only, so the card rows talk to the
+// frame's own content script, as the background worker addresses a frame by
+// its id (frames.spec.ts does the same).
+//
+// Redaction has to stay targeted, so most rows carry a control on an ordinary
+// email field, and one row pins the other direction outright: an action on a
+// field that is not sensitive still quotes what was sent and what the field
+// kept, because a validation that cannot say whether the value matched is
+// worthless. For a sensitive field the same rows require the validation to say
+// whether it matched -- in words, never by quoting it.
 //
 // The rows about the hop to the domain are the other side of the same coin,
 // added once the verbs began declaring their redaction with `redacted: true`.
@@ -34,48 +50,139 @@
 // through a client that stamps its withheld comparison `redacted: true` as well
 // as through this one, because that stamp once disarmed the adapter's guard.
 //
-// The fixture's two sensitive controls are both covered: the password field,
-// and the card field, which is sensitive because it carries
-// `autocomplete="cc-number"` as a real one does. Until Wave 3 it carried
-// neither that nor `data-sensitive`, so the shared rule could not see it and
-// this scenario -- tagged `redaction` and `security` -- proved the opposite of
-// what it was for.
+// A multi-token autocomplete (`billing cc-number`) has no field on any realistic
+// site. `isSensitiveFormControl` hands the raw attribute to the shared rule
+// (`content/element-traits.ts`), whose token split is proved in
+// `src/shared/tests/sensitive-field.test.ts` ("every autocomplete token is
+// checked, not only the whole value"); the DOM read itself is the card rows'.
 
-import { createWebAutomationRuntimeAdapter, webAutomationActionResultPayload } from "@fluxiq-web-extension/domain";
+import type { Frame, Page } from "@playwright/test";
+import { WEB_AUTOMATION_DOMAIN_ID, createWebAutomationRuntimeAdapter, webAutomationActionResultPayload } from "@fluxiq-web-extension/domain";
 import type { FluxIQ } from "fluxiq";
 import type { FluxIQRuntimeCommandResult } from "fluxiq/runtime";
-import type { BrowserActionResult } from "../../../src/shared/protocol.js";
-import { expect, test } from "../index.js";
+import type { BrowserActionCommand, BrowserActionResult, DomSnapshot, RecordingEventPayload } from "../../../src/shared/protocol.js";
+import { expect, test, type ContentHarness, type HarnessDelivery, type HarnessRecordingSettings, type SentMessage } from "../index.js";
 
-/** The fixture's own pre-filled password. Synthetic, and it must still never leave the page. */
-const FIXTURE_PASSWORD = "SYNTHETIC_PASSWORD_DO_NOT_USE";
+/** Written into the password field before the recorder starts. Synthetic, and it must still never leave the page. */
+const PREFILLED_PASSWORD = "SYNTHETIC_PASSWORD_DO_NOT_USE";
 /** Typed during a row, so a value that only exists after the recorder started is covered too. */
 const TYPED_PASSWORD = "synthetic-typed-secret";
+/** The card a shopper already entered: the public test number, never a real card. */
+const CARD_ON_FILE = "4242424242424242";
 /** Typed into the card field. Not a card number: nothing here needs to look like one. */
 const TYPED_CARD = "synthetic-card-entry";
-/** The fixture's email, which is not sensitive: it is the control that proves redaction is targeted. */
-const FIXTURE_EMAIL = "synthetic-user@example.test";
+/** An ordinary email, which is not sensitive: it is the control that proves redaction is targeted. */
+const SHOPPER_EMAIL = "synthetic-shopper@example.test";
 /** Appended to the email by keyboard, so a captured value is visible in the wire form. */
 const EMAIL_SUFFIX = "+control";
 /** Typed into the email field by an action, to read back the validation strings an ordinary field still gets. */
 const CONTROL_TEXT = "synthetic-control-text";
 
-const PASSWORD = '[data-testid="password"]';
-const CARD = '[data-testid="payment"]';
-// The multi-token form. `autocomplete="billing cc-number"` is how the attribute
-// is ordinarily written, and it is the exact spelling that leaked a card number
-// twice in this plan -- once through a duplicated rule, once through a copy that
-// compared the whole attribute instead of splitting it into tokens. The
-// single-token CARD field above cannot catch either regression.
-const BILLING_CARD = '[data-testid="billing"]';
-const EMAIL = 'input[name="username"]';
+const PASSWORD = 'input[name="password"]';
+const EMAIL = 'input[name="email"]';
+const CARD = 'input[name="cardnumber"]';
+const CARD_FRAME = 'iframe[title="Secure card entry"]';
+const CHECKOUT = "/scenarios/bigbox-retail/checkout";
 
 const LOUD = { captureMutations: false, captureInputValues: true, captureSnapshots: true };
 const QUIET = { captureMutations: false, captureInputValues: true, captureSnapshots: false };
 const NO_VALUES = { captureMutations: false, captureInputValues: false, captureSnapshots: false };
 
+/** The page global e2e/content/runtime-stub.ts installs in every frame; harness.ts owns the name and exports none. */
+const HARNESS_GLOBAL = "__fluxiqContentHarness";
+/** A child frame id, as the background worker addresses one. The frame reads only "not the top one". */
+const A_CHILD_FRAME = 1;
+
+/** Applies one bigbox-retail operation through the site's own API, as its pages do. */
+async function apply(harness: ContentHarness, operation: string, payload: object = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  expect(response.ok, `${operation} answered ${response.status}`).toBe(true);
+}
+
+/**
+ * Opens bigbox-retail's checkout: the sign-in wall, or as a guest the contact
+ * details and the card frame. The privacy choices are declined first, as a
+ * shopper would, because their scrim eats every click.
+ */
+async function openCheckout(openHarness: (scenarioId: string) => Promise<ContentHarness>, as: "wall" | "guest"): Promise<ContentHarness> {
+  const harness = await openHarness("bigbox-retail");
+  await apply(harness, "consent", { choice: "reject" });
+  if (as === "guest") await apply(harness, "start-guest-checkout");
+  await harness.page.goto(new URL(CHECKOUT, harness.lab.origin).href);
+  await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+  await expect(harness.page.locator(as === "guest" ? CARD_FRAME : PASSWORD)).toBeVisible();
+  return harness;
+}
+
+/** The card frame's own content script, spoken to as the background worker speaks to a child frame. */
+type FrameChannel = {
+  frame: Frame;
+  runAction(command: BrowserActionCommand): Promise<BrowserActionResult>;
+  capture(): Promise<DomSnapshot>;
+  setRecording(recording: boolean, settings?: HarnessRecordingSettings): Promise<void>;
+  messages(): Promise<SentMessage[]>;
+  recordedEvents(kind: RecordingEventPayload["kind"]): Promise<RecordingEventPayload[]>;
+};
+
+async function cardFrame(page: Page): Promise<FrameChannel> {
+  const frame = await (await page.locator(CARD_FRAME).elementHandle())?.contentFrame();
+  if (!frame) throw new Error(`${CARD_FRAME} has no frame.`);
+  await frame.waitForFunction((name) => {
+    const stub = (window as unknown as Record<string, { sent?: Array<{ type?: string }> } | undefined>)[name];
+    return Boolean(stub?.sent?.some((message) => message.type === "fluxiq.contentReady"));
+  }, HARNESS_GLOBAL);
+  await frame.locator(CARD).waitFor();
+  const deliver = (message: Record<string, unknown>): Promise<HarnessDelivery> => frame.evaluate(([name, value]) => {
+    const stub = (window as unknown as Record<string, { deliver(message: unknown): Promise<HarnessDelivery> } | undefined>)[name];
+    if (!stub) throw new Error("The content-harness runtime stub is not installed in the card frame.");
+    return stub.deliver(value);
+  }, [HARNESS_GLOBAL, message] as const);
+  const answer = async (message: Record<string, unknown>, what: string): Promise<unknown> => {
+    const delivery = await deliver(message);
+    if (!delivery.responded) throw new Error(`The card frame's content script did not answer ${what}.`);
+    return delivery.response;
+  };
+  const messages = async (): Promise<SentMessage[]> => await frame.evaluate(
+    (name) => (window as unknown as Record<string, { sent: SentMessage[] } | undefined>)[name]?.sent ?? [],
+    HARNESS_GLOBAL
+  );
+  return {
+    frame,
+    runAction: async (command) => await answer(
+      { type: "executeAction", action: { ...command, frameId: A_CHILD_FRAME }, frameId: A_CHILD_FRAME },
+      `executeAction for ${command.actionType} (${command.commandId})`
+    ) as BrowserActionResult,
+    capture: async () => await answer({ type: "captureSnapshot" }, "captureSnapshot") as DomSnapshot,
+    setRecording: async (recording, settings) => {
+      await answer({ type: "recording", recording, ...(settings ? { settings } : {}) }, "the recording message");
+    },
+    messages,
+    recordedEvents: async (kind) => (await messages())
+      .filter((message) => message.type === "fluxiq.contentEvent")
+      .map((message) => message.payload as RecordingEventPayload)
+      .filter((event) => event.kind === kind)
+  };
+}
+
+/** Guest checkout with a card already entered in the frame, before anything listens. */
+async function cardOnFile(openHarness: (scenarioId: string) => Promise<ContentHarness>): Promise<{ harness: ContentHarness; card: FrameChannel }> {
+  const harness = await openCheckout(openHarness, "guest");
+  const card = await cardFrame(harness.page);
+  await card.frame.locator(CARD).fill(CARD_ON_FILE);
+  return { harness, card };
+}
+
+const named = (name: string) => (event: RecordingEventPayload) => event.element?.attributes?.name === name;
+const describedAs = (snapshot: DomSnapshot, name: string) => snapshot.interactiveElements.find((element) => element.attributes?.name === name);
+
 test("no password value reaches any recorded message, typed or pre-filled", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
+  const harness = await openCheckout(openHarness, "wall");
+  await page.locator(PASSWORD).fill(PREFILLED_PASSWORD);
+  await page.locator(EMAIL).fill(SHOPPER_EMAIL);
   await harness.setRecording(true, LOUD);
 
   await page.locator(PASSWORD).focus();
@@ -85,25 +192,24 @@ test("no password value reaches any recorded message, typed or pre-filled", asyn
   await page.locator(EMAIL).focus();
   await page.keyboard.press("End");
   await page.keyboard.type(EMAIL_SUFFIX);
-  await page.locator("form button").click();
+  await page.keyboard.press("Tab");
   await harness.setRecording(false);
 
   const wire = JSON.stringify(await harness.messages());
-  expect(wire).not.toContain(FIXTURE_PASSWORD);
+  expect(wire).not.toContain(PREFILLED_PASSWORD);
   expect(wire).not.toContain(TYPED_PASSWORD);
-  expect(wire).toContain(`${FIXTURE_EMAIL}${EMAIL_SUFFIX}`);
+  expect(wire).toContain(`${SHOPPER_EMAIL}${EMAIL_SUFFIX}`);
 });
 
 test("a key pressed in a sensitive field is recorded as a press, never as the character", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
+  const harness = await openCheckout(openHarness, "wall");
   await harness.setRecording(true, QUIET);
   await page.locator(PASSWORD).focus();
   await page.keyboard.type("abc");
   await page.keyboard.press("Tab");
   await harness.setRecording(false);
 
-  const presses = (await harness.recordedEvents("dom.keydown"))
-    .filter((event) => event.element?.selector === PASSWORD);
+  const presses = (await harness.recordedEvents("dom.keydown")).filter(named("password"));
   // Three characters and the Tab that left the field.
   expect(presses).toHaveLength(4);
   expect(presses.slice(0, 3).map((event) => event.key)).toEqual([undefined, undefined, undefined]);
@@ -112,14 +218,13 @@ test("a key pressed in a sensitive field is recorded as a press, never as the ch
 });
 
 test("the recorded input event for a sensitive field reports the change without the value", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
+  const harness = await openCheckout(openHarness, "wall");
   await harness.setRecording(true, QUIET);
   await page.locator(PASSWORD).focus();
   await page.keyboard.type(TYPED_PASSWORD);
   await harness.setRecording(false);
 
-  const inputs = (await harness.recordedEvents("dom.input"))
-    .filter((event) => event.element?.selector === PASSWORD);
+  const inputs = (await harness.recordedEvents("dom.input")).filter(named("password"));
   expect(inputs).toHaveLength(1);
   expect(inputs[0]?.inputValue).toBeUndefined();
   // Presence still travels: the recording knows a value was entered.
@@ -127,55 +232,57 @@ test("the recorded input event for a sensitive field reports the change without 
   expect(inputs[0]?.element?.value).toBeUndefined();
 });
 
-test("a snapshot reports a sensitive field's presence and never its value", async ({ openHarness }) => {
-  const harness = await openHarness("sensitive-input");
+test("a snapshot reports a sensitive field's presence and never its value", async ({ openHarness, page }) => {
+  const harness = await openCheckout(openHarness, "wall");
+  await page.locator(PASSWORD).fill(PREFILLED_PASSWORD);
+  await page.locator(EMAIL).fill(SHOPPER_EMAIL);
   const snapshot = await harness.capture();
 
-  const password = snapshot.interactiveElements.find((element) => element.selector === PASSWORD);
+  const password = describedAs(snapshot, "password");
   expect(password, "the password field is missing from the snapshot").toBeTruthy();
   expect(password?.value).toBeUndefined();
   expect(password?.hasValue).toBe(true);
   expect(password?.inputType).toBe("password");
-  expect(JSON.stringify(snapshot)).not.toContain(FIXTURE_PASSWORD);
+  expect(JSON.stringify(snapshot)).not.toContain(PREFILLED_PASSWORD);
 
   // The control: the same snapshot carries the ordinary field's value.
-  const email = snapshot.interactiveElements.find((element) => element.selector === EMAIL);
-  expect(email?.value).toBe(FIXTURE_EMAIL);
+  expect(describedAs(snapshot, "email")?.value).toBe(SHOPPER_EMAIL);
 });
 
-test("an action result's evidence describes a sensitive field without its value", async ({ openHarness }) => {
-  const harness = await openHarness("sensitive-input");
+test("an action result's evidence describes a sensitive field without its value", async ({ openHarness, page }) => {
+  const harness = await openCheckout(openHarness, "wall");
+  await page.locator(PASSWORD).fill(PREFILLED_PASSWORD);
   const result = await harness.runAction({ commandId: "click-password", actionType: "web.dom.click", selector: PASSWORD });
 
   expect(result.status).toBe("succeeded");
-  expect(JSON.stringify(result)).not.toContain(FIXTURE_PASSWORD);
+  expect(JSON.stringify(result)).not.toContain(PREFILLED_PASSWORD);
   expect(result.element?.value).toBeUndefined();
   expect(result.element?.hasValue).toBe(true);
 });
 
 test("captureInputValues off withholds every value, sensitive or not", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
+  const harness = await openCheckout(openHarness, "wall");
+  await page.locator(EMAIL).fill(SHOPPER_EMAIL);
   await harness.setRecording(true, NO_VALUES);
   await page.locator(EMAIL).focus();
   await page.keyboard.press("End");
   await page.keyboard.type(EMAIL_SUFFIX);
   await harness.setRecording(false);
 
-  const inputs = (await harness.recordedEvents("dom.input"))
-    .filter((event) => event.element?.selector === EMAIL);
+  const inputs = (await harness.recordedEvents("dom.input")).filter(named("email"));
   expect(inputs).toHaveLength(1);
   expect(inputs[0]?.inputValue).toBeUndefined();
   expect(inputs[0]?.element?.value).toBeUndefined();
   // Presence is not a value, so it is unaffected by the setting.
   expect(inputs[0]?.element?.hasValue).toBe(true);
+  expect(JSON.stringify(await harness.messages())).not.toContain(SHOPPER_EMAIL);
 });
 
 test("web.dom.type withholds a sensitive field's text from its validation and still reports the match", async ({ openHarness }) => {
-  const harness = await openHarness("sensitive-input");
+  const harness = await openCheckout(openHarness, "wall");
   const result = await harness.runAction({ commandId: "type-password", actionType: "web.dom.type", selector: PASSWORD, text: TYPED_PASSWORD });
 
   expect(JSON.stringify(result)).not.toContain(TYPED_PASSWORD);
-  expect(JSON.stringify(result)).not.toContain(FIXTURE_PASSWORD);
   // Useful without being quotable: the read-back still says the field kept what was sent.
   expect(result).toMatchObject({
     status: "succeeded",
@@ -187,50 +294,49 @@ test("web.dom.type withholds a sensitive field's text from its validation and st
   });
 });
 
-test("web.dom.clear withholds a sensitive field's value from its validation", async ({ openHarness }) => {
-  const harness = await openHarness("sensitive-input");
+test("web.dom.clear withholds a sensitive field's value from its validation", async ({ openHarness, page }) => {
+  const harness = await openCheckout(openHarness, "wall");
+  await page.locator(PASSWORD).fill(PREFILLED_PASSWORD);
   const result = await harness.runAction({ commandId: "clear-password", actionType: "web.dom.clear", selector: PASSWORD });
 
-  expect(JSON.stringify(result)).not.toContain(FIXTURE_PASSWORD);
+  expect(JSON.stringify(result)).not.toContain(PREFILLED_PASSWORD);
   // An empty field is not a secret, so the passing case reads exactly as it always did.
   expect(result).toMatchObject({ status: "succeeded", validation: { status: "passed", expected: "the field is empty", actual: "the field is empty" } });
+  await expect(page.locator(PASSWORD)).toHaveValue("");
 });
 
-test("the card field is sensitive by the shared rule, so no path carries its value", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
-  // Read the fixture's own card value from the page rather than restating it here.
-  const prefilled = await page.locator(CARD).inputValue();
-  expect(prefilled.length, "the card field has no value to redact").toBeGreaterThan(0);
+test("the card field is sensitive by the shared rule, so no path carries its value", async ({ openHarness }) => {
+  const { card } = await cardOnFile(openHarness);
 
-  const snapshot = await harness.capture();
-  const card = snapshot.interactiveElements.find((element) => element.selector === CARD);
-  expect(card, "the card field is missing from the snapshot").toBeTruthy();
-  expect(card?.value).toBeUndefined();
-  expect(card?.hasValue).toBe(true);
-  expect(JSON.stringify(snapshot)).not.toContain(prefilled);
+  const snapshot = await card.capture();
+  const described = describedAs(snapshot, "cardnumber");
+  expect(described, "the card field is missing from the frame's snapshot").toBeTruthy();
+  expect(described?.value).toBeUndefined();
+  expect(described?.hasValue).toBe(true);
+  expect(JSON.stringify(snapshot)).not.toContain(CARD_ON_FILE);
 
-  // Typed at the caret rather than over a select-all, deliberately. A
+  // Typed at the caret rather than over a select-all, deliberately: a
   // select-all inside a sensitive text field puts its value in the page
-  // selection, and `dom-snapshot.ts` copies `window.getSelection()` into
-  // `snapshot.selectedText` without asking whether the focused control is
-  // sensitive -- a live leak this brief does not own the file to fix, recorded
-  // in reports/w3-redaction-followup.md. Chromium returns nothing for a
-  // password field, which is why the rows above never met it.
-  await harness.setRecording(true, LOUD);
-  await page.locator(CARD).focus();
-  await page.keyboard.type(TYPED_CARD);
-  await harness.setRecording(false);
-  const wire = JSON.stringify(await harness.messages());
-  expect(wire).not.toContain(prefilled);
+  // selection, which selection-redaction.spec.ts proves is withheld. This row
+  // is about the recorder's own paths.
+  await card.setRecording(true, LOUD);
+  await card.frame.locator(CARD).focus();
+  await card.frame.locator(CARD).press("End");
+  await card.frame.page().keyboard.type(TYPED_CARD);
+  await card.setRecording(false);
+  const recorded = await card.recordedEvents("dom.input");
+  expect(recorded.some(named("cardnumber")), "the frame recorded no input for the card field, so the row proves nothing").toBe(true);
+  const wire = JSON.stringify(await card.messages());
+  expect(wire).not.toContain(CARD_ON_FILE);
   expect(wire).not.toContain(TYPED_CARD);
 
-  const result = await harness.runAction({ commandId: "type-card", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
+  const result = await card.runAction({ commandId: "type-card", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
   expect(JSON.stringify(result)).not.toContain(TYPED_CARD);
   expect(result).toMatchObject({ status: "succeeded", validation: { status: "passed", expected: expect.stringContaining("a withheld value of") } });
 });
 
 test("a field that is not sensitive keeps validation strings that quote what was sent and what it kept", async ({ openHarness }) => {
-  const harness = await openHarness("sensitive-input");
+  const harness = await openCheckout(openHarness, "wall");
   const result = await harness.runAction({ commandId: "type-email", actionType: "web.dom.type", selector: EMAIL, text: CONTROL_TEXT });
 
   expect(result).toMatchObject({
@@ -256,6 +362,14 @@ const WITHHELD = "(withheld: the action ran on a control that holds a secret)";
  *
  * `stamped` sends the validation as a client built before 1b6f5df did for a
  * producer that did not declare: withheld, and stamped `redacted: true`.
+ *
+ * The one session declares this domain's id, because since bca31a06 the
+ * adapter picks a session by Core's one rule under the web criteria
+ * (`domain/src/runtime/web-sessions/criteria.ts`): a `web.actions` capability
+ * counts only with the domain's id or the snapshot action, no longer for any
+ * `web.*` action type. Without it no session is picked, the command never
+ * reaches the gateway, and the adapter answers `web.action.failed` with no
+ * payload -- which these rows would then be asserting nothing about.
  */
 async function throughTheDomain(result: BrowserActionResult, stamped = false): Promise<FluxIQRuntimeCommandResult> {
   const payload = webAutomationActionResultPayload(result as never) as Record<string, unknown>;
@@ -273,37 +387,43 @@ async function throughTheDomain(result: BrowserActionResult, stamped = false): P
         snapshot: () => ({
           sessions: [{
             sessionId: "session.redaction", clientId: "client.redaction", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.type"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.type"], metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID } }]
           }]
         })
       },
-      automationStudioClientGateway: { executeAction: async () => gatewayResult }
+      automationStudioClientGateway: {
+        executeAction: async () => {
+          delivered += 1;
+          return gatewayResult;
+        }
+      }
     }
   } as unknown as FluxIQ;
+  let delivered = 0;
   const adapter = createWebAutomationRuntimeAdapter({ fluxiq });
-  return await adapter.execute({ kind: "execute_action", commandId: "command.redaction", outputId: "web.dom.type", parameters: { selector: CARD } }, {});
+  const runtimeResult = await adapter.execute({ kind: "execute_action", commandId: "command.redaction", outputId: "web.dom.type", parameters: { selector: CARD } }, {});
+  expect(delivered, "the adapter has to send the command and map the page's answer, or there is no hop to check").toBe(1);
+  return runtimeResult;
 }
 
-test("a sensitive control's post-condition is secret-free after the hop to the domain, on both paths it takes", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
-  const prefilled = await page.locator(CARD).inputValue();
-  expect(prefilled.length, "the card field has no value to redact").toBeGreaterThan(0);
+test("a sensitive control's post-condition is secret-free after the hop to the domain, on both paths it takes", async ({ openHarness }) => {
+  const { card } = await cardOnFile(openHarness);
 
-  // A real page behaviour, arranged here rather than fixtured: the card field
-  // rewrites whatever is typed into it, from its own `input` handler. That is
-  // the only way `type.ts`'s mismatch branch is reachable live, and it is the
+  // A page behaviour, arranged here rather than found on the site: the card
+  // field rewrites whatever is typed into it, from its own `input` handler. That
+  // is the only way `type.ts`'s mismatch branch is reachable live, and it is the
   // branch that matters, because a failed read-back is what puts BOTH sides of
   // the comparison onto a failure record — and the failure record does not go
   // through `webAutomationActionResultPayload` at all. `result-mapping.ts` puts
   // it on the gateway result directly, so it is a second exit with a second
   // guard, in `domain/src/runtime/adapter.ts`.
   const rewritten = "page-rewrote-this-value";
-  await page.evaluate(([selector, replacement]) => {
+  await card.frame.evaluate(([selector, replacement]) => {
     const field = document.querySelector(selector) as HTMLInputElement | null;
     field?.addEventListener("input", () => { field.value = replacement; });
   }, [CARD, rewritten] as const);
 
-  const result = await harness.runAction({ commandId: "type-card-rewritten", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
+  const result = await card.runAction({ commandId: "type-card-rewritten", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
   expect(result.status, "the read-back has to disagree, or there is no comparison to carry").toBe("failed");
   expect(result.failure?.expected, "both sides ride on the record, which is the exit the wire payload never sees").toBeTruthy();
   expect(result.failure?.actual).toBeTruthy();
@@ -313,7 +433,7 @@ test("a sensitive control's post-condition is secret-free after the hop to the d
   // named field: every leak found in this plan was found this way, and three of
   // them were in fields nobody had thought to name.
   const arrived = JSON.stringify({ payload: runtimeResult.payload, failure: runtimeResult.failure, metadata: runtimeResult.metadata, message: runtimeResult.message, error: runtimeResult.error });
-  expect(arrived).not.toContain(prefilled);
+  expect(arrived).not.toContain(CARD_ON_FILE);
   expect(arrived).not.toContain(TYPED_CARD);
   expect(arrived, "what the page put in the field is the field's value, and the field is sensitive").not.toContain(rewritten);
 
@@ -337,11 +457,9 @@ test("a sensitive control's post-condition is secret-free after the hop to the d
   expect(runtimeResult.failure?.actual, "the phrasing is only worth carrying if it still says what went wrong").toContain("which is not the text that was sent");
 });
 
-test("the declaration is what buys a sensitive control's phrasing through, and every other state of it withholds", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
-  const prefilled = await page.locator(CARD).inputValue();
-  expect(prefilled.length, "the card field has no value to redact").toBeGreaterThan(0);
-  const result = await harness.runAction({ commandId: "type-card-domain-guard", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
+test("the declaration is what buys a sensitive control's phrasing through, and every other state of it withholds", async ({ openHarness }) => {
+  const { harness, card } = await cardOnFile(openHarness);
+  const result = await card.runAction({ commandId: "type-card-domain-guard", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
 
   // The producer's phrasing, which the rows above prove is already secret-free,
   // and beside it the declaration that says so. The declaration has to survive
@@ -383,30 +501,33 @@ test("the declaration is what buys a sensitive control's phrasing through, and e
 
   // The same two withholding states with the producer's redaction taken back
   // out, which is what makes them more than marker bookkeeping. The strings
-  // hold the value the field really holds, read off the page a moment ago and
-  // never written down here — exactly what would reach this function if
-  // `content/actions/type.ts` set the flag and stopped withholding, or if a
-  // future verb copied the flag without copying the redaction. Staged here
-  // rather than by editing that file: a mutation window in a shared tree is how
-  // a deliberately broken compile gets committed.
+  // hold the value the field really holds, read off the page a moment ago —
+  // exactly what would reach this function if `content/actions/type.ts` set the
+  // flag and stopped withholding, or if a future verb copied the flag without
+  // copying the redaction. Staged here rather than by editing that file: a
+  // mutation window in a shared tree is how a deliberately broken compile gets
+  // committed.
   //
   // The state not tested is `true` over an unredacted string. A declaration is
   // a contract and this layer believes it, by design — nothing here reads the
   // text, because a predicate that scans for things that look like card numbers
   // both misses and misfires. That is why the flag is set beside the redaction
   // inside the verb and nowhere else.
-  const leaked = `the field holds "${prefilled}"`;
+  const held = await card.frame.locator(CARD).inputValue();
+  expect(held.length, "the card field has no value to leak").toBeGreaterThan(0);
+  const leaked = `the field holds "${held}"`;
   expect(
     JSON.stringify(webAutomationActionResultPayload(declared(false, leaked, leaked) as never)),
     "an explicit false must withhold, or the fail-safe has a hole shaped like a boolean"
-  ).not.toContain(prefilled);
+  ).not.toContain(held);
   expect(
     JSON.stringify(webAutomationActionResultPayload(declared(undefined, leaked, leaked) as never)),
     "the second layer holds on its own, which is the whole claim"
-  ).not.toContain(prefilled);
+  ).not.toContain(held);
 
-  // The other direction, live: an ordinary control keeps a comparison an
-  // operator can act on, so the guard is targeted rather than a blanket.
+  // The other direction, live: an ordinary control on the page around the
+  // frame keeps a comparison an operator can act on, so the guard is targeted
+  // rather than a blanket.
   const control = await harness.runAction({ commandId: "type-email-domain-guard", actionType: "web.dom.type", selector: EMAIL, text: CONTROL_TEXT });
   const controlPayload = webAutomationActionResultPayload(control as never) as { validation?: { expected?: string } };
   expect(controlPayload.validation?.expected).toBe(`the field holds "${CONTROL_TEXT}"`);
@@ -425,13 +546,13 @@ test("the declaration is what buys a sensitive control's phrasing through, and e
  * still stamps, so each state runs through this client and through one that
  * stamps, against strings holding the value the field really holds.
  */
-test("the runtime adapter withholds a failure record's comparison when the producer did not declare one", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
-  const prefilled = await page.locator(CARD).inputValue();
-  expect(prefilled.length, "the card field has no value to redact").toBeGreaterThan(0);
-  const result = await harness.runAction({ commandId: "type-card-record-guard", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
+test("the runtime adapter withholds a failure record's comparison when the producer did not declare one", async ({ openHarness }) => {
+  const { card } = await cardOnFile(openHarness);
+  const result = await card.runAction({ commandId: "type-card-record-guard", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
+  const held = await card.frame.locator(CARD).inputValue();
+  expect(held.length, "the card field has no value to leak").toBeGreaterThan(0);
 
-  const leaked = `the field holds "${prefilled}"`;
+  const leaked = `the field holds "${held}"`;
   for (const declaration of [undefined, false] as const) {
     const asIfOnTheRecord: BrowserActionResult = {
       ...result,
@@ -443,26 +564,9 @@ test("the runtime adapter withholds a failure record's comparison when the produ
       // Soft, so one run names every state that leaks rather than the first.
       const state = `declaration ${String(declaration)}, ${stamped ? "a client that stamps" : "this client"}`;
       const runtimeResult = await throughTheDomain(asIfOnTheRecord, stamped);
-      expect.soft(JSON.stringify(runtimeResult), state).not.toContain(prefilled);
+      expect.soft(JSON.stringify(runtimeResult), state).not.toContain(held);
       expect.soft(runtimeResult.failure?.expected, state).toBe(WITHHELD);
       expect.soft(runtimeResult.failure?.code, "the classification is untouched; only the two strings are").toBe("web.validation.output_not_observed");
     }
   }
-});
-
-test("a multi-token autocomplete is sensitive by the shared rule, so no path carries its value", async ({ openHarness, page }) => {
-  const harness = await openHarness("sensitive-input");
-  // Read the value off the page rather than restating it, so the fixture stays
-  // the single source of the secret.
-  const prefilled = await page.locator(BILLING_CARD).inputValue();
-  expect(prefilled.length, "the billing card field has no value to redact").toBeGreaterThan(0);
-
-  const snapshot = await harness.capture();
-  const billing = snapshot.interactiveElements.find((element) => element.selector === BILLING_CARD);
-  expect(billing, "the billing card field is missing from the snapshot").toBeTruthy();
-  // Presence is reportable; the value is not. A whole-string comparison against
-  // "cc-number" would leave both of these failing.
-  expect(billing?.value).toBeUndefined();
-  expect(billing?.hasValue).toBe(true);
-  expect(JSON.stringify(snapshot)).not.toContain(prefilled);
 });

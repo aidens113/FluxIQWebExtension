@@ -3,6 +3,7 @@ import { EARBUDS, HOUSEHOLD, STORE_PATHS, formatMoney, type Product } from "../.
 import { cartScript } from "../../client/index.js";
 import type { PageKit } from "../page-kit.js";
 import { storePage } from "../shell.js";
+import { helpAndOffersMarkup } from "./help-and-offers.js";
 import { cartMainMarkup } from "./main.js";
 import { cartSubtotalText } from "./subtotal.js";
 
@@ -17,7 +18,8 @@ function recommendations(kit: PageKit): string {
 /**
  * The cart page. The subtotal appears twice, once under the lines and once
  * beside the checkout button, and only the one under the lines is kept up to
- * date without a reload.
+ * date without a reload. Under `help-and-offers` the page ends with its
+ * "Help and offers" area (`help-and-offers.ts`).
  */
 export function renderCartPage(kit: PageKit): string {
   const { css } = kit;
@@ -28,6 +30,6 @@ export function renderCartPage(kit: PageKit): string {
 <button type="button" class="${css.button} ${css.buttonPrimary}" data-action="proceed">Proceed to checkout</button>
 <p class="${css.rowError}" data-checkout-error hidden>Select at least one item to continue to checkout.</p></aside>
 </div>
-${recommendations(kit)}`;
-  return storePage(kit, { title: "Brightaisle.com Shopping Cart", body, script: cartScript(css) });
+${recommendations(kit)}${kit.state.mode === "help-and-offers" ? helpAndOffersMarkup(kit) : ""}`;
+  return storePage(kit, { title: "Brightaisle.com Shopping Cart", body, script: cartScript(css, kit.state.mode) });
 }

@@ -1,7 +1,7 @@
 import { escapeHtml } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import { defaultFulfilment, formatMoney, PRODUCTS, SITE_ROOT, speedOf, storeById, variantTitle } from "../catalog/index.js";
-import { productScript, type ProductVariantView } from "../client/index.js";
+import { partnerWidgetsScript, productScript, type ProductVariantView } from "../client/index.js";
 import type { BigboxState, Fulfilment, Product, Variant } from "../types.js";
 import { priceMarkup } from "../listing/index.js";
 import { IMAGE_PLACEHOLDER } from "../listing/index.js";
@@ -9,6 +9,7 @@ import { ratingMarkup } from "../listing/index.js";
 import { renderShell } from "../shell/index.js";
 import type { BigboxClasses } from "../theme/index.js";
 import { listingMarkup, tileDefaultsFor } from "../listing/index.js";
+import { partnerWidgetsStrip } from "./partner-widgets/index.js";
 
 const METHODS: readonly Fulfilment[] = ["pickup", "delivery", "shipping"];
 const sellerSlug = (seller: string) => seller.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/-$/u, "");
@@ -40,11 +41,14 @@ function variantViews(product: Product, storeId: string, c: BigboxClasses): Prod
  * choices appear. Add to cart lives in a bar pinned to the bottom of the
  * window -- under the support widget's card once that opens -- except in the
  * redesign, where it moved up into the buy box and Buy now took the bar.
+ * The `partner-widgets` rendering adds the partner embeds below the buy
+ * box's live part.
  */
 export function renderProductPage(state: BigboxState, context: RenderContext, product: Product, variant: Variant): string {
   const store = storeById(state.storeId);
   const similar = PRODUCTS.filter((candidate) => candidate.department === product.department && candidate.id !== product.id).slice(0, 5);
   const redesigned = state.mode === "redesigned-buy-box";
+  const partners = state.mode === "partner-widgets";
   const title = variantTitle(product, variant);
   return renderShell({
     state, context, kind: "product", title,
@@ -68,13 +72,16 @@ ${swatches}<div class="${c.skeleton}">Checking availability at ${escapeHtml(stor
 <div class="${c.buyBoxLive}" hidden><p>How you'll get this item:</p><div class="${c.fulfilOptions}">${options}</div>
 <p class="${c.storeLine}">Pickup at <b>${escapeHtml(store.name)}</b> · <a href="#" class="${c.btnLink}">Change store</a></p>
 <div class="${c.qtyStepper}"><span class="${c.qtyControl}">&minus;</span><span class="${c.qtyValue}">1</span><span class="${c.qtyControl}">+</span></div>${addHere}
-<p class="${c.listLinks}"><a href="#">Add to list</a> · <a href="#">Add to registry</a></p></div></div></div>
+<p class="${c.listLinks}"><a href="#">Add to list</a> · <a href="#">Add to registry</a></p></div>${partners ? partnerWidgetsStrip() : ""}</div></div>
 <section class="${c.about}"><h2>About this item</h2><ul>${product.about.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
 <table class="${c.specs}"><tbody><tr><th scope="row">Brand</th><td>${escapeHtml(product.brand)}</td></tr><tr><th scope="row">Seller</th><td>${escapeHtml(product.seller)}</td></tr><tr><th scope="row">Item number</th><td>${product.id}</td></tr></tbody></table></section>
 <section class="${c.reviews}"><h2>Customer reviews</h2><div></div><button type="button" class="${c.btn} ${c.btnQuiet} ${c.moreReviews}">See more reviews</button></section>
 <section class="${c.rail}"><div class="${c.railHead}"><h2>Similar items you might like</h2></div><ul class="${c.railList}">${similar.map((item) => listingMarkup(item, state.storeId, c, "rail")).join("")}</ul></section>
 ${bar}`;
     },
-    script: (c) => productScript({ classes: c, productId: product.id, views: variantViews(product, state.storeId, c), selectedSku: variant.sku, redesigned }),
+    script: (c) => {
+      const own = productScript({ classes: c, productId: product.id, views: variantViews(product, state.storeId, c), selectedSku: variant.sku, redesigned });
+      return partners ? `${own}\n${partnerWidgetsScript()}` : own;
+    },
   });
 }

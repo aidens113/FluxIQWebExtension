@@ -19,9 +19,19 @@
 //   answers with the page it left behind, and every handle on it is restamped
 //   so it keeps naming what it named. The claim is therefore made directly --
 //   an entry is made with a handle read from an *earlier* packet, and the
-//   handle each other field had is the handle it still has afterwards;
-// - **the values never leave the page**: what was typed is not in the evidence,
-//   and a control that holds a value says it has one without quoting it.
+//   handle each other field had is the handle it still has afterwards.
+//
+// t730 moved the row off the synthetic social scheduler onto realistic pages
+// and onto the evidence the model now reads: the compact page view, one line
+// per element (`t14 button "Get a free quote"`), whose `tN` is the handle. The
+// text fields are the company website's quote drawer, opened from its header
+// button; the select is the auction site's header category picker, because the
+// drawer has none. The row used to also claim that what was typed never
+// reaches the packet. That stopped being the contract when the page view began
+// printing a field's value (`="…"`, `domain/src/runtime/llm-evidence/page-view/
+// element/state-tokens.ts`); a sensitive control's value is still withheld,
+// which `evidence/tests/sensitive-names.spec.ts` pins. So the row now checks
+// that each entry is what the next packet shows, on the line its handle names.
 
 import type { JsonObject } from "fluxiq/core";
 import {
@@ -31,6 +41,7 @@ import {
   type WebLlmEvidenceToolExecution
 } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../../../index.js";
+import type { ContentHarness } from "../../../index.js";
 
 const BASE = { projectId: "project.live-field-entry", flowId: "flow.live-field-entry", maxEvidenceBytes: 16_000 } as const;
 
@@ -40,9 +51,18 @@ const CLICK = "web.output.dom-click";
 const TYPE = "web.output.dom-type";
 const SELECT = "web.output.dom-select";
 
-test("enters a live form's text and select fields through the Flow's own nodes, with handles that keep naming the same controls", async ({ openHarness, page }) => {
-  test.setTimeout(120_000);
-  const harness = await openHarness("social-scheduler");
+/** Sends one of the site's own state operations, as its page script does. */
+async function mutate(harness: ContentHarness, operation: string, payload: Record<string, unknown> = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(`${harness.scenarioId} answered ${response.status} to ${operation}.`);
+}
+
+/** The evidence runtime over the harness, and a `core.run_node` call that must not be refused. */
+function nodeRunner(harness: ContentHarness): (node: string, parameters: JsonObject) => Promise<WebLlmEvidenceToolExecution> {
   let command = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.live-browser"],
@@ -62,71 +82,106 @@ test("enters a live form's text and select fields through the Flow's own nodes, 
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   let call = 0;
-  const run = async (node: string, parameters: JsonObject): Promise<WebLlmEvidenceToolExecution> => {
+  return async (node, parameters) => {
     const execution = await runtime.executeTool({ ...BASE, callId: `call.${++call}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node, parameters, consequences: [] } });
     expect(execution.resultCode, `${node}: ${JSON.stringify(execution.evidence).slice(0, 600)}`).not.toMatch(/rejected/u);
     return execution;
   };
+}
+
+/** One entry of the row: the field's name in the page view, the node, its parameters, and how its line reads afterwards. */
+type Entry = { name: string; node: string; parameters: JsonObject; shows: string };
+
+/**
+ * Makes every entry with the handle the *opening* packet gave, not one re-read
+ * after the entry before it -- a handle that stopped naming its field would
+ * fail here rather than quietly aim somewhere else -- and checks after each
+ * that every other field keeps the handle it had.
+ */
+async function enterAll(run: (node: string, parameters: JsonObject) => Promise<WebLlmEvidenceToolExecution>, opened: WebLlmEvidenceToolExecution, entries: Entry[]): Promise<WebLlmEvidenceToolExecution> {
+  const planned = entries.map((entry) => ({ ...entry, handle: handleNamed(opened, entry.name) }));
+  let latest = opened;
+  for (const entry of planned) {
+    latest = await run(entry.node, { target: { handle: entry.handle }, ...entry.parameters });
+    expect(latest.effectApplied, entry.name).toBe(true);
+    expect(latest.draft?.proposes, entry.name).toBe(true);
+    expect(lineOf(latest, entry.handle), `${entry.name} shows its entry on its own line`).toContain(entry.shows);
+    for (const other of planned) {
+      if (other.name === entry.name) continue;
+      expect(handleNamed(latest, other.name), `${other.name} after ${entry.name}`).toBe(other.handle);
+    }
+  }
+  return latest;
+}
+
+test("enters a live form's text fields through the Flow's own nodes, with handles that keep naming the same controls", async ({ openHarness, page }) => {
+  test.setTimeout(120_000);
+  const harness = await openHarness("company-website");
+  // A returning visitor: cookies answered and the newsletter offer and chat greeting dismissed.
+  await mutate(harness, "set-consent", { choice: "all" });
+  await mutate(harness, "dismiss-newsletter");
+  await mutate(harness, "dismiss-chat-greeting");
+  await page.reload();
+  const run = nodeRunner(harness);
 
   const looked = await run(LOOK, {});
   // A look changes nothing and is not a step of any Flow.
   expect(looked.effectApplied).toBe(false);
   expect(looked.draft?.proposes).toBe(false);
 
-  const opened = await run(CLICK, { target: { handle: targetNamed(looked, "New post") } });
-  // A press that opens the composer is a step the Flow keeps, with the handle
+  const opened = await run(CLICK, { target: { handle: handleNamed(looked, "Get a free quote") } });
+  // A press that opens the drawer is a step the Flow keeps, with the handle
   // the model wrote, which Core resolves again when the plan is assembled.
   expect(opened.effectApplied).toBe(true);
   expect(opened.draft?.proposes).toBe(true);
+  await expect(page.getByRole("dialog", { name: "Get a free quote" })).toBeVisible();
 
-  const text = "Trail update for Thursday morning";
-  const entries = [
-    { name: "Post text", node: TYPE, parameters: { text } },
-    { name: "Account", node: SELECT, parameters: { value: "photogram-northwind-trails" } },
-    { name: "Date", node: TYPE, parameters: { text: "2026-09-24" } },
-    { name: "Time", node: TYPE, parameters: { text: "09:00" } }
-  ] as const;
+  await enterAll(run, opened, [
+    { name: "Full name", node: TYPE, parameters: { text: "Ada Lovelace" }, shows: "=\"Ada Lovelace\"" },
+    { name: "Email address", node: TYPE, parameters: { text: "ada@example.test" }, shows: "=\"ada@example.test\"" },
+    { name: "Phone number", node: TYPE, parameters: { text: "01632960418" }, shows: "=\"01632960418\"" },
+    { name: "Postcode of the property", node: TYPE, parameters: { text: "WR1 2AB" }, shows: "=\"WR1 2AB\"" }
+  ]);
 
-  // Every entry is made with the handle the *composer's own* packet gave, not
-  // with one re-read after the entry before it: a handle that stopped naming
-  // its field would fail here rather than quietly aim somewhere else.
-  const planned = entries.map((entry) => ({ name: entry.name, node: entry.node, parameters: entry.parameters, handle: targetNamed(opened, entry.name) }));
-  let latest = opened;
-  for (const entry of planned) {
-    latest = await run(entry.node, { target: { handle: entry.handle }, ...entry.parameters });
-    expect(latest.effectApplied, entry.name).toBe(true);
-    expect(latest.draft?.proposes, entry.name).toBe(true);
-    // And the handle each other field had is the handle it still has.
-    for (const other of planned) {
-      if (other.name === entry.name) continue;
-      expect(targetNamed(latest, other.name), `${other.name} after ${entry.name}`).toBe(other.handle);
-    }
-  }
-
-  await expect(page.locator("#composer-body")).toHaveValue(text);
-  await expect(page.locator("#composer-account")).toHaveValue("photogram-northwind-trails");
-  await expect(page.locator("#composer-date")).toHaveValue("2026-09-24");
-  await expect(page.locator("#composer-time")).toHaveValue("09:00");
-
-  // What was typed never reaches the packet, and a control that holds a value
-  // says so without quoting it.
-  expect(JSON.stringify(latest.evidence)).not.toContain(text);
-  expect(JSON.stringify(latest.evidence)).not.toContain("2026-09-24");
-  const timeEvidence = evidenceElementNamed(latest, "Time");
-  expect(timeEvidence).toMatchObject({ name: "Time", hasValue: true });
-  expect(timeEvidence).not.toHaveProperty("value");
-  expect(timeEvidence).not.toHaveProperty("text", "09:00");
+  await expect(page.locator("input[name=\"fullName\"]")).toHaveValue("Ada Lovelace");
+  await expect(page.locator("input[name=\"email\"]")).toHaveValue("ada@example.test");
+  await expect(page.locator("input[name=\"phone\"]")).toHaveValue("01632960418");
+  await expect(page.locator("input[name=\"postcode\"]")).toHaveValue("WR1 2AB");
 });
 
-function targetNamed(execution: WebLlmEvidenceToolExecution, name: string): string {
-  const found = evidenceElementNamed(execution, name);
-  if (typeof found?.target !== "string") throw new Error(`Live evidence did not contain an actionable ${name} field.`);
-  return found.target;
+test("enters a live select and a text field through the Flow's own nodes, with handles that keep naming the same controls", async ({ openHarness, page }) => {
+  test.setTimeout(120_000);
+  const harness = await openHarness("auction-marketplace");
+  const run = nodeRunner(harness);
+  const looked = await run(LOOK, {});
+  expect(looked.effectApplied).toBe(false);
+
+  await enterAll(run, looked, [
+    { name: "Select a category for search", node: SELECT, parameters: { value: "625" }, shows: "Cameras & Photography" },
+    { name: "Search for anything", node: TYPE, parameters: { text: "kestrel 35" }, shows: "=\"kestrel 35\"" }
+  ]);
+
+  await expect(page.locator("select[name=\"_sacat\"]")).toHaveValue("625");
+  await expect(page.locator("input[name=\"_nkw\"]")).toHaveValue("kestrel 35");
+});
+
+function pageOf(execution: WebLlmEvidenceToolExecution): string {
+  const page = (execution.evidence as { page?: unknown }).page;
+  return typeof page === "string" ? page : "";
 }
 
-function evidenceElementNamed(execution: WebLlmEvidenceToolExecution, name: string): Record<string, unknown> {
-  const elements = (execution.evidence as { elements?: Array<Record<string, unknown>> }).elements ?? [];
-  const found = elements.find((element) => element.name === name || element.text === name);
-  if (!found) throw new Error(`Live evidence did not contain ${name}.`);
+/**
+ * The handle of the first control line naming `name` in the packet's page view:
+ * a line with a kind (`field`, `button`), not a bare text line such as a label.
+ */
+function handleNamed(execution: WebLlmEvidenceToolExecution, name: string): string {
+  const quoted = JSON.stringify(name).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const found = pageOf(execution).match(new RegExp(`^(t\\d+) [a-z][^"\\n]* ${quoted}`, "mu"))?.[1];
+  if (!found) throw new Error(`Live evidence did not contain ${name}: ${pageOf(execution).slice(0, 1200)}`);
   return found;
+}
+
+/** The whole page-view line a handle names. */
+function lineOf(execution: WebLlmEvidenceToolExecution, handle: string): string {
+  return pageOf(execution).split("\n").find((line) => line.startsWith(`${handle} `)) ?? "";
 }

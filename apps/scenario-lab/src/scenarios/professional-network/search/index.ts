@@ -2,6 +2,7 @@ export { renderAllResultsPage } from "./all-page.js";
 export { cardAction, resultEntryMarkup } from "./card.js";
 export type { CardAction } from "./card.js";
 export { challengeFragment, peopleFragment } from "./fragment.js";
+export { inPlacePagingScript } from "./in-place-paging-script.js";
 export type { PeopleFragment } from "./fragment.js";
 export { renderPeoplePage } from "./people-page.js";
 export { peopleSearchHref, readPeopleQuery } from "./query.js";

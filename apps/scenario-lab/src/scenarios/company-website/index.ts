@@ -1,3 +1,4 @@
+export { UNSUBSCRIBE_CONFIRM_TEXT } from "./client/index.js";
 export { BOOKING_INPUT, BOOKING_RECORD, EXPECTED_QUOTE, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS, QUOTE_INPUT, SITE_PATHS } from "./expectations.js";
 export { COMPANY_WEBSITE_LIVE_TASKS } from "./live-tasks.js";
 export { companyWebsiteManifest } from "./manifest.js";

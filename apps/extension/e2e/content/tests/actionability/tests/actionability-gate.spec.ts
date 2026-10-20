@@ -15,10 +15,23 @@
 // - **check** operates a control a person operates, so the whole gate applies:
 //   covered, hidden, disabled. A checkbox behind a scrim is refused, and
 //   because a modal dialog is what covers it, the refusal is reported as
-//   BLOCKED_BY_DIALOG rather than as a capability refusal.
+//   BLOCKED_BY_DIALOG rather than as a capability refusal. That refusal is
+//   no longer where the command ends: since 2026-09-28 (260a4e17) every verb
+//   absorbs it, answers the dialog through its own way out, and runs again
+//   (`action-runtime/recovery/fault.ts`), so the row proves the box was set
+//   only after the dialog was answered, never through the scrim.
+//
+//   bigbox's facets navigate on their own `change`, and the check verb reads
+//   its control back 50 ms after the press (4d7a1447, 2026-10-06), so the
+//   page usually unloads before the content script answers. In the extension
+//   the background then judges the requested state on the new document
+//   (`runtime/click-landing.ts`, t407, written for these very facets); this
+//   harness has no background, so the check rows do the same judgement here.
 // - **upload** puts files into an input through a `DataTransfer` and never
 //   presses it, and the standard way to ship a file input on the web is to
-//   hide it behind a styled label -- job-board and everything-store both do --
+//   hide it behind a styled control -- job-board's application form and
+//   everything-store's image search both do, and the upload rows run on the
+//   first --
 //   so "no visible box" is not evidence that the upload would not work. What
 //   is evidence is `disabled`: a disabled input takes the files and submits
 //   none of them.
@@ -29,14 +42,25 @@
 
 import type { BrowserActionResult } from "../../../../../src/shared/protocol.js";
 import { expect, test } from "../../../index.js";
+import type { ContentHarness } from "../../../index.js";
 
 /** A facet in bigbox-retail's results sidebar: an ordinary checkbox whose change filters the page. */
 const PICKUP_FACET = 'input[type="checkbox"][value="fulfillment_method:Pickup"]';
 const SEARCH_PATH = "/scenarios/bigbox-retail/search?q=paper+towels";
-const UPLOAD_INPUT = '[data-testid="upload-file"]';
+/** Talentloom's application form on job-board, opened as its frame's document (the harness talks to the top frame only). */
+const APPLICATION_PATH = "/scenarios/job-board/embed/job_app?for=quillmark&token=QM-4471";
+/** Its CV input: shipped hidden, behind an "Attach" button that calls `click()` on it. */
+const UPLOAD_INPUT = 'input[type="file"][name="resume"]';
 
 /** One small file, so the upload rows carry no content worth reading. */
 const FILE = { name: "supporting.txt", mimeType: "text/plain", contentBase64: Buffer.from("supporting evidence\n").toString("base64") };
+
+/** Opens job-board's application form at the top of the harness page and waits for the content script there. */
+async function openApplicationForm(harness: ContentHarness): Promise<void> {
+  await harness.page.goto(new URL(APPLICATION_PATH, harness.lab.frameOrigin).href);
+  await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+  await expect(harness.page.locator(UPLOAD_INPUT)).toHaveCount(1);
+}
 
 /** The validation's `actual`, or a failure naming the reason there was none. */
 function actualOf(result: BrowserActionResult): string {
@@ -44,31 +68,58 @@ function actualOf(result: BrowserActionResult): string {
   return result.validation.actual;
 }
 
-test("check: a checkbox behind the consent dialog's scrim is refused, and the page is left alone", async ({ openHarness, page }) => {
+/** What the facet's own navigation leaves in the address once the box was really ticked. */
+const PICKUP_FILTERED = /facet=fulfillment_method%3APickup/u;
+
+/**
+ * Sends a check whose `change` navigates the page: the reply, when the content
+ * script answered before the page unloaded, or `"lost"` when the page went
+ * first -- the harness's form of the "message port closed" the background
+ * reads as a reply lost to navigation (`runtime/navigating-page.ts`).
+ */
+async function runNavigatingCheck(harness: ContentHarness, commandId: string): Promise<BrowserActionResult | "lost"> {
+  try {
+    return await harness.runAction({ commandId, actionType: "web.dom.check", selector: PICKUP_FACET, checked: true });
+  } catch (error) {
+    if (/Execution context was destroyed|navigat/u.test(String(error))) return "lost";
+    throw error;
+  }
+}
+
+/**
+ * Judges the check as the background judges one whose reply was lost
+ * (`runtime/click-landing.ts`, t407): the facet's navigation landed, and the
+ * new document shows the requested state. A reply that did arrive must say
+ * the same; anything the recovery absorbed on the way is appended to its
+ * `actual` after a semicolon.
+ */
+async function expectPickupFilterSet(harness: ContentHarness, reply: BrowserActionResult | "lost"): Promise<void> {
+  if (reply !== "lost") expect(reply, reply.message).toMatchObject({ status: "succeeded", validation: { status: "passed", actual: expect.stringMatching(/^the checkbox is checked(?:;|$)/u) } });
+  await expect(harness.page).toHaveURL(PICKUP_FILTERED);
+  await expect(harness.page.locator(PICKUP_FACET)).toBeChecked();
+}
+
+test("check: a checkbox behind the consent dialog's scrim is not set through it; the dialog is answered first", async ({ openHarness, page }) => {
   const harness = await openHarness("bigbox-retail");
   await page.goto(new URL(SEARCH_PATH, harness.url).href);
   await expect(page.locator(PICKUP_FACET)).toHaveCount(1);
   // The premise: the store's consent dialog is up, and its scrim is what a
   // press aimed at the sidebar would land on.
   await expect(page.locator('[role="dialog"][aria-modal="true"]')).toBeVisible();
-  const before = page.url();
+  expect((await harness.finalState()).state).toMatchObject({ consent: "pending" });
 
-  const reply = await harness.runAction({
-    commandId: "check:covered",
-    actionType: "web.dom.check",
-    selector: PICKUP_FACET,
-    checked: true
-  });
+  const reply = await runNavigatingCheck(harness, "check:covered");
 
-  expect(reply, reply.message).toMatchObject({
-    status: "failed",
-    failure: { code: "web.action.blocked_by_dialog", category: "unexpected_state" }
-  });
-  expect(actualOf(reply)).toContain("covers the target");
-  // Nothing was set, so the page never filtered: the fixture navigates on the
-  // facet's own `change` event, which is the oracle for "the check happened".
-  await expect(page.locator(PICKUP_FACET)).not.toBeChecked();
-  expect(page.url()).toBe(before);
+  // The gate refused the first attempt as BLOCKED_BY_DIALOG, and the defence
+  // answered the dialog by its way out -- "Reject all", never "Accept all" --
+  // before the second attempt set the box. Had the box been set through the
+  // scrim, the consent would still be pending: the facet's navigation would
+  // have left before anything answered it.
+  await expectPickupFilterSet(harness, reply);
+  // When the reply outran the navigation, it says so itself.
+  if (reply !== "lost") expect(actualOf(reply)).toContain("after absorbing blocking_dialog, closing 1 dialog");
+  expect((await harness.finalState()).state).toMatchObject({ consent: "rejected" });
+  await expect(page.locator('[role="dialog"][aria-modal="true"]')).toHaveCount(0);
 });
 
 test("check: the same checkbox is set once the dialog is answered", async ({ openHarness, page }) => {
@@ -76,22 +127,18 @@ test("check: the same checkbox is set once the dialog is answered", async ({ ope
   await page.goto(new URL(SEARCH_PATH, harness.url).href);
   await page.getByRole("button", { name: "Accept all" }).click();
   await expect(page.locator('[role="dialog"][aria-modal="true"]')).toHaveCount(0);
+  await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ consent: "accepted" });
 
-  const reply = await harness.runAction({
-    commandId: "check:clear",
-    actionType: "web.dom.check",
-    selector: PICKUP_FACET,
-    checked: true
-  });
-  expect(reply, reply.message).toMatchObject({ status: "succeeded", validation: { status: "passed", actual: "the checkbox is checked" } });
-  await expect(page).toHaveURL(/facet=fulfillment_method%3APickup/u);
+  await expectPickupFilterSet(harness, await runNavigatingCheck(harness, "check:clear"));
 });
 
 test("upload: a file input the page keeps out of sight still takes the file", async ({ openHarness, page }) => {
-  const harness = await openHarness("file-transfer");
-  // How the web ships a file input: hidden, with a styled control in front of
-  // it. Refusing this would refuse nearly every real upload.
-  await page.locator(UPLOAD_INPUT).evaluate((element) => { (element as HTMLElement).style.display = "none"; });
+  const harness = await openHarness("job-board");
+  await openApplicationForm(harness);
+  // How the web ships a file input, and how Talentloom ships its CV input:
+  // hidden, with a styled control in front of it. Refusing this would refuse
+  // nearly every real upload.
+  await expect(page.locator(UPLOAD_INPUT)).toBeHidden();
 
   const reply = await harness.runAction({
     commandId: "upload:hidden",
@@ -103,7 +150,9 @@ test("upload: a file input the page keeps out of sight still takes the file", as
 });
 
 test("upload: a disabled file input is refused instead of taking files nothing would send", async ({ openHarness, page }) => {
-  const harness = await openHarness("file-transfer");
+  const harness = await openHarness("job-board");
+  await openApplicationForm(harness);
+  // The form ships its input enabled; disabling it is the one change a page makes when it stops taking files.
   await page.locator(UPLOAD_INPUT).evaluate((element) => { (element as HTMLInputElement).disabled = true; });
 
   const reply = await harness.runAction({
@@ -121,10 +170,12 @@ test("upload: a disabled file input is refused instead of taking files nothing w
 });
 
 test("upload: a file input in an inert subtree is refused, because the page has stopped listening", async ({ openHarness, page }) => {
-  const harness = await openHarness("file-transfer");
+  const harness = await openHarness("job-board");
+  await openApplicationForm(harness);
   // What a modal prompt does to the page behind it: everything-store's
-  // notifications prompt makes the whole page inert while it is up.
-  await page.locator('[data-testid="upload-form"]').evaluate((element) => { (element as HTMLElement).setAttribute("inert", ""); });
+  // notifications prompt makes the whole page inert while it is up. Made inert
+  // here by hand, because a real prompt would be closed by the defence first.
+  await page.locator("form").evaluate((element) => { (element as HTMLElement).setAttribute("inert", ""); });
 
   const reply = await harness.runAction({
     commandId: "upload:inert",

@@ -29,8 +29,9 @@ export async function startScenarioLab(options: ScenarioLabOptions): Promise<Run
   const host = options.host ?? LOOPBACK_HOST;
   if (host !== LOOPBACK_HOST) throw new Error("Scenario lab may bind only to 127.0.0.1");
   const store = new ScenarioStateStore(options.seed ?? 1);
+  const requests = requestCounter();
   const frameServer = createServer((request, response) => {
-    void handleRequest(request, response, options.runToken, store).catch(error => {
+    void handleRequest(request, response, options.runToken, store, requests).catch(error => {
       if (!response.headersSent) sendJson(response, 500, { error: "fixture_error" });
       else response.destroy();
       if (process.env.SCENARIO_LAB_DEBUG === "1") console.error(error);
@@ -41,7 +42,7 @@ export async function startScenarioLab(options: ScenarioLabOptions): Promise<Run
   if (!frameAddress || typeof frameAddress === "string") throw new Error("Scenario frame server did not obtain a TCP port");
   const frameOrigin = `http://${host}:${frameAddress.port}`;
   const server = createServer((request, response) => {
-    void handleRequest(request, response, options.runToken, store, frameOrigin).catch(error => {
+    void handleRequest(request, response, options.runToken, store, requests, frameOrigin).catch(error => {
       if (!response.headersSent) sendJson(response, 500, { error: "fixture_error" });
       else response.destroy();
       if (process.env.SCENARIO_LAB_DEBUG === "1") console.error(error);
@@ -65,15 +66,16 @@ export async function startScenarioLab(options: ScenarioLabOptions): Promise<Run
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, runToken: string, store: ScenarioStateStore, alternateOrigin?: string): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, runToken: string, store: ScenarioStateStore, requests: RequestCounter, alternateOrigin?: string): Promise<void> {
   setSecurityHeaders(response);
   if (!isAllowedHost(request.headers.host)) return sendJson(response, 421, { error: "loopback_host_required" });
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
 
   if (url.pathname.startsWith(CONTROL_PREFIX)) {
     if (!isAuthorized(request, runToken)) return sendJson(response, 401, { error: "unauthorized" });
-    return handleScenarioControl(request, response, url, store, runToken);
+    return handleScenarioControl(request, response, url, store, runToken, requests);
   }
+  requests.record(url);
 
   if (url.pathname.startsWith("/api/")) {
     if (!isAuthorized(request, runToken)) return sendJson(response, 401, { error: "unauthorized" });
@@ -131,6 +133,40 @@ function renderContext(runToken: string, store: ScenarioStateStore, alternateOri
   return { runToken, seed: store.seed, ...(alternateOrigin ? { alternateOrigin } : {}) };
 }
 
+/**
+ * How many requests reached each address since the lab started or was last
+ * reset, for `GET /__control/requests`. A test that must prove a page or a
+ * script did or did not reach the server reads it here, where nothing the
+ * browser does can fake it. Control requests are never counted.
+ */
+type RequestCounter = { record(url: URL): void; count(path: string, query: string | undefined): number; clear(): void };
+
+function requestCounter(): RequestCounter {
+  const seen = new Map<string, Map<string, number>>();
+  return {
+    record(url) {
+      const queries = seen.get(url.pathname) ?? new Map<string, number>();
+      queries.set(url.search, (queries.get(url.search) ?? 0) + 1);
+      seen.set(url.pathname, queries);
+    },
+    count(path, query) {
+      const queries = seen.get(path);
+      if (!queries) return 0;
+      if (query !== undefined) return queries.get(query) ?? 0;
+      return [...queries.values()].reduce((sum, value) => sum + value, 0);
+    },
+    clear() {
+      seen.clear();
+    },
+  };
+}
+
+/**
+ * The lab's own headers, set before anything else. A scenario route may
+ * replace any of them with its own -- a page served under a stricter content
+ * security policy than the lab's, as a real site serves a printable page --
+ * because `writeHead` gives the headers it is passed precedence over these.
+ */
 function setSecurityHeaders(response: ServerResponse): void {
   response.setHeader("content-security-policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-src 'self' http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
   response.setHeader("referrer-policy", "no-referrer");
