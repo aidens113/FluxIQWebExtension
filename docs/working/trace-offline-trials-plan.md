@@ -20,27 +20,33 @@ progress. Get it done."
 lane G (phases 1, 3), t727 lane H (0, 5), t728 lane S (2, 4). Ledger in
 [extension-core-boundary-audit.md](./extension-core-boundary-audit.md).
 
-**Trace plan: P0 and P1 complete** (t729, t734): the baseline (live trials 49.8% of build time), the capture-boundary
-inventory, the snapshot spike (DOM serialization plus resource map reloads faithfully), the trace and result
-contracts, the gateway channel scope and the run environment that the executor, evidence loop and trial runners now
-go through (live is the default; an offline pass never completes a build). **Next: P2 capture** (t736).
+**Trace plan: P0-P3 complete, P4 running.** P0 baseline (live trials are 49.8% of build time) and P1 contracts and
+the run environment (t729, t734); P2 capture at the client gateway and Core's ingress, on for every Lab live run,
+about +11.5% overhead (t736); P3 intake parity: a stored trace replays through Core's own intake, 3,333 of 3,333
+saved-Flow delivery points and 4,274 of 6,941 live points matched with honest capture gaps and 0 intake defects
+(t742); t745 keyed every content address in a protected project (trace chunks and boundaries, artifacts, manifests,
+reusable-context digests), rekeying existing data at open. **Running:** t746 P4 offline trials tier 1 (lane T lead;
+gate: T05-T08, T10, T12-T16, T20, T22-T24 and an offline trial reproducing social run-mvfq957o's judged result).
+**Next:** P5 offline reads (tier 2), P6 build-loop integration, P7 measure and roll out.
 
-**Also merged on 2026-10-19/20:** t724 L1 reset settlement redesign; t730 browser specs run only on the ten realistic
-scenarios (a guard and a repository scan enforce it; 26 realistic-site test modes); t731 sweep test fixes; t732 card
-security codes withheld on every capture path; t733 identity capture back to seconds (a 6,000-link snapshot 304 s ->
-3.9 s), the group sensitive marker on the wire, in-place clicks wait for busy regions; t735 sync-core works against an
-outdated Core; lane S's follow-ups (host-aware wording, spend diagnostics restored, and the chat defect since
-2026-10-07 that folded earlier turns into a build's instruction).
+**Breadth reruns: rounds 2-4 passed 0 of 12; every cause was a product defect, each fixed** (t738, t741). Round 4's
+three shared weaknesses get structural fixes in **t743 (running, lead-xhigh)**: build-scoped site memory, an
+actionable-answer contract with `gate_unsatisfiable`, repair before ending, plus the per-site causes. After t743
+merges: rebuild Core, sync the four lane trees (t563, t719, t566, t567), and run round 5 on fresh workspaces,
+supervised at $0.25 each via both `FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`.
 
-**In flight:** lane-sync-1020 (the four live lane trees t563, t719, t566, t567 to `dev`, Core rebuilt), then the
-breadth round's four repaired tasks rerun on fresh workspaces, supervised ($0.25 each via both
-`FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`): office checkout, job save, photo newest likes, social
-group posts. t736 trace P2 capture (lane T lead). t737 session follow-ups.
+**Also merged 2026-10-19/20:** t724 L1 reset settlement; t730 browser specs on the ten realistic scenarios only;
+t731-t733, t735, t737; t739 photo-social fixture and build-cache fingerprint; t740 the real-SQL test group (removed
+every sweep timeout); t744 sweep-1020b fixes; the root `test` script runs every package (`--no-bail`).
 
-**Open follow-ups (t737):** reconnect.spec.ts `:85`/`:122` flake on the shared extension fixture (teardown over 30 s
-under load; an intermittent missing hello after a worker restart; pre-existing); `shown-addresses` can exceed Core's
-64 KiB per-value limit; `summarize-task.mjs:39` may double-count repair calls; the repository scan covers only the two
-Playwright trees and Scenario Lab source; Core emits no reset span inside trials.
+**Daily sweeps:** both 2026-10-20 sweeps are done; the next runs on 2026-10-21.
+
+**Open follow-ups:** the size check counts the never-sent node catalog; a press that reloads the page drops the
+control's name from trial feedback; several directories at their 25-file budget (storage `gateway-trace/` at its hard
+limit, so the next trace-storage change needs a structural decision); no re-seal job for sealed content when a host
+retires a protection key; `sweepUnreferencedObjects` removes a file before its row (t745's notes 3-5, pre-existing).
+t737 closed the earlier five (reconnect flake, `shown-addresses` size, repair double count, repository-wide scan,
+reset step inside trials).
 
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
@@ -283,6 +289,25 @@ was still running at dispatch and is excluded below by its own file list.
   isolation, a guessed-content probe that no longer confirms); Core typecheck; audit; real-SQL marker on tests that open
   SQLite.
 - Report: `docs/working/trace-offline-trials-plan/reports/t745-keyed-content-addresses.md` in the downstream tree.
+
+### Brief: t747-storage-followups (lead, Core project storage)
+- Why: t745's notes 3-5 name three pre-existing gaps in Core's project storage; known integrity and security gaps are
+  fixed, not deferred.
+- Task: (a) `sweepUnreferencedObjects`, and any other path that removes a content file before its row, removes the row
+  first through t745's pending-removal pattern (`object_pending_removals`, drained at every content store open), so a
+  writer racing a sweep never loses a file; (b) a re-seal job: when a host rotates or retires its content protection
+  key, every sealed item (content-store objects, trace chunks, sealed manifests, reusable contexts, the wrapped address
+  key) is re-sealed under the new key, resumable after a crash, and the old key is released only after it finishes; the
+  host-facing protection API states that order; (c) a structural decision for storage `gateway-trace/` (25-file hard
+  limit, a subdirectory breaks the path-depth limit) applied now with callers switched in the same unit and the
+  `storage/project` barrel exports unchanged.
+- Owns: Core `packages/fluxiq/src/programs/automation-studio/storage/project/**` and tests, the content protection type
+  and host binding if (b) needs them, `docs/architecture/automation-studio/persistence.md`, the regenerated framework
+  reference. Not: `runtime/gateway-trace/**`, `client-gateway/**` (t746) or any file t743 changes. A migration takes the
+  next free number after 0035.
+- Validation: each fix fails first; storage/project tests and t745's consumer list; fluxiq `tsc`; Core audit;
+  `pnpm docs:check`; real-SQL marker on tests that open SQLite.
+- Report: `docs/working/trace-offline-trials-plan/reports/t747-storage-followups.md` in the downstream tree.
 
 ### Brief: t746-offline-trials-tier1 (lane T lead, trace plan P4)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P4: the production executor runs against a trace
@@ -717,6 +742,29 @@ was still running at dispatch and is excluded below by its own file list.
   brief t745; P4 offline trials tier 1: brief t746; the size check counts the never-sent node catalog (follow-up).
 - Outcome: Accepted
 - Follow-up: t745, t746; round 5 after t743.
+
+### 2026-10-20 - t745 merged: keyed content addresses in protected projects
+- Agent: supervisor (t745 lead and workers u1-u5)
+- Changed: Core: in a project opened with a content protection, every address of protected content is an HMAC under a
+  random per-project 256-bit address key sealed by that protection (closed domain set, project id in the input): trace
+  chunk digests and a keyed chunker (the public gear table let chunk lengths confirm a guess), artifact digests,
+  sealed manifests, reusable-context digests; legacy plaintext event bodies re-cut into keyed sealed chunks. Existing
+  data is rekeyed at each protected open in guarded batches, resumable after a crash; old forms are removed and the
+  file scrubbed (secure_delete, durable scrub requests, VACUUM after a converting open); key rotation keeps retired
+  keys. Migrations 0033-0035. Brief premise corrected: sealed content-store object ids were already safe (SHA-256 of
+  random-IV ciphertext). Wire digests stay plain SHA-256, so downstream needed no change. Reports
+  `reports/t745-*.md`.
+- Validation: supervisor's gate on t745 after merging dev: Core `vitest run` over storage/project, runtime
+  gateway-trace, client-gateway trace and trace-tap, reusable-context service, caches, object-documents-trace,
+  service/projects -> `Test Files 99 passed | 2 skipped (101)`, `Tests 662 passed | 4 skipped (666)`; fluxiq `tsc` 0;
+  Core audit passed (433 warnings, 1152 baselined); `pnpm docs:check` -> framework reference current; Core build 0;
+  downstream audit passed after `structure:baseline`; core-build gate current; extension trace-capture and core-api ->
+  pass 50 fail 0. Every new SQLite test carries the real-SQL marker. Lead: Core web trace routes 17/17; Lab trace
+  inspection and parity 28/28; mutations reverted to show each test fails without its fix.
+- Open (lead): two-process races tested within one process and by injection only; a re-seal job, the sweep's
+  file-before-row removal and storage `gateway-trace/` at its 25-file limit are pre-existing (brief t747).
+- Outcome: Accepted
+- Follow-up: t747 storage follow-ups.
 
 ## Open Questions
 
