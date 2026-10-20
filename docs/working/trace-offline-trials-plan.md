@@ -29,11 +29,11 @@ reusable-context digests), rekeying existing data at open. **Running:** t746 P4 
 gate: T05-T08, T10, T12-T16, T20, T22-T24 and an offline trial reproducing social run-mvfq957o's judged result).
 **Next:** P5 offline reads (tier 2), P6 build-loop integration, P7 measure and roll out.
 
-**Breadth reruns: rounds 2-4 passed 0 of 12; every cause was a product defect, each fixed** (t738, t741). Round 4's
-three shared weaknesses get structural fixes in **t743 (running, lead-xhigh)**: build-scoped site memory, an
-actionable-answer contract with `gate_unsatisfiable`, repair before ending, plus the per-site causes. After t743
-merges: rebuild Core, sync the four lane trees (t563, t719, t566, t567), and run round 5 on fresh workspaces,
-supervised at $0.25 each via both `FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`.
+**Breadth reruns: rounds 2-4 passed 0 of 12; every cause was a product defect, each fixed** (t738, t741, t743). t743
+(merged) made round 4's three shared weaknesses structural: build-scoped site memory, actionable answers with
+`gate_unsatisfiable`, repair before ending, plus each site's causes. **Next:** sync the four lane trees (t563, t719,
+t566, t567) and run round 5 on fresh workspaces, supervised at $0.25 each via both `FLUXIQ_LLM_RUN_COST_CEILING_USD`
+and `--llm-max-cost-usd`. **t748** fixes t743's open items and two earlier follow-ups in parallel (none was seen live).
 
 **Also merged 2026-10-19/20:** t724 L1 reset settlement; t730 browser specs on the ten realistic scenarios only;
 t731-t733, t735, t737; t739 photo-social fixture and build-cache fingerprint; t740 the real-SQL test group (removed
@@ -41,12 +41,9 @@ every sweep timeout); t744 sweep-1020b fixes; the root `test` script runs every 
 
 **Daily sweeps:** both 2026-10-20 sweeps are done; the next runs on 2026-10-21.
 
-**Open follow-ups:** the size check counts the never-sent node catalog; a press that reloads the page drops the
-control's name from trial feedback; several directories at their 25-file budget (storage `gateway-trace/` at its hard
-limit, so the next trace-storage change needs a structural decision); no re-seal job for sealed content when a host
-retires a protection key; `sweepUnreferencedObjects` removes a file before its row (t745's notes 3-5, pre-existing).
-t737 closed the earlier five (reconnect flake, `shown-addresses` size, repair double count, repository-wide scan,
-reset step inside trials).
+**Open follow-ups:** all assigned. t747 (running, lead): the content sweep's file-before-row removal, a re-seal job
+for a host's key rotation, storage `gateway-trace/` at its 25-file limit. t748: the never-sent node catalog in the size
+check, the control name lost on a reloading press, and t743's open items. t737 closed the earlier five.
 
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
@@ -289,6 +286,33 @@ was still running at dispatch and is excluded below by its own file list.
   isolation, a guessed-content probe that no longer confirms); Core typecheck; audit; real-SQL marker on tests that open
   SQLite.
 - Report: `docs/working/trace-offline-trials-plan/reports/t745-keyed-content-addresses.md` in the downstream tree.
+
+### Brief: t748-build-loop-followups (lead-xhigh, Core and downstream build loop)
+- Why: t743's open items and two earlier follow-ups are weaknesses a live build can meet; none was seen in round 4's
+  runs, so round 5 runs on t743 while these are fixed (their debugs may add to this list).
+- Task, partitioned by file (serial where two share one):
+  1. Domain: a dialog view and a standalone page at one address share one view in the target-packet store, so a Flow
+     that opens the dialog and presses a handle last shown on the standalone page can fail `web.target.ambiguous`.
+     Choose the view a step stands on from the step before it, or key handles per document. t743's reverted attempt
+     (`reports/t743-d5-view-alias.md`; patch `C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/53d1357c-b7da-4f48-9665-ff78992a8998/scratchpad/t743-d5-view-alias.patch`) broke a passing spec: find why
+     first.
+  2. Core site reset: an `undo` reason no call can meet is detected in general (an act whose differing list has no
+     admissible undo becomes `gate_unsatisfiable` with its condition named), not left to the repeat guard.
+  3. Core trial feedback: a read step is labelled with the words it read, not the words captured before a change;
+     a press that reloads the page keeps the control's name.
+  4. Core LLM request size: the pre-provider size check counts only what is sent (the node catalog is counted though
+     never sent; t744 worked around it in a test).
+  5. Assess and fix where real: office debug C5/C6 (baselines on unrelated lists; "press again with this ref"); a
+     looped trial act's pass named in `trialRan`; `refused-repeat.ts` carrying the last refusal code; t738's open
+     points (the ending filter that drops part-level test claims; the reset-witness rule for unscoped presses and a
+     lone `create_new`; the job spec's wrong-job undo check).
+- Not: t746's files (Core `runtime/environment/**`, `runtime/gateway-trace/**`, `client-gateway/**`, executor
+  contracts/graph-run/region-execution, `runtime/index.ts`, `service/offline-trial/**`, `model/offline-trial/**`) or
+  t747's (`storage/project/**`). If a fix needs one, stop and report.
+- Validation: each fix fails first; tests beside each change; Core prompt contract tests when model-facing text
+  changes (no realistic task mirrored); touched typechecks; both audits; headed provider-free reproductions on the ten
+  realistic scenarios where a fix changes browser behaviour, plus the `e2e/site-reset` specs.
+- Report: `docs/working/trace-offline-trials-plan/reports/t748-build-loop-followups.md` in the downstream tree.
 
 ### Brief: t747-storage-followups (lead, Core project storage)
 - Why: t745's notes 3-5 name three pre-existing gaps in Core's project storage; known integrity and security gaps are
@@ -765,6 +789,36 @@ was still running at dispatch and is excluded below by its own file list.
   file-before-row removal and storage `gateway-trace/` at its 25-file limit are pre-existing (brief t747).
 - Outcome: Accepted
 - Follow-up: t747 storage follow-ups.
+
+### 2026-10-20 - t743 merged: round 4's three shared weaknesses fixed structurally
+- Agent: supervisor (t743 lead and workers)
+- Changed: Core and downstream merged and pushed. S1 build-scoped site memory: shown addresses belong to the build,
+  every brief's opening carries the build's issued-list places, Core's own reset looks skip the address rule (new
+  public `runAsAutomationStudioCoreMove`). S2 actionable answers: every reset refusal names its failed condition and
+  whether any call can meet it (`reset-answers/`); a list that is an act's only witness and cannot be read again makes
+  it `gate_unsatisfiable` (honest exit, `terminalReason`); a toggle back settles `restored`; a witnessless trial act
+  adopts only lists the build named or lists on its own page. S3 repair before ending: with money and turns left, an
+  ending is refused once per failed subflow until it had one changed brief, unless it carries a closed terminal
+  reason. S4: a read step's words are marked as the value it reads; each looped pass on its own row; a press answered
+  only by a notice in the page's alert or status region fails `web.action.page_reported_failure` and is retried. S5
+  social: disclosure checked only on rows a read's conditions keep; a trial past 40 steps names its stopping step; the
+  step log names a thrown error's real kind; judge advice after `incomplete_text` is the disclosure order. Settlement
+  modules moved to `reset-settlement/`. Supervisor accepted the lead's two choices (the job spec retries the page's
+  failed first save then undoes it, per the retry rule; a witnessless act with nothing adoptable ends honestly instead
+  of settling on unrelated lists, which was round 4's office defect).
+- Validation: supervisor's gate on t743 after merging dev: Core `vitest run` over flow-bootstrap, llm, project-agents,
+  service, executor, runtime/tests -> `Test Files 927 passed | 1 skipped (928)`, `Tests 8274 passed | 3 skipped
+  (8277)`; fluxiq `tsc` 0; Core audit passed; `pnpm docs:check` failed on a stale framework reference (t743's two new
+  exports), regenerated and committed, then current; Core build 0; domain and extension `check` 0; domain runtime,
+  client, actions, element-fingerprint, output-nodes -> pass 2024 fail 0; extension content+background -> pass 2089
+  fail 0; downstream audit passed; headed provider-free `e2e/site-reset` -> `11 passed (6.3m)` (after a Core rebuild:
+  the first attempt was refused by the core-build gate because the reference commit touched `packages/fluxiq`);
+  content harness `social-kept-row-disclosure.spec.ts` -> `1 passed`.
+- Open (lead, now brief t748): dialog and standalone page at one address share one view (d5 reverted); an undo reason
+  no call can meet is not detected in general; trial feedback labels a read with pre-change words; office C5/C6 and
+  smaller debug points; Core reads the domain refusal word `incomplete_text` (documented cross-repository contract).
+- Outcome: Accepted
+- Follow-up: sync the lane trees and run rerun round 5; t748.
 
 ## Open Questions
 
