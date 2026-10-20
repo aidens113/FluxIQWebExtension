@@ -94,15 +94,15 @@ realistic scenarios. "Mode" means a realistic-site test mode switched on by the 
 | identity, identity-ambiguity, identity-signals, identity-wire-chain | element identity: fingerprints, ambiguity refusal, signals, wire chain | retargeted | look-alikes and drift on everything-store, company-website, local-classifieds; sensitive checkbox on bigbox `account-recovery` | t730-b1, t730-c2 |
 | identity-resolution | recovery after drift | retargeted | realistic drift; reworded-aria row on company-website `reworded-quote-submit` | t730-b1, t730-c1 |
 | identity-veto | veto of look-alikes after a redeploy | retargeted; page edits replaced by modes | company-website `quotes-paused`, `quote-footer-redesign`, `phone-quotes` | t730-b1, t730-d4 |
-| click | click semantics, coverage gate, links, in-place loads | retargeted; 7 cart-page rows moved to a mode; **bounded edits kept** in 2 rows (the hidden row hides "Deliver to" mid-row; the control row covers then uncovers the viewport on cue): a store mode doing that would be a test construct dressed as a page; job-board in-place row **Blocked** on "in-place effect settles before aria-busy clears" (src task) | everything-store `help-and-offers`; job-board `in-place-filters`; company-website, photo-social | t730-b2, t730-c4, t730-f1 |
+| click | click semantics, coverage gate, links, in-place loads | retargeted; 7 cart-page rows moved to a mode; **bounded edits kept** in 2 rows (the hidden row hides "Deliver to" mid-row; the control row covers then uncovers the viewport on cue): a store mode doing that would be a test construct dressed as a page; job-board in-place row was Blocked on "in-place effect settles before aria-busy clears" until t733 fixed it; green headed 5 runs in a row | everything-store `help-and-offers`; job-board `in-place-filters`; company-website, photo-social | t730-b2, t730-c4, t730-f1 |
 | actions | typed actions; reads that skip sensitive contents | retargeted; injected sensitive controls replaced by a mode | photo-social `saved-logins` and realistic forms | t730-b2, t730-d1 |
 | recorder-trust, repeat-exemplars | recorder trust of events; repeated exemplars (current folding) | retargeted | realistic pages; 4 repeat-exemplars rows had already failed on dev (t200 removed the ranking) and now test current folding | t730-b2 |
 | redaction, selection-redaction | sensitive values never reach snapshots, events or extraction | retargeted | bigbox checkout sign-in wall and cross-origin card frame; photo-social login | t730-b3 |
 | evidence/sensitive-names, extraction/extract-list-sensitive | names and extraction skip sensitive-marked contents | retargeted | bigbox `account-recovery` | t730-b3, t730-c2 |
 | extraction/extract-list-catalog, -pagination, -continuation, pagination-stop, extract-list-table | list extraction, Next, continuation, stopping, tables | retargeted; 2 deleted (covered by realistic specs, cited); 3 moved to unit tests (column reorder, load-more end, 1,000-record cap) | realistic list pages; `src/content/extraction/tests/{field-reader,list-reader}.test.ts`, `page-advance/tests/load-more.test.ts` | t730-b4 |
 | extraction/structure-detection, inference, extraction-picker | structure detection, field inference, picker | retargeted; credential rows on photo-social `saved-logins` | realistic list pages | t730-b5, t730-d1 |
-| selectors/unique-selectors | unique, stable selectors | retargeted; **bounded injection kept** for three writer-shape rows (duplicate ids, quote-bearing ids, a 2-D grid): no realistic site has the shape and a mode drawing malformed markup would be out of proportion | store results page | t730-b5 |
-| large-page-resolution | resolution at scale | retargeted (row 1 on everything-store `reworded-prompt`); size **injected** as filler anchors (a page bigger than any site draws, by design); rows 1-2 **Blocked** on the identity-capture regression (`src/content/identity/control-row.ts`, separate task) | company-website home; everything-store | t730-b5, t730-c3 |
+| selectors/unique-selectors | unique, stable selectors | retargeted; large-page row was Blocked on the identity-capture regression until t733 (green headed since); **bounded injection kept** for three writer-shape rows (duplicate ids, quote-bearing ids, a 2-D grid): no realistic site has the shape and a mode drawing malformed markup would be out of proportion | store results page | t730-b5 |
+| large-page-resolution | resolution at scale | retargeted (row 1 on everything-store `reworded-prompt`); size **injected** as filler anchors (a page bigger than any site draws, by design); rows 1-2 were Blocked on the identity-capture regression (`src/content/identity/control-row.ts`) until t733 fixed it; green headed since | company-website home; everything-store | t730-b5, t730-c3 |
 | evidence/page-evidence, snapshot-items, live-page, shadow-overlays; exploration-state/*; resolve-target | page evidence, digests, target resolution | retargeted; native-confirm row on company-website `confirm-unsubscribe` | job-board consent wall, everything-store chat, local-classifieds filters | t730-b6, t730-c1, t730-c5 |
 | keyboard, select, scroll, waits, frames | keys, selects, scrolling, waits, frames | retargeted; W03 row on everything-store `keyboard-suggestions`; waits "stable" on job-board's own rate-limit countdown | job-board, local-classifieds, bigbox/auction cross-origin frames, everything-store | t730-b7, t730-c3, t730-d5 |
 | shadow-roots/shadow-root-in-place | closed, late and inserted shadow roots | retargeted; constructed component replaced by a mode | bigbox `partner-widgets` | t730-b7, t730-d2 |
@@ -420,3 +420,31 @@ realistic scenarios. "Mode" means a realistic-site test mode switched on by the 
   the two Playwright trees; extending it to scenario-lab unit tests that launch a browser would catch this file.
 
 UNIT READY: apps/scenario-lab/e2e/**, apps/scenario-lab/src/{server.ts,control.ts,tests/**}, apps/scenario-lab/src/scenarios/** (realistic modes and synthetic-scenario unit tests), apps/scenario-lab/tsconfig.e2e.json, apps/extension/e2e/** (content harness, fixtures, specs), apps/extension/src/content/extraction/tests/{field-reader,list-reader}.test.ts, apps/extension/src/content/extraction/page-advance/tests/load-more.test.ts, .github/workflows/testing-facility.yml, docs/architecture/testing-facility.md, .structure-baseline.json, docs/working/trace-offline-trials-plan/reports/t730-*.md
+
+## Unblock unit (2026-10-20, after the supervisor's commit 85c75cba and the dev merge with t733)
+
+- t733 fixed both product defects: identity capture is back to seconds and an in-place click no longer settles
+  while a region it saw change is `aria-busy`. Lead removed the Blocked markers from large-page-resolution rows
+  1-2, the unique-selectors large page and the click.spec job-board in-place row (no Blocked marker is left in
+  either Playwright tree).
+- `within-page-time.test.ts` (scenario-lab unit test, commit 41235213) no longer opens Chromium on
+  `setContent` markup: it runs on company-website's home page, freezes the page's main thread and presses the
+  site's own "Get a free quote" on a page timer, waiting for the site's own quote drawer; nothing is injected.
+- The repository scan now also covers Scenario Lab unit tests and kits under a `tests` folder that import
+  Playwright: it flags a browser launched inside a synthetic scenario's folder and every synthetic-page use the
+  spec scan flags; it asserts it found browser tests to scan. testing-facility.md says so.
+- Validation (lead):
+  - `pnpm --filter @fluxiq-web-extension/extension test:e2e:build` (once, before the runs).
+  - `test:content -- content/tests/large-page-resolution.spec.ts content/tests/selectors/tests/unique-selectors.spec.ts content/tests/click.spec.ts --headed --workers=2 --output=test-results/lead-unblock`
+    -> `32 passed (1.5m)`; large-page rows 1-2 in 11.6 s and 7.3 s, the unique-selectors large page in 8.2 s.
+  - `test:content -- content/tests/click.spec.ts -g "in-place filters" --headed --workers=1` five times in a
+    row, each with its own `--output` -> `1 passed` x 5 (8.8-9.9 s).
+  - `node --test dist/scenarios/tests/within-page-time.test.js` three times -> `# pass 3 # fail 0` each.
+  - Scenario Lab whole suite headed (both scans included):
+    `playwright test -c e2e/playwright.config.ts --headed --workers=3 --output=test-results/lead-sl10` -> `45 passed (2.0m)`;
+    after the scan's type fix, `browser-specs-scan.spec.ts` -> `4 passed`.
+  - `tsc` scenario-lab `tsconfig.json` and `tsconfig.e2e.json` -> exit 0; extension `tsconfig.test.json` -> exit 0.
+  - `pnpm structure:baseline` -> `baseline already current`; `node scripts/structure-audit.mjs` ->
+    `structure-audit: passed (214 warning(s), 618 baselined).`
+
+UNIT READY: apps/extension/e2e/content/tests/{large-page-resolution.spec.ts,click.spec.ts,selectors/tests/unique-selectors.spec.ts}, apps/scenario-lab/src/scenarios/tests/within-page-time.test.ts, apps/scenario-lab/e2e/realistic-scenario-guard/tests/browser-specs-scan.spec.ts, docs/architecture/testing-facility.md, docs/working/trace-offline-trials-plan/reports/t730-realistic-specs.md

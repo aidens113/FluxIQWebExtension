@@ -1048,7 +1048,9 @@ root is the repository for that reason).
 The browser guard is the runtime half. The static half is
 `realistic-scenario-guard/tests/browser-specs-scan.spec.ts`, which runs with the
 Scenario Lab's Playwright suite and fails on any source under
-`apps/scenario-lab/e2e` or `apps/extension/e2e` that opens a synthetic scenario
+`apps/scenario-lab/e2e` or `apps/extension/e2e`, or any Scenario Lab unit test or
+test kit under a `tests` folder that launches a browser (imports Playwright),
+that opens a synthetic scenario
 (a `/scenarios/<id>` path, `openHarness("<id>")`, `scenarioId: "<id>"`, the
 oracle helpers, or an import from a synthetic scenario's source) or serves a
 page of its own (`setContent`, a `data:text/html` URL, or an HTTP server that

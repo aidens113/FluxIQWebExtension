@@ -101,11 +101,6 @@ const UNFINDABLE_BUTTON = {
 // enumeration and scoring, with three thousand interactive elements in front of
 // the control. `identity-resolution.spec.ts` measures the same kind of drift on
 // a page of ordinary size.
-// Blocked on the identity-capture regression (supervisor-assigned task, 2026-10-19):
-// `src/content/identity/control-row.ts` walks up to 3 x 2,000 nodes per element, so
-// a capture on this 6,000-anchor page takes about 372 s against about 4 s in
-// September, and this row times out at 30 s. The assertion and budget stay as they
-// are: raising the budget would hide the regression.
 test("a control past the old scan bound is enumerated and recovered, not reported missing", async ({ openHarness, page }) => {
   const harness = await openHarness("everything-store");
   await expect(page.getByRole("dialog", { name: NOTIFICATIONS_PROMPT })).toBeVisible({ timeout: 15_000 });
@@ -141,11 +136,6 @@ test("a control past the old scan bound is enumerated and recovered, not reporte
     .toMatchObject({ mode: "reworded-prompt", nudges: { notifications: "dismissed" }, activity: expect.arrayContaining(["declined notifications"]) });
 });
 
-// Blocked on the identity-capture regression (supervisor-assigned task, 2026-10-19):
-// `src/content/identity/control-row.ts` walks up to 3 x 2,000 nodes per element, so
-// a capture on this 6,000-anchor page takes about 372 s against about 4 s in
-// September, and this row times out at 30 s. The assertion and budget stay as they
-// are: raising the budget would hide the regression.
 test("a scan the bound does cut short says so, rather than reporting the page as holding no such control", async ({ openHarness, page }) => {
   const harness = await openQuietPage(openHarness);
   await prependInteractiveFiller(page, SCAN_BOUND + 1_000);

@@ -511,10 +511,6 @@ test("on a real page, the anchored xpaths resolve where the form they used to be
   });
 });
 
-// Blocked on the identity-capture regression (supervisor-assigned task, 2026-10-19):
-// each snapshot descriptor is built through `describeElement`, whose identity capture
-// (`src/content/identity/control-row.ts`) walks up to 3 x 2,000 nodes per element, so
-// this capture takes about 43 s. The 5 s bound stays: raising it would hide that.
 test("a large page is described with unique selectors without making the snapshot slow", async ({ openHarness }) => {
   test.setTimeout(90_000);
   const harness = await openHarness("job-board");

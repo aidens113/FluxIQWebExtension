@@ -7,12 +7,16 @@ import { listScenarios } from "../../../src/registry.js";
 import { findSyntheticPageUses } from "../find-synthetic-page-uses.js";
 
 // The static half of the realistic-scenarios rule: no browser-spec source in
-// either Playwright tree opens a synthetic Scenario Lab scenario or serves a
-// page of its own. Synthetic scenarios stay for unit tests that never open a
-// browser (`apps/scenario-lab/src/**/tests`), which this does not scan.
+// either Playwright tree, and no Scenario Lab unit test or test kit that
+// launches a browser (it imports Playwright), opens a synthetic Scenario Lab
+// scenario or serves a page of its own. Synthetic scenarios stay for unit tests
+// that never open a browser, which this leaves alone.
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const BROWSER_SPEC_ROOTS = ["apps/scenario-lab/e2e", "apps/extension/e2e"];
+/** Scenario Lab sources scanned only where they launch a browser: unit tests and their kits under a `tests` folder. */
+const LAB_SOURCE_ROOT = "apps/scenario-lab/src";
+const LAUNCHES_A_BROWSER = /from\s+["'](?:@playwright\/test|playwright(?:-core)?)["']/u;
 const SKIPPED_DIRECTORIES = new Set(["node_modules", "test-results", ".harness-build"]);
 const THIS_SCANNER = path.join("apps", "scenario-lab", "e2e", "realistic-scenario-guard");
 const syntheticScenarioIds = listScenarios().map((scenario) => scenario.id).filter((id) => !isRealisticScenario(id));
@@ -40,6 +44,24 @@ test("no browser-spec source opens a synthetic scenario or serves its own page",
     }
   }
   expect(found, "Browser specs may open only the ten realistic scenarios (AGENTS.md). Retarget each use to a realistic scenario, or move browser-free checks to a unit test.").toEqual([]);
+});
+
+test("no Scenario Lab unit test that launches a browser opens a synthetic scenario or a page of its own", () => {
+  const found: string[] = [];
+  const scanned: string[] = [];
+  for (const file of sourceFiles(path.join(repositoryRoot, LAB_SOURCE_ROOT))) {
+    const relative = path.relative(repositoryRoot, file).replaceAll("\\", "/");
+    if (!relative.split("/").includes("tests")) continue;
+    const source = readFileSync(file, "utf8");
+    if (!LAUNCHES_A_BROWSER.test(source)) continue;
+    scanned.push(relative);
+    const scenario = /\/scenarios\/([^/]+)\//u.exec(relative)?.[1];
+    if (scenario !== undefined && syntheticScenarioIds.some((id) => id === scenario)) found.push(`${relative}: launches a browser inside synthetic scenario ${scenario}`);
+    for (const use of findSyntheticPageUses(source, syntheticScenarioIds)) found.push(`${relative}:${use.line}: ${use.what}`);
+  }
+  // The realistic sites' own browser paths are here, so an empty list would mean the scan looked nowhere.
+  expect(scanned.length).toBeGreaterThan(0);
+  expect(found, "A browser may open only the ten realistic scenarios (AGENTS.md), in unit tests too. Move the check onto a realistic page, or make it browser-free.").toEqual([]);
 });
 
 test("the scanner finds each kind of use and ignores comments", () => {

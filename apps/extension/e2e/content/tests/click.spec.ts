@@ -497,11 +497,6 @@ test.describe("links on job-board's results", () => {
 // its newer results page: a filter pill's menu option cancels its navigation,
 // fetches the filtered results, swaps them into the results column under
 // `aria-busy`, and leaves the address alone.
-// Blocked on "in-place effect settles before aria-busy clears" (src task,
-// supervisor, 2026-10-19): `src/content/action-runtime/in-place-effect.ts` passes
-// the press as soon as the pill menu closes and the column turns aria-busy="true",
-// before the fetched rows land, so the reply can arrive while the column is busy
-// and the read below fails intermittently. The assertion stays; it is the claim.
 test.describe("on job-board's in-place filters", () => {
   test("a filter link the page loads in place passes, and the results it loaded are already there when the reply arrives", async ({ openHarness, page }) => {
     const harness = await openHarness("job-board");
