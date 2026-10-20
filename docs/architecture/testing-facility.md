@@ -1277,6 +1277,15 @@ These are fixture tests, not extension-to-Core E2E tests.
 
 ### Realistic-site test modes
 
+Two Lab hooks serve browser specs as well. A scenario route may answer with its
+own `Content-Security-Policy` (the Lab's same-origin policy stays the default):
+everything-store's printable order receipt (`/gp/css/summary/print.html?orderID=`)
+is served with `default-src 'none'; script-src 'none'` and an inline script whose
+missing side effect shows page scripts did not run. And the run-token-protected
+`GET /__control/requests?path=<path>` reports how many requests reached a path (and
+query) since the last reset. The gated user-script probe
+(`apps/extension/e2e/user-script-feasibility`, `FLUXIQ_USER_SCRIPT_PROBE=1`) uses both.
+
 | Scenario | Mode (`set-mode`) | What it adds | Used by (`apps/extension/e2e`) |
 | --- | --- | --- | --- |
 | `bigbox-retail` | `account-recovery` | A "Forgot password?" panel on the checkout sign-in wall with sensitive-marked controls (group, select, textarea, checkbox) beside ordinary ones | `sensitive-names`, `extract-list-sensitive`, `identity-signals` |
@@ -1290,6 +1299,7 @@ These are fixture tests, not extension-to-Core E2E tests.
 | `crossborder-marketplace` | `cart-add-ons` | Cart line selection and add-on boxes a React-style shop renders: a controlled box, boxes the site unticks itself (at once and after a microtask), a box replaced by an unticked clone | `runtime/typed-browser-readiness` |
 | `everything-store` | `keyboard-suggestions` | Header search suggestions driven by arrow keys, with an Enter the page cancels inside the form | `keyboard` |
 | `everything-store` | `reworded-prompt` | The notifications prompt's "Not now" drawn as other words while its accessible name stays | `large-page-resolution` |
+| `everything-store` | `help-and-offers` | A help and offers area on the cart page: in-page tabs, a filter strip, promo links (one broken, one that only flags busy), a sticky banner over a control | `click` |
 | `job-board` | `in-place-filters` | A results filter fetches and swaps rows in place under `aria-busy` without moving the address | `click` |
 | `job-board` | `extended-application` | An extended application step on the ATS form: native date, time, month, week, datetime-local and number fields, a numeric-only field, a referral code the site rejects and reverts, a read-only job reference, a leave-without-saving dialog | `runtime/sanitized-field-typing` |
 | `photo-social` | `saved-logins` | The login page on a device that remembers its accounts: pre-filled form, password hint, security answer, saved accounts, backup codes | `actions`, `extraction/inference`, `extraction/structure-detection` |

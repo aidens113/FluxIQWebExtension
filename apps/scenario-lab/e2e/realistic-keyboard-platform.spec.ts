@@ -37,6 +37,11 @@ async function mutate(lab: RunningScenarioLab, scenarioId: string, operation: st
 
 const SUGGESTIONS = '[role="listbox"][aria-label="Search suggestions"]';
 
+// Each test opens a page on a full realistic site; on a loaded machine that
+// page set-up alone has taken the config's whole 20 s, so each test gets 60 s
+// to cover its own page and the site's first load, not to wait longer for an answer.
+test.describe.configure({ timeout: 60_000 });
+
 test.describe("everything-store's header search", () => {
   test.use({ labSeed: getScenario("everything-store")!.seed });
 

@@ -61,7 +61,7 @@ describe("in a real browser", { concurrency: true }, () => {
   // Suite-level, not file-level: a file-level `after` waits for the process to go idle, which an open browser never lets it do.
   after(() => kit.closeBrowser());
 
-  it("the receipt's own script never runs, and the same markup without the policy runs it", async () => {
+  it("the receipt's own script never runs, and run by hand on the same page it reveals the button", async () => {
     const session = await kit.openStore();
     try {
       const { page, lab } = session;
@@ -78,10 +78,15 @@ describe("in a real browser", { concurrency: true }, () => {
       // Images from the store itself still load under the policy.
       await page.waitForFunction("[...document.images].every((image) => image.complete && image.naturalWidth > 0)");
 
-      const markup = await response!.text();
-      await page.goto("about:blank");
-      await page.setContent(markup);
-      assert.equal(await page.locator("[data-print]").isVisible(), true, "without the policy the script reveals the button");
+      // The control: the page's own inline script, run by the test on the same
+      // receipt (Playwright's evaluate is not subject to the page's policy), does
+      // reveal the button. So the button stayed hidden because the policy stopped
+      // the script, not because the script does nothing. The page stays the
+      // store's receipt throughout; no page of the test's own is opened.
+      const inline = await page.locator("script:not([src])").evaluateAll((scripts) => scripts.map((script) => script.textContent ?? ""));
+      assert.equal(inline.length, 1, "the receipt carries exactly one inline script");
+      await page.evaluate(inline[0]!);
+      assert.equal(await page.locator("[data-print]").isVisible(), true, "run, the script reveals the button");
       assert.equal(await page.locator("[data-print-hint]").isVisible(), false);
     } finally {
       await session.close();

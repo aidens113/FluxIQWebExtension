@@ -94,7 +94,7 @@ realistic scenarios. "Mode" means a realistic-site test mode switched on by the 
 | identity, identity-ambiguity, identity-signals, identity-wire-chain | element identity: fingerprints, ambiguity refusal, signals, wire chain | retargeted | look-alikes and drift on everything-store, company-website, local-classifieds; sensitive checkbox on bigbox `account-recovery` | t730-b1, t730-c2 |
 | identity-resolution | recovery after drift | retargeted | realistic drift; reworded-aria row on company-website `reworded-quote-submit` | t730-b1, t730-c1 |
 | identity-veto | veto of look-alikes after a redeploy | retargeted; page edits replaced by modes | company-website `quotes-paused`, `quote-footer-redesign`, `phone-quotes` | t730-b1, t730-d4 |
-| click | click semantics, coverage gate, links, in-place loads | retargeted | everything-store, company-website, job-board, photo-social; in-place row load on job-board `in-place-filters`; cart-page link and cover rows: F1 (pending) | t730-b2, t730-c4 |
+| click | click semantics, coverage gate, links, in-place loads | retargeted; 7 cart-page rows moved to a mode; **bounded edits kept** in 2 rows (the hidden row hides "Deliver to" mid-row; the control row covers then uncovers the viewport on cue): a store mode doing that would be a test construct dressed as a page; job-board in-place row **Blocked** on "in-place effect settles before aria-busy clears" (src task) | everything-store `help-and-offers`; job-board `in-place-filters`; company-website, photo-social | t730-b2, t730-c4, t730-f1 |
 | actions | typed actions; reads that skip sensitive contents | retargeted; injected sensitive controls replaced by a mode | photo-social `saved-logins` and realistic forms | t730-b2, t730-d1 |
 | recorder-trust, repeat-exemplars | recorder trust of events; repeated exemplars (current folding) | retargeted | realistic pages; 4 repeat-exemplars rows had already failed on dev (t200 removed the ranking) and now test current folding | t730-b2 |
 | redaction, selection-redaction | sensitive values never reach snapshots, events or extraction | retargeted | bigbox checkout sign-in wall and cross-origin card frame; photo-social login | t730-b3 |
@@ -111,10 +111,10 @@ realistic scenarios. "Mode" means a realistic-site test mode switched on by the 
 | failures, check-assert, actionability-gate | failure classification, check/assert, actionability | retargeted; two stale bigbox check rows rewritten | company-website, job-board, photo-social, bigbox | t730-b8, t730-c5 |
 | harness-guard/tests/realistic-scenarios (new) | the content harness refuses non-realistic scenarios | new | company-website, everything-store | lead |
 | action, install-and-content, runtime/browser-navigation-readiness, requests-settings | extension install, injection, actions, open validation, requests setting | retargeted; inline page fixture `fixtures/scenario-page.ts` deleted | everything-store, bigbox | t730-b9 |
-| runtime/meaningful-assert-wait | refusal of empty predicates | retargeted; **Blocked on t732** (blank `wait_for_text` retried as a plain Error) | bigbox search results | t730-b9 |
+| runtime/meaningful-assert-wait | refusal of empty predicates | retargeted; was Blocked on t732 (blank `wait_for_text` retried as a plain Error), unblocked after t732 merged | bigbox search results | t730-b9 |
 | runtime/sanitized-field-typing | native typed values, refused and reverted edits, per-key events | retargeted; own server removed | job-board `extended-application`; everything-store search; photo-social login | t730-b9, t730-e1 |
 | runtime/typed-browser-readiness | controlled checks; Next across documents and in place | retargeted; own server removed | crossborder `cart-add-ons`, professional-network `in-place-paging`, company-website quote drawer, everything-store results, photo-social comments | t730-b9, t730-e2 |
-| user-script-feasibility/** | userScripts world on a strict-CSP page, isolation, network counting (gated by `FLUXIQ_USER_SCRIPT_PROBE=1`) | F1 (pending): retarget onto the everything-store receipt page with its own CSP and the Lab's `/__control/requests` | everything-store | t730-b9, F1 |
+| user-script-feasibility/** | userScripts world on a strict-CSP page, isolation, network counting (gated by `FLUXIQ_USER_SCRIPT_PROBE=1`) | retargeted, still gated; own page server removed | everything-store printable receipt (route-level CSP), the Lab's `/__control/requests`, `window.storeModals` | t730-b9, t730-f1 |
 | cancellation/** | Stop cancels a build or run | kept: its servers are gateway mocks, no page | n/a | t730-b9 |
 
 
@@ -368,3 +368,55 @@ realistic scenarios. "Mode" means a realistic-site test mode switched on by the 
   following number, `by: "following"`); the oracle still checks moved, same row nodes rewritten, address
   unchanged, end on `control_disabled`, exactly one press. Lead tightened the press check from
   `["Next","3"]` to exactly `"3"` with the contract cited.
+
+## Final unit (2026-10-20, after the supervisor's commit 4441cde5 and dev merge 50500e8a)
+
+- F1 landed (`t730-f1-receipt-counter-probe-click.md`): Lab per-route CSP and `/__control/requests` (server
+  15/15, counter 3/3), everything-store printable receipt and `help-and-offers` mode (77/77), user-script probe
+  retargeted and gated, click.spec's 7 cart-page rows on the mode; 2 rows keep bounded edits (reasons in the
+  table).
+- Lead edits: click.spec job-board in-place row marked **Blocked on "in-place effect settles before aria-busy
+  clears"** (supervisor's src task; root cause: `in-place-effect.ts` passes on the menu closing plus
+  `aria-busy="true"` before the fetched rows land); meaningful-assert-wait unblocked (t732 merged;
+  `requireText` now throws `BlankTextWaitError`); unique-selectors large-page row marked **Blocked on the
+  identity-capture regression** (snapshot descriptors go through `describeElement`; capture 43 s against the
+  5 s bound); `receipt.test.ts` no longer opens `setContent` markup in a browser (its negative control now runs
+  the receipt's own inline script on the receipt page); guard test race fixed (fresh page after the refused
+  navigation, since Chromium's error page could interrupt the next `goto`); explicit 60 s budgets with reasons
+  on the guard's browser tests and `realistic-keyboard-platform` (page set-up on a loaded machine took the
+  config's 20 s); one packed statement in redaction.spec unpacked; testing-facility.md gains the
+  `help-and-offers` row and the two Lab hooks; `pnpm structure:baseline` (7 entries removed, 1 lowered).
+- C7 (`t730-c7-redaction-after-merge.md`): the two redaction rows that failed after the merge used a fake
+  session lane G's bca31a06 no longer picks (a web session now needs the domain id or
+  `web.dom.capture_snapshot`); the fake declares `WEB_AUTOMATION_DOMAIN_ID` and the helper asserts exactly one
+  delivery. No assertion weakened.
+- Validation (lead, all headed, provider-free, each run with its own `--output`):
+  - `pnpm --filter @fluxiq-web-extension/extension test:e2e:build` -> `e2e-chromium: verified 22 files`
+    (rebuilt once more before the extension run).
+  - Content harness, all 44 changed content specs:
+    `pnpm --filter @fluxiq-web-extension/extension test:content -- <44 specs> --headed --workers=3 --output=test-results/lead-content`
+    -> `Running 355 tests` / `350 passed (15.2m)`, 5 failed: large-page-resolution rows 1-2 and unique-selectors
+    large page (all three Blocked on the identity-capture regression), redaction :393 and :533 (fixed by C7).
+    Rerun `content/tests/redaction.spec.ts` -> `13 passed (1.3m)`.
+  - Real extension: `playwright test -c e2e/playwright.config.ts <the 7 changed specs> --headed --workers=2 --output=test-results/lead-ext`
+    -> `15 passed (1.7m)`.
+  - Scenario Lab, whole suite (the scan included):
+    `playwright test -c e2e/playwright.config.ts --headed --workers=3 --output=test-results/lead-sl9`
+    -> `44 passed (2.5m)`. The repository scan is green. Before the race fix and budgets, one run had 4
+    set-up timeouts and the guard race; `realistic-keyboard-platform` plus the guard, `--repeat-each=3`, then
+    `33 passed`.
+  - `playwright test -c e2e/user-script-feasibility/playwright.config.ts` -> `2 skipped` (gated, as designed).
+  - Unit tests of every touched scenario and the Lab: `node --test <dist/tests, dist/scenarios/tests, and the
+    tests of the 10 realistic and 19 touched synthetic scenarios>` -> `# tests 871 # pass 871 # fail 0`.
+  - `tsc -p tsconfig.json --noEmit` and `tsc -p tsconfig.e2e.json --noEmit` (scenario-lab) -> exit 0;
+    `tsc -p tsconfig.test.json --noEmit` (extension) -> exit 0.
+  - `node scripts/structure-audit.mjs` -> `structure-audit: passed (212 warning(s), 618 baselined).`
+- Rows still Blocked, each with its assertion kept: large-page-resolution rows 1-2 and unique-selectors large
+  page (identity-capture regression, `src/content/identity/control-row.ts`); click.spec job-board in-place row
+  (in-place effect settles before aria-busy clears). Bounded injections or edits kept with reasons: click (2
+  rows), unique-selectors (3 writer-shape rows), large-page-resolution (filler anchors).
+- Found, not this lane's file: `apps/scenario-lab/src/scenarios/tests/within-page-time.test.ts` (41235213)
+  launches Chromium on `page.setContent("<main></main>")`, a synthetic page in a browser. The scan covers only
+  the two Playwright trees; extending it to scenario-lab unit tests that launch a browser would catch this file.
+
+UNIT READY: apps/scenario-lab/e2e/**, apps/scenario-lab/src/{server.ts,control.ts,tests/**}, apps/scenario-lab/src/scenarios/** (realistic modes and synthetic-scenario unit tests), apps/scenario-lab/tsconfig.e2e.json, apps/extension/e2e/** (content harness, fixtures, specs), apps/extension/src/content/extraction/tests/{field-reader,list-reader}.test.ts, apps/extension/src/content/extraction/page-advance/tests/load-more.test.ts, .github/workflows/testing-facility.yml, docs/architecture/testing-facility.md, .structure-baseline.json, docs/working/trace-offline-trials-plan/reports/t730-*.md

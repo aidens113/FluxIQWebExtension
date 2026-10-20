@@ -57,7 +57,7 @@
 // checked, not only the whole value"); the DOM read itself is the card rows'.
 
 import type { Frame, Page } from "@playwright/test";
-import { createWebAutomationRuntimeAdapter, webAutomationActionResultPayload } from "@fluxiq-web-extension/domain";
+import { WEB_AUTOMATION_DOMAIN_ID, createWebAutomationRuntimeAdapter, webAutomationActionResultPayload } from "@fluxiq-web-extension/domain";
 import type { FluxIQ } from "fluxiq";
 import type { FluxIQRuntimeCommandResult } from "fluxiq/runtime";
 import type { BrowserActionCommand, BrowserActionResult, DomSnapshot, RecordingEventPayload } from "../../../src/shared/protocol.js";
@@ -362,6 +362,14 @@ const WITHHELD = "(withheld: the action ran on a control that holds a secret)";
  *
  * `stamped` sends the validation as a client built before 1b6f5df did for a
  * producer that did not declare: withheld, and stamped `redacted: true`.
+ *
+ * The one session declares this domain's id, because since bca31a06 the
+ * adapter picks a session by Core's one rule under the web criteria
+ * (`domain/src/runtime/web-sessions/criteria.ts`): a `web.actions` capability
+ * counts only with the domain's id or the snapshot action, no longer for any
+ * `web.*` action type. Without it no session is picked, the command never
+ * reaches the gateway, and the adapter answers `web.action.failed` with no
+ * payload -- which these rows would then be asserting nothing about.
  */
 async function throughTheDomain(result: BrowserActionResult, stamped = false): Promise<FluxIQRuntimeCommandResult> {
   const payload = webAutomationActionResultPayload(result as never) as Record<string, unknown>;
@@ -379,15 +387,23 @@ async function throughTheDomain(result: BrowserActionResult, stamped = false): P
         snapshot: () => ({
           sessions: [{
             sessionId: "session.redaction", clientId: "client.redaction", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.type"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.type"], metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID } }]
           }]
         })
       },
-      automationStudioClientGateway: { executeAction: async () => gatewayResult }
+      automationStudioClientGateway: {
+        executeAction: async () => {
+          delivered += 1;
+          return gatewayResult;
+        }
+      }
     }
   } as unknown as FluxIQ;
+  let delivered = 0;
   const adapter = createWebAutomationRuntimeAdapter({ fluxiq });
-  return await adapter.execute({ kind: "execute_action", commandId: "command.redaction", outputId: "web.dom.type", parameters: { selector: CARD } }, {});
+  const runtimeResult = await adapter.execute({ kind: "execute_action", commandId: "command.redaction", outputId: "web.dom.type", parameters: { selector: CARD } }, {});
+  expect(delivered, "the adapter has to send the command and map the page's answer, or there is no hop to check").toBe(1);
+  return runtimeResult;
 }
 
 test("a sensitive control's post-condition is secret-free after the hop to the domain, on both paths it takes", async ({ openHarness }) => {

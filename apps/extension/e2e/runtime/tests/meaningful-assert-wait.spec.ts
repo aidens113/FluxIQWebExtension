@@ -9,14 +9,6 @@
 // focused control instead of the page would not find the word. The store's
 // cookie dialog and email offer are answered through its own API first, as a
 // returning visitor would have answered them, so nothing stands over the page.
-//
-// Blocked on t732 (sensitive to a product defect, not to this page): a blank
-// `web.dom.wait_for_text` makes `requireText` in
-// src/content/action-runtime/wait-conditions.ts throw a plain Error, which the
-// recovery ladder retries three times, so the wait refusals take over 2 s.
-// The 2 s bound stays: it is the claim that a refusal is immediate. Until t732
-// makes the wait refusal non-retryable, as `assert.ts` already is, the wait rows
-// here fail.
 
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";

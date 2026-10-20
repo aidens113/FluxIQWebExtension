@@ -11,6 +11,11 @@ import { installRealisticScenarioGuard } from "../install-realistic-scenario-gua
 // lab fixture, because the fixture's own guard would fail this test for the
 // refusals it provokes on purpose.
 
+// The two browser tests open and close a context of their own and load a full
+// realistic site; on a loaded machine that alone has taken the config's 20 s,
+// so they get 60 s for their own launch, load and close.
+test.describe.configure({ timeout: 60_000 });
+
 test("a synthetic scenario is refused before it loads, by goto and by fetch, and the refusal names the rule", async ({ browser }) => {
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed: 42 });
   const context = await browser.newContext();
@@ -22,9 +27,12 @@ test("a synthetic scenario is refused before it loads, by goto and by fetch, and
     expect(guard.refusedScenarioIds).toEqual(["basic-form"]);
 
     // A realistic page loads, and a fetch from it to a synthetic scenario's API is refused too.
-    const response = await page.goto(`${lab.origin}/scenarios/company-website/`);
+    // A fresh page, because the refused one may still be drawing Chromium's own
+    // error page, which would interrupt a second navigation there.
+    const realistic = await context.newPage();
+    const response = await realistic.goto(`${lab.origin}/scenarios/company-website/`);
     expect(response?.status()).toBe(200);
-    const fetched = await page.evaluate(async (url) => {
+    const fetched = await realistic.evaluate(async (url) => {
       try {
         await fetch(url, { method: "POST", body: "{}" });
         return "reached";
