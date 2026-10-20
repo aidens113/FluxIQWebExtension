@@ -14,10 +14,13 @@ import { buildOrder, coversPath, pathSpellings, readWorkspacePackages, REPOSITOR
 
 const relative = (file) => path.relative(REPOSITORY_ROOT, file).split(path.sep).join("/");
 const insideRepository = (file) => !relative(file).startsWith("../") && !path.isAbsolute(relative(file));
+const gitPath = (file) => relative(file) || ".";
 
 /** The paths git ignores, of those given (absolute, inside the repository). */
 function ignoredByGit(files) {
-  const asked = [...new Set(files.filter(insideRepository).map(relative))];
+  // The repository root is relative "", which git refuses as a pathspec; it
+  // asks as ".", which git never ignores.
+  const asked = [...new Set(files.filter(insideRepository).map(gitPath))];
   if (asked.length === 0) return new Set();
   try {
     const out = execFileSync("git", ["-C", REPOSITORY_ROOT, "check-ignore", "--stdin", "--no-index"], { input: asked.join("\n"), encoding: "utf8" });
@@ -38,7 +41,7 @@ function ignoredByGit(files) {
 function fingerprints(resolved, targets) {
   const ignored = ignoredByGit(targets);
   const walked = { roots: resolved.roots.filter((root) => root.kind === "walk") };
-  return (target) => (!insideRepository(target) || ignored.has(relative(target)) ? coversPath(target, walked) : coversPath(target, resolved));
+  return (target) => (!insideRepository(target) || ignored.has(gitPath(target)) ? coversPath(target, walked) : coversPath(target, resolved));
 }
 const packages = [...readWorkspacePackages(REPOSITORY_ROOT).values()].map((pkg) => ({ ...pkg, relative: relative(pkg.dir) }));
 const CLI_CALL = /node (\S*scripts\/build-cache\/cli\.mjs) (\S+)(?: -- "([^"]*)")?/gu;
