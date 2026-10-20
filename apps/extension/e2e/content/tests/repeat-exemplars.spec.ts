@@ -1,117 +1,149 @@
-// One example per repeating control, on the page that needed it.
+// One example per repeating control, on a real page built from a repeated
+// template.
 //
-// The social scheduler is a 280-row publishing queue with one checkbox and one
-// "Post actions" button per row. Before `content/repeat-exemplars.ts`, the
-// evidence packet a model authors from held the three filter selects and a
-// column of row checkboxes -- at rest and after "Select all posts" alike --
-// and none of the page's own buttons, so a Flow whose action is the bulk bar's
-// Retry button could not be written: the model had no handle for it. The rows
-// below run the real content script in Chromium and the real domain sanitizer
-// on what it captured, because the defect lived in the join between the two:
-// each side's own suite was green while the packet was full of checkboxes.
+// `content/repeat-exemplars.ts` folds a run of identical row controls behind
+// one exemplar that carries the run's size, so a reader can say "one of 50
+// cards" without counting. Since t200 it annotates and nothing else: the
+// snapshot lists every rendered element in composed document order and no
+// longer ranks or cuts that list, so a run's followers stay where the page put
+// them. The rows below run the real content script in Chromium and the real
+// domain sanitizer on what it captured, because the count has to survive the
+// join between the two.
+//
+// The page (t730: browser specs open only the ten realistic scenarios) is the
+// job board's results list: an `ol` of `li > article` cards, each with its
+// title as an `h2 > a`, sponsored cards built from the same template. Its
+// header links, filter pills and search button are the page's own controls,
+// which never fold. The run's size is read from the list the page rendered,
+// since the board's page size is the visitor's choice (`limit`).
+//
+// What the synthetic scheduler's rows also pinned, and why it is not here:
+// that the snapshot's head held the page's buttons ahead of the row
+// checkboxes, that followers ranked after every distinct element, and that a
+// row control just used stayed in the first forty. All three describe the
+// ranking t200 removed, and all three failed on `dev` before this retarget
+// (t730 report). A select-all checkbox sharing the rows' column has no
+// counterpart on the ten sites.
 
 import type { Page } from "@playwright/test";
 import { sanitizeWebLlmSnapshot } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../index.js";
+import type { ContentHarness } from "../index.js";
 import type { DomElementDescriptor } from "../../../src/shared/protocol.js";
 
-/** What the evidence packet describes of a snapshot at most: `WEB_LLM_EVIDENCE_BOUNDS.elements`. */
-const PACKET_ELEMENTS = 40;
-const QUEUE_SIZE = 280;
-const SELECT_ALL = 'input[aria-label="Select all posts"]';
-const ROW_CHECKBOX = /^Select the post for /u;
+const RESULTS = "/scenarios/job-board/jobs";
+/** Every card's title link, organic or sponsored: one position in the card template. */
+const TITLE_LINK = "main ol > li > article h2 > a";
 
 const nameOf = (element: DomElementDescriptor): string => element.accessibleName ?? element.visibleText ?? "";
 
-async function selectAll(page: Page): Promise<void> {
-  await page.check(SELECT_ALL);
-  await page.waitForSelector('[data-testid="bulk-toolbar"]');
+/** Sends one of the scenario's own page mutations, as its page script would. */
+async function mutate(harness: ContentHarness, operation: string, payload: Record<string, unknown> = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(`${harness.scenarioId} answered ${response.status} to ${operation}.`);
 }
 
-async function narrowToLastWeeksFailures(page: Page): Promise<void> {
-  await page.selectOption('[data-testid="status-filter"]', "failed");
-  await page.selectOption('[data-testid="range-filter"]', "last-7");
-  await page.waitForSelector('[data-testid="filter-summary"]');
+/** Opens a results page holding `limit` cards, as a returning visitor sees it: consent answered, the alert offer and the chat put away. */
+async function openResults(openHarness: (id: string) => Promise<ContentHarness>, limit: 10 | 25 | 50): Promise<ContentHarness> {
+  const harness = await openHarness("job-board");
+  await mutate(harness, "consent", { choice: "accepted" });
+  await mutate(harness, "dismiss-alert-offer");
+  await mutate(harness, "minimise-chat");
+  await harness.page.goto(new URL(`${RESULTS}?limit=${limit}`, harness.lab.origin).href);
+  await expect(harness.page.locator(TITLE_LINK).first()).toBeVisible();
+  return harness;
 }
 
-test("the head of the snapshot holds the page's own controls and one example of each row control", async ({ openHarness }) => {
-  const harness = await openHarness("social-scheduler");
+/** For each descriptor, the index among `css`'s matches of the element its selector names, or -1 when it names none of them. */
+async function positionsAmong(page: Page, elements: readonly DomElementDescriptor[], css: string): Promise<number[]> {
+  return await page.evaluate(([selectors, query]) => {
+    const matches = Array.from(document.querySelectorAll(query));
+    return selectors.map((selector) => {
+      try {
+        const found = selector ? document.querySelector(selector) : null;
+        return found ? matches.indexOf(found) : -1;
+      } catch {
+        return -1;
+      }
+    });
+  }, [elements.map((element) => element.selector ?? ""), css] as const);
+}
+
+/** The descriptors of the cards' title links, each with its card's place in the list, in snapshot order. */
+async function titleLinks(page: Page, elements: readonly DomElementDescriptor[]): Promise<Array<{ element: DomElementDescriptor; card: number }>> {
+  const positions = await positionsAmong(page, elements, TITLE_LINK);
+  return elements.flatMap((element, index) => (positions[index] !== undefined && positions[index] >= 0 ? [{ element, card: positions[index] }] : []));
+}
+
+test("a card's title link is one kind: one exemplar, the first card's, carrying the run's size, and the page's own controls are not folded", async ({ openHarness, page }) => {
+  const harness = await openResults(openHarness, 50);
+  const cards = await page.locator(TITLE_LINK).count();
+  expect(cards, "a page of fifty is a template, not a short list of choices").toBeGreaterThan(5);
   const elements = (await harness.capture()).interactiveElements;
-  const head = elements.slice(0, PACKET_ELEMENTS);
-  const headNames = head.map(nameOf);
 
-  // Every button the page itself offers, which the row checkboxes used to crowd out.
-  for (const button of ["New post", "Import schedule", "Connect an account", "Export queue", "Notifications"]) {
-    expect(headNames, button).toContain(button);
+  const links = await titleLinks(page, elements);
+  const exemplars = links.filter((link) => link.element.repeatCount !== undefined);
+  expect(exemplars).toHaveLength(1);
+  expect(exemplars[0]?.card, "the exemplar is the first card's").toBe(0);
+  expect(exemplars[0]?.element.repeatCount).toBe(cards);
+
+  // The page's own controls are distinct destinations and choices, each listed for itself.
+  for (const name of ["Find jobs", "Date posted", "Remote", "Salary", "Job type"]) {
+    const control = elements.find((element) => element.tagName === "button" && nameOf(element) === name);
+    expect(control, name).toBeDefined();
+    expect(control?.repeatCount, name).toBeUndefined();
   }
-  expect(head.filter((element) => element.tagName === "select")).toHaveLength(3);
-  expect(headNames).toContain("Select all posts");
-
-  // One of each row control, carrying how many rows it stands for.
-  const rowCheckboxes = head.filter((element) => ROW_CHECKBOX.test(nameOf(element)));
-  expect(rowCheckboxes).toHaveLength(1);
-  expect(rowCheckboxes[0]?.repeatCount).toBe(QUEUE_SIZE);
-  expect(rowCheckboxes[0]?.context?.tablePosition?.row, "the exemplar is the first row's").toBe(2);
-  const rowActions = head.filter((element) => nameOf(element) === "Post actions");
-  expect(rowActions).toHaveLength(1);
-  expect(rowActions[0]?.repeatCount).toBe(QUEUE_SIZE);
-
-  // The select-all checkbox shares the rows' column but not their rows: it is not one of them.
-  expect(head.find((element) => nameOf(element) === "Select all posts")?.repeatCount).toBeUndefined();
-
-  // The sidebar's links are distinct destinations, not a repeated control: all
-  // eleven are listed and none is counted as an example of the others.
-  const navigation = head.filter((element) => element.tagName === "a" && element.context?.landmark === "navigation");
-  expect(navigation.map(nameOf)).toEqual(["Queue", "Calendar", "Drafts8", "Approvals3", "Library", "Reports", "Engagement", "Accounts", "Team", "Billing", "Settings"]);
-  expect(navigation.filter((element) => element.repeatCount !== undefined)).toEqual([]);
+  const header = elements.filter((element) => element.tagName === "a" && element.context?.landmark === "navigation");
+  expect(header.map(nameOf)).toEqual(expect.arrayContaining(["Find jobs", "Company reviews", "Salary guide"]));
+  expect(header.filter((element) => element.repeatCount !== undefined)).toEqual([]);
 });
 
-test("the rest of a run is ranked after every distinct element, not dropped", async ({ openHarness }) => {
-  const harness = await openHarness("social-scheduler");
-  const elements = (await harness.capture()).interactiveElements;
-  const firstFollower = elements.findIndex((element) => ROW_CHECKBOX.test(nameOf(element)) && element.repeatCount === undefined);
-  expect(firstFollower, "the second row's checkbox is still in the snapshot").toBeGreaterThan(0);
-  expect(elements[firstFollower]?.context?.tablePosition?.row).toBe(3);
-  // Everything ahead of it is either not in a run or is a run's exemplar.
-  const ahead = elements.slice(0, firstFollower);
-  expect(ahead.some((element) => ROW_CHECKBOX.test(nameOf(element)) && element.repeatCount === undefined)).toBe(false);
-  expect(ahead.map(nameOf)).toContain("Showing 280 of 280 posts");
+test("the rest of the run stays in the snapshot, where the page put it (t200)", async ({ openHarness, page }) => {
+  const harness = await openResults(openHarness, 50);
+  const cards = await page.locator(TITLE_LINK).count();
+  const links = await titleLinks(page, (await harness.capture()).interactiveElements);
+  // Every card's link is listed, once, in the list's own order, and only the first carries the count.
+  expect(links.map((link) => link.card)).toEqual(Array.from({ length: cards }, (_, index) => index));
+  expect(links.slice(1).filter((link) => link.element.repeatCount !== undefined)).toEqual([]);
 });
 
-test("after Select all, the bulk bar's Retry button reaches the packet a model is shown", async ({ openHarness }) => {
-  const harness = await openHarness("social-scheduler");
-  await selectAll(harness.page);
+test("the packet a model is shown carries the run's size on the first card's link, beside the page's own button", async ({ openHarness, page }) => {
+  const harness = await openResults(openHarness, 50);
+  const cards = await page.locator(TITLE_LINK).count();
+  const firstTitle = (await page.locator(TITLE_LINK).first().innerText()).trim();
   const packet = sanitizeWebLlmSnapshot(await harness.capture());
-  const described = packet.elements.map((element) => element.name ?? element.text ?? "");
-
-  expect(described).toContain("Retry");
-  expect(described).toContain("Export CSV");
-  expect(packet.elements.filter((element) => ROW_CHECKBOX.test(element.name ?? ""))).toEqual([
-    expect.objectContaining({ inputType: "checkbox", repeats: QUEUE_SIZE })
-  ]);
+  // The card's other parts (company, salary, tags, snippet, footer) are runs of
+  // text and fold the same way; the one link among them is the title.
+  const counted = packet.elements.filter((element) => element.repeats === cards && element.tag === "a");
+  expect(counted.map((element) => element.name ?? element.text ?? "")).toEqual([firstTitle]);
+  expect(packet.elements.map((element) => element.name ?? element.text ?? "")).toContain("Find jobs");
 });
 
-test("a narrowed page counts what is left, and still lists Retry once rows are selected", async ({ openHarness }) => {
-  const harness = await openHarness("social-scheduler");
-  await narrowToLastWeeksFailures(harness.page);
-  const narrowed = (await harness.capture()).interactiveElements;
-  expect(narrowed.find((element) => ROW_CHECKBOX.test(nameOf(element)))?.repeatCount).toBe(10);
-
-  await selectAll(harness.page);
-  const packet = sanitizeWebLlmSnapshot(await harness.capture());
-  expect(packet.elements.map((element) => element.name ?? element.text ?? "")).toContain("Retry");
+test("a smaller page counts what is left", async ({ openHarness, page }) => {
+  const harness = await openResults(openHarness, 10);
+  const cards = await page.locator(TITLE_LINK).count();
+  expect(cards).toBeLessThan(50);
+  const exemplars = (await titleLinks(page, (await harness.capture()).interactiveElements)).filter((link) => link.element.repeatCount !== undefined);
+  expect(exemplars.map((link) => [link.card, link.element.repeatCount])).toEqual([[0, cards]]);
 });
 
 // Nothing is recording here, so this is the runtime interaction ledger's
-// case: an action checks one row's box, and the look that follows has to show
-// that box -- not only row one's, the run's exemplar.
-test("a row control just acted on keeps its place ahead of its run", async ({ openHarness }) => {
-  const harness = await openHarness("social-scheduler");
-  const fifthRow = '[data-testid="queue-rows"] > tr:nth-of-type(5) input[type="checkbox"]';
-  await harness.page.check(fifthRow);
-  await harness.page.waitForSelector('[data-testid="bulk-toolbar"]');
-  const elements = (await harness.capture()).interactiveElements;
-  const touched = elements.findIndex((element) => ROW_CHECKBOX.test(nameOf(element)) && element.context?.tablePosition?.row === 6);
-  expect(touched).toBeGreaterThanOrEqual(0);
-  expect(touched, "the checkbox just used is in the head, not behind the run").toBeLessThan(PACKET_ELEMENTS);
+// case: an action presses one card's title, the board opens that posting in
+// its pane, and the look that follows still lists that card's link as itself
+// -- never as a follower the first card's link stands for.
+test("a card's link just acted on is listed as itself, and the run's exemplar is unchanged", async ({ openHarness, page }) => {
+  const harness = await openResults(openHarness, 10);
+  const cards = await page.locator(TITLE_LINK).count();
+  await page.locator(TITLE_LINK).nth(4).evaluate((anchor) => anchor.setAttribute("data-spec-fifth", ""));
+  const pressed = await harness.runAction({ commandId: "open-fifth", actionType: "web.dom.click", selector: "[data-spec-fifth]" });
+  expect(pressed.status, pressed.message).toBe("succeeded");
+  const links = await titleLinks(page, (await harness.capture()).interactiveElements);
+  const fifth = links.find((link) => link.card === 4);
+  expect(fifth, "the card just pressed is in the snapshot").toBeDefined();
+  expect(fifth?.element.repeatCount).toBeUndefined();
+  expect(links.filter((link) => link.element.repeatCount !== undefined).map((link) => [link.card, link.element.repeatCount])).toEqual([[0, cards]]);
 });

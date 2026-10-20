@@ -180,7 +180,10 @@ test.describe("the offer, the manifest's own workflow", () => {
     expect((await finalState(lab)).offers).toEqual([]);
   });
 
-  test("sending the ready-made message first gets the offer refused until the rate limit has passed", async ({ page, lab }) => {
+  // The instruction says to offer and nothing else, so the ready-made "Hi, is
+  // this still available?" sent first misses the goal even once the offer goes:
+  // the action bar shows the seller had both (fact only-the-offer, 2026-09-29).
+  test("sending the ready-made message first gets the offer refused until the rate limit has passed, and misses the goal", async ({ page, lab }) => {
     await open(page, lab);
     await reachOfferListing(page, lab);
     await page.getByRole("button", { name: "Close chat" }).click();
@@ -193,7 +196,10 @@ test.describe("the offer, the manifest's own workflow", () => {
     expect((await finalState(lab)).offers).toEqual([]);
     await page.waitForTimeout(CONTACT_INTERVAL_MS);
     await page.getByRole("button", { name: "Send offer" }).click();
-    await factsHold(page, offerGoal);
+    const onlyTheOffer = offerGoal.find(({ id }) => id === "only-the-offer")!;
+    await factsHold(page, offerGoal.filter((fact) => fact !== onlyTheOffer));
+    await expect(page.getByTestId(onlyTheOffer.subject)).toHaveText("You've sent Morgan Tate 1 message and 1 offer");
+    await factFails(page, onlyTheOffer);
     expect((await finalState(lab)).messages.map(({ text }) => text)).toEqual(["Hi, is this still available?"]);
   });
 });

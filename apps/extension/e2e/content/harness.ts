@@ -26,7 +26,9 @@
 
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
+import { assertRealisticScenarios } from "../../../../packages/test-runner/src/realistic-scenarios/index.js";
+import { installRealisticScenarioGuard, type RealisticScenarioGuard } from "../../../scenario-lab/e2e/realistic-scenario-guard/index.js";
 import { getScenario } from "../../../scenario-lab/src/registry.js";
 import { startScenarioLab, type RunningScenarioLab } from "../../../scenario-lab/src/server.js";
 import type { ScenarioSnapshot } from "../../../scenario-lab/src/types.js";
@@ -83,9 +85,24 @@ export type ContentHarness = {
 let bundleSource: Promise<string> | undefined;
 let pageWorldBundle: Promise<string> | undefined;
 const pagesWithContentScript = new WeakSet<Page>();
+/** The launch entry the realistic-scenarios refusals name. */
+const ENTRY = "content harness";
+/** One realistic-scenarios guard per browser context, however many harnesses a test opens on it. */
+const scenarioGuards = new WeakMap<BrowserContext, Promise<RealisticScenarioGuard>>();
 
-/** Starts a Scenario Lab, opens `scenarioId` in `page` with the content script loaded, and waits for it to announce itself. */
+/**
+ * Starts a Scenario Lab, opens `scenarioId` in `page` with the content script loaded, and waits for it to announce itself.
+ *
+ * Only the ten realistic scenarios open (AGENTS.md): any other id is refused
+ * before the lab starts, and the page's browser context refuses any request
+ * for another scenario, by `goto`, link, frame or `fetch`; `close()` then
+ * throws the refusal.
+ */
 export async function openContentHarness(page: Page, options: ContentHarnessOptions): Promise<ContentHarness> {
+  assertRealisticScenarios([options.scenarioId], ENTRY);
+  const context = page.context();
+  if (!scenarioGuards.has(context)) scenarioGuards.set(context, installRealisticScenarioGuard(context, ENTRY));
+  const scenarioGuard = await scenarioGuards.get(context)!;
   const scenario = getScenario(options.scenarioId);
   if (!scenario) throw new Error(`Scenario "${options.scenarioId}" is not registered in the Scenario Lab.`);
   const source = await contentBundleSource();
@@ -155,7 +172,7 @@ export async function openContentHarness(page: Page, options: ContentHarnessOpti
       if (!response.ok) throw new Error(`The Scenario Lab answered ${response.status} for the final state of ${scenario.id}.`);
       return await response.json() as ScenarioSnapshot;
     },
-    close: () => (closing ??= lab.close())
+    close: () => (closing ??= lab.close().then(() => scenarioGuard.assertClean()))
   };
 }
 

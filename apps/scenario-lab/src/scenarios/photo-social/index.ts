@@ -4,6 +4,7 @@ export { PHOTO_SOCIAL_LIVE_TASKS } from "./live-tasks.js";
 export { COLLECTIONS_AFTER, GLAZE_COLLECTION, PRICE_QUESTION, photoSocialManifest } from "./manifest.js";
 export { PHOTO_SOCIAL_REPAIR_TASKS } from "./repair-tasks.js";
 export { RELAY_SUBJECTS, collectionsText, relayFor } from "./relay.js";
+export { SAVED_LOGINS_VALUES } from "./pages/index.js";
 export { pageContext, renderPhotoHome, routePhotoSocial } from "./route.js";
 export { photoSocialScenario } from "./scenario.js";
 export { createPhotoState, mutatePhotoState } from "./state.js";

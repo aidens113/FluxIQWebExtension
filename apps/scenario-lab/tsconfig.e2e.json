@@ -3,7 +3,11 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "noEmit": true,
-    "rootDir": "."
+    // The repository root, not this package: the specs' realistic-scenario
+    // guard imports the one list of realistic scenarios from source
+    // (packages/test-runner/src/realistic-scenarios), as the Lab's launchers
+    // do. Nothing is emitted, so the root only widens what may be imported.
+    "rootDir": "../.."
   },
   "include": ["e2e/**/*.ts"]
 }

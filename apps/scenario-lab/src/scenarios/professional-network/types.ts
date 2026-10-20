@@ -12,8 +12,14 @@
  *   Its confirm control lost the test hook the recording named, now reads
  *   "Withdraw invitation", and stands beside "Keep invitation", which withdraws
  *   nothing. Only a repair that re-points the click at the right one passes.
+ * - `in-place-paging` -- the people search's pager updates the results where
+ *   they stand: the rows already on the page are kept and rewritten with the
+ *   next page's people (the same list items and links, with new text and
+ *   addresses), the address bar does not move, and on the last page Next is
+ *   disabled. No manifest variant arms it; it is reached through `set-mode`
+ *   alone.
  */
-export const networkModes = ["baseline", "premium-upsell", "redesigned-withdraw-dialog"] as const;
+export const networkModes = ["baseline", "premium-upsell", "redesigned-withdraw-dialog", "in-place-paging"] as const;
 
 export type NetworkMode = (typeof networkModes)[number];
 

@@ -18,8 +18,20 @@
  * - `list-layout` is a search-results experiment: results render as a list
  *   of rows rather than a grid of tiles, prices as plain text, and sponsored
  *   rows carry an "Ad" pill rather than a "Sponsored" label.
+ * - `account-recovery` is the checkout's sign-in wall with the "Forgot your
+ *   password?" panel open beside it: security details the site keeps hidden
+ *   (a group marked `data-sensitive`, a password hint, a one-time code), the
+ *   shopper's ordinary contact preferences, and the saved cards whose masked
+ *   details the page marks hidden too. Every other page, and the guest
+ *   checkout, render as the baseline does.
+ * - `partner-widgets` is the product page with the store's partner embeds
+ *   switched on in its buy box: a pay-over-time offer drawn inside a closed
+ *   shadow root, a delivery estimate inserted with its text already inside
+ *   its root, and review highlights whose element is in place from load and
+ *   attaches its root only when its link is pressed. Every other page renders
+ *   as the baseline does.
  */
-export const bigboxModes = ["baseline", "redesigned-buy-box", "list-layout"] as const;
+export const bigboxModes = ["baseline", "redesigned-buy-box", "list-layout", "account-recovery", "partner-widgets"] as const;
 
 export type BigboxMode = (typeof bigboxModes)[number];
 

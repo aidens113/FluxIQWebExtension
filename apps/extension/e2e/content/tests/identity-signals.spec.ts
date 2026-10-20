@@ -10,6 +10,16 @@
 // projection and a JSON round trip, then through the domain's step builder and
 // normalizer, and read the result where a replay reads it.
 //
+// The page is everything-store's checkout (AGENTS.md: realistic scenarios
+// only), which has every construct the rows need and draws them itself: a
+// gift-card box that starts unticked and a Plus-trial box that starts ticked, a
+// delivery radio group, a region named by reference to its heading ("Paying
+// with ..."), and the cookie banner -- a region named by `aria-label` -- whose
+// Customize panel holds boxes that toggle without reloading the page. The
+// checkout's own boxes post a mutation and reload, which would wipe the
+// recorded events before a row could read them, so the recorded toggle is the
+// banner's.
+//
 // The recorded toggle is followed through its `dom.change`, not its `dom.click`,
 // and that choice is measured rather than assumed. The recorder emits a click
 // from `pointerdown` (`content/dom-events.ts`), before the browser flips the
@@ -18,38 +28,52 @@
 // to `web.dom.check` (`domain/src/io/input-model.ts`), whose `checked`
 // parameter `output-nodes/payloads.ts` reads off the recorded element.
 //
-// The markup is injected into a Scenario Lab page rather than added to a
-// fixture. The rows need a region named by reference, a navigation landmark
-// named by `aria-label` and three kinds of toggle, and no scenario's recorded
-// contract should move for a test of the recorder.
+// The sensitive checkbox is bigbox-retail's (t730 C2): armed into its
+// `account-recovery` rendering, the sign-in wall opens a "Forgot your
+// password?" section, named by its heading, whose "Your security details" group
+// the page marks `data-sensitive` and whose "Remember this device" box starts
+// ticked. The box is not marked itself; the group around it is.
 
-import { WEB_AUTOMATION_INPUT_IDS, outputTargetFromPayload, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_INPUT_IDS, outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
 import { gatewayRecordingEventFromPayload, recordedInputId } from "../../../src/background/connection/index.js";
 import type { DomElementDescriptor, JsonObject, RecordingEventPayload } from "../../../src/shared/protocol.js";
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
-import { describe } from "./identity-fixtures.js";
+import { describe, labMutate, openPath } from "./identity-fixtures.js";
 
-const TOGGLES = `
-  <section id="b5-billing" aria-labelledby="b5-billing-title">
-    <h2 id="b5-billing-title">Billing   details</h2>
-    <label><input type="checkbox" id="b5-agree" checked> I agree to the terms</label>
-    <label><input type="checkbox" id="b5-news"> Send me news</label>
-    <label><input type="radio" name="b5-plan" id="b5-annual" checked> Annual</label>
-    <label>Name on the account <input type="text" id="b5-name"></label>
-  </section>
-  <nav aria-label="Account">
-    <label><input type="checkbox" id="b5-secret" data-sensitive="true" checked> Share my health record</label>
-  </nav>`;
+const GIFT_CARD = 'section[aria-labelledby="pay-heading"] input[type="checkbox"]';
+const PLUS_TRIAL = 'section:not([aria-labelledby]) > input[type="checkbox"]';
+const DELIVERY = 'input[name="delivery"]:checked';
+const SEARCH = 'input[name="k"]';
+const PERFORMANCE = '[data-consent-prefs] label:nth-of-type(2) input[type="checkbox"]';
 
-async function openToggles(openHarness: (scenarioId: string) => Promise<ContentHarness>): Promise<ContentHarness> {
-  const harness = await openHarness("ambiguous-targets");
-  await harness.page.evaluate((markup) => {
-    const host = document.createElement("div");
-    host.id = "b5-host";
-    host.innerHTML = markup;
-    document.body.append(host);
-  }, TOGGLES);
+/** everything-store's checkout for the cart as the account left it, with the cookie banner still unanswered. */
+async function openCheckout(openHarness: (scenarioId: string) => Promise<ContentHarness>): Promise<ContentHarness> {
+  const harness = await openHarness("everything-store");
+  await labMutate(harness, "dismiss-nudge", { nudge: "app-banner" });
+  await labMutate(harness, "dismiss-nudge", { nudge: "notifications" });
+  await labMutate(harness, "start-checkout", { pipeline: "cart" });
+  await openPath(harness, "checkout");
+  return harness;
+}
+
+/** The cookie banner's purposes, opened through its own Customize button. */
+async function openCookiePurposes(harness: ContentHarness): Promise<void> {
+  await harness.page.click('[data-consent="customize"]');
+  await expect(harness.page.locator(PERFORMANCE)).toBeVisible();
+}
+
+/** The ticked box inside the group bigbox-retail's recovery panel marks `data-sensitive`. */
+const REMEMBER_DEVICE = 'input[type="checkbox"][name="rememberDevice"]';
+
+/** bigbox-retail's sign-in wall armed into its `account-recovery` rendering, with the privacy choices declined. */
+async function openAccountRecovery(openHarness: (scenarioId: string) => Promise<ContentHarness>): Promise<ContentHarness> {
+  const harness = await openHarness("bigbox-retail");
+  // Arming starts the shopper over, so it goes first.
+  await labMutate(harness, "set-mode", { mode: "account-recovery" });
+  await labMutate(harness, "consent", { choice: "reject" });
+  await openPath(harness, "checkout");
+  await expect(harness.page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
   return harness;
 }
 
@@ -59,11 +83,12 @@ async function openToggles(openHarness: (scenarioId: string) => Promise<ContentH
  * `web.dom.extract` -- the route `describe` uses -- cannot describe one. The
  * snapshot carries the same `describeElement` output, and is where the
  * background worker reads it, so the rows below still judge the descriptor the
- * recorder produces.
+ * recorder produces. The control is found by the `name` the page gives it,
+ * because its generated id changes with the seed.
  */
-async function describeInSnapshot(harness: ContentHarness, selector: string): Promise<DomElementDescriptor> {
-  const element = (await harness.capture()).interactiveElements.find((candidate) => candidate.selector === selector);
-  if (!element) throw new Error(`the snapshot of ${harness.scenarioId} carries no descriptor for ${selector}`);
+async function describeInSnapshot(harness: ContentHarness, name: string): Promise<DomElementDescriptor> {
+  const element = (await harness.capture()).interactiveElements.find((candidate) => candidate.attributes?.name === name);
+  if (!element) throw new Error(`the snapshot of ${harness.scenarioId} carries no descriptor for the control named ${name}`);
   return element;
 }
 
@@ -94,23 +119,28 @@ function dispatchedElement(parameters: JsonObject): Record<string, unknown> {
 
 test.describe("B5: a toggle's state and its landmark's name, from the page to the dispatched target", () => {
   test("the recorder describes a checked state for a checkbox and a radio, and for nothing else", async ({ openHarness }) => {
-    const harness = await openToggles(openHarness);
-    expect((await describe(harness, "#b5-agree")).checked).toBe(true);
-    expect((await describe(harness, "#b5-news")).checked, "an unchecked box says so rather than saying nothing").toBe(false);
-    expect((await describe(harness, "#b5-annual")).checked).toBe(true);
-    expect("checked" in await describe(harness, "#b5-name"), "a text field has no checked state").toBe(false);
+    const harness = await openCheckout(openHarness);
+    expect((await describe(harness, PLUS_TRIAL)).checked, "the Plus trial box starts ticked").toBe(true);
+    expect((await describe(harness, GIFT_CARD)).checked, "an unchecked box says so rather than saying nothing").toBe(false);
+    expect((await describe(harness, DELIVERY)).checked).toBe(true);
+    expect("checked" in await describe(harness, SEARCH), "a text field has no checked state").toBe(false);
   });
 
-  test("the recorder names the landmark around a control, by reference and by aria-label", async ({ openHarness }) => {
-    const harness = await openToggles(openHarness);
-    expect((await describe(harness, "#b5-agree")).context).toMatchObject({ landmark: "region", landmarkName: "Billing details" });
-    expect((await describeInSnapshot(harness, "#b5-secret")).context).toMatchObject({ landmark: "navigation", landmarkName: "Account" });
+  test("the recorder names the landmark around a control, by reference and by aria-label", async ({ openHarness, page }) => {
+    const harness = await openCheckout(openHarness);
+    // By reference: the section's `aria-labelledby` points at its heading, so the name is the heading's words.
+    const heading = (await page.locator("#pay-heading").textContent())?.trim();
+    expect(heading).toMatch(/^Paying with /u);
+    expect((await describe(harness, GIFT_CARD)).context).toMatchObject({ landmark: "region", landmarkName: heading });
+    // By aria-label: the cookie banner is a region the page names in an attribute.
+    await openCookiePurposes(harness);
+    expect((await describe(harness, PERFORMANCE)).context).toMatchObject({ landmark: "region", landmarkName: "Cookie preferences" });
   });
 
   test("a sensitive checkbox is described without its state, and its toggle never becomes a guessed check", async ({ openHarness }) => {
-    const harness = await openToggles(openHarness);
-    expect(await harness.page.locator("#b5-secret").isChecked(), "the box really is checked").toBe(true);
-    const described = await describeInSnapshot(harness, "#b5-secret");
+    const harness = await openAccountRecovery(openHarness);
+    expect(await harness.page.locator(REMEMBER_DEVICE).isChecked(), "the box really is checked").toBe(true);
+    const described = await describeInSnapshot(harness, "rememberDevice");
     expect("checked" in described, "the recorder withholds a sensitive control's state").toBe(false);
     const recorded = recordedChange(harness, described);
     expect("checked" in wireElement(recorded)).toBe(false);
@@ -118,25 +148,35 @@ test.describe("B5: a toggle's state and its landmark's name, from the page to th
     expect("checked" in parameters, "with no state, the domain keeps the toggle as evidence").toBe(false);
     const dispatched = dispatchedElement(parameters);
     expect("checked" in dispatched).toBe(false);
-    expect(dispatched.context, "its landmark's name is page chrome and still travels").toMatchObject({ landmark: "navigation", landmarkName: "Account" });
+    expect(dispatched.context, "its landmark's name is page chrome and still travels").toMatchObject({ landmark: "region", landmarkName: "Forgot your password?" });
   });
 
-  test("a recorded toggle becomes a check step carrying the state it was left in, and its landmark's name", async ({ openHarness }) => {
-    const harness = await openToggles(openHarness);
+  test("a recorded toggle becomes a check step carrying the state it was left in, and its landmark's name", async ({ openHarness, page }) => {
+    const harness = await openCheckout(openHarness);
+    await openCookiePurposes(harness);
+    const performance = await describe(harness, PERFORMANCE);
+    expect(performance.checked, "Performance starts unticked").toBe(false);
     await harness.setRecording(true);
-    await harness.page.locator("#b5-agree").click();
-    const changeOnAgree = async () => (await harness.recordedEvents("dom.change")).find((event) => event.element?.selector === "#b5-agree");
-    await expect.poll(async () => Boolean(await changeOnAgree()), "the recorder sent the checkbox's change").toBe(true);
-    const recorded = await changeOnAgree();
-    if (!recorded) throw new Error("no recorded change on #b5-agree");
-    const leftChecked = await harness.page.locator("#b5-agree").isChecked();
-    expect(leftChecked, "the click unchecked a box that started checked").toBe(false);
+    await page.locator(PERFORMANCE).click();
+    const changeOnPerformance = async () => (await harness.recordedEvents("dom.change")).find((event) => event.element?.selector === performance.selector);
+    await expect.poll(async () => Boolean(await changeOnPerformance()), "the recorder sent the checkbox's change").toBe(true);
+    const recorded = await changeOnPerformance();
+    if (!recorded) throw new Error(`no recorded change on ${performance.selector}`);
+    const leftChecked = await page.locator(PERFORMANCE).isChecked();
+    expect(leftChecked, "the click ticked a box that started unticked").toBe(true);
     expect(recordedInputId(recorded)).toBe(WEB_AUTOMATION_INPUT_IDS.checkboxToggled);
 
     const parameters = webAutomationOutputPayload("web.dom.check", wirePayload(recorded));
     expect(parameters.checked, "the state a replay has to reproduce").toBe(leftChecked);
+    // The state reaches the page on the command itself, which is where
+    // `content/actions/check.ts` reads it. The step's element has carried no
+    // state since t425 (`output-nodes/payloads.ts`: every signal the recorder
+    // captured, "never what the control held or the state it was left in").
+    const command = webAutomationActionFromGatewayCommand({ commandId: "b5:replayed-toggle", actionType: "web.dom.check", parameters });
+    if ("status" in command) throw new Error(`the domain rejected the replayed toggle: ${command.message}`);
+    expect(command.checked, "the state check.ts sets on replay").toBe(leftChecked);
     const dispatched = dispatchedElement(parameters);
-    expect(dispatched.checked).toBe(leftChecked);
-    expect(dispatched.context).toMatchObject({ landmark: "region", landmarkName: "Billing details" });
+    expect("checked" in dispatched, "the element describes the control, not its state").toBe(false);
+    expect(dispatched.context).toMatchObject({ landmark: "region", landmarkName: "Cookie preferences" });
   });
 });

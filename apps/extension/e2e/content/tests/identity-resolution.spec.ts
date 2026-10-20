@@ -1,56 +1,39 @@
 // How the content script chooses the element an action acts on, once the page
-// has moved on from the recording (Phase 1.3 step 3).
-//
-// Three things are pinned here, and all three are changes from the resolver
-// this suite's sibling `resolve-target.spec.ts` describes.
+// has moved on from the recording (Phase 1.3 step 3), on realistic pages only
+// (AGENTS.md, user 2026-09-29).
 //
 // A replayed action finds its control through whichever signal the drift left
-// standing: identity-drift renders one Save action five ways, and each mode
-// takes a different signal away. The rows below replay the *recorded*
-// descriptor -- read off the baseline page through `web.dom.extract`, not
-// hand-written -- so what is exercised is the resolution a real replay
-// performs, not a fingerprint invented to suit it.
+// standing. The drifts here are the sites' own: company-website's next deploy
+// (another lab seed) redraws every generated id and hashed class, bigbox's
+// `redesigned-buy-box` moves Add to cart into the buy box and puts Buy now in
+// its slot, crossborder's `basket-redesign` renames the button outright. The
+// rows replay the *recorded* descriptor -- read off the page through
+// `web.dom.extract`, not hand-written -- so what is exercised is the resolution
+// a real replay performs, not a fingerprint invented to suit it.
 //
-// And a visual target's document bounds now win over the viewport bounds
-// recorded beside them. Viewport bounds say where the element was on screen
-// when it was captured; after any scroll they point at whatever has since moved
-// into that spot, which is how a click lands on a sticky header.
+// And a visual target's document bounds win over the viewport bounds recorded
+// beside them. Viewport bounds say where the element was on screen when it was
+// captured; after any scroll they point at whatever has since moved into that
+// spot, which is how a click lands on a sticky header.
 //
-// Scored selection is here now. Core's element matcher ships to the browser
-// from `fluxiq/automation-studio/fingerprinting`, and the resolver hands it the
-// candidates whenever an exact answer is not one: a strategy that matched
-// several elements the gate could not narrow, or every strategy missing. It
-// resolves the winner only when the winner clears the floor and beats the
-// runner-up by a margin.
+// Scored selection: Core's element matcher ships to the browser from
+// `fluxiq/automation-studio/fingerprinting`, and the resolver hands it the
+// candidates whenever an exact answer is not one. It resolves the winner only
+// when the winner clears the floor and beats the runner-up by a margin. What
+// scoring does *not* do is guess: company-website's `redesigned-quote-submit`
+// takes Send request's words, test id and id at once and puts "Save and finish
+// later" in its slot, and the resolver refuses on both paths -- the variant's
+// manifest says only a repair can pass it -- while an applied repair resolves.
 //
-// What scoring does *not* do is guess. On the identity-drift fixture a control
-// whose text, id, class and test id have all changed at once scores below the
-// floor against its own page -- the highest-scoring button there is the wrong
-// one, Discard -- so the resolver refuses. The row that proves that is as
-// important as the rows where scoring wins, and the measured scores behind the
-// floor are in reports/w3-matcher-packaging.md.
+// One subject per file. `identity-ambiguity.spec.ts` holds what happens when
+// two controls answer to one description; `identity-veto.spec.ts` holds the
+// check a fast Level 1 answer passes before it is acted on;
+// `identity-fixtures.ts` holds the helpers all three share, and the scope
+// caveat that applies to every row in all three.
 //
-// The `reworded-aria` rendering keeps the accessible name through that same
-// drift, and scoring ranks the *right* control first. Whether the floor then
-// admits it depends on a Core constant that changed during Wave 3: a candidate
-// *missing* a stable identifier is now charged -0.1 rather than -0.55, which is
-// the calibration `reports/v-matcher-calibration.md` recommended and Core took.
-// That lifts the rendering from 0.218 to 0.389, over the 0.35 floor, so the row
-// below now proves a resolution where it used to prove a refusal. **If that Core
-// change is reverted, this row has to go back to expecting TARGET_NOT_FOUND.**
-//
-// One subject per file, since this one carried three and reached 715 lines.
-// `identity-ambiguity.spec.ts` holds what happens when two controls answer to
-// one description; `identity-veto.spec.ts` holds the check a fast Level 1
-// answer passes before it is acted on; `identity-fixtures.ts` holds the
-// selectors and the descriptor helpers all three share, and the scope caveat
-// that applies to every row in all three.
-//
-// And the last group is what a resolution *reports* -- the strategy that
-// answered, how many candidates it weighed, and the scores behind the choice.
-// Read the four shapes together: an exact match, a tie broken at 1.000, a
-// scored recovery at 0.389, and a refusal. The status alone cannot tell the
-// middle two apart.
+// Read the resolution shapes together: an exact match, a tie broken by the
+// recorded name, a scored recovery, and a refusal. The status alone cannot tell
+// the middle two apart; the reported strategy and scores can.
 
 import type { Page } from "@playwright/test";
 import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
@@ -58,457 +41,462 @@ import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
 import {
-  BELOW_FOLD,
-  DISPLAY_NAME,
-  DRIFT_MODES,
-  PRIMARY,
-  SAVE_BASELINE,
-  SECONDARY,
   TARGET_AMBIGUOUS,
   TARGET_NOT_FOUND,
-  armMode,
   describe,
   documentRect,
+  labMutate,
+  openPath,
+  quoteDrawer,
   recordedElement,
-  viewportRect,
-  visualTarget
+  trackClicks,
+  visualTarget,
+  type Descriptor,
+  type Rect
 } from "./identity-fixtures.js";
 
-test.describe("identity-drift: a replayed action finds the control the drift left", () => {
-  for (const drift of DRIFT_MODES) {
-    test(`${drift.mode}: the recorded descriptor resolves the drifted Save action`, async ({ openHarness, page }) => {
-      const harness = await openHarness("identity-drift");
-      const recorded = await describe(harness, SAVE_BASELINE);
-      const displayName = await page.locator(DISPLAY_NAME).inputValue();
-      await armMode(harness, drift.mode);
+type NodePayload = Parameters<typeof webAutomationOutputPayload>[1];
+type Command = Parameters<ContentHarness["runAction"]>[0];
 
-      const reply = await harness.runAction({
-        commandId: `replay-save:${drift.mode}`,
-        actionType: "web.dom.click",
-        // Exactly what a replay sends: the recorded selector, which three of
-        // the four modes still answer to, and the recorded descriptor behind it.
-        ...(recorded.selector ? { selector: recorded.selector } : {}),
-        options: recordedElement(recorded)
-      });
+// Refusals retry for several seconds before they answer, and several rows make two.
+test.describe.configure({ timeout: 120_000 });
 
-      expect(reply.status, reply.message).toBe("succeeded");
-      expect(reply.element).toMatchObject({ tagName: "button", id: drift.saveId });
-      await expect
-        .poll(async () => (await harness.finalState()).state)
-        .toMatchObject({ savedInMode: drift.mode, savedDisplayName: displayName, saveCount: 1 });
-    });
-  }
+const ids = quoteDrawer.ids();
+const byId = quoteDrawer.byId;
+/** company-website's deploy after the recorded one: the lab seed renames every class and generated id and changes nothing else. */
+const REDEPLOYED_SEED = 4520;
+const redeployed = quoteDrawer.ids(REDEPLOYED_SEED);
+/** Any press on one of the quote form's actions, or on a control standing in for one. */
+const QUOTE_ACTION = /Send request|Save and finish later|Get my free quote|Continue|Back/u;
+const PRIVACY_ERROR = "Tick the box so we can contact you about this request";
 
-  test("selector-only: the recorded selector is gone, and the fingerprint's text recovers the control", async ({ openHarness, page }) => {
-    const harness = await openHarness("identity-drift");
-    const recorded = await describe(harness, SAVE_BASELINE);
-    expect(recorded).toMatchObject({ selector: "#save-settings", testId: "save-changes", visibleText: "Save changes" });
-    await armMode(harness, "selector-only");
+/** Exactly what a replay sends: the recorded selector, and the recorded descriptor behind it. */
+function replayOf(commandId: string, recorded: Descriptor, extra: Partial<Command> = {}): Command {
+  return { commandId, actionType: "web.dom.click", ...(recorded.selector ? { selector: recorded.selector } : {}), ...extra, options: recordedElement(recorded) };
+}
 
-    // Every stable signal the recording captured has drifted: the id, the test
-    // id and the class names are all different, so the whole exact half of the
-    // fingerprint misses and only its text is left to answer with.
-    await expect(page.locator("#save-settings")).toHaveCount(0);
-    await expect(page.locator('[data-testid="save-changes"]')).toHaveCount(0);
-    await expect(page.locator(".btn-primary")).toHaveCount(0);
+async function viewportRect(page: Page, selector: string): Promise<Rect> {
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`${selector} has no layout box.`);
+  return box;
+}
 
-    const reply = await harness.runAction({
-      commandId: "replay-save:selector-only-fingerprint-only",
-      actionType: "web.dom.click",
-      options: recordedElement(recorded)
-    });
+const state = async <T>(harness: ContentHarness) => (await harness.finalState()).state as T;
+
+test.describe("a replayed action finds the control the drift left", () => {
+  test("company-website's next deploy: the recorded Continue is pressed although its id and class were redrawn", async ({ openHarness, page }) => {
+    const recording = await openHarness("company-website");
+    await quoteDrawer.open(recording);
+    const recorded = await describe(recording, byId(ids.next));
+    const replay = await openHarness("company-website", { seed: REDEPLOYED_SEED });
+    await quoteDrawer.open(replay);
+    await expect(page.locator(byId(ids.next))).toHaveCount(0);
+
+    const reply = await replay.runAction(replayOf("redeploy:continue", recorded));
     expect(reply.status, reply.message).toBe("succeeded");
-    expect(reply.element).toMatchObject({ id: "workspace-settings-submit" });
-    await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ savedInMode: "selector-only" });
+    expect(reply.element).toMatchObject({ tagName: "button", visibleText: "Continue", id: redeployed.next });
+    // Pressed on step 1 with nothing filled in: the form's own check answers.
+    await expect(page.locator(byId(redeployed.errors.fullName!))).toHaveText("Enter your full name");
+  });
+
+  test("company-website's next deploy: the recorded Send request is pressed by its surviving test id", async ({ openHarness, page }) => {
+    const recording = await openHarness("company-website");
+    await quoteDrawer.open(recording);
+    await quoteDrawer.toStep(page, 3);
+    const recorded = await describe(recording, byId(ids.send));
+    const replay = await openHarness("company-website", { seed: REDEPLOYED_SEED });
+    await quoteDrawer.open(replay);
+    await quoteDrawer.toStep(page, 3, REDEPLOYED_SEED);
+
+    const reply = await replay.runAction(replayOf("redeploy:send", recorded));
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.element).toMatchObject({ testId: "quote-submit", id: redeployed.send });
+    await expect(page.locator(byId(redeployed.errors.privacy!))).toHaveText(PRIVACY_ERROR);
+    expect(await state(replay)).toMatchObject({ quotes: [], drafts: 0 });
+  });
+
+  test("bigbox redesigned-buy-box: the recorded Add to cart is found in the buy box, and Buy now in its old slot is not pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("bigbox-retail");
+    const product = "ip/valueridge-essentials-select-a-size-paper-towels/418830127";
+    const settle = async () => {
+      await labMutate(harness, "consent", { choice: "reject" });
+      await labMutate(harness, "dismiss-promo");
+      await labMutate(harness, "dismiss-chat-card");
+    };
+    await settle();
+    await openPath(harness, product);
+    const recorded = await describe(harness, '[data-testid="atc"]');
+    await labMutate(harness, "set-mode", { mode: "redesigned-buy-box" });
+    await settle();
+    await openPath(harness, product);
+    await expect(page.getByRole("button", { name: "Add to cart", exact: true })).toBeVisible();
+    await expect(page.locator('[data-testid="atc"]')).toHaveCount(0);
+    const clicks = await trackClicks(page);
+
+    const reply = await harness.runAction(replayOf("redesign:bigbox", recorded));
+    // Every class was renamed and the test id is gone, so no exact strategy
+    // answers; scoring ranks the moved Add to cart first by its words, name and role.
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.resolution).toMatchObject({ strategy: "scored-candidate" });
+    expect(reply.element).toMatchObject({ tagName: "button", visibleText: "Add to cart" });
+    expect(await clicks()).toContain("main|Add to cart");
+    expect(await clicks()).not.toContainEqual(expect.stringContaining("Buy now"));
+    expect(await state(harness)).toMatchObject({ express: null });
+  });
+
+  test("a redeploy took the recorded id and class, and with no selector the fingerprint's text recovers Continue", async ({ openHarness, page }) => {
+    const recording = await openHarness("company-website");
+    await quoteDrawer.open(recording);
+    const recorded = await describe(recording, byId(ids.next));
+    expect(recorded).toMatchObject({ visibleText: "Continue", id: ids.next });
+    const replay = await openHarness("company-website", { seed: REDEPLOYED_SEED });
+    await quoteDrawer.open(replay);
+
+    // Every stable-looking signal the recording captured has drifted: the id
+    // and the class names are this deploy's, so the exact half of the
+    // fingerprint misses and only its words are left to answer with.
+    await expect(page.locator(byId(recorded.id!))).toHaveCount(0);
+    await expect(page.locator(`.${recorded.classNames![0]}`)).toHaveCount(0);
+
+    const reply = await replay.runAction({ commandId: "redeploy:fingerprint-only", actionType: "web.dom.click", options: recordedElement(recorded) });
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.resolution).toMatchObject({ strategy: "fingerprint", candidateCount: 1 });
+    expect(reply.element).toMatchObject({ id: redeployed.next });
   });
 });
 
 test.describe("scored selection: Core's matcher decides what an exact strategy could not", () => {
-  for (const target of [
-    { name: "secondary", selector: SECONDARY, result: "secondary" },
-    { name: "primary", selector: PRIMARY, result: "primary" }
-  ]) {
-    test(`the recorded ${target.name} control wins the tie its selector could not break`, async ({ openHarness, page }) => {
-      const harness = await openHarness("ambiguous-targets");
-      const recorded = await describe(harness, target.selector);
+  const CART_BOXES = '[aria-label="Active Items"] input[type="checkbox"]';
+  for (const line of [1, 2] as const) {
+    test(`everything-store cart: the recorded line ${line}'s box wins the tie its selector could not break`, async ({ openHarness, page }) => {
+      const harness = await openHarness("everything-store");
+      await labMutate(harness, "consent", { choice: "decline" });
+      await labMutate(harness, "dismiss-nudge", { nudge: "app-banner" });
+      await labMutate(harness, "dismiss-nudge", { nudge: "notifications" });
+      await openPath(harness, "cart");
+      await expect(page.locator(CART_BOXES)).toHaveCount(2);
+      const before = (await state<{ cart: Array<{ lineId: string; selected: boolean }> }>(harness)).cart;
+      const recorded = await describe(harness, `${CART_BOXES.replace(" input", ` > div:nth-child(${line}) input`)}`);
+      expect(recorded.accessibleName).toMatch(/^Select /u);
 
-      // `button` matches both Continue buttons and the gate prefers neither:
-      // both are visible, enabled and of the recorded tag. Before scoring this
-      // was TARGET_AMBIGUOUS; now the recorded test id decides it.
-      const reply = await harness.runAction({
-        commandId: `scored-tie:${target.name}`,
-        actionType: "web.dom.click",
-        selector: "button",
-        options: recordedElement(recorded)
-      });
-
-      expect(reply).toMatchObject({ status: "succeeded", element: { selector: target.selector } });
-      // The tie was broken by a signal that identifies the control, and the
-      // measurement now rides on the success saying so: 1.000 against the twin's
-      // 0.382, at Core's full confidence. `reworded-aria` below also succeeds,
-      // at 0.389 and 0.366 -- the same status over a far weaker match, and a
-      // Flow can only tell the two apart because the resolution is reported.
-      expect(reply.resolution).toMatchObject({ strategy: "scored-candidate", candidateCount: 2 });
-      expect(reply.resolution?.bestScore).toBe(1);
-      expect(reply.resolution?.confidence).toBe(1);
-      expect(reply.resolution?.runnerUpScore).toBeCloseTo(0.382, 3);
-      await expect(page.getByTestId("result")).toHaveText(target.result);
-      expect((await harness.finalState()).state).toEqual({ selected: target.result });
+      // The selector matches both lines' boxes and the gate prefers neither:
+      // both are visible, enabled and of the recorded tag, with the same hashed
+      // class. Each box is named for its line, and the recorded name decides.
+      const reply = await harness.runAction({ commandId: `scored-tie:${line}`, actionType: "web.dom.click", selector: CART_BOXES, options: recordedElement(recorded) });
+      expect(reply, reply.message).toMatchObject({ status: "succeeded", element: { accessibleName: recorded.accessibleName } });
+      // Measured: the selector's strategy answers with the winner's score, at
+      // a confidence a Flow can read as well short of an exact match.
+      expect(reply.resolution).toMatchObject({ strategy: "selector", candidateCount: 2 });
+      expect(reply.resolution?.bestScore).toBeCloseTo(0.727, 3);
+      expect(reply.resolution?.confidence).toBeCloseTo(0.64, 2);
+      // The site re-renders the cart from the server: only the recorded line flipped.
+      await expect
+        .poll(async () => (await state<{ cart: Array<{ lineId: string; selected: boolean }> }>(harness)).cart.map((entry) => entry.selected))
+        .toEqual(before.map((entry, index) => (index === line - 1 ? !entry.selected : entry.selected)));
     });
   }
 
-  test("a descriptor that cannot tell the twins apart leaves them tied, and the failure carries their scores", async ({ openHarness, page }) => {
-    const harness = await openHarness("ambiguous-targets");
+  test("a descriptor that cannot tell company-website's two quote buttons apart leaves them tied, and the failure carries their scores", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await quoteDrawer.settle(harness);
+    const clicks = await trackClicks(page);
 
     // Both buttons answer every signal this descriptor carries, so both score
     // at the top of the scale. A tie at 1.00 is still a tie.
     const reply = await harness.runAction({
       commandId: "scored-tie-unbroken",
       actionType: "web.dom.click",
-      selector: "button",
-      options: { element: { tagName: "button", visibleText: "Continue" } }
+      selector: "button[data-open-quote]",
+      options: { element: { tagName: "button", visibleText: "Get a free quote" } }
     });
 
     expect(reply).toMatchObject({
       status: "failed",
-      failure: { ...TARGET_AMBIGUOUS, expected: "one element matching selector button" },
+      failure: { ...TARGET_AMBIGUOUS, expected: "one element matching selector button[data-open-quote]" },
       resolution: { strategy: "selector", candidateCount: 2 }
     });
-    expect(reply.message).toContain('button[data-testid="choice-primary"] "Continue" (1.00)');
-    expect(reply.message).toContain('button[data-testid="choice-secondary"] "Continue" (1.00)');
-    await expect(page.getByTestId("result")).toHaveText("None");
-    expect((await harness.finalState()).state).toEqual({ selected: null });
+    expect(reply.message).toBe('Target ambiguous: selector button[data-open-quote] matched 2 elements: button "Get a free quote" (1.00), button "Get a free quote" (1.00).');
+    expect(await clicks()).toEqual([]);
+    await expect(page.getByRole("dialog", { name: "Get a free quote" })).toBeHidden();
   });
 
   // CS1d. A point lands on one element, so a twin never shows in its count: the
-  // Flow lane's recorded bounds clicked the first of no-context's two identical
-  // Continue buttons and reported success (`L-replay` Defect 1). The family is
-  // now scored before a point is acted on, and a tie is reported as one.
-  test("no-context: recorded bounds on one of two identical twins fail TARGET_AMBIGUOUS, not a click", async ({ openHarness, page }) => {
-    const harness = await openHarness("ambiguous-targets");
-    const recorded = await describe(harness, PRIMARY);
-    const documentBounds = await documentRect(harness, PRIMARY);
-    const headers = { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" };
-    expect((await fetch(`${harness.lab.origin}/api/ambiguous-targets/set-mode`, { method: "POST", headers, body: '{"mode":"no-context"}' })).ok).toBe(true);
-    await page.goto(harness.url);
-    await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+  // Flow lane's recorded bounds clicked the first of two identical buttons and
+  // reported success (`L-replay` Defect 1). The family is now scored before a
+  // point is acted on, and a tie is reported as one. everything-store's
+  // checkout draws "Place your order" twice, in the main column and in the
+  // order summary, with the same class and the same words.
+  test("everything-store checkout: recorded bounds on one of the two Place your order buttons fail TARGET_AMBIGUOUS, not an order", async ({ openHarness }) => {
+    const harness = await openHarness("everything-store");
+    await labMutate(harness, "consent", { choice: "decline" });
+    await labMutate(harness, "dismiss-nudge", { nudge: "app-banner" });
+    await labMutate(harness, "dismiss-nudge", { nudge: "notifications" });
+    await labMutate(harness, "start-checkout", { pipeline: "cart" });
+    await openPath(harness, "checkout");
+    const summary = 'aside button[data-action="place-order"]';
+    const recorded = await describe(harness, summary);
+    const documentBounds = await documentRect(harness, summary);
 
-    const reply = await harness.runAction({ commandId: "cs1d-no-context", actionType: "web.dom.click", selector: PRIMARY, visualTarget: visualTarget({ documentBounds }), options: recordedElement(recorded) });
+    // The point and the recording, as the Flow lane sends them; no selector.
+    const reply = await harness.runAction({ commandId: "cs1d-checkout", actionType: "web.dom.click", visualTarget: visualTarget({ documentBounds }), options: recordedElement(recorded) });
 
     // Scoring decided, over a point that did land: the failure names the point among what was tried.
-    expect(reply).toMatchObject({ status: "failed", failure: { ...TARGET_AMBIGUOUS, expected: expect.stringContaining("visual target") }, resolution: { strategy: "scored-candidate", candidateCount: 2 } });
-    await expect(page.getByTestId("result")).toHaveText("None");
-    expect((await harness.finalState()).state).toMatchObject({ selected: null, mode: "no-context" });
+    expect(reply).toMatchObject({ status: "failed", failure: { ...TARGET_AMBIGUOUS, expected: expect.stringContaining("visual target") }, resolution: { strategy: "scored-candidate" } });
+    expect(reply.failure?.actual).toContain('button "Place your order" (0.80), button "Place your order" (0.79)');
+    expect(await state(harness)).toMatchObject({ orders: [] });
   });
 
-  test("a control whose every recorded signal has drifted is refused, not approximated", async ({ openHarness, page }) => {
-    const harness = await openHarness("identity-drift");
-    const recorded = await describe(harness, SAVE_BASELINE);
-    await armMode(harness, "selector-only");
-    // selector-only already changes the id, the class and the test id. Taking
-    // the text as well leaves nothing the recording knew this control by --
-    // the one state no rendering of the fixture reaches on its own.
-    await page.locator("#workspace-settings-submit").evaluate((element) => { element.textContent = "Apply changes"; });
-
-    const reply = await harness.runAction({
-      commandId: "scored-below-floor",
-      actionType: "web.dom.click",
-      ...(recorded.selector ? { selector: recorded.selector } : {}),
-      options: recordedElement(recorded)
-    });
-
-    // Two buttons were weighed and neither cleared the floor. The higher-scoring
-    // of the two is Discard, on a shared class prefix, which is exactly the
-    // answer a resolver without a floor would have clicked.
-    expect(reply).toMatchObject({
-      status: "failed",
-      failure: TARGET_NOT_FOUND,
-      resolution: { strategy: "fingerprint", candidateCount: 2 }
-    });
-    expect(reply.message).toBe("No target resolved from selector #save-settings, element fingerprint.");
-    expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
-  });
-
-  test("renamed-redesign: the fixture's own rendering of that drift is refused on both paths, and nothing is pressed", async ({ openHarness, page }) => {
-    const harness = await openHarness("identity-drift");
-    const recorded = await describe(harness, SAVE_BASELINE);
-    const bounds = await documentRect(harness, SAVE_BASELINE);
-    await armMode(harness, "renamed-redesign");
-    // The row above as a rendering the fixture reaches by itself, without the id
-    // and test id: the `reworded-aria` component with its aria-label gone and
-    // its label renamed, so the accessible name changed as well.
-    await expect(page.getByRole("button", { name: "Apply changes", exact: true })).toHaveAttribute("class", "ui-button ui-button--accent");
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+  test("crossborder basket-redesign: a control whose every recorded signal has drifted is refused, not approximated", async ({ openHarness, page }) => {
+    const harness = await openHarness("crossborder-marketplace");
+    const item = "item/1005008123450";
+    const settle = async () => {
+      await labMutate(harness, "consent", { choice: "essential" });
+      await labMutate(harness, "welcome", { action: "close" });
+      await labMutate(harness, "notifications", { answer: "later" });
+      await labMutate(harness, "chat", { view: "minimized" });
+    };
+    await settle();
+    await openPath(harness, item);
+    const recorded = await describe(harness, '[data-testid="add-to-cart"]');
+    expect(recorded).toMatchObject({ tagName: "div", visibleText: "Add to cart" });
+    await labMutate(harness, "set-mode", { mode: "basket-redesign" });
+    await settle();
+    await openPath(harness, item);
+    // The redesign took the test id, the words and the build's class names at
+    // once, and put Buy now where Add to cart stood: nothing the recording knew
+    // this control by is left.
+    await expect(page.getByText("Add to basket", { exact: true })).toBeVisible();
+    await expect(page.locator('[data-testid="add-to-cart"]')).toHaveCount(0);
     const clicks = await trackClicks(page);
 
+    const reply = await harness.runAction(replayOf("basket-redesign", recorded));
+    expect(reply).toMatchObject({ status: "failed", failure: TARGET_NOT_FOUND, resolution: { strategy: "fingerprint", confidence: expect.any(Number) } });
+    expect(await clicks()).toEqual([]);
+    expect(await state(harness)).toMatchObject({ cart: [] });
+  });
+
+  test("company-website redesigned-quote-submit: the recorded Send request is refused on both paths, and nothing is pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await quoteDrawer.open(harness);
+    await quoteDrawer.toStep(page, 3);
+    const recorded = await describe(harness, byId(ids.send));
+    const bounds = await documentRect(harness, byId(ids.send));
+
     // Measured with Core's matcher as it now stands, and the same on both
-    // paths: the renamed Save ranks first at -0.085, Discard second at -0.256,
-    // confidence 0 -- 0.435 under the 0.35 floor. The ranking is right and the
-    // floor refuses it anyway, which is what sends this variant's live run to
-    // the provider. The Flow path's point lands on the renamed Save and is
-    // refused at the same score.
+    // paths: "Save and finish later" in the old slot is refused at -0.13, and
+    // nothing on the page reaches the floor -- the best scores -0.073 at
+    // confidence 0. The Flow path's point lands too and is refused. This is
+    // what the variant's manifest means by "only a repair can pass this row".
     for (const [shape, point] of [["replay", {}], ["flow", { visualTarget: visualTarget({ documentBounds: bounds }) }]] as const) {
-      const reply = await harness.runAction({
-        commandId: `renamed-redesign:${shape}`,
-        actionType: "web.dom.click",
-        ...(recorded.selector ? { selector: recorded.selector } : {}),
-        ...point,
-        options: recordedElement(recorded)
-      });
+      await quoteDrawer.open(harness, "redesigned-quote-submit");
+      await quoteDrawer.toStep(page, 3);
+      await expect(page.locator(byId(ids.headerSend))).toHaveText("Get my free quote");
+      const clicks = await trackClicks(page);
+      const reply = await harness.runAction(replayOf(`renamed-redesign:${shape}`, recorded, point));
       expect(reply, `${shape}: ${reply.message}`).toMatchObject({
         status: "failed",
         failure: TARGET_NOT_FOUND,
-        resolution: { strategy: "fingerprint", candidateCount: 2, confidence: 0 }
+        resolution: { strategy: "fingerprint", candidateCount: 6, confidence: 0 }
       });
-      // -0.104 before t419: the recorded id and selector are on no element of the drifted page, so they no longer count against it.
-      expect(reply.resolution?.bestScore).toBeCloseTo(-0.085, 3);
-      // -0.360 before t419, for the same reason: Discard is no longer charged for lacking the absent id.
-      expect(reply.resolution?.runnerUpScore).toBeCloseTo(-0.256, 3);
-      // The veto's sentence reads -0.09 rather than -0.10 since t419, on the same score.
-      if (shape === "flow") expect(reply.message).toContain('refused button "Apply changes" scoring -0.09');
+      expect(reply.resolution?.bestScore).toBeCloseTo(-0.073, 3);
+      expect(reply.resolution?.runnerUpScore).toBeCloseTo(-0.099, 3);
+      expect(reply.message).toContain(`refused button#${ids.draft} "Save and finish later" scoring -0.13`);
+      // While it retried, the resolver may close the drawer through its ×
+      // (reports/t730-b1-identity.md); no action of the form is pressed.
+      expect(await clicks()).not.toContainEqual(expect.stringMatching(QUOTE_ACTION));
+      expect(await state(harness)).toMatchObject({ mode: "redesigned-quote-submit", drafts: 0, quotes: [] });
     }
-
-    expect(await clicks()).toEqual([]);
-    expect((await harness.finalState()).state).toMatchObject({ mode: "renamed-redesign", saveCount: 0, discardCount: 0, savedInMode: null, status: "" });
   });
 
   // D-1 (reports/w2-back-half-design.md). The row above is a recorded Flow with
   // no repair. This is the same node once a correct repair has been approved
-  // and applied: its `target` names the renamed control, and its `element`
-  // still names the Save that was recorded. The repaired selector used to
-  // travel with the stale identity, so the veto refused the very control the
-  // repair named, as uncorroborated by "Save changes", and scoring failed at
-  // -0.104. The repair has to win on both halves, and the veto still has to
-  // refuse a wrong element when judged against the repair.
-  test("a persisted repair of the recorded Save resolves Apply changes on renamed-redesign, and the veto still refuses Discard", async ({ openHarness, page }) => {
-    const harness = await openHarness("identity-drift");
-    const recorded = await describe(harness, SAVE_BASELINE);
-    const bounds = await documentRect(harness, SAVE_BASELINE);
+  // and applied: its `target` names the redesigned "Get my free quote", and its
+  // `element` still names the Send request that was recorded. The repair has to
+  // win, and once the page moves on again the repaired node must not land on
+  // "Save and finish later" instead.
+  test("a persisted repair of the recorded Send request resolves Get my free quote, and refuses once that is gone", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await quoteDrawer.open(harness);
+    await quoteDrawer.toStep(page, 3);
+    const recorded = await describe(harness, byId(ids.send));
+    const bounds = await documentRect(harness, byId(ids.send));
+    await quoteDrawer.open(harness, "redesigned-quote-submit");
+    await quoteDrawer.toStep(page, 3);
+    const repairedTarget = repairNaming(await describe(harness, byId(ids.headerSend)));
 
     for (const [shape, point] of [["replay", {}], ["flow", { visualTarget: visualTarget({ documentBounds: bounds }) }]] as const) {
-      await armMode(harness, "renamed-redesign");
-      await expect(page.locator(REPAIRED_SAVE.selector)).toHaveText("Apply changes");
+      await quoteDrawer.open(harness, "redesigned-quote-submit");
+      await quoteDrawer.toStep(page, 3);
       const clicks = await trackClicks(page);
-
-      const reply = await harness.runAction(dispatchedRepair(`persisted-repair:${shape}`, { element: recorded as unknown as NodePayload, ...point }));
-
+      const reply = await harness.runAction(dispatchedRepair(`persisted-repair:${shape}`, repairedTarget, { element: recorded as unknown as NodePayload, ...point }));
       expect(reply, `${shape}: ${reply.message}`).toMatchObject({
         status: "succeeded",
-        element: { tagName: "button", accessibleName: "Apply changes" },
+        element: { tagName: "button", accessibleName: "Get my free quote" },
         resolution: { strategy: "selector", candidateCount: 1 }
       });
-      expect(await clicks()).toEqual(["Apply changes"]);
-      await expect
-        .poll(async () => (await harness.finalState()).state)
-        .toMatchObject({ mode: "renamed-redesign", savedInMode: "renamed-redesign", saveCount: 1, discardCount: 0 });
+      expect(await clicks()).toEqual(["main|Get my free quote"]);
+      await expect(page.locator(byId(ids.errors.privacy!))).toHaveText(PRIVACY_ERROR);
     }
 
-    // The same repaired node after the page moved on again: Apply changes is
-    // gone, so the repaired selector now lands on Discard. Judged against the
-    // repair, Discard answers nothing it named, and nothing is pressed.
-    await armMode(harness, "renamed-redesign");
-    await page.locator(REPAIRED_SAVE.selector).evaluate((element) => element.remove());
-    await expect(page.locator(REPAIRED_SAVE.selector)).toHaveText("Discard changes");
+    // The same repaired node after the page moved on again: Get my free quote
+    // is gone, and "Save and finish later" is still in the footer. Judged
+    // against the repair, nothing on the page is it, and nothing is pressed.
+    await quoteDrawer.open(harness, "redesigned-quote-submit");
+    await quoteDrawer.toStep(page, 3);
+    await page.locator(byId(ids.headerSend)).evaluate((element) => element.remove());
     const staleClicks = await trackClicks(page);
-
-    const refused = await harness.runAction(dispatchedRepair("persisted-repair:stale", { element: recorded as unknown as NodePayload, visualTarget: visualTarget({ documentBounds: bounds }) }));
-
+    const refused = await harness.runAction(dispatchedRepair("persisted-repair:stale", repairedTarget, { element: recorded as unknown as NodePayload, visualTarget: visualTarget({ documentBounds: bounds }) }));
     expect(refused, refused.message).toMatchObject({ status: "failed", failure: TARGET_NOT_FOUND });
-    // Contradicted, not merely uncorroborated: Discard scores -0.13 against the
-    // repair, and the selector, the point and the fingerprint all land on it.
-    expect(refused.message).toContain('refused button[data-testid="discard-changes"] "Discard changes" scoring -0.13)');
-    expect(refused.message).not.toContain("Apply changes");
-    expect(await staleClicks()).toEqual([]);
-    expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
-  });
-
-  test("reworded-aria: the surviving accessible name resolves the right control, and Discard is not touched", async ({ openHarness, page }) => {
-    const harness = await openHarness("identity-drift");
-    const recorded = await describe(harness, SAVE_BASELINE);
-    const displayName = await page.locator(DISPLAY_NAME).inputValue();
-    await armMode(harness, "reworded-aria");
-
-    // One redesign took every signal Level 1 looks a target up by -- id, test
-    // id, class names, exact text -- and left the accessible name standing.
-    await expect(page.locator("#save-settings")).toHaveCount(0);
-    await expect(page.locator('[data-testid="save-changes"]')).toHaveCount(0);
-    await expect(page.locator("button.btn.btn-primary")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveText("Save");
-
-    const reply = await harness.runAction({
-      commandId: "replay-save:reworded-aria",
-      actionType: "web.dom.click",
-      ...(recorded.selector ? { selector: recorded.selector } : {}),
-      options: recordedElement(recorded)
-    });
-
-    // Level 1 has nothing left to look the control up by, so Level 2 decides.
-    // Measured with Core's matcher as it now stands: the redesigned Save scores
-    // 0.389 against Discard's -0.360, so it clears the 0.35 floor and leads by
-    // 0.749. Both numbers move with the missing-identifier constant named in
-    // this file's header; the ranking does not.
-    expect(reply.status, reply.message).toBe("succeeded");
-    // A successful resolution now carries its measurement. It did not until
-    // 2026-09-12 -- `resolveTarget` handed the verbs an Element and nothing
-    // else, so the scores reached a Flow only on the failure path -- and this
-    // row asserted the gap to keep it visible. The gap closed while this file
-    // was being edited, so the assertion is inverted rather than deleted: a
-    // Flow reading this reply can now tell a control recovered by a hair from
-    // one matched outright.
-    expect(reply.resolution).toMatchObject({ strategy: "scored-candidate", candidateCount: 2 });
-    expect(reply.resolution?.bestScore).toBeGreaterThan(0.35);
-    expect(reply.resolution?.runnerUpScore).toBeLessThan(0);
-    // The numbers themselves, because they are what a Flow acts on: 0.389, a
-    // measured 0.039 over the floor, at confidence 0.366 -- against the
-    // 1.000/1.000 of the tie-break above, which both succeeded. Pinned rather
-    // than bounded, so the Core constant this file's header names cannot move
-    // without a row saying so.
-    // 0.389 and 0.366 before t419: the recorded id and selector are on no element of the redesigned page, so they no longer count against it.
-    expect(reply.resolution?.bestScore).toBeCloseTo(0.602, 3);
-    expect(reply.resolution?.confidence).toBeCloseTo(0.566, 3);
-    expect(reply.element).toMatchObject({ tagName: "button", accessibleName: "Save changes", visibleText: "Save" });
-    await expect
-      .poll(async () => (await harness.finalState()).state)
-      .toMatchObject({ savedInMode: "reworded-aria", savedDisplayName: displayName, saveCount: 1, discardCount: 0 });
+    expect(await staleClicks()).not.toContainEqual(expect.stringMatching(QUOTE_ACTION));
+    expect(await state(harness)).toMatchObject({ drafts: 0, quotes: [] });
   });
 });
 
-test.describe("long-document: a visual target prefers its document bounds", () => {
+// company-website's `reworded-quote-submit` restyles the drawer's submit: it
+// now reads "Send", with a new generated id, a new class and no analytics test
+// id. Only its accessible name, `aria-label="Send request"`, is what was
+// recorded, and Back is the look-alike sibling standing beside it.
+test.describe("company-website reworded-quote-submit: a replayed action finds the control by its surviving accessible name", () => {
+  test("reworded: the surviving accessible name resolves Send, and Back is not touched", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await quoteDrawer.open(harness);
+    await quoteDrawer.toStep(page, 3);
+    const recorded = await describe(harness, byId(ids.send));
+    expect(recorded).toMatchObject({ testId: "quote-submit", visibleText: "Send request", id: ids.send });
+
+    await quoteDrawer.open(harness, "reworded-quote-submit");
+    await quoteDrawer.toStep(page, 3);
+    // One restyle took every signal Level 1 looks a target up by -- id, test
+    // id, class names, exact text -- and left the accessible name standing.
+    await expect(page.locator(byId(ids.send))).toHaveCount(0);
+    await expect(page.locator('[data-testid="quote-submit"]')).toHaveCount(0);
+    const send = page.getByRole("button", { name: "Send request", exact: true });
+    await expect(send).toHaveText("Send");
+    expect(recorded.classNames?.length).toBeGreaterThan(0);
+    const classes = await send.evaluate((element) => [...element.classList]);
+    expect(classes.filter((name) => recorded.classNames?.includes(name))).toEqual([]);
+    await expect(page.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+
+    const clicks = await trackClicks(page);
+    const reply = await harness.runAction(replayOf("replay-send:reworded", recorded));
+
+    // No stable identifier matches any more, and the recorded text "Send
+    // request" is on nothing, so the fingerprint's name scan decides: exactly
+    // one element is named "Send request". The veto then weighs that one
+    // element against the recording with Core's matcher; the scores were
+    // measured on this tree on 2026-10-19.
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.resolution).toMatchObject({ strategy: "fingerprint", candidateCount: 1 });
+    expect(reply.resolution?.bestScore).toBeCloseTo(0.602, 3);
+    expect(reply.resolution?.confidence).toBeCloseTo(0.566, 3);
+    expect(reply.element).toMatchObject({ tagName: "button", accessibleName: "Send request", visibleText: "Send", id: ids.restyledSend });
+    // Pressed with the privacy box unticked: the drawer's own check answers, and nothing is sent.
+    await expect(page.locator(byId(ids.errors.privacy!))).toHaveText(PRIVACY_ERROR);
+    expect(await clicks()).toEqual(["main|Send"]);
+    expect(await state(harness)).toMatchObject({ mode: "reworded-quote-submit", quotes: [], drafts: 0 });
+  });
+});
+
+test.describe("company-website's home page: a visual target prefers its document bounds", () => {
+  const FOOTER_QUOTE = "footer span[data-open-quote]";
+
   test("document bounds win over the viewport bounds recorded beside them", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
-    const documentBounds = await documentRect(harness, BELOW_FOLD);
-    // Where the sticky header sits: the spot the stale viewport bounds point at.
-    const staleBounds = await viewportRect(harness, '[data-testid="sticky-header"]');
+    const harness = await openHarness("company-website");
+    await quoteDrawer.settle(harness);
+    const documentBounds = await documentRect(harness, FOOTER_QUOTE);
+    // The footer's "Request a quote" is below the fold, and the site's header
+    // is sticky: the spot the stale viewport bounds point at.
+    expect(documentBounds.y).toBeGreaterThan(720);
+    const staleBounds = await viewportRect(page, "header");
     await page.evaluate((top) => window.scrollTo(0, top), Math.round(documentBounds.y - 200));
 
-    const reply = await harness.runAction({
-      commandId: "document-bounds-win",
-      actionType: "web.dom.click",
-      visualTarget: visualTarget({ bounds: staleBounds, documentBounds })
-    });
-    expect(reply).toMatchObject({ status: "succeeded", element: { selector: BELOW_FOLD } });
-    await expect(page.getByTestId("result")).toHaveText("Reached");
-    expect((await harness.finalState()).state).toMatchObject({ reached: true });
+    const reply = await harness.runAction({ commandId: "document-bounds-win", actionType: "web.dom.click", visualTarget: visualTarget({ bounds: staleBounds, documentBounds }) });
+    expect(reply).toMatchObject({ status: "succeeded", resolution: { strategy: "visual-target" }, element: { visibleText: "Request a quote" } });
+    await expect(page.getByRole("dialog", { name: "Get a free quote" })).toBeVisible();
   });
 
   test("stale viewport bounds no longer click whatever scrolled into their place", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
-    const documentBounds = await documentRect(harness, BELOW_FOLD);
+    const harness = await openHarness("company-website");
+    await quoteDrawer.settle(harness);
+    const documentBounds = await documentRect(harness, FOOTER_QUOTE);
     await page.evaluate((top) => window.scrollTo(0, top), Math.round(documentBounds.y - 200));
-    const recordedBounds = await viewportRect(harness, BELOW_FOLD);
+    const recordedBounds = await viewportRect(page, FOOTER_QUOTE);
     await page.evaluate(() => window.scrollTo(0, 0));
 
-    const reply = await harness.runAction({
-      commandId: "stale-bounds-refused",
-      actionType: "web.dom.click",
-      visualTarget: visualTarget({ bounds: recordedBounds, documentBounds })
-    });
+    const reply = await harness.runAction({ commandId: "stale-bounds-refused", actionType: "web.dom.click", visualTarget: visualTarget({ bounds: recordedBounds, documentBounds }) });
     // The document bounds are still below the fold, so nothing is under them
     // and the action fails. It used to succeed, on the wrong element.
-    expect(reply).toMatchObject({
-      status: "failed",
-      failure: TARGET_NOT_FOUND,
-      resolution: { strategy: "visual-target" }
-    });
+    expect(reply).toMatchObject({ status: "failed", failure: TARGET_NOT_FOUND, resolution: { strategy: "visual-target" } });
     expect(reply.message).toContain("No target resolved from visual target");
-    await expect(page.getByTestId("result")).toHaveText("Pending");
-    expect((await harness.finalState()).state).toMatchObject({ reached: false });
+    await expect(page.getByRole("dialog", { name: "Get a free quote" })).toBeHidden();
   });
 });
 
 test.describe("a successful resolution says how sure it was", () => {
   // D1 promised structured resolution diagnostics -- strategy, candidate count,
-  // best and runner-up score, confidence -- in *every* action result. Until
-  // 2026-09-12 a failure carried them and a success carried nothing, because
-  // `resolveTarget` was typed to return an `Element` and the measurement was
-  // dropped one call below where the failure path's copy was kept. It was never
-  // a decision; it fell out of a signature. `resolveTarget` now returns both and
-  // every verb passes the measurement into the evidence it already builds.
+  // best and runner-up score, confidence -- in *every* action result, and
+  // `resolveTarget` now returns them with the element it resolved. The rows
+  // above prove the numbers for each shape a resolution can take:
   //
-  // The rows above prove the numbers for each shape a resolution can take, and
-  // between them they are the whole point of carrying the field. Measured on
-  // these fixtures, with Core's matcher as it now stands:
+  //   exact, Continue                 best 0.840, no runner-up, confidence 0.840
+  //   tie broken by the recorded name best 0.727 of 2,             confidence 0.64
+  //   refused, redesigned Send        best -0.073, runner-up -0.099, confidence 0
   //
-  //   exact, `#save-settings`  best 1.000, no runner-up,    confidence 1.000
-  //   scored, recorded twin    best 1.000, runner-up 0.382, confidence 1.000
-  //   scored, `reworded-aria`  best 0.389, runner-up -0.360, confidence 0.366
-  //   refused by the veto      best -0.065, runner-up -0.360, confidence 0
-  //
-  // The exact row is the newest of the four and the one that used to be blank.
-  // It carries no runner-up because an exact strategy weighed one element, and
-  // that is the difference a reader should take from the table: 1.000 with
-  // nothing to compare against is a selector that answered, while 1.000 over a
-  // runner-up's 0.382 is a tie Core broke.
-  //
-  // The middle two both report `succeeded` and both clicked the right control.
-  // A Flow reading only the status cannot tell them apart; reading the
-  // confidence it can, and 1.000 against 0.366 is the difference between a
-  // control matched on a signal that identifies it and one recovered by 0.039
-  // over the floor. That is the distinction this field exists to carry.
-  test("an exact match reports the strategy that answered, and claims no score it did not measure", async ({ openHarness }) => {
-    const harness = await openHarness("identity-drift");
-    const recorded = await describe(harness, SAVE_BASELINE);
+  // An exact strategy weighed one element, so it carries no runner-up: the
+  // difference between "a selector answered" and "a tie was broken" is there in
+  // the field, not in the status.
+  test("an exact match reports the strategy that answered, and claims no score it did not measure", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await quoteDrawer.open(harness);
+    const recorded = await describe(harness, byId(ids.next));
 
-    const reply = await harness.runAction({
-      commandId: "diagnostics:exact",
-      actionType: "web.dom.click",
-      ...(recorded.selector ? { selector: recorded.selector } : {}),
-      options: recordedElement(recorded)
-    });
+    const reply = await harness.runAction(replayOf("diagnostics:exact", recorded));
 
     // Nothing drifted, so the recorded selector answers at once and one element
-    // survives the gate -- and it reports what that match scored, which it did
-    // not until 2026-09-12. `identity/veto.ts` has always weighed an exact match
-    // before it is acted on; it used to return the measurement only when it
-    // refused and drop it when it accepted, so this row asserted an empty
-    // resolution. The number is Core's, taken on the way past, and no element is
-    // scored twice to get it.
-    //
-    // 1.000 at full confidence, because the descriptor was read off this very
-    // page and nothing has moved: this is what a resolution looks like when the
-    // recording and the page still agree completely, and it is the top of the
-    // scale the other three rows are read against.
+    // survives the gate -- and it reports what that match scored, which
+    // `identity/veto.ts` weighs before acting. Measured: 0.840, not the 1.000
+    // the synthetic fixture's Save reached against itself, although this
+    // descriptor was read off this very page a moment earlier
+    // (reports/t730-b1-identity.md, open questions).
     expect(reply.status, reply.message).toBe("succeeded");
-    expect(reply.resolution).toEqual({ strategy: "selector", candidateCount: 1, bestScore: 1, confidence: 1 });
+    expect(reply.resolution).toMatchObject({ strategy: "selector", candidateCount: 1 });
+    expect(reply.resolution?.bestScore).toBeCloseTo(0.84, 3);
+    expect(reply.resolution?.confidence).toBeCloseTo(0.84, 3);
     // No runner-up: one element was weighed, so there is nothing to compare it
     // with, and the field is absent rather than zero.
     expect(reply.resolution?.runnerUpScore).toBeUndefined();
+    await expect(page.locator(byId(ids.errors.fullName!))).toHaveText("Enter your full name");
   });
 
   test("a verb that resolves nothing gains no measurement", async ({ openHarness }) => {
-    const harness = await openHarness("long-document");
+    const harness = await openHarness("company-website");
+    await quoteDrawer.settle(harness);
 
     // Scrolling to a position resolves no element, so there is nothing to
     // report and the field stays absent. The pair matters: "no resolution" and
-    // "a resolution with no scores" are different statements, and a reader of
-    // the result can tell which they have.
-    const reply = await harness.runAction({
-      commandId: "diagnostics:no-target",
-      actionType: "web.dom.scroll",
-      options: { y: 200 }
-    });
-
+    // "a resolution with no scores" are different statements.
+    const reply = await harness.runAction({ commandId: "diagnostics:no-target", actionType: "web.dom.scroll", options: { y: 200 } });
     expect(reply.status, reply.message).toBe("succeeded");
     expect(reply.resolution).toBeUndefined();
   });
 });
 
 /**
- * What `validateWebRuntimeTargetOverrideEvidence` resolves the model's
- * `{ element: "target.2" }` to on this page, copied from its output as
- * `domain/src/runtime/llm-evidence/tests/renamed-save-override.test.ts` pins it.
- * This is what an applied repair stores as the node's `target`.
+ * The repair an approved adaptation stores as the node's `target`: the shape
+ * `validateWebRuntimeTargetOverrideEvidence` gives a model's
+ * `{ element: "target.2" }`, filled with what this page says about the control
+ * the repair names.
  */
-const REPAIRED_SAVE = {
-  handles: { element: "target.2" },
-  handleResolution: "named",
-  tagName: "button",
-  accessibleName: "Apply changes",
-  selector: "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)",
-  metadata: { controlType: "submit", formId: "settings-form" }
-} as const;
-
-type NodePayload = Parameters<typeof webAutomationOutputPayload>[1];
+function repairNaming(control: Descriptor) {
+  return {
+    handles: { element: "target.2" },
+    handleResolution: "named",
+    tagName: control.tagName,
+    accessibleName: control.accessibleName,
+    selector: control.selector,
+    metadata: { controlType: "button", formId: ids.form }
+  };
+}
 
 /**
  * The command a live run dispatches for the recorded click once the repair is
@@ -520,9 +508,9 @@ type NodePayload = Parameters<typeof webAutomationOutputPayload>[1];
  * is the one hop restated. The wire target and the command come from the
  * domain's own mapping.
  */
-function dispatchedRepair(commandId: string, recording: NodePayload): Parameters<ContentHarness["runAction"]>[0] {
+function dispatchedRepair(commandId: string, repaired: ReturnType<typeof repairNaming>, recording: NodePayload): Command {
   const node = webAutomationOutputPayload("web.dom.click", recording);
-  const prepared = { ...node, target: normalizeAutomationStudioElementTarget({ ...REPAIRED_SAVE }, { source: "runtime" }) as unknown as NodePayload };
+  const prepared = { ...node, target: normalizeAutomationStudioElementTarget({ ...repaired }, { source: "runtime" }) as unknown as NodePayload };
   const target = outputTargetFromPayload(prepared);
   const command = webAutomationActionFromGatewayCommand({ commandId, actionType: "web.dom.click", ...(target ? { target } : {}), parameters: prepared });
   if ("status" in command) throw new Error(`the domain rejected the repaired click: ${command.message}`);
@@ -530,152 +518,143 @@ function dispatchedRepair(commandId: string, recording: NodePayload): Parameters
 }
 
 // The near-miss: a different action whose label contains the recorded one
-// (design A, reports/i-resolver-safety.md "(a)", rows R1-R4 and R7-R8). Save is
-// recorded, then the page puts "Save changes and exit" where a replay looks for
-// it. Core gives that label the rung it gives "Save changes" shortened, so these
-// pages had the resolver click the wrong action and report success: through
-// Level 2 at 0.633 on a recording with no identifiers, through the Level 1 veto
-// on the same recording, and at 0.359 on an authored one once the wrong action
-// carried no identifiers of its own. `identity/corroboration.ts` now requires
-// something that says which control this is to agree exactly.
+// (design A, reports/i-resolver-safety.md "(a)", rows R1-R4 and R7-R8).
+// Continue is recorded, then the page puts "Continue to site" -- the words of
+// the site's own winter notice -- where a replay looks for it. Core gives that
+// label the rung it gives "Continue" shortened, so such pages had the resolver
+// click the wrong action and report success. `identity/corroboration.ts` now
+// requires something that says which control this is to agree exactly.
 //
 // Each row replays as a replay sends it and as the Flow lane does, with the
-// recorded bounds too, because a point is a third way onto the near-miss: R1
-// was accepted through it at 0.088. Both must refuse, nothing may be clicked,
-// and the oracle must record no save. The control is the same near-miss beside
-// the Save it imitates. These rows live here rather than in a spec of their own
-// because `e2e/content/tests/` is at its 25-file structure limit.
+// recorded bounds too, because a point is a third way onto the near-miss. Both
+// must refuse and no action may be pressed. The control is the same near-miss
+// beside the Continue it imitates. Continue's id is a generated one, so
+// "with its id" and "without" are the two recordings a page can produce; the
+// near-miss gets a generated-looking id of its own in every shape but R7 and
+// R8, since the site draws no test ids on these buttons.
 
-const NEAR_MISS = { id: "exit-btn", testId: "save-and-exit", text: "Save changes and exit" };
+const NEAR_MISS = { id: ":rk9q:", text: "Continue to site" };
 
 type NearMissPage = "R1" | "R2" | "R3" | "R4" | "R7" | "R8" | "control";
 
-/** Records Save; `identifierLess` takes its id and test id off first, which is how a page with neither records it. */
-async function recordSave(harness: ContentHarness, identifierLess: boolean) {
-  if (identifierLess) {
-    await harness.page.locator(SAVE_BASELINE).evaluate((element) => {
-      element.removeAttribute("id");
-      element.removeAttribute("data-testid");
-    });
-  }
-  const selector = identifierLess ? "button.btn.btn-primary" : SAVE_BASELINE;
+/** Records Continue; `withoutId` takes its generated id off first, which is how a page with none records it. */
+async function recordContinue(harness: ContentHarness, withoutId: boolean) {
+  if (withoutId) await harness.page.locator(byId(ids.next)).evaluate((element) => element.removeAttribute("id"));
+  const selector = withoutId ? "section[role=dialog] > div:last-child > button:nth-of-type(2)" : byId(ids.next);
   return { recorded: await describe(harness, selector), bounds: await documentRect(harness, selector) };
 }
 
-/** Puts the near-miss where each row needs it; every shape but R7 and R8 gives it an id and a test id of its own. */
+/** Puts the near-miss where each row needs it, in the drawer's footer (Back, Continue) or its header. */
 async function arrangeNearMiss(page: Page, row: NearMissPage): Promise<void> {
   await page.evaluate(({ which, nearMiss }) => {
-    const group = document.querySelector('[data-testid="primary-actions"]')!;
-    const save = group.querySelector('button[type="submit"]')!;
-    const discard = group.querySelector('[data-testid="discard-changes"]')!;
+    const footer = document.querySelector("section[role=dialog] > div:last-child")!;
+    const [back, next] = [...footer.querySelectorAll("button")];
     const button = document.createElement("button");
     button.type = "button";
-    if (which !== "R7" && which !== "R8") {
-      button.id = nearMiss.id;
-      button.setAttribute("data-testid", nearMiss.testId);
-    }
+    button.className = next!.className;
+    if (which !== "R7" && which !== "R8") button.id = nearMiss.id;
     button.textContent = nearMiss.text;
-    if (which === "R1" || which === "R3" || which === "R7" || which === "R8") save.replaceWith(button);
-    else document.querySelector("main > header")!.append(button);
-    if (which === "R2" || which === "R4") save.remove();
-    if (which === "R1" || which === "R2" || which === "R7") discard.remove();
+    if (which === "R1" || which === "R3" || which === "R7" || which === "R8") next!.replaceWith(button);
+    else document.querySelector("section[role=dialog] > div:first-child")!.append(button);
+    if (which === "R2" || which === "R4") next!.remove();
+    if (which === "R1" || which === "R2" || which === "R7") back!.remove();
   }, { which: row, nearMiss: NEAR_MISS });
 }
 
-/** Starts recording every click the page receives, whatever it lands on, and returns a reader for them. */
-async function trackClicks(page: Page): Promise<() => Promise<string[]>> {
-  await page.evaluate(() => {
-    const clicks: string[] = [];
-    (window as unknown as { __nearMissClicks: string[] }).__nearMissClicks = clicks;
-    document.addEventListener("click", (event) => clicks.push(((event.target as Element | null)?.textContent ?? "").trim()), true);
-  });
-  return () => page.evaluate(() => (window as unknown as { __nearMissClicks: string[] }).__nearMissClicks);
-}
-
-test.describe("identity-drift near-miss: a label that contains the recorded one is not the recorded control", () => {
+test.describe("company-website near-miss: a label that contains the recorded one is not the recorded control", () => {
   for (const spec of [
-    { row: "R1", identifierLess: false, page: "Save replaced in its slot by the near-miss, Discard removed" },
-    { row: "R2", identifierLess: true, page: "Save and Discard gone, the near-miss in the header" },
-    { row: "R3", identifierLess: true, page: "the near-miss in Save's slot, Discard kept" },
-    { row: "R4", identifierLess: true, page: "Save gone, Discard left in the slot, the near-miss in the header" },
-    { row: "R7", identifierLess: false, page: "Save replaced by the near-miss with no identifiers, Discard removed" },
-    { row: "R8", identifierLess: false, page: "Save replaced by the near-miss with no identifiers, Discard kept" }
+    { row: "R1", withoutId: false, page: "Continue replaced in its slot by the near-miss, Back removed" },
+    { row: "R2", withoutId: true, page: "Continue and Back gone, the near-miss in the drawer's header" },
+    { row: "R3", withoutId: true, page: "the near-miss in Continue's slot, Back kept" },
+    { row: "R4", withoutId: true, page: "Continue gone, Back left in the footer, the near-miss in the header" },
+    { row: "R7", withoutId: false, page: "Continue replaced by the near-miss with no id, Back removed" },
+    { row: "R8", withoutId: false, page: "Continue replaced by the near-miss with no id, Back kept" }
   ] as const) {
-    test(`${spec.row}, ${spec.identifierLess ? "identifier-less" : "authored"} recording: ${spec.page}`, async ({ openHarness, page }) => {
-      const harness = await openHarness("identity-drift");
-      const { recorded, bounds } = await recordSave(harness, spec.identifierLess);
+    test(`${spec.row}, recording ${spec.withoutId ? "without" : "with"} Continue's id: ${spec.page}`, async ({ openHarness, page }) => {
+      const harness = await openHarness("company-website");
+      await quoteDrawer.open(harness);
+      const { recorded, bounds } = await recordContinue(harness, spec.withoutId);
       await arrangeNearMiss(page, spec.row);
       await expect(page.getByRole("button", { name: NEAR_MISS.text, exact: true })).toHaveCount(1);
       const clicks = await trackClicks(page);
 
-      const selector = recorded.selector ? { selector: recorded.selector } : {};
       for (const [shape, point] of [["replay", {}], ["flow", { visualTarget: visualTarget({ documentBounds: bounds }) }]] as const) {
-        const reply = await harness.runAction({ commandId: `near-miss:${spec.row}:${shape}`, actionType: "web.dom.click", ...selector, ...point, options: recordedElement(recorded) });
+        const reply = await harness.runAction(replayOf(`near-miss:${spec.row}:${shape}`, recorded, point));
         expect(reply, `${shape}: ${reply.message}`).toMatchObject({ status: "failed", failure: TARGET_NOT_FOUND });
       }
 
-      expect(await clicks()).toEqual([]);
-      expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
+      // While it retried, the resolver may close the drawer through its ×
+      // (reports/t730-b1-identity.md); no action of the form is pressed.
+      expect(await clicks()).not.toContainEqual(expect.stringMatching(QUOTE_ACTION));
     });
   }
 
-  test("control: the same near-miss beside the Save it imitates, and Save is what resolves", async ({ openHarness, page }) => {
-    const harness = await openHarness("identity-drift");
-    const { recorded } = await recordSave(harness, true);
+  test("control: the same near-miss beside the Continue it imitates, and Continue is what resolves", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await quoteDrawer.open(harness);
+    const { recorded } = await recordContinue(harness, true);
     await arrangeNearMiss(page, "control");
+    const clicks = await trackClicks(page);
 
-    const reply = await harness.runAction({ commandId: "near-miss:control", actionType: "web.dom.click", ...(recorded.selector ? { selector: recorded.selector } : {}), options: recordedElement(recorded) });
+    const reply = await harness.runAction(replayOf("near-miss:control", recorded));
 
     expect(reply.status, reply.message).toBe("succeeded");
-    expect(reply.element).toMatchObject({ tagName: "button", visibleText: "Save changes" });
-    await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ saveCount: 1, discardCount: 0 });
+    expect(reply.element).toMatchObject({ tagName: "button", visibleText: "Continue" });
+    expect(await clicks()).toEqual(["main|Continue"]);
+    await expect(page.locator(byId(ids.errors.fullName!))).toHaveText("Enter your full name");
   });
 });
 
-// Live run `run-mux6n7m4-8273e7a0` (reports/live-a-r3-f1.md): a colour swatch is
-// a role-less, text-less div named only by its `title`. Its recorded selector
-// hung off a rotating id, so it drifted by design; the fingerprint's name
-// lookup read only `aria-label`/`name`, its text fallback needs visible text,
-// and the swatch matches none of Level 2's candidate selectors. The page view
-// listed it as `clickable "Space Grey"`, and the resolver said not found. For a
-// target with no role the fingerprint now also scans for the recorded accessible
-// name, counted, so two swatches with one title are a tie rather than the first
-// in document order. A target with a role is still left to enumeration and
-// scoring (the `reworded-aria` rows above).
+// Live run `run-mux6n7m4-8273e7a0` (reports/live-a-r3-f1.md): crossborder's
+// colour swatch is a role-less, text-less div named only by its `title`. Its
+// recorded selector hung off an id the item page draws afresh on every load, so
+// it drifted by design; the fingerprint's name lookup read only
+// `aria-label`/`name`, its text fallback needs visible text, and the swatch
+// matches none of Level 2's candidate selectors. The page view listed it as
+// `clickable "Space Grey"`, and the resolver said not found. For a target with
+// no role the fingerprint now also scans for the recorded accessible name,
+// counted, so look-alikes sharing one title are a tie rather than the first in
+// document order. A target with a role is still left to enumeration and scoring.
 test.describe("a control named only by its title resolves by that name once its selector drifts", () => {
-  async function injectSwatches(page: Page, titles: readonly string[]): Promise<void> {
-    await page.evaluate((names) => {
-      const swatches = names
-        .map((name) => `<div class="sw" title="${name}" style="width:40px;height:40px;cursor:pointer"><img alt=""></div>`)
-        .join("");
-      document.body.insertAdjacentHTML("beforeend", `<div id="g2">${swatches}</div>`);
-      document.querySelectorAll(".sw").forEach((element) => element.addEventListener("click", () => element.setAttribute("data-pressed", "yes")));
-    }, titles);
-  }
+  test("crossborder: the stale selector misses and the title alone names the Silver swatch, which is pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("crossborder-marketplace");
+    await labMutate(harness, "consent", { choice: "essential" });
+    await labMutate(harness, "welcome", { action: "close" });
+    await labMutate(harness, "notifications", { answer: "later" });
+    await labMutate(harness, "chat", { view: "minimized" });
+    const item = "item/1005008123450";
+    await openPath(harness, item);
+    const stale = (await describe(harness, 'div[title="Silver"]')).selector!;
+    await openPath(harness, item);
+    await expect(page.locator(stale), "the reload drew a new id under the recorded selector").toHaveCount(0);
+    const clicks = await trackClicks(page);
 
-  const STALE = "#g1 > div:nth-of-type(1)";
-  const swatch = { tagName: "div", accessibleName: "Space Grey", selector: STALE };
-
-  test("the stale selector misses and the title alone names the swatch, which is pressed", async ({ openHarness, page }) => {
-    const harness = await openHarness("basic-form");
-    await injectSwatches(page, ["Space Grey", "Silver"]);
-    await expect(page.locator(STALE)).toHaveCount(0);
-
-    const reply = await harness.runAction({ commandId: "title-named-swatch", actionType: "web.dom.click", selector: STALE, options: { element: swatch } });
+    const reply = await harness.runAction({ commandId: "title-named-swatch", actionType: "web.dom.click", selector: stale, options: { element: { tagName: "div", accessibleName: "Silver", selector: stale } } });
 
     expect(reply.status, reply.message).toBe("succeeded");
     expect(reply.resolution).toMatchObject({ strategy: "fingerprint", candidateCount: 1 });
-    await expect(page.locator('[title="Space Grey"]')).toHaveAttribute("data-pressed", "yes");
-    await expect(page.locator('[title="Silver"]')).not.toHaveAttribute("data-pressed", "yes");
+    expect(await clicks()).toEqual(["main|Silver"]);
+    await expect(page.getByText("Color: Silver")).toBeVisible();
   });
 
-  test("two swatches sharing the title are ambiguous, and neither is pressed", async ({ openHarness, page }) => {
-    const harness = await openHarness("basic-form");
-    await injectSwatches(page, ["Space Grey", "Space Grey", "Silver"]);
+  test("auction: every unwatched card's heart is titled Watch this item, so the title is ambiguous and none is pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("auction-marketplace");
+    await labMutate(harness, "consent");
+    await labMutate(harness, "dismiss-promo");
+    await openPath(harness, "sch/i.html?_nkw=kestrel");
+    await expect(page.locator('ul[aria-busy="false"]').first()).toBeAttached();
+    const titles = await page.locator("hl-watch").evaluateAll((hearts) => hearts.map((heart) => heart.shadowRoot?.querySelector("div")?.title));
+    const unwatched = titles.filter((title) => title === "Watch this item").length;
+    expect(unwatched).toBeGreaterThan(1);
+    const watched = (await state<{ watched: unknown }>(harness)).watched;
+    const clicks = await trackClicks(page);
 
-    const reply = await harness.runAction({ commandId: "title-named-swatch-twins", actionType: "web.dom.click", selector: STALE, options: { element: swatch } });
+    const reply = await harness.runAction({ commandId: "title-named-hearts", actionType: "web.dom.click", selector: "#watch-heart-gone > div", options: { element: { tagName: "div", accessibleName: "Watch this item", selector: "#watch-heart-gone > div" } } });
 
-    expect(reply, reply.message).toMatchObject({ status: "failed", failure: TARGET_AMBIGUOUS, resolution: { strategy: "fingerprint", candidateCount: 2 } });
-    await expect(page.locator("[data-pressed]")).toHaveCount(0);
+    // The hearts live in open shadow roots, and the name scan reaches them.
+    expect(reply, reply.message).toMatchObject({ status: "failed", failure: TARGET_AMBIGUOUS, resolution: { strategy: "fingerprint", candidateCount: unwatched } });
+    expect(reply.failure?.expected).toContain("in the page's open shadow roots");
+    expect(await clicks()).toEqual([]);
+    expect((await state<{ watched: unknown }>(harness)).watched).toEqual(watched);
   });
 });

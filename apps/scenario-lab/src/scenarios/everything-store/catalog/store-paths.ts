@@ -20,5 +20,7 @@ export const STORE_PATHS = {
   product: (product: Pick<Product, "slug" | "sku">) => `${BASE}/${product.slug}/dp/${product.sku}`,
   image: (sku: string) => `${BASE}/img/${sku}.svg`,
   thankYou: (orderId: string) => `${BASE}/thankyou?orderId=${encodeURIComponent(orderId)}`,
+  /** An order's printable receipt, at the address the store's "Your Orders" pages print from. */
+  receipt: (orderId: string) => `${BASE}/gp/css/summary/print.html?orderID=${encodeURIComponent(orderId)}`,
   sponsored: (ad: AdPlacement) => `${BASE}/sspa/click?ie=UTF8&adId=${encodeURIComponent(ad.adId)}&url=${encodeURIComponent(`${BASE}/${ad.product.slug}/dp/${ad.product.sku}`)}`,
 } as const;

@@ -12,46 +12,55 @@
 // is called here as it ships, never restated. A copied key list would have
 // passed while the real one was wrong, which is exactly what happened.
 //
-// What that cost, measured live (`reports/L-replay.md`) and reproduced number
-// for number in real Chromium (`reports/i-resolver-safety.md`, rows R5-R6):
-// until `ab736a1` the projection was a hand-written list of seventeen keys with
-// no `testId`, `accessibleName`, `label`, `implicitRole` or `context`. The
-// domain re-derives a test id from `attributes` and a name only from an
-// `aria-label`, and the baseline Save has none, so `reworded-aria` reached the
-// resolver with no accessible name and no role. It scored 0.197, confidence
-// 0.173, and was refused. With both signals across the wire it scores 0.389,
-// confidence 0.366 -- the same numbers `identity-resolution.spec.ts` pins for
-// the full descriptor, which is the point: the wire now loses nothing the
-// resolver scores.
+// What that cost, measured live (`reports/L-replay.md`) and reproduced in real
+// Chromium (`reports/i-resolver-safety.md`, rows R5-R6): until `ab736a1` the
+// projection was a hand-written list of seventeen keys with no `testId`,
+// `accessibleName`, `label`, `implicitRole` or `context`, so a replay reached
+// the resolver with less than the recorder had captured and scored lower than
+// the same control described off the page.
+//
+// The row now runs on company-website (AGENTS.md: realistic scenarios only):
+// a person presses the quote drawer's Send request, which carries every one of
+// those signals -- a test id, an accessible name, a role and a dialog -- and the
+// replay runs on the site's next deploy, another lab seed, where every
+// generated id and hashed class has been redrawn. The bar it must clear is set
+// by the page rather than by a constant: whatever the full on-page descriptor
+// scores on the redeployed page, the recording that crossed the wire must score
+// exactly the same. A signal lost on the way shows up as a lower score, a
+// different strategy, or a refusal.
 //
 // Scope. Core stores the event between the projection and the node, and
-// prepares the element target on dispatch; neither hop runs here. The Lab run
-// `identity-drift --flow --variant reworded-aria` is what covers them.
+// prepares the element target on dispatch; neither hop runs here. A Lab run of
+// company-website's quote workflow is what covers them.
 
 import { webAutomationActionFromGatewayCommand, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
 import { gatewayRecordingEventFromPayload } from "../../../src/background/connection/index.js";
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
-import { DISPLAY_NAME, SAVE_BASELINE, armMode } from "./identity-fixtures.js";
+import { describe, quoteDrawer, recordedElement, trackClicks } from "./identity-fixtures.js";
 
 type ActionCommand = Parameters<ContentHarness["runAction"]>[0];
 type RecordedEvent = Awaited<ReturnType<ContentHarness["recordedEvents"]>>[number];
 type NodePayload = Parameters<typeof webAutomationOutputPayload>[1];
 
 const QUIET = { captureMutations: false, captureInputValues: true, captureSnapshots: false };
+/** The deploy after the recorded one: company-website's lab seed renames every class and generated id and changes nothing else. */
+const REDEPLOYED_SEED = 4520;
+const recordedIds = quoteDrawer.ids();
+const redeployedIds = quoteDrawer.ids(REDEPLOYED_SEED);
 
 /**
- * Records a real click on the baseline Save and returns the event a live
- * recording keeps. The recorder sends a `dom.click` for the press and another
- * for the click; `PointerClickFilter` keeps the first to arrive, the press.
- * Recording stays on until that event is in: `click()` can return before the
- * page has handled the mouse events, and stopping first records nothing.
+ * Records a real click on Send request and returns the event a live recording
+ * keeps. The recorder sends a `dom.click` for the press and another for the
+ * click; `PointerClickFilter` keeps the first to arrive, the press. Recording
+ * stays on until that event is in: `click()` can return before the page has
+ * handled the mouse events, and stopping first records nothing.
  */
-async function recordSaveClick(harness: ContentHarness): Promise<RecordedEvent> {
+async function recordSendClick(harness: ContentHarness): Promise<RecordedEvent> {
   const press = async () => (await harness.recordedEvents("dom.click")).find((event) => event.metadata?.sourceEvent === "pointerdown");
   await harness.setRecording(true, QUIET);
-  await harness.page.locator(SAVE_BASELINE).click();
-  await expect.poll(press, "the press on Save was recorded").toBeDefined();
+  await harness.page.locator(quoteDrawer.byId(recordedIds.send)).click();
+  await expect.poll(press, "the press on Send request was recorded").toBeDefined();
   await harness.setRecording(false);
   return (await press())!;
 }
@@ -67,7 +76,7 @@ function acrossTheWire(recorded: RecordedEvent): NodePayload {
 const SHAPES: Array<{ name: string; command(parameters: NodePayload): ActionCommand }> = [
   {
     // The node's element and selector alone, so a visual target that happened
-    // to land on Save could not stand in for a signal the wire lost.
+    // to land on Send request could not stand in for a signal the wire lost.
     name: "the node's element and selector",
     command: (parameters) => ({
       commandId: "wire-chain:element",
@@ -88,34 +97,60 @@ const SHAPES: Array<{ name: string; command(parameters: NodePayload): ActionComm
   }
 ];
 
-test.describe("identity wire chain: a recorded click survives the wire and resolves reworded-aria", () => {
+test.describe("identity wire chain: a recorded click survives the wire and the next deploy", () => {
   for (const shape of SHAPES) {
-    test(`${shape.name}: the redesigned Save resolves, and Discard is not touched`, async ({ openHarness, page }) => {
-      const harness = await openHarness("identity-drift");
-      const displayName = await page.locator(DISPLAY_NAME).inputValue();
-      const recorded = await recordSaveClick(harness);
-      // The recorder captured both signals the old wire dropped. Were this to
+    test(`${shape.name}: Send request is pressed on the redeployed page, scored as the full descriptor scores it`, async ({ openHarness, page }) => {
+      test.setTimeout(90_000);
+      const recording = await openHarness("company-website");
+      await quoteDrawer.open(recording);
+      await quoteDrawer.toStep(page, 3);
+      const recorded = await recordSendClick(recording);
+      // The recorder captured every signal the old wire dropped. Were this to
       // fail, the loss is upstream of everything the rest of the row measures.
-      expect(recorded.element).toMatchObject({ selector: "#save-settings", testId: "save-changes", accessibleName: "Save changes", implicitRole: "button" });
-
+      expect(recorded.element).toMatchObject({
+        selector: '[data-testid="quote-submit"]',
+        testId: "quote-submit",
+        accessibleName: "Send request",
+        implicitRole: "button",
+        context: { dialog: "Get a free quote" }
+      });
+      const onPage = await describe(recording, quoteDrawer.byId(recordedIds.send));
       const parameters = webAutomationOutputPayload("web.dom.click", acrossTheWire(recorded));
-      // Arming resets the fixture's counters, so the recorded click above is
-      // not counted as the replay's.
-      await armMode(harness, "reworded-aria");
 
-      const reply = await harness.runAction(shape.command(parameters));
+      const replay = await openHarness("company-website", { seed: REDEPLOYED_SEED });
+      await quoteDrawer.open(replay);
+      await quoteDrawer.toStep(page, 3, REDEPLOYED_SEED);
+      // The redeploy redrew the button's id and class; its test id, words and place survive.
+      expect(redeployedIds.send).not.toBe(recordedIds.send);
+      await expect(page.locator(quoteDrawer.byId(recordedIds.send))).toHaveCount(0);
+      await expect(page.locator(`button.${onPage.classNames![0]}`)).toHaveCount(0);
+
+      // The bar: what the descriptor read off the recorded page scores here.
+      const reference = await replay.runAction({
+        commandId: "wire-chain:reference",
+        actionType: "web.dom.click",
+        ...(onPage.selector ? { selector: onPage.selector } : {}),
+        options: recordedElement(onPage)
+      });
+      expect(reference.status, reference.message).toBe("succeeded");
+
+      // A fresh step 3 for the replay under test, so its press has an effect of its own to show.
+      await quoteDrawer.open(replay);
+      await quoteDrawer.toStep(page, 3, REDEPLOYED_SEED);
+      const clicks = await trackClicks(page);
+      const reply = await replay.runAction(shape.command(parameters));
 
       // One assertion, so a failure prints the status and the scores together:
-      // a projection that drops the name and role fails here at 0.197.
-      expect(reply, reply.message).toMatchObject({
+      // a projection that drops a scored signal fails here.
+      expect(reply, JSON.stringify(reply.failure ?? reply.message)).toMatchObject({
         status: "succeeded",
-        // 0.389 and 0.366 before t419: the recorded id and selector are on no element of the redesigned page, so they no longer count against it.
-        resolution: { strategy: "scored-candidate", candidateCount: 2, bestScore: expect.closeTo(0.602, 3), confidence: expect.closeTo(0.566, 3) },
-        element: { tagName: "button", accessibleName: "Save changes", visibleText: "Save" }
+        element: { tagName: "button", testId: "quote-submit", id: redeployedIds.send, accessibleName: "Send request" }
       });
-      await expect
-        .poll(async () => (await harness.finalState()).state)
-        .toMatchObject({ savedInMode: "reworded-aria", savedDisplayName: displayName, saveCount: 1, discardCount: 0 });
+      expect(reply.resolution).toEqual(reference.resolution);
+      expect(await clicks()).toEqual(["main|Send request"]);
+      // Pressed, and refused by the form's own check: the privacy box is unticked, so nothing was sent.
+      await expect(page.locator(quoteDrawer.byId(redeployedIds.errors.privacy!))).toHaveText("Tick the box so we can contact you about this request");
+      expect((await replay.finalState()).state).toMatchObject({ quotes: [], drafts: 0 });
     });
   }
 });

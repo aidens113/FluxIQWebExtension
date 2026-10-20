@@ -6,36 +6,41 @@
 // in front of it -- is covered in `src/runtime/tests/action-runner.test.ts`,
 // because a page cannot observe its own delivery. What a page *can* prove is
 // the part that matters here: the top frame refuses a command addressed to a
-// child, so an action meant for the checkout iframe can never be answered by
-// the page around it. That refusal is not theoretical -- `packages/test-runner`
-// sends `executeAction` to a whole tab, where every frame receives it and
-// Chrome keeps whichever reply comes first.
+// child, so an action meant for a checkout's payment frame can never be
+// answered by the page around it. That refusal is not theoretical --
+// `packages/test-runner` sends `executeAction` to a whole tab, where every
+// frame receives it and Chrome keeps whichever reply comes first.
 //
 // The harness gives each frame its own `chrome.runtime` stub, so a spec
 // delivers a message to one frame by evaluating in that frame. It does that
 // through the stub's page global, whose name harness.ts owns; there is no
-// export for it, so it is written out here (see the report's open questions).
+// export for it, so it is written out here.
 //
-// Both child frames are exercised, because the same-origin one shares a process
-// with its parent and the cross-origin one does not, and an out-of-process
-// frame is where a routing assumption that holds locally tends to stop holding.
+// Both kinds of child frame are exercised, on the realistic checkouts that
+// embed them, because a same-origin frame shares a process with its parent
+// and a cross-origin one does not, and an out-of-process frame is where a
+// routing assumption that holds locally tends to stop holding:
 //
-// Not covered, and deliberately: shadow DOM. The recorder sees inside a shadow
-// root -- `content/event-elements.ts` reads the event's composed path -- but
-// resolution runs `document.querySelector`, which does not pierce one, so a
-// shadow-root target is recorded and not replayable. It is a post-MVP item, not
-// a frame-addressing one: a shadow root is not a frame and has no id to address.
+// - everything-store's checkout embeds its "Payment methods" chooser as a
+//   same-origin frame, shown by the "Change" link under "Paying with";
+// - bigbox-retail's guest checkout embeds the payment provider's "Secure card
+//   entry" form from the Lab's second origin.
+//
+// Not covered here: shadow DOM. A shadow root is not a frame and has no id to
+// address; its targets are the shadow-roots specs'.
 
 import type { Frame, Page } from "@playwright/test";
-import { expect, test, type HarnessDelivery } from "../index.js";
+import { expect, test, type ContentHarness, type HarnessDelivery } from "../index.js";
 import type { BrowserActionCommand } from "../../../src/shared/protocol.js";
 
 /** The page global e2e/content/runtime-stub.ts installs in every frame. */
 const HARNESS_GLOBAL = "__fluxiqContentHarness";
 
-const SAME_ORIGIN_FRAME = 'iframe[data-testid="same-frame"]';
-const CROSS_ORIGIN_FRAME = 'iframe[data-testid="cross-frame"]';
-const FRAME_RESULT = '[data-testid="frame-result"]';
+const PAYMENT_FRAME = 'iframe[title="Payment methods"]';
+const CARD_FRAME = 'iframe[title="Secure card entry"]';
+/** The method everything-store's checkout starts on, and the one the click chooses. */
+const DEFAULT_PAYMENT = "visa-4417";
+const OTHER_PAYMENT = "checking-7781";
 
 /** A child frame id. Which child is settled by the delivery; the frame only reads "not the top one". */
 const A_CHILD_FRAME = 1;
@@ -67,10 +72,38 @@ function snapshotCommand(commandId: string): BrowserActionCommand {
   return { commandId, actionType: "web.dom.capture_snapshot" };
 }
 
-test.describe("on iframe-checkout", () => {
+/** Posts one of the scenario's own page mutations, as the page's `mutate` does. */
+async function mutate(harness: ContentHarness, operation: string, payload: Record<string, unknown> = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  expect(response.status, `${harness.scenarioId} ${operation}`).toBe(200);
+}
+
+/** Opens `path` on the harness's Lab and waits for the top frame's content script to announce itself. */
+async function openPath(harness: ContentHarness, path: string): Promise<void> {
+  await harness.page.goto(new URL(path, harness.lab.origin).href);
+  await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+}
+
+/** everything-store's checkout for the cart as it stands, with the payment chooser shown, as a shopper who pressed Change sees it. */
+async function openStoreCheckout(openHarness: (id: string) => Promise<ContentHarness>): Promise<{ harness: ContentHarness; child: Frame }> {
+  const harness = await openHarness("everything-store");
+  await mutate(harness, "consent", { choice: "accept" });
+  await mutate(harness, "dismiss-nudge", { nudge: "notifications" });
+  await mutate(harness, "dismiss-nudge", { nudge: "app-banner" });
+  await mutate(harness, "start-checkout", { pipeline: "cart" });
+  await openPath(harness, "/scenarios/everything-store/checkout");
+  await harness.page.locator('[data-action="change-payment"]').click();
+  await expect(harness.page.locator(PAYMENT_FRAME)).toBeVisible();
+  return { harness, child: await readyChildFrame(harness.page, PAYMENT_FRAME) };
+}
+
+test.describe("on everything-store's checkout, a same-origin payment frame", () => {
   test("a command is answered by the frame it addresses, and by no other", async ({ openHarness, page }) => {
-    await openHarness("iframe-checkout");
-    const child = await readyChildFrame(page, SAME_ORIGIN_FRAME);
+    const { child } = await openStoreCheckout(openHarness);
     const top = page.mainFrame();
 
     // Each row is one address delivered to one frame, and whether that frame
@@ -98,13 +131,12 @@ test.describe("on iframe-checkout", () => {
     }
   });
 
-  test("a click addressed to the same-origin child frame is performed in that frame", async ({ openHarness, page }) => {
-    const harness = await openHarness("iframe-checkout");
-    const child = await readyChildFrame(page, SAME_ORIGIN_FRAME);
+  test("a click addressed to the same-origin payment frame is performed in that frame", async ({ openHarness, page }) => {
+    const { harness, child } = await openStoreCheckout(openHarness);
     const command: BrowserActionCommand = {
-      commandId: "confirm-same",
+      commandId: "choose-checking",
       actionType: "web.dom.click",
-      selector: '[data-testid="same-frame-action"]',
+      selector: `input[name="payment"][value="${OTHER_PAYMENT}"]`,
       frameId: A_CHILD_FRAME
     };
 
@@ -114,30 +146,41 @@ test.describe("on iframe-checkout", () => {
 
     const delivery = await deliverTo(child, { type: "executeAction", action: command, frameId: A_CHILD_FRAME });
     expect(delivery.responded).toBe(true);
-    expect(delivery.response).toMatchObject({ commandId: "confirm-same", status: "succeeded" });
+    expect(delivery.response).toMatchObject({ commandId: "choose-checking", status: "succeeded" });
 
-    // The page is the oracle: the button inside the frame really was pressed.
-    await expect(page.frameLocator(SAME_ORIGIN_FRAME).locator(FRAME_RESULT)).toHaveText("Confirmed");
-    await expect(page.frameLocator(CROSS_ORIGIN_FRAME).locator(FRAME_RESULT)).toHaveText("Pending");
-    await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ sameOriginClicks: 1, crossOriginClicks: 0 });
+    // The page is the oracle: the method inside the frame really was chosen,
+    // and nothing was reported yet, because "Use this payment method" was not pressed.
+    const frame = page.frameLocator(PAYMENT_FRAME);
+    await expect(frame.locator(`input[name="payment"][value="${OTHER_PAYMENT}"]`)).toBeChecked();
+    await expect(frame.locator(`input[name="payment"][value="${DEFAULT_PAYMENT}"]`)).not.toBeChecked();
+    expect((await harness.finalState()).state).toMatchObject({ checkout: { paymentId: DEFAULT_PAYMENT } });
   });
+});
 
-  test("a click addressed to the cross-origin child frame is performed in that frame", async ({ openHarness, page }) => {
-    const harness = await openHarness("iframe-checkout");
-    const child = await readyChildFrame(page, CROSS_ORIGIN_FRAME);
+test.describe("on bigbox-retail's guest checkout, a cross-origin card frame", () => {
+  test("a click addressed to the cross-origin card frame is performed in that frame", async ({ openHarness, page }) => {
+    const harness = await openHarness("bigbox-retail");
+    await mutate(harness, "consent", { choice: "accept" });
+    await mutate(harness, "dismiss-promo");
+    await mutate(harness, "start-guest-checkout");
+    await openPath(harness, "/scenarios/bigbox-retail/checkout");
+    const child = await readyChildFrame(page, CARD_FRAME);
+    expect(new URL(child.url()).origin, "the card form is served from the Lab's other origin").not.toBe(harness.lab.origin);
+
     const command: BrowserActionCommand = {
-      commandId: "confirm-cross",
+      commandId: "use-card",
       actionType: "web.dom.click",
-      selector: '[data-testid="cross-frame-action"]',
+      selector: 'button[type="submit"]',
       frameId: A_CHILD_FRAME
     };
+    expect(await deliverTo(page.mainFrame(), { type: "executeAction", action: command, frameId: A_CHILD_FRAME })).toEqual({ responded: false });
 
     const delivery = await deliverTo(child, { type: "executeAction", action: command, frameId: A_CHILD_FRAME });
     expect(delivery.responded).toBe(true);
-    expect(delivery.response).toMatchObject({ commandId: "confirm-cross", status: "succeeded" });
+    expect(delivery.response).toMatchObject({ commandId: "use-card", status: "succeeded" });
 
-    await expect(page.frameLocator(CROSS_ORIGIN_FRAME).locator(FRAME_RESULT)).toHaveText("Confirmed");
-    await expect(page.frameLocator(SAME_ORIGIN_FRAME).locator(FRAME_RESULT)).toHaveText("Pending");
-    await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ sameOriginClicks: 0, crossOriginClicks: 1 });
+    // The press reached the provider's form: with no card entered it says so, inside the frame, and hands the store no token.
+    await expect(page.frameLocator(CARD_FRAME).getByRole("status")).toHaveText("Check your card details.");
+    expect((await harness.finalState()).state).toMatchObject({ orders: [] });
   });
 });

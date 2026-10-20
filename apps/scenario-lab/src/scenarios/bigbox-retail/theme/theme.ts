@@ -29,6 +29,7 @@ const CLASS_ROLES = [
   "holdFill", "robotNote", "chatPill", "chatPillClose", "chatCard", "chatCardClose", "chatPanel", "chatLog", "chatInput",
   "pickerChip", "pickerLabel", "pickerStore", "pickerFlyout", "pickerTabs", "pickerTab", "pickerTabOn", "pickerList",
   "pickerCard", "pickerSet", "pickerCurrent", "pickerClose", "toast", "buyBoxLive", "listLinks",
+  "wallStack", "recoveryCard", "recoveryGroup", "recoveryRow", "recoveryTable",
 ] as const;
 
 export type BigboxClassRole = (typeof CLASS_ROLES)[number];

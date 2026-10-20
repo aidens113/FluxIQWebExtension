@@ -121,8 +121,8 @@ test("every rendering states page facts, and they are true of that rendering", (
     for (const fact of facts) {
       const tag = openingTag(html, fact.subject);
       const label = `${mode}/${fact.id}`;
-      // Markup is all a rendered string can answer for; `negative-variants.spec.ts`
-      // puts the same facts to a real browser, where visibility is real.
+      // Markup is all a rendered string can answer for. Synthetic fixtures are
+      // never opened in a browser, so visibility itself is not checked here.
       if (fact.predicate === "exists") assert.equal(tag !== undefined, fact.value, label);
       else if (fact.predicate === "visible") assert.equal(tag !== undefined && !hasAttribute(tag, "hidden"), fact.value, label);
       else if (fact.predicate === "enabled") assert.equal(tag !== undefined && !hasAttribute(tag, "disabled"), fact.value, label);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
+import { startScenarioLab } from "../../../server.js";
 import { navigationScenario as scenario, type NavigationState } from "../scenario.js";
 
 const context = { runToken: "unit-test-run-token-0001", seed: 103 };
@@ -66,4 +67,29 @@ test("broken-link changes nothing but the retired destination", () => {
   assert.equal(start?.body, scenario.route?.(scenario.createState(103), { subpath: "start", query: new URLSearchParams(), method: "GET" }, context)?.body);
   // The link's own href is untouched: the page it points at is what is gone.
   assert.match(start?.body ?? "", /href="\/scenarios\/navigation\/second"/u);
+});
+
+test("over HTTP, the armed lab redirects the recorded destination to a 404 notice and records that visit, never the second page", async () => {
+  const lab = await startScenarioLab({ runToken: "navigation-http-token-0001", seed: 103 });
+  const authorization = { authorization: "Bearer navigation-http-token-0001" };
+  try {
+    const arm = resolveScenarioWorkflow(scenario.manifest, { variantId: "broken-link" }).variant?.arm;
+    assert.ok(arm);
+    const armed = await fetch(`${lab.origin}/api/navigation/${arm.operation}`, { method: "POST", headers: { ...authorization, "content-type": "application/json" }, body: JSON.stringify(arm.payload ?? {}) });
+    assert.equal(armed.status, 200);
+
+    const start = await (await fetch(`${lab.origin}${scenario.manifest.startPath}`)).text();
+    assert.match(start, /href="\/scenarios\/navigation\/second"/u, "arming rewrites no href");
+
+    const followed = await fetch(`${lab.origin}/scenarios/navigation/second`);
+    assert.equal(followed.status, 404);
+    assert.equal(new URL(followed.url).pathname, "/scenarios/navigation/link-retired");
+    assert.doesNotMatch(await followed.text(), /data-testid="navigation-page"/u);
+
+    const { state } = await (await fetch(`${lab.origin}/__control/final-state?scenario=navigation`, { headers: authorization })).json() as { state: NavigationState };
+    assert.equal(state.mode, "broken-link");
+    assert.deepEqual(state.visits, ["link-retired"]);
+  } finally {
+    await lab.close();
+  }
 });

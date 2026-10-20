@@ -1,6 +1,7 @@
-// `web.dom.scroll`, the three modes, against two fixtures that can tell the
-// difference: `long-document`, where the page is tall but finished, and
-// `infinite-feed`, where scrolling is what makes more page exist.
+// `web.dom.scroll`, the three modes, against two realistic pages that can tell
+// the difference: job-board's results page at fifty jobs a page, which is tall
+// but finished, and social-network-feed's home feed, where scrolling is what
+// makes more page exist.
 //
 // What each row proves is the post-condition, not the call: a delta lands
 // where it said it would, a request past the end lands at the document's
@@ -9,13 +10,23 @@
 // cap row is the one that matters most -- stopping at `maxScrolls` with the
 // document still growing reports `failed` with Core's `output_not_observed`,
 // so a Flow that truncated a feed cannot look like one that read all of it.
+//
+// The feed's expected lengths come from the scenario's own feed plan, and the
+// shorter feed is its `quiet-feed` variant, armed from the manifest.
 
 import type { Page } from "@playwright/test";
 import type { BrowserActionResult } from "../../../src/shared/protocol.js";
 import { getScenario } from "../../../../scenario-lab/src/registry.js";
+import { feedPlanFor } from "../../../../scenario-lab/src/scenarios/social-network-feed/content/index.js";
+import type { FeedMode } from "../../../../scenario-lab/src/scenarios/social-network-feed/index.js";
 import { expect, test, type ContentHarness } from "../index.js";
 
-const TARGET = '[data-testid="below-fold-target"]';
+/** The results page's "Jobs per page" select, at the foot of the list: below the fold with fifty jobs above it. */
+const TARGET = 'select[name="limit"]';
+const RESULTS_PATH = "/scenarios/job-board/jobs?limit=50";
+const FEED_PATH = "/scenarios/social-network-feed/";
+const FEED_UNITS = '[role="feed"] > [aria-posinset]';
+const END_NOTE = "No more posts to show right now.";
 
 async function scrollY(page: Page): Promise<number> {
   return page.evaluate(() => Math.round(window.scrollY));
@@ -32,33 +43,61 @@ function comparedActual(result: BrowserActionResult): string {
   return result.validation.actual;
 }
 
-/**
- * Arms the fixture's own `end-early` variant through the Lab's authenticated
- * mutate endpoint, the way `packages/test-runner`'s `armScenarioVariant`
- * does, and from the manifest rather than a copy of its operation name. The
- * harness opens the page as it starts the Lab, so the fixture is re-opened
- * afterwards: the start document renders from the state armed here.
- */
-async function armEndEarly(harness: ContentHarness): Promise<void> {
-  const variant = getScenario("infinite-feed")?.manifest.variants?.find((candidate) => candidate.id === "end-early");
-  if (!variant) throw new Error("The infinite-feed manifest has no end-early variant to arm.");
-  const response = await fetch(`${harness.lab.origin}/api/infinite-feed/${variant.arm.operation}`, {
+/** Posts one of the scenario's own page mutations, as the page's `mutate` does. */
+async function mutate(harness: ContentHarness, operation: string, payload: object = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
     method: "POST",
     headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
-    body: JSON.stringify(variant.arm.payload ?? {})
+    body: JSON.stringify(payload)
   });
-  expect(response.status, "arming the infinite-feed end-early variant").toBe(200);
+  expect(response.status, `${harness.scenarioId} ${operation}`).toBe(200);
 }
 
-/** Opens the feed and waits for its first page, which the fixture announces only after its observer is watching. */
-async function openFeed(harness: ContentHarness, page: Page): Promise<void> {
-  await expect(page.getByTestId("feed-status")).toHaveText("Showing 10 posts");
-  expect(harness.scenarioId).toBe("infinite-feed");
+/** Opens `path` on the harness's Lab and waits for the content script there to announce itself. */
+async function openPath(harness: ContentHarness, path: string): Promise<void> {
+  await harness.page.goto(new URL(path, harness.lab.origin).href);
+  await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
 }
 
-test.describe("on long-document", () => {
+/** job-board's fifty-a-page results with consent answered, the alert offer declined and the chat minimised. */
+async function openResults(openHarness: (id: string) => Promise<ContentHarness>): Promise<ContentHarness> {
+  const harness = await openHarness("job-board");
+  await mutate(harness, "consent", { choice: "accepted" });
+  await mutate(harness, "dismiss-alert-offer");
+  await mutate(harness, "minimise-chat");
+  await openPath(harness, RESULTS_PATH);
+  await expect(harness.page.locator(TARGET)).toBeAttached();
+  return harness;
+}
+
+/**
+ * The feed with its overlays answered, after its first batch replaced the
+ * skeletons. `quiet-feed` is armed from the manifest first, because arming
+ * starts a new visitor.
+ */
+async function openFeed(openHarness: (id: string) => Promise<ContentHarness>, variantId?: string): Promise<ContentHarness> {
+  const harness = await openHarness("social-network-feed");
+  if (variantId) {
+    const variant = getScenario("social-network-feed")?.manifest.workflows?.flatMap((workflow) => workflow.variants ?? []).find((candidate) => candidate.id === variantId);
+    if (!variant) throw new Error(`The social-network-feed manifest has no ${variantId} variant to arm.`);
+    await mutate(harness, variant.arm.operation, variant.arm.payload ?? {});
+  }
+  await mutate(harness, "consent", { choice: "all" });
+  await mutate(harness, "notifications", { choice: "dismissed" });
+  await mutate(harness, "chat", { state: "closed" });
+  await openPath(harness, FEED_PATH);
+  await expect(harness.page.locator(FEED_UNITS)).toHaveCount(5);
+  return harness;
+}
+
+/** Every unit the feed holds under `mode`, the suggested posts after "You're all caught up" included. */
+function feedLength(mode: FeedMode): number {
+  return feedPlanFor({ mode, created: [], trashed: [], hidden: [] }).batches.flat().length;
+}
+
+test.describe("on job-board's results page", () => {
   test("by: moves the window by the delta and records the position change", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
+    const harness = await openResults(openHarness);
     const first = await harness.runAction({ commandId: "by-1", actionType: "web.dom.scroll", scroll: { mode: "by", y: 600 } });
     expect(first).toMatchObject({
       status: "succeeded",
@@ -77,16 +116,16 @@ test.describe("on long-document", () => {
   });
 
   test("by: a delta past the end lands at the document's limit and still passes", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
+    const harness = await openResults(openHarness);
     const limit = await maxScrollY(page);
-    expect(limit).toBeGreaterThan(0);
+    expect(limit).toBeGreaterThan(1200);
     const reply = await harness.runAction({ commandId: "by-past-end", actionType: "web.dom.scroll", scroll: { mode: "by", y: 100_000 } });
     expect(reply).toMatchObject({ status: "succeeded", validation: { status: "passed", expected: `scroll position 0,${limit}` } });
     expect(await scrollY(page)).toBe(limit);
   });
 
   test("toElement: brings a target below the fold into the viewport", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
+    const harness = await openResults(openHarness);
     expect(await page.locator(TARGET).evaluate((element) => element.getBoundingClientRect().top > window.innerHeight)).toBe(true);
 
     const reply = await harness.runAction({ commandId: "to-element", actionType: "web.dom.scroll", selector: TARGET, scroll: { mode: "toElement" } });
@@ -108,15 +147,16 @@ test.describe("on long-document", () => {
   });
 
   test("toElement: an unresolvable target fails and leaves the page where it was", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
+    const harness = await openResults(openHarness);
     await harness.runAction({ commandId: "position", actionType: "web.dom.scroll", scroll: { mode: "by", y: 300 } });
     const reply = await harness.runAction({ commandId: "to-missing", actionType: "web.dom.scroll", selector: '[data-testid="missing"]', scroll: { mode: "toElement" } });
-    expect(reply).toMatchObject({ status: "failed", message: 'No target resolved from selector [data-testid="missing"].' });
+    // The board has open shadow roots (its consent and chat widgets), so they were searched too.
+    expect(reply).toMatchObject({ status: "failed", message: `No target resolved from selector [data-testid="missing"], selector [data-testid="missing"] in the page's open shadow roots.` });
     expect(await scrollY(page)).toBe(300);
   });
 
   test("an absolute options move still works, and now reports the position it reached", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
+    const harness = await openResults(openHarness);
     const reply = await harness.runAction({ commandId: "absolute", actionType: "web.dom.scroll", options: { x: 0, y: 900 } });
     expect(reply).toMatchObject({
       status: "succeeded",
@@ -128,30 +168,25 @@ test.describe("on long-document", () => {
   });
 });
 
-test.describe("on infinite-feed", () => {
+test.describe("on social-network-feed's home feed", () => {
   test("untilStable: loads every post, then stops because the document stopped growing", async ({ openHarness, page }) => {
-    const harness = await openHarness("infinite-feed");
-    await openFeed(harness, page);
-
-    const reply = await harness.runAction({ commandId: "until-stable", actionType: "web.dom.scroll", scroll: { mode: "untilStable", maxScrolls: 12 } });
+    const harness = await openFeed(openHarness);
+    const reply = await harness.runAction({ commandId: "until-stable", actionType: "web.dom.scroll", scroll: { mode: "untilStable", maxScrolls: 30 } });
     expect(reply).toMatchObject({
       status: "succeeded",
       message: "Scrolled until the document stopped growing.",
-      validation: { status: "passed", expected: "the document to stop growing within 12 scrolls" }
+      validation: { status: "passed", expected: "the document to stop growing within 30 scrolls" }
     });
     expect(comparedActual(reply)).toMatch(/^the document stopped growing after \d+ scrolls?, at \d+ pixels$/);
     expect(reply.failure).toBeUndefined();
 
-    await expect(page.getByTestId("feed-item")).toHaveCount(60);
-    await expect(page.getByTestId("feed-status")).toHaveText("Showing all 60 posts");
-    await expect(page.getByTestId("feed-end")).toBeVisible();
-    expect((await harness.finalState()).state).toMatchObject({ mode: "baseline", feedLength: 60, loadedCount: 60, ended: true });
+    await expect(page.locator(FEED_UNITS)).toHaveCount(feedLength("baseline"));
+    await expect(page.getByRole("heading", { name: "You're all caught up" })).toBeAttached();
+    await expect(page.getByText(END_NOTE)).toBeVisible();
   });
 
   test("untilStable: the maxScrolls cap reports the document still growing, not success", async ({ openHarness, page }) => {
-    const harness = await openHarness("infinite-feed");
-    await openFeed(harness, page);
-
+    const harness = await openFeed(openHarness);
     const reply = await harness.runAction({ commandId: "capped", actionType: "web.dom.scroll", scroll: { mode: "untilStable", maxScrolls: 1 } });
     expect(reply).toMatchObject({
       status: "failed",
@@ -161,28 +196,24 @@ test.describe("on infinite-feed", () => {
     });
     expect(comparedActual(reply)).toMatch(/^the document was still growing after 1 scroll, from \d+ to \d+ pixels$/);
 
-    await expect(page.getByTestId("feed-status")).toHaveText("Showing 20 posts");
-    await expect(page.getByTestId("feed-end")).toBeHidden();
-    expect((await harness.finalState()).state).toMatchObject({ loadedCount: 20, ended: false });
+    // One scroll brought one more batch of five, and the feed is far from its end.
+    await expect(page.locator(FEED_UNITS)).toHaveCount(10);
+    await expect(page.getByText(END_NOTE)).toHaveCount(0);
   });
 
-  test("untilStable on the end-early variant: the feed ends at 25 posts and the scroll settles there", async ({ openHarness, page }) => {
-    const harness = await openHarness("infinite-feed");
-    await armEndEarly(harness);
-    await page.goto(harness.url);
-    await openFeed(harness, page);
-
-    const reply = await harness.runAction({ commandId: "until-stable-end-early", actionType: "web.dom.scroll", scroll: { mode: "untilStable", maxScrolls: 12 } });
+  test("untilStable on the quiet-feed variant: the feed ends sooner and the scroll settles there", async ({ openHarness, page }) => {
+    const harness = await openFeed(openHarness, "quiet-feed");
+    const reply = await harness.runAction({ commandId: "until-stable-quiet", actionType: "web.dom.scroll", scroll: { mode: "untilStable", maxScrolls: 30 } });
     expect(reply).toMatchObject({
       status: "succeeded",
       message: "Scrolled until the document stopped growing.",
       validation: { status: "passed" }
     });
 
-    await expect(page.getByTestId("feed-item")).toHaveCount(25);
-    await expect(page.getByTestId("feed-status")).toHaveText("Showing all 25 posts");
-    await expect(page.getByTestId("feed-end")).toBeVisible();
-    await expect(page.getByTestId("feed-page-4")).toHaveCount(0);
-    expect((await harness.finalState()).state).toMatchObject({ mode: "end-early", feedLength: 25, loadedCount: 25, ended: true });
+    const quiet = feedLength("quiet-feed");
+    expect(quiet).toBeLessThan(feedLength("baseline"));
+    await expect(page.locator(FEED_UNITS)).toHaveCount(quiet);
+    await expect(page.getByText(END_NOTE)).toBeVisible();
+    expect((await harness.finalState()).state).toMatchObject({ mode: "quiet-feed" });
   });
 });

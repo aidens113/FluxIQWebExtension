@@ -17,7 +17,9 @@ export const CHAT_GREETING_DELAY_MS = 1_800;
  * server-rendered into a declarative shadow root, as a consent platform's tag
  * would be), the newsletter offer that opens a few seconds after the visitor
  * has answered consent, the chat widget a vendor script injects into a shadow
- * root of its own, and the winter notice when the site is running one.
+ * root of its own, the winter notice when the site is running one, the
+ * account or security dialog an armed mode opens (any of its buttons closes
+ * it, and the server records which), and `phone-quotes`' call button.
  *
  * `mutate` and the class names are the page's; the chat widget's classes are
  * the vendor's, hashed separately.
@@ -136,7 +138,40 @@ function mountNotice() {
   });
 }
 
+function mountInterstitial() {
+  const scrim = document.querySelector('[data-interstitial]');
+  if (!scrim) return;
+  const picture = scrim.querySelector('[data-security-image]');
+  const pen = picture ? picture.getContext('2d') : null;
+  if (pen) {
+    pen.fillStyle = '#eef2f3';
+    pen.fillRect(0, 0, picture.width, picture.height);
+    pen.font = 'italic 700 34px Georgia, serif';
+    pen.fillStyle = '#28434a';
+    'R7KQ4'.split('').forEach((letter, at) => pen.fillText(letter, 22 + at * 34, 42 + (at % 2 ? -6 : 6)));
+    pen.strokeStyle = '#7d969b';
+    pen.beginPath();
+    pen.moveTo(8, 38);
+    pen.bezierCurveTo(60, 8, 130, 58, 192, 22);
+    pen.stroke();
+  }
+  scrim.addEventListener('submit', (event) => event.preventDefault());
+  scrim.addEventListener('click', async (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    await mutate('answer-interstitial', { control: button.textContent.trim() });
+    scrim.remove();
+  });
+}
+
+function mountCallButton() {
+  const call = document.querySelector('[data-call-office]');
+  if (call) call.addEventListener('click', () => { location.href = 'tel:01632960418'; });
+}
+
 mountNotice();
+mountInterstitial();
+mountCallButton();
 mountChat();
 if (consentAnswered) scheduleNewsletter();
 `;

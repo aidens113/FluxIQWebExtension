@@ -8,6 +8,10 @@
 // every gate green. `SNAPSHOT_ROWS` pins the first five on a page at rest, the
 // two selection rows underneath pin what only an interaction can show, and the
 // tests at the foot pin the sixth.
+//
+// t730 moved them off the synthetic basic form onto realistic pages: the job
+// board's home page (a search form with two labelled fields and a submit, under
+// its consent wall) and, for a native select, the auction site's header.
 
 import { webAutomationActionFromGatewayCommand, webAutomationExpectationActionPayload, webAutomationExpectationCondition } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../../../index.js";
@@ -16,13 +20,17 @@ import type { JsonObject } from "../../../../../src/shared/protocol.js";
 import { capture } from "./captured-snapshot.js";
 import type { CapturedElement, CapturedSnapshot } from "./captured-snapshot.js";
 
-/** basic-form's controls, by the test ids the fixture gives them. */
-const BASIC_FORM = '[data-testid="basic-form"]';
-const RESULT = '[data-testid="result"]';
+/** The job board's search form, its submit and its heading, by the selectors the content script gives them. */
+const SEARCH_FORM = "main > form";
+const FIND_JOBS = "main > form > button";
+const WHAT = "input[name=\"q\"]";
+const HEADING = "main > h1";
+const HEADING_TEXT = "Find the role, not the noise";
+const CATEGORY = "select[name=\"_sacat\"]";
 
-function byTestId(snapshot: CapturedSnapshot, testId: string): CapturedElement {
-  const element = snapshot.interactiveElements.find((candidate) => candidate.testId === testId);
-  if (!element) throw new Error(`The snapshot carried no element with test id "${testId}".`);
+function bySelector(snapshot: CapturedSnapshot, selector: string): CapturedElement {
+  const element = snapshot.interactiveElements.find((candidate) => candidate.selector === selector);
+  if (!element) throw new Error(`The snapshot carried no element with selector ${selector}.`);
   return element;
 }
 
@@ -30,31 +38,32 @@ function byTestId(snapshot: CapturedSnapshot, testId: string): CapturedElement {
 type SnapshotRow = {
   item: string;
   scenario: string;
-  assert(snapshot: CapturedSnapshot, harness: ContentHarness): void;
+  assert(snapshot: CapturedSnapshot, harness: ContentHarness): Promise<void> | void;
 };
 
 const SNAPSHOT_ROWS: SnapshotRow[] = [
   {
     item: "visible text",
-    scenario: "basic-form",
+    scenario: "job-board",
     assert: (snapshot) => {
-      expect(byTestId(snapshot, "result")).toMatchObject({ text: "Not submitted", visibleText: "Not submitted" });
-      expect(byTestId(snapshot, "submit")).toMatchObject({ text: "Submit", visibleText: "Submit" });
+      expect(bySelector(snapshot, HEADING)).toMatchObject({ text: HEADING_TEXT, visibleText: HEADING_TEXT });
+      expect(bySelector(snapshot, FIND_JOBS)).toMatchObject({ text: "Find jobs", visibleText: "Find jobs" });
     }
   },
   {
     item: "visible text is not invented for a control that renders none",
-    scenario: "basic-form",
+    scenario: "job-board",
     assert: (snapshot) => {
-      // The label reads "Name", but the input itself renders no text of its own.
-      const name = byTestId(snapshot, "name");
-      expect(name.text).toBeUndefined();
-      expect(name.visibleText).toBeUndefined();
+      // The label reads "What" and the placeholder suggests keywords, but the input itself renders no text of its own.
+      const what = bySelector(snapshot, WHAT);
+      expect(what).toMatchObject({ accessibleName: "What", label: "What" });
+      expect(what.text).toBeUndefined();
+      expect(what.visibleText).toBeUndefined();
     }
   },
   {
     item: "current URL",
-    scenario: "basic-form",
+    scenario: "job-board",
     assert: (snapshot, harness) => {
       expect(snapshot.url).toBe(harness.url);
       // The page's address and its navigation evidence are one reading, not two.
@@ -63,41 +72,46 @@ const SNAPSHOT_ROWS: SnapshotRow[] = [
   },
   {
     item: "page title",
-    scenario: "basic-form",
+    scenario: "job-board",
     assert: (snapshot) => {
-      expect(snapshot.title).toBe("Basic form");
+      expect(snapshot.title).toBe("Rolefinch - Jobs, salaries and company reviews");
     }
   },
   {
     item: "selected elements at rest",
-    scenario: "basic-form",
+    scenario: "auction-marketplace",
     assert: (snapshot) => {
       // A select always holds an option, so its selection is evidence before anyone touches it.
-      expect(byTestId(snapshot, "plan")).toMatchObject({
-        selectedValue: "starter",
-        options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }]
+      expect(bySelector(snapshot, CATEGORY)).toMatchObject({
+        selectedValue: "0",
+        options: [{ value: "0", label: "All Categories" }, { value: "625", label: "Cameras & Photography" }, { value: "15230", label: "Film Photography" }]
       });
       // Nothing else is selected: no page selection, no selection on a control that has none, and focus on the body.
-      expect(byTestId(snapshot, "name").selectedValue).toBeUndefined();
+      expect(bySelector(snapshot, "input[name=\"_nkw\"]").selectedValue).toBeUndefined();
       expect(snapshot.selectedText).toBeUndefined();
       expect(snapshot.focusedElement?.tagName).toBe("body");
     }
   },
   {
     item: "relevant attributes",
-    scenario: "basic-form",
-    assert: (snapshot) => {
-      // Exactly the allowlisted attributes: the input is also `required`, which the allowlist does not carry.
-      expect(byTestId(snapshot, "name").attributes).toEqual({ name: "name", "data-testid": "name", autocomplete: "off" });
-      expect(byTestId(snapshot, "submit").attributes).toEqual({ type: "submit", "data-testid": "submit" });
+    scenario: "job-board",
+    assert: async (snapshot, harness) => {
+      // Every attribute the page wrote, in the order it wrote them, whole
+      // (t200): the id rotates with the seed, so the page itself is the oracle.
+      const written = (selector: string) => harness.page.locator(selector).evaluate((element) => Object.fromEntries([...element.attributes].map((attribute) => [attribute.name, attribute.value])));
+      const what = bySelector(snapshot, WHAT).attributes;
+      expect(what).toEqual(await written(WHAT));
+      expect(Object.keys(what ?? {})).toEqual(Object.keys(await written(WHAT)));
+      expect(what).toMatchObject({ name: "q", placeholder: "Job title, keywords or company" });
+      expect(bySelector(snapshot, FIND_JOBS).attributes).toEqual(await written(FIND_JOBS));
     }
   },
   {
     item: "relevant attributes are not invented on an element that has none",
-    scenario: "basic-form",
+    scenario: "job-board",
     assert: (snapshot) => {
       const heading = snapshot.interactiveElements.find((element) => element.tagName === "h1");
-      expect(heading?.text).toBe("Basic form");
+      expect(heading?.text).toBe(HEADING_TEXT);
       expect(heading?.attributes).toBeUndefined();
     }
   }
@@ -106,26 +120,26 @@ const SNAPSHOT_ROWS: SnapshotRow[] = [
 for (const row of SNAPSHOT_ROWS) {
   test(`${row.scenario}: ${row.item}`, async ({ openHarness }) => {
     const harness = await openHarness(row.scenario);
-    row.assert(await capture(harness), harness);
+    await row.assert(await capture(harness), harness);
   });
 }
 
-test("basic-form: a page selection and a focused control are carried as the selected elements", async ({ openHarness, page }) => {
-  const harness = await openHarness("basic-form");
+test("job-board: a page selection and a focused control are carried as the selected elements", async ({ openHarness, page }) => {
+  const harness = await openHarness("job-board");
   // The selection first: focusing a text control afterwards moves the selection into it.
   await page.evaluate(() => {
     const heading = document.querySelector("main h1");
-    if (!heading) throw new Error("basic-form has no heading to select");
+    if (!heading) throw new Error("the job board's home page has no heading to select");
     window.getSelection()?.selectAllChildren(heading);
   });
-  expect((await capture(harness)).selectedText).toBe("Basic form");
+  expect((await capture(harness)).selectedText).toBe(HEADING_TEXT);
 
-  await page.locator("[data-testid=\"notes\"]").focus();
-  expect((await capture(harness)).focusedElement).toMatchObject({ tagName: "textarea", selector: "[data-testid=\"notes\"]", testId: "notes" });
+  await page.locator(WHAT).focus();
+  expect((await capture(harness)).focusedElement).toMatchObject({ tagName: "input", selector: WHAT });
 });
 
-test("basic-form: a page with no title reports an empty title, not one borrowed from its heading", async ({ openHarness, page }) => {
-  const harness = await openHarness("basic-form");
+test("job-board: a page with no title reports an empty title, not one borrowed from its heading", async ({ openHarness, page }) => {
+  const harness = await openHarness("job-board");
   await page.evaluate(() => document.querySelector("title")?.remove());
   expect((await capture(harness)).title).toBe("");
 });
@@ -145,26 +159,26 @@ function expectedStateCheck(commandId: string, entry: JsonObject): Parameters<Co
   return command;
 }
 
-test("basic-form: expected-state evidence carries the claim and what the page showed when it holds", async ({ openHarness }) => {
-  const harness = await openHarness("basic-form");
-  const reply = await harness.runAction(expectedStateCheck("expected-state-holds", { selector: RESULT, assert: { kind: "text", expected: "Not submitted" } }));
+test("job-board: expected-state evidence carries the claim and what the page showed when it holds", async ({ openHarness }) => {
+  const harness = await openHarness("job-board");
+  const reply = await harness.runAction(expectedStateCheck("expected-state-holds", { selector: HEADING, assert: { kind: "text", expected: HEADING_TEXT } }));
   expect(reply).toMatchObject({
     status: "succeeded",
-    validation: { status: "passed", expected: `"${RESULT}" contains "Not submitted"`, actual: `"${RESULT}" reads "Not submitted"` }
+    validation: { status: "passed", expected: `"${HEADING}" contains "${HEADING_TEXT}"`, actual: `"${HEADING}" reads "${HEADING_TEXT}"` }
   });
   expect(reply.failure).toBeUndefined();
 });
 
-test("basic-form: expected-state evidence on a page not in that state is a mismatch carrying both sides", async ({ openHarness }) => {
-  const harness = await openHarness("basic-form");
-  // The form is expected gone, as it would be after a submit that replaced it; nothing was submitted.
-  const reply = await harness.runAction(expectedStateCheck("expected-state-missing", { selector: BASIC_FORM, assert: { kind: "absent" } }));
+test("job-board: expected-state evidence on a page not in that state is a mismatch carrying both sides", async ({ openHarness }) => {
+  const harness = await openHarness("job-board");
+  // The search form is expected gone, as it would be after a search replaced the page; nothing was searched.
+  const reply = await harness.runAction(expectedStateCheck("expected-state-missing", { selector: SEARCH_FORM, assert: { kind: "absent" } }));
   expect(reply).toMatchObject({
     status: "failed",
-    validation: { status: "failed", expected: `no element matches "${BASIC_FORM}"`, actual: `"${BASIC_FORM}" is still present` },
+    validation: { status: "failed", expected: `no element matches "${SEARCH_FORM}"`, actual: `"${SEARCH_FORM}" is still present` },
     failure: {
       category: "unexpected_state", code: "web.validation.state_mismatch",
-      expected: `no element matches "${BASIC_FORM}"`, actual: `"${BASIC_FORM}" is still present`
+      expected: `no element matches "${SEARCH_FORM}"`, actual: `"${SEARCH_FORM}" is still present`
     }
   });
 });

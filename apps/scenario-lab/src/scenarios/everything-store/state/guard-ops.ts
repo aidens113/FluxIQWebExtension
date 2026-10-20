@@ -11,6 +11,17 @@ function flag(state: StoreState, reason: "honeypot" | "rate-limit"): StoreState 
 }
 
 /**
+ * The activity line for a dismissed nudge. The notifications prompt has two
+ * answers and says which one it got; every other nudge, and a prompt answer
+ * that names none, is a plain dismissal.
+ */
+function dismissal(key: string, payload: Record<string, unknown>): string {
+  if (key === "notifications" && payload.choice === "later") return "declined notifications";
+  if (key === "notifications" && payload.choice === "allow") return "allowed notifications";
+  return `dismissed ${String(payload.nudge)}`;
+}
+
+/**
  * The operations that belong to the store's shell and its defences: consent,
  * the nudges, the chat, and everything the bot defences count. Returns
  * `undefined` for an operation that is not one of these, so the dispatcher can
@@ -27,7 +38,7 @@ export function applyGuardOperation(state: StoreState, operation: string, payloa
       return withActivity({ ...state, consent: payload.choice === "accept" ? "accepted" : "declined" }, `consent ${payload.choice}`);
     case "dismiss-nudge": {
       const key = payload.nudge === "app-banner" ? "appBanner" : payload.nudge === "notifications" ? "notifications" : payload.nudge === "deal-wheel" ? "dealWheel" : undefined;
-      return key === undefined ? state : withActivity({ ...state, nudges: { ...state.nudges, [key]: "dismissed" } }, `dismissed ${String(payload.nudge)}`);
+      return key === undefined ? state : withActivity({ ...state, nudges: { ...state.nudges, [key]: "dismissed" } }, dismissal(key, payload));
     }
     case "chat":
       if (payload.state !== "open" && payload.state !== "minimized") return state;

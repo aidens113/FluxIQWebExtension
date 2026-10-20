@@ -1,5 +1,7 @@
 import { STORE_PATHS } from "../catalog/index.js";
+import type { StoreMode } from "../state/index.js";
 import type { StoreClasses } from "../style/index.js";
+import { HELP_AND_OFFERS_BODY } from "./help-and-offers-script.js";
 import { STORE_TIMINGS } from "./timings.js";
 
 /**
@@ -12,11 +14,14 @@ import { STORE_TIMINGS } from "./timings.js";
  * the cart, the row keeps its spinner, and only after `saveRetry` does it
  * admit something went wrong and offer "Try again". Nothing clears the spinner
  * except that retry or a reload.
+ *
+ * Under `help-and-offers` the area's own script follows
+ * (`help-and-offers-script.ts`).
  */
-export function cartScript(css: StoreClasses): string {
+export function cartScript(css: StoreClasses, mode: StoreMode): string {
   const config = { css, timings: STORE_TIMINGS, cart: STORE_PATHS.cart, checkout: STORE_PATHS.checkout };
   return `const CART = ${JSON.stringify(config)};
-${CART_BODY}`;
+${CART_BODY}${mode === "help-and-offers" ? HELP_AND_OFFERS_BODY : ""}`;
 }
 
 const CART_BODY = String.raw`

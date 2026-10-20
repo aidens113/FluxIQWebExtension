@@ -1,8 +1,10 @@
 import { escapeHtml, fixtureClient } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import { postingByKey, SUBMITTED_DATE_TEXT } from "../catalog/index.js";
-import type { JobBoardState, Posting, SubmittedApplication } from "../types.js";
+import type { JobBoardMode, JobBoardState, Posting, SubmittedApplication } from "../types.js";
 import { DIALLING_CODES, NOTICE_OPTIONS, SOURCE_OPTIONS } from "./application.js";
+import { extendedQuestions } from "./extended-questions.js";
+import { extendedQuestionsScript } from "./extended-script.js";
 import { formScript } from "./form-script.js";
 
 /** Talentloom's embed is framed by employer sites on the lab's other loopback port. */
@@ -48,8 +50,11 @@ const options = (entries: ReadonlyArray<{ value: string; label: string }>, place
  * pair of unlabelled pills, the salary must be a bare number, the talent
  * community box arrives ticked, and a field labelled "Confirm email" sits off
  * screen as a honeypot: filling it gets the application quietly discarded.
+ * Under `extended-application` the form also asks "A few more questions"
+ * before its two boxes; under every other mode it is exactly the baseline's.
  */
-export function renderApplicationForm(context: RenderContext, posting: Posting): string {
+export function renderApplicationForm(context: RenderContext, posting: Posting, mode: JobBoardMode): string {
+  const extended = mode === "extended-application";
   const body = `<main class="tl"><h1>${escapeHtml(posting.title)}</h1><p class="tl-sub">${escapeHtml(posting.company)} · ${escapeHtml(posting.location)}</p>
 <form novalidate>
 <p class="tl-req">* Required</p>
@@ -66,14 +71,14 @@ export function renderApplicationForm(context: RenderContext, posting: Posting):
 <div class="tl-row"><label for="notice">What is your notice period? *</label><select id="notice" name="notice">${options(NOTICE_OPTIONS, "Select...")}</select></div>
 <div class="tl-row"><label for="salary_expectation">What are your salary expectations? *</label><input type="text" id="salary_expectation" name="salary_expectation" inputmode="numeric"><p class="tl-hint">Annual, in pounds sterling.</p></div>
 <div class="tl-row"><label for="source">How did you hear about this job? *</label><select id="source" name="source">${options(SOURCE_OPTIONS, "Select...")}</select></div>
-<div class="tl-check"><input type="checkbox" id="talent_pool" name="talent_pool" checked><label for="talent_pool">Keep me in ${escapeHtml(posting.company)}'s talent community and share my profile with Talentloom partner employers hiring for similar roles.</label></div>
+${extended ? extendedQuestions(posting) : ""}<div class="tl-check"><input type="checkbox" id="talent_pool" name="talent_pool" checked><label for="talent_pool">Keep me in ${escapeHtml(posting.company)}'s talent community and share my profile with Talentloom partner employers hiring for similar roles.</label></div>
 <div class="tl-check"><input type="checkbox" id="privacy" name="privacy"><label for="privacy">I have read and accept the candidate privacy notice. *</label></div>
 <p class="tl-errors" role="alert"></p>
 <button type="submit" class="tl-submit">Submit application</button>
 </form>
 <div class="tl-shield" hidden><div><strong>Talentloom Shield</strong><p>Checking that this application is being sent by a person. This only takes a moment.</p><button type="button" disabled>Please wait</button></div></div>
 </main>`;
-  return embedDocument(`Apply for ${posting.title}`, body, `${fixtureClient(context.runToken, "job-board")}\n${formScript(posting.key)}`);
+  return embedDocument(`Apply for ${posting.title}`, body, `${fixtureClient(context.runToken, "job-board")}\n${formScript(posting.key)}${extended ? extendedQuestionsScript() : ""}`);
 }
 
 /** What the embed shows for a requisition that takes no applications. */

@@ -1,3 +1,4 @@
+export { cartAddOnsScript } from "./add-ons-script.js";
 export { cartScript } from "./cart-script.js";
 export { checkoutScript } from "./checkout-script.js";
 export { homeScript } from "./home-script.js";

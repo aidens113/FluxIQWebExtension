@@ -1,6 +1,8 @@
 export { BRANCHES, branchById, COMPANY } from "./company.js";
 export type { Branch } from "./company.js";
 export { addDays, formatPence, longDate, shortDay, weekday } from "./format.js";
+export { INTERSTITIALS } from "./interstitials.js";
+export type { Interstitial } from "./interstitials.js";
 export { newsletterCode } from "./newsletter.js";
 export { fnv1a, referenceCode } from "./reference.js";
 export { PRICE_LIST, priceText } from "./services.js";
