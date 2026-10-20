@@ -271,6 +271,20 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: sql-test-pool (worker-high, Core vitest isolation for real-SQL tests)
+- Why: every daily sweep produces a different set of 15 s timeouts in Core's heavy real-SQLite tests (S1, sweep-1019b,
+  sweep-1020: canonical-authority, database-manager, controller, command-execution service, provider-unavailable,
+  flow-index-read, ...): they pass alone in about a second and run 8 to 15 times slower inside the full package run
+  (t731 and t739 reports). Rerunning each set is the patch; the structural fix is isolation.
+- Task: in the Core worktree, give the real-SQL integration tests their own vitest project (or pool) with low
+  concurrency so the full `pnpm test` never starves them, selected by a rule (path or a marker) that new tests follow
+  without a list to maintain; `pnpm test` and `vitest run <path>` keep working; no timeout raised, no test skipped.
+  Document the rule in Core's testing docs and AGENTS.md if it states where tests run.
+- Validation: run the previously timed-out files together under the new pool and alone; run the whole
+  `packages/fluxiq` vitest once at the end and report its duration and failures (one full package run is allowed for
+  this change); both audits.
+- Report: `docs/working/trace-offline-trials-plan/reports/sql-test-pool.md` in the task's downstream tree.
+
 ### Brief: t739-sweep-1020-fixes (lead, t739 sweep-1020-fixes)
 - Why: sweep-1020 (`reports/sweep-1020.md`, logs `fxwork/sweep-1020/logs/`, Core ca23a8ba, downstream 6dd2d724).
 - Task, partitioned by file, root causes only (never raise a timeout or loosen an assertion): (1) scenario-lab
@@ -513,6 +527,21 @@ was still running at dispatch and is excluded below by its own file list.
   and the crossborder failure of sweep-1019b are gone; no out-of-memory error.
 - Outcome: Partial (fix forward in t739)
 - Follow-up: t739; the photo-social fixture result gates rerun round 3.
+
+### 2026-10-20 - t739 merged: photo-social fixture defect, build-cache fingerprint gap
+- Agent: supervisor (t739 lead and workers)
+- Changed: downstream merged (Core side had no change): photo-social's heart and dock show done only once the server
+  has the act (newest-likes lost likes when a navigation followed the optimistic heart; a live-run risk too); the
+  recording driver keeps Playwright's call log; `scenario-lab:check` declares its read of `packages/test-runner`
+  (t730 had left the realistic-scenarios list outside the cache fingerprint).
+- Validation: supervisor reruns in t739: `node --test dist/scenarios/photo-social/tests/*.test.js
+  dist/scenarios/photo-social/breadth/tests/*.test.js` -> pass 46 fail 0; live-task and instruction tests -> pass 17;
+  `node --test scripts/build-cache/tests/*.test.mjs` -> pass 25 fail 0; `prove-inputs.mjs scenario-lab:check` ->
+  `inputs proved complete for 2 listing(s)`; scenario-lab e2e `tsc` 0; audit passed; gated `pnpm task finish t739`
+  -> merged. Lead: extension suite alone 3220/3220; the four Core timeouts pass alone (0.4-1.5 s) and in their
+  directories (218/218), load-only.
+- Outcome: Accepted
+- Follow-up: sql-test-pool (structural fix for the recurring sweep timeouts).
 
 ## Open Questions
 
