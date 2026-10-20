@@ -2,6 +2,7 @@
 // the host bundle, and that a run with nothing changed spawns no build.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -164,6 +165,11 @@ writeFileSync(path.join(out, "index.js"), readFileSync("src/main.ts", "utf8"));
       await put(`${dir}/src/main.ts`, `export const name = "${name}";\n`);
       await put(`${dir}/build.mjs`, BUILD_SCRIPT);
     }
+    // A checkout, as the real one is: Core's engine fingerprints only the files
+    // git can see and runs uncached where git cannot list them, so the run log
+    // and outputs are ignored the way the real repository ignores them.
+    await put(".gitignore", "node_modules/\nruns.log\ndist/\n");
+    execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "ignore" });
   });
   afterEach(async () => { await rm(repo, { recursive: true, force: true }); });
 

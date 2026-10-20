@@ -1,171 +1,33 @@
-// Coverage of gateway-session.ts's state transitions that need no socket:
-// reaching `connected` clears whatever error came before it, and no other
-// state does, so a failure stays visible until the connection is actually back.
+// Coverage of gateway-session.ts, the web adapter over Core's connection: the
+// hello every socket opens with, where the gateway token is kept, how gateway
+// commands are mapped, and that the extension's timing, queue context and loss
+// handler reach Core. The connection itself -- state, open deadline, backoff,
+// heartbeat, lineage, queue binding and flush -- is covered by Core's
+// `client-gateway-websocket/src/connection/tests/`. Tokens here are synthetic
+// placeholders.
 
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 
-import { createClientGatewayMessage } from "@fluxiq/client-gateway-websocket";
+import {
+  ClientGatewayOutbox,
+  clientGatewayMemoryOutboxStore,
+  createClientGatewayMessage,
+  type ClientGatewayOutboxBinding,
+  type ClientGatewayOutboxContext
+} from "@fluxiq/client-gateway-websocket";
 import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
-import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
+import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../shared/protocol";
 import { GatewaySession, type GatewaySessionDeps } from "../gateway-session";
 
-function harness() {
-  const events: string[] = [];
-  const deps: GatewaySessionDeps = {
-    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
-    session: () => ({ clientId: "client-1" }) as FluxIQSession,
-    persistSession: async () => undefined,
-    emitStatus: () => events.push("emit"),
-    reportError: (message) => events.push(`error ${message}`),
-    clearError: () => events.push("clearError"),
-    beforeConnect: async () => undefined,
-    queue: { queueEvent: async () => 0, readQueuedEvents: async () => [], clearQueuedEvents: async () => undefined },
-    handlers: {
-      onServerMessage: () => undefined,
-      onPairingRequired: () => undefined,
-      onSessionReady: () => undefined,
-      onCommand: () => undefined,
-      onHeartbeat: () => undefined
-    }
-  };
-  return { session: new GatewaySession(deps), events };
-}
+const SYNTHETIC_TOKEN = "synthetic-token.0";
+const NEXT_SYNTHETIC_TOKEN = "synthetic-token.1";
 
-test("becoming connected clears the last error before the status is published", () => {
-  const h = harness();
-  h.session.markSessionReady();
-  assert.equal(h.session.state(), "connected");
-  assert.deepEqual(h.events, ["clearError", "emit"]);
-});
-
-test("failing or disconnecting keeps the error", () => {
-  const h = harness();
-  h.session.markFailed();
-  h.session.markDisconnected();
-  assert.deepEqual(h.events, ["emit", "emit"]);
-});
-
-test("retrying now does nothing for a session nobody asked to connect, even a failed one", () => {
-  const h = harness();
-  h.session.markFailed();
-  assert.equal(h.session.wantsConnection(), false);
-  assert.equal(h.session.retryNow(), false);
-  assert.equal(h.session.state(), "error");
-});
-
-// --- A socket that never opens ------------------------------------------------
-// Before t174-w7, `connect()` awaited Core's `waitForOpen`, which had no
-// deadline: a gateway that took the TCP connection and never answered the
-// upgrade left a person's Connect -- and the Lab's `fluxiq.connect` -- waiting
-// for ever, with nothing in the status to say why.
-
-class NeverOpeningSocket {
-  static created: NeverOpeningSocket[] = [];
-  readyState = 0;
-  closed = false;
-  constructor(readonly url: string) { NeverOpeningSocket.created.push(this); }
-  send(): void {}
-  close(): void { this.closed = true; this.readyState = 3; }
-  addEventListener(): void {}
-  removeEventListener(): void {}
-}
-
-/** Runs with `impl` as the global WebSocket and the one `chrome` read the hello makes (its manifest version). */
-function withSocket<T>(impl: unknown, run: () => Promise<T>): Promise<T> {
-  const holder = globalThis as { WebSocket?: unknown; chrome?: unknown };
-  const previous = { WebSocket: holder.WebSocket, chrome: holder.chrome };
-  holder.WebSocket = impl;
-  holder.chrome = { runtime: { getManifest: () => ({ version: "0.0.0-test" }) } };
-  return run().finally(() => { holder.WebSocket = previous.WebSocket; holder.chrome = previous.chrome; });
-}
-
-function neverOpeningHarness(openTimeoutMs: number) {
-  const events: string[] = [];
-  const deps: GatewaySessionDeps = {
-    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
-    session: () => ({ clientId: "client-1" }) as FluxIQSession,
-    persistSession: async () => undefined,
-    emitStatus: () => undefined,
-    reportError: (message) => events.push(`error ${message}`),
-    clearError: () => events.push("clearError"),
-    beforeConnect: async () => undefined,
-    queue: { queueEvent: async () => 0, readQueuedEvents: async () => [], clearQueuedEvents: async () => undefined },
-    openTimeoutMs,
-    handlers: {
-      onServerMessage: () => undefined,
-      onPairingRequired: () => undefined,
-      onSessionReady: () => undefined,
-      onCommand: () => undefined,
-      onHeartbeat: () => undefined
-    }
-  };
-  return { session: new GatewaySession(deps), events };
-}
-
-test("a connect whose socket never opens settles within its deadline and names open_timeout", { timeout: 5_000 }, async () => {
-  NeverOpeningSocket.created = [];
-  const h = neverOpeningHarness(30);
-  await withSocket(NeverOpeningSocket, () => h.session.connect());
-  assert.equal(h.session.state(), "error");
-  assert.equal(h.events.length, 1);
-  assert.match(h.events[0]!, /^error FluxIQ did not open the connection within .* \(open_timeout\)\.$/u);
-  assert.equal(NeverOpeningSocket.created[0]!.closed, true, "the unopened socket is closed, not left to open later");
-});
-
-test("a connect superseded by a newer one says nothing about the newer attempt", { timeout: 5_000 }, async () => {
-  NeverOpeningSocket.created = [];
-  const h = neverOpeningHarness(40);
-  await withSocket(NeverOpeningSocket, async () => {
-    const first = h.session.connect();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    // A second Connect, or a reconnect, replaces the first attempt's socket.
-    const second = h.session.connect();
-    await first;
-    // The first attempt's deadline has passed; the second's has not.
-    assert.equal(h.session.state(), "connecting", "the superseded attempt did not mark the live one failed");
-    assert.deepEqual(h.events, [], "the superseded attempt reported nothing");
-    await second;
-    assert.equal(h.session.state(), "error");
-    assert.equal(h.events.length, 1);
-  });
-});
-
-// A command whose result waits in the offline queue is answered with it, never
-// run again (plan B3, `in-flight/command-reconciliation.ts`).
-test("the offline queue is asked for a command's result by its id, and only a result answers", async () => {
-  const queued: ClientGatewayClientMessage[] = [
-    createClientGatewayMessage("client.recording_event", { eventId: "cmd-1", domainId: "web-automation", eventType: "dom.click", timestamp: 1, payload: { commandId: "cmd-1" } }),
-    createClientGatewayMessage("client.action_result", { commandId: "cmd-2", status: "succeeded" })
-  ];
-  const deps: GatewaySessionDeps = {
-    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
-    session: () => ({ clientId: "client-1" }) as FluxIQSession,
-    persistSession: async () => undefined,
-    emitStatus: () => undefined,
-    reportError: () => undefined,
-    clearError: () => undefined,
-    beforeConnect: async () => undefined,
-    queue: { queueEvent: async () => 0, readQueuedEvents: async () => queued, clearQueuedEvents: async () => undefined },
-    handlers: { onServerMessage: () => undefined, onPairingRequired: () => undefined, onSessionReady: () => undefined, onCommand: () => undefined, onHeartbeat: () => undefined }
-  };
-  const session = new GatewaySession(deps);
-  assert.deepEqual(await session.queuedActionResult("cmd-2"), { commandId: "cmd-2", status: "succeeded" });
-  assert.equal(await session.queuedActionResult("cmd-1"), undefined, "a recording event is not a result");
-  assert.equal(await session.queuedActionResult("cmd-3"), undefined);
-});
-
-// --- Staying awake while a person approves ------------------------------------
-// t706: Chrome's MV3 idle rule stopped the service worker about 30 s after the
-// pairing code showed, because nothing reset its idle timer while the session
-// waited for approval. The socket closed, and a person who approved after that
-// was approved for a socket that no longer existed. Each heartbeat tick now
-// calls `keepAlive` while the socket is open but not connected.
-
-/** A socket that opens on the next turn and can be dropped by the test. */
+/** A socket that opens on the next turn, records what is sent, and lets the test speak for the gateway. */
 class OpeningSocket {
   static latest: OpeningSocket | undefined;
   readyState = 0;
+  readonly sent: string[] = [];
   private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
   constructor(readonly url: string) {
     OpeningSocket.latest = this;
@@ -174,7 +36,9 @@ class OpeningSocket {
       for (const listener of this.listeners.get("open") ?? []) listener({});
     }, 0);
   }
-  send(): void {}
+  send(data: string): void {
+    this.sent.push(data);
+  }
   close(): void { this.readyState = 3; }
   addEventListener(type: string, listener: (event: unknown) => void): void {
     const set = this.listeners.get(type) ?? new Set();
@@ -184,89 +48,271 @@ class OpeningSocket {
   removeEventListener(type: string, listener: (event: unknown) => void): void {
     this.listeners.get(type)?.delete(listener);
   }
-  /** The worker stopping, or the network dropping: the socket closes under the session. */
-  drop(): void {
-    this.readyState = 3;
-    for (const listener of this.listeners.get("close") ?? []) listener({ code: 1006, reason: "" });
+  /** A server message arriving on the socket. */
+  deliver(type: string, payload: unknown, id = `server-${type}`): void {
+    for (const listener of this.listeners.get("message") ?? []) listener({ data: JSON.stringify({ id, type, protocolVersion: "1", timestamp: 1, payload }) });
+  }
+  /** What the client sent, parsed. */
+  messages(): Array<{ type: string; clientId?: string; payload: Record<string, unknown> }> {
+    return this.sent.map((data) => JSON.parse(data) as { type: string; clientId?: string; payload: Record<string, unknown> });
   }
 }
 
-function tickingHarness(token: string | undefined) {
-  const ticks: string[] = [];
+type HarnessInput = {
+  session?: FluxIQSession;
+  outbox?: ClientGatewayOutbox;
+  context?: ClientGatewayOutboxContext;
+  onQueueLoss?: GatewaySessionDeps["handlers"]["onQueueLoss"];
+  keepAlive?: () => void;
+};
+
+function harness(input: HarnessInput = {}) {
+  const store = clientGatewayMemoryOutboxStore();
+  const outbox = input.outbox ?? new ClientGatewayOutbox(store);
+  const state = {
+    session: input.session ?? ({ clientId: "client-1" } as FluxIQSession),
+    context: input.context ?? { projectId: "project-1", recordingId: null },
+    persisted: [] as FluxIQSession[],
+    commands: [] as Array<{ payload: ServerCommandPayload; messageId: string }>,
+    errors: [] as string[]
+  };
+  let markReady: () => void = () => undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
   const deps: GatewaySessionDeps = {
-    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
-    session: () => ({ clientId: "client-1", ...(token !== undefined ? { token } : {}) }) as FluxIQSession,
-    persistSession: async () => undefined,
+    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false, captureMutations: true, captureInputValues: false, captureSnapshots: true }) as FluxIQSettings,
+    session: () => state.session,
+    persistSession: async (session) => {
+      state.persisted.push(session);
+      state.session = session;
+    },
     emitStatus: () => undefined,
-    reportError: () => undefined,
+    reportError: (message) => void state.errors.push(message),
     clearError: () => undefined,
     beforeConnect: async () => undefined,
-    queue: { queueEvent: async () => 0, readQueuedEvents: async () => [], clearQueuedEvents: async () => undefined },
+    outbox,
+    queueContext: () => state.context,
+    mintLineage: () => "lineage-minted",
     handlers: {
       onServerMessage: () => undefined,
       onPairingRequired: () => undefined,
-      onSessionReady: () => undefined,
-      onCommand: () => undefined,
-      onHeartbeat: () => ticks.push("heartbeat"),
-      keepAlive: () => ticks.push("keepAlive")
+      onSessionReady: () => markReady(),
+      onCommand: (payload, messageId) => void state.commands.push({ payload, messageId }),
+      onHeartbeat: () => undefined,
+      ...(input.keepAlive !== undefined ? { keepAlive: input.keepAlive } : {}),
+      ...(input.onQueueLoss !== undefined ? { onQueueLoss: input.onQueueLoss } : {})
     }
   };
-  return { session: new GatewaySession(deps), ticks };
+  return { session: new GatewaySession(deps), outbox, store, state, ready };
 }
 
-/** Opens a session with `setInterval` faked (the socket still opens on a real timeout) and runs `body` against it. */
-async function withTickingSession(token: string | undefined, body: (h: ReturnType<typeof tickingHarness>) => void | Promise<void>): Promise<void> {
-  const h = tickingHarness(token);
+/** Runs with the fake socket as the global WebSocket and the one `chrome` read the hello makes (its manifest version). */
+async function withSocket<T>(run: () => Promise<T>): Promise<T> {
+  const holder = globalThis as { WebSocket?: unknown; chrome?: unknown };
+  const previous = { WebSocket: holder.WebSocket, chrome: holder.chrome };
+  holder.WebSocket = OpeningSocket;
+  holder.chrome = { runtime: { getManifest: () => ({ version: "0.0.0-test" }) } };
+  try {
+    return await run();
+  } finally {
+    holder.WebSocket = previous.WebSocket;
+    holder.chrome = previous.chrome;
+  }
+}
+
+/** Connects over an `OpeningSocket` (its hello is `sent[0]`) and runs `body` with it. */
+async function withOpenSession(h: ReturnType<typeof harness>, body: (socket: OpeningSocket) => Promise<void>): Promise<void> {
+  await withSocket(async () => {
+    await h.session.connect();
+    try {
+      await body(OpeningSocket.latest!);
+    } finally {
+      h.session.closeClient();
+    }
+  });
+}
+
+/** The gateway accepting the session, and the extension marking it ready as `server-command-channel.ts` does. */
+async function acceptSession(h: ReturnType<typeof harness>, socket: OpeningSocket): Promise<void> {
+  socket.deliver("server.session_ready", { sessionId: "wire-2", token: NEXT_SYNTHETIC_TOKEN });
+  await h.ready;
+  h.session.markSessionReady();
+}
+
+const nextTurn = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+function bound(session: string, projectId: string | null, recordingId: string | null): ClientGatewayOutboxBinding {
+  return { session, projectId, recordingId };
+}
+
+function recordingEvent(eventId: string): ClientGatewayClientMessage {
+  return createClientGatewayMessage("client.recording_event", { eventId, eventType: "dom.click" });
+}
+
+// --- The hello ----------------------------------------------------------------
+
+test("every socket opens with the extension's hello: identity, capabilities, domain, browser and capture settings", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withOpenSession(h, async (socket) => {
+    hello = socket.messages()[0];
+  });
+  assert.equal(hello?.type, "client.hello");
+  const payload = hello!.payload as {
+    clientId: string; clientType: string; name: string; version: string; token?: string;
+    capabilities: unknown[]; metadata: { domainId: string; browser: { extensionVersion: string }; settings: Record<string, boolean> };
+  };
+  assert.equal(payload.clientId, "client-1");
+  assert.equal(payload.clientType, "extension");
+  assert.equal(payload.name, "FluxIQ Browser Extension");
+  assert.equal(payload.version, "0.0.0-test");
+  assert.equal(payload.token, SYNTHETIC_TOKEN, "the saved token resumes the trusted client");
+  assert.ok(payload.capabilities.length > 0);
+  assert.equal(payload.metadata.domainId, "web-automation");
+  assert.equal(payload.metadata.browser.extensionVersion, "0.0.0-test");
+  assert.deepEqual(payload.metadata.settings, { captureMutations: true, captureInputValues: false, captureSnapshots: true });
+});
+
+test("a hello without a saved token carries none", async () => {
+  const h = harness();
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withOpenSession(h, async (socket) => {
+    hello = socket.messages()[0];
+  });
+  assert.equal(Object.hasOwn(hello!.payload, "token"), false);
+  assert.equal(h.session.state(), "pairing");
+});
+
+// --- The token ----------------------------------------------------------------
+
+test("the token the gateway issues is kept in the session record, compacted, with where and when it connected", async () => {
+  const h = harness({ session: { clientId: "client-1", projectId: "project-1", sessionId: undefined } });
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+  });
+  assert.equal(h.state.persisted.length, 1);
+  const [written] = h.state.persisted;
+  assert.equal(written!.token, NEXT_SYNTHETIC_TOKEN);
+  assert.equal(written!.clientId, "client-1");
+  assert.equal(written!.projectId, "project-1");
+  assert.equal(written!.serverUrl, "ws://gateway.test");
+  assert.equal(typeof written!.connectedAt, "number");
+  assert.equal(Object.hasOwn(written!, "sessionId"), false, "an undefined field is not written");
+});
+
+// --- Gateway commands ---------------------------------------------------------
+
+test("recording and snapshot commands reach the channel by name with their message id", async () => {
+  const h = harness();
+  await withOpenSession(h, async (socket) => {
+    socket.deliver("server.start_recording", { recordingId: "rec-1", projectId: "project-1" }, "m-start");
+    socket.deliver("server.capture_snapshot", { reason: "test" }, "m-snap");
+    socket.deliver("server.stop_recording", { recordingId: "rec-1" }, "m-stop");
+    await nextTurn();
+  });
+  assert.deepEqual(h.state.commands.map(({ payload, messageId }) => `${payload.command} ${messageId}`), [
+    "start_recording m-start",
+    "capture_snapshot m-snap",
+    "stop_recording m-stop"
+  ]);
+  const start = h.state.commands[0]!.payload;
+  assert.equal(start.command === "start_recording" ? start.recordingId : undefined, "rec-1");
+});
+
+test("an action of an unknown type is answered as rejected and never reaches the channel", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  let sent: ReturnType<OpeningSocket["messages"]> = [];
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    socket.deliver("server.execute_action", { commandId: "cmd-unknown", actionType: "web.not.a.thing", parameters: {} }, "m-1");
+    await nextTurn();
+    sent = socket.messages().slice(1);
+  });
+  assert.deepEqual(h.state.commands, []);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.type, "client.action_result");
+  assert.equal(sent[0]!.payload.commandId, "cmd-unknown");
+  assert.notEqual(sent[0]!.payload.status, "succeeded");
+});
+
+// Core writes nothing to a socket before `server.session_ready` (the old
+// extension session sent over any open socket): a rejection answered while the
+// gateway is still checking the token waits in the queue and goes out with the
+// flush once the session is ready.
+test("a rejection answered before the session is ready is queued, not written to the socket, and flushed once it is", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN } });
+  await h.outbox.setLineage("lineage-1");
+  let beforeReady: string[] = [];
+  let afterFlush: string[] = [];
+  await withOpenSession(h, async (socket) => {
+    socket.deliver("server.execute_action", { commandId: "cmd-early", actionType: "web.not.a.thing", parameters: {} }, "m-1");
+    await nextTurn();
+    beforeReady = socket.messages().map(({ type }) => type);
+    await acceptSession(h, socket);
+    await h.session.flushQueue();
+    afterFlush = socket.messages().map(({ type }) => type);
+  });
+  assert.deepEqual(beforeReady, ["client.hello"]);
+  assert.deepEqual(afterFlush, ["client.hello", "client.action_result"]);
+});
+
+// --- What the extension hands Core ---------------------------------------------
+
+test("a message sent while offline is queued under the extension's project, recording and client id, and flushed after a token resume", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, context: { projectId: "project-1", recordingId: "rec-1" } });
+  await h.outbox.setLineage("lineage-1");
+  await h.session.send("client.recording_event", { eventId: "event-offline", eventType: "dom.click" });
+  const [entry] = (await h.store.read()).entries;
+  assert.deepEqual(entry!.binding, bound("lineage-1", "project-1", "rec-1"));
+  assert.equal(entry!.message.clientId, "client-1");
+  assert.equal(h.session.statusFields().queueSize, 1);
+  let sent: ReturnType<OpeningSocket["messages"]> = [];
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    await h.session.flushQueue();
+    sent = socket.messages().slice(1);
+  });
+  assert.deepEqual(sent.map(({ type, payload }) => `${type} ${String(payload.eventId)}`), ["client.recording_event event-offline"]);
+  assert.equal(h.session.statusFields().queueSize, 0);
+});
+
+test("a flush sends FluxIQ the outbox's loss marker before the queued messages, then tells the extension", async () => {
+  // A limit of one entry: the second message queued drops the first.
+  const outbox = new ClientGatewayOutbox(clientGatewayMemoryOutboxStore(), { limit: 1 });
+  await outbox.setLineage("lineage-1");
+  await outbox.enqueue(recordingEvent("event-dropped"), bound("lineage-1", "project-1", null));
+  await outbox.enqueue(recordingEvent("event-kept"), bound("lineage-1", "project-1", null));
+  const losses: number[] = [];
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN }, outbox, onQueueLoss: (loss) => losses.push(loss.count) });
+  let sent: ReturnType<OpeningSocket["messages"]> = [];
+  await withOpenSession(h, async (socket) => {
+    await acceptSession(h, socket);
+    await h.session.flushQueue();
+    sent = socket.messages().slice(1);
+  });
+  assert.deepEqual(sent.map(({ type, payload }) => `${type} ${String(payload.code ?? payload.eventId)}`), [
+    "client.error client.outbox.entries_lost",
+    "client.recording_event event-kept"
+  ]);
+  assert.deepEqual(losses, [1]);
+  assert.equal(await outbox.lost(), undefined);
+});
+
+// t706: Chrome's MV3 idle rule stopped the service worker about 30 s after the
+// pairing code showed. The extension's keep-alive must reach Core's tick, at the
+// extension's interval, for as long as a person takes to approve.
+test("while a person approves pairing, the extension's keep-alive runs on every heartbeat interval", async () => {
+  const ticks: string[] = [];
+  const h = harness({ keepAlive: () => ticks.push("keepAlive") });
   mock.timers.enable({ apis: ["setInterval"] });
   try {
-    await withSocket(OpeningSocket, async () => {
-      await h.session.connect();
-      try { await body(h); } finally { h.session.closeClient(); }
+    await withOpenSession(h, async () => {
+      assert.equal(h.session.state(), "pairing");
+      mock.timers.tick(HEARTBEAT_INTERVAL_MS * 15);
     });
   } finally {
     mock.timers.reset();
   }
-}
-
-test("while a person approves pairing, every tick keeps the worker awake and sends no heartbeat", async () => {
-  await withTickingSession(undefined, (h) => {
-    assert.equal(h.session.state(), "pairing");
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 15);
-    assert.deepEqual(h.ticks, Array(15).fill("keepAlive"), "five minutes of approval window, a keepalive every tick");
-  });
-});
-
-test("while the gateway checks a saved token, every tick keeps the worker awake", async () => {
-  await withTickingSession("token-1", (h) => {
-    assert.equal(h.session.state(), "connecting");
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 2);
-    assert.deepEqual(h.ticks, ["keepAlive", "keepAlive"]);
-  });
-});
-
-test("once connected, ticks are heartbeats, as before, and no keepalive", async () => {
-  await withTickingSession(undefined, (h) => {
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS);
-    h.session.markSessionReady();
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 2);
-    assert.deepEqual(h.ticks, ["keepAlive", "heartbeat", "heartbeat"]);
-  });
-});
-
-test("after the socket closes, nothing ticks", async () => {
-  await withTickingSession(undefined, (h) => {
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS);
-    OpeningSocket.latest!.drop();
-    assert.equal(h.session.state(), "disconnected");
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 5);
-    assert.deepEqual(h.ticks, ["keepAlive"]);
-  });
-});
-
-test("after the extension closes the client, nothing ticks", async () => {
-  await withTickingSession(undefined, (h) => {
-    h.session.closeClient();
-    mock.timers.tick(HEARTBEAT_INTERVAL_MS * 5);
-    assert.deepEqual(h.ticks, []);
-  });
+  assert.deepEqual(ticks, Array(15).fill("keepAlive"));
 });

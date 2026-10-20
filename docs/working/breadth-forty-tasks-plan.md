@@ -673,6 +673,21 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
 - Decision: the user paused the breadth round; the next session runs the lanes in `trace-offline-trials-plan.md`
   and finishes L1 first.
 
+### 2026-10-19 - L1 browser proof found two defects; supervisor decisions
+- Agent: supervisor (L1 worker l1-d3-browser-proof)
+- Changed: nothing on `dev`; decisions sent to the L1 lead.
+- Why: D3 (`fxwork/t724/.../reports/l1-d3-browser-proof.md`), headed and provider-free on the installed extension:
+  both existing cases, job D+F and office C pass; office E fails on a Core defect (a builder's whole-run act lands in
+  the supervisor's ledger, whose repeat matching has no explored acts, so act-2 never links to its explored press);
+  photo G fails because icon-only buttons capture `accessibleName: null`, so Like and Unlike share one state token.
+- Validation: not validated by the supervisor; the worker's diagnosis rests on saved diagnostics (`d3-run11`).
+- Decisions: fix both inside L1 before merge (two of the four breadth reruns depend on them); repeat matching spans
+  every ledger of the build; accessible-name capture takes a descendant `svg[aria-label]`/`title`, the state digest
+  falls back to the printed words; a navigation with no lasting effect is a look, never an undo attempt (settles
+  `unchanged`); `NODE_OPTIONS=--no-experimental-strip-types` in the extension's Playwright config (L1 owns it).
+- Outcome: Partial
+- Follow-up: L1 reruns D3's five cases green, then integration.
+
 ## Open Questions
 
 None requiring user input.

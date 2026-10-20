@@ -120,7 +120,10 @@ test("a restarted worker reconnects a paired browser by itself, and reconnects a
 });
 
 test("saved settings of the wrong shape are repaired rather than breaking every message", async ({ extensionSession }) => {
+  // An older build's persistent queue is never read again: the background removes it at start.
   await extensionSession.extensionPage.evaluate(() => chrome.storage.local.set({ "fluxiq.settings": { coreApiUrl: 42, autoReconnect: "yes" }, "fluxiq.queuedEvents": "not a list" }));
+  // The queue lives in session storage now, and a malformed one is repaired when it is read.
+  await extensionSession.extensionPage.evaluate(() => chrome.storage.session.set({ "fluxiq.outbox": "not a queue" }));
   await restartServiceWorker(extensionSession);
   const status = await extensionSession.extensionPage.evaluate(() => chrome.runtime.sendMessage({ type: "fluxiq.getStatus" })) as { ok: boolean; status?: { settings?: { coreApiUrl?: unknown; autoReconnect?: unknown }; queueSize?: unknown } };
   expect(status.ok).toBe(true);
@@ -129,8 +132,10 @@ test("saved settings of the wrong shape are repaired rather than breaking every 
   expect(status.status?.queueSize).toBe(0);
   const stored = await extensionSession.extensionPage.evaluate(() => chrome.storage.local.get(["fluxiq.settings", "fluxiq.queuedEvents", "fluxiq.problemLog"]));
   expect(typeof (stored["fluxiq.settings"] as { coreApiUrl?: unknown }).coreApiUrl).toBe("string");
-  expect(stored["fluxiq.queuedEvents"]).toEqual([]);
+  expect(stored["fluxiq.queuedEvents"]).toBeUndefined();
   expect(JSON.stringify(stored["fluxiq.problemLog"])).toContain("repaired");
+  const session = await extensionSession.extensionPage.evaluate(() => chrome.storage.session.get("fluxiq.outbox"));
+  expect(session["fluxiq.outbox"]).toEqual({ entries: [] });
 });
 
 test("while a paired browser cannot reach FluxIQ, the reconnect alarm is set and fires, and the browser reconnects once FluxIQ answers", async ({ extensionSession }) => {
