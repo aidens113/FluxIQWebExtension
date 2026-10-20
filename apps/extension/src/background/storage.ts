@@ -25,6 +25,12 @@ async function repaired<T>(reading: SavedReading<T>, key: string, rewrite: (valu
   return reading.value;
 }
 
+// Saved settings are the person's choices, direct requests included, kept as
+// they set them. Storage is read before Core's recording-capture policy is
+// known, so it applies no policy: the policy is applied where settings are used
+// (`capture-policy/effective-settings.ts`, which keeps direct requests off under
+// Core's default) and to what a save may change (`capture-policy/requests-choice.ts`).
+
 export async function readSettings(): Promise<FluxIQSettings> {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
   const settings = await repaired(readSavedSettings(stored[STORAGE_KEYS.settings], defaultSettings()), "settings", writeSettings);
@@ -36,7 +42,7 @@ export async function writeSettings(settings: FluxIQSettings): Promise<void> {
 }
 
 function normalizeSettings(settings: FluxIQSettings): FluxIQSettings {
-  settings = { ...settings, requestsEnabled: false };
+  settings = { ...settings, requestsEnabled: settings.requestsEnabled === true };
   if (settings.coreApiUrl.trim().replace(/\/+$/, "") !== LEGACY_GATEWAY_CORE_API_URL) return settings;
   return { ...settings, coreApiUrl: DEFAULT_CORE_API_URL };
 }

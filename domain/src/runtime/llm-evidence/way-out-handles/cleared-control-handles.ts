@@ -16,7 +16,7 @@
 // as printed, so a candidate step naming it resolves to that control. Nothing
 // it describes is shown to the model but the handle.
 //
-// A reference the registry let go, or a way out that does not describe exactly
+// A reference neither this process nor the Flow's durable record still keeps, or a way out that does not describe exactly
 // one element, is left out: the trial feedback then names no handle, and the
 // script format asks for no step closing the layer.
 
@@ -40,7 +40,8 @@ export function webLlmClearedControlHandles(dependencies: {
     const scope = { projectId, flowId };
     const handles: Record<string, string> = {};
     for (const reference of new Set(wayOuts)) {
-      const wayOut = dependencies.wayOuts.get(reference);
+      // Kept by this process, or, after a restart, in the Flow's durable record (`../../../cleared-way-outs/registry.ts`, t728).
+      const wayOut = await dependencies.wayOuts.find(reference, scope);
       if (wayOut === undefined) continue;
       let described: WebLlmSnapshotBinding;
       try {

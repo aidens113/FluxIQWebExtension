@@ -100,7 +100,8 @@ export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
  * advertisements was deleted on 2026-09-18 and is not wanted back.
  *
  * What may be said about that value, and what each phrase means, is
- * `./condition-grammar.ts` and `./condition-match.ts`. In short:
+ * `./condition-grammar.ts` and Core's `automationStudioRecordConditionHolds`
+ * (`fluxiq/automation-studio/nodes`). In short:
  *
  * - `is` tests whether the page has the value at all, which is the whole of
  *   what a mark says: `absent` keeps the items that do not carry it;

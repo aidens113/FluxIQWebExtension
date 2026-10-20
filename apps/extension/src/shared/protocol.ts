@@ -66,8 +66,20 @@ export type FluxIQSettings = {
   captureMutations: boolean;
   captureInputValues: boolean;
   captureSnapshots: boolean;
-  /** Reserved preference: forced OFF until the executable broker is available. */
+  /** On only where Core's recording-capture policy allows direct requests (`capturePolicy.directRequests.allowed`). */
   requestsEnabled: boolean;
+};
+
+/**
+ * Which switches Core's recording-capture policy lets the person turn on, as
+ * the status carries it to the panel: booleans only. A switch that is false is
+ * shown disabled and saved off; the background enforces it either way.
+ */
+export type ExtensionCaptureAllowed = {
+  captureMutations: boolean;
+  captureInputValues: boolean;
+  captureSnapshots: boolean;
+  directRequests: boolean;
 };
 
 export type FluxIQSession = {
@@ -153,6 +165,8 @@ export type ExtensionStatus = {
   recordingState: RecordingState;
   gatewayUrl: string;
   settings?: FluxIQSettings | undefined;
+  /** What Core's recording-capture policy allows, so the settings form can disable what it forbids. Absent: Core's default. */
+  captureAllowed?: ExtensionCaptureAllowed | undefined;
   clientId: string;
   /**
    * A pairing token is stored, so FluxIQ has approved this browser before. Tells

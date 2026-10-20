@@ -11,11 +11,13 @@
 // `run-munw7ffn-fe1cecd2`'s 36 re-author calls and $0.0425 were in no figure
 // the Lab or the machine's spend ledger kept.
 //
-// A failed build's loop names no provider call count, only its decisions
-// (`evidenceLoop.decisionCount`, one paid call each), and its `ending` says how
-// it closed. `run-musp39u8-9ac026ab` booked both of its re-author builds as
-// `calls: null` and kept neither ending, so its 69 re-author calls read as
-// uncounted and nothing said a budget, and which one, had stopped each build.
+// A failed build's loop names no provider call count, and
+// `run-musp39u8-9ac026ab` booked both of its re-author builds as
+// `calls: null`, so its 69 re-author calls read as uncounted. Core now writes
+// the count on the attempt itself (`calls`, t728: the failed build's
+// diagnostic count, or its purse receipt's, and 0 for a build never started),
+// and that is what is read first; the decision count the Lab used to stand in
+// for it is no longer read. The attempt's `ending` says how it closed.
 //
 // **Which build of a brief (`try`).** Core builds a re-author once more, on
 // the same brief, only when the first build failed on a named transient
@@ -50,9 +52,10 @@ export type LiveLlmReauthorAttempt = {
   /** Core's count of the build's provider calls, or `null` where it recorded none this reader could reach. */
   calls: number | null;
   /**
-   * Where `calls` came from: the attempt's own loop (a build that failed), its
-   * adaptation (one that succeeded), an adaptation that could not be read, or
-   * nowhere, because Core recorded neither.
+   * Where `calls` came from: the attempt record (Core's count for a failed
+   * build), the attempt's own loop, its adaptation (a build that succeeded),
+   * an adaptation that could not be read, or nowhere, because Core recorded
+   * none.
    */
   callsFrom: LiveLlmReauthorCallsSource;
   inputTokens: number | null;
@@ -83,12 +86,11 @@ export type LiveLlmReauthorEnding = {
 };
 
 /**
- * Where `calls` came from: `loop` is the loop's own provider call count,
- * `loop_decisions` its decision count where it kept no call count (a failed
- * build's loop; one paid call per decision, calls outside the loop not
- * included), `adaptation` the succeeded build's adaptation.
+ * Where `calls` came from: `attempt` is the count Core wrote on the attempt
+ * (a failed build's), `loop` the loop's own provider call count, `adaptation`
+ * the succeeded build's adaptation.
  */
-export type LiveLlmReauthorCallsSource = "loop" | "loop_decisions" | "adaptation" | "adaptation_unreadable" | "not_recorded";
+export type LiveLlmReauthorCallsSource = "attempt" | "loop" | "adaptation" | "adaptation_unreadable" | "not_recorded";
 
 export type LiveLlmReauthorRecord = {
   /** `run-detail` when Core recorded a re-author, `absent` when it recorded none, `unreadable` when the detail could not be read. */
@@ -127,7 +129,8 @@ export async function readLiveLlmReauthor(control: LiveLlmExplorationControl, sc
   for (const [index, item] of recorded.entries()) {
     const accounting = asRecord(item.accounting);
     const adaptationId = id(item.adaptationId);
-    const counted = await attemptCalls(control, scope.projectId, flowId, adaptationId, asRecord(item.evidenceLoop));
+    const recordedCalls = count(item.calls);
+    const counted = recordedCalls !== null ? { calls: recordedCalls, callsFrom: "attempt" as const } : await attemptCalls(control, scope.projectId, flowId, adaptationId, asRecord(item.evidenceLoop));
     attempts.push({
       attempt: count(item.attempt),
       try: tries[index] ?? null,
@@ -157,18 +160,15 @@ function loopCalls(loop: Record<string, unknown> | undefined): number | null {
 async function attemptCalls(control: LiveLlmExplorationControl, projectId: string, flowId: string | null, adaptationId: string | null, loop: Record<string, unknown> | undefined): Promise<{ calls: number | null; callsFrom: LiveLlmReauthorCallsSource }> {
   const own = loopCalls(loop);
   if (own !== null) return { calls: own, callsFrom: "loop" };
-  const decisions = count(loop?.decisionCount);
-  const fromDecisions = (otherwise: LiveLlmReauthorCallsSource): { calls: number | null; callsFrom: LiveLlmReauthorCallsSource } =>
-    decisions === null ? { calls: null, callsFrom: otherwise } : { calls: decisions, callsFrom: "loop_decisions" };
-  if (!adaptationId || !flowId) return fromDecisions("not_recorded");
+  if (!adaptationId || !flowId) return { calls: null, callsFrom: "not_recorded" };
   let payload: unknown;
   try {
     payload = await control.automationStudioCall("get-flow-adaptation", { projectId, flowId, adaptationId });
   } catch {
-    return fromDecisions("adaptation_unreadable");
+    return { calls: null, callsFrom: "adaptation_unreadable" };
   }
   const calls = loopCalls(asRecord(asRecord(asRecord(payload)?.adaptation)?.evidenceLoop));
-  return calls === null ? fromDecisions("not_recorded") : { calls, callsFrom: "adaptation" };
+  return calls === null ? { calls: null, callsFrom: "not_recorded" } : { calls, callsFrom: "adaptation" };
 }
 
 /** Each entry's `try`, by the rule in the file comment. */

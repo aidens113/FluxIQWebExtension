@@ -6,7 +6,7 @@
 // `mutual matches /(?:[5-9]|[1-9][0-9]+) mutual/` rather than `atLeast: 5`. The
 // regex dropped Jonas Weber, whose line reads "Aisha Khan and 4 other mutual
 // friends": five, by the reading every numeric condition uses
-// (`actions/extraction/condition-match.ts`, `webAutomationExtractConditionNumber`),
+// (Core's `readAutomationStudioRecordNumber`, `fluxiq/automation-studio/nodes`),
 // but no digit run a pattern over the text can see. The rejected row was shown;
 // what the model lacked was that a bound reads the number the page means and a
 // pattern does not.
@@ -29,12 +29,9 @@
 // it quotes nothing the rows beside it do not already quote, and it is bounded:
 // at most `NAMED_ROWS` rows, each label cut to `LABEL_CHARACTERS`.
 
+import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, readAutomationStudioRecordNumber } from "fluxiq/automation-studio/nodes";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import {
-  WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
-  webAutomationExtractConditionNumber,
-  type WebAutomationExtractItemCondition
-} from "../../../actions/extraction";
+import type { WebAutomationExtractItemCondition } from "../../../actions/extraction";
 import { isWithheldText } from "../withheld";
 
 /** The most rejected rows one sentence names. */
@@ -50,7 +47,7 @@ const LABEL_CHARACTERS = 40;
 export function webNodeNumericTextFilterSentence(where: number, condition: WebAutomationExtractItemCondition, rows: readonly JsonValue[]): string | undefined {
   const column = condition.field;
   if (column === undefined || (condition.matches === undefined && condition.contains === undefined)) return undefined;
-  if (condition.equals !== undefined || WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS.some((key) => condition[key] !== undefined)) return undefined;
+  if (condition.equals !== undefined || AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS.some((key) => condition[key] !== undefined)) return undefined;
   if (!comparesDigits(condition)) return undefined;
   const named: string[] = [];
   let read = 0;
@@ -59,7 +56,7 @@ export function webNodeNumericTextFilterSentence(where: number, condition: WebAu
     const value = row?.[column];
     if (row === undefined || value === null || value === undefined) continue;
     if (typeof value !== "string" || isWithheldText(value)) return undefined;
-    const number = webAutomationExtractConditionNumber(value);
+    const number = readAutomationStudioRecordNumber(value);
     if (number === undefined) return undefined;
     read += 1;
     if (named.length < NAMED_ROWS) {

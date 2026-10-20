@@ -1,5 +1,4 @@
 export * from "./condition-grammar";
-export * from "./condition-match";
 export * from "./field-key";
 export * from "./field-match";
 export * from "./kept-values";

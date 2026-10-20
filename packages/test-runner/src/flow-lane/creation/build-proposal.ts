@@ -216,11 +216,14 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
  * - `instructedConsequences`: the lasting consequences Core found the person's
- *   instruction asks for, each with the words it quoted. Read from the
- *   proposal's `metadata.bootstrap` and from nowhere else -- the top-level
- *   field this used to read is never populated for a bootstrap proposal, so
- *   every build measured before 2026-09-23 reported an empty set while the
- *   stored proposal held a full one. `null` on a refused build.
+ *   instruction asks for, each with the words it quoted. A proposed build's
+ *   are read from the proposal's `metadata.bootstrap` -- the top-level field
+ *   this used to read is never populated for a bootstrap proposal, so every
+ *   build measured before 2026-09-23 reported an empty set while the stored
+ *   proposal held a full one. A refused build's are its failure diagnostic's
+ *   (Core t728), which keeps the classes and never the person's words, so
+ *   each `quote` is `null`. `null` when Core published none: a refusal before
+ *   the instructions were read, or one that found no lasting consequence.
  * - `declaredConsequences` and `consequenceCrossCheck`: what every action put
  *   to Core's gate said about itself, and Core's reading of that against the
  *   instruction. From `metadata.bootstrap` as well.
@@ -254,7 +257,7 @@ export type CreatedFlowBuild = Readonly<{
   failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[]; providerThrow?: Readonly<{ errorClass?: string; errorCode?: string; causeClass?: string; causeCode?: string }> }> | null;
   recoveredAfterTimeout: boolean;
   durationMs: number;
-  instructedConsequences: ReadonlyArray<Readonly<{ consequence: string; quote: string }>> | null;
+  instructedConsequences: ReadonlyArray<Readonly<{ consequence: string; quote: string | null }>> | null;
   /**
    * What every action the build put to Core's permission gate declared about
    * itself, in the order it was asked, with Core's own answer beside it. A
@@ -652,10 +655,11 @@ export function createdFlowBuildFromDiagnostic(value: unknown, durationMs: numbe
     failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus, ...(issueCodes.length ? { issueCodes } : {}), ...providerThrowCodes(diagnostic.providerThrow) },
     recoveredAfterTimeout: false,
     durationMs,
-    instructedConsequences: null,
-    // A refusal's diagnostic carries the request and nothing else about the
-    // gate: the declarations and the cross-check live on a proposal, and a
-    // refused build left none.
+    // The classes the gate read the instruction to ask for (Core t728); the person's words stay out of a diagnostic.
+    instructedConsequences: diagnostic.instructedConsequences?.length ? Object.freeze(diagnostic.instructedConsequences.map((consequence) => Object.freeze({ consequence, quote: null }))) : null,
+    // Beyond that and the request, a refusal's diagnostic carries nothing
+    // about the gate: the declarations and the cross-check live on a
+    // proposal, and a refused build left none.
     declaredConsequences: null,
     consequenceCrossCheck: null,
     permissionRequest: diagnostic.permissionRequest ? permissionRequestOf(diagnostic.permissionRequest) : null,

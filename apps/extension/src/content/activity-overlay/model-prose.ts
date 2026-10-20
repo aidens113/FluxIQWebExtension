@@ -5,7 +5,8 @@
 // step, a refused edit with its own summary as the thing not done, a recovery
 // choice -- are said in the chat. The background's pacer already keeps them
 // out of the detail and marks the display `kind: "thought"`
-// (`shared/activity/model-thought.ts`, `background/activity/pacer.ts`); this
+// (`isModelThought` and `ActivityPacer` from `fluxiq/ui`, Core's
+// `ui/activity-status/`); this
 // keys on that mark, so a thought is never drawn as status whatever event
 // rides beside the display. The raw `activity` in the same message says
 // nothing of what the display was built from: the relay's four-a-second gate

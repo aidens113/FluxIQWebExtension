@@ -7,9 +7,11 @@
 // is the build's own accounting and the bounds it has to satisfy.
 // `publishable-step-value.ts` is what may travel out of an audit detail on one
 // decision row, shared with the reader of a refused build so the two records
-// are built by one rule rather than two copies of it.
+// are built by one rule rather than two copies of it. `flow-spend.ts` is a
+// Flow's spend as Core's Flow purse recorded it (`get-flow-spend`).
 
 export * from "./adaptation-consequences.js";
 export * from "./adaptation-evidence-loop.js";
 export * from "./api-readings.js";
+export * from "./flow-spend.js";
 export * from "./publishable-step-value.js";

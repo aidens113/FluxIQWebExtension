@@ -1,4 +1,12 @@
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import type { WebAutomationRequestPolicy, WebAutomationRequestPolicyInput } from "./contracts";
+
+// Core owns whether direct requests may be turned on at all (its
+// recording-capture policy, `fluxiq/automation-studio/nodes`). A request
+// policy asking for `enabled: true` is still validated whole -- an enabled
+// policy needs an exact HTTPS origin -- but comes out enabled only when Core's
+// clamp allows direct requests. Core's default does not, so without a policy
+// from Core every request policy is disabled.
 
 const DEFAULTS: WebAutomationRequestPolicy = Object.freeze({
   enabled: false, allowedOrigins: Object.freeze([]), credentials: "omit", redirects: "reject",
@@ -7,7 +15,7 @@ const DEFAULTS: WebAutomationRequestPolicy = Object.freeze({
 const LIMITS = Object.freeze({ minTimeoutMs: 1_000, maxTimeoutMs: 30_000, minResponseBytes: 1_024, maxResponseBytes: 1_048_576, maxOrigins: 32 });
 const bound = new WeakMap<object, WebAutomationRequestPolicy>();
 
-function normalize(input: unknown): WebAutomationRequestPolicy {
+function normalize(input: unknown, capturePolicy: AutomationStudioRecordingCapturePolicy = AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY): WebAutomationRequestPolicy {
   if (input === undefined) return DEFAULTS;
   if (!input || typeof input !== "object" || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) throw new Error("Request policy must be plain data.");
   const values: Record<string, unknown> = {};
@@ -26,7 +34,8 @@ function normalize(input: unknown): WebAutomationRequestPolicy {
   const maxResponseBytes = integer((Object.hasOwn(values, "maxResponseBytes") ? values.maxResponseBytes : DEFAULTS.maxResponseBytes), LIMITS.minResponseBytes, LIMITS.maxResponseBytes);
   const allowedOrigins = origins((Object.hasOwn(values, "allowedOrigins") ? values.allowedOrigins : DEFAULTS.allowedOrigins));
   if (enabled && !allowedOrigins.length) throw new Error("Enabled request policy requires an exact HTTPS origin.");
-  return Object.freeze({ enabled, allowedOrigins, credentials, redirects, timeoutMs, maxResponseBytes });
+  const allowed = clampAutomationStudioRecordingCaptureSettings({ directRequests: enabled }, capturePolicy).directRequests;
+  return Object.freeze({ enabled: allowed, allowedOrigins, credentials, redirects, timeoutMs, maxResponseBytes });
 }
 
 function integer(value: unknown, min: number, max: number): number {
@@ -57,10 +66,10 @@ function origins(value: unknown): readonly string[] {
 /** Immutable instance binding. Omitted repeated registration inherits its original policy. */
 export const webAutomationRequestPolicies = Object.freeze({
   normalize,
-  register(owner: object, input?: WebAutomationRequestPolicyInput): WebAutomationRequestPolicy {
+  register(owner: object, input?: WebAutomationRequestPolicyInput, capturePolicy?: AutomationStudioRecordingCapturePolicy): WebAutomationRequestPolicy {
     const previous = bound.get(owner);
     if (input === undefined && previous) return previous;
-    const policy = normalize(input);
+    const policy = normalize(input, capturePolicy);
     if (previous && JSON.stringify(previous) !== JSON.stringify(policy)) throw new Error("Conflicting request policy registration.");
     if (previous) return previous;
     bound.set(owner, policy);

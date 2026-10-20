@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings, PanelRelayResponse } from "../../../shared/protocol";
@@ -49,7 +50,7 @@ const baseSettings: FluxIQSettings = {
   requestsEnabled: false
 };
 
-function harness(settings: FluxIQSettings = baseSettings) {
+function harness(settings: FluxIQSettings = baseSettings, policy: AutomationStudioRecordingCapturePolicy = AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY) {
   const touched: string[] = [];
   let stored = { ...settings };
   const applied: FluxIQSettings[] = [];
@@ -81,6 +82,7 @@ function harness(settings: FluxIQSettings = baseSettings) {
       touched.push("writeSettings");
       stored = { ...next };
     },
+    capturePolicy: () => policy,
     applySettings: (next) => {
       touched.push("applySettings");
       applied.push(next);
@@ -149,6 +151,17 @@ test("saving stores the known, well-typed fields, hands them to the connection, 
   assert.deepEqual(result, { handled: true, response: { ok: true, status: { connectionState: "disconnected", paired: true } } });
   assert.ok(!h.touched.includes("call"));
   assert.ok(!("token" in h.stored()));
+});
+
+test("saving clamps direct requests by the policy Core gave: kept where allowed, off under Core's default", async (t) => {
+  installChrome(t);
+  const allowing: AutomationStudioRecordingCapturePolicy = { ...AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, directRequests: { allowed: true } };
+  const allowed = harness(baseSettings, allowing);
+  await handlePanelControl({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: { requestsEnabled: true } }, popup, allowed.deps);
+  assert.equal(allowed.stored().requestsEnabled, true);
+  const byDefault = harness();
+  await handlePanelControl({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: { requestsEnabled: true } }, popup, byDefault.deps);
+  assert.equal(byDefault.stored().requestsEnabled, false);
 });
 
 test("Open FluxIQ opens the web panel's address from settings", async (t) => {

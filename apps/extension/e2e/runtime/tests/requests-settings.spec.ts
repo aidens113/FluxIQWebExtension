@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, restartServiceWorker, test } from "../../fixtures/extension-context.js";
 
-test("requests Settings stays unavailable and persisted OFF in the actual extension", async ({ extensionSession }, info) => {
+test("requests Settings stays unavailable under Core's default, a save cannot turn it on, and a stored choice survives a restart", async ({ extensionSession }, info) => {
   const server = createServer((_request, response) => response.end("<!doctype html><title>Requests policy fixture</title>"));
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   try {
@@ -42,8 +42,10 @@ test("requests Settings stays unavailable and persisted OFF in the actual extens
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(requests).toBeDisabled();
   await expect(requests).not.toBeChecked();
-  await expect.poll(read).toEqual({ requestsEnabled: false, autoReconnect: false });
-  await info.attach("requests-foundation", { contentType: "application/json", body: JSON.stringify({ identity: expected, browser: await page.evaluate(() => navigator.userAgent), available: false, persistedEnabled: false }) });
+  // The stored choice is the person's and is not rewritten by a read made before
+  // Core's policy is known; effective settings keep requests off where they are used.
+  await expect.poll(read).toEqual({ requestsEnabled: true, autoReconnect: false });
+  await info.attach("requests-foundation", { contentType: "application/json", body: JSON.stringify({ identity: expected, browser: await page.evaluate(() => navigator.userAgent), available: false, storedChoiceKept: true }) });
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve, reject) => {

@@ -1,13 +1,17 @@
 // Getting the content script into a tab and telling it whether to record.
 // Every message name here is part of the background/content contract.
 
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import type { FluxIQSettings } from "../../shared/protocol";
 import { unsupportedPageForUrl } from "./browser-state";
 
 export type ContentAttachmentDeps = {
   readonly sendToTab: <TResponse = unknown>(tabId: number, message: unknown, frameId?: number) => Promise<TResponse>;
   readonly ensureContentScript: (tabId: number) => Promise<void>;
+  /** The settings already under Core's recording-capture policy. */
   readonly settings: () => FluxIQSettings;
+  /** Core's policy itself, sent beside them so the page clamps again (`content/message-handler.ts`). */
+  readonly capturePolicy?: () => AutomationStudioRecordingCapturePolicy;
   readonly isRecording: () => boolean;
   readonly hasRecordedTab: (tabId: number) => boolean;
   readonly noteRecordedTab: (tabId: number, url: string, timestamp: number) => void;
@@ -28,7 +32,8 @@ export class ContentAttachment {
   }
 
   async setRecordingState(tabId: number, recording: boolean, frameId?: number): Promise<void> {
-    await this.deps.sendToTab(tabId, { type: "recording", recording, settings: this.deps.settings() }, frameId);
+    const capturePolicy = this.deps.capturePolicy?.();
+    await this.deps.sendToTab(tabId, { type: "recording", recording, settings: this.deps.settings(), ...(capturePolicy ? { capturePolicy } : {}) }, frameId);
   }
 
   async broadcast(message: unknown, injectMissing: boolean): Promise<void> {

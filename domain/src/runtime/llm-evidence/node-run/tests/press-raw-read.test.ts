@@ -10,6 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { webNodeWithoutPageRecord } from "../page-record";
@@ -100,13 +101,15 @@ function store() {
   return { runtime: createWebAutomationLlmEvidenceRuntime(gateway) };
 }
 
-function call(site: ReturnType<typeof store>, callId: string, node: string, parameters: JsonObject) {
-  return site.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: HOME, value: { node, parameters, consequences: [] } });
+/** A call as Core's registry runs it: in the build's frame, marked as Core's opening of a fresh round only where Core would mark it. */
+function call(site: ReturnType<typeof store>, callId: string, node: string, parameters: JsonObject, opening?: "fresh") {
+  return runWithAutomationStudioEvidenceBuildScope(opening ? { ...PROJECT, buildId: "build.one", opening } : { ...PROJECT, buildId: "build.one" },
+    () => site.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: HOME, value: { node, parameters, consequences: [] } }));
 }
 
 /** Arrive at the store and look, returning the look's packet. */
 async function arriveAndLook(site: ReturnType<typeof store>): Promise<Packet> {
-  const opening = await call(site, "initial.core.run_node", SNAPSHOT, {});
+  const opening = await call(site, "call.opening", SNAPSHOT, {}, "fresh");
   // The tab is blank until the navigation, and a page that cannot be read refuses even a look.
   assert.equal(opening.resultCode, "web.action.rejected.not_at_start_location");
   assert.equal((await call(site, "call.start", NAVIGATE, { url: HOME })).resultCode, "web.action.succeeded");

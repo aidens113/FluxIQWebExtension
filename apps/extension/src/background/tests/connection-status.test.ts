@@ -43,3 +43,9 @@ test("the activity relay draws the overlay on the tabs the overlay target resolv
   const deps = (connection as unknown as { activity: { deps: { overlayTabIds?: () => Promise<readonly number[]> } } }).activity.deps;
   assert.deepEqual(await deps.overlayTabIds?.(), [7, 9]);
 });
+
+test("the status carries what Core's recording-capture policy allows, as booleans: Core's default until Core gives one", () => {
+  const connection = new FluxIQConnection(settings, { clientId: "client-1" });
+  assert.deepEqual(connection.status().captureAllowed, { captureMutations: true, captureInputValues: true, captureSnapshots: true, directRequests: false });
+  assert.equal(connection.currentCapturePolicy().directRequests.allowed, false);
+});

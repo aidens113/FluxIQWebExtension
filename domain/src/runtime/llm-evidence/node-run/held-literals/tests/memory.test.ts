@@ -9,8 +9,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
+import { coreBuildStateStore } from "../../build-state/tests/core-store";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const PERMITTED = async () => ({ permitted: true as const });
@@ -28,7 +30,7 @@ const HELD: JsonObject[] = [
 // A press that lands counts on the page's status line, as a real page answers
 // a press, so no press here is taken for one that changed nothing (t511) and
 // pressed once more.
-function site() {
+function site(store?: ReturnType<typeof coreBuildStateStore>) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
@@ -45,19 +47,28 @@ function site() {
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
-  return { runtime: createWebAutomationLlmEvidenceRuntime(gateway), commands };
+  return { runtime: createWebAutomationLlmEvidenceRuntime(gateway, undefined, () => store), commands };
 }
 
 type Site = ReturnType<typeof site>;
 
+/**
+ * A call as Core's registry runs it: inside the build's frame, marked as Core's
+ * opening of a round only where Core would mark it -- continuing when the round's
+ * draft holds the Flow, fresh otherwise.
+ */
+async function exec(at: Site, input: Parameters<Site["runtime"]["executeTool"]>[0], opening?: "fresh" | "continuing") {
+  return await runWithAutomationStudioEvidenceBuildScope(opening ? { ...PROJECT, buildId: "build.one", opening } : { ...PROJECT, buildId: "build.one" }, () => at.runtime.executeTool(input));
+}
+
 async function open(at: Site, held?: JsonObject[]) {
   const value: JsonObject = { node: SNAPSHOT, parameters: {}, consequences: [] };
   if (held) value.held = held;
-  return await at.runtime.executeTool({ ...PROJECT, callId: `initial.${WEB_LLM_RUN_NODE_TOOL_ID}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  return await exec(at, { ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value }, held ? "continuing" : "fresh");
 }
 
 async function call(at: Site, callId: string, node: string, parameters: JsonObject) {
-  return await at.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { node, parameters, consequences: [] } });
+  return await exec(at, { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { node, parameters, consequences: [] } });
 }
 
 test("a rerun in a round that continues a Flow keeps the step's saved address and identity beside the model's new handle", async () => {
@@ -101,6 +112,24 @@ test("a build that continues no Flow holds nothing, and a new build forgets what
   assert.equal(forgotten.effectApplied, false);
 });
 
+// t728: what the Flow a round continues holds is kept in Core's durable build
+// state too, so a host restarted mid-round still reruns the Flow's own step.
+test("a host restarted mid-round still knows what the Flow it continues holds (t728)", async () => {
+  const store = coreBuildStateStore();
+  await open(site(store), HELD);
+
+  const restarted = site(store);
+  await call(restarted, "call.look", SNAPSHOT, {});
+  const pressed = await call(restarted, "rerun.after-restart", CLICK, { selector: "#renew-saved", element: SAVED_ELEMENT, target: { handle: "t1" } });
+  assert.equal(pressed.effectApplied, true, JSON.stringify(pressed.evidence).slice(0, 300));
+
+  // Without the store, the restarted host would judge the saved address the model's own.
+  const forgetful = site();
+  await call(forgetful, "call.look", SNAPSHOT, {});
+  const refused = await call(forgetful, "rerun.after-restart", CLICK, { selector: "#renew-saved", element: SAVED_ELEMENT, target: { handle: "t1" } });
+  assert.equal(refused.effectApplied, false);
+});
+
 // t439 (`run-mv4912r9-53b05a51`): a saved step rerun as saved runs on what the
 // Flow saved, whatever screen a copy of it went through, and whatever the Flow
 // declared for it.
@@ -119,7 +148,7 @@ const SCRIPTED: JsonObject[] = [
 const RECORDED: JsonObject[] = [{ node: CLICK, parameters: { selector: "#renew-saved", element: SAVED_ELEMENT } }];
 
 async function rerun(at: Site, callId: string, value: JsonObject) {
-  return await at.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  return await exec(at, { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
 }
 
 /** The saved element as the model is shown it: the denied `selector` taken out. */
