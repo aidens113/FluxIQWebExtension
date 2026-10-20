@@ -573,6 +573,8 @@ test("an incomplete-text list refusal reaches the builder with executable disclo
   assert.equal((failed.evidence as JsonObject).code, "output_not_observed");
   const detail = (failed.evidence as JsonObject).detail as JsonObject;
   assert.equal(detail?.reason, "incomplete_text");
-  assert.match(String(detail?.next), /nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click.*Next page/u);
+  assert.match(String(detail?.next), /Load every row first.*nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click/u);
+  // t738: no row loop after each page move, which nests a repeat inside a repeat.
+  assert.doesNotMatch(String(detail?.next), /after each Next page/u);
   assert.doesNotMatch(JSON.stringify(failed.evidence), /field description|unexpanded text disclosure/u);
 });

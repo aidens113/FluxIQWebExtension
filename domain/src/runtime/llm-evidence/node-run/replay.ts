@@ -370,7 +370,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   if (result.status !== "succeeded" && lastingAct !== "landed") {
     // A lasting act Core left uncertain and did not repeat says so, reason
     // `outcome_uncertain`, rather than the failure's own (`./retries/uncertain-outcome.ts`, t361).
-    const refused = webNodeFailureRefusal(result, lastingAct);
+    const refused = webNodeFailureRefusal(result, lastingAct, { actionType: node.actionType, parameters: ran });
     const failure = refused.code;
     // The reason, where this domain has one for what the page answered
     // (`../action-failure/refusal.ts`), and nothing where it does not: a page

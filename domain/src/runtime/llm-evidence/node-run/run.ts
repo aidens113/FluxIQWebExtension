@@ -398,7 +398,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // page, and where the Flow has not reached its start location that is the
       // whole of what can honestly be said, whatever the page then answered.
       // A lasting act Core left uncertain and did not repeat says that instead (`./retries/uncertain-outcome.ts`, t361).
-      const refused = webNodeFailureRefusal(result, lastingAct);
+      const refused = webNodeFailureRefusal(result, lastingAct, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran) });
       throw current
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
         : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded);
