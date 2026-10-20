@@ -224,13 +224,25 @@ A browser FluxIQ has paired reconnects without anyone pressing Connect, as long
 as "Reconnect automatically" is on and the person has not pressed Disconnect
 since they last pressed Connect (remembered in `chrome.storage.session`).
 
+The socket itself is Core's: `GatewaySession`
+(`background/connection/gateway-session.ts`) is a subclass of
+`FluxIQClientGatewayConnection` from `@fluxiq/client-gateway-websocket`, which
+owns the socket, its state, the reconnect backoff, the heartbeat and keep-alive
+ticks, the offline queue's lineage and flush, and the wording of a socket that
+never opened. The extension's half is only what Core cannot know: the hello
+(browser descriptor, capabilities, the web domain, the capture settings), where
+the token is kept (the session record, through `persistSession`), the timing
+constants, and how a gateway command becomes a command `ServerCommandChannel`
+runs. Nothing a client sends crosses the socket before `server.session_ready`:
+while it pairs, or while FluxIQ checks its token, a message is queued.
+
 - **Worker start.** `background/index.ts` reconnects on every start of the
   Manifest V3 worker, not only on `runtime.onStartup`: a browser start, an
   extension reload or update, and a worker Chrome stopped for idleness and an
   event woke all start the worker with a token in storage and no socket. Building
   the connection and reconnecting are each single-flight, so start-up, a panel
   opening and an alarm arriving together make one socket.
-- **Dropped socket.** `GatewaySession` retries with a backoff of 1 s doubling to
+- **Dropped socket.** The connection retries with a backoff of 1 s doubling to
   30 s. `retryNow()` starts the backoff over and tries at once; the worker calls
   it when the browser reports it is back `online` and when the reconnect alarm
   fires.
@@ -249,6 +261,11 @@ since they last pressed Connect (remembered in `chrome.storage.session`).
 
 `e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
 reconnecting, and the alarm being set and firing.
+`e2e/gateway-session/tests/queue-across-reconnects.spec.ts` drives the built
+extension on the everything-store scenario against a stand-in gateway: events
+queued while the socket is down arrive in order after a reconnect by token, none
+arrive after a reconnect that had to pair, and a higher lease epoch takes over
+while the old holder's late command is refused.
 
 **The offline queue** (boundary audit finding 2). A message sent while the
 socket is down -- a recorded event, a DOM snapshot, an action result, a state

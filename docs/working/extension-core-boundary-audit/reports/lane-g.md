@@ -470,3 +470,149 @@ downstream `apps/extension/src/shared/protocol.ts`,
 - Done: the spec passes headed against the build; report each step exercised and its observed evidence,
   and what was not exercised.
 - Report to: `docs/working/extension-core-boundary-audit/reports/lane-g-wi-browser-exercise.md`.
+
+### 2026-10-19 - Supervisor committed Units 1 and 2a
+- Core `3ccb50b2`, downstream `bca31a06` (one commit each side; they share files and only the combined tree
+  was verified). W-E was held until then so no half-edited file could be snapshotted.
+
+### 2026-10-19 - Step 3b: Core docs (W-H), pairing gate (lead), gateway adapter (W-E), browser exercise (W-I)
+- W-H: Core `packages/client-gateway-websocket/README.md` (a usage section per part),
+  `docs/architecture/automation-studio/client-gateway.md` (new "Client half" section; two places that
+  called the package a thin transport corrected), `docs/architecture/package-boundaries.md` (one table row).
+  Lead read the new section against the source. Structure audit passed.
+- Lead, Core: W-I and W-C both observed that a socket still pairing (or whose token the gateway is
+  checking) carried client data, because the transport counts an open socket as connected. An unapproved
+  session must not receive client data, so `FluxIQClientGatewayConnection.send` now writes to the socket
+  only after that socket's `server.session_ready` (lineage decided); before it, a message is queued, and a
+  pairing reconnect then drops it with the old lineage. Test first; reverting the gate turns it red
+  (`vitest run src/connection -t "still pairing"`: 1 failed), with the gate the package passes:
+  `npx vitest run` 27 files, 179 tests passed; `npx tsc --noEmit -p tsconfig.json` 0; Core structure audit
+  "passed (410 warning(s), 1152 baselined)"; the package's three warnings are advisory (connection class 32
+  methods, `connection.ts` 407 lines, its test 439 lines). One sentence added to `client-gateway.md`.
+  Package rebuilt.
+- W-E: `gateway-session.ts` is now a subclass of Core's `FluxIQClientGatewayConnection` (488 to 201 lines):
+  hello, token persistence through `persistSession`, timing constants and the command mapping
+  (`connection.on(...)`, fact checks, rejections, `withLease`); every downstream copy of backoff,
+  heartbeat, lineage, flush and open-failure wording deleted. Test file rewritten: 19 tests whose subject
+  moved to Core dropped (each mapped to its Core counterpart in the W-E report), 9 adapter tests kept or
+  added, including one pinning queue-before-ready. `connection.ts`, `connection/index.ts`,
+  `shared/constants.ts` and the carriage test needed no change. Lead reviewed the file line by line and
+  updated `docs/architecture/extension-client.md` "Staying Connected" (Core owns the socket; the adapter's
+  half; nothing crosses before `session_ready`; the new spec).
+- W-I: new headed spec `apps/extension/e2e/gateway-session/tests/queue-across-reconnects.spec.ts` with its
+  stand-in gateway helper and the directory barrel; everything-store scenario, provider-free.
+- Lead's checks on the final tree: extension `npx tsc -p tsconfig.json --noEmit` 0 and
+  `-p tsconfig.test.json` 0; `EXTENSION_TEST_BUILD_LABEL=lane-g node apps/extension/scripts/test-extension.mjs`
+  on gateway-session, host-lease, in-flight, server-command-channel, outbox, connection-status,
+  reconnect-watchdog, saved-state, storage: 72 pass, 0 fail; `node scripts/structure-audit.mjs`: "passed
+  (212 warning(s), 636 baselined)" (three fewer warnings; the supervisor may run `pnpm structure:baseline`).
+  `pnpm --filter @fluxiq-web-extension/extension test:e2e:build`: built (Chrome, Firefox, e2e-chromium).
+  `npx playwright test -c e2e/playwright.config.ts e2e/gateway-session/tests/queue-across-reconnects.spec.ts
+  e2e/lease/tests/stale-holder.spec.ts e2e/reconnect.spec.ts --workers=1`, headed: 5 passed (2.1 min).
+
+### Browser exercise: what was and was not exercised (final build, Chromium, headed)
+- Exercised, observed in the spec's evidence line: connect by token (`server.session_ready`); a leased
+  command typed into the store's search box; a gateway-started recording with live events; drop with the
+  gateway refusing upgrades (3 refused while down); 19 entries queued while down (recording events and
+  snapshots) all arrived in queue order on the token reconnect; second drop, 23 entries queued, reconnect
+  through `server.pairing_required` then `server.session_ready`: none of the 11 old-trust events and no
+  snapshot arrived, while the page's next events did; lease takeover by a higher epoch for another holder
+  succeeded and the old holder's late epoch-5 command was refused `host_lease.stale` with the page
+  unchanged. The stale-holder spec and `reconnect.spec.ts` (worker restart, dropped socket, alarm, saved
+  state repair with the persistent queue key removed) also pass.
+- Not exercised in a browser: Firefox and Edge; a service-worker restart with entries queued; the project
+  and recording drop rules, the count cap, the byte budget and loss marker, a send failing mid-flush, and
+  `queuedActionResult` (all covered by Core and extension unit tests only); a real Core gateway (stand-in
+  gateway only).
+- Start marker (corrected 2026-10-19 after `g-recording-start-marker.md`): by design it crosses as a
+  `client.state_update` (`reason: "recording-evidence"`, `clientKind: "browser.tab"`,
+  `recordingState: "started"`, the recording's id), never as a `client.recording_event`: it is passive
+  evidence, not an executable input. The spec looked only at recording events. It now asserts the state
+  update arrives once and that no recording event carries the marker.
+
+UNIT READY (Unit 2b, the gateway client on Core, docs and browser proof):
+Core `packages/client-gateway-websocket/src/connection/{connection.ts,tests/connection.test.ts}`,
+`packages/client-gateway-websocket/README.md`, `docs/architecture/automation-studio/client-gateway.md`,
+`docs/architecture/package-boundaries.md`;
+downstream `apps/extension/src/background/connection/gateway-session.ts`,
+`apps/extension/src/background/connection/tests/gateway-session.test.ts`,
+`apps/extension/e2e/gateway-session/**`, `docs/architecture/extension-client.md`,
+`docs/working/extension-core-boundary-audit/reports/lane-g*.md`. Core package dist rebuilt; downstream
+narrow checks and the three headed specs above pass on this tree.
+
+### 2026-10-19 - Supervisor: headed specs flaky on rerun; investigation
+Directed: run each spec at least 5 times with step-level capture; compare `reconnect.spec.ts` with the
+pre-lane-G tree `fxwork/sweep-1019b` (downstream `cedd46af`, read-only); fix the root cause in lane G's files
+without raising waits or loosening assertions; prove it with 5 consecutive green runs; assert the start
+marker; correct the observation; run `pnpm structure:baseline`.
+
+Method: `scratchpad/flake/run-batch.sh` runs the specs with the config's workers unless stated, list and
+JSON reporters, artifacts in the scratchpad (nothing written into either tree); `failures.mjs` names each
+failure's step and error. Command per run:
+`NODE_OPTIONS=--no-experimental-strip-types npx playwright test -c e2e/playwright.config.ts <specs> --reporter=list,json --output <scratch>`.
+
+Before OneDrive was restarted (low virtual memory):
+- Windows logged "low virtual memory condition" (Resource-Exhaustion-Detector, event 2004) at 19:16:17,
+  19:21:31, 19:26:21, 19:33:11, 19:43:10 and 19:44:25, naming `OneDrive.Sync.Service.exe` (pid 32000) at
+  15.6-16.0 GB each time. The supervisor's run D artifacts are stamped 19:21-19:22.
+- Three runs of all three specs (19:31-19:41): run 1 exit 127 with no output; run 2 every test lost, the
+  Playwright workers dying with "Fatal process out of memory: Zone" (exit 0x80000003, 0xC0000409) and the
+  queue spec's fixture `page.goto` aborting (`net::ERR_ABORTED; maybe frame was detached?`, the run D
+  error); run 3 the queue spec timed out at 240 s with its store page blank. The supervisor rules these out.
+- `reconnect.spec.ts`, interleaved, 5 runs each: pre-lane-G 3 green, 2 red (run 3 out of memory at
+  19:44:29; run 4 `:85` "a restarted worker reconnects": no hello within 15 s, the run A error); lane G
+  5 green.
+
+After the restart (about 19:50; commit free 13.2-13.4 GB, but CPU at 99.9-100% and 1,800-2,400 pages/s
+from the other lanes, 29 Chrome processes not mine):
+- Five runs of all three specs, config workers: run 1 red, 2 green, 3 red, 4 green, 5 red. Every failure is the same pair, `reconnect.spec.ts:85` and `:122`, "Tearing down
+  `extensionSession` exceeded the test timeout of 30000ms". `queue-across-reconnects.spec.ts` (with the new
+  start-marker assertion), `stale-holder.spec.ts` and `reconnect.spec.ts:141` passed all 5.
+- Every test ran 2-5 times slower than before 19:50 (stale-holder 49-78 s, was 13-17 s; `:141` 59-105 s,
+  was 33-41 s); in run 2 the queue spec's steps add up to 57 s of its 134 s. The trace of a failing `:85`:
+  launch (Before Hooks) 8.2 s, body 3 s, teardown (After Hooks) over 30 s. The two failing tests are the two
+  with the default 30 s budget; the others carry 120-240 s and absorb the same slow teardown.
+- `reconnect.spec.ts`, interleaved, 5 runs each: pre-lane-G 3 green (`:122` teardown timeout in run 1,
+  `:85` in run 5); lane G 3 green (`:85` and `:122` teardown timeouts in runs 1 and 5). Same failure, both
+  trees; green totals overlap (pre-G 43-48 s, G 47-54 s; before 19:50 G was the faster one).
+- Tracing is not it: interleaved `--trace off` and default (retain-on-failure) pairs fail the same way
+  (`trace-off-2`: `:85` and `:122` teardown timeouts; `trace-on-3`: `:85`).
+- Teardown parts measured outside the runner (`teardown-probe.mjs`, 8 launches per tree, with and without
+  the CDP worker restart): launch 0.5-1.2 s, `context.close()` 0.4-2.1 s, profile removal about 25 ms, the
+  same for both builds. With `DEBUG=pw:api` inside a loaded run, one `context.close()` took 13 s.
+- The other `:85` mode (no hello within 15 s after the worker restart) recurred once in a `DEBUG=pw:api`
+  run on lane G (every call took milliseconds; the panel showed "Connecting to FluxIQ..."). It did not
+  reproduce in isolation: `restart-probe.mjs` 25 restarts, a new worker started every time;
+  `hello-probe.mjs` three parallel browsers, 36 restarts, hello within 0-1.6 s every time. It is the same
+  failure the pre-lane-G tree showed at 19:45.
+- The side-panel polling race named earlier is ruled out: `AutoConnect` connects only from `disconnected`
+  or `error`, and the connection moves from `error` to `reconnecting` synchronously; the queue spec's
+  evidence shows exactly one accepted socket per phase.
+
+Verdict: lane G introduced no flake. The two failure modes are in `reconnect.spec.ts`'s shared e2e fixture
+(`e2e/fixtures/extension-context.ts`, not lane G's): (1) teardown (browser close plus profile removal) that
+takes over 30 s when the machine is saturated, inside a 30 s per-test budget; (2) an intermittent missing
+hello after a CDP worker restart. Both reproduce on the pre-lane-G tree at a similar rate, so there is no
+root cause in lane G's files to fix. Raising the 30 s budget would mean raising a wait, so I did not do it.
+The five consecutive green runs were not achieved: post-restart the lane G specs (queue-across-reconnects,
+stale-holder) and `:141` were green 5 of 5, and `:85` and `:122` failed in 3 of 5, as they do before lane G.
+Decision for the supervisor: give `reconnect.spec.ts:85` and `:122` an explicit budget that covers
+browser launch and close (as `:141` already has), run headed e2e with fewer workers while lanes are busy,
+or have the fixture's owner investigate the slow close and the missing hello.
+
+Done as directed: the queue spec asserts the start marker (`client.state_update`, `reason:
+"recording-evidence"`, `clientKind: "browser.tab"`, `recordingState: "started"`, the recording id, once;
+no recording event carries it) and passed in all 5 post-restart runs; the start-marker observation is
+corrected here and in `lane-g-wi-browser-exercise.md`; `pnpm structure:baseline` removed the 2 entries
+lane G cleared (`as-never` in `gateway-session.ts`, `statement-packing` in its test; "636 entries across 9
+rules (0 lowered, 2 removed)"). `npx tsc -p tsconfig.test.json --noEmit` (covers `e2e/`): 0;
+`node scripts/structure-audit.mjs`: "passed (212 warning(s), 636 baselined)".
+
+UNIT READY (Unit 2b, refreshed; supersedes the Unit 2b block above): Core
+`packages/client-gateway-websocket/src/connection/{connection.ts,tests/connection.test.ts}`,
+`packages/client-gateway-websocket/README.md`, `docs/architecture/automation-studio/client-gateway.md`,
+`docs/architecture/package-boundaries.md`; downstream `.structure-baseline.json`,
+`apps/extension/src/background/connection/gateway-session.ts`,
+`apps/extension/src/background/connection/tests/gateway-session.test.ts`, `apps/extension/e2e/gateway-session/**`,
+`docs/architecture/extension-client.md`, `docs/working/extension-core-boundary-audit/reports/lane-g*.md`.
+Not included: `g-recording-start-marker.md` (another agent's report; the supervisor's to place).
