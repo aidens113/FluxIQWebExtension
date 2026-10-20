@@ -793,6 +793,22 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
 - Follow-up: t741 fixes all four causes; reset settlement has failed in a new shape for a third round, so t741 makes Core
   settle no-list trial and entry acts itself instead of patching the shape.
 
+### 2026-10-20 - Rerun round 4 launched after t741 fixed round 3's causes (first traced live runs)
+- Agent: supervisor
+- Changed: nothing in the repositories; lane trees fast-forwarded to dev (downstream 0cada957, Core 3b13e394),
+  installed and rebuilt.
+- Why: t741 merged (Core settles witnessless trial and entry acts, one port-name rule, listing sort guidance, the
+  recording excerpt reaches the builder, judge continuation rule, rate-limited retries reported first, reload marks by
+  time origin, named incomplete fields, wordless icons named); t736 makes the Lab trace every live run; no other agreed
+  change that affects live behaviour is in flight (t742 P3 is a harness).
+- Validation: each tree `git rev-list --count HEAD..dev` -> 0 in both repositories; `core-build.mjs` -> current x4;
+  live guard -> `"state":"admitted"` for rr4-slot-1 to 4.
+- Launch: as before ($0.25 via both settings, headed, `--model-reset-only`), fresh workspaces
+  `claude-office-checkout-t563-20261020-r5`, `claude-job-save-t719-20261020-r5`,
+  `claude-social-groups-t566-20261020-r7`, `claude-photo-likes-t567-20261020-r5`.
+- Outcome: Partial (running)
+- Follow-up: verdicts, spend, debugs; hand the four traces to lane T for P3.
+
 ## Open Questions
 
 None requiring user input.

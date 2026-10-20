@@ -619,6 +619,26 @@ was still running at dispatch and is excluded below by its own file list.
 - Outcome: Accepted
 - Follow-up: P3 intake parity (t742).
 
+### 2026-10-20 - t741 merged: the four rerun round 3 causes fixed
+- Agent: supervisor (t741 lead and workers)
+- Changed: Core and downstream merged and pushed: Core settles witnessless trial and entry-preparation acts against
+  the build's issued lists (A1, structural), settling looks report what they settled and every open act, the wrap-up
+  allows the undo calls a trial demands; one port-name rule for plan and script; `extractList.sort` in the script
+  format and a refusal of process sort/limit on a lasting-act listing; the recording excerpt reaches the builder;
+  stable scoped revisions; truthful endings; the judge no longer reads a feed's continuation as missing rows and does
+  not repeat identical advice; downstream: rate-limited retries reported first, reload marks by time origin, named
+  incomplete fields, wordless icons named; a headed spec reproducing office round 3's address-confirm shape.
+- Validation: supervisor's gate on t741 after merging dev: Core `vitest run` over flow-bootstrap, llm, service,
+  project-agents, result-verification, ui -> 854 files, 8072 passed; fluxiq `tsc` 0; downstream checks 0; domain
+  runtime/io/client -> pass 1873; extension content+background -> pass 2055; audits passed; headed `e2e/site-reset`
+  -> 7 passed (4.2m). The script's own gate printed ok=0 because a test title contains "failed"; the silent checks were
+  rerun (`tsc` 0, core-build current) and the finish merged both sides. Lead: the new office spec fails exactly as
+  round 3 did with A1 switched off and passes with it on.
+- Open (lead): a press that reloads the page drops the control's name from trial feedback; several directories are at
+  their 25-file budget.
+- Outcome: Accepted
+- Follow-up: rerun round 4 (tracing on for the first live runs).
+
 ## Open Questions
 
 None requiring user input.
