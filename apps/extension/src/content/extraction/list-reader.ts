@@ -58,6 +58,17 @@
 // asked to read it. `filtered` counts them, so a read says how much of the run
 // it left out rather than only how much it kept.
 //
+// Full disclosure is the rows the read keeps, checked after `where`. An item's
+// fields are read as the page shows them, the conditions judge that, and only a
+// kept item must show every field whole: one collapsed "Read more" refuses the
+// read with `incomplete_text`. A rejected item refuses it only where a condition
+// that rejected it tested a field still collapsed, since that rejection judged
+// partial text. Until 2026-10-20 every item was held to it before the conditions
+// ran, so one long row a date condition dropped refused a read that kept none of
+// its kind, and a repeat that disclosed only the rows a first read kept could
+// never be followed by a read with the same conditions (`run-mvgw3ve5-294881b5`).
+// Reading an item into its record, and that check, are `item-record/`.
+//
 // **Unless the conditions left nothing at all, in which case the read answers
 // with the rows it rejected and says so** (`conditions.unfiltered`). That is a
 // deliberate preference for too much over nothing, and it was bought with a
@@ -125,10 +136,9 @@
 import { type WebAutomationExtractionRejectionObservation, WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
 import type { ExtractionCheckpoint } from "../../shared/extraction-continuation";
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
-import { readField } from "./field-reader";
-import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
+import { assertDisclosed, contentKey, fieldReaders, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
@@ -278,11 +288,6 @@ export type ListExtractionOptions = {
   sampleRejected?: boolean | undefined;
 };
 
-type FieldReaders = ReadonlyArray<readonly [name: string, reader: ExtractFieldReader]>;
-
-/** One item read: its record, and the required fields it lacked. */
-type ItemRead = { record: ExtractedListRecord; missing: string[] };
-
 export async function extractList(request: WebAutomationExtractListRequest, options: ListExtractionOptions = {}): Promise<ListExtractionOutcome> {
   const item = request.item.trim();
   if (!item) throw new Error("An extract_list request needs an item selector.");
@@ -325,7 +330,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const keyOf = (itemRead: ItemRead): string => (contentAware ? contentKey(itemRead.record, fields) : "");
   const hasUnreadItem = (): boolean => Array.from(document.querySelectorAll(item)).some((element) => {
     const seen = read.get(element);
-    return seen === undefined || (contentAware && seen !== keyOf(readRecord(element, fields)));
+    return seen === undefined || (contentAware && seen !== keyOf(readRecord(element, fields, "visible")));
   });
   const progress: PaginationProgress = {
     item,
@@ -558,7 +563,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
           truncated = true;
           break;
         }
-        const itemRead = readRecord(element, fields);
+        const itemRead = readRecord(element, fields, rejects ? "visible" : "complete");
         const key = keyOf(itemRead);
         if (seen === key) continue;
         if (shownOnEarlierPages) shownThisPage.push(contentKey(itemRead.record, fields));
@@ -571,6 +576,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
           const rejectedBy = rejects(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined, keptValuesEach);
           if (seen === undefined) applied += 1;
           if (rejectedBy.length > 0) {
+            assertDisclosed(element, fields, rejectedBy.map((index) => request.where?.[index]?.field));
             if (seen === undefined) {
               filtered += 1;
               // Each index is a position in `where`, which is what `rejectedEach`
@@ -585,6 +591,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
             read.set(element, key);
             continue;
           }
+          assertDisclosed(element, fields);
           if (seen === undefined) kept += 1;
         }
         const content = earlierPages ? contentKey(itemRead.record, fields) : "";
@@ -715,18 +722,6 @@ function movesToAnotherPage(paginate: WebAutomationExtractListPagination | undef
   return paginate !== undefined && (paginate.mode === undefined || paginate.mode === "next" || paginate.mode === "numbered");
 }
 
-/** The included fields' readers, in declaration order, refusing a request that names none or reads none. */
-function fieldReaders(fields: WebAutomationExtractListRequest["fields"]): FieldReaders {
-  const declared = Object.entries(fields);
-  if (declared.length === 0) throw new Error("An extract_list request names no fields.");
-  const readers = declared.flatMap(([name, field]) => {
-    const reader = normalizeExtractField(name, field);
-    return reader === undefined ? [] : [[name, reader] as const];
-  });
-  if (readers.length === 0) throw new Error("An extract_list request reads no fields: every field it names is excluded.");
-  return readers;
-}
-
 /**
  * How many items the request says the page must hold, which is what the first
  * read waits for. It is `extract-list.ts`'s own `minItems` rule -- 1 when the
@@ -741,54 +736,4 @@ function requiredItems(requested: number | undefined): number {
 function itemBound(requested: number | undefined): number {
   const whole = typeof requested === "number" && !Number.isNaN(requested) ? Math.trunc(requested) : WEB_AUTOMATION_EXTRACT_MAX_ITEMS;
   return Math.min(Math.max(0, whole), WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
-}
-
-/**
- * What the answered records are short of, read off the records themselves rather
- * than counted through the loop: a declared field is `null` where an optional
- * read found nothing (D16) and absent where a required one did, so the rows say
- * this without anything having to be carried alongside them -- a continued read's
- * resumed rows included.
- *
- * All three are facts, never failures. A field the author did not require is not
- * a shortfall, but a gap nobody states is worse than one nobody minds: the read
- * that keeps forty rows because three lack a rating has to say that three lack a
- * rating, or the answer looks complete.
- */
-function recordGaps(records: readonly ExtractedListRecord[], fields: FieldReaders): { blankFields: string[]; incompleteRecords: number; emptyRecords: number } {
-  const blank = new Set<string>();
-  let incompleteRecords = 0;
-  let emptyRecords = 0;
-  for (const record of records) {
-    let short = 0;
-    for (const [name] of fields) {
-      const value = Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
-      if (value !== undefined && value !== null) continue;
-      short += 1;
-      if (value === null) blank.add(name);
-    }
-    if (short > 0) incompleteRecords += 1;
-    if (short === fields.length && fields.length > 0) emptyRecords += 1;
-  }
-  return { blankFields: [...blank].sort(), incompleteRecords, emptyRecords };
-}
-
-function readRecord(element: Element, fields: FieldReaders): ItemRead {
-  const record: ExtractedListRecord = {};
-  const missing: string[] = [];
-  for (const [name, reader] of fields) {
-    const value = readField(element, name, reader, "complete");
-    if (value === undefined) missing.push(name);
-    else record[name] = value;
-  }
-  return { record, missing };
-}
-
-/**
- * A record's content as one comparable string: each field in declaration
- * order, as `[value]` when the record carries it and `[]` when a required
- * field was missing, so no two different records share a key.
- */
-function contentKey(record: ExtractedListRecord, fields: FieldReaders): string {
-  return JSON.stringify(fields.map(([name]) => (Object.prototype.hasOwnProperty.call(record, name) ? [record[name]] : [])));
 }

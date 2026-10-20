@@ -266,8 +266,9 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
         throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
       }
       const diff = webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
-      // Where the step's control sat and the items of the lists both pages show (header, t609).
-      return { ...diff, ...webStateDiffPlaces(places.of(input.before?.stateRef), places.of(input.after?.stateRef), input.node, diff.documentChanged === true) };
+      // Where the step's control sat and the items of the lists both pages show (header, t609);
+      // a loop pass's control in its own row, from the attempt's `item` (job rerun round 4).
+      return { ...diff, ...webStateDiffPlaces(places.of(input.before?.stateRef), places.of(input.after?.stateRef), input.node, diff.documentChanged === true, input.inputs?.item) };
     },
     expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context),
     factEvaluator,

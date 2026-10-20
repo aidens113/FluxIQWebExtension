@@ -24,7 +24,10 @@
 //   Flow (`held`, `./arrival.ts`): that step passed this rule when it first
 //   ran. On run 38 (`run-muqilf9s-c3211328`, C8) the re-author was refused the
 //   Flow's own step-3 address four times. Only a held navigation's address
-//   counts, nothing else a held step carries.
+//   counts, nothing else a held step carries;
+// - every place Core prints for the build on a brief's opening call (`places`,
+//   `./arrival.ts`, t743): the locations of its issued lists, its acts' pages
+//   and its proposals' navigations.
 //
 // **How an address is compared.** By origin, by path with any trailing slash
 // dropped, and by the query's keys; the fragment is ignored. Since t200 a
@@ -41,10 +44,23 @@
 //
 // **What is not touched.** Replaying the draft and running a saved Flow go to
 // what the step holds (`./replay.ts`), which this rule already let through when
-// the step first ran. Core's opening of a fresh round forgets what the build
-// was shown before it, as arrival does (`./arrival.ts`); the opening look of a
-// round that continues a Flow forgets nothing, since it continues the same
-// build.
+// the step first ran. A move Core makes itself (`move: "core"` in its frame,
+// `./build-state/build-key.ts`) is not asked at all (`./run.ts`): this rule
+// stops the model going to addresses it made up, and Core's own looks before a
+// trial or on a reset are not the model's.
+//
+// **What a build was shown belongs to the build, not to one brief of it**
+// (t743). Until t743 Core's opening of a fresh round forgot what the build was
+// shown, and each brief run beside others (its own `callScope`) kept its own.
+// On office rerun round 4 (`run-mvgvyaip-d856e135`) a repair brief and a reset
+// brief were then refused navigations to pages the first brief had searched for
+// and stood on -- the reset was refused even a page its own evidence named --
+// and Core's own looks were refused the same way. An address any brief of the
+// build was shown, or a text any brief typed, is not one the model made up. So
+// no opening forgets anything, and every brief of a build reads and writes one
+// memory, in this process and in the one stored copy (`shared`). A new build has
+// a new `buildId` and starts with nothing; a call outside every build is keyed
+// by its project and Flow, as it always was.
 //
 // **Kept across a restart** (t728). What a build was shown and typed is kept in
 // Core's durable build state as well as here (`./build-state/`), so a host
@@ -71,7 +87,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";
 import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS } from "fluxiq/automation-studio";
-import { createWebNodeBuildMemory, webNodeStoredPrefix, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "./build-state";
+import { createWebNodeBuildMemory, webNodeStoredPrefix, type WebNodeBuildKey, type WebNodeBuildStatePersistence } from "./build-state";
 import type { WebRunnableNode } from "./catalog";
 import { WEB_NAVIGATION_ACTION } from "./start-location";
 
@@ -79,7 +95,7 @@ import { WEB_NAVIGATION_ACTION } from "./start-location";
 const REMEMBERED_BUILDS = 16;
 // A build remembers every address it was shown, every text it typed and every
 // address a read returned, for as long as the build lasts (a new build of the
-// flow forgets them, `opening`). Until 2026-09-30 it kept the newest 512
+// flow has a new id and starts empty, t743). Until 2026-09-30 it kept the newest 512
 // addresses, 16 typed texts and the first 256 address strings of a read six
 // levels deep. Now that a packet carries the whole page, a page with more links
 // than that pushed earlier ones out, and a navigation to a link the model had
@@ -89,12 +105,17 @@ const TYPE_ACTION = "web.dom.type";
 const STORED_BYTES = Math.floor((AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS.maxValueBytes * 3) / 4);
 
 /**
- * The two ways to get where the refused navigation meant to go, in this
- * domain's own words and never the page's.
+ * The ways to get where the refused navigation meant to go, in this domain's
+ * own words and never the page's. The second says whose addresses count: any
+ * brief of this build's, where until t743 it said "a page's location", which a
+ * model met with a location a fresh brief had never been shown. The third names
+ * the move that reaches a typed search's results again, which nothing named on
+ * office rerun round 4 (`run-mvgvyaip-d856e135`).
  */
 const INSTEAD = [
   'web.output.dom-click with target: {"handle": "tN"} of the link that goes there, from the packet',
-  "web.output.browser-navigate with url: an address from the evidence -- a link's href, a page's location, a read's address, or the start location"
+  "web.output.browser-navigate with url: an address this build was shown -- a link's href, the location of a page any brief of this build was shown or stood on, a read's address, or the start location",
+  "a page a typed search reached is reached again by typing the search into the site's own search field and submitting it, never by writing the page's address"
 ];
 
 type Query = ReadonlyArray<readonly [string, string]>;
@@ -104,8 +125,6 @@ type BuildMemory = { addresses: Map<string, Address>; typed: string[] };
 export type WebNodeShownAddresses = {
   /** Read what this build was shown back from Core's store when this process holds none of it (`./build-state/memory.ts`). */
   restore(build: WebNodeBuildKey): Promise<void>;
-  /** Forget what this build was shown before, when this call is Core's opening of a fresh round. */
-  opening(build: WebNodeBuildKey, opening: WebNodeOpening | undefined): void;
   /** A packet this build has been shown. */
   saw(build: WebNodeBuildKey, page: WebLlmSnapshotBinding): void;
   /** An address a navigation of the Flow this round continues goes to, read against `base` as the step was. */
@@ -118,19 +137,16 @@ export type WebNodeShownAddresses = {
 
 export function createWebNodeShownAddresses(persistence?: WebNodeBuildStatePersistence): WebNodeShownAddresses {
   const builds = createWebNodeBuildMemory<BuildMemory>({ name: "web.shown-addresses", bound: REMEMBERED_BUILDS, encode: encoded, decode: decoded, persistence });
-  const memory = (build: WebNodeBuildKey): BuildMemory => builds.entry(build, () => ({ addresses: new Map<string, Address>(), typed: [] }));
+  const memory = (build: WebNodeBuildKey): BuildMemory => builds.entry(shared(build), () => ({ addresses: new Map<string, Address>(), typed: [] }));
   // Written through only when something new was remembered: most packets show addresses the build already has.
   const changing = (build: WebNodeBuildKey, change: (held: BuildMemory) => void): void => {
     const held = memory(build);
     const before = `${held.addresses.size}\u0000${held.typed.join("\u0000")}`;
     change(held);
-    if (`${held.addresses.size}\u0000${held.typed.join("\u0000")}` !== before) builds.saved(build);
+    if (`${held.addresses.size}\u0000${held.typed.join("\u0000")}` !== before) builds.saved(shared(build));
   };
   return {
-    restore: (build) => builds.restore(build),
-    opening(build, opening) {
-      if (opening === "fresh") builds.forget(build);
-    },
+    restore: (build) => builds.restore(shared(build)),
     saw(build, page) {
       changing(build, (held) => {
         // A link's query is shown with it, so it is remembered with it.
@@ -178,6 +194,11 @@ export function createWebNodeShownAddresses(persistence?: WebNodeBuildStatePersi
 /** The refusal for a navigation to an address this build was not shown. */
 export function webUnshownAddressRefusal(startLocation: string | undefined): WebLlmToolRejectionDetail {
   return rejectionDetail({ reason: "address_not_shown", instead: INSTEAD, startLocation });
+}
+
+/** The key every brief of `build` shares: the build without the brief's call scope (header, t743). */
+function shared(build: WebNodeBuildKey): WebNodeBuildKey {
+  return build.callScope === undefined ? build : { ...build, callScope: undefined };
 }
 
 /** Keep an address for the rest of the build. */

@@ -168,6 +168,8 @@ const NAMED: ReadonlyArray<readonly [string, string, string | undefined]> = [
   // refused had no code of its own at all.
   ["web.action.refused_by_page", "refused_by_page", "page_needs_something_first"],
   [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, "refused_by_page", "page_busy_try_later"],
+  // t743: a press answered by nothing but the page's own live-region notice.
+  [WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE, "refused_by_page", "page_reported_press_failed"],
   // t509: a select sent an option it does not offer, and was told only `output_not_observed`.
   [WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED, "output_not_observed", "option_not_offered"]
 ];
@@ -176,6 +178,15 @@ test("a no-effect refusal explains that automatic retries finished without claim
   const refusal = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT } });
   assert.equal(refusal.detail?.reason, "press_had_no_effect");
   assert.match(refusal.detail?.next ?? "", /Automatic retries have finished/);
+  assert.match(refusal.detail?.next ?? "", /effect has not been established/);
+});
+
+test("a press the page reported failed says the retries finished and points at the notice, never claiming success (t743)", () => {
+  const refusal = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE } });
+  assert.equal(refusal.code, "refused_by_page");
+  assert.equal(refusal.detail?.reason, "page_reported_press_failed");
+  assert.match(refusal.detail?.next ?? "", /Automatic retries have finished/);
+  assert.match(refusal.detail?.next ?? "", /status or alert region/);
   assert.match(refusal.detail?.next ?? "", /effect has not been established/);
 });
 

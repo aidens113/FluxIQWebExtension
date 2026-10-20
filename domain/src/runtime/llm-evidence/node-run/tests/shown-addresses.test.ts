@@ -36,8 +36,8 @@ const TYPE = "web.output.dom-type";
 
 type Call = { node: string; parameters: JsonObject };
 type Runtime = ReturnType<typeof createWebAutomationLlmEvidenceRuntime>;
-/** How Core frames a call: its opening of a round, if it is one, and the brief it runs under beside others. */
-type Frame = { opening?: "fresh" | "continuing"; callScope?: string };
+/** How Core frames a call: its build, its opening of a round, the brief it runs under beside others, and whether it is Core's own move. */
+type Frame = { buildId?: string; opening?: "fresh" | "continuing"; callScope?: string; move?: "core" };
 
 /**
  * A call as Core's registry runs it: inside the build's frame, marked as Core's
@@ -59,9 +59,11 @@ test("a navigation to an item address no evidence showed is refused, and nothing
   const refusal = went.evidence as JsonObject & { code: string; detail: { reason: string; instead: string[] }; page?: { location: string; page: string } };
   assert.equal(refusal.code, "address_not_shown");
   assert.equal(refusal.detail.reason, "address_not_shown");
-  // What to do instead, in this domain's words: press the link, or use an address the evidence gave.
-  assert.equal(refusal.detail.instead.length, 2);
+  // What to do instead, in this domain's words: press the link, use an address the build was shown, or search again (t743).
+  assert.equal(refusal.detail.instead.length, 3);
   assert.match(refusal.detail.instead[0]!, /web\.output\.dom-click/u);
+  assert.match(refusal.detail.instead[1]!, /any brief of this build was shown or stood on/u);
+  assert.match(refusal.detail.instead[2]!, /typed search .* site's own search field/u);
   // The page comes back, so the link that does go there can be pressed next.
   assert.equal(refusal.page?.location, START);
   // The link with its query, as the packet now shows it (t200).
@@ -149,21 +151,79 @@ test("a replay of a saved step navigates where the step says, as it always did",
   assert.equal(site.navigations().includes(MADE_UP_ITEM), true);
 });
 
-test("Core's opening of a fresh round forgets what the build was shown and searched before it", async () => {
+test("a new build of the flow, under another build id, starts with nothing its last build was shown or searched (t743)", async () => {
   const site = bigbox();
   await arrive(site);
-  const looked = await call(site, "call.look", { node: SNAPSHOT, parameters: {} });
-  await call(site, "call.type", { node: TYPE, parameters: { target: { handle: handleOf(looked, "Search") }, text: "paper towels" } });
-  await call(site, "call.press", { node: CLICK, parameters: { target: { handle: handleOf(looked, "Go") } } });
-  const results = site.location()!;
+  const results = await search(site, {});
 
-  // The opening call of the next build re-arms the rule: this build has not
-  // searched. It opens on a blank tab, because a look reads the page as it
-  // stands and the results page would show this build the address itself.
+  // The next build re-arms the rule: it has not searched. It opens on a blank
+  // tab, because a look reads the page as it stands and the results page would
+  // show this build the address itself.
   site.blank();
-  await arrive(site);
-  const again = await call(site, "call.results", { node: NAVIGATE, parameters: { url: results } });
+  await arrive(site, { buildId: "build.two" });
+  const again = await call(site, "call.results", { node: NAVIGATE, parameters: { url: results } }, { buildId: "build.two" });
   assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
+});
+
+// Office rerun round 4 (`run-mvgvyaip-d856e135`, t743): a repair brief and a
+// reset brief were refused navigations to the pages the first brief had
+// searched for and stood on, because each brief's fresh opening forgot what the
+// build had been shown. What a build was shown and typed belongs to the build.
+test("a second brief's fresh opening keeps what the first brief was shown and typed: its search page is admitted (t743)", async () => {
+  const site = bigbox();
+  await arrive(site, { callScope: "brief-1" });
+  const results = await search(site, { callScope: "brief-1" });
+
+  site.blank();
+  await arrive(site, { callScope: "brief-2" });
+  const again = await call(site, "call.results", { node: NAVIGATE, parameters: { url: results } }, { callScope: "brief-2" });
+  assert.equal(again.resultCode, "web.action.succeeded");
+  // The same search with other words: the first brief typed the words it replaces.
+  const other = await call(site, "call.napkins", { node: NAVIGATE, parameters: { url: `${SEARCH}?q=napkins&store=12` } }, { callScope: "brief-2" });
+  assert.equal(other.resultCode, "web.action.succeeded");
+  // An address no brief of the build was shown is still refused.
+  const madeUp = await call(site, "call.made-up", { node: NAVIGATE, parameters: { url: MADE_UP_ITEM } }, { callScope: "brief-2" });
+  assert.equal(madeUp.resultCode, "web.action.rejected.address_not_shown");
+});
+
+test("a reset brief may go to a page the first brief stood on, which no page it was shown links to (t743)", async () => {
+  const site = bigbox({ readRows: [{ name: "Paper towels", url: "/scenarios/bigbox-retail/ip/paper-towels/418830127" }] });
+  await arrive(site, { callScope: "brief-1" });
+  assert.equal((await call(site, "call.read", { node: "web.output.dom-wait_for_text", parameters: { text: "Napkins" } }, { callScope: "brief-1" })).resultCode, "web.inspect.succeeded");
+  assert.equal((await call(site, "call.item", { node: NAVIGATE, parameters: { url: FLOW_ITEM } }, { callScope: "brief-1" })).resultCode, "web.action.succeeded");
+
+  site.blank();
+  await arrive(site, { callScope: "reset-1" });
+  const went = await call(site, "call.reset-item", { node: NAVIGATE, parameters: { url: FLOW_ITEM } }, { callScope: "reset-1" });
+  assert.equal(went.resultCode, "web.action.succeeded");
+});
+
+test("a host restarted mid-build still admits, for a later brief, what an earlier brief was shown and typed (t743)", async () => {
+  const store = coreBuildStateStore();
+  const site = bigbox({ store });
+  await arrive(site, { callScope: "brief-1" });
+  const results = await search(site, { callScope: "brief-1" });
+
+  const restarted = bigbox({ store });
+  await arrive(restarted, { callScope: "brief-2" });
+  assert.equal((await call(restarted, "call.results", { node: NAVIGATE, parameters: { url: results } }, { callScope: "brief-2" })).resultCode, "web.action.succeeded");
+  assert.equal((await call(restarted, "call.made-up", { node: NAVIGATE, parameters: { url: MADE_UP_ITEM } }, { callScope: "brief-2" })).resultCode, "web.action.rejected.address_not_shown");
+});
+
+// The same round: Core's own pre-trial looks went to each list's place through
+// the arrival node and were refused unrun by this rule. A move Core makes
+// itself is framed `move: "core"`, which a model-written call never carries.
+test("a navigation Core frames as its own move runs to an address never shown; the same call unframed is refused (t743)", async () => {
+  const site = bigbox();
+  await arrive(site);
+
+  const written = await call(site, "call.model", { node: NAVIGATE, parameters: { url: MADE_UP_ITEM } });
+  assert.equal(written.resultCode, "web.action.rejected.address_not_shown");
+  assert.equal(site.navigations().includes(MADE_UP_ITEM), false);
+
+  const moved = await call(site, "site-reset.look.1.arrival", { node: NAVIGATE, parameters: { url: MADE_UP_ITEM } }, { move: "core" });
+  assert.equal(moved.resultCode, "web.action.succeeded");
+  assert.deepEqual(site.navigations(), [START, MADE_UP_ITEM]);
 });
 
 // Live run 38 (`run-muqilf9s-c3211328`, cause C8): the re-author's opening
@@ -261,12 +321,20 @@ test("every address a read returned may be followed, however many and however de
  * The build's opening look, then the move to the start location. The look
  * reads the page as it stands, so only the blank tab refuses it.
  */
-async function arrive(site: ReturnType<typeof bigbox>): Promise<void> {
+async function arrive(site: ReturnType<typeof bigbox>, frame: Frame = {}): Promise<void> {
   const blank = site.location() === undefined;
-  const opening = await call(site, "call.opening", { node: SNAPSHOT, parameters: {} }, { opening: "fresh" });
+  const opening = await call(site, "call.opening", { node: SNAPSHOT, parameters: {} }, { ...frame, opening: "fresh" });
   assert.equal(opening.resultCode, blank ? "web.action.rejected.not_at_start_location" : "web.inspect.succeeded");
-  const went = await call(site, "call.start", { node: NAVIGATE, parameters: { url: START } });
+  const went = await call(site, "call.start", { node: NAVIGATE, parameters: { url: START } }, frame);
   assert.equal(went.resultCode, "web.action.succeeded");
+}
+
+/** A site search typed into the page's own field, under `frame`: the results address it reached. */
+async function search(site: ReturnType<typeof bigbox>, frame: Frame): Promise<string> {
+  const looked = await call(site, "call.look", { node: SNAPSHOT, parameters: {} }, frame);
+  assert.equal((await call(site, "call.type", { node: TYPE, parameters: { target: { handle: handleOf(looked, "Search") }, text: "paper towels" } }, frame)).resultCode, "web.action.succeeded");
+  assert.equal((await call(site, "call.press", { node: CLICK, parameters: { target: { handle: handleOf(looked, "Go") } } }, frame)).resultCode, "web.action.succeeded");
+  return site.location()!;
 }
 
 /** Core's opening look of a round whose draft already holds the Flow (`AS/runtime/llm/evidence-loop.ts`). */
@@ -382,14 +450,14 @@ test("a repair may go to the repaired proposal's own navigation address, and onl
   assert.deepEqual(site.navigations(), [LIBRARY_START, REPAIRED_ITEM]);
 });
 
-test("a repair opening still forgets the last build of the flow (t648)", async () => {
+test("a repair opening of a new build has nothing the last build of the flow was shown (t648, t743)", async () => {
   const site = library();
   await repairOpening(site, {}, REPAIRED);
   assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } })).resultCode, "web.action.succeeded");
 
   // The next build opens with no repairs: the last build's held address is gone.
-  await repairOpening(site, {}, undefined);
-  const again = await libraryCall(site, "call.again", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } });
+  await repairOpening(site, { buildId: "build.two" }, undefined);
+  const again = await libraryCall(site, "call.again", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { buildId: "build.two" });
   assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
 });
 
@@ -398,8 +466,9 @@ test("repairs count on a brief's scoped opening too, never on a call Core did no
   // A brief run beside others is framed with its call scope (Core `llm/harness-options/evidence-build-scope.ts`).
   assert.equal((await repairOpening(site, { callScope: "brief-6" }, REPAIRED)).resultCode, "web.action.succeeded");
   assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { callScope: "brief-6" })).resultCode, "web.action.succeeded");
-  // Another brief of the same build was shown none of it.
-  assert.notEqual((await libraryCall(site, "call.other-brief", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { callScope: "brief-7" })).resultCode, "web.action.succeeded");
+  // Another brief of the same build shares what the build was shown (t743); another build does not.
+  assert.equal((await libraryCall(site, "call.other-brief", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { callScope: "brief-7" })).resultCode, "web.action.succeeded");
+  assert.notEqual((await libraryCall(site, "call.other-build", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { buildId: "build.two", callScope: "brief-7" })).resultCode, "web.action.succeeded");
 
   const other = library();
   await repairOpening(other, {}, undefined);
@@ -420,8 +489,45 @@ test("a scoped opening look marked arrived is the builder's arrival, as the unsc
   assert.equal(typed.resultCode, "web.action.succeeded");
 });
 
+// t743: every brief's opening call may carry the build's places -- the
+// locations Core prints for it -- under `places`, read only there, as `repairs`.
+const PLACE_ITEM = `${LIBRARY}/catalogue/item/5120?shelf=2`;
+
+test("places on a brief's opening count as shown, absolute or from the site's root, and nothing else does (t743)", async () => {
+  const site = library();
+  const value: JsonObject = { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [], places: [PLACE_ITEM, "/catalogue/list/12"] };
+  const opened = await exec(site.runtime, { ...LIBRARY_BUILD, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value }, { opening: "fresh", callScope: "reset-1" });
+  assert.equal(opened.resultCode, "web.action.succeeded");
+  // The places are not the opening's step: it ran without them.
+  assert.equal(JSON.stringify(opened.draft?.ranWith ?? {}).includes("places"), false);
+
+  assert.equal((await libraryCall(site, "call.place", { node: NAVIGATE, parameters: { url: PLACE_ITEM } }, { callScope: "reset-1" })).resultCode, "web.action.succeeded");
+  assert.equal((await libraryCall(site, "call.rooted", { node: NAVIGATE, parameters: { url: `${LIBRARY}/catalogue/list/12` } }, { callScope: "reset-1" })).resultCode, "web.action.succeeded");
+  assert.equal((await libraryCall(site, "call.edited", { node: NAVIGATE, parameters: { url: PLACE_ITEM.replace("shelf=2", "shelf=3") } }, { callScope: "reset-1" })).resultCode, "web.action.rejected.address_not_shown");
+});
+
+test("places beside repairs on a repair's opening both count (t648, t743)", async () => {
+  const site = library();
+  const value: JsonObject = { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [], repairs: REPAIRED, places: [PLACE_ITEM] };
+  assert.equal((await exec(site.runtime, { ...LIBRARY_BUILD, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value }, { opening: "fresh" })).resultCode, "web.action.succeeded");
+  assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } })).resultCode, "web.action.succeeded");
+  assert.equal((await libraryCall(site, "call.place", { node: NAVIGATE, parameters: { url: PLACE_ITEM } })).resultCode, "web.action.succeeded");
+});
+
+test("places on any call Core did not mark as its opening are an unexpected key, and count nothing (t743)", async () => {
+  const site = library();
+  await repairOpening(site, {}, undefined);
+  for (const node of [NAVIGATE, SNAPSHOT]) {
+    const sent = await exec(site.runtime, { ...LIBRARY_BUILD, callId: "call.places", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node, parameters: node === NAVIGATE ? { url: PLACE_ITEM } : {}, consequences: [], places: [PLACE_ITEM] } });
+    assert.equal(sent.resultCode, "web.action.rejected.invalid_input", node);
+    assert.equal((sent.evidence as { detail?: { reason?: string } }).detail?.reason, "unexpected_input_keys", node);
+  }
+  assert.equal((await libraryCall(site, "call.place", { node: NAVIGATE, parameters: { url: PLACE_ITEM } })).resultCode, "web.action.rejected.address_not_shown");
+  assert.deepEqual(site.navigations(), [LIBRARY_START]);
+});
+
 /** Core's opening call of a repair brief: the arrival navigation, the repaired proposal's calls beside it (Core `run-brief.ts`, `shownAtOpening`). */
-function repairOpening(site: ReturnType<typeof library>, frame: { callScope?: string }, repairs: Call[] | undefined) {
+function repairOpening(site: ReturnType<typeof library>, frame: { buildId?: string; callScope?: string }, repairs: Call[] | undefined) {
   const value: JsonObject = { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [] };
   if (repairs) value.repairs = repairs;
   return exec(site.runtime, { ...LIBRARY_BUILD, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value }, { ...frame, opening: "fresh" });
@@ -521,6 +627,32 @@ test("an ordinary build is stored whole, in the shape it always had, and read ba
   assert.equal(shopGoes(restarted.addresses, shopItem(1)), true);
   assert.equal(shopGoes(restarted.addresses, shopItem(2)), true);
   assert.equal(shopGoes(restarted.addresses, `${SHOP}/catalog/item/made-up/999`), false);
+});
+
+test("briefs of one build run side by side share one memory, here and in the one stored copy; another build has none of it (t743)", async () => {
+  const store = coreBuildStateStore();
+  const first = shopHost(store);
+  const brief = (callScope: string): WebNodeBuildKey => ({ ...SHOP_BUILD, callScope });
+  first.addresses.saw(brief("brief-1"), shopPage(SHOP_START, [shopItem(1)]));
+  first.addresses.ran(brief("brief-2"), { actionType: SHOP_TYPE, parameters: { text: "Blue Mug" }, read: undefined, location: SHOP_START });
+  await first.persistence.settled();
+
+  const goes = (addresses: WebNodeShownAddresses, build: WebNodeBuildKey, url: string): boolean =>
+    !addresses.refuses(build, SHOP_NAVIGATE, { url } as JsonObject, { location: SHOP_START, startLocation: SHOP_START });
+  assert.equal(goes(first.addresses, brief("brief-2"), shopItem(1)), true);
+  // One stored copy, under the build alone: what brief-1 was shown and brief-2 typed.
+  const stored = await store.get(SHOP_SCOPE, "web.shown-addresses") as { addresses: JsonValue[]; typed: string[] } | undefined;
+  assert.equal(stored?.addresses.length, 2);
+  assert.deepEqual(stored?.typed, ["blue mug"]);
+  assert.equal(await store.get(SHOP_SCOPE, "web.shown-addresses:brief-1"), undefined);
+
+  const restarted = shopHost(store);
+  await restarted.addresses.restore(brief("reset-1"));
+  assert.equal(goes(restarted.addresses, brief("reset-1"), shopItem(1)), true);
+  assert.equal(goes(restarted.addresses, brief("reset-1"), `${SHOP}/catalog?q=cup`), false);
+  const otherBuild: WebNodeBuildKey = { ...SHOP_BUILD, buildId: "build.two", callScope: "brief-1" };
+  await restarted.addresses.restore(otherBuild);
+  assert.equal(goes(restarted.addresses, otherBuild, shopItem(1)), false);
 });
 
 test("a build shown more than 64 KiB of addresses still stores its newest ones, and a restarted shopHost may follow them", async () => {

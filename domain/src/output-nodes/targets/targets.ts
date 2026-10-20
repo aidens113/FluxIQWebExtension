@@ -58,7 +58,19 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
  * it, because then it is describing a record and not merely inheriting one.
  */
 function withRecordedPlace(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
-  return withRecordedDialog(withRecordedRecord(element, payload), payload);
+  return withRecordedReadMark(withRecordedDialog(withRecordedRecord(element, payload), payload), payload);
+}
+
+/**
+ * The recording's `readsWords` mark, carried whichever source won the identity
+ * (t743). The mark says what the *step* does with the element -- it reads its
+ * words -- not what the element is, so a repair that renamed the control has
+ * no standing to drop it; and Core's normalizer, which a repair's target passes
+ * through, has no field for it.
+ */
+function withRecordedReadMark(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
+  if (!element || element.readsWords === true) return element;
+  return objectValue(payload.element)?.readsWords === true ? { ...element, readsWords: true } : element;
 }
 
 function withRecordedRecord(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
@@ -285,6 +297,9 @@ export function elementFingerprint(value: unknown): WebAutomationElementFingerpr
     label: stringValue(element.label),
     attributes,
     context: elementContext(element.context),
+    // The step reads this element's words (`plan-resolution/read-identity.ts`);
+    // only `true` is a mark, so anything else is no mark at all.
+    readsWords: booleanValue(element.readsWords) === true ? true : undefined,
     // Core's remaining fingerprint signals, named so their absence is a
     // decision and so a signal Core adds stops this producer compiling. A
     // browser recording has no source for any of them: the first four are a

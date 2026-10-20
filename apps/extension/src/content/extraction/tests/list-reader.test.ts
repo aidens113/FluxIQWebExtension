@@ -14,27 +14,7 @@ import type { RefusedPageHost } from "../pagination";
 import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../shared/extraction-continuation";
 import type { WebAutomationExtractListRequest } from "../../types";
 import { nthPagerLink, PAGE_ITEM, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "./store-pager";
-import { fakeShadowDom } from "./fake-shadow-dom";
 import { el as pageEl, page as standPage, PageElement } from "./selector-page";
-
-test("an incomplete field refuses the entire list instead of being swallowed as an item fault or stored partial row", async () => {
-  const dom = fakeShadowDom();
-  const whole = dom.el("p", {}, "Whole text");
-  const partial = dom.el("p", {}, "Partial text… ", dom.el("button", {}, "Read more"));
-  const savedDocument = globalThis.document;
-  globalThis.document = { querySelectorAll: () => [whole, partial], querySelector: () => null } as unknown as Document;
-  try {
-    await assert.rejects(extractList({ item: "p", fields: { description: { kind: "text" } } }, {
-      resume: { records: [], pagesRead: 0, scrolls: 0, missingFields: [], itemsSeen: 0 }
-    }), (error: unknown) => {
-      assert.equal((error as { failure: { code: string } }).failure.code, "web.validation.output_not_observed");
-      assert.match((error as Error).message, /incomplete_text/u);
-      return true;
-    });
-  } finally {
-    globalThis.document = savedDocument;
-  }
-});
 
 test("an encrypt field refuses the read as not implemented before the page is read", async () => {
   await assert.rejects(

@@ -32,6 +32,14 @@ test("an executable condition's own text read refuses an unexpanded field rather
   assert.throws(() => rejects!(item, {}), /incomplete_text/u);
 });
 
+test("a condition's own read of a collapsed field is not refused when another condition rejected the item", () => {
+  const dom = fakeShadowDom();
+  const item = dom.el("li", {}, dom.el("p", { class: "body" }, "Partial… ", dom.el("button", {}, "Read more")));
+  const rejects = itemFilterFor({ item: "li", fields: { posted: ".posted" }, where: [{ field: "posted", contains: "2026" }, { read: { kind: "text", selector: ".body" }, contains: "Partial" }] });
+  assert.deepEqual(rejects!(item, { posted: "March 2019" }), [0]);
+  assert.throws(() => rejects!(item, { posted: "March 2026" }), /incomplete_text/u);
+});
+
 test("rejecting predicates preserve the evaluated absent and present-empty values without changing membership", () => {
   const rejects = itemFilterFor({ item: ".card", fields: FIELDS, where: [{ field: "badge", contains: "allowed" }, { field: "price", lessThan: 12 }] });
   const observations: WebAutomationExtractionRejectionObservation[] = [];

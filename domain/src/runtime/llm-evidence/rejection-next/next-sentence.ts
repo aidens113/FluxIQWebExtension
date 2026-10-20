@@ -22,6 +22,7 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     : reason === "handle_not_in_packet" && instead?.includes(RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
     : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
+    : reason === "page_reported_press_failed" ? "The page answered the press only with a notice in its own status or alert region and changed nothing else. Automatic retries have finished. Read what the notice says on the current page before pressing again or choosing another way; the requested effect has not been established."
     : reason === "option_not_offered" ? OPTION_NOT_OFFERED_NEXT
     // Read off the field code in `instead`, so a repeat that passes it back says it again.
     : reason === "incomplete_text" ? incompleteTextNext(instead)
@@ -51,7 +52,11 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
  * Until t741 it ended "Then read the full text." with no field named, and the
  * builds sent the same field again (social rerun 3): it did not say where the
  * read goes. It goes after the repeat, not inside it, with no condition tying
- * it to the loop, because by then every row is disclosed.
+ * it to the loop. Until t743 it promised "by then every row is disclosed",
+ * which was false whenever the first read filtered: the repeat disclosed only
+ * the rows that read kept (social rerun 4). Giving both reads the same
+ * conditions is what makes every row the final read keeps one the repeat
+ * disclosed; the reader checks disclosure only on the rows a read keeps.
  */
 function incompleteTextNext(instead: readonly string[] | undefined): string {
   const key = instead?.find((code) => code.startsWith(INCOMPLETE_FIELD_CODE))?.slice(INCOMPLETE_FIELD_CODE.length);
@@ -60,7 +65,7 @@ function incompleteTextNext(instead: readonly string[] | undefined): string {
     + "Load every row first: a Scroll step with mode untilStable where the list grows in place as it scrolls, or Next page in its own repeat-while span. "
     + `Then read only nonempty stable row-context columns, without ${field ?? "the incomplete text field"}. `
     + "Then, with repeat over that read (For Each), an optional explicit registered row-bound click on each row's own disclosure. "
-    + `After that repeat, not inside it, read the same listing again with ${field ?? "the text field"}: by then every row is disclosed. `
+    + `After that repeat, not inside it, read the same listing again with ${field ?? "the text field"}, and give both reads the same conditions, so every row the final read keeps was disclosed by the repeat. `
     + "Exclude units with no row context from that helper; find another context for any requested row this would omit.";
 }
 

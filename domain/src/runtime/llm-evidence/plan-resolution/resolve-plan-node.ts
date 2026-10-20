@@ -122,6 +122,8 @@ import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 import { resolveWebExtractionSlot, webPlanRunRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
+import { webPlanReadIdentity } from "./read-identity";
+import { webPlanSameTargetIdentity as sameTargetIdentity } from "./same-target-identity";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
@@ -626,6 +628,8 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
     }
   }
   const firstNamed = named[0];
+  // A read's target saved with its words marked as the value it reads (`read-identity.ts`, t743); every other node's as resolved.
+  const identity = webPlanReadIdentity(nodeDefinitionId, parameters, element?.element);
   const misfit = webPlanControlMisfit(nodeDefinitionId, element?.element);
   if (firstNamed && misfit.wrong) return { status: "refused", refusals: [misfit.fits, misfit.kind].map((fits): Refusal => ({ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits })) };
   if (firstNamed && typing && element?.notAField !== undefined) {
@@ -634,7 +638,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       { code: "web.handle.not_a_field", kind: "target", path: [firstNamed.slot], fits: misfit.fits }
     ] };
   }
-  if (firstNamed && scope.step && ELEMENT_NODE_IDS.has(nodeDefinitionId) && webPlanStepFoundByTooLittle(element?.element)) {
+  if (firstNamed && scope.step && ELEMENT_NODE_IDS.has(nodeDefinitionId) && webPlanStepFoundByTooLittle(identity)) {
     return { status: "refused", refusals: [{ code: "web.handle.unidentifiable", kind: "target", path: [firstNamed.slot] }] };
   }
 
@@ -660,11 +664,11 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   }
   if (bound?.statePath !== undefined) {
     const fallback: JsonObject = { selector: bound.value };
-    if (bound.element) fallback.element = bound.element;
+    const boundIdentity = webPlanReadIdentity(nodeDefinitionId, parameters, bound.element);
+    if (boundIdentity) fallback.element = boundIdentity;
     resolved.target = { $state: { path: bound.statePath, fallback } };
   }
   else if (element) resolved.selector = element.value;
-  const identity = element?.element;
   if (!bound && identity !== undefined && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved.element = identity;
   if (frameId !== undefined && frameId !== 0) {
     resolved.browserFrameId = frameId;
@@ -682,18 +686,6 @@ function boundTargetState(value: JsonValue | undefined): { path: string; fallbac
   if (Object.keys(state).some((key) => key !== "path" && key !== "fallback")
     || typeof state.path !== "string" || state.path.trim() === "" || !isJsonRecord(state.fallback)) return undefined;
   return { path: state.path, fallback: state.fallback as JsonObject };
-}
-
-/** Object key order cannot turn an agreeing explicit identity into a conflict. */
-function sameTargetIdentity(left: JsonValue | undefined, right: JsonValue | undefined): boolean {
-  if (left === undefined || right === undefined) return false;
-  if (left === right) return true;
-  if (Array.isArray(left) || Array.isArray(right)) return Array.isArray(left) && Array.isArray(right)
-    && left.length === right.length && left.every((value, index) => sameTargetIdentity(value, right[index]));
-  if (!isJsonRecord(left) || !isJsonRecord(right)) return false;
-  const keys = Object.keys(left);
-  return keys.length === Object.keys(right).length
-    && keys.every((key) => Object.hasOwn(right, key) && sameTargetIdentity(left[key] as JsonValue, right[key] as JsonValue));
 }
 
 /** Core's Run Output node: a web output's payload resolved as that output's own node, and a handle anywhere else misplaced. */

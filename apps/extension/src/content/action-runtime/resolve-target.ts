@@ -144,6 +144,11 @@
 // its own page, because at that point nothing distinguishes it from the next
 // button along; the resolver refuses rather than clicking the least-wrong thing.
 // The measured numbers are in reports/w3-matcher-packaging.md.
+//
+// A target that a step *reads* (`readsWords`, t743) is never looked up by the
+// words it reads once its selector missed: an earlier step of the same Flow may
+// have changed them, and a neighbour may now show the old ones. `read-lookup/`
+// says how it is found instead; a target without the mark resolves as before.
 
 import {
   WEB_AUTOMATION_FAILURE_CODES,
@@ -172,6 +177,7 @@ import {
 } from "../identity";
 import { isHiddenTie, isVisibleForResolution, passesResolutionGate } from "./resolution-gate";
 import { resolvedForPass, type PassOutcome } from "./pass-row";
+import { readFingerprintMatches, readsItsWords, scanTagMatches, withReadElements } from "./read-lookup";
 import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, DomElementContext, RectDescriptor } from "../types";
 
 /** The element an action will act on, with the measurement that chose it. */
@@ -200,6 +206,12 @@ type RecordedTarget = ElementFingerprint & {
    * controls can be told apart by something other than their position.
    */
   context?: DomElementContext | undefined;
+  /**
+   * The step reads this element's words, so they are its value and not its
+   * identity: never looked up by, only a tie-break (`read-lookup/`,
+   * `identity/read-words.ts`). Set by the domain's read resolution.
+   */
+  readsWords?: boolean | undefined;
 };
 
 /** One exact strategy's result: what it was asked for, and everything it matched. */
@@ -210,8 +222,6 @@ type StrategyAttempt = {
   matches: Element[];
 };
 
-/** Elements walked while matching a fingerprint's text. A resolution runs on every action's critical path. */
-const MAX_TEXT_SCAN = 2_000;
 /** Candidates named in an ambiguous failure. Core bounds a record's text, and a longer list helps nobody. */
 const MAX_NAMED_CANDIDATES = 5;
 
@@ -352,7 +362,8 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       if (target && verdict?.refusedBecause) {
         // Refused by its score, it may still be the recorded control with its
         // state changed; refused by its record or dialog, it is not, at any reading.
-        const steady = verdict.refusedBecause === "other-record" || verdict.refusedBecause === "other-dialog" ? undefined : stableNameMatch(target, only, scope);
+        // A read's words never vouch for it (`read-lookup/`), so neither does a stable part of them.
+        const steady = verdict.refusedBecause === "other-record" || verdict.refusedBecause === "other-dialog" || readsItsWords(target) ? undefined : stableNameMatch(target, only, scope);
         if (!steady) {
           misses.push(`${attempt.description} (${verdict.summary})`);
           continue;
@@ -415,7 +426,8 @@ function scoreFamily(target: RecordedTarget, scope: ShadowScope): ScoredFamily {
   // the page's sixtieth same-family control is still weighed (`candidates.ts`).
   const record = target.context?.record;
   const admits = record?.values?.length ? (element: Element) => agreesWithRecordedRecord(record, element) : undefined;
-  const nearby = collectTargetCandidates(candidateFamily(target), scope.roots, admits);
+  const family = collectTargetCandidates(candidateFamily(target), scope.roots, admits);
+  const nearby = readsItsWords(target) ? withReadElements(family, target, scope.roots) : family;
   return { nearby, decided: scoreTargetCandidates(target, nearby.candidates) };
 }
 
@@ -520,30 +532,17 @@ function* exactAttempts(action: BrowserActionCommand, target: RecordedTarget | u
  * weighs its name with its other signals.
  */
 function fingerprintMatches(target: RecordedTarget, roots: readonly LookupRoot[]): Element[] {
+  if (readsItsWords(target)) return readFingerprintMatches(target, roots);
   const { visibleText, ...stable } = target;
   const lookups = roots.map((root) => stableFingerprintMatches(stable, root));
   const exact = lookups.flatMap((lookup) => lookup.matches);
   if (exact.length && !lookups.some((lookup) => lookup.shared)) return exact;
   const name = target.role?.trim() || target.implicitRole?.trim() ? undefined : normalizedText(target.accessibleName);
-  const named = name ? scanMatches(target, roots, (element) => accessibleNameFor(element) === name) : [];
+  const named = name ? scanTagMatches(target.tagName, roots, (element) => accessibleNameFor(element) === name) : [];
   if (!exact.length && named.length) return named;
   const wanted = visibleText ? normalizeText(visibleText) : undefined;
-  const worded = wanted ? scanMatches(target, roots, (element) => normalizeText(element.textContent ?? "") === wanted) : [];
+  const worded = wanted ? scanTagMatches(target.tagName, roots, (element) => normalizeText(element.textContent ?? "") === wanted) : [];
   return [...new Set([...exact, ...named, ...worded])];
-}
-
-/** The recorded tag's elements in scope that `matches` accepts, walking at most `MAX_TEXT_SCAN` of them. */
-function scanMatches(target: RecordedTarget, roots: readonly LookupRoot[], matches: (element: Element) => boolean): Element[] {
-  const found: Element[] = [];
-  let scanned = 0;
-  for (const root of roots) {
-    for (const element of root.querySelectorAll(target.tagName || "*")) {
-      scanned += 1;
-      if (scanned > MAX_TEXT_SCAN) return found;
-      if (matches(element)) found.push(element);
-    }
-  }
-  return found;
 }
 
 /**
