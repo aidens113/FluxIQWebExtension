@@ -226,6 +226,29 @@ was still running at dispatch and is excluded below by its own file list.
 - Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t731-sweep-fixes.md` in the t731
   downstream tree, running log with `UNIT READY` markers.
 
+### Brief: t732-sensitive-capture (worker-high, t732 sensitive-cvc-capture)
+- Why: t730 worker C2 (`fxwork/t730-realistic-only-browser-specs/.../reports/t730-c2-bigbox-hooks.md`) confirmed
+  in a headed probe that bigbox-retail's checkout "Security code" field (`input[name=cvc]`, in the card frame) leaks
+  its typed value into the page snapshot, every recorded keydown and the recorded `dom.input`; and that a checkbox
+  marked sensitive only through its group (hook B-1) carries no sensitive marker on the wire descriptor. Typed
+  secrets must never leave the page. C1 also found `upload.ts` reporting an inert file input as `disabled`
+  (`not_actionable`) where the contract since ba9fea58 says `not_shown`.
+- Task: unit 1, find the extension's sensitive-field classification and every capture path it gates (snapshot,
+  keydown/input recording, descriptors); make card security codes (name, autocomplete `cc-csc`, labels such as
+  "Security code", "CVC", "CVV") and any control inside a sensitive-marked ancestor sensitive by one rule applied on
+  every path, tests first beside each subject. Unit 2, the inert file input reports `not_shown`, test beside it.
+- Worktree: `C:/Users/osrs_/FluxStuff/fxwork/t732/!FluxIQWebExtension` (own Core, read-only).
+- Owns: the classification module(s) and capture paths it leads to under `apps/extension/src/content/**` and
+  `apps/extension/src/shared/**`, `upload.ts`, their `tests/`.
+- Must not touch: L1's files (`git -C C:/Users/osrs_/FluxStuff/fxwork/t724/!FluxIQWebExtension status --short`,
+  which include `shared/dom-element.ts` and `content/dom-snapshot.ts`): if the fix must go there, stop and report
+  the exact change; `apps/extension/e2e/**` (t730); Core.
+- Validation: tests beside each change; extension `tsc` src and test; structure audit; a headed provider-free probe
+  on bigbox-retail's checkout (script in your scratchpad, not the tree) showing the typed code absent from snapshot,
+  keydown and input events.
+- Report: `docs/working/trace-offline-trials-plan/reports/t732-sensitive-capture.md` in the t732 tree, with
+  `UNIT READY` markers. No commits; never write a typed value into logs or the report.
+
 ### Brief: sweep-1019b (worker-low, second daily full sweep of `dev`)
 - Detached worktrees of both repositories at `origin/dev` (downstream cedd46af, Core 4077d0a0) under
   `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019b/` (Core sibling to the downstream checkout); `pnpm install` both;
@@ -320,6 +343,25 @@ was still running at dispatch and is excluded below by its own file list.
   (`browser.tab`, `recordingState: started`) and Core needs no marker; the new spec will assert that.
 - Outcome: Partial
 - Follow-up: lane G reruns on the recovered machine, compares with pre-G sweep-1019b, fixes any race, five green runs.
+
+### 2026-10-19 - Lane T P0 complete and P1 to the L1 stop point, committed on t729
+- Agent: supervisor (lane-t and workers U2a, U2b, U3, U4, U6, U8)
+- Changed: Core b529bd02 (`client-gateway/trace/**` contract, `client-gateway/service/channel-scope/**`, bridge
+  `attachScopedSession`/`isScopedSession`, `runtime/environment/**` port and trace-fed fixture); downstream 791bb235
+  (`apps/extension/e2e/content/tests/snapshot-fidelity/**`, reports u2a-u8).
+- Findings: a DOM serialization with a resource map, reloaded with scripts and network off, matched live reads and
+  sampled targets on all four sites tried (MHTML did not), so P2 captures that way; P1's single environment port
+  is really a clock plus a gateway channel scope (D3), and the chat, asks, run control, screenshot upload and start
+  hook bypass the gateway and need capture where Core accepts them (D1). Possible defect: photo-social
+  `web.dom.extract_list` stalled over 4 minutes in 2 of about 6 spike runs.
+- Validation: supervisor reruns in t729: Core `pnpm exec vitest run src/client-gateway
+  src/programs/automation-studio/runtime/environment src/programs/automation-studio/client-gateway
+  src/programs/automation-studio/model/offline-trial` -> 42 files, 303 tests passed; `npx tsc --noEmit -p
+  tsconfig.json` (fluxiq) -> 0; Core audit passed (1152 baselined); extension `tsc -p tsconfig.test.json` -> 0;
+  downstream audit passed (638). The spike's headed run (lead, 20:17, after the memory fix: 4 passed, 0 requests
+  leaked, 0 page scripts run) was not repeated by the supervisor.
+- Outcome: Accepted (P0; P1 contract and port)
+- Follow-up: U7 consumer wiring after L1 merges, as a new task; the extract_list stall needs a trace.
 
 ## Open Questions
 

@@ -206,6 +206,26 @@ working document before its first Core edit.
 - Outcome: Accepted (units)
 - Follow-up: lane G unit 2b (gateway adapter), Core docs, headed browser spec; lane H's core-web-build seam.
 
+### 2026-10-19 - t726 merged; lane H done; lane S committed on t728
+- Agent: supervisor (lane-g, lane-h, lane-s and their workers)
+- Changed: t726 merged (Core f9883658, downstream 9459221d, both pushed): gateway session as a web adapter over
+  Core's connection, which now queues until `session_ready`. t727 gained Core 11eee59e / downstream c9b2d392 (Core
+  `scripts/web-build/` seam; `core-web-build` from ~1,060 to 355 lines). t728: Core c74e11a9, downstream 81649a44
+  (phases 2 and 4, one commit each side: they are consistent only together).
+- Validation: t726 unit 2b: Core package vitest -> 179 passed; extension `tsc` src and test 0; extension
+  `background/connection` tests -> pass 313 fail 0; headed specs after the memory fix: lane G's own specs 5 of 5;
+  `reconnect.spec.ts:85`/`:122` fail 3 of 5 on both lane G and the pre-lane-G tree (fixture teardown over its 30 s
+  budget under load; an intermittent missing hello after a worker restart); `pnpm task finish t726` -> structure
+  audit passed and, in Core, the prompt contract tests ran. t727 web-build: Core `node --test` web-build,
+  build-cache, task, scripts/tests -> pass 170 fail 0; test-runner dist tests -> fail 0, skipped 2; audits passed;
+  core-mirror 58 files. t728: Core 37 changed fluxiq tests plus the three prompt-contract files -> 39 files, 389
+  passed; fluxiq and contracts `check` 0; domain, extension, test-runner `check` 0; changed domain tests -> pass 135,
+  extension -> pass 73, test-runner dist -> pass 135; audits passed.
+- Outcome: Accepted
+- Follow-up: finish t727 then t728 and t729; lane S follow-ups (panel wording in Core's own panel, the
+  largestInputTokens and byRole diagnostics, the chat check that folded an earlier turn into the instruction, the
+  Lab's balance codes, requestsEnabled and the hello's raw capture flags); the reconnect fixture flake.
+
 ## Open Questions
 
 None requiring user input (the move plan and the tooling policy were approved on 2026-10-19).
