@@ -1,19 +1,13 @@
-// The one rule for which paired browser session a build may drive: ready, an
-// extension, not recording, and offering this domain's web actions (or the DOM
-// snapshot action). The host-resource lease (`../host-resources/leasable-session.ts`)
-// and the evidence tools (`../llm-evidence/tools.ts`) both pick sessions by it.
+// Whether a build may drive a paired browser session: Core's one session rule
+// (`clientGatewaySessionEligible`: ready, still connected, not recording) under
+// the web criteria (`./criteria.ts`). The evidence tools
+// (`../llm-evidence/tools.ts`) list sessions by it; the pick a build, a
+// snapshot, an output and a host lease use is `./pick-web-session.ts`.
 
-import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
-import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { clientGatewaySessionEligible, type ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
+import { WEB_AUTOMATION_SESSION_CRITERIA } from "./criteria";
 
 /** Whether a build may drive `session`; with `alsoDeclaring` named, the session must also declare that capability id. */
 export function isEligibleWebSession(session: ClientGatewaySession, alsoDeclaring?: string): boolean {
-  return session.status === "ready" &&
-    session.clientType === "extension" &&
-    !session.activeRecordingId &&
-    session.capabilities.some((capability) =>
-      capability.id === "web.actions" &&
-      (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.includes("web.dom.capture_snapshot"))
-    ) &&
-    (alsoDeclaring === undefined || session.capabilities.some((capability) => capability.id === alsoDeclaring));
+  return clientGatewaySessionEligible(session, alsoDeclaring === undefined ? WEB_AUTOMATION_SESSION_CRITERIA : { ...WEB_AUTOMATION_SESSION_CRITERIA, alsoDeclaring });
 }

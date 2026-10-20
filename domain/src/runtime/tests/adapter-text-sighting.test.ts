@@ -29,7 +29,7 @@ async function runWait(payload: JsonObject, status = "timed_out"): Promise<FluxI
         snapshot: () => ({
           sessions: [{
             sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.wait_for_text"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.wait_for_text"], metadata: { domainId: "web-automation" } }]
           }]
         })
       },

@@ -1,12 +1,12 @@
 # Extension And Core Boundary Audit
 
 Status: Active
-Status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S created (t726-t728), not yet dispatched.
+Status detail: Audit complete (no model calls downstream); the user approved implementing the six-phase move plan; lanes G, H, S (t726-t728) dispatched 2026-10-19.
 Created: 2026-10-19
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
 Scope: Find anything in this repository that belongs in FluxIQ Core (model calls, prompts, judging, generic framework or gateway behaviour, durable ownership of projects, policies and recordings) and plan the moves. Planning only; no code moves in this effort until the user approves the plan.
-Paired document: none yet (a Core-side document is owed if moves are approved)
+Paired document: `docs/working/extension-boundary-moves.md` in FluxIQ Core
 Related: [AGENTS.md](../../AGENTS.md) ("Repository Boundaries", "Automated Testing Facility Boundary"), [repository layout](../architecture/repository-layout.md), [breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md)
 
 ---
@@ -40,7 +40,12 @@ left). Execution is run from [trace-offline-trials-plan.md](./trace-offline-tria
 (t726) phases 1 and 3, lane H (t727) phases 0 and 5, lane S (t728) phases 2 and 4. Branches exist; nothing is
 implemented yet. A paired Core document is opened by the first lane that edits Core.
 
-**Next:** dispatch lanes G, H and S from the lane table (briefs written here under Worker Briefs first).
+**Dispatched 2026-10-19:** lanes G, H and S are running; their briefs are in
+[trace-offline-trials-plan.md](./trace-offline-trials-plan.md) under "Worker Briefs" (lane-g, lane-h, lane-s), and
+each lane's running log is `extension-core-boundary-audit/reports/lane-<g|h|s>.md` in its own worktree. Core's paired
+document is `docs/working/extension-boundary-moves.md` in FluxIQ Core.
+
+**Next:** commit each lane's units as they land; record the checks in this ledger.
 
 ## Worker Briefs
 
@@ -144,6 +149,62 @@ working document before its first Core edit.
   t728 single-sources-telemetry created; their worktrees `git status --short` -> 0 lines.
 - Outcome: Partial (nothing implemented yet)
 - Follow-up: dispatch lanes G, H, S.
+
+### 2026-10-19 - Lane H phase 0 verified and committed on t727
+- Agent: supervisor (lane-h, workers H1-H4)
+- Changed: provider-call rule (`restricted-references`, Core first then mirrored), `scripts/check/core-mirror*` wired
+  into `pnpm check`, `packages/agent-orchestrator` and `reusable-evidence-coordinator.ts` deleted, one provider key
+  list, the "$0.10" comment, `packages/test-matrix` selects only the ten realistic scenarios for browser jobs.
+  Commits t727: downstream 654e9b1f, Core 4ad4eac2.
+- Validation: supervisor reruns in the t727 trees: `node scripts/structure-audit.mjs` -> `passed (213 warning(s),
+  635 baselined)`, Core -> `passed (408 warning(s), 1152 baselined)`; `node scripts/check/core-mirror.mjs` -> `1
+  mirror set(s) match ... structure-audit (58 files)`; rule and mirror tests -> pass 21 fail 0, Core rule test -> pass
+  15 fail 0; planted `apps/extension/src/zz-planted.ts` with a DeepSeek URL -> `FAIL [restricted-references] ...`,
+  removed -> passed; `pnpm --filter @fluxiq-web-extension/test-matrix test` -> pass 23 fail 0; domain `check` ->
+  current; no remaining reference to either deleted module.
+- Suspicions (lane-h-h4.md): core-web-build duplicates Core's `web:build` (needs a Core publication seam first);
+  `scripts/lab/core/build/` judges Core staleness by mtime (confirmed; swap to Core's `decideStep`); test-matrix
+  synthetic browser selection (confirmed, fixed). Still opening synthetic pages outside lane H's files: the CI
+  workflow's scenario-page step and `apps/scenario-lab/e2e` specs.
+- Outcome: Accepted (unit); merges with phase 5.
+- Follow-up: phase 5; the two remaining suspicions and the synthetic-page specs need owners.
+
+### 2026-10-19 - Lane G unit 1 (offline queue privacy) verified; commit held for unit 2
+- Agent: supervisor (lane-g, workers W-A to W-D)
+- Changed (t726, uncommitted): Core `client-gateway-websocket` outbox, storage-area, reconcile, host-lease,
+  session-pick; the extension queue on Core's outbox in `chrome.storage.session` (`fluxiq.outbox`), the old
+  `fluxiq.queuedEvents` discarded at every background start, flushes bound to the session lineage, project and
+  recording.
+- Validation: supervisor reruns in t726: Core `npx vitest run` in the package -> `Test Files 22 passed, Tests 150
+  passed`, `npx tsc --noEmit` -> exit 0; extension `tsc -p tsconfig.json` and `tsconfig.test.json` -> exit 0;
+  `EXTENSION_TEST_BUILD_LABEL=sup-g1 node apps/extension/scripts/test-extension.mjs` on gateway-session, host-lease,
+  saved-state, storage-queue-discard, outbox -> tests 46 pass 46 fail 0; structure audit -> passed (638 baselined).
+- Held: Core's package index already exports unit 2's `connection/`, and `shared/protocol.ts` changed outside the
+  unit list, so the listed files alone may not compile; committed with unit 2.
+- Follow-up: the session-storage byte risk (~10 MB) sent back to lane G as a fix (byte budget, explicit counted
+  loss, write failure degrades instead of throwing).
+
+### 2026-10-19 - Lane G units 1+2a and lane H phase 5 committed on their branches
+- Agent: supervisor (lane-g workers W-A to W-G; lane-h workers H5, H6 and the lead)
+- Changed: t726 Core 3ccb50b2 (`client-gateway-websocket`: reconnecting connection, outbox with lineage binding,
+  count cap, byte budget, closed loss marker and write-failure degradation, reconciliation, lease fencing, one
+  session pick) and downstream bca31a06 (queue on Core's outbox in session storage, old queue discarded at start,
+  downstream reconciliation, ledgers and domain host-lease replaced by Core's, one web session pick). t727 Core
+  f748af1a (build-cache engine and task rules exported; AGENTS.md says downstream imports them) and downstream
+  0725def0 (imports them; Core staleness by Core's `decideStep`, not modification times; AGENTS.md names the
+  provider guard, mirror check and imported tooling).
+- Validation: supervisor reruns. t726: Core package `npx vitest run` -> 27 files, 178 tests passed; `tsc` 0; domain
+  and extension `tsc` src and test -> 0; `DOMAIN_TEST_BUILD_LABEL=sup-g2 node domain/scripts/test-domain.mjs client/
+  web-sessions host-resources runtime/tests/adapter io/tests/gateway-output-dispatcher llm-evidence/tests/tools` ->
+  pass 181 fail 0; extension gateway, outbox, saved-state, in-flight, host-lease, server-command-channel,
+  connection-status -> pass 73 fail 0; audits passed. t727: Core `node --test` task, build-cache, structure-audit,
+  scripts/tests -> pass 394 fail 0; downstream `node --test` over every `check` glob plus core-scripts -> tests 667,
+  pass 666, fail 0; `node scripts/build-cache/prove-inputs.mjs` -> `inputs proved complete for 31 listing(s)`;
+  audits passed (634 baselined).
+- Merge order (t727): Core first, then the main checkout's and shared Cores, then downstream; every Core that takes
+  phase 5 rebuilds its three libraries once.
+- Outcome: Accepted (units)
+- Follow-up: lane G unit 2b (gateway adapter), Core docs, headed browser spec; lane H's core-web-build seam.
 
 ## Open Questions
 
