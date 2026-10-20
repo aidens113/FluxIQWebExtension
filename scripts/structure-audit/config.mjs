@@ -3,6 +3,12 @@
 // repository; the entry point, context, baseline, and rules are mirrored
 // from F:\!FluxIQ\scripts\structure-audit and must be changed there first.
 
+import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES } from "../provider-secret-environment.mjs";
+
+// The provider key names come from the one list the Lab strips from every
+// child environment, so this entry never restates it.
+const PROVIDER_KEY_NAME = new RegExp(`^(${PROVIDER_SECRET_ENVIRONMENT_VARIABLES.join("|")})$`, "i");
+
 export const CONFIG = {
   repository: "web-extension",
 
@@ -149,6 +155,90 @@ export const CONFIG = {
   // The repository root's own Markdown stays out: AGENTS.md links sideways into
   // the FluxIQ Core checkout, which is not this repository's to resolve.
   docsLinkDirs: ["docs"],
+
+  // References that may appear only in the files an entry allows, for the
+  // restricted-references rule (mirrored from Core, where the list is empty
+  // because Core owns provider calls).
+  //
+  // Model providers. This repository never calls a model provider: every LLM
+  // call goes through Core's gateway with a key held in Core's Secret Keys.
+  // Before this entry the only thing that stopped a provider call here was the
+  // Lab's runtime network policy (audit finding 12, extension-core boundary
+  // audit); a provider URL written into the extension would type-check, test
+  // and build clean. The entry covers provider API hosts, provider SDK module
+  // specifiers (in code and in every package.json), and the provider key
+  // environment variables of scripts/provider-secret-environment.mjs, read as a
+  // property (`process.env.X`, `env["X"]`, a destructured key) or written as a
+  // string.
+  //
+  // `allow` lists exact files, each one a place that legitimately names a key
+  // or host today, found by running the rule on the tree. Never allow
+  // apps/extension or domain/src: neither has any business naming a provider.
+  restrictedReferences: [
+    {
+      name: "model provider",
+      imports: [
+        /^openai(\/|$)/, /^@openai\//, /^@anthropic-ai\//, /^@ai-sdk\//, /^ai(\/|$)/,
+        /^langchain(\/|$)/, /^@langchain\//, /^@google\/generative-ai(\/|$)/, /^@google\/genai(\/|$)/,
+        /^@google-cloud\/vertexai(\/|$)/, /^@mistralai\//, /^groq-sdk(\/|$)/, /^cohere-ai(\/|$)/,
+        /^ollama(\/|$)/, /^deepseek/i, /^@deepseek/i, /^together-ai(\/|$)/, /^@openrouter\//,
+        /^openrouter/i, /^@aws-sdk\/client-bedrock/, /^@azure\/openai(\/|$)/, /^replicate(\/|$)/,
+        /^@huggingface\//, /^@fireworks-ai\//, /^llamaindex(\/|$)/
+      ],
+      strings: [
+        /api\.deepseek\.com/i, /api\.openai\.com/i, /api\.anthropic\.com/i, /openrouter\.ai/i,
+        /generativelanguage\.googleapis\.com/i, /aiplatform\.googleapis\.com/i, /api\.mistral\.ai/i,
+        /api\.groq\.com/i, /api\.together\.(xyz|ai)/i, /api\.x\.ai/i, /api\.cohere\.(ai|com)/i,
+        /api\.fireworks\.ai/i, /api\.perplexity\.ai/i, /bedrock-runtime/i, /openai\.azure\.com/i,
+        /api-inference\.huggingface\.co/i, /router\.huggingface\.co/i, /api\.replicate\.com/i,
+        PROVIDER_KEY_NAME
+      ],
+      names: [
+        PROVIDER_KEY_NAME
+      ],
+      allow: [
+        // The provider-key strip list: the names every Lab child process and
+        // build environment is stripped of, so the extension never inherits one.
+        "scripts/provider-secret-environment.mjs",
+        // The Lab's key-install path into Core's Secret Keys. The runner reads
+        // the operator's DeepSeek key once (process environment, then .env,
+        // then .env.local) and types it into Core's Secret Keys UI, after which
+        // only Core holds it and only Core calls the provider.
+        "packages/test-runner/src/live-llm/provider-credential.ts",
+        "packages/test-runner/src/secret-keys-ui.ts",
+        "scripts/setup-demo-llm-key.mjs",
+        // The interactive driver's allowlist of secret environment names it
+        // may type into a field -- how an operator's key reaches Core's Secret
+        // Keys form without ever being written into a request.
+        "packages/test-runner/src/interactive-session.ts",
+        // The pair launcher reports whether a live run from the pair would
+        // find its key, by source and never by value.
+        "scripts/lab/pair/provider-key.mjs",
+        // Tests of the files above: they name the key to assert it is read
+        // from the right source, carried by name only, and never printed.
+        "packages/test-runner/src/live-llm/tests/call-rows.test.ts",
+        "packages/test-runner/src/live-llm/tests/canonical-judge-spend.test.ts",
+        "packages/test-runner/src/live-llm/tests/core-default-model.test.ts",
+        "packages/test-runner/src/live-llm/tests/live-llm-run.test.ts",
+        "packages/test-runner/src/live-llm/tests/provider-credential.test.ts",
+        "packages/test-runner/src/tests/cli-llm.test.ts",
+        "packages/test-runner/src/tests/environment.test.ts",
+        "packages/test-runner/src/tests/interactive-session.test.ts",
+        "scripts/lab/pair/tests/instructions.test.mjs",
+        "scripts/lab/pair/tests/provider-key.test.mjs",
+        // Tests the saved-Flow replay's provider-absence check, which names any
+        // provider credential set (never its value) so a zero-call replay can
+        // refuse to start with one present.
+        "packages/test-runner/src/saved-flow-replay/tests/provider-absence.test.ts",
+        // The guarded browser's lane network policy admits only the Lab, the
+        // panel and the gateway; its test names a provider host to prove a
+        // lane's browser can never reach one.
+        "packages/test-runner/src/guarded-browser/tests/lane-network-policies.test.ts"
+      ],
+      reason: "This repository never calls a model provider: every LLM call goes through FluxIQ Core with a key held in Core's Secret Keys, and naming a provider host, SDK or key here is how a direct call starts.",
+      remedy: "Ask Core for the model call through the gateway instead; a Lab file that installs a key into Core's Secret Keys belongs in the allow list."
+    }
+  ],
 
   workingDocsDir: "docs/working",
   workingDocsIndexKind: "ext"
