@@ -470,6 +470,23 @@ was still running at dispatch and is excluded below by its own file list.
 - Outcome: Accepted
 - Follow-up: merge t733 after its doc/runtime-status unit; merge t735 after t730's combined run (shared Core).
 
+### 2026-10-20 - t728, t730, t734, t735, t737 merged; rerun round 2 0 of 4; t738 fixing its causes
+- Agent: supervisor (lanes S, T; t730, t735, t737 leads and workers; four debuggers)
+- Changed: merged and pushed in order t735, t728 (lane S with follow-ups, including the chat instruction-fold fix,
+  migration 0026), t730 (realistic-only browser specs, one conflict in requests-settings.spec.ts resolved to lane S's
+  test on t730's realistic page), t734 (trace U7), t737 (install handler, shown-addresses, repair count, scan, reset
+  step). Rerun round 2 ran on the synced lane trees: 0 of 4, $0.567236172 (ledger in breadth-forty-tasks-plan.md).
+- Validation: t728 gated recheck after merging dev: Core `vitest run` over flow-bootstrap, llm, conversations, service,
+  ui/activity-status, client-gateway -> 669 files, 6488 passed; fluxiq `tsc` 0; web check 0; extension background,
+  identity, action-runtime, shared, panel/settings -> 1236 pass; domain runtime, sensitivity, client -> 1625 pass;
+  audits passed. t730: headed `requests-settings.spec.ts` -> 1 passed, scan -> 4 passed, Scenario Lab suite -> 45
+  passed, the unblocked specs -> 32 passed. t734 gated: Core 664 files, 6407 passed; tsc 0; audits passed. t735:
+  171 pass; its sync-core moved the shared Core bcb2c0ec -> 2d7bf003 -> 3dcd0355 for real. t737: five `tsc` 0;
+  extension background 573, domain 398, row 41, build-time 12, Core 84 pass; headed `reconnect.spec.ts` -> 3 passed
+  twice (the flaky `:85`/`:122` included); scan -> 9 passed.
+- Outcome: Accepted (merges); Partial (live)
+- Follow-up: t738 (four rerun causes), then rerun round 3; t736 P2 capture; sweep-1020.
+
 ## Open Questions
 
 None requiring user input.
