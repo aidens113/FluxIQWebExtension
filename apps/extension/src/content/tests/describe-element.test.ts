@@ -79,6 +79,22 @@ test("a pointer-only record control carries its subject while an ordinary wrappe
   });
 });
 
+test("a control inside a marked group is described as sensitive, and an ordinary control carries no marker", async () => {
+  await withStubPage(load, ({ describeElement }) => {
+    // Sensitive only through its group: the field itself carries nothing the rule reads.
+    const field = input("text", "SYNTHETIC_FIELD_VALUE", { name: "note" });
+    const plain = input("text", "Ada", { name: "first-name" });
+    const root = element("form", {}, element("div", { "data-sensitive": "true" }, field), plain);
+    withDescriptorRecords(root, root, () => {
+      const marked = describeElement(field);
+      assert.equal(marked.sensitive, true);
+      assert.equal(marked.value, undefined);
+      const ordinary = describeElement(plain);
+      assert.equal("sensitive" in ordinary, false);
+    });
+  });
+});
+
 test("a file input yields no value, so the chosen file's local name never leaves the page", async () => {
   await withStubPage(load, ({ readElementValue }) => {
     assert.equal(readElementValue(input("file", "C:\\fakepath\\expense-receipts.csv")), undefined);

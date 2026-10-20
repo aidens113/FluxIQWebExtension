@@ -68,7 +68,7 @@
 // **values** -- what the list extraction read from that row -- and those win
 // over both (`holdsRowValues` below, t195). A control in no record is then
 // checked against the row its own kind marks out: the part of the page that
-// holds it and no other control alike to it (`control-row.ts`), or, where it
+// holds it and no other control alike to it (`control-row/`), or, where it
 // is itself one tile of a run of same-shaped siblings, against itself
 // (`own-run.ts`).
 //
@@ -104,9 +104,13 @@
 // automation loop, which can look at the page and repair it. A wrong click
 // reaches nobody, because it reports success.
 //
-// Nothing here is memoized. Every lookup is bounded by depth and by node count,
-// and the key path -- the common one on a table worth protecting --
-// short-circuits before any text is read.
+// Every lookup is bounded by depth and by node count, and the key path -- the
+// common one on a table worth protecting -- short-circuits before any text is
+// read. Outside a capture scope nothing here is kept. Inside one
+// (`withSelectorMemo`) a record's words and a row's title are read once and
+// kept for the rest of it (`scoped-memo.ts`), as the climb of `control-row/` is:
+// every control in a row asks for the same row's words, and `recordSubject`
+// asks for the title of every part of the page above a lone control (t733).
 //
 // Neither the key nor the text is cut any more (t200). `context.record` rides
 // on every descriptor the model is shown, and a record's words cut at 160
@@ -122,6 +126,7 @@ import { controlRow, soleAncestors } from "./control-row";
 import { heldAsJoinedLines } from "./joined-row-value";
 import { normalizedText } from "./normalized-text";
 import { ownRun } from "./own-run";
+import { scopedMemo } from "./scoped-memo";
 import { parsedUrl } from "../../shared/parsed-url";
 
 /**
@@ -188,7 +193,7 @@ const ROW_CONTROL_ROLES: ReadonlySet<string> = new Set([
 
 /**
  * A control in no record the page drew, named by the words of the row its own
- * kind marks out (`control-row.ts`) -- bigbox's cart line, a `<div>` with a
+ * kind marks out (`control-row/`) -- bigbox's cart line, a `<div>` with a
  * "Qty" select in it like every other line's (t463, `run-mv5jnc62-01c3609a`).
  *
  * Only for a control, because only a control is acted on, and because the walk
@@ -253,8 +258,15 @@ function rowTitle(row: Element): string | undefined {
   return rowTitleElement(row)?.words;
 }
 
+/** A row's title, read once per capture scope. */
+const rowTitles = scopedMemo<Element, { element: Element; words: string } | undefined>();
+
 /** The element `rowTitle` reads, with its words. */
 function rowTitleElement(row: Element): { element: Element; words: string } | undefined {
+  return rowTitles(row, () => readRowTitle(row));
+}
+
+function readRowTitle(row: Element): { element: Element; words: string } | undefined {
   if (isWithinSensitiveControl(row)) return undefined;
   let budget = MAX_RECORD_NODES;
   let link: { element: Element; words: string } | undefined;
@@ -283,7 +295,7 @@ function rowTitleElement(row: Element): { element: Element; words: string } | un
  * and no other control alike to it reads whole as those words, or is titled by
  * them through a title in the control's own row.
  *
- * The climb is `control-row.ts`'s, so it stops below the first ancestor that
+ * The climb is `control-row/`'s, so it stops below the first ancestor that
  * holds a second alike control: the soap line's "Qty" is never weighed by the
  * words of the group that also holds the towels' line. A control with no alike
  * left on the page is weighed by every ancestor in the depth bound, and the
@@ -677,12 +689,19 @@ function repeatedAtCapture(record: Element): boolean {
   return false;
 }
 
+/** A record's words, read once per capture scope. */
+const recordTexts = scopedMemo<Element, string | undefined>();
+
 /**
  * The record's own words: its text, less every sensitive control's contents and
  * less every subtree whose words are a control's state rather than the record's
  * identity.
  */
 function recordText(record: Element): string | undefined {
+  return recordTexts(record, () => readRecordText(record));
+}
+
+function readRecordText(record: Element): string | undefined {
   if (isWithinSensitiveControl(record)) return undefined;
   let budget = MAX_RECORD_NODES;
   let text = "";

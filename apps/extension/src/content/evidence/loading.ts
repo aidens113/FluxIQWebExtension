@@ -20,15 +20,22 @@
 // whether they say it is loading, and read as an indicator's label -- are read
 // through `textOutsideSensitiveControls` (`../sensitive-text.ts`), so a status
 // message holding a sensitive control's contents does not quote them.
+//
+// What counts as painted (`painted.ts`) and as a busy region (`busy-region.ts`)
+// are their own modules, because the in-place effect watch asks the same
+// busy-region question of a link click and the two must not drift apart.
 
 import { selectorFor } from "../selector";
 import { accessibleNameFor, normalizedText } from "../identity";
 import { textOutsideSensitiveControls } from "../sensitive-text";
-import { composedClosest, queryComposedInOrder } from "../shadow-dom";
+import { queryComposedInOrder } from "../shadow-dom";
 import { present } from "../../shared/present";
+import { isBusyRegion } from "./busy-region";
+import { isPainted } from "./painted";
 import type { LoadingEvidence, LoadingIndicator } from "./types";
 
-const BUSY_SELECTOR = "[aria-busy='true']";
+/** Every element that could be a busy region; `isBusyRegion` decides which are. */
+const BUSY_CANDIDATES = "[aria-busy]";
 const PROGRESS_SELECTOR = "progress,[role='progressbar']";
 const SPINNER_SELECTOR = "[class*='spinner'],[class*='loader'],[class*='loading'],[class*='skeleton'],[id*='spinner'],[id*='loading'],[data-testid*='spinner'],[data-testid*='loading']";
 const STATUS_SELECTOR = "[role='status'],[role='alert'],[aria-live='polite'],[aria-live='assertive']";
@@ -36,7 +43,7 @@ const LOADING_WORDS = /\b(loading|saving|submitting|processing|uploading|refresh
 
 export function loadingEvidence(): LoadingEvidence {
   const documentState = document.readyState;
-  const busyRegions = queryComposedInOrder(BUSY_SELECTOR).filter(isPainted).map((element) => selectorFor(element));
+  const busyRegions = queryComposedInOrder(BUSY_CANDIDATES).filter(isBusyRegion).map((element) => selectorFor(element));
   const indicators = loadingIndicators();
   const pendingNavigation = documentState !== "complete";
   return present<LoadingEvidence>({
@@ -74,13 +81,4 @@ function indicatorKind(element: Element): LoadingIndicator["kind"] | undefined {
 function indicator(element: Element, kind: LoadingIndicator["kind"]): LoadingIndicator {
   const label = accessibleNameFor(element) ?? normalizedText(textOutsideSensitiveControls(element));
   return present<LoadingIndicator>({ selector: selectorFor(element), kind, label: label || undefined });
-}
-
-/** On screen in the sense that matters here: rendered, not hidden, and occupying space. */
-function isPainted(element: Element): boolean {
-  if (composedClosest(element, "[hidden],[aria-hidden='true']")) return false;
-  const style = getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
-  const rect = element.getBoundingClientRect();
-  return rect.width >= 1 && rect.height >= 1;
 }
