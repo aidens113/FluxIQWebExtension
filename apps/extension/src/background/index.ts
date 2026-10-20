@@ -1,6 +1,6 @@
 import { BUILD_IDENTITY_MESSAGE } from "../shared/build-identity";
 import { RUNTIME_MESSAGES } from "../shared/constants";
-import { browserDescriptor, defaultSettings } from "../shared/browser";
+import { browserDescriptor } from "../shared/browser";
 import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../shared/protocol";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
@@ -9,6 +9,7 @@ import { acceptActionEvidencePort } from "./action-evidence";
 import { handleScriptedNavigationControl } from "./scripted-navigation-control";
 import { clearExtractionTab, handleExtractionControl } from "./extraction";
 import { isControlPage } from "./control-page";
+import { handleExtensionInstalled } from "./extension-installed";
 import { AutoConnect, handlePanelControl, panelControlDeps, sessionDisconnectMemory, ToolbarIndicator } from "./panel";
 import { callCoreProgram } from "./connection/index";
 import { requestsChoice } from "./capture-policy/index";
@@ -70,13 +71,10 @@ async function buildConnection(): Promise<FluxIQConnection> {
   return built;
 }
 
+// Writes no saved state: the start-up below creates the client id, and
+// settings read with defaults (`extension-installed.ts` says why).
 chrome.runtime.onInstalled.addListener(() => {
-  void (async () => {
-    const settings = await readSettings();
-    await writeSettings({ ...defaultSettings(), ...settings });
-    await readOrCreateClientId();
-    await enableSidePanelFirst();
-  })();
+  void handleExtensionInstalled({ enableSidePanel: enableSidePanelFirst }).catch(noteMessageFailure);
 });
 
 chrome.runtime.onStartup.addListener(() => {

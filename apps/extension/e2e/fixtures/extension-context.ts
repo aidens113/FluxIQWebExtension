@@ -35,8 +35,19 @@ type ExtensionFixtures = {
   extensionSession: ExtensionSession;
 };
 
+// The session launches and closes a headed Chromium of its own, and that work
+// gets its own budget rather than the test's: on a saturated machine the
+// launch took 9 s and Chromium's graceful exit (Browser.close until the
+// process is gone) 13-25 s, all of it Chromium flushing the profile it is
+// about to have deleted -- the guards, the profile removal and Playwright's
+// own temp-directory cleanup take milliseconds (t737, measured with
+// DEBUG=pw:browser and Chromium's log). Inside the default 30 s test budget
+// that failed passing tests in teardown. Setup and teardown share this one
+// budget; the test body keeps its own.
+const EXTENSION_SESSION_BUDGET_MS = 90_000;
+
 export const test = base.extend<ExtensionFixtures>({
-  extensionSession: async ({}, use, testInfo) => {
+  extensionSession: [async ({}, use, testInfo) => {
     const session = await launchExtensionSession(testInfo.testId);
     await testInfo.attach("extension-build.json", {
       body: Buffer.from(JSON.stringify(session.metadata, null, 2)),
@@ -51,7 +62,7 @@ export const test = base.extend<ExtensionFixtures>({
       await closeExtensionSession(session);
       if (networkError) throw networkError;
     }
-  }
+  }, { timeout: EXTENSION_SESSION_BUDGET_MS }]
 });
 
 export { expect } from "@playwright/test";
@@ -87,6 +98,7 @@ export async function launchExtensionSession(label = "run"): Promise<ExtensionSe
     const id = extensionIdFromWorker(worker);
     const extensionPage = await context.newPage();
     await extensionPage.goto(`chrome-extension://${id}/sidepanel/index.html`);
+    await waitForWorkerStartUp(extensionPage);
 
     return {
       context,
@@ -151,6 +163,29 @@ export async function restartServiceWorker(session: ExtensionSession): Promise<W
     ?? session.context.serviceWorkers().find((worker) => worker.url().startsWith("chrome-extension://"))
     ?? original;
   return session.worker;
+}
+
+// A freshly installed worker's start-up creates the client id and stores the
+// session record, each read first and written after. A test that seeds saved
+// state (a pairing, settings) while that is still running has its write
+// replaced, which on a busy machine is seconds after launch. The worker answers
+// a status request only once its start-up connection is built, so the session
+// is handed over after that answer. Retried only while nothing is listening yet.
+async function waitForWorkerStartUp(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    let lastError = "no answer";
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try {
+        const response = await chrome.runtime.sendMessage({ type: "fluxiq.getStatus" });
+        if (response?.ok) return;
+        lastError = String(response?.error ?? "status was refused");
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`extension.start: the MV3 worker did not answer a status request after install: ${lastError}`);
+  });
 }
 
 async function waitForServiceWorker(context: BrowserContext): Promise<Worker> {

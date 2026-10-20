@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { chromium } from "@playwright/test";
 import { verifyRunningHostIdentity } from "../index.js";
 
 
@@ -33,8 +32,6 @@ test("actual retained host refuses changed rebind before IO; legacy clears attes
   const downstream = process.env.FLUXIQ_HOST_IDENTITY_DOWNSTREAM_ROOT ?? fileURLToPath(new URL("../../../../../../..", import.meta.url));
   const core = process.env.FLUXIQ_HOST_IDENTITY_CORE_ROOT ?? path.resolve(downstream, "../!FluxIQ");
   const root = await mkdtemp(path.join(tmpdir(), "actual-host-identity-")), copied = path.join(root, "downstream");
-  const browser = await chromium.launch({ headless: false });
-  const page = await browser.newPage();
   let child: ChildProcess | undefined, ownedBuild: ChildProcess | undefined;
   try {
     for (const dir of ["domain/src", "domain/scripts", "domain/dist/host", "scripts/build-cache"]) await cp(path.join(downstream, dir), path.join(copied, dir), { recursive: true });
@@ -60,7 +57,6 @@ const registerAdapter = fluxiq.runtime.registerAdapter.bind(fluxiq.runtime); flu
 const loaded = await import(pathToFileURL(hostPath)); loaded.registerFluxIQHost(fluxiq);
 registerRuntimeIdentityEndpoint({ registry: { register: entry => { endpoint = entry; } }, service });
 const http = createServer(async (request, response) => {
-  if (request.url === '/') { response.setHeader('content-type', 'text/html'); response.end('<!doctype html><title>Owned built-host proof</title>'); return; }
   if (request.headers.authorization !== 'Bearer isolated-public-test-token') { response.writeHead(401); response.end('{}'); return; }
   let body = ''; for await (const bytes of request) body += bytes;
   response.setHeader('content-type', 'application/json');
@@ -99,11 +95,11 @@ process.on('message', async message => {
       }); assert.ok(started.mutations > 0); return `http://127.0.0.1:${started.port}`;
     };
     const close = async () => { if (child) await stopOwnedChild(child, true); child = undefined; };
-    let origin = await launch(); await page.goto(origin);
-    const request = async (reachedInputs: string[]) => page.evaluate(async ({ origin, reachedInputs }) => (await fetch(`${origin}/identity`, { method: "POST", headers: { authorization: "Bearer isolated-public-test-token", "content-type": "application/json" }, body: JSON.stringify({ reachedInputs }) })).json(), { origin, reachedInputs });
+    let origin = await launch();
+    const request = async (reachedInputs: string[]): Promise<{ payload: { loadedModules: unknown[] } }> => (await fetch(`${origin}/identity`, { method: "POST", headers: { authorization: "Bearer isolated-public-test-token", "content-type": "application/json" }, body: JSON.stringify({ reachedInputs }) })).json();
     const records: unknown[] = []; let simulatedAdmissions = 0;
     const admit = async () => { await verifyRunningHostIdentity({ readRuntimeBuildIdentity: request }, copied, hostPath, async record => { records.push(record); }); simulatedAdmissions++; };
-    assert.equal((await page.request.post(`${origin}/identity`, { data: {} })).status(), 401);
+    assert.equal((await fetch(`${origin}/identity`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 401);
     await admit(); assert.equal(simulatedAdmissions, 1);
     const before = (records.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest;
     const readerPath = path.join(copied, "domain/src/host-build-identity/read.ts");
@@ -129,16 +125,15 @@ process.on('message', async message => {
     const legacy = await request(["packages/fluxiq/dist/index.js"]); assert.deepEqual(legacy.payload.loadedModules, []);
     await assert.rejects(admit, /provider dispatch refused/);
     assert.deepEqual(await message("rebind"), { refused: true, mutations: 0 });
-    const counts = await (await page.request.get(`${origin}/counts`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json(); assert.equal(counts.dispatches, 0);
-    await close(); origin = await launch(); await page.goto(origin); await admit(); assert.equal(simulatedAdmissions, 2);
+    const counts = await (await fetch(`${origin}/counts`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json() as { dispatches: number }; assert.equal(counts.dispatches, 0);
+    await close(); origin = await launch(); await admit(); assert.equal(simulatedAdmissions, 2);
     assert.equal((records.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest, after.artifactDigest);
-    const final = await (await page.request.get(`${origin}/counts`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json(); assert.equal(final.dispatches, 0);
-    t.diagnostic(`Headed Chromium ${browser.version()}; actual built Core+domain host; stale source refused, regenerated host/reloaded actual route refused by retained service, changed rebind refused with zero IO mutation, legacy cleared attestation without resetting anchor, fresh process matched; zero chat/provider calls; normalized host ${after.artifactDigest}`);
+    const final = await (await fetch(`${origin}/counts`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json() as { dispatches: number }; assert.equal(final.dispatches, 0);
+    t.diagnostic(`Node ${process.version} fetch client; actual built Core+domain host; stale source refused, regenerated host/reloaded actual route refused by retained service, changed rebind refused with zero IO mutation, legacy cleared attestation without resetting anchor, fresh process matched; zero chat/provider calls; normalized host ${after.artifactDigest}`);
     await close();
   } finally {
     try { if (child) await stopOwnedChild(child); } finally {
       try { if (ownedBuild) await stopOwnedChild(ownedBuild); } finally {
-        await browser.close();
         await rm(path.join(copied, "domain/node_modules"), { force: true });
         await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
       }

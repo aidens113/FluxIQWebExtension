@@ -22,10 +22,10 @@ export function renderBuildTimeTable(rows: readonly RunBuildTimeRow[], totals: B
   for (const category of CATEGORIES) lines.push(`| ${category} | ${minutes(totals.exclusive[category])} | ${percent(totals.share[category], 1)} | ${percent(totals.meanShare[category], 1)} |`);
   lines.push(
     "",
-    `Of other: idle (no step running) ${minutes(totals.idleMs)} min. Model time inside trials (counted as trial): ${minutes(totals.modelInTrialMs)} min (${percent(totals.modelInTrialMs, totals.exclusive.trial)} of trial time). Reset-labelled time inside trials: ${minutes(totals.resetInTrialMs)} min. Playback excluded: ${minutes(totals.playbackMs)} min. Incomplete steps skipped: ${totals.incompleteSteps}.`,
+    `Of other: idle (no step running) ${minutes(totals.idleMs)} min. Model time inside trials (counted as trial): ${minutes(totals.modelInTrialMs)} min (${percent(totals.modelInTrialMs, totals.exclusive.trial)} of trial time). Reset time inside trials (counted as reset, not trial): ${minutes(totals.resetInTrialMs)} min. Playback excluded: ${minutes(totals.playbackMs)} min. Incomplete steps skipped: ${totals.incompleteSteps}.`,
     `Unknown kinds (in other): ${Object.keys(totals.unknown).length === 0 ? "none" : Object.entries(totals.unknown).map(([key, count]) => `${key} x${count}`).join(", ")}.`,
     "",
-    "Precedence for overlaps: trial > reset > model > exploration > other.",
+    "Precedence for overlaps: reset > trial > model > exploration > other.",
     "",
     "| Rule | Category | Matches | Steps |",
     "| --- | --- | --- | --- |"

@@ -1,67 +1,51 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { isRealisticScenario } from "../../../../../packages/test-runner/src/realistic-scenarios/index.js";
 import { listScenarios } from "../../../src/registry.js";
+import { findBrowserTestFiles } from "../find-browser-test-files.js";
 import { findSyntheticPageUses } from "../find-synthetic-page-uses.js";
 
-// The static half of the realistic-scenarios rule: no browser-spec source in
-// either Playwright tree, and no Scenario Lab unit test or test kit that
-// launches a browser (it imports Playwright), opens a synthetic Scenario Lab
-// scenario or serves a page of its own. Synthetic scenarios stay for unit tests
-// that never open a browser, which this leaves alone.
+// The static half of the realistic-scenarios rule, over every browser test in
+// the repository: each source in a Playwright tree (any directory holding a
+// Playwright config), and each test file anywhere else that imports a browser
+// driver or launches a browser. None may open a synthetic Scenario Lab
+// scenario or serve a page of its own. The repository is walked, not a list of
+// roots, so a browser test added anywhere is covered. Synthetic scenarios stay
+// for unit tests that never open a browser, which this leaves alone.
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
-const BROWSER_SPEC_ROOTS = ["apps/scenario-lab/e2e", "apps/extension/e2e"];
-/** Scenario Lab sources scanned only where they launch a browser: unit tests and their kits under a `tests` folder. */
-const LAB_SOURCE_ROOT = "apps/scenario-lab/src";
-const LAUNCHES_A_BROWSER = /from\s+["'](?:@playwright\/test|playwright(?:-core)?)["']/u;
-const SKIPPED_DIRECTORIES = new Set(["node_modules", "test-results", ".harness-build"]);
-const THIS_SCANNER = path.join("apps", "scenario-lab", "e2e", "realistic-scenario-guard");
+/** This scanner's own sources name every pattern on purpose. */
+const THIS_SCANNER = "apps/scenario-lab/e2e/realistic-scenario-guard/";
 const syntheticScenarioIds = listScenarios().map((scenario) => scenario.id).filter((id) => !isRealisticScenario(id));
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const full = path.join(directory, entry.name);
-    if (entry.isDirectory()) return SKIPPED_DIRECTORIES.has(entry.name) ? [] : sourceFiles(full);
-    return /\.(?:ts|mts|mjs|js)$/u.test(entry.name) ? [full] : [];
-  });
-}
+const browserTests = findBrowserTestFiles(repositoryRoot);
 
 test("the registry still has synthetic scenarios for the scan to look for", () => {
   expect(syntheticScenarioIds.length).toBeGreaterThan(0);
   expect(syntheticScenarioIds).toContain("basic-form");
 });
 
-test("no browser-spec source opens a synthetic scenario or serves its own page", () => {
-  const found: string[] = [];
-  for (const root of BROWSER_SPEC_ROOTS) {
-    for (const file of sourceFiles(path.join(repositoryRoot, root))) {
-      const relative = path.relative(repositoryRoot, file);
-      if (relative.startsWith(THIS_SCANNER)) continue;
-      for (const use of findSyntheticPageUses(readFileSync(file, "utf8"), syntheticScenarioIds)) found.push(`${relative.replaceAll("\\", "/")}:${use.line}: ${use.what}`);
-    }
-  }
-  expect(found, "Browser specs may open only the ten realistic scenarios (AGENTS.md). Retarget each use to a realistic scenario, or move browser-free checks to a unit test.").toEqual([]);
+test("the walk finds the browser tests of every package that has them", () => {
+  // An empty or shrunken list would mean the scan looked nowhere; each of these holds browser tests today.
+  const has = (prefix: string, why: string) => browserTests.some((file) => file.relativePath.startsWith(prefix) && file.why === why);
+  expect(has("apps/scenario-lab/e2e/", "playwright-tree")).toBe(true);
+  expect(has("apps/extension/e2e/", "playwright-tree")).toBe(true);
+  expect(has("apps/extension/e2e/content/", "playwright-tree")).toBe(true);
+  expect(has("apps/scenario-lab/src/scenarios/", "launches-a-browser")).toBe(true);
+  expect(has("packages/test-runner/src/", "launches-a-browser")).toBe(true);
+  expect(browserTests.some((file) => /(?:^|\/)(?:node_modules|dist|test-runs|\.test-build[^/]*)\//u.test(file.relativePath))).toBe(false);
 });
 
-test("no Scenario Lab unit test that launches a browser opens a synthetic scenario or a page of its own", () => {
+test("no browser test in the repository opens a synthetic scenario or serves its own page", () => {
   const found: string[] = [];
-  const scanned: string[] = [];
-  for (const file of sourceFiles(path.join(repositoryRoot, LAB_SOURCE_ROOT))) {
-    const relative = path.relative(repositoryRoot, file).replaceAll("\\", "/");
-    if (!relative.split("/").includes("tests")) continue;
-    const source = readFileSync(file, "utf8");
-    if (!LAUNCHES_A_BROWSER.test(source)) continue;
-    scanned.push(relative);
-    const scenario = /\/scenarios\/([^/]+)\//u.exec(relative)?.[1];
-    if (scenario !== undefined && syntheticScenarioIds.some((id) => id === scenario)) found.push(`${relative}: launches a browser inside synthetic scenario ${scenario}`);
-    for (const use of findSyntheticPageUses(source, syntheticScenarioIds)) found.push(`${relative}:${use.line}: ${use.what}`);
+  for (const { relativePath } of browserTests) {
+    if (relativePath.startsWith(THIS_SCANNER)) continue;
+    const scenario = /^apps\/scenario-lab\/src\/scenarios\/([^/]+)\//u.exec(relativePath)?.[1];
+    if (scenario !== undefined && syntheticScenarioIds.some((id) => id === scenario)) found.push(`${relativePath}: launches a browser inside synthetic scenario ${scenario}`);
+    for (const use of findSyntheticPageUses(readFileSync(path.join(repositoryRoot, relativePath), "utf8"), syntheticScenarioIds)) found.push(`${relativePath}:${use.line}: ${use.what}`);
   }
-  // The realistic sites' own browser paths are here, so an empty list would mean the scan looked nowhere.
-  expect(scanned.length).toBeGreaterThan(0);
-  expect(found, "A browser may open only the ten realistic scenarios (AGENTS.md), in unit tests too. Move the check onto a realistic page, or make it browser-free.").toEqual([]);
+  expect(found, "A browser may open only the ten realistic scenarios (AGENTS.md), in Playwright specs and unit tests alike. Retarget each use to a realistic scenario, or make the check browser-free.").toEqual([]);
 });
 
 test("the scanner finds each kind of use and ignores comments", () => {
