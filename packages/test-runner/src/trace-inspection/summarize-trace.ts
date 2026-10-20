@@ -9,7 +9,7 @@ import type { ClientGatewayTraceArtifactPresence, ClientGatewayTraceEvent, Clien
 import { traceArtifactReferences } from "./artifact-references.js";
 import { traceCommandTimings } from "./command-timings.js";
 import { traceCredentialRedactions } from "./credential-redactions.js";
-import type { TraceSummary } from "./types.js";
+import type { TraceEventSummary } from "./types.js";
 
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/u;
 
@@ -19,7 +19,7 @@ export function summarizeTrace(input: {
   heldArtifacts: readonly ClientGatewayTraceArtifactPresence[];
   /** The project store keeps an event's JSON inline below this many bytes, else as a content object. */
   objectThresholdBytes: number;
-}): TraceSummary {
+}): TraceEventSummary {
   const { manifest, events, heldArtifacts } = input;
   const completeness = evaluateClientGatewayTraceCompleteness({ manifest, events, availableArtifacts: heldArtifacts, compatibility: { status: "compatible" }, recorderActive: false });
   const bytes = { total: 0, inline: 0, inlineEvents: 0, object: 0, objectEvents: 0 };

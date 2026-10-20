@@ -2,6 +2,8 @@
 // store API (`AutomationStudioProjectGatewayTraceStore`, lane T P2 D10), never
 // by opening its tables: manifests, events and the artifacts the content store
 // actually holds. Each trace is summarized as counts (`summarize-trace.ts`),
+// joined with the bytes the store keeps for its events (`stored-event-bytes.ts`,
+// from the store's own `measureTrace`),
 // the artifacts are deduplicated across traces, and every stored event and
 // artifact is searched in process for the secrets the caller holds.
 //
@@ -13,6 +15,8 @@ import { AUTOMATION_STUDIO_OBJECT_THRESHOLD_BYTES, AutomationStudioProjectDataba
 import type { ClientGatewayTraceArtifactPresence, ClientGatewayTraceManifest } from "fluxiq/client-gateway";
 import { traceArtifactDedupe } from "./artifact-dedupe.js";
 import { holdsAnySecret } from "./holds-any-secret.js";
+import { readTraceStorageDedupe } from "./storage-dedupe.js";
+import { readTraceStoredBytes } from "./stored-event-bytes.js";
 import { summarizeTrace } from "./summarize-trace.js";
 import type { ProjectTraceInspection, TraceSummary } from "./types.js";
 
@@ -50,7 +54,8 @@ async function inspect(store: AutomationStudioProjectGatewayTraceStore, input: P
   for (const manifest of selected) {
     const events = await store.readEventRange(manifest.traceId, 1, Number.MAX_SAFE_INTEGER);
     const heldArtifacts = await store.listArtifacts(manifest.traceId);
-    traces.push(summarizeTrace({ manifest, events, heldArtifacts, objectThresholdBytes: AUTOMATION_STUDIO_OBJECT_THRESHOLD_BYTES }));
+    const storedBytes = await readTraceStoredBytes(store, manifest.traceId);
+    traces.push(Object.freeze({ ...summarizeTrace({ manifest, events, heldArtifacts, objectThresholdBytes: AUTOMATION_STUDIO_OBJECT_THRESHOLD_BYTES }), storedBytes }));
     held.push(heldArtifacts);
     if (secrets.length === 0) continue;
     if (holdsAnySecret(JSON.stringify(manifest), secrets)) scan.eventHits += 1;
@@ -67,6 +72,7 @@ async function inspect(store: AutomationStudioProjectGatewayTraceStore, input: P
   }
   return Object.freeze({
     projectId: input.projectId, traces: Object.freeze(traces), tracesSkipped: manifests.length - selected.length,
-    dedupe: traceArtifactDedupe(held), secretScan: Object.freeze(scan),
+    dedupe: traceArtifactDedupe(held), storage: await readTraceStorageDedupe(store, traces.map(trace => ({ traceId: trace.traceId, stored: trace.storedBytes }))),
+    secretScan: Object.freeze(scan),
   });
 }
