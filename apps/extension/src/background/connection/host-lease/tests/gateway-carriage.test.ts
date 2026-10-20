@@ -40,6 +40,7 @@ async function commandsFor(payloads: unknown[]): Promise<ServerCommandPayload[]>
   const commands: ServerCommandPayload[] = [];
   const deps: GatewaySessionDeps = {
     settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
+    effectiveSettings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
     session: () => ({ clientId: "client-1" }) as FluxIQSession,
     persistSession: async () => undefined,
     emitStatus: () => undefined,

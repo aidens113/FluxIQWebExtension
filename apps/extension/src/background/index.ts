@@ -11,6 +11,7 @@ import { clearExtractionTab, handleExtractionControl } from "./extraction";
 import { isControlPage } from "./control-page";
 import { AutoConnect, handlePanelControl, panelControlDeps, sessionDisconnectMemory, ToolbarIndicator } from "./panel";
 import { callCoreProgram } from "./connection/index";
+import { requestsChoice } from "./capture-policy/index";
 import { readBuildIdentity, handleReportProblem, localProblemLogStore, ProblemLog, ProblemNoticer, type ReportProblemDeps } from "./diagnostics";
 import { browserReconnectAlarms, RECONNECT_ALARM_NAME, ReconnectWatchdog } from "./reconnect-watchdog";
 import { handleAutomationRelay, type AutomationRelayDeps } from "./automation-relay";
@@ -178,7 +179,11 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
 
   if (typed.type === RUNTIME_MESSAGES.connect) {
     await autoConnect.noteConnectedByPerson();
-    const settings = { ...(await readSettings()), ...((typed.settings as Partial<FluxIQSettings> | undefined) ?? {}) };
+    const stored = await readSettings();
+    const requested = (typed.settings as Partial<FluxIQSettings> | undefined) ?? {};
+    // The direct-requests choice changes only where the policy Core gave this
+    // connection allows it (Core's default until it has given one).
+    const settings = { ...stored, ...requested, requestsEnabled: requestsChoice(stored.requestsEnabled, requested.requestsEnabled, manager.currentCapturePolicy()) };
     await writeSettings(settings);
     manager.updateSettings(await readSettings());
     await manager.connect();

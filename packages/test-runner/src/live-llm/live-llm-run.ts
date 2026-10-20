@@ -26,10 +26,9 @@ import { assertLlmMaxCostWithinCeiling } from "./max-cost-within-ceiling.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
-import { liveLlmRunSpend, type LiveLlmRunSpend } from "./run-spend.js";
+import { liveLlmRunSpend, type LiveLlmFlowSpendControl, type LiveLlmRunSpend } from "./flow-spend.js";
+import { LiveLlmFlowSpendReader } from "./spend-reader.js";
 import { stepLogObservedCalls } from "./call-rows.js";
-import { readLiveLlmStepLogInstructed } from "./step-log-instructed.js";
-import { readLiveLlmStepLogSpend, type LiveLlmStepLogSpend } from "./step-log-spend.js";
 import type { ProviderFailureRequestBounds } from "../provider-failure/index.js";
 
 /** What the run needs from whichever Core it is driving, kept structural so this module imports no topology. */
@@ -38,10 +37,11 @@ export type LiveLlmRunCredentials = { projectId?: string; authorizationPassword?
 export type LiveLlmRunBundle = { writeStructured(bundlePath: string, value: unknown): Promise<unknown> };
 /**
  * What a settlement reads the run back through: the parsed detail for the
- * accounting, and the raw call for the exploration record, which lives in
- * `metadata.recoveryTrace` and does not survive the client's parser.
+ * accounting, the raw call for the exploration record, which lives in
+ * `metadata.recoveryTrace` and does not survive the client's parser, and the
+ * Flow's spend as Core's purse recorded it (`./flow-spend.ts`).
  */
-type LiveLlmRunDetailReader = { getRunDetail(projectId: string, runId: string): Promise<ExistingRunDetail> } & LiveLlmExplorationControl;
+type LiveLlmRunDetailReader = { getRunDetail(projectId: string, runId: string): Promise<ExistingRunDetail> } & LiveLlmExplorationControl & LiveLlmFlowSpendControl;
 type LiveLlmPublish = (details: Record<string, unknown>) => Promise<unknown>;
 
 /**
@@ -151,28 +151,36 @@ export class LiveLlmRun {
   private reauthor: LiveLlmReauthorRecord | undefined;
   /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
   private buildRecord: CreatedFlowBuild | undefined;
-  /** Where the build record's `instructedConsequences` came from: Core's proposal, the run's step log (a build that left no proposal), or neither. */
-  private instructedFrom: "proposal" | "step_log" | null = null;
+  /**
+   * Where the build record's `instructedConsequences` came from: Core's build
+   * record -- its proposal or, for a build that left none, its failure
+   * diagnostic (t728) -- or neither. The Lab no longer reads it from the step
+   * log: Core publishes it on both records.
+   */
+  private instructedFrom: "proposal" | "failure_diagnostic" | null = null;
   /** Whether a created Flow's playback was readied for the model, and what that run spent; `undefined` before it settled. */
   private repairPrepared = false;
   private repairObserved: LiveLlmObservedUsage | undefined;
   /** The run's step log (`steps/`), where Core writes every provider call; `undefined` for a run that keeps none. */
   private stepLogDirectory: string | undefined;
-  /** What that log held when the snapshot was last written; `null` before then, or when there was none. */
-  private stepLog: LiveLlmStepLogSpend | null = null;
+  /** The run's Flow, and its spend as Core's purse records it (`./spend-reader.ts`). */
+  private readonly flowSpend = new LiveLlmFlowSpendReader();
+  /** What that purse held when it was last read; unknown (`not_settled`) before then. */
+  private runSpend: LiveLlmRunSpend;
   /** What the run's scenario declares about provider calls; `null` until the runner reads the resolved workflow, and for a scenario that declares nothing. */
   private declaredCalls: DeclaredProviderCalls | null = null;
 
-  constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
+  constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {
+    this.runSpend = liveLlmRunSpend(null, plan.maxTotalEstimatedCostUsd, "not_settled");
+  }
   get authorizedBuildCallLimit(): number { return this.plan.maxCalls; }
   /** The authoring mode the run's Core was started in (`./authoring-mode-env.ts`). */
   get coreAuthoringMode(): LiveLlmPlan["coreAuthoringMode"] { return this.plan.coreAuthoringMode; }
 
   /**
    * Where Core logs this run's model and tool steps (`FLUXIQ_LLM_STEP_LOG_DIR`).
-   * Every settlement reads it again, so the run's totals count the calls only
-   * the log records: the chat's own, and a re-author's Core did not count
-   * (`run-spend.ts`).
+   * Every settlement lists the calls it holds, one row each (`call-rows.ts`);
+   * the run's totals are Core's purse's, never the log's (`flow-spend.ts`).
    */
   readStepLogFrom(stepsDirectory: string): void {
     this.stepLogDirectory = stepsDirectory;
@@ -237,6 +245,8 @@ export class LiveLlmRun {
       if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} run cannot build a Flow`);
       this.assertChatBuildable();
       if (!core.authorizationPassword) throw new RunnerFailure("environment.missing", "A live LLM run needs the account password its Core was bootstrapped with, and this topology published none");
+      // The chat makes its Flow inside Core's command; the project's Flows now are what tells settlement which one it made.
+      if (core.projectId) await this.flowSpend.beforeChatBuild(control, core.projectId);
       await installLiveLlmSessionKey(control, { plan: this.plan, credentialValue: this.credential.value, authorizationPassword: core.authorizationPassword, ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}) });
     };
   }
@@ -298,21 +308,19 @@ export class LiveLlmRun {
 
   /**
    * What the evaluation records: every provider call this run paid for -- the
-   * build's, the Flow run's own, Core's result check, any re-author and the chat's own
-   * (`run-spend.ts`). `calls` stays 0 until the run has settled.
+   * build's, the Flow run's own, every judge, any re-author and the chat's own
+   * -- as Core's purse counted them (`flow-spend.ts`). `calls` stays 0 until
+   * the run has settled. Where Core kept no itemised record the evaluation,
+   * which needs a number, gets the calls Core's settled phase records reported
+   * (the build's and the playback's): a floor, not a total.
    */
   get usage(): LlmUsage {
-    return { mode: "live", profileId: this.plan.profileId, calls: this.spend().calls };
+    return { mode: "live", profileId: this.plan.profileId, calls: this.runSpend.calls ?? (this.observed?.calls ?? 0) + (this.repairObserved?.calls ?? 0) };
   }
 
-  /**
-   * Every call the run made, by phase. `observed` is the created Flow's build,
-   * and its playback is the run phase. The phases are each budgeted where they
-   * settle; this only adds them up.
-   */
-  private spend(repairObserved: LiveLlmObservedUsage | undefined = this.repairObserved): LiveLlmRunSpend {
-    const created = this.buildRecord !== undefined;
-    return liveLlmRunSpend({ build: created ? this.observed : undefined, runtime: created ? repairObserved : this.observed, judge: this.verification, reauthor: this.reauthor, stepLog: this.stepLog, ceilingUsd: this.plan.maxTotalEstimatedCostUsd });
+  /** Reads the Flow's spend from Core again, so what is written and published next is what its purse holds now. */
+  private async refreshSpend(): Promise<void> {
+    this.runSpend = await this.flowSpend.read(this.plan.maxTotalEstimatedCostUsd);
   }
 
   /**
@@ -381,6 +389,7 @@ export class LiveLlmRun {
     return async (flowId: string) => {
       if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} run cannot build a Flow`);
       await this.authorize(control, core, flowId, this.plan);
+      this.flowSpend.name(control, core.projectId!, flowId);
       return { permittedConsequences: this.plan.permittedConsequences };
     };
   }
@@ -395,6 +404,7 @@ export class LiveLlmRun {
   repairAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
     return async (flowId: string) => {
       await this.authorize(control, core, flowId, this.repairPlan);
+      this.flowSpend.name(control, core.projectId!, flowId);
       this.repairPrepared = true;
       return { intent: CREATED_FLOW_REPAIR_PURPOSE, permittedConsequences: this.plan.permittedConsequences };
     };
@@ -410,22 +420,22 @@ export class LiveLlmRun {
    *
    * Answers with that record and where its instructed consequences came from,
    * so the lane keeps the same build in `flow-lane.json` as this snapshot keeps
-   * in `live-llm.json`: the step log is read once, here, under one rule
-   * (`withInstructedFromStepLog`).
+   * in `live-llm.json`. Both come from Core's build record: its proposal, or a
+   * failed build's diagnostic (`flow-lane/creation/build-proposal.ts`).
    */
-  async settleBuild(settled: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<CreatedFlowSettledBuild> {
-    // Read before anything below can throw, and carried on whatever is thrown
+  async settleBuild(build: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<CreatedFlowSettledBuild> {
+    // Set before anything below can throw, and carried on whatever is thrown
     // (`withSettledBuild`): a breach or a build that reached no provider is the
     // run that most needs its record, and flow-lane.json must hold this one too.
-    const build = await this.withInstructedFromStepLog(settled);
+    this.instructedFrom = build.instructedConsequences === null ? null : build.outcome === "failed" ? "failure_diagnostic" : "proposal";
     this.buildRecord = build;
     const answer: CreatedFlowSettledBuild = Object.freeze({ build, instructedConsequencesFrom: this.instructedFrom });
     // Deliberately no declaration: a build that reached no provider proposed
     // no Flow, so "the runtime absorbed it" can never be what happened here.
     try {
-      // The step log counts a build Core gave no call count for (a candidate-mode build, t466).
-      const stepLog = this.stepLogDirectory ? await readLiveLlmStepLogSpend(this.stepLogDirectory) : null;
-      await this.settleObserved(liveLlmBuildUsage(build, stepLog), bundle, publish, { build });
+      // The Flow's purse counts a build its record gave no call count for (a candidate-mode build, t466).
+      await this.refreshSpend();
+      await this.settleObserved(liveLlmBuildUsage(build, this.runSpend), bundle, publish, { build });
     } catch (error) {
       // The breach is thrown before the lane sees the build, so a build that
       // ended without a Flow is carried on it, or the run reads as the facility's.
@@ -436,24 +446,6 @@ export class LiveLlmRun {
       throw withSettledBuild(new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`), answer);
     }
     return answer;
-  }
-
-  /**
-   * The build with the consequences its reading of the instructions found,
-   * from the step log when Core's record has none. Core publishes them only on
-   * a proposal, so a build that left none -- refused, or stopped at its
-   * spending limit -- read `null` though it had read them
-   * (`run-murzln6g-11debe1d`, `S/0015`). A record that has them, or a run with
-   * no step log or no reading in it, is returned as it came.
-   */
-  private async withInstructedFromStepLog(build: CreatedFlowBuild): Promise<CreatedFlowBuild> {
-    if (build.instructedConsequences !== null) {
-      this.instructedFrom = "proposal";
-      return build;
-    }
-    const read = this.stepLogDirectory ? await readLiveLlmStepLogInstructed(this.stepLogDirectory) : null;
-    this.instructedFrom = read ? "step_log" : null;
-    return read ? Object.freeze({ ...build, instructedConsequences: read }) : build;
   }
 
   /**
@@ -472,19 +464,24 @@ export class LiveLlmRun {
    * Core's post-run result checks are filed among the run's interventions, but
    * they are not a repair: `repair.observed` lists recovery only, the checks
    * are `verification`'s, and they settle with an event of their own
-   * (`resultChecks`). The run's spend is computed from the whole detail
-   * exactly as before, so the totals do not move (run-murwd8le-79e735a8).
+   * (`resultChecks`). The run's whole spend is Core's purse's, read once the
+   * run detail has named the Flow.
    */
   async settleRepair(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
     if (!this.repairPrepared || this.repairObserved) return;
     const plan = this.repairPlan;
     let observed: LiveLlmObservedUsage | undefined;
     try {
-      if (input.runId) observed = liveLlmObservedUsage(await control.getRunDetail(input.projectId, input.runId));
+      if (input.runId) {
+        const detail = await control.getRunDetail(input.projectId, input.runId);
+        observed = liveLlmObservedUsage(detail);
+        this.flowSpend.name(control, input.projectId, detail.summary.flowId);
+      }
     } catch {
       observed = undefined;
     }
     if (input.runId) await this.readRunRecords(control, { projectId: input.projectId, runId: input.runId });
+    await this.refreshSpend();
     const checks = this.verification?.interventions ?? [];
     const checksCost = checks.reduce((sum, call) => sum + (call.estimatedCostUsd ?? 0), 0);
     const recovery = observed ? this.withoutResultChecks(observed, checks) : undefined;
@@ -496,10 +493,10 @@ export class LiveLlmRun {
       ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
       ...(checks.length > 0 ? { resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), record: "verification" } } : {}),
     };
-    await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair }, observed);
+    await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair });
     if (!observed || !recovery) return;
     this.repairObserved = observed;
-    const runTotal = spendSummary(this.spend());
+    const runTotal = spendSummary(this.runSpend);
     // A playback that only had its result checked made no repair, so it publishes none; one that called nothing at all still settles as before.
     if (recovery.calls > 0 || recovery.interventions > 0 || checks.length === 0) await publish({ repair: usageSummary(recovery), runTotal });
     if (checks.length > 0) await publish({ resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), status: this.verification?.status ?? null }, runTotal });
@@ -507,13 +504,14 @@ export class LiveLlmRun {
   }
 
   /**
-   * The playback's own usage without Core's result checks: the calls and cost
-   * are the run phase's as `run-spend.ts` counts it (the checks taken out
-   * where they were counted in), and the itemized calls and the intervention
-   * count leave the checks out, matched by request id.
+   * The playback's own usage without Core's result checks: where Core itemised
+   * the Flow's spend, the calls and cost are its purse's `runtime` phase, which
+   * Core keeps apart from its judges (no runtime phase is none spent), and the
+   * run detail's own figures where it did not; the itemized calls and the
+   * intervention count leave the checks out, matched by request id.
    */
   private withoutResultChecks(observed: LiveLlmObservedUsage, checks: LiveLlmVerificationRecord["interventions"]): LiveLlmObservedUsage {
-    const runtime = this.spend(observed).phases.runtime;
+    const runtime = this.runSpend.source === "flow_purse" ? this.runSpend.phases.runtime ?? { calls: 0, estimatedCostUsd: 0 } : null;
     const checkIds = new Set(checks.flatMap((call) => call.requestId ?? []));
     return {
       ...observed,
@@ -570,16 +568,19 @@ export class LiveLlmRun {
    * `snapshots/live-llm.json`: what was authorized, what the run permitted, and
    * what it spent, or `null` where that could not be read.
    *
-   * `observed.calls` and `observed.totalEstimatedCostUsd` are the whole run's
-   * (`run-spend.ts`), because they are the figures every reader of this file
-   * takes as what the run cost -- the machine's spend ledger among them. The
-   * rest of `observed` is the settled phase's, but its rows are the step log's,
-   * one per call (`call-rows.ts`); `observed.phases` and `runSpend` break the
-   * total down, and `build`, `repair` and `verification` keep each phase's own.
+   * `observed.calls` and `observed.totalEstimatedCostUsd` are the whole run's,
+   * as Core's purse recorded the Flow's spend (`flow-spend.ts`), because they
+   * are the figures every reader of this file takes as what the run cost -- the
+   * machine's spend ledger among them -- and `null` where Core holds no figure
+   * (`runSpend.source` says why). The rest of `observed` is the settled
+   * phase's, but its rows are the step log's, one per call (`call-rows.ts`);
+   * `observed.phases` and `runSpend` break the total down, and `build`,
+   * `repair` and `verification` keep each phase's own. Callers read the spend
+   * first (`refreshSpend`).
    */
-  private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>, repairObserved?: LiveLlmObservedUsage): Promise<void> {
-    if (this.stepLogDirectory) this.stepLog = await readLiveLlmStepLogSpend(this.stepLogDirectory);
-    const spend = this.spend(repairObserved ?? this.repairObserved), stepCalls = observed ? await stepLogObservedCalls(this.stepLogDirectory, observed, spend.calls) : undefined;
+  private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>): Promise<void> {
+    const spend = this.runSpend;
+    const stepCalls = observed ? await stepLogObservedCalls(this.stepLogDirectory, observed, spend.calls ?? observed.calls) : undefined;
     await bundle.writeStructured("snapshots/live-llm.json", {
       schemaVersion: "0.1",
       profileId: this.plan.profileId,
@@ -624,8 +625,8 @@ export class LiveLlmRun {
       // accounting above does not include. `null` before a settlement read one.
       verification: this.verification ?? null,
       // Where `build.instructedConsequences` was read from, on a run that
-      // settled a build: Core's proposal, or the step log's reading of the
-      // instructions for a build that left no proposal.
+      // settled a build: Core's build record (its proposal or its failure
+      // diagnostic), or nowhere.
       ...(this.buildRecord ? { instructedConsequencesFrom: this.instructedFrom } : {}),
       ...extra,
     });
@@ -692,9 +693,13 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-/** The whole run's calls and cost, for the settle event, and any build that spent past the per-build ceiling. */
+/**
+ * The whole run's calls and cost, for the settle event, and a Flow that spent
+ * past the ceiling; `spendSource` says why the figures are `null` or partial
+ * when Core's purse held no itemised record of the Flow.
+ */
 function spendSummary(spend: LiveLlmRunSpend): Record<string, unknown> {
-  return { calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, ...(spend.perBuild.overCeiling > 0 ? { buildsOverCeiling: spend.perBuild.overCeiling, perBuildCeilingUsd: spend.perBuild.ceilingUsd } : {}), ...(spend.uncountedPhases.length > 0 ? { uncountedPhases: spend.uncountedPhases } : {}) };
+  return { calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, ...(spend.perBuild.overCeiling > 0 ? { buildsOverCeiling: spend.perBuild.overCeiling, perBuildCeilingUsd: spend.perBuild.ceilingUsd } : {}), ...(spend.source === "flow_purse" ? {} : { spendSource: spend.source }) };
 }
 
 /** What a settlement publishes on the run's event stream: counts and a total, never a call. */

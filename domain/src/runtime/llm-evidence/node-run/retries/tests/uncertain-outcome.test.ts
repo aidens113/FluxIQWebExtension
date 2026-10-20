@@ -12,6 +12,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../failure";
@@ -185,9 +186,11 @@ test("exploring: plain typing is typed again after an ambiguous failure, and suc
 test("exploring: a navigation is made again after an ambiguous failure, and arrives", async () => {
   const site = itemPage("web.browser.navigate", [failed(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, "slow"), ANSWER_LOST]);
   const runtime = createWebAutomationLlmEvidenceRuntime(site.gateway);
-  await runtime.executeTool({ ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: ITEM, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const went = await runtime.executeTool({ ...PROJECT, callId: "go", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: ITEM, permission: PERMITTED,
-    value: { node: NAVIGATE, parameters: { url: ITEM }, consequences: [] } });
+  // As Core's registry runs them: in the build's frame, the round's opening look marked fresh.
+  const frame = { ...PROJECT, buildId: "build.one" };
+  await runWithAutomationStudioEvidenceBuildScope({ ...frame, opening: "fresh" }, () => runtime.executeTool({ ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: ITEM, value: { node: SNAPSHOT, parameters: {}, consequences: [] } }));
+  const went = await runWithAutomationStudioEvidenceBuildScope(frame, () => runtime.executeTool({ ...PROJECT, callId: "go", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: ITEM, permission: PERMITTED,
+    value: { node: NAVIGATE, parameters: { url: ITEM }, consequences: [] } }));
   assert.equal(went.resultCode, "web.action.succeeded", JSON.stringify(went.evidence).slice(0, 400));
   assert.deepEqual(site.sent, [1, 2, 3]);
 });

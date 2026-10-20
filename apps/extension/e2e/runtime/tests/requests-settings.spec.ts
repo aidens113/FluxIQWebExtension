@@ -1,5 +1,6 @@
-// The requests setting in the real extension: unavailable, and persisted OFF
-// whatever is written to storage. A tab on a realistic Scenario Lab page (the
+// The requests setting in the real extension: unavailable under Core's default
+// policy, a save cannot turn it on, and the person's stored choice survives a
+// restart while effective settings keep requests off. A tab on a realistic Scenario Lab page (the
 // everything store's home page) is where the running content script reports
 // the build identity the check below compares with the artifact's.
 
@@ -9,7 +10,7 @@ import path from "node:path";
 import { startScenarioLab } from "../../../../scenario-lab/src/server.js";
 import { expect, restartServiceWorker, test } from "../../fixtures/extension-context.js";
 
-test("requests Settings stays unavailable and persisted OFF in the actual extension", async ({ extensionSession }, info) => {
+test("requests Settings stays unavailable under Core's default, a save cannot turn it on, and a stored choice survives a restart", async ({ extensionSession }, info) => {
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url") });
   try {
   const fixture = await extensionSession.context.newPage();
@@ -45,8 +46,10 @@ test("requests Settings stays unavailable and persisted OFF in the actual extens
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(requests).toBeDisabled();
   await expect(requests).not.toBeChecked();
-  await expect.poll(read).toEqual({ requestsEnabled: false, autoReconnect: false });
-  await info.attach("requests-foundation", { contentType: "application/json", body: JSON.stringify({ identity: expected, browser: await page.evaluate(() => navigator.userAgent), available: false, persistedEnabled: false }) });
+  // The stored choice is the person's and is not rewritten by a read made before
+  // Core's policy is known; effective settings keep requests off where they are used.
+  await expect.poll(read).toEqual({ requestsEnabled: true, autoReconnect: false });
+  await info.attach("requests-foundation", { contentType: "application/json", body: JSON.stringify({ identity: expected, browser: await page.evaluate(() => navigator.userAgent), available: false, storedChoiceKept: true }) });
   } finally {
     await lab.close();
   }

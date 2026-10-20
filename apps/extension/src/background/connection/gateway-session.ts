@@ -49,6 +49,11 @@ export type GatewayStatusFields = ClientGatewayConnectionStatus;
 
 export type GatewaySessionDeps = {
   readonly settings: () => FluxIQSettings;
+  // The settings the recorder actually uses: the person's, with Core's
+  // recording-capture policy applied (`capture-policy/effective-settings.ts`).
+  // The hello reports these, so the gateway hears what this client captures
+  // rather than what the person asked for.
+  readonly effectiveSettings: () => FluxIQSettings;
   readonly session: () => FluxIQSession;
   // Replaces the caller's session record and persists it. Called when the
   // gateway issues or clears a token.
@@ -90,7 +95,7 @@ export class GatewaySession extends FluxIQClientGatewayConnection {
   constructor(deps: GatewaySessionDeps) {
     super({
       url: () => deps.settings().gatewayUrl,
-      hello: () => extensionHello(deps.session(), deps.settings()),
+      hello: () => extensionHello(deps.session(), deps.effectiveSettings()),
       tokenStorage: sessionTokenStorage(deps),
       ...(deps.openTimeoutMs !== undefined ? { openTimeoutMs: deps.openTimeoutMs } : {}),
       autoReconnect: () => deps.settings().autoReconnect,
@@ -147,7 +152,8 @@ export class GatewaySession extends FluxIQClientGatewayConnection {
 }
 
 // What every socket opens with: who this client is, what it can do, which
-// domain it serves and what it captures. The token, when the session holds one.
+// domain it serves and what it captures under Core's recording-capture policy
+// (the effective settings, never the person's raw switches). The token, when the session holds one.
 function extensionHello(session: FluxIQSession, settings: FluxIQSettings): ClientGatewayConnectionHello {
   return {
     clientId: session.clientId,

@@ -1,5 +1,4 @@
-import type { ClientGatewayActivity } from "@fluxiq/client-gateway-websocket";
-import type { ActivityDisplay } from "./activity-display.js";
+import type { ActivityDisplay, ClientGatewayActivity } from "fluxiq/ui";
 
 /** How the on-page overlay shows: a full status card, a small pill, or nothing. */
 export type ActivityOverlayPreference = "expanded" | "collapsed" | "hidden";
@@ -16,7 +15,7 @@ export const ACTIVITY_RECENT_LIMIT = 60;
  * message -- each decision with its reason, each check and repair, each
  * action's outcome, each run step -- so the chat can show a whole build, not
  * only its last 60 events (`ACTIVITY_HISTORY_LIMITS`,
- * `background/activity/unit-history.ts`).
+ * `UnitHistory`, both from `fluxiq/ui`).
  */
 export type ExtensionActivityState = {
   current: ClientGatewayActivity | null;

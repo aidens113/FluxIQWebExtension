@@ -4,6 +4,7 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
 import { LiveLlmRun } from "../live-llm-run.js";
+import { flowPurse } from "./flow-purse.js";
 import { planAtLabCeiling } from "./lab-ceiling.js";
 
 function record(value: unknown): Record<string, unknown> {
@@ -11,6 +12,8 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+// Core's purse files a paid result check under `judge` as it settles, apart from the playback's own recovery, so the
+// Lab counts it once without matching request ids across records (which `run-spend.ts` did until t728).
 test("real build and playback settlement count a canonical paid result check once in the snapshot and public usage", async () => {
   const profile: LlmExecutionProfile = {
     schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "canonical-check", mode: "live", provider: "deepseek", model: DEFAULT_LLM_MODEL,
@@ -20,7 +23,13 @@ test("real build and playback settlement count a canonical paid result check onc
   };
   const run = new LiveLlmRun(planAtLabCeiling(profile), { name: "DEEPSEEK_API_KEY", source: "test", value: "unit-test-only" });
   let metadata: unknown;
+  let purse = flowPurse({ build: [1, 0.001] });
+  const spendReads: string[] = [];
   const owner = {
+    async getFlowSpend(projectId: string, flowId: string) {
+      spendReads.push(`${projectId}/${flowId}`);
+      return purse;
+    },
     async reauthenticate(): Promise<void> {},
     async secretKeysCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
       if (endpoint === "snapshot") return { keys: [] };
@@ -48,6 +57,7 @@ test("real build and playback settlement count a canonical paid result check onc
   await run.buildAuthorizer(owner, { projectId: "project-1", authorizationPassword: "test-only" })("flow-1");
   await run.settleBuild(build, bundle, async (value) => { published.push(value); });
   await run.repairAuthorizer(owner, { projectId: "project-1", authorizationPassword: "test-only" })("flow-1");
+  purse = flowPurse({ build: [1, 0.001], judge: [1, 0.002] });
   const detail: ExistingRunDetail = {
     summary: { runId: "run-1", projectId: "project-1", flowId: "flow-1", status: "succeeded", routeDecisionCount: 0, subflowEntryCount: 0, actionAttemptCount: 1, updatedAt: 1 },
     actionAttempts: [], routeDecisions: [], subflows: [], providerCallCount: 1, providerCallsOmitted: 0,
@@ -62,6 +72,7 @@ test("real build and playback settlement count a canonical paid result check onc
   };
   const endpoints: string[] = [];
   await run.settleRepair({
+    getFlowSpend: owner.getFlowSpend,
     getRunDetail: async () => detail,
     automationStudioCall: async (endpoint: string) => {
       endpoints.push(endpoint);
@@ -73,12 +84,13 @@ test("real build and playback settlement count a canonical paid result check onc
     },
   }, { projectId: "project-1", runId: "run-1" }, bundle, async (value) => { published.push(value); });
   assert.deepEqual(endpoints, ["get-flow-run-detail"]);
+  assert.deepEqual(spendReads, ["project-1/flow-1", "project-1/flow-1"], "one read of the Flow's purse per settlement");
   const settled = record(snapshot);
   const spend = record(settled.runSpend);
   assert.equal(spend.calls, 2);
   assert.equal(spend.totalEstimatedCostUsd, 0.003);
   const phases = record(spend.phases);
-  assert.deepEqual(phases.runtime, { calls: 0, estimatedCostUsd: 0 });
+  assert.equal(phases.runtime, null);
   assert.deepEqual(phases.judge, { calls: 1, estimatedCostUsd: 0.002 });
   assert.equal(record(settled.observed).calls, 2);
   assert.equal(record(settled.observed).totalEstimatedCostUsd, 0.003);

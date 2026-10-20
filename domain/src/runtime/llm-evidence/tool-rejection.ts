@@ -60,6 +60,7 @@
 // page as it now stands (`page`): the page as an inspection returns it, the
 // compact view (`web-llm-page.v3`, `./page-view/`), never the structured packet.
 
+import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation-studio";
 import { publishedWebLlmPage, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import { webLlmRejectionNext } from "./rejection-next";
@@ -414,7 +415,8 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_needs_something_first",
   "page_busy_try_later",
   "press_had_no_effect",
-  "answered_the_same_again",
+  // Core's value (`answered_the_same_again`), shared with its activity and repair readers.
+  AUTOMATION_STUDIO_REPEATED_ANSWER_REASON,
   "page_unchanged_after_action",
   "already_at_destination",
   "nothing_changed_while_waiting",

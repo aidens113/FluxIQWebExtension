@@ -1,14 +1,29 @@
-export { systemActivityClock, type ActivityClock, type ActivityTimer } from "./clock";
-export { activityHeadline, type ActivityHeadlineSituation, type ActivityWaitReason } from "./headline";
-export { ACTIVITY_DETAIL_INTERVAL_MS, ActivityPacer, type ActivityPacerOptions } from "./pacer";
+// The activity status's headline, pacer, clock, fan-out gate and unit readers
+// are Core's (`fluxiq/ui`), shared with Core's panel chat; they are re-exported
+// here beside the extension-only relay, start/answer sends and overlay target.
+export {
+  ACTIVITY_DETAIL_INTERVAL_MS,
+  ACTIVITY_FAN_OUT_INTERVAL_MS,
+  ActivityPacer,
+  activityHeadline,
+  activityWording,
+  FanOutGate,
+  systemActivityClock,
+  UnitHistory,
+  UnitSituation,
+  type ActivityClock,
+  type ActivityHeadlineSituation,
+  type ActivityHostWords,
+  type ActivityPacerOptions,
+  type ActivityTimer,
+  type ActivityWaitReason,
+  type ActivityWording,
+  type UnitState
+} from "fluxiq/ui";
 export { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "./activity-relay";
-export { ACTIVITY_FAN_OUT_INTERVAL_MS, FanOutGate } from "./fan-out-gate";
+export { EXTENSION_ACTIVITY_HOST_WORDS } from "./host-words";
 export { isActivityOverlayPreference } from "./is-activity-overlay-preference";
 export { sendStartedWork } from "./send-answer";
 export { SendStart, STARTING_HEADLINE, STARTING_HOLD_MS, type StartingOverride } from "./send-start";
 export { OverlayTarget, type OverlayTabCandidate, type OverlayTargetDeps } from "./overlay-target";
 export { overlayPreferenceStorage } from "./overlay-preference-storage";
-export { UnitHistory } from "./unit-history";
-export { UnitSituation, type UnitState } from "./unit-situation";
-// The wording is shared with the panel's chat rows, so it lives in `shared/activity/`.
-export { activityWording, type ActivityWording } from "../../shared/activity/index";

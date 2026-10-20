@@ -6,12 +6,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FluxIQ, OutputDispatchResult } from "fluxiq";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { webAutomationClearedWayOutsOf } from "../../cleared-way-outs";
 import { dispatchWebAutomationOutput } from "../gateway-output-dispatcher";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { bindWebAutomationLlmEvidenceRuntime, type WebAutomationLlmEvidenceRuntime } from "../../runtime/llm-evidence";
+import { coreBuildStateOwner, type CoreBuildStateOwner } from "../../runtime/llm-evidence/node-run/build-state/tests/core-store";
 
 async function dispatchWith(payload: JsonObject | undefined, fluxiq: FluxIQ = fakeFluxIQ(payload)): Promise<OutputDispatchResult<JsonObject>> {
   return await dispatchWebAutomationOutput(fluxiq, { domainId: WEB_AUTOMATION_DOMAIN_ID, outputId: "web.dom.click", payload: { selector: "#confirm" } });
@@ -123,4 +125,34 @@ test("a playback close resolves through the bound domain without exploration or 
     assert.equal(resolved.parameters.selector, "#later");
     assert.equal(JSON.stringify(resolved.parameters).includes('"handle"'), false);
   }
+});
+
+// t728: a way out pressed while Core ran a call for a Flow is kept with that Flow in Core's durable build state, so a
+// host restarted before the trial asks still names it -- the reference Core carried, resolved by the restarted runtime.
+test("a way out pressed for a Flow is still named for it after the host restarts", async () => {
+  const wayOut = { url: "https://library.test/catalogue", element: { tagName: "button", selector: "#later", accessibleName: "Maybe later", visibleText: "Maybe later" } };
+  const payload = { status: "succeeded", clearedLayers: [{ kind: "dialog", control: "Maybe later", name: "Reading club", wayOut }] } as unknown as JsonObject;
+  const scope = { projectId: "project.library", flowId: "flow.holds" };
+  const storage = coreBuildStateOwner();
+  const host = (owner: CoreBuildStateOwner): FluxIQ => {
+    const fluxiq = fakeFluxIQ(payload);
+    Object.assign(fluxiq, { domains: owner.domains });
+    Object.assign(fluxiq.programs, { automationStudio: owner.programs.automationStudio });
+    return fluxiq;
+  };
+
+  const before = host(storage);
+  const result = await runWithAutomationStudioEvidenceBuildScope({ ...scope, buildId: "build.one" }, () => dispatchWith(payload, before));
+  const [layer] = result.payload?.clearedLayers as Array<{ wayOut: string }>;
+
+  const after = host(coreBuildStateOwner(storage.programs.automationStudio.domainBuildState));
+  assert.equal(webAutomationClearedWayOutsOf(after).get(layer!.wayOut), undefined);
+  let runtime: WebAutomationLlmEvidenceRuntime | undefined;
+  Object.assign(after.programs.automationStudio, { bindLlmEvidenceRuntime: (bound: WebAutomationLlmEvidenceRuntime) => { runtime = bound; } });
+  bindWebAutomationLlmEvidenceRuntime(after);
+  assert.ok(runtime);
+  const handles = await runtime.clearedControlHandles!({ ...scope, wayOuts: [layer!.wayOut] });
+  assert.ok(handles[layer!.wayOut]);
+  // Another Flow was never pressed it.
+  assert.deepEqual(await runtime.clearedControlHandles!({ ...scope, flowId: "flow.other", wayOuts: [layer!.wayOut] }), {});
 });

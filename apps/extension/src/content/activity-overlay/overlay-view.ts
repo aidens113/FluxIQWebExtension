@@ -2,7 +2,7 @@
 // can be tested in Node.
 //
 // Every word comes from the background's `ActivityDisplay`, which is already
-// paced (`background/activity/pacer.ts`): the headline names the unit
+// paced (`ActivityPacer` from `fluxiq/ui`): the headline names the unit
 // of work, the detail is Core's latest event in a person's words (never a tool
 // id or result code) at a readable pace, the step
 // is the run's. Nothing is inferred or timed here. The one timer in this

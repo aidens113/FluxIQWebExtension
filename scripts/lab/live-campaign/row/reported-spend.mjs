@@ -26,7 +26,7 @@ export function reportedSpend(liveLlm, flowLane) {
 
 /**
  * The run's whole spend in place of the phases' sum, when the run recorded it
- * (`live-llm.json` `runSpend.totalEstimatedCostUsd`, `run-spend.ts`): every
+ * (`live-llm.json` `runSpend.totalEstimatedCostUsd`, `live-llm/flow-spend.ts`, Core's Flow purse): every
  * call the run paid for, the chat's own interpreter call and the build's judge
  * and reading among them, which no build or repair record holds. The row
  * reported only the build's $0.211519044 of a run that spent $0.212718924

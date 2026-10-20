@@ -34,6 +34,9 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
     },
     readSettings,
     writeSettings,
+    // What a save may change is decided by the policy Core gave this
+    // connection (Core's default until it has given one), read per call.
+    capturePolicy: () => connection.currentCapturePolicy(),
     applySettings: (settings) => connection.updateSettings(settings),
     status,
     openTab: async (url) => {

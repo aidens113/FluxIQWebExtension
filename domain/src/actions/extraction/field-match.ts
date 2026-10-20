@@ -40,9 +40,8 @@
 // that grammar (`content/extraction/field-spec.ts`) and a second parser of it
 // here would disagree with the first about which selectors carry an attribute.
 
-import { automationStudioMatchName } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, automationStudioMatchName } from "fluxiq/automation-studio/nodes";
 import type { WebAutomationExtractConditionSaying } from "./condition-grammar";
-import { WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS } from "./condition-match";
 import type { WebAutomationExtractField } from "./request";
 
 /**
@@ -96,7 +95,7 @@ export function isWebAutomationExtractFieldRead(field: WebAutomationExtractField
 
 /** Whether the condition puts a comparison on the number in its value, which no address column was written to answer. */
 function comparesNumbers(says: WebAutomationExtractConditionSaying): boolean {
-  if (WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS.some((key) => says[key] !== undefined)) return true;
+  if (AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS.some((key) => says[key] !== undefined)) return true;
   const equals = says.equals;
   return Array.isArray(equals) && equals.some((entry) => typeof entry === "number");
 }

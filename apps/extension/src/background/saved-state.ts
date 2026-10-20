@@ -12,6 +12,12 @@
 // next read is clean, and notes the repair where a problem report finds it. A
 // stored pairing token that is not a string is dropped rather than repaired:
 // there is no default token, and the browser pairs again.
+//
+// The direct-requests choice is read as the person stored it, like every other
+// switch: it is read before Core's recording-capture policy is known, so
+// clamping it here would overwrite a choice a later policy allows. Core's policy
+// is applied where settings are used (`capture-policy/effective-settings.ts`),
+// which keeps direct requests off under Core's default.
 
 import {
   CLIENT_GATEWAY_OUTBOX_LOSS_REASONS,
@@ -21,19 +27,17 @@ import {
   type ClientGatewayOutboxLossReason,
   type ClientGatewayOutboxState
 } from "@fluxiq/client-gateway-websocket";
-import type { FluxIQSession, FluxIQSettings } from "../shared/protocol";
+import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
 
 export type SavedReading<T> = { value: T; repaired: string[] };
 
-const SETTINGS_FLAGS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const;
+const SETTINGS_FLAGS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled"] as const;
 
 export function readSavedSettings(stored: unknown, defaults: FluxIQSettings): SavedReading<FluxIQSettings> {
-  defaults = { ...defaults, requestsEnabled: false };
   if (stored === undefined) return { value: { ...defaults }, repaired: [] };
   if (!isRecord(stored)) return { value: { ...defaults }, repaired: ["settings"] };
   const repaired: string[] = [];
   const value: FluxIQSettings = { ...defaults };
-  if (stored.requestsEnabled !== false) repaired.push("requestsEnabled");
   const gatewayUrl = stored.gatewayUrl;
   if (gatewayUrl !== undefined) {
     if (isAddress(gatewayUrl, ["ws:", "wss:"])) value.gatewayUrl = gatewayUrl;

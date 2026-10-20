@@ -28,7 +28,7 @@
 // Pure apart from the injected clock.
 
 import type { ActivityDisplay } from "../../shared/activity/index";
-import type { ActivityClock, ActivityTimer } from "./clock";
+import type { ActivityClock, ActivityTimer } from "fluxiq/ui";
 
 /** The starting status's headline. */
 export const STARTING_HEADLINE = "Starting…";

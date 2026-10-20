@@ -258,14 +258,20 @@ export { WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR } from "./extraction";
 // that accepted the condition is a wrong answer nothing would report.
 export {
   isWebAutomationExtractFieldKey,
-  webAutomationExtractConditionHolds,
-  // The number a value states, which a list read's numeric sort reads by the
-  // same rule a `where` bound does (`content/extraction/order-rows.ts`).
-  webAutomationExtractConditionNumber,
   webAutomationExtractListRequestValue,
   webAutomationExtractListTimeoutMs,
   webAutomationRecordedExtraction
 } from "./extraction";
+
+// Whether a condition holds of a value, and the number a value states, are
+// Core's (`fluxiq/automation-studio/nodes`): the page, the resolver and Core's
+// dataset processing run the one reader. These names stay for the callers that
+// reach them through `domain/client`; they are the Core functions themselves,
+// not copies. A blank or whitespace-only value is absent under Core's rule.
+export {
+  automationStudioRecordConditionHolds as webAutomationExtractConditionHolds,
+  readAutomationStudioRecordNumber as webAutomationExtractConditionNumber
+} from "fluxiq/automation-studio/nodes";
 
 // `web.dom.next_page`'s request and answer (contract C1) live in `./next-page`
 // and are re-exported here for the reason the extraction's are: `domain/client`

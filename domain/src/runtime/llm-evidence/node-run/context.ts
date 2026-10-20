@@ -30,9 +30,10 @@ export type WebNodeRun = {
    */
   looked: (binding: WebLlmSnapshotBinding) => void;
   /**
-   * Whether this build has reached its start location, held by the runtime for
-   * the life of the process (`./arrival.ts`). Read only for a build told a
-   * start location.
+   * Whether this build has reached its start location (`./arrival.ts`), keyed
+   * by Core's build id and kept in Core's durable domain build state, so it
+   * survives a restart (`./build-state/`). Read only for a build told a start
+   * location.
    */
   arrivals: WebNodeArrivals;
   /** Where this build has been shown it can go, which is where it may navigate (`./shown-addresses.ts`). */

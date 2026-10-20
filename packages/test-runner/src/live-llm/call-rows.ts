@@ -7,10 +7,10 @@
 // interpreter call, the build's reading of its instructions or its judges
 // (`run-musp8nz1-dbd3905a`: 15 rows all null, 5 calls missing;
 // `run-musq0b1m-0472cfa0`: 27 rows all null, 4 missing). Core writes every one
-// of those calls into `steps/` with its identity in `meta.json`, which is what
-// `step-log-spend.ts` already counts the run's spend from. The snapshot's rows
-// are read from the same folders, so the rows and the totals beside them
-// describe the same calls.
+// of those calls into `steps/` with its identity in `meta.json`, and the
+// snapshot's rows are read from there. This lists calls and adds up nothing:
+// the totals beside the rows are Core's purse's (`flow-spend.ts`), which counts
+// the same calls as they settle.
 //
 // Only the call's identity and figures are read -- request id, task kind,
 // stage, provider, model, tokens, cost -- never a request, an answer or a
@@ -30,7 +30,8 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
  * `observed`'s per-call fields with the step log's rows in place of the
  * settled phase's, or `undefined` when there is no step log or it holds no
  * call, so a run without one keeps Core's rows. `calls` is the run's whole
- * count (`run-spend.ts`), which the rows are held against. A Core row whose
+ * count as Core's purse recorded it (`flow-spend.ts`), or the settled phase's
+ * where Core kept none, which the rows are held against. A Core row whose
  * request id the log does not hold is kept after the log's rows, so a call the
  * log missed is never dropped; a Core row with no request id is one of the
  * log's calls and is not listed twice.

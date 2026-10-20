@@ -19,7 +19,8 @@
 // reads the item the Flow's does, whatever conditions the model rewrote, since
 // its item is the locator in it. Every other parameter is the model's. A call
 // in a build that continues no Flow holds nothing, so all of it is the
-// model's. A new build forgets the last one's (`opening`), as arrival does.
+// model's. Core's opening of a fresh round forgets what the build held
+// (`opening`), as arrival does.
 //
 // **A saved value stays the host's after a screen (t439).** What the model is
 // shown of a step is screened of the keys this domain denies
@@ -34,16 +35,18 @@
 // step runs on the address and the fingerprint the Flow saved, never on the
 // screened remains.
 //
-// Bounded like the other build memories (`../arrival.ts`).
+// Bounded in this process like the other build memories (`../arrival.ts`), and
+// kept in Core's durable build state as well (`../build-state/`, t728), so a
+// host restarted mid-round still knows what the Flow it continues holds.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { withoutWebLlmDeniedKeys } from "../../denied-keys";
 import type { WebPlanNodeResolutionInput } from "../../plan-resolution";
 import { isJsonRecord } from "../../untrusted-json";
-import { webNodeOpensBuild, type WebNodeBuildKey } from "../arrival";
+import { createWebNodeBuildMemory, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "../build-state";
 import { webRunnableNode } from "../catalog";
 
-/** How many builds are remembered at once. */
+/** How many builds this process remembers at once. */
 const REMEMBERED_BUILDS = 16;
 /** The parameters whose request is the Flow's when its `item` is. */
 const LIST_REQUESTS: ReadonlySet<string> = new Set(["extractList", "nextPage"]);
@@ -53,8 +56,10 @@ const ELEMENT_SLOTS = ["selector", "target", "element", "visualTarget"] as const
 const HANDLE_SLOTS = ["selector", "target", "element"] as const;
 
 export type WebNodeHeldLiterals = {
-  /** Forget what the last build of this flow held, when this call opens a new one. */
-  opening(build: WebNodeBuildKey, callId: string): void;
+  /** Read what this build held back from Core's store when this process holds none of it (`../build-state/memory.ts`). */
+  restore(build: WebNodeBuildKey): Promise<void>;
+  /** Forget what this build held, when this call is Core's opening of a fresh round. */
+  opening(build: WebNodeBuildKey, opening: WebNodeOpening | undefined): void;
   /** Remember what the Flow a round continues holds, from its opening look's `held` calls. */
   hold(build: WebNodeBuildKey, calls: readonly JsonValue[]): void;
   /**
@@ -78,12 +83,12 @@ type Held = {
   selectors: Map<string, JsonValue | null>;
 };
 
-export function createWebNodeHeldLiterals(): WebNodeHeldLiterals {
-  const builds = new Map<string, Held>();
-  const keyOf = (build: WebNodeBuildKey): string => `${build.sessionId}\u0000${build.projectId}\u0000${build.flowId}`;
+export function createWebNodeHeldLiterals(persistence?: WebNodeBuildStatePersistence): WebNodeHeldLiterals {
+  const builds = createWebNodeBuildMemory<Held>({ name: "web.held-literals", bound: REMEMBERED_BUILDS, encode: encoded, decode: decoded, persistence });
   return {
-    opening(build, callId) {
-      if (webNodeOpensBuild(callId)) builds.delete(keyOf(build));
+    restore: (build) => builds.restore(build),
+    opening(build, opening) {
+      if (opening === "fresh") builds.forget(build);
     },
     hold(build, calls) {
       const held: Held = { entries: new Set(), saved: new Map(), selectors: new Map() };
@@ -103,13 +108,13 @@ export function createWebNodeHeldLiterals(): WebNodeHeldLiterals {
           remember(held.selectors, entry(node.definitionId, "element", withoutWebLlmDeniedKeys(parameters.element)), parameters.selector);
         }
       }
-      const key = keyOf(build);
-      builds.delete(key);
-      builds.set(key, held);
-      while (builds.size > REMEMBERED_BUILDS) builds.delete(builds.keys().next().value!);
+      // Replaces whatever the build held before, as the newest kept.
+      builds.forget(build);
+      builds.entry(build, () => held);
+      builds.saved(build);
     },
     author(input, build) {
-      const held = builds.get(keyOf(build));
+      const held = builds.get(build);
       if (held && !namesHandle(input.parameters)) input.parameters = restored(held, input.nodeDefinitionId, input.parameters);
       const keys = Object.keys(input.parameters);
       const own = held ? keys.filter((key) => !held.entries.has(entry(input.nodeDefinitionId, key, input.parameters[key]!))) : keys;
@@ -137,6 +142,19 @@ function restored(held: Held, nodeId: string, parameters: JsonObject): JsonObjec
     if (selector !== undefined && selector !== null) out.selector = structuredClone(selector);
   }
   return out;
+}
+
+/** What one continued Flow holds, as Core stores it: the entries, and each shown copy's saved value and selector. Nothing else. */
+function encoded(held: Held): JsonValue {
+  return { entries: [...held.entries], saved: [...held.saved].map(([key, value]) => [key, value]), selectors: [...held.selectors].map(([key, value]) => [key, value]) };
+}
+
+/** The held Flow a stored value holds; an entry that is not one is skipped, and a value that is not one at all is none. */
+function decoded(stored: JsonValue): Held | undefined {
+  if (!isJsonRecord(stored) || !Array.isArray(stored.entries) || !Array.isArray(stored.saved) || !Array.isArray(stored.selectors)) return undefined;
+  const pairs = (list: JsonValue[]): Map<string, JsonValue | null> =>
+    new Map(list.flatMap((pair) => (Array.isArray(pair) && pair.length === 2 && typeof pair[0] === "string" ? [[pair[0], pair[1] as JsonValue | null] as const] : [])));
+  return { entries: new Set(stored.entries.filter((entry): entry is string => typeof entry === "string")), saved: pairs(stored.saved), selectors: pairs(stored.selectors) };
 }
 
 /** Remember one value under its key; a key two different values share keeps neither. */

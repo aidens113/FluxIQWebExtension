@@ -20,6 +20,7 @@
 // when Core answers without starting work (`activity/send-start.ts`). Opening
 // a thread alone is not a message and does not.
 
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings, PanelHandBackRunRequest, PanelStopRunRequest, PanelTakeOverRunRequest } from "../../shared/protocol";
@@ -41,6 +42,8 @@ export type PanelControlDeps = {
   readonly relay: PanelRelayContext;
   readonly readSettings: () => Promise<FluxIQSettings>;
   readonly writeSettings: (settings: FluxIQSettings) => Promise<void>;
+  /** Core's recording-capture policy a save is clamped by: the last one Core gave, or its default. */
+  readonly capturePolicy: () => AutomationStudioRecordingCapturePolicy;
   /** Hands stored settings to the live connection without connecting. */
   readonly applySettings: (settings: FluxIQSettings) => void;
   readonly status: () => Promise<ExtensionStatus>;
@@ -74,7 +77,7 @@ export async function handlePanelControl(message: ControlMessage, sender: chrome
 
 async function respond(message: ControlMessage, deps: PanelControlDeps): Promise<unknown> {
   if (message.type === RUNTIME_MESSAGES.panelSaveSettings) {
-    await deps.writeSettings(mergeSettings(await deps.readSettings(), message.settings));
+    await deps.writeSettings(mergeSettings(await deps.readSettings(), message.settings, deps.capturePolicy()));
     deps.applySettings(await deps.readSettings());
     return { ok: true, status: await deps.status() };
   }

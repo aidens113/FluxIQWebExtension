@@ -1546,9 +1546,9 @@ promotion owner. The Lab therefore treats it as a candidate build:
   build, since a direct build is never a pass; in a project run it is refused
   before any provider call with `lab.direct_build_project_mode`, never sent to
   Core as another mode.
-- **Per-role spend** is read from the step log's `role` and `briefId` (below)
-  and written into `snapshots/live-llm.json` as `runSpend.stepLog.byRole` and
-  `runSpend.stepLog.largestInputTokens`.
+- **Spend** is Core's Flow purse, itemised by phase (below); it is not tallied
+  per role or brief. The step log's `role` and `briefId` stay in
+  `steps/*/meta.json` for a debug.
 
 Until the Lab comparison (A8) passes, `project` is never the default of Core
 or of the Lab.
@@ -2046,6 +2046,13 @@ top-level `adaptation.instructedConsequences` this facility read until
 that date therefore reported an empty declaration while the stored proposal
 held a full one.
 
+A build that failed has no proposal. Its instructed classes come from Core's
+failure diagnostic (`instructedConsequences`, present only when the gate had
+read the instruction and it asked for at least one class;
+`flow-lane/creation/build-proposal.ts` `createdFlowBuildFromDiagnostic`).
+Core keeps the classes only, never the person's words, so each entry's
+`quote` is `null`. The step log is not read for them.
+
 ### The Lab plays the person at a check
 
 A check that asks "are you a robot" is asking the person, so FluxIQ never
@@ -2178,26 +2185,35 @@ two is what Core spent outside the loop. A record whose total is not the loop's
 calls plus the ones outside it is refused rather than reported
 (`existing-fluxiq-control/adaptation-evidence-loop.ts`).
 
-A live run's totals (and so its spend-ledger entry) also count the calls Core's
-records leave out, from the run's own step log (`steps/*/meta.json`,
-`live-llm/step-log-spend.ts`): the extension chat's interpreter call, as a
-`chat` phase, and the calls of a re-author Core recorded a cost for and no
-count. Anything else the log saw is added as `unattributed`, never subtracted
-(`run-muqk713g-d08ad3dc`: 17 counted of 35 calls before this).
+A live run's totals (and so its spend-ledger entry) are Core's, not the Lab's.
+Core adds every settled provider call to the Flow's purse as it settles,
+itemised by phase -- `build`, `read` (the build's reading of the
+instructions), `judge`, `runtime` (the Flow run's own recovery), `reauthor`
+and `chat` (the extension chat's interpreter, sent as `interpretationCalls`
+beside `interpretationCostUsd`) -- and serves the record from the
+`get-flow-spend` endpoint (`{ projectId, flowId }` → `{ spend }`, with
+`spentUsd`, `builds`, `calls` and `byPhase`). The Lab reads it through
+`ExistingFluxIQControlClient.getFlowSpend` (reader `existing-fluxiq-control/flow-spend.ts`)
+and turns it into the snapshot's fields with `live-llm/flow-spend.ts`
+(`liveLlmRunSpend`), adding nothing Core did not publish. `live-llm/spend-reader.ts`
+works out which Flow the run spent on: the Flow a direct build or playback
+names, or, for a chat build, the one Flow the project gained (Subflow graphs
+left out). The snapshot's `runSpend.source` says where the figures came from:
+`flow_purse` (itemised), `flow_purse_unitemised` (a total only; `calls` and the
+phases are `null`), `no_record`, `flow_unknown` (no new Flow, or more than one),
+`unreadable` or `not_settled`. A figure Core does not hold is `null`, never
+rebuilt from the step log or another record; an unknown cost is not a free
+call. A phase that spent nothing is `null`. Paid result checks count once,
+under `judge`, because Core's purse flags each judge call as it settles; the
+Lab matches no request ids. Original run artifacts remain unchanged when a
+later read-only reconciliation corrects historical telemetry.
 
-Core canonical accounting can already include paid result checks. Lab assigns a check to the judge phase only when a unique, nonempty request ID matches uniquely on both sides; its canonical charged usage moves out of runtime intact, so the total counts it once. Legacy intervention-only accounting retains its fallback. Missing or ambiguous identity and pending or omitted usage remain conservative residuals; no deduction is guessed. An unknown cost is not a free call. Original run artifacts remain unchanged when a later read-only reconciliation corrects historical telemetry.
+Per-agent tallies of a project build (by `role` and `briefId`) and the largest
+single input are not reported: Core's purse itemises by phase, not by agent,
+and the Lab no longer tallies the step log. The step log's `role` and
+`briefId` stay readable in `steps/*/meta.json` for a debug.
 
-The same reading also gives, for every run, `largestInputTokens`: the largest
-input, in tokens, of any one provider call, from each step's `meta.usage` --
-how big a single decision's context grew. A project build's steps name the
-agent that made them (`role`: `supervisor`, `builder`, `repair`; `briefId` for
-a builder's work), and the reading tallies them as `byRole`: per role, its
-calls, cost and largest single input, and the same per brief, so a debug can
-read one builder's cost on its own and A8 can set a project build beside a
-candidate build, whose steps name no agent and whose `byRole` is empty. A role
-or brief that is not an identifier is not tallied under it.
-
-The same log gives `live-llm.json` its per-call rows: `observed.observedCalls`
+The step log gives `live-llm.json` its per-call rows: `observed.observedCalls`
 is one row per provider call in `steps/`, each with the request id, task kind,
 stage, provider, model, tokens and cost its `meta.json` names
 (`live-llm/call-rows.ts`). A row takes the prompt version and validation
@@ -2214,10 +2230,12 @@ figure left out the chat's call ($0.211519044 of $0.212718924 in that run).
 `live-llm.json`'s `reauthor` record lists every re-author build Core recorded on
 the run (`metadata.resultReauthor.attempts[]`, `live-llm/reauthor-record.ts`).
 Each build says where its `calls` came from:
+- `attempt`: the call count Core writes on the attempt record itself (from the
+  build's `totalProviderCallCount`, else its purse receipt; `0` for a
+  cost-bound build that never started).
 - `loop`: the build loop's provider call count.
-- `loop_decisions`: a failed build's decision count, one paid call each, where
-  the loop kept no call count.
 - `adaptation`: the succeeded build's adaptation.
+- `adaptation_unreadable` / `not_recorded`: no count could be read.
 
 A failed build's `ending` is Core's build ending in closed words and counts
 only (`flow-bootstrap/generation-failure/build-ending.ts`): its kind, the
@@ -3571,10 +3589,14 @@ run that failed on the facility before any provider call), so the ledger records
 no rule limits it. The loop rule counts starts, so a crashed run still counts. A start whose launcher died, or
 that is older than six hours, is closed from its run directory
 (`"reconciled": true`) before the next admission. When a finished run's
-`provider-failures.local.json` shows an empty balance or exhausted quota
-(provider HTTP 402, or text such as DeepSeek's `Insufficient Balance` or
-`insufficient_quota`), the Lab writes `STOP-balance` with the reason. A plain
-429 rate limit is not a balance failure.
+`provider-failures.local.json` or step log shows an empty balance or exhausted quota,
+the Lab writes `STOP-balance` with the reason. Core classifies it itself
+(`llm.provider_balance_exhausted` on the step's `meta.error.code`,
+`flow_bootstrap.provider_balance_exhausted` on a failed build or re-author), and
+`scripts/lab/live-guards/balance-failure.mjs` matches those codes; provider HTTP
+402 and text such as DeepSeek's `Insufficient Balance` or `insufficient_quota`
+still match records written before Core published the codes. A plain 429 rate
+limit is not a balance failure.
 
 The fingerprint is a SHA-256 over every file `git ls-files --cached --others
 --exclude-standard` lists in this repository and in the FluxIQ Core beside it,

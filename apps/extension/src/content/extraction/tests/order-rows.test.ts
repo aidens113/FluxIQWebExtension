@@ -1,14 +1,16 @@
-// T1 coverage of a list read's `dedupe` and `sort` (`../order-rows.ts`): which
-// rows count as one, the order the rest are answered in, what a value that
-// cannot be read does, and that the bound is applied last.
+// T1 coverage of a list read's `dedupe` and `sort` (`../order-rows.ts`): the
+// binding of a request to the columns the read reads, what the read reports
+// (duplicates, unsortable rows, the cut) and that the bound is applied last.
+// How values are read, compared and identified is Core's
+// (`automationStudioRecordRowIdentity`, `sortAutomationStudioRecordRows`,
+// `countAutomationStudioRecordUnsortableRows`) and is pinned by Core's tests:
+// relative dates, numbers and their magnitudes, collation, `auto` and ties.
 //
 // The rows are records as the list reader builds them -- each field's text, or
 // `null` for one the page had nothing for -- so nothing here needs a page.
 
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { listRowOrderFor } from "../order-rows";
 
 type Row = Record<string, string | null>;
@@ -61,65 +63,20 @@ test("a dedupe whose every column the read does not read falls back to the whole
   assert.equal(ordered.duplicates, 1);
 });
 
-test("newest first over a column a listing states relative to the read", () => {
-  // The case this was built for: run `run-mulwm2dc-0bd95f22` asked the job board
-  // for roles "newest first", and a job board says when a role was posted as
-  // prose.
-  const order = listRowOrderFor({ sort: [{ field: "posted", order: "desc" }] }, FIELDS)!;
-  const rows: Row[] = [
-    { title: "month", posted: "Posted 30+ days ago" },
-    { title: "hours", posted: "5 hours ago" },
-    { title: "yesterday", posted: "Yesterday" },
-    { title: "week", posted: "a week ago" },
-    { title: "just", posted: "Just posted" },
-    { title: "days", posted: "3 days ago" }
-  ];
-  const ordered = order.apply(rows, 100, NOW);
-  assert.deepEqual(titles(ordered.rows), ["just", "hours", "yesterday", "days", "week", "month"]);
-  assert.equal(ordered.unsortable, 0);
-  assert.equal(order.sorts, true);
-});
-
-test("absolute dates are read in the forms listings write them, a missing year meaning the latest such date", () => {
+test("absolute dates are read in the forms listings write them, a missing year meaning the nearest such date", () => {
   const order = listRowOrderFor({ sort: [{ field: "posted", order: "asc", as: "date" }] }, FIELDS)!;
   const rows: Row[] = [
     { title: "iso", posted: "2026-09-12" },
     { title: "dm", posted: "Posted 3 Sep 2026" },
     { title: "md", posted: "Aug 30, 2026" },
-    // No year: September 20 has passed by the read, so it is this year's.
+    // No year: the occurrence nearest the read, within six months either way
+    // (Core's rule, t510). September 20 is this year's, just past.
     { title: "noyear", posted: "Sep 20" },
-    // And December 1 has not, so it is last year's.
-    { title: "lastyear", posted: "Dec 1" },
+    // And December 1 is this year's too, two months ahead, not last year's.
+    { title: "nextdec", posted: "Dec 1" },
     { title: "numeric", posted: "25/09/2026" }
   ];
-  assert.deepEqual(titles(order.apply(rows, 100, NOW).rows), ["lastyear", "md", "dm", "iso", "noyear", "numeric"]);
-});
-
-test("numbers sort by the number a value states, and text sorts as a person reads it", () => {
-  const bySalary = listRowOrderFor({ sort: [{ field: "salary", order: "desc" }] }, FIELDS)!;
-  const rows: Row[] = [
-    { title: "low", salary: "£65,000 to £80,000" },
-    { title: "high", salary: "£120,000" },
-    { title: "mid", salary: "£95,500.50 a year" }
-  ];
-  assert.deepEqual(titles(bySalary.apply(rows, 100, NOW).rows), ["high", "mid", "low"]);
-  const byTitle = listRowOrderFor({ sort: [{ field: "title", order: "asc", as: "text" }] }, FIELDS)!;
-  const named: Row[] = [{ title: "item 10" }, { title: "Item 9" }, { title: "apple" }];
-  assert.deepEqual(titles(byTitle.apply(named, 100, NOW).rows), ["apple", "Item 9", "item 10"]);
-  // Left to `auto`, the same column is numbers -- two of its three values state
-  // one -- which is the contract's rule, and why `as` exists.
-  const auto = listRowOrderFor({ sort: [{ field: "title", order: "asc" }] }, FIELDS)!;
-  assert.deepEqual(titles(auto.apply(named, 100, NOW).rows), ["Item 9", "item 10", "apple"]);
-});
-
-test("auto reads a column as the type most of its values state", () => {
-  const order = listRowOrderFor({ sort: [{ field: "salary", order: "asc", as: "auto" }] }, FIELDS)!;
-  // Two of three state a number, so the column is numbers and "competitive" is
-  // a value that cannot be read as one.
-  const rows: Row[] = [{ title: "c", salary: "competitive" }, { title: "b", salary: "90,000" }, { title: "a", salary: "70,000" }];
-  const ordered = order.apply(rows, 100, NOW);
-  assert.deepEqual(titles(ordered.rows), ["a", "b", "c"]);
-  assert.equal(ordered.unsortable, 1);
+  assert.deepEqual(titles(order.apply(rows, 100, NOW).rows), ["md", "dm", "iso", "noyear", "numeric", "nextdec"]);
 });
 
 test("a value that cannot be read goes last whichever the direction, and is counted", () => {
@@ -139,17 +96,6 @@ test("a value that cannot be read goes last whichever the direction, and is coun
   }
 });
 
-test("ties fall to the next key and then to page order", () => {
-  const order = listRowOrderFor({ sort: [{ field: "company", order: "asc" }, { field: "salary", order: "desc" }] }, FIELDS)!;
-  const rows: Row[] = [
-    { title: "1", company: "B", salary: "10" },
-    { title: "2", company: "A", salary: "10" },
-    { title: "3", company: "A", salary: "30" },
-    { title: "4", company: "B", salary: "10" }
-  ];
-  assert.deepEqual(titles(order.apply(rows, 100, NOW).rows), ["3", "2", "1", "4"]);
-});
-
 test("dedupe, then sort, then the bound: the answer is the first rows of the sorted distinct rows", () => {
   const order = listRowOrderFor({ dedupe: { by: ["url"] }, sort: [{ field: "salary", order: "desc" }] }, FIELDS)!;
   const rows: Row[] = [
@@ -163,49 +109,5 @@ test("dedupe, then sort, then the bound: the answer is the first rows of the sor
   assert.deepEqual(titles(ordered.rows), ["b", "c"]);
   assert.equal(ordered.duplicates, 1);
   assert.equal(ordered.cut, true);
-});
-
-// A number sort key reads a value as Core's processing does (P7, t510): the
-// page's order and Core's agree on every number case of Core's shared table
-// (`@fluxiq/contracts`, `record-sets/process/value-reading-cases.ts`), read from
-// the linked Core's source when it is there, else from its built export. "£72k"
-// sorts as 72000, not 72, and "3m ago" as 3. The table's date cases are Core's
-// own reader's.
-type ReadingCase = { kind: string; text?: string; expected: unknown };
-
-async function coreValueReadingCases(): Promise<readonly ReadingCase[]> {
-  // `.../packages/fluxiq/dist/programs/automation-studio/index.js`, four levels under `packages/`.
-  const packages = new URL("../../../../", import.meta.resolve("fluxiq/automation-studio"));
-  const source = new URL("contracts/src/record-sets/process/value-reading-cases.ts", packages);
-  const built = new URL("contracts/dist/automation-studio.js", packages);
-  const loaded = (await import(existsSync(fileURLToPath(source)) ? source.href : built.href)) as { AUTOMATION_STUDIO_RECORD_VALUE_READING_CASES?: readonly ReadingCase[] };
-  const cases = loaded.AUTOMATION_STUDIO_RECORD_VALUE_READING_CASES;
-  assert.ok(Array.isArray(cases), "Core's value-reading table is exported");
-  return cases;
-}
-
-/** The supervisor's rule for a letter m (t510), pinned beside the table until Core's table carries it. */
-const LETTER_M_CASES: readonly ReadingCase[] = [
-  { kind: "number", text: "3m ago", expected: 3 },
-  { kind: "number", text: "10 m", expected: 10 },
-  { kind: "number", text: "$1.2m", expected: 1_200_000 },
-  { kind: "number", text: "£3m", expected: 3_000_000 }
-];
-
-test("a number sort reads every number case of Core's value-reading table as Core does", async () => {
-  const numbers = [...await coreValueReadingCases(), ...LETTER_M_CASES].filter((entry): entry is ReadingCase & { text: string } => entry.kind === "number" && typeof entry.text === "string");
-  assert.ok(numbers.some((entry) => entry.text === "£72k – £80k per annum"), "the magnitude case is in the table");
-  const order = listRowOrderFor({ sort: [{ field: "salary", order: "asc", as: "number" }] }, FIELDS)!;
-  for (const entry of numbers) {
-    const row: Row = { title: "case", salary: entry.text };
-    if (entry.expected === null) {
-      // A value that states no number cannot be sorted, and is counted.
-      assert.equal(order.apply([row], 10, NOW).unsortable, 1, entry.text);
-      continue;
-    }
-    // Read as the expected number, it sorts between plain numbers just under and just over it.
-    const expected = entry.expected as number;
-    const rows: Row[] = [{ title: "over", salary: String(expected + 0.0001) }, row, { title: "under", salary: String(expected - 0.0001) }];
-    assert.deepEqual(titles(order.apply(rows, 10, NOW).rows), ["under", "case", "over"], entry.text);
-  }
+  assert.equal(order.sorts, true);
 });

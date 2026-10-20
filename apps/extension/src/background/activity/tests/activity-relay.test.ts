@@ -20,7 +20,7 @@ import {
 } from "../../../shared/activity/index";
 import { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "../activity-relay";
 import { OverlayTarget } from "../overlay-target";
-import { ACTIVITY_DETAIL_INTERVAL_MS } from "../pacer";
+import { ACTIVITY_DETAIL_INTERVAL_MS } from "fluxiq/ui";
 import { FakeClock } from "./fake-clock";
 
 function activity(sequence: number, overrides: Partial<ClientGatewayActivity> = {}): ClientGatewayActivity {
@@ -102,6 +102,17 @@ test("an event is kept, paced into a display, broadcast to the panel pages, and 
     overlay: "expanded",
     topFrameOnly: true
   });
+});
+
+test("a wait is headed in the extension's own words: answer in the FluxIQ panel, finish the check on the page", async () => {
+  const h = harness();
+  await h.relay.accept(activity(1));
+  await h.relay.accept(activity(2, { phase: "waiting_permission", label: "Run is waiting for an answer" }));
+  assert.equal(h.relay.state().display?.headline, "Waiting for you: answer in the FluxIQ panel");
+  const check = { kind: "tool" as const, title: "Using core.run_node", status: "succeeded" as const, ref: "core.run_node", text: "Result: web.intervention.required" };
+  await h.relay.accept(activity(3, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "building", label: "Reading your request" }));
+  await h.relay.accept(activity(4, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "exploring", label: "Using core.run_node: web.intervention.required", detail: check }));
+  assert.equal(h.relay.state().display?.headline, "Waiting for you: finish the check on the page");
 });
 
 test("an event not newer than the last kept one is dropped, and nothing is sent for it", async () => {
