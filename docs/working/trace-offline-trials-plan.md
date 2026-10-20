@@ -281,6 +281,17 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: lane-sync-1020 (worker-low, live lane trees to dev before the breadth rerun)
+- Trees: `C:/Users/osrs_/FluxStuff/fxwork/{t563,t719,t566,t567}/{!FluxIQWebExtension,!FluxIQ}`, each on its own lane
+  branch, clean, and strictly behind `dev` (nothing ahead).
+- Task, per tree: `git merge --ff-only dev` in both repositories; `pnpm install --frozen-lockfile` in both (the
+  lockfile changed); in Core, `pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket
+  build`; downstream, `node scripts/check/core-build.mjs` must say current, then
+  `pnpm --filter @fluxiq-web-extension/extension build`. One tree at a time (memory).
+- Must not: run any Lab or live run, edit files, commit, or touch other trees or `lab-slots`.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-sync-1020.md` (main checkout): per tree, both HEADs
+  after the merge and each command's exit code and last line.
+
 ### Brief: sweep-1019b (worker-low, second daily full sweep of `dev`)
 - Detached worktrees of both repositories at `origin/dev` (downstream cedd46af, Core 4077d0a0) under
   `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019b/` (Core sibling to the downstream checkout); `pnpm install` both;
