@@ -121,6 +121,7 @@ export function describeElement(element: Element): DomElementDescriptor {
   if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
   const checked = checkedState(element);
   if (checked !== undefined) descriptor.checked = checked;
+  if (isWithinSensitiveControl(element)) descriptor.sensitive = true;
   const valuePresent = hasEnteredValue(element);
   if (valuePresent !== undefined) descriptor.hasValue = valuePresent;
   const testId = testIdFor(element);

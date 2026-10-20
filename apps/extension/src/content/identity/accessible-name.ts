@@ -8,9 +8,10 @@
 //
 // Two rules about values, both deliberate. A control's own value is read only
 // for a push button (`submit`, `button`, `reset`), whose value *is* its label,
-// and never for a field the shared sensitivity rule marks sensitive. Text is
-// read only for elements whose role takes its name from content, so a
-// container never acquires a name made of the first words inside it.
+// and never for one that is, or sits inside, a control the shared sensitivity
+// rule marks (t733). Text is read only for elements whose role takes its name
+// from content, so a container never acquires a name made of the first words
+// inside it.
 //
 // And one rule about contents (decision D2 of the data-extraction plan). Both
 // places this computation reads page text -- each `aria-labelledby` reference,
@@ -114,11 +115,11 @@ function svgTitle(element: Element): string | undefined {
   return undefined;
 }
 
-/** A push button's value is its label; a sensitive field's value is never a name. */
+/** A push button's value is its label; a value inside a sensitive control is never a name. */
 function buttonValueName(element: Element): string | undefined {
   if (!(element instanceof HTMLInputElement)) return undefined;
   if (!BUTTON_INPUT_TYPES.has(element.type.toLowerCase())) return undefined;
-  if (isSensitiveFormControl(element)) return undefined;
+  if (isWithinSensitiveControl(element)) return undefined;
   return normalizedText(element.value);
 }
 
