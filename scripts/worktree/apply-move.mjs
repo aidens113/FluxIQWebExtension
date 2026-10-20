@@ -12,12 +12,10 @@
 // markers can be tested without two real installs and a Core build.
 
 import { buildCore } from "./core-build.mjs";
-import { importCoreScript } from "../core-scripts/index.mjs";
+import { runGit } from "../core-scripts/index.mjs";
 import { installWorktree } from "./install-worktree.mjs";
 import { clearMarker, writeMarker } from "./markers.mjs";
 import { noteProgress } from "./progress-note.mjs";
-
-const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
 
 /**
  * @param {{ side: string, root: string, from: string, to: string, targetLock: string, checkout: boolean, install: boolean, build: boolean, packages?: Array<{ filter: string, directory: string }> }} plan

@@ -21,7 +21,11 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runTaskCommandLine } from "./index.mjs";
+// The dispatcher, not this directory's barrel: the barrel imports every
+// command's module, and most of those load Core's task rules as they are
+// imported, which `sync-core` must not do before it has moved an outdated Core
+// (`command-line.mjs`).
+import { runTaskCommandLine } from "./command-line.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const coreRepositoryRoot = path.resolve(repositoryRoot, "..", "!FluxIQ");

@@ -13,12 +13,9 @@
 // worktree wants neither.
 
 import { realpath, stat } from "node:fs/promises";
-import { importCoreScript } from "../core-scripts/index.mjs";
+import { runGit, samePath } from "../core-scripts/index.mjs";
 import { installedLockfile } from "./installed-lockfile.mjs";
 import { readMarker } from "./markers.mjs";
-
-const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
-const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /**
  * @param {string} root

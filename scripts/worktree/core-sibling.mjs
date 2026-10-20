@@ -24,10 +24,8 @@
 // file says what goes wrong without it.
 
 import { stat } from "node:fs/promises";
-import { coreRootOf, importCoreScript } from "../core-scripts/index.mjs";
+import { coreRootOf, samePath } from "../core-scripts/index.mjs";
 import { checkoutRepository } from "./checkout-repository.mjs";
-
-const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /**
  * @param {string} extRoot a worktree of this repository
