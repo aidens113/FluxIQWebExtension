@@ -79,6 +79,22 @@ test("a pointer-only record control carries its subject while an ordinary wrappe
   });
 });
 
+test("a control inside a marked group is described as sensitive, and an ordinary control carries no marker", async () => {
+  await withStubPage(load, ({ describeElement }) => {
+    // Sensitive only through its group: the field itself carries nothing the rule reads.
+    const field = input("text", "SYNTHETIC_FIELD_VALUE", { name: "note" });
+    const plain = input("text", "Ada", { name: "first-name" });
+    const root = element("form", {}, element("div", { "data-sensitive": "true" }, field), plain);
+    withDescriptorRecords(root, root, () => {
+      const marked = describeElement(field);
+      assert.equal(marked.sensitive, true);
+      assert.equal(marked.value, undefined);
+      const ordinary = describeElement(plain);
+      assert.equal("sensitive" in ordinary, false);
+    });
+  });
+});
+
 test("a file input yields no value, so the chosen file's local name never leaves the page", async () => {
   await withStubPage(load, ({ readElementValue }) => {
     assert.equal(readElementValue(input("file", "C:\\fakepath\\expense-receipts.csv")), undefined);
@@ -112,6 +128,22 @@ test("an element inside a sensitive control yields no value: a span in a marked 
     const plain = editable(element("span", {}, "Ada"));
     editable(element("div", {}, plain));
     assert.equal(readElementValue(plain), "Ada");
+  });
+});
+
+// bigbox-retail's card frame (t730 c2): `<input name="cvc">` under "Security
+// code", no `autocomplete`. Its typed value reached the snapshot, every keydown
+// and the recorded `dom.input`, all of which read values through here.
+test("a card security code named only by its name or its label yields no value", async () => {
+  await withStubPage(load, ({ readElementValue }) => {
+    assert.equal(readElementValue(input("text", "SYNTHETIC_TYPED_CODE", { name: "cvc", inputmode: "numeric" })), undefined);
+    const labelled = input("text", "SYNTHETIC_TYPED_CODE", { name: "field-7" });
+    element("label", {}, "Security code ", labelled);
+    assert.equal(readElementValue(labelled), undefined);
+    // Its neighbours on the card form are not swept up with it.
+    const zip = input("text", "SYNTHETIC_ZIP", { name: "zip" });
+    element("label", {}, "ZIP code ", zip);
+    assert.equal(readElementValue(zip), "SYNTHETIC_ZIP");
   });
 });
 

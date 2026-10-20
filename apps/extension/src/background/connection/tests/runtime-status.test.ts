@@ -63,8 +63,10 @@ const confirmations: Record<BrowserActionType, Confirmation> = {
 // rows also prove it changes nothing for a verb that is not a tab action.
 const closeTab: BrowserActionCommand["tab"] = { operation: "close" };
 
-// The sensitivity rule the recorder defines (isSensitiveFormControl in
-// content/element-traits.ts), as the worker judges it from the wire descriptor.
+// The one sensitivity rule (domain/src/sensitivity/), as the worker judges it
+// from the wire descriptor: the domain's own descriptor reader, so the marker a
+// group-marked control carries (`sensitive: true`, t733) and a card security
+// code's label count here as they do everywhere else.
 const sensitiveFields: Array<[label: string, element: DomElementDescriptor]> = [
   ["a password input", field({ inputType: "password" })],
   ["a password input typed in upper case", field({ inputType: "PASSWORD" })],
@@ -75,7 +77,9 @@ const sensitiveFields: Array<[label: string, element: DomElementDescriptor]> = [
   ["autocomplete=cc-number", field({ attributes: { autocomplete: "cc-number" } })],
   ["autocomplete=cc-csc", field({ attributes: { autocomplete: "cc-csc" } })],
   ["a select with autocomplete=cc-exp-month", field({ tagName: "select", attributes: { autocomplete: "cc-exp-month" } })],
-  ["data-sensitive=true", field({ attributes: { "data-sensitive": "true" } })]
+  ["data-sensitive=true", field({ attributes: { "data-sensitive": "true" } })],
+  ["a field inside a marked group (sensitive: true)", field({ inputType: "text", sensitive: true })],
+  ["a text input labelled as a card security code", field({ inputType: "text", label: "Security code" })]
 ];
 
 const plainFields: Array<[label: string, element: DomElementDescriptor]> = [

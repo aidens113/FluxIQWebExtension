@@ -112,6 +112,9 @@ test("text contains requires a nonblank expectation while literal null remains t
       assert.equal(result.judged, false);
       assert.equal(result.waitExpired, false);
       assert.equal(result.attempts, 1);
+      // The words are the shared rule's (`blank-text-refusal.ts`), which a blank text wait gives too.
+      assert.equal(result.expected, "a nonblank text expectation");
+      assert.equal(result.actual, "the assertion named no meaningful text");
     }
     assert.equal((await evaluateAssertion({ kind: "text", expected: "null", timeoutMs: 0 }, {})).held, true);
   } finally { delete (globalThis as { document?: unknown }).document; }

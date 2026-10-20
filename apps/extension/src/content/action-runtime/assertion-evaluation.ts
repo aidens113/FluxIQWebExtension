@@ -58,6 +58,7 @@
 // was deleted. `validation-outcome.ts` turns the two into a status.
 
 import { resolveShadowScope } from "../selector";
+import { blankTextRefusal } from "./blank-text-refusal";
 import { composedParent } from "../shadow-dom";
 import type { WebAutomationAssertRequest } from "../types";
 
@@ -143,9 +144,9 @@ export async function evaluateAssertion(request: WebAutomationAssertRequest, tar
 function evaluateOnce(request: WebAutomationAssertRequest, target: AssertionTarget): AssertionAttempt {
   if (request.kind === "url") return urlOutcome(request.expected);
 
-  if (request.kind === "text" && (typeof request.expected !== "string" || request.expected.trim().length === 0)) {
-    return { held: false, expected: "a nonblank text expectation", actual: "the assertion named no meaningful text", verdict: "malformed" };
-  }
+  // One rule with the text waits (`blank-text-refusal.ts`): refused on the first attempt, never polled.
+  const blank = request.kind === "text" ? blankTextRefusal(request.expected, "assertion") : undefined;
+  if (blank) return { held: false, ...blank, verdict: "malformed" };
   if (request.kind === "absent" && !target.selector && !target.element) {
     return { held: false, expected: "an authored target to test for absence", actual: "the action named no selector and no element", verdict: "malformed" };
   }

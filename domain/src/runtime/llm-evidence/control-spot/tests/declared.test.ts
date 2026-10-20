@@ -121,3 +121,50 @@ test("a press declares what its control and its page are about, so an add on a d
   assert.equal(kettle?.page, webControlSpotToken("subject", "Your basket"));
   assert.ok(!JSON.stringify(declared.map((declaration) => [declaration.control.subject, declaration.control.page])).match(/Kettle|Wraps|basket/u));
 });
+
+// L1 reset settlement: a toggle pressed and pressed back declares its own place
+// and its state before each press, so Core can tie the press that turns it back
+// to the act; a start-state read counts the controls at that place by state.
+test("a press on a stateful control declares its own place and its state before the press, and the same place when pressed back", async () => {
+  let starred = false;
+  const notePage = (): JsonObject => ({ url: "https://notebook.test/notes/41/", title: "Notebook", viewport: { width: 400, height: 400, scrollX: 0, scrollY: 0 }, interactiveElements: [
+    { tagName: "h1", selector: "#title", visibleText: "Lentil soup", bounds: { x: 0, y: 0, width: 200, height: 20 }, context: { subject: "Lentil soup" } },
+    { tagName: "div", role: "button", selector: "#star", accessibleName: starred ? "Unstar" : "Star", attributes: { "aria-pressed": String(starred) }, bounds: { x: 0, y: 40, width: 40, height: 20 }, context: { subject: "Lentil soup" } }
+  ] });
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_session, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: notePage(), sourceId: "tab:1:frame:0" } };
+      if (command.actionType === "web.dom.click") starred = !starred;
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const declared: AutomationStudioActionDeclaration[] = [];
+  const press = async (callId: string, words: string) => {
+    const looked = await runtime.executeTool({ ...PROJECT, callId: `${callId}.look`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+    const line = shownPageLines(looked.evidence).find((shown) => shown.words === words);
+    assert.ok(line, `no shown line "${words}"`);
+    await runtime.executeTool({
+      ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+      value: { node: "web.output.dom-click", parameters: { target: { handle: line.target } }, consequences: ["modify_existing"] },
+      permission: async (declaration) => {
+        declared.push(declaration);
+        return { permitted: true };
+      }
+    });
+  };
+  const request = { ...PROJECT, callId: "call.start", permission: async () => ({ permitted: true as const }) };
+  const start = await runtime.startState!(request);
+  await press("call.star", "Star");
+  const pressed = await runtime.startState!({ ...request, callId: "call.pressed" });
+  await press("call.unstar", "Unstar");
+
+  const [star, unstar] = declared.map((declaration) => declaration.control);
+  assert.ok(star?.place && star.state && unstar?.place && unstar.state);
+  assert.equal(unstar.place, star.place, "pressed back at its own place");
+  assert.notEqual(unstar.state, star.state, "each press declares the state it found");
+  assert.deepEqual(start?.controls, { [star.place]: { [star.state]: 1 } });
+  assert.deepEqual(pressed?.controls, { [star.place]: { [unstar.state]: 1 } }, "the read after the press shows the state the press back found");
+  assert.ok(!JSON.stringify(declared.map((declaration) => [declaration.control.place, declaration.control.state])).match(/Star|Lentil/u));
+});

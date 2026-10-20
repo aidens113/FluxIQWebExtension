@@ -11,7 +11,9 @@
 // turns it into a `timed_out` result with Core's `timeout` category rather than
 // a flattened `failed`. A request that could never be satisfied -- a condition
 // that needs a selector, asked without one -- does throw, because that is a
-// malformed command rather than a page that was too slow.
+// malformed command rather than a page that was too slow. A text wait naming no
+// text throws carrying the closed, non-retryable record a blank text assert
+// ends in (`blank-text-refusal.ts`), so it is refused once, not retried.
 //
 // A selector is looked for in the roots the recorded target's host chain
 // reaches, exactly as `resolveTarget` looks for the element the wait is about
@@ -28,7 +30,14 @@
 // "Accept all" timed out, and the click on that same control, with that same
 // recorded target, succeeded immediately afterwards.
 
+import {
+  WEB_AUTOMATION_FAILURE_CODES,
+  webAutomationFailureRecord,
+  type WebAutomationFailureCarrier,
+  type WebAutomationFailureRecord
+} from "@fluxiq-web-extension/domain/client";
 import { resolveShadowScope, type LookupRoot } from "../selector/shadow";
+import { blankTextRefusal } from "./blank-text-refusal";
 import type { WebAutomationWaitCondition } from "../types";
 import { DEFAULT_WAIT_TIMEOUT_MS, pageText, waitUntil, type WaitProgress } from "./waits";
 
@@ -198,7 +207,28 @@ function requireSelector(request: WaitConditionRequest): string {
   return request.selector;
 }
 
+/**
+ * The text a selector-less wait waits on, or a refusal by the rule a blank text
+ * assert is refused by (`blank-text-refusal.ts`). The throw carries that
+ * assert's closed record -- STATE_MISMATCH, not retryable -- so the failure path
+ * (`results.ts` `actionFailure`) reports it as given instead of classifying a
+ * bare Error as ACTION_FAILED, which is retryable and ran the same blank wait
+ * three more times. `waitUntil` ends on the first evaluation's throw, so nothing
+ * is polled either.
+ */
 function requireText(request: WaitConditionRequest): string {
-  if (typeof request.text !== "string" || request.text.trim().length === 0) throw new Error(`The "${request.condition}" wait condition needs a selector or text to wait for.`);
-  return request.text;
+  const blank = blankTextRefusal(request.text, "wait");
+  if (blank) throw new BlankTextWaitError(request.condition, blank);
+  // The rule refuses everything but a nonblank string, so this is that string.
+  return String(request.text);
+}
+
+/** A text wait that names no text: a malformed command, carrying its closed, non-retryable record. */
+class BlankTextWaitError extends Error implements WebAutomationFailureCarrier {
+  readonly failure: WebAutomationFailureRecord;
+  constructor(condition: WebAutomationWaitCondition, refusal: { expected: string; actual: string }) {
+    super(`The "${condition}" wait condition needs a selector or text to wait for.`);
+    this.name = "BlankTextWaitError";
+    this.failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH, refusal);
+  }
 }

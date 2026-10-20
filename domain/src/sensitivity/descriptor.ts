@@ -1,12 +1,13 @@
-// The same rule asked of a serialized element descriptor rather than of three
+// The same rule asked of a serialized element descriptor rather than of its
 // named fields.
 //
 // Three call sites hold one of these -- the recording reducer, the LLM evidence
 // sanitizer, and the extension's background worker -- and each was reaching
 // into `inputType` and `attributes` its own way. The shape is the wire
 // descriptor `apps/extension/src/content/describe-element.ts` produces, whose
-// attribute allowlist already carries `type`, `autocomplete` and
-// `data-sensitive`, which is exactly what the rule needs.
+// `attributes` carry every attribute the page wrote -- `type`, `autocomplete`,
+// `data-sensitive`, `name`, `id`, `aria-label`, `placeholder` -- beside the
+// computed `label` and `accessibleName`, which is everything the rule reads.
 //
 // The input is `unknown` on purpose: a descriptor arrives from a page, over a
 // wire, or out of stored state, so nothing about its shape may be assumed. An
@@ -30,7 +31,11 @@ export function sensitiveFieldSignatureOfDescriptor(descriptor: unknown): Sensit
     inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
-    dataSensitive: stringField(attributes["data-sensitive"])
+    // The producer's own marker for a control sensitive through its group
+    // (`DomElementDescriptor.sensitive`, t733) reads as the attribute would.
+    dataSensitive: record.sensitive === true ? "true" : stringField(attributes["data-sensitive"]),
+    names: stringFields([attributes.name, attributes.id, record.id]),
+    labels: stringFields([record.label, record.accessibleName, attributes["aria-label"], attributes.placeholder])
   };
 }
 
@@ -41,4 +46,9 @@ export function isSensitiveElementDescriptor(descriptor: unknown): boolean {
 
 function stringField(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+/** The strings among the values, in order; anything else a page sent is not read. */
+function stringFields(values: readonly unknown[]): string[] {
+  return values.filter((value): value is string => typeof value === "string");
 }

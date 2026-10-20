@@ -255,3 +255,23 @@ test("reset witnesses include singleton and hidden subjects and distinguish equa
   assert.notEqual(first?.scope, second?.scope, "equal headings do not identify one destination");
   assert.ok(!JSON.stringify(first?.subjects).includes(subject));
 });
+
+test("each answer counts the page's visible stateful controls by their own place and state, so Core sees a toggle come back (L1)", async () => {
+  const toggle = (pressed: boolean) => [{ tagName: "div", role: "button", selector: "#gift", accessibleName: pressed ? "Gift wrap on" : "Gift wrap off", attributes: { "aria-pressed": String(pressed) }, bounds: box(0, 400, 80, 20) }];
+  const { start, now } = await compare(cart(3, toggle(false)), cart(3, toggle(true)));
+  const before = start.controls ?? {}, after = now.controls ?? {};
+  assert.deepEqual(Object.keys(after), Object.keys(before), "a press moves no control to another place");
+  const counts = (controls: Record<string, Record<string, number>>) => Object.values(controls).flatMap((states) => Object.values(states)).reduce((sum, count) => sum + count, 0);
+  // The cart's own buttons here carry no role, as the capture states one (`implicitRole`); only the toggle is a stateful control.
+  assert.equal(counts(before), 1);
+  assert.equal(counts(after), 1);
+  assert.notDeepEqual(after, before, "the toggle's state changed");
+  for (const [place, states] of Object.entries(before)) {
+    assert.match(place, /^p:[0-9a-f]{32}$/u);
+    for (const state of Object.keys(states)) assert.match(state, /^p:[0-9a-f]{32}$/u);
+  }
+  assert.doesNotMatch(JSON.stringify(before), /Gift|Add to cart/u);
+  // A page with no stateful control answers none.
+  const { start: bare } = await compare({ url: "https://shop.test/about", title: "About", interactiveElements: [{ tagName: "p", selector: "#about", visibleText: "About us", bounds: box(0, 0, 100, 20) }] }, { url: "https://shop.test/about", title: "About", interactiveElements: [] });
+  assert.equal(bare.controls, undefined);
+});

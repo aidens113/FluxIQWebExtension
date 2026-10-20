@@ -39,10 +39,12 @@
 // are identical controls, so the recording carries the name of the dialog the
 // control sat in, and both acting paths refuse a candidate in another one.
 //
-// `control-row.ts` finds the row a page drew as plain markup -- a cart line's
+// `control-row/` finds the row a page drew as plain markup -- a cart line's
 // `<div>` -- by the control's own kind: the largest ancestor holding it and no
 // other control alike to it. `record.ts` names such a row by its title and
-// checks a replay's candidate against it (t463).
+// checks a replay's candidate against it (t463). Inside a capture scope both
+// keep what they read for the rest of it (`scoped-memo.ts`, t733), which is
+// what keeps a snapshot of thousands of links from walking the page per link.
 // `own-run.ts` finds the row a control *is*: a gallery's tile, one of a run of
 // same-shaped siblings that carry and differ in content. `record.ts` gates a
 // loop pass's values on the tile itself, and `../action-runtime/pass-row/`

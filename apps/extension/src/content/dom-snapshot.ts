@@ -37,6 +37,7 @@ import { observedEventElementQueue } from "./event-elements";
 import { describeElement, ownTextBeside, readableTextBeside } from "./describe-element";
 import { isActionableElement, isSensitiveFormControl } from "./element-traits";
 import { listedParentIndexes } from "./listed-parents";
+import { listWayOn } from "./extraction/read-coverage";
 import { renderedElements } from "./rendered-elements";
 import { repeatExemplars } from "./repeat-exemplars";
 import { withSelectorMemo } from "./selector";
@@ -216,8 +217,9 @@ function touchedElements(): ReadonlySet<Element> {
  * exemplar, how many elements the run holds; whether it is on a front layer;
  * whether it is one of the main region's lead statements; the cursor it sets
  * for itself and, for something a person presses, whether it is drawn apart
- * from its like siblings (t229); its own words beside its descendants'; its
- * listed parent. The flags are written only when true, and the rest only when
+ * from its like siblings (t229); for a list or table, how it goes on past what
+ * the page shows (`extraction/read-coverage/list-way-on.ts`, l1 D1); its own
+ * words beside its descendants'; its listed parent. The flags are written only when true, and the rest only when
  * there is something to say.
  */
 function snapshotDescriptor(element: Element, repeatCount: number | undefined, frontLayer: boolean, parent: number | undefined): DomElementDescriptor {
@@ -228,6 +230,8 @@ function snapshotDescriptor(element: Element, repeatCount: number | undefined, f
   const cursor = ownPressCursor(element);
   if (cursor !== undefined) descriptor.cursor = cursor;
   if ((cursor !== undefined || isActionableElement(element)) && setApartFromLikeSiblings(element)) descriptor.setApart = true;
+  const wayOn = listWayOn(element);
+  if (wayOn !== undefined) descriptor.listWayOn = wayOn;
   return withStructure(element, descriptor, parent);
 }
 
