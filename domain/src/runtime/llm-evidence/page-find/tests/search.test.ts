@@ -185,3 +185,44 @@ test("close matches are capped, deterministic, and shown only once the exact mat
   assert.match(webLlmFindOnPage(page(mixed), "mug rack", 50).found, /^n1 link "Rack for a mug" near, holds every word on screen$/mu);
   assert.deepEqual(lines(webLlmFindOnPage(page(mixed), "mug", 0).found).filter((line) => line.includes(" near, ")), [], "a one-word query has no close matches");
 });
+
+// Job note (rerun 3): ten searches for a control that was a bare icon -- no
+// text, label or title -- each answered only that the words were nowhere and
+// to try the site's search. An empty search on a page that holds wordless icon
+// controls names the first few, since what one does is written nowhere.
+test("an empty search on a page with wordless icon controls names the first few, keeping the site-search sentence", () => {
+  const star = (n: number): WebLlmEvidenceElement[] => [
+    { target: `t${n}`, tag: "span", cursor: "pointer", attributes: [["class", "rc-star"]], box: BOX, onViewport: true },
+    { target: `t${n + 1}`, tag: "svg", parent: `t${n}`, box: BOX, onViewport: true }
+  ];
+  const found = webLlmFindOnPage(page([
+    { target: "t1", tag: "input", inputType: "search", label: "Search recipes", box: BOX, onViewport: true },
+    { target: "t2", tag: "h2", text: "Lentil soup", box: BOX, onViewport: true },
+    ...star(3), ...star(5), ...star(7), ...star(9)
+  ]), "keep for later", 0).found;
+  assert.deepEqual(lines(found), [
+    "0 matches for \"keep for later\"",
+    "Nothing on this page holds those words, hidden elements included; find_on_page reads only the page you are on, never the rest of the site. To look across the site, type it into the site's search field t1 and submit it, or follow a link to the page that lists it. Some controls here show no words, only an icon: t3, t5, t7 and 1 more. What one does is written nowhere, so describe one (web.describe_element) or watch what it changes."
+  ]);
+});
+
+test("an empty search names two wordless icon controls as a pair", () => {
+  const found = webLlmFindOnPage(page([
+    { target: "t1", tag: "button", attributes: [["class", "btn"]], box: BOX, onViewport: true },
+    { target: "t2", tag: "i", parent: "t1", attributes: [["class", "glyph glyph-star"]], box: BOX, onViewport: true },
+    { target: "t3", tag: "span", cursor: "pointer", box: BOX, onViewport: true },
+    { target: "t4", tag: "img", parent: "t3", box: BOX, onViewport: true }
+  ]), "keep for later", 0).found;
+  assert.match(found, / Some controls here show no words, only an icon: t1 and t3\. What one does/u);
+});
+
+test("an empty search on a page whose only wordless control holds no picture reads as before", () => {
+  const found = webLlmFindOnPage(page([
+    { target: "t1", tag: "a", href: "https://shop.test/r/1", attributes: [["class", "cover"]], box: BOX, onViewport: true },
+    { target: "t2", tag: "button", name: "Print", box: BOX, onViewport: true }
+  ]), "keep for later", 0).found;
+  assert.deepEqual(lines(found), [
+    "0 matches for \"keep for later\"",
+    "Nothing on this page holds those words, hidden elements included; find_on_page reads only the page you are on, never the rest of the site. To look across the site, follow a link to the page that lists it."
+  ]);
+});

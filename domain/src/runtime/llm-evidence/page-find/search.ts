@@ -27,11 +27,19 @@
 // own search box: it took this tool for the site's search. So an empty answer
 // says this page holds none of it, that only this page was read, and how to
 // look across the site -- the site's search fields by handle, or a link.
+//
+// Rerun 3's job note: ten searches for a control drawn only as an icon -- no
+// text, label or title, printed by the view as `clickable icon class="..."`
+// (`../page-view/element/icon-hints.ts`) -- each answered as above, which
+// steered the model to the site's search and away from the page's own
+// wordless controls. So when the page holds such controls, an empty answer
+// also names the first few and says how to learn what one does.
 
 import { present } from "../present";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
 import {
+  chosenWebLlmLines,
   quotedWords,
   undoubledWords,
   webLlmElementKind,
@@ -52,6 +60,8 @@ const WEB_LLM_FIND_PAGE_SIZE = 50;
 const WORDS_SHOWN = 80;
 /** About how much of a matching value is printed around the match. */
 const WINDOW = 60;
+/** How many wordless icon controls an empty answer names. */
+const ICONS_NAMED = 3;
 
 export type WebLlmFindResult = {
   schemaVersion: typeof WEB_LLM_FIND_SCHEMA_VERSION;
@@ -95,7 +105,24 @@ function nothingHere(evidence: WebLlmPageEvidence, nearFollow: boolean): string 
   const none = nearFollow
     ? "Nothing on this page holds those words as written, hidden elements included; the close matches below hold most or part of them. find_on_page"
     : "Nothing on this page holds those words, hidden elements included; find_on_page";
-  return `${none} reads only the page you are on, never the rest of the site. ${across}`;
+  const icons = wordlessIcons(evidence);
+  return `${none} reads only the page you are on, never the rest of the site. ${across}${icons === undefined ? "" : ` ${icons}`}`;
+}
+
+/** The sentence naming the page's first few wordless icon controls, or `undefined` when it has none. */
+function wordlessIcons(evidence: WebLlmPageEvidence): string | undefined {
+  const handles = chosenWebLlmLines(evidence.elements, webLlmPageTree(evidence.elements))
+    .filter((line) => line.role === "control" && line.icon?.includes("icon") === true)
+    .map((line) => line.element.target);
+  if (handles.length === 0) return undefined;
+  const named = handles.slice(0, ICONS_NAMED);
+  const more = handles.length - named.length;
+  const list = more > 0 ? `${named.join(", ")} and ${more} more` : listed(named);
+  return `Some controls here show no words, only an icon: ${list}. What one does is written nowhere, so describe one (web.describe_element) or watch what it changes.`;
+}
+
+function listed(handles: readonly string[]): string {
+  return handles.length <= 1 ? handles.join("") : `${handles.slice(0, -1).join(", ")} and ${handles.at(-1)}`;
 }
 
 /** Where an element matched: in its words, or in a named field or attribute's value or name. */

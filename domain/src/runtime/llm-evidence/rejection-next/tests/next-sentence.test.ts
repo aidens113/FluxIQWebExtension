@@ -12,9 +12,24 @@ import { webLlmRejectionNext } from "../next-sentence";
 test("incomplete text loads every row first, then one row-context read, the per-row disclosure over it, then the full read, with no loop inside a page loop", () => {
   const next = webLlmRejectionNext("incomplete_text", ["private column"], ["private control"], "private row") ?? "";
   assert.match(next, /cannot hold another repeat/u);
-  assert.match(next, /Load every row first.*Scroll step with mode untilStable.*Next page in its own repeat-while span.*Then read only nonempty stable row-context columns.*without.*incomplete text field.*repeat over that read.*registered row-bound click.*Then read the full text/u);
+  assert.match(next, /Load every row first.*Scroll step with mode untilStable.*Next page in its own repeat-while span.*Then read only nonempty stable row-context columns.*without.*incomplete text field.*repeat over that read.*registered row-bound click.*After that repeat.*read the same listing again with the text field/u);
+  assert.match(next, /not inside it/u);
+  assert.match(next, /every row is disclosed/u);
+  assert.doesNotMatch(next, /only after|only once/iu, "no only-after instruction ties the read to the loop");
   assert.doesNotMatch(next, /after each Next page/iu);
   assert.doesNotMatch(next, /private column|private control|private row/u);
+});
+
+// social rerun 3: the field was never named, so the build sent it again; the
+// key rides in `instead` as the domain's own code, so a repeat names it again.
+test("incomplete text with a known field key names it, and only an identifier key", () => {
+  const next = webLlmRejectionNext("incomplete_text", ["web.text.incomplete_field.summary"], undefined) ?? "";
+  assert.match(next, /without the field `summary`/u);
+  assert.match(next, /After that repeat.*read the same listing again with the field `summary`/u);
+  assert.doesNotMatch(next, /only after/iu);
+  const odd = webLlmRejectionNext("incomplete_text", ["web.text.incomplete_field.not a key`"], undefined) ?? "";
+  assert.doesNotMatch(odd, /not a key/u);
+  assert.equal(odd, webLlmRejectionNext("incomplete_text", undefined, undefined));
 });
 
 test("a covered press with closers names the closers, then the cover, then the target, in that order", () => {

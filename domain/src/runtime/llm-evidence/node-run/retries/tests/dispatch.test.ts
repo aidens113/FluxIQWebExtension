@@ -15,6 +15,7 @@ import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY } from "fluxiq/automation-s
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../failure";
 import { shownHandle } from "../../../page-view/tests/shown-page-lines";
+import { webNodeDispatchWithRetries } from "..";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -164,4 +165,90 @@ test("a replayed press whose target the page draws late is pressed, not called r
       parameters: { selector: "#coupon-late", element: { tagName: "button", visibleText: "Get coupons", selector: "#coupon-late" } } } });
   assert.equal(replayed.resultCode, "core.replay.replayed");
   assert.deepEqual(presses, ["#coupon-late"]);
+});
+
+// t741 C1, from `run-mvgo9wzn-fad4e050` step 0116: the first attempt landed on
+// a page the site served HTTP 429, the extension took the tab back, and the
+// three retries failed only because the control -- inside a menu the return had
+// closed -- was no longer shown. The model was told `target_not_actionable`,
+// which Core's repeat guard does not let it make again. The refusal caused the
+// later failures, so it answers. Here on another kind of site: a library
+// catalogue's "Available now" filter link.
+const CATALOGUE = "https://library.example.test/catalogue?q=rivers";
+const RETRY_AFTER_MS = 5_000;
+const TAB_RETURNED = "HTTP 429 for /catalogue?available=1; the tab was taken back to /catalogue?q=rivers";
+
+function refusedForNow(): ReturnType<typeof failed> {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected: "the filtered list", actual: TAB_RETURNED, retryAfterMs: RETRY_AFTER_MS });
+  return { status: "failed", failure: failure as unknown as JsonObject, error: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED };
+}
+
+/** The catalogue, whose filter link answers `answers` in turn. */
+function cataloguePage(answers: ReadonlyArray<ReturnType<typeof failed>>) {
+  const presses: number[] = [];
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") {
+        presses.push(presses.length + 1);
+        return answers[presses.length - 1] ?? { status: "succeeded", payload: { value: "ok" } };
+      }
+      return { status: "succeeded", payload: { snapshot: {
+        url: CATALOGUE,
+        title: "Catalogue search",
+        viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 },
+        interactiveElements: [
+          { tagName: "button", selector: "#filters", visibleText: "Filters" },
+          { tagName: "a", selector: "#available", visibleText: "Available now", href: `${CATALOGUE}&available=1` }
+        ]
+      } } };
+    }
+  };
+  return { gateway, presses };
+}
+
+const notShown = () => failed(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN);
+
+async function pressFilter(gateway: WebLlmEvidenceGateway) {
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const filter = shownHandle(looked.evidence, "Available now");
+  return await runtime.executeTool({ ...PROJECT, callId: "filter.available", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { node: CLICK, parameters: { target: { handle: filter } }, consequences: [] } });
+}
+
+test("a press the site refused for now, whose retries then found the control gone, reaches the model as the refusal after four attempts", async () => {
+  const site = cataloguePage([refusedForNow(), notShown(), notShown(), notShown()]);
+  const pressed = await pressFilter(site.gateway);
+  assert.equal(pressed.effectApplied, false);
+  assert.deepEqual(site.presses, [1, 2, 3, 4]);
+  const packet = pressed.evidence as Packet;
+  assert.equal(packet.ok, false);
+  assert.equal(packet.code, "refused_by_page");
+  assert.equal((packet.detail as JsonObject).reason, "page_busy_try_later");
+  assert.equal(pressed.resultReason, "page_busy_try_later");
+  assert.equal(packet.attempts, 4);
+});
+
+test("the node's answer after such retries is the refusal's own record: the site's wait and the tab taken back", async () => {
+  const site = cataloguePage([refusedForNow(), notShown(), notShown(), notShown()]);
+  const run = { gateway: site.gateway, sessionId: "session.one", request: { signal: undefined } } as unknown as Parameters<typeof webNodeDispatchWithRetries>[0];
+  const noted: { attempts?: number } = {};
+  const answered = await webNodeDispatchWithRetries(run, { definitionId: CLICK, effect: "mutate", declared: [] }, { actionType: "web.dom.click", parameters: { selector: "#available" }, metadata: {} }, noted);
+  assert.equal(answered.attempts, 4);
+  assert.equal(noted.attempts, 4);
+  const failure = answered.result.failure as JsonObject;
+  assert.equal(failure.code, WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED);
+  assert.equal(failure.retryAfterMs, RETRY_AFTER_MS);
+  assert.equal(failure.actual, TAB_RETURNED);
+});
+
+test("a press whose every attempt found the control not shown is still told so", async () => {
+  const site = cataloguePage([notShown(), notShown(), notShown(), notShown()]);
+  const pressed = await pressFilter(site.gateway);
+  assert.deepEqual(site.presses, [1, 2, 3, 4]);
+  const packet = pressed.evidence as Packet;
+  assert.equal(packet.code, "target_not_actionable");
+  assert.notEqual((packet.detail as JsonObject | undefined)?.reason, "page_busy_try_later");
+  assert.equal(packet.attempts, 4);
 });

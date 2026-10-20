@@ -150,6 +150,10 @@ export function repeatedRejectionDetail(detail: WebLlmToolRejectionDetail | unde
     // wording for a layer with none, which the model read as naming the
     // covered control itself.
     closeWith: detail?.closeWith,
+    // The site's wait and the tab's return on a press refused for now (t741 C1b): a repeat that
+    // dropped them would tell the model less, the second time, about when the same press is worth making.
+    retryAfterMs: detail?.retryAfterMs,
+    tabReturned: detail?.tabReturned,
     repeatedAnswer
   });
 }
