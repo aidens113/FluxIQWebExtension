@@ -44,9 +44,15 @@
 // Written down once because two callers need the same order. Written twice, a
 // fourth Core package would be added to one copy and not the other, and the
 // symptom would be a type error in a worktree that looks correctly provisioned.
+//
+// The build cache is imported only on the path that uses it, never when this
+// module loads: it binds Core's build-cache engine from the Core beside this
+// checkout at import time, and `pnpm task sync-core` imports this module
+// through `apply-move.mjs` while that Core is still the outdated one it is
+// about to move (t735). A Core at Core's `dev` owns its own build, so a moved
+// Core never reaches the import at all.
 
 import path from "node:path";
-import { resolveCoreLibrary, runStep } from "../build-cache/index.mjs";
 import { coreCacheOwnsBuild } from "./cache-delegation.mjs";
 import { runPnpm } from "./pnpm-command.mjs";
 import { noteProgress } from "./progress-note.mjs";
@@ -83,10 +89,10 @@ export function fullCoreDistPaths(coreRoot) {
  * @param {{
  *   env: NodeJS.ProcessEnv, note?: (line: Record<string, unknown>) => void,
  *   packages?: Array<{ filter: string, directory: string }>,
- *   pnpm?: typeof runPnpm, step?: typeof runStep,
- * }} options `pnpm` and `step` replace running pnpm and the build cache, for tests
+ *   pnpm?: typeof runPnpm, step?: typeof import("../build-cache/index.mjs").runStep,
+ * }} options `pnpm` and `step` replace running pnpm and the build cache's `runStep`, for tests
  */
-export async function buildCore(coreRoot, { env, note = noteProgress, packages = CORE_PACKAGES, pnpm = runPnpm, step = runStep }) {
+export async function buildCore(coreRoot, { env, note = noteProgress, packages = CORE_PACKAGES, pnpm = runPnpm, step }) {
   note({ step: "build-core", root: coreRoot, packages: packages.map((item) => item.filter) });
   for (const item of packages) {
     const build = () => pnpm(coreRoot, ["--filter", item.filter, "build"], { env });
@@ -105,9 +111,10 @@ export async function buildCore(coreRoot, { env, note = noteProgress, packages =
       await build();
       continue;
     }
-    const resolved = resolveCoreLibrary(coreRoot, item.directory, { env });
+    const cache = await import("../build-cache/index.mjs");
+    const resolved = cache.resolveCoreLibrary(coreRoot, item.directory, { env });
     if (resolved.command !== `pnpm --filter ${item.filter} build`) throw new Error(`packages/${item.directory} in ${coreRoot} is ${resolved.command.split(" ")[2]}, not ${item.filter}`);
-    const outcome = await step(resolved, { env, run: async () => { await build(); return 0; } });
+    const outcome = await (step ?? cache.runStep)(resolved, { env, run: async () => { await build(); return 0; } });
     note({ step: "build-core-package", package: item.filter, "build-cache": outcome.result, source: outcome.source, reason: outcome.reason, ms: outcome.ms });
     if (outcome.exitCode !== 0) throw new Error(`pnpm --filter ${item.filter} build in ${coreRoot} was not stamped: ${outcome.reason}`);
   }
