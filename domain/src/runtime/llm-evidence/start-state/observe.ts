@@ -9,7 +9,7 @@ import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-st
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmSnapshotBinding } from "../sanitize";
-import { webResetCollections, webControlSpotToken } from "../control-spot";
+import { webResetCollections, webControlSpotToken, webControlStates } from "../control-spot";
 import { present } from "../present";
 import { boundedIdentifier } from "../untrusted-json";
 import { webStartStateChangedLines } from "./changed-lines";
@@ -39,6 +39,7 @@ export async function observeWebStartState(
   const captured = await capture(request);
   input.signal?.throwIfAborted();
   const now = webStartStateFromEvidence(captured.evidence, captured.records);
+  const controls = webControlStates(captured);
   // Where it was read, so Core can bring the target back to this page through the arrival's `url` (t471: an act is looked for on its own page).
   // `lines` are the same differences as the lines themselves, so Core can tell which act changed which line without reading words.
   return present<WebStartStateAnswer>({
@@ -51,9 +52,11 @@ export async function observeWebStartState(
     subjects: captured.subjects === undefined ? undefined : [...new Set([...captured.subjects.values()].map((value) => webControlSpotToken("subject", value)))],
     resource: captured.resetResource,
     scope: captured.resetResource ? webControlSpotToken("scope", `${captured.resetResource}\0${now.location}`) : undefined,
-    collections: webResetCollections(captured).collections
+    collections: webResetCollections(captured).collections,
+    // Every visible stateful control by its own place and state (L1): how Core sees a toggle the build pressed come back.
+    controls: Object.keys(controls).length ? controls : undefined
   });
 }
 
 /** One answer to Core's `startState`; `items` absent when the read had no records. */
-type WebStartStateAnswer = { state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; resource?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }> };
+type WebStartStateAnswer = { state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] }; items?: string[]; subjects?: string[]; scope?: string; resource?: string; collections?: Array<{ scope: string; group: string; subjects: string[]; states: Record<string, string> }>; controls?: Record<string, Record<string, number>> };

@@ -38,10 +38,24 @@
 // A step that moved to another document vouches for no list: the two pages are
 // not one page before and after, and Core credits nothing there anyway. More
 // items than Core reads (2,000) are no list it can use, and none is written.
+//
+// - `controls` (L1 reset settlement): `{ page, location, before, after }`,
+//   for a step whose control is a visible stateful one (the spot's `place`)
+//   and that stayed on its document: how many controls at that place showed
+//   each state on the page before and after the step (`webControlStates`), the
+//   page's scope token, the one a start-state read names the page by, and the
+//   page's `location` that token is built from, as a start-state read carries
+//   `location` beside `scope`. Core reads a toggle the trial pressed from it,
+//   and the press that turns it back; the location is where Core looks when
+//   the ledger holding the act has had no read of that page (L1 d7).
+//   A stateful control the page placed in no record, dialog or subject is
+//   still found for the spot by its selector, since a toggle's place needs none
+//   of them.
 
 import type { JsonObject } from "fluxiq/core";
-import { webTargetSpot } from "../../llm-evidence";
-import { webResetCollections } from "../../llm-evidence/control-spot";
+import { webControlSpotToken, webControlStates, webTargetSpot } from "../../llm-evidence";
+import { isWebStatefulControl, webResetCollections } from "../../llm-evidence/control-spot";
+import { webStatePlaceKey } from "./key";
 import { webNodeTargetPlaceKey } from "./node-target";
 import type { WebStateSnapshotPlaces } from "./snapshot";
 
@@ -62,15 +76,38 @@ export function webStateDiffPlaces(
   const groups = new Set(was.map((collection) => collection.group));
   const collections = was.length && now.length && now.every((collection) => groups.has(collection.group))
     ? { before: was, after: now } : undefined;
-  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}), ...(collections ? { collections } : {}) };
+  const controls = typeof spot?.place === "string" && before && after && !documentChanged ? controlsAt(spot.place, before, after) : undefined;
+  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}), ...(collections ? { collections } : {}), ...(controls ? { controls } : {}) };
+}
+
+/** The counts of each state at `place` on each page, and the page's scope token and the location it is built from, as a start-state read names them (header). */
+function controlsAt(place: string, before: WebStateSnapshotPlaces, after: WebStateSnapshotPlaces): JsonObject | undefined {
+  if (!before.resetResource || !before.evidence) return undefined;
+  const location = before.evidence.location;
+  return {
+    page: webControlSpotToken("scope", `${before.resetResource}\0${location}`),
+    location,
+    before: webControlStates(before)[place] ?? {},
+    after: webControlStates(after)[place] ?? {}
+  };
 }
 
 function spotOf(before: WebStateSnapshotPlaces, node: { definitionId: string; parameterValues?: JsonObject | undefined }): JsonObject | undefined {
   const key = webNodeTargetPlaceKey(node);
-  const handle = key === undefined ? undefined : before.handles.get(key);
+  const handle = key === undefined ? undefined : before.handles.get(key) ?? statefulHandle(before, key);
   if (handle === undefined) return undefined;
   const spot = webTargetSpot(before, handle);
   return Object.keys(spot).length > 0 ? spot : undefined;
+}
+
+/** The handle of the visible stateful control at `key` on the page, which `handles` holds only when it sits in a record or dialog or has a subject (header). */
+function statefulHandle(page: WebStateSnapshotPlaces, key: string): string | undefined {
+  if (!page.evidence || !page.selectors) return undefined;
+  for (const element of page.evidence.elements) {
+    const selector = page.selectors.get(element.target);
+    if (selector !== undefined && webStatePlaceKey(element.frameId, selector) === key) return isWebStatefulControl(element) ? element.target : undefined;
+  }
+  return undefined;
 }
 
 /** The items of every list both pages show, on each side; none when no list is (header). */

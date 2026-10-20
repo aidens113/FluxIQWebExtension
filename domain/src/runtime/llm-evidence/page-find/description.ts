@@ -27,6 +27,9 @@ export type WebLlmDescribeResult = {
 /** Fields printed on their own lines, so not again under `context`. */
 const OWN_LINES: ReadonlySet<string> = new Set(["target", "tag", "attributes", "box"]);
 
+/** Fields the model is never shown: how a list goes on is read only by the reset's list check (`../control-spot/collection.ts`, l1 D1). */
+const NEVER_PRINTED: ReadonlySet<string> = new Set(["listWayOn"]);
+
 /** Everything the page holds about the element `handle` names; a handle not on the page is refused as unobserved. */
 export function webLlmDescribeElement(evidence: WebLlmPageEvidence, handle: string): WebLlmDescribeResult {
   const element = observedElement(evidence, handle);
@@ -68,7 +71,7 @@ function boxLine(element: WebLlmEvidenceElement, evidence: WebLlmPageEvidence): 
  * it, or the nearest named ARIA group, which only the packet's tree says.
  */
 function contextLine(element: WebLlmEvidenceElement, group: string | undefined): string {
-  const fields = Object.entries({ ...element, group }).filter(([key, value]) => !OWN_LINES.has(key) && value !== undefined);
+  const fields = Object.entries({ ...element, group }).filter(([key, value]) => !OWN_LINES.has(key) && !NEVER_PRINTED.has(key) && value !== undefined);
   return fields.length === 0 ? "context: none" : `context: ${fields.map(([key, value]) => `${key}=${printed(value)}`).join(" ")}`;
 }
 
