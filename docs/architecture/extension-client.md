@@ -250,12 +250,56 @@ since they last pressed Connect (remembered in `chrome.storage.session`).
 `e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
 reconnecting, and the alarm being set and firing.
 
+**The offline queue** (boundary audit finding 2). A message sent while the
+socket is down -- a recorded event, a DOM snapshot, an action result, a state
+update -- is queued by Core's `ClientGatewayOutbox`
+(`@fluxiq/client-gateway-websocket`), stored under `fluxiq.outbox` in
+`chrome.storage.session` (`background/connection/outbox/store.ts`; worker
+memory in a browser without it). It survives a worker restart and is forgotten
+when the browser closes, so queued page data never outlives the browser session
+that recorded it. Older builds kept it in `chrome.storage.local` under
+`fluxiq.queuedEvents`; the background removes that key at every start, which
+every upgrade does, and never reads it.
+
+The queue is bounded twice: at most 1,000 entries, and a byte budget of four
+fifths of `chrome.storage.session.QUOTA_BYTES` (10 MB since Chrome 112; 10 MB
+assumed where the browser names none), measured as each entry's UTF-8 JSON
+(`background/connection/outbox/byte-budget.ts`), so a run of large snapshots can
+never fill the area the in-flight records and leases share. Past either limit
+the oldest entries are dropped; an entry alone over the budget is never stored;
+and a storage write the browser refuses never throws out of a send: the oldest
+half of the queue is dropped and the write tried again. Every drop is counted in
+the queue's loss record, by a closed set of reasons (`count_limit`,
+`byte_budget`, `write_failed`). The next flush sends FluxIQ that loss first, as
+one `client.error` with code `client.outbox.entries_lost` and the counts alone
+(Core files it in its audit log and as a marker in the active recording), and
+the panel's activity log says "Some offline messages were lost". A loss is never
+silent.
+
+Each entry is bound to three things when it is queued: the client's **trust
+lineage**, its current project, and the recording the payload names (else the
+recording in progress, else none). The lineage is not the wire `sessionId`,
+which Core mints per socket: it is one id kept while every new socket resumes
+the trusted client by token, and replaced when a socket had to pair or said
+hello without a token -- the same unit Core files a client's recording under.
+It is decided on `server.session_ready`, before the rest of the extension hears
+of it. The flush after `session_ready` delivers, in queue order, only the
+entries whose lineage and project are the current ones and whose recording is
+none, the current one, or one whose own `client.stop_recording` is queued (it
+ended while the socket was down); every other entry is dropped, never sent to a
+trust, project or recording it was not captured for. A send that fails mid-flush
+keeps the undelivered tail. `queuedActionResult` answers only from the current
+lineage.
+
 **A command in flight** (state-aware recovery plan, B3). An action's promise
 dies with the worker that ran it, so before the background sends a Flow action
 toward a page it writes a record to `chrome.storage.session` --
-`{ commandId, actionType, committing, tabId, documentId, startedAt }`, one key
-per command, never a value the action carries -- and clears it once the result
-is sent or queued (`background/connection/in-flight/`). `committing` is the
+`{ commandId, actionType, committing, startedAt, place: { tabId, documentId } }`,
+one key per command, never a value the action carries -- and clears it once the
+result is sent or queued. The bookkeeping is Core's
+`ClientGatewayCommandReconciliation` (`@fluxiq/client-gateway-websocket`), the
+client half of Core's C8; `background/connection/in-flight/web-reconciliation.ts`
+hands it the session area and this domain's facts. `committing` is the
 domain's rule (`webAutomationActionCommits`): a press, a key press, a dialog
 answer, or typing that submits. The record names its tab when the command is
 accepted and is refined with the tab and Chrome's `documentId` just before
@@ -279,8 +323,9 @@ accepted and is refined with the tab and Chrome's `documentId` just before
   alone: the command is still running in this worker, its result is queued
   offline, and the queue is flushed on the next `session_ready`.
 
-A browser without `chrome.storage.session` (Firefox before 115) keeps the
-records in worker memory: a repeated id is still answered, but a worker that
+An id answered `not_seen` is refused from then on with the domain's
+`webAutomationNotSeenActionResult`. A browser without `chrome.storage.session`
+(Firefox before 115) keeps the records in Core's memory area: a repeated id is still answered, but a worker that
 stops takes its records with it. The client declares the behaviour as
 `web.actions.reconcile` version 1 (`domain/src/runtime/capabilities.ts`).
 
@@ -291,8 +336,9 @@ command the builder issues with `lease: { resourceKey, epoch, holder }`. The
 action mapping keeps only the fields it knows, so `gateway-session.ts` carries
 the lease beside the mapped action or fact check on `ServerCommandPayload`.
 `ServerCommandChannel` judges it after a repeated id is answered and before the
-in-flight record is begun (`background/connection/host-lease/`), against the
-highest lease kept per resource key in `chrome.storage.session`
+in-flight record is begun, with Core's `ClientGatewayHostLeaseLedger`
+(`background/connection/host-lease/session-ledger.ts` gives it the session
+area), against the highest lease kept per resource key in `chrome.storage.session`
 (`fluxiq.hostLease.<resourceKey>`, so a restarted worker still knows it):
 
 - a higher epoch is adopted, and the same epoch and holder is current: the
@@ -303,7 +349,7 @@ highest lease kept per resource key in `chrome.storage.session`
 
 A refusal is a `client.action_result` with status `failed` and failure
 `{ category: "blocked_by_capability_or_policy", code, retryable: false, stage:
-"dispatch", effect: "unacted" }` (`domain/src/client/host-lease.ts`). It is sent
+"dispatch", effect: "unacted" }` (Core's `clientGatewayHostLeaseRefusal`). It is sent
 directly, opening no runtime status and recording no event, and settled in
 reconciliation, so a repeat of the id is answered with the refusal and Core
 asking about it hears `landed` with it, never `not_seen`. A command with no
@@ -314,7 +360,7 @@ wins, and with no automation tab open yet it runs where an unleased one would
 (`runtime/action-runner.ts`).
 
 **Saved state of the wrong shape** is repaired, not thrown. Settings, the
-session, the client id and the offline queue are read through
+session, the client id and the offline queue (in session storage) are read through
 `background/saved-state.ts`: each well-formed field is kept, each malformed one
 is replaced by its default (a malformed token is dropped, and the browser pairs
 again), the repair is written back and noted, by field name only, in the problem

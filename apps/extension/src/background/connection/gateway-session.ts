@@ -1,6 +1,7 @@
 // The client-gateway WebSocket session: opening it, keeping it alive,
 // reconnecting with backoff when it drops, and queueing outgoing messages while
-// it is down. This is the seam reliability work lands on — extension reconnect,
+// it is down, each bound to the trust lineage, project and recording it was
+// queued under (Core's `ClientGatewayOutbox`). This is the seam reliability work lands on — extension reconnect,
 // runtime reconnect, tab closure, network failure all pass through here.
 //
 // It owns the socket and everything that describes the socket's health. It owns
@@ -8,9 +9,14 @@
 // caller's decision, reached through the handlers below.
 
 import {
+  clientGatewayLineageAfterReady,
+  clientGatewayOutboxBinding,
   createClientGatewayMessage,
   FluxIQClientGatewayOpenError,
-  FluxIQClientGatewayWebSocketClient
+  FluxIQClientGatewayWebSocketClient,
+  type ClientGatewayOutbox,
+  type ClientGatewayOutboxContext,
+  type ClientGatewayOutboxLoss
 } from "@fluxiq/client-gateway-websocket";
 import { WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/client";
 import { HEARTBEAT_INTERVAL_MS, RECONNECT_BASE_DELAY_MS, RECONNECT_MAX_DELAY_MS } from "../../shared/constants";
@@ -40,14 +46,6 @@ export type GatewayMessageSender = <TType extends ClientGatewayClientMessage["ty
   payload: Extract<ClientGatewayClientMessage, { type: TType }>["payload"]
 ) => Promise<void>;
 
-// The persisted queue a message falls back to when the socket is down. Supplied
-// by the caller so this module does not reach into extension storage itself.
-export type GatewayEventQueue = {
-  readonly queueEvent: (message: ClientGatewayClientMessage) => Promise<number>;
-  readonly readQueuedEvents: () => Promise<ClientGatewayClientMessage[]>;
-  readonly clearQueuedEvents: () => Promise<void>;
-};
-
 export type GatewaySessionDeps = {
   readonly settings: () => FluxIQSettings;
   readonly session: () => FluxIQSession;
@@ -61,7 +59,15 @@ export type GatewaySessionDeps = {
   // Run before a socket is opened, so the session starts against a current
   // view of the active tab.
   readonly beforeConnect: () => Promise<void>;
-  readonly queue: GatewayEventQueue;
+  // The offline queue a message falls back to when the socket is down, kept
+  // for the browser session (`outbox/store.ts`). Supplied by the caller so this
+  // module does not reach into extension storage itself.
+  readonly outbox: ClientGatewayOutbox;
+  // The project and recording the client is in now: what a queued message is
+  // bound to, and what a flush delivers to.
+  readonly queueContext: () => ClientGatewayOutboxContext;
+  // A new trust lineage id, for a socket that had to pair. Tests fix it.
+  readonly mintLineage?: () => string;
   readonly handlers: GatewaySessionHandlers;
   // How long a socket is given to open. Omitted in the extension, which takes
   // Core's `CLIENT_GATEWAY_OPEN_TIMEOUT_MS`; tests shorten it.
@@ -81,6 +87,10 @@ export type GatewaySessionHandlers = {
   // about 30 s in, long before a person has had time to approve (t706). Not a
   // gateway message: an unpaired session may not send client data.
   readonly keepAlive?: () => void;
+  // After a flush that sent FluxIQ the outbox's loss marker: how many queued
+  // messages were dropped before they could be sent, and why (count cap, byte
+  // budget, a refused storage write). The caller tells the person.
+  readonly onQueueLoss?: (loss: ClientGatewayOutboxLoss) => void;
 };
 
 // The connection-health fields the extension status carries.
@@ -101,6 +111,9 @@ export class GatewaySession {
   private pairingReferenceCode: string | undefined;
   private queueSize = 0;
   private shouldStayConnected = false;
+  // The trust lineage the last ready socket ended in, once this worker has
+  // seen or read one. Not the wire `sessionId`, which Core mints per socket.
+  private lineage: string | undefined;
 
   constructor(private readonly deps: GatewaySessionDeps) {}
 
@@ -123,9 +136,10 @@ export class GatewaySession {
     this.setState("connecting");
     await this.deps.beforeConnect();
     await this.client?.close();
+    const hello = this.clientHello();
     const client = new FluxIQClientGatewayWebSocketClient({
       url: this.deps.settings().gatewayUrl,
-      client: this.clientHello(),
+      client: hello,
       WebSocketImpl: WebSocket as never,
       ...(this.deps.openTimeoutMs !== undefined ? { openTimeoutMs: this.deps.openTimeoutMs } : {}),
       tokenStorage: {
@@ -152,7 +166,7 @@ export class GatewaySession {
       }
     });
     this.client = client;
-    this.attachClientHandlers(client);
+    this.attachClientHandlers(client, Boolean(hello.token));
     try {
       await client.connect();
     } catch (error) {
@@ -218,13 +232,15 @@ export class GatewaySession {
     this.lastMessageAt = Date.now();
   }
 
-  // Sends over the open socket, or persists the message to the offline queue so
-  // it survives a service-worker restart and is flushed on the next session.
+  // Sends over the open socket, or queues the message under its binding so it
+  // survives a service-worker restart and is flushed on the next session that
+  // is still in the same lineage, project and recording.
   readonly send: GatewayMessageSender = async (type, payload) => {
     if (this.client?.connected) {
       await (this.client.send as (messageType: ClientGatewayClientMessage["type"], messagePayload: unknown) => Promise<unknown>)(type, payload);
       return;
     }
+    const context = this.deps.queueContext();
     const session = this.deps.session();
     const message = (createClientGatewayMessage as (
       messageType: ClientGatewayClientMessage["type"],
@@ -234,7 +250,7 @@ export class GatewaySession {
       clientId: session.clientId,
       ...(session.sessionId !== undefined ? { sessionId: session.sessionId } : {})
     });
-    this.queueSize = await this.deps.queue.queueEvent(message);
+    this.queueSize = await this.deps.outbox.enqueue(message, clientGatewayOutboxBinding(message, await this.currentLineage(), context));
     this.deps.emitStatus();
   };
 
@@ -243,30 +259,85 @@ export class GatewaySession {
    * command whose result was queued while the socket was down is answered with
    * it, never run again (`in-flight/command-reconciliation.ts`, plan B3).
    *
+   * Only a result queued under the current lineage answers: one queued under
+   * an earlier trust is never delivered, so it cannot answer either.
+   *
    * The wire lets a client report `interrupted` (Core's contract, C8); this
    * extension still reports a leftover as `unknown` or `failed` with the
    * payload marker, so a queued `interrupted` is read as `unknown`: never as
-   * "did not act".
+   * "did not act" (`ClientGatewayOutbox.actionResult`).
    */
   async queuedActionResult(commandId: string): Promise<ClientGatewayActionResult | undefined> {
-    const queued = await this.deps.queue.readQueuedEvents();
-    for (const message of queued) {
-      if (message.type !== "client.action_result" || message.payload.commandId !== commandId) continue;
-      const { status, ...rest } = message.payload;
-      return { ...rest, status: status === "interrupted" ? "unknown" : status };
-    }
-    return undefined;
+    return await this.deps.outbox.actionResult(commandId, await this.currentLineage());
   }
 
+  /**
+   * Delivers, in queue order, what was queued under the current lineage and
+   * project for no recording, the current recording, or a recording that ended
+   * while the socket was down, and drops everything else
+   * (`clientGatewayOutboxDeliverable`). A send failing mid-flush keeps the
+   * undelivered tail and rethrows.
+   */
   async flushQueue(): Promise<void> {
-    if (!this.client?.connected) return;
-    const queued = await this.deps.queue.readQueuedEvents();
-    for (const message of queued) {
-      await (this.client.send as (messageType: ClientGatewayClientMessage["type"], messagePayload: unknown) => Promise<unknown>)(message.type, message.payload);
+    const client = this.client;
+    if (!client?.connected) return;
+    const current = { session: await this.currentLineage(), ...this.deps.queueContext() };
+    const send = client.send as (messageType: ClientGatewayClientMessage["type"], messagePayload: unknown) => Promise<unknown>;
+    try {
+      // A loss the outbox recorded goes to FluxIQ first, as one marker, and
+      // then to the person: dropped messages are never dropped silently.
+      const { lost } = await this.deps.outbox.flush(current, async (message) => await send.call(client, message.type, message.payload));
+      if (lost) this.deps.handlers.onQueueLoss?.(lost);
+    } finally {
+      await this.refreshQueueSize();
     }
-    await this.deps.queue.clearQueuedEvents();
-    this.queueSize = 0;
-    this.deps.emitStatus();
+  }
+
+  /** Removes the queued recording events sent under `eventId` (a step removed before it was sent), and answers how many there were. */
+  async removeQueuedRecordingEvent(eventId: string): Promise<number> {
+    const removed = await this.deps.outbox.removeRecordingEvent(eventId);
+    if (removed > 0) await this.refreshQueueSize();
+    return removed;
+  }
+
+  /**
+   * Reads the queue size from the stored queue, which outlives this worker,
+   * and publishes it when it changed. A restarted worker starts at zero.
+   */
+  async refreshQueueSize(): Promise<number> {
+    const size = await this.deps.outbox.size();
+    if (size !== this.queueSize) {
+      this.queueSize = size;
+      this.deps.emitStatus();
+    }
+    return size;
+  }
+
+  // The lineage queued messages are bound to now: the one this worker last
+  // decided, else the stored one, else none yet ("", which no ready socket
+  // ever ends in).
+  private async currentLineage(): Promise<string> {
+    this.lineage ??= await this.deps.outbox.lineage();
+    return this.lineage ?? "";
+  }
+
+  // Decided on `server.session_ready`, before the caller hears of it: a socket
+  // whose hello carried a token and that was not asked to pair resumed the same
+  // trusted client, so it keeps the stored lineage; any other starts a new one,
+  // and nothing queued under the old trust is delivered to the new.
+  private async adoptLineage(resumed: boolean): Promise<void> {
+    const mint = this.deps.mintLineage ?? (() => globalThis.crypto.randomUUID());
+    let stored: string | undefined;
+    try {
+      stored = await this.deps.outbox.lineage();
+    } catch (error) {
+      // Unreadable: a fresh lineage in memory, so nothing queued is delivered to a trust it may not belong to.
+      this.lineage = mint();
+      throw error;
+    }
+    const next = clientGatewayLineageAfterReady({ stored, resumed, mint });
+    this.lineage = next;
+    if (next !== stored) await this.deps.outbox.setLineage(next);
   }
 
   // Reaching `connected` ends whatever went wrong before it: a failed socket, a
@@ -323,18 +394,28 @@ export class GatewaySession {
     };
   }
 
-  private attachClientHandlers(client: FluxIQClientGatewayWebSocketClient): void {
+  private attachClientHandlers(client: FluxIQClientGatewayWebSocketClient, helloCarriedToken: boolean): void {
     const handlers = this.deps.handlers;
+    // Whether this socket resumed the trusted client: its hello carried a token
+    // and FluxIQ did not ask it to pair (`adoptLineage`).
+    let pairingAsked = false;
     client.on("open", () => this.onOpen());
     client.on("close", () => this.onClose());
     client.on("error", () => this.fail("WebSocket connection failed."));
     client.on("message", ({ message }) => handlers.onServerMessage(message));
     client.on("pairing_required", ({ message }) => {
+      pairingAsked = true;
       this.pairingReferenceCode = message.payload.referenceCode;
       this.setState("pairing");
       handlers.onPairingRequired(this.pairingReferenceCode, message.payload.reason);
     });
-    client.on("session_ready", ({ message }) => handlers.onSessionReady(message));
+    client.on("session_ready", ({ message }) => {
+      // The session is reported ready even when the lineage could not be
+      // stored: the queue is then judged against the lineage held in memory.
+      void this.adoptLineage(helloCarriedToken && !pairingAsked)
+        .catch((error: unknown) => this.deps.reportError(error instanceof Error ? error.message : "Could not store the offline queue's lineage."))
+        .then(() => handlers.onSessionReady(message));
+    });
     client.on("start_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "start_recording" }, message.id));
     client.on("stop_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "stop_recording" }, message.id));
     client.on("capture_snapshot", ({ message }) => handlers.onCommand({ ...message.payload, command: "capture_snapshot" }, message.id));

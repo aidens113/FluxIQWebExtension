@@ -52,7 +52,7 @@ async function runCommand(result: GatewayActionResult, command: FluxIQRuntimeCom
         snapshot: () => ({
           sessions: [{
             sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.type"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.type"], metadata: { domainId: "web-automation" } }]
           }]
         })
       },

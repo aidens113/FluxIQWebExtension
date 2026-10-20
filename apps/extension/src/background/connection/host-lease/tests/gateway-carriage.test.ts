@@ -5,6 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ClientGatewayOutbox, clientGatewayMemoryOutboxStore } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../../shared/protocol";
 import { GatewaySession, type GatewaySessionDeps } from "../../gateway-session";
 
@@ -45,7 +46,8 @@ async function commandsFor(payloads: unknown[]): Promise<ServerCommandPayload[]>
     reportError: () => undefined,
     clearError: () => undefined,
     beforeConnect: async () => undefined,
-    queue: { queueEvent: async () => 0, readQueuedEvents: async () => [], clearQueuedEvents: async () => undefined },
+    outbox: new ClientGatewayOutbox(clientGatewayMemoryOutboxStore()),
+    queueContext: () => ({ projectId: null, recordingId: null }),
     handlers: {
       onServerMessage: () => undefined,
       onPairingRequired: () => undefined,

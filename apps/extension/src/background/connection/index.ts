@@ -33,13 +33,13 @@ export {
 } from "./gateway-payloads";
 export {
   GatewaySession,
-  type GatewayEventQueue,
   type GatewayMessageSender,
   type GatewaySessionDeps,
   type GatewaySessionHandlers,
   type GatewayStatusFields
 } from "./gateway-session";
 export { NavigationRecorder } from "./navigation-recorder";
+export { extensionOutboxByteBudget, extensionOutboxStore } from "./outbox/index";
 export { ScriptedNavigationIntent } from "./scripted-navigation/index";
 export { PointerClickFilter } from "./pointer-click-filter";
 export { ProjectContext, type ProjectContextDeps } from "./project-context";
