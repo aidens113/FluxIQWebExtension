@@ -551,8 +551,14 @@ The 2026-10-18 entries are archived in
 - Shared weaknesses (the debugs' conclusion): build-wide site facts held per brief; refusals that do not say which
   condition failed or whether any call can meet it (builders repeat until the repeat guard ends the brief); the
   supervisor ending the build after one failed brief with money left. t743 makes all three structural.
-- Outcome: Partial (social pending)
-- Follow-up: t743; social debug.
+- Social (debug-rr4-social): run-mvgw3ve5-294881b5 failed $0.153415092 (196 steps, reached repair; round total
+  $0.317408940 for 0 of 4). The last step's `threw non_error` was the build's own 25-minute limit (a TimeoutError) that
+  a step-log bug labels non_error; the real cause is the extension's `list-reader.ts` checking every row for
+  disclosed text before the `where` filter, so posts the filter rejects block the honest read (0129 kept 0 of 30 rows
+  and still failed `incomplete_text`); trial feedback lists only 40 steps and hid the loop trial's stopping step; the
+  judge still advises adding the text field to the refused read. Round 3's reload mark and unnamed field are gone.
+- Outcome: Partial
+- Follow-up: t743 (units S1-S4 plus S5 for social).
 
 ## Open Questions
 
