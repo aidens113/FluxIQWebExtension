@@ -661,6 +661,20 @@ was still running at dispatch and is excluded below by its own file list.
 - Outcome: Accepted
 - Follow-up: rerun round 4 (tracing on for the first live runs).
 
+### 2026-10-20 - Second daily sweep (sweep-1020b); root test script runs every package
+- Agent: supervisor (worker sweep-1020b)
+- Changed: `reports/sweep-1020b.md`; root `package.json` `test` is now `pnpm -r --no-bail test` (the sweep stopped at
+  scenario-lab's failure, so the extension's tests never ran; the exit code still fails on any failure).
+- Validation: worker's runs (Core 3b13e394, downstream 72b7fab3): installs, Core build and check 0; Core test 1
+  (contracts 250/250; client-gateway-websocket 182/182; fluxiq parallel group 12115 passed in 952 s, real-SQL group
+  1531 passed, 1 failed in 943 s; web 3142/3142); downstream check 0; test 1 (domain 2244/2244, scenario-lab 999/1000);
+  build 0. Gone since sweep-1020: all four 15 s timeouts (t740 works), the registry test, both photo-social tests.
+  New: Core `deepseek-bootstrap/exploration.test.ts` token ceiling (`pre_provider_request_total_exceeded`), and
+  scenario-lab crossborder flash-deal-on-arrival `locator.waitFor` 1000 ms. Supervisor check of the flag:
+  `pnpm -r --no-bail --filter @fluxiq-web-extension/real-site-policy exec node -e "process.exit(0)"` -> exit 0.
+- Outcome: Partial (two failures to fix forward)
+- Follow-up: t744 for the two failures; extension totals come back in the next sweep.
+
 ## Open Questions
 
 None requiring user input.
