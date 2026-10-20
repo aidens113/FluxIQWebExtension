@@ -59,9 +59,11 @@ class FlDock extends HTMLElement {
     if (!part) return;
     if (part.getAttribute('part') === 'pill') this.expand();
     else if (part.getAttribute('part') === 'collapse-button') {
+      // Drawn collapsed once the server has it, as every lasting control here is,
+      // so leaving the page straight after never loses the collapse.
+      await act('dock', { minimized: true });
       this.expanded = false;
       this.render();
-      await act('dock', { minimized: true });
     }
   }
 }

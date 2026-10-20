@@ -3,11 +3,14 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "noEmit": true,
-    // The repository root, not this package: the specs' realistic-scenario
-    // guard imports the one list of realistic scenarios from source
-    // (packages/test-runner/src/realistic-scenarios), as the Lab's launchers
-    // do. Nothing is emitted, so the root only widens what may be imported.
-    "rootDir": "../.."
+    // A check-only project emits nothing, so it unsets the emit layout it
+    // would inherit. The specs' realistic-scenario guard imports the one list
+    // of realistic scenarios from source (packages/test-runner/src/
+    // realistic-scenarios), as the Lab's launchers do, and an inherited
+    // rootDir would refuse that file. scenario-lab:check declares the read in
+    // scripts/build-cache/steps.mjs, so its fingerprint covers it.
+    "rootDir": null,
+    "outDir": null
   },
   "include": ["e2e/**/*.ts"]
 }
