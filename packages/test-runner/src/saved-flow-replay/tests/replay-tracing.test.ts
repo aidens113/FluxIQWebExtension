@@ -41,7 +41,7 @@ function harness(record: { topologyOptions: unknown[]; inspected: unknown[]; tok
     },
     inspectReplayTraces: async (input: Parameters<typeof inspectReplayTraces>[0]) => {
       record.inspected.push(input);
-      return { inspection: null, failure: null, secretSources: { replaySecrets: input.replaySecrets.length, sessionTokens: input.sessionTokens.length, sessionTokenReadFailures: input.sessionTokenReadFailures } };
+      return { inspection: null, failure: null, secretSources: { replaySecrets: input.replaySecrets.length, sessionTokens: input.sessionTokens.length, sessionTokenReadFailures: input.sessionTokenReadFailures }, parity: null, parityFailure: null };
     },
   } as unknown as Seams;
 }
@@ -77,7 +77,40 @@ for (const tracing of [undefined, false] as const) {
 
 test("a trace store that cannot be read is a named failure, not a throw", async () => {
   const outcome = await inspectReplayTraces({ storageDir: "unit-storage", projectId: "p", startedAt: "2026-10-20T00:00:00.000Z", replaySecrets: ["s"], sessionTokens: [], sessionTokenReadFailures: 0 }, { inspect: async () => { throw new Error("store unavailable"); } });
-  assert.deepEqual(outcome, { inspection: null, failure: "Error: store unavailable", secretSources: { replaySecrets: 1, sessionTokens: 0, sessionTokenReadFailures: 0 } });
+  assert.deepEqual(outcome, { inspection: null, failure: "Error: store unavailable", secretSources: { replaySecrets: 1, sessionTokens: 0, sessionTokenReadFailures: 0 }, parity: null, parityFailure: "not run: the trace store could not be read" });
+});
+
+const EMPTY_INSPECTION = { projectId: "p", traces: [], tracesSkipped: 0, dedupe: { references: 0, referencedBytes: 0, distinct: 0, distinctBytes: 0 }, secretScan: { secretsChecked: 0, eventsScanned: 0, artifactsScanned: 0, eventHits: 0, artifactHits: 0 } };
+const EMPTY_PARITY = { projectId: "p", traces: [], tracesSkipped: 0, totals: { traces: 0, matched: 0, diverged: 0, failed: 0, compared: 0, matchedPoints: 0, divergencesByClass: { capture_gap: 0, nondeterminism: 0, intake_defect: 0 } }, durationMs: 0 };
+
+test("the parity check replays the same traces the read-back read, from the same store", async () => {
+  let seen: { automationDataDir: string; projectId: string; include?: (manifest: { startedAt: string }) => boolean } | undefined;
+  const outcome = await inspectReplayTraces({ storageDir: path.join("w", ".fluxiq"), projectId: "p", startedAt: "2026-10-20T00:00:00.000Z", replaySecrets: [], sessionTokens: [], sessionTokenReadFailures: 0 }, {
+    inspect: async () => EMPTY_INSPECTION,
+    parity: async input => {
+      seen = input as unknown as typeof seen;
+      return EMPTY_PARITY;
+    },
+  });
+  assert.equal(seen?.automationDataDir, path.join("w", ".fluxiq", "artifacts", "automation-studio"));
+  assert.equal(seen?.projectId, "p");
+  assert.equal(seen?.include?.({ startedAt: "2026-10-19T23:59:59.999Z" }), false);
+  assert.equal(seen?.include?.({ startedAt: "2026-10-20T00:00:00.001Z" }), true);
+  assert.deepEqual(outcome.parity, EMPTY_PARITY);
+  assert.equal(outcome.parityFailure, null);
+});
+
+test("a parity check that throws keeps the read-back and names only the error's kind", async () => {
+  const outcome = await inspectReplayTraces({ storageDir: "unit-storage", projectId: "p", startedAt: "2026-10-20T00:00:00.000Z", replaySecrets: [], sessionTokens: [], sessionTokenReadFailures: 0 }, {
+    inspect: async () => EMPTY_INSPECTION,
+    parity: async () => {
+      throw new TypeError("quoted page text");
+    },
+  });
+  assert.deepEqual(outcome.inspection, EMPTY_INSPECTION);
+  assert.equal(outcome.parity, null);
+  assert.equal(outcome.parityFailure, "the parity check threw TypeError (text withheld)");
+  assert.equal(JSON.stringify(outcome).includes("quoted page text"), false);
 });
 
 test("the replay reads only the traces it started, under the workspace's Automation Studio storage", async () => {
@@ -87,6 +120,7 @@ test("the replay reads only the traces it started, under the workspace's Automat
       seen = input as unknown as typeof seen;
       return { projectId: "p", traces: [], tracesSkipped: 0, dedupe: { references: 0, referencedBytes: 0, distinct: 0, distinctBytes: 0 }, secretScan: { secretsChecked: 2, eventsScanned: 0, artifactsScanned: 0, eventHits: 0, artifactHits: 0 } };
     },
+    parity: async () => EMPTY_PARITY,
   });
   assert.equal(seen?.automationDataDir, path.join("w", ".fluxiq", "artifacts", "automation-studio"));
   assert.equal(seen?.include?.({ startedAt: "2026-10-19T23:59:59.999Z" }), false);

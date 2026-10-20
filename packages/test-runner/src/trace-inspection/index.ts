@@ -10,4 +10,6 @@ export * from "./credential-redactions.js";
 export * from "./holds-any-secret.js";
 export * from "./inspect-project-traces.js";
 export * from "./payload-value.js";
+export * from "./storage-dedupe.js";
+export * from "./stored-event-bytes.js";
 export * from "./summarize-trace.js";
