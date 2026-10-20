@@ -19,8 +19,10 @@ function likeOn(code: string, index: number): ScenarioStep[] {
 
 /**
  * Like the studio's three most recent posts. Each is liked on its own page,
- * then the profile's grid, where the pinned posts come first, is read from the
- * fourth cell to the sixth: the three newest, newest first.
+ * and the next page opens only once the heart has turned, which it does when
+ * the server has the like; then the profile's grid, where the pinned posts
+ * come first, is read from the fourth cell to the sixth: the three newest,
+ * newest first.
  */
 export const newestLikesWorkflow: ScenarioWorkflow = {
   id: "newest-likes",
