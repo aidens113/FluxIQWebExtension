@@ -32,6 +32,22 @@ export type BuilderTurn = {
   complete: (result: JsonObject) => ScriptedAnswer;
 };
 
+/**
+ * One supervisor turn, for a spec that scripts the supervisor itself (t743: several briefs, a refused ending and its
+ * repair) instead of the default one-part plan and single build brief.
+ */
+export type SupervisorTurn = {
+  /** The supervisor's turn, from 1. */
+  step: number;
+  evidence: ScriptedEntry[];
+  /** The newest answer of `toolId`. */
+  last: (toolId: string) => JsonObject | undefined;
+  call: (callId: string, toolId: string, input: JsonObject) => ScriptedAnswer;
+  /** The default one-part plan's `project.write_plan` input, for a script that keeps it. */
+  plan: () => JsonObject;
+  complete: (result: JsonObject) => ScriptedAnswer;
+};
+
 export type ScriptedProviderOptions = {
   task: string;
   permitted: string[];
@@ -39,6 +55,8 @@ export type ScriptedProviderOptions = {
   maxIterations: number;
   maxCallsPerRun: number;
   builder: (turn: BuilderTurn) => ScriptedAnswer | Promise<ScriptedAnswer>;
+  /** Scripts every supervisor turn; absent, the default one-part plan, one build brief, and completion on its answer. */
+  supervisor?: (turn: SupervisorTurn) => ScriptedAnswer | Promise<ScriptedAnswer>;
 };
 
 /** What the scripted supervisor saw each of its calls answer, and how many turns each role took. */
@@ -71,10 +89,10 @@ export function bindScriptedProvider(build: Pick<InstalledBuild, "service">, opt
         supervisorStep++;
         const previous = evidence.at(-1);
         if (previous) receipts.push({ call: previous.toolId, code: previous.value.code ?? (previous.value.ok === true ? "ok" : "unknown") });
-        if (supervisorStep === 1) {
-          const part = { id: "p1", quote: { sourceId: options.instructionSourceId(), text: options.task }, goalFacts: ["A new line exists"], lastingActs: options.permitted };
-          return call("plan", "project.write_plan", { taskSpec: { parts: [part], notAsked: [] }, subflows: [{ key: "main", name: "New line", parts: ["p1"] }] });
-        }
+        const part = { id: "p1", quote: { sourceId: options.instructionSourceId(), text: options.task }, goalFacts: ["A new line exists"], lastingActs: options.permitted };
+        const plan = (): JsonObject => ({ taskSpec: { parts: [part], notAsked: [] }, subflows: [{ key: "main", name: "New line", parts: ["p1"] }] });
+        if (options.supervisor) return options.supervisor({ step: supervisorStep, evidence, last, call, plan, complete: result => answer({ kind: "complete", result }) });
+        if (supervisorStep === 1) return call("plan", "project.write_plan", plan());
         if (supervisorStep === 2) {
           const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: options.permitted, maxIterations: options.maxIterations };
           return call("dispatch", "project.dispatch", { reason: "Exercise the transport.", briefs: [brief] });

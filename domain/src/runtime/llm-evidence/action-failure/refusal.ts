@@ -96,7 +96,11 @@ const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Objec
   // used to fall through to `action_failed`, which the activity card reads as
   // "the step wasn't accepted" (t174 F40, run-muqk4u32 step 0021).
   [WEB_AUTOMATION_FAILURE_CODES.REFUSED_BY_PAGE]: "refused_by_page",
-  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "refused_by_page"
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "refused_by_page",
+  // The press brought nothing but the page's own live-region notice (t743):
+  // the page answered it and did nothing, so its words, quoted beside the
+  // refusal, are what the model reads next.
+  [WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE]: "refused_by_page"
 });
 
 /**
@@ -126,6 +130,7 @@ const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = O
   [WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED]: "page_not_scriptable",
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "channel_to_page_failed",
   [WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT]: "press_had_no_effect",
+  [WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE]: "page_reported_press_failed",
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]: "node_not_runnable_here",
   [WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED]: "node_not_runnable_here",
   [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER]: "parameter_not_readable",

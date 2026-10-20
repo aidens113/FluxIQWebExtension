@@ -94,6 +94,9 @@ export function webElementFingerprint(source: WebElementFingerprintSource): WebA
     label: filled(source.label),
     attributes: identityAttributes(attributes, tagName),
     context: source.context,
+    // Whether a step reads these words is the step's to say, never the capture's: plan resolution marks it
+    // where the node kind is known (`../runtime/llm-evidence/plan-resolution/read-identity.ts`, t743).
+    readsWords: undefined,
     // Core's remaining signals. A web page has no source for the first four,
     // `url` names the page rather than the control, and `bounds` are the
     // capture's viewport rather than the run's, which is why the page refuses

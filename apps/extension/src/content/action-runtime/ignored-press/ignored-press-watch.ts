@@ -34,10 +34,12 @@ export type IgnoredPressWatch = {
   settle(windowMs: number): Promise<IgnoredPressAnswer>;
   /**
    * After `settle`: resolves `true` only when, within `windowMs`, the page
-   * settled exactly as it was before the press and nothing else answered it
-   * (`settled-look.ts`). Stops the look.
+   * settled exactly as it was before the press and nothing else answered it,
+   * `"announced"` when that held but for a notice the page put in one of its
+   * own notice regions (t743), and `false` otherwise (`settled-look.ts`).
+   * Stops the look.
    */
-  settleUnchanged(windowMs: number): Promise<boolean>;
+  settleUnchanged(windowMs: number): Promise<boolean | "announced">;
   /** Stops without waiting, the settled look included; safe to call more than once. */
   stop(): void;
 };

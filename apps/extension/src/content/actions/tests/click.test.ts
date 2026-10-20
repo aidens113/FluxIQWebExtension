@@ -13,336 +13,41 @@
 // The row that matters most is the one where the page cancelled the click and
 // the watch saw nothing: that is a dead link, and it must fail. Make
 // `linkValidation` pass it and that row goes red.
+//
+// The fakes are `click/`'s, shared with `click/tests/`, which holds the rows on
+// the settled look (t517, t743) since 2026-10-20.
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
-import type { ActionabilityRejectionCode, ActionabilityReport, InPlaceEffect, InPlaceEffectWatch, PressSignal, RateLimitNotice, RobotCheckSighting } from "../../action-runtime";
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
+import type { ActionabilityRejectionCode, ActionabilityReport, PressSignal, RobotCheckSighting } from "../../action-runtime";
 import { runWithRecovery, type RecoveryFault } from "../../action-runtime/recovery";
-import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../types";
+import type { BrowserActionCommand, BrowserActionResult } from "../../types";
 import { clickAction } from "../click";
 import type { ContentActionDependencies } from "../types";
+import {
+  click,
+  CLICK,
+  COVER_DETAIL,
+  dependencies,
+  fakeCheckWatch,
+  fakeNoticeWatch,
+  fakePage,
+  fakeWatch,
+  FIRST_PRESS,
+  IGNORED,
+  installMouseEvent,
+  LINK_HREF,
+  notPressable,
+  PAGE,
+  PRESSABLE,
+  SECOND_PRESS,
+  type IgnoredRecord
+} from "./click";
 
-const PAGE = "http://127.0.0.1:4000/scenarios/company-directory/";
-const LINK_HREF = `${PAGE}?sector=logistics`;
 const EXPECTED = `navigation to ${LINK_HREF} begins, or the page answers the click in place`;
 /** `IN_PLACE_WINDOW_MS` in the verb. */
 const WINDOW_MS = 5_000;
-
-const CLICK: BrowserActionCommand = { commandId: "c-click", actionType: "web.dom.click", selector: '[data-testid="sector-logistics"]' };
-
-/** What the page does when the click event reaches it. */
-type PageBehaviour = {
-  /** The target is inside a link naming `LINK_HREF`; a button otherwise. */
-  link: boolean;
-  /** The page's handler cancels the click's default action. */
-  prevent: boolean;
-  /** The handler moves the address before the click event returns, as a hash link or a synchronous router push does. */
-  moveTo?: string;
-  /** The target is no command control -- a text box, a line of text -- so no selector but a link's finds it. */
-  plain?: boolean;
-};
-
-type FakePage = { element: Element; events: string[] };
-
-/** The `MouseEvent` the verb constructs, which Node lacks; only its type is read here. */
-function installMouseEvent(t: TestContext): void {
-  const global = globalThis as { MouseEvent?: unknown };
-  const had = Object.prototype.hasOwnProperty.call(global, "MouseEvent");
-  const previous = global.MouseEvent;
-  global.MouseEvent = class {
-    constructor(readonly type: string, readonly init: unknown) {}
-  };
-  t.after(() => {
-    if (had) global.MouseEvent = previous;
-    else delete global.MouseEvent;
-  });
-}
-
-function fakePage(behaviour: PageBehaviour): FakePage {
-  const events: string[] = [];
-  const location = { href: PAGE };
-  const anchor = { href: LINK_HREF, protocol: "http:", focus: () => undefined };
-  const target = {
-    ownerDocument: { location, defaultView: {} },
-    closest: (selector: string) => {
-      if (selector === "a[href]") return behaviour.link ? anchor : null;
-      return behaviour.plain ? null : target;
-    },
-    focus: () => undefined,
-    dispatchEvent(event: { type: string }): boolean {
-      events.push(event.type);
-      if (event.type !== "click") return true;
-      if (behaviour.moveTo !== undefined) location.href = behaviour.moveTo;
-      return !behaviour.prevent;
-    }
-  };
-  return { element: target as unknown as Element, events };
-}
-
-type WatchRecord = { made: number; settledWith: number[]; stopped: number };
-
-/** An in-place watch that reports `effect` when settled, and records how the verb used it. */
-function fakeWatch(effect: InPlaceEffect | undefined, events: string[]): { make: (link: Element) => InPlaceEffectWatch; record: WatchRecord } {
-  const record: WatchRecord = { made: 0, settledWith: [], stopped: 0 };
-  return {
-    record,
-    make: () => {
-      events.push("watch");
-      record.made += 1;
-      return {
-        settle: async (timeoutMs) => {
-          record.settledWith.push(timeoutMs);
-          return effect;
-        },
-        stop: () => {
-          record.stopped += 1;
-        }
-      };
-    }
-  };
-}
-
-type NoticeRecord = { made: number; settledWith: number[]; stopped: number; refusedWith: RateLimitNotice[]; refusedByPageWith: RateLimitNotice[] };
-
-/** A rate-limit watch that reports `notice` when settled (`later` for a press made once more), and records how the verb used it. */
-function fakeNoticeWatch(
-  notice: RateLimitNotice | undefined,
-  events: string[],
-  later?: RateLimitNotice
-): { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord } {
-  const record: NoticeRecord = { made: 0, settledWith: [], stopped: 0, refusedWith: [], refusedByPageWith: [] };
-  return {
-    record,
-    make: () => {
-      events.push("notice-watch");
-      record.made += 1;
-      const answer = record.made === 1 ? notice : later;
-      return {
-        settle: async (windowMs) => {
-          record.settledWith.push(windowMs);
-          return answer;
-        },
-        stop: () => {
-          record.stopped += 1;
-        }
-      };
-    }
-  };
-}
-
-type CheckRecord = { made: number; settledWith: Array<[number, number]>; stopped: number; handedOver: RobotCheckSighting[] };
-
-/** A robot-check watch that reports `sighting` when settled, and records how the verb used it. */
-function fakeCheckWatch(sighting: RobotCheckSighting | undefined, events: string[]): { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord } {
-  const record: CheckRecord = { made: 0, settledWith: [], stopped: 0, handedOver: [] };
-  return {
-    record,
-    make: () => {
-      events.push("check-watch");
-      record.made += 1;
-      return {
-        settle: async (windowMs, waitMs) => {
-          record.settledWith.push([windowMs, waitMs]);
-          return sighting;
-        },
-        stop: () => {
-          record.stopped += 1;
-        }
-      };
-    }
-  };
-}
-
-type IgnoredRecord = { made: number; settledWith: number[]; stopped: number };
-
-/**
- * An ignored-press watch that reports `seen` when the first press's watch is
- * settled and `secondSeen` for the press made once more, and records how the
- * verb used it.
- */
-function fakeIgnoredWatch(
-  firstSeen: PressSignal[],
-  events: string[],
-  secondSeen: PressSignal[] = ["change"],
-  settledUnchanged = false
-): { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord; unchangedAsked: number[] } {
-  const record: IgnoredRecord = { made: 0, settledWith: [], stopped: 0 };
-  // The windows each press's settled look was asked to wait (t517); it answers `settledUnchanged`.
-  const unchangedAsked: number[] = [];
-  return {
-    record,
-    unchangedAsked,
-    make: () => {
-      events.push("ignored-watch");
-      record.made += 1;
-      const seen = record.made === 1 ? firstSeen : secondSeen;
-      return {
-        settle: async (windowMs) => {
-          record.settledWith.push(windowMs);
-          return { seen: [...seen], afterMs: seen.length > 0 ? 4 : windowMs };
-        },
-        settleUnchanged: async (windowMs) => {
-          unchangedAsked.push(windowMs);
-          return settledUnchanged;
-        },
-        stop: () => {
-          record.stopped += 1;
-        }
-      };
-    }
-  };
-}
-
-/** The dependencies the click verb reads, with a result builder that keeps only the verdict. Anything else it reaches for throws. */
-function dependencies(
-  element: Element,
-  watchInPlaceEffect: ContentActionDependencies["watchInPlaceEffect"],
-  notices: { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord },
-  checks: { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord },
-  ignored: { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord },
-  pressableAgain: boolean,
-  againAs: ActionabilityRejectionCode = "covered",
-  judgedAs?: () => ActionabilityReport
-): ContentActionDependencies {
-  let judged = 0;
-  const provided: Partial<ContentActionDependencies> = {
-    resolveTarget: () => ({ element, resolution: {} as ReturnType<ContentActionDependencies["resolveTarget"]>["resolution"] }),
-    checkActionability: () => {
-      judged += 1;
-      if (judgedAs) return judgedAs();
-      return judged === 1 || pressableAgain ? PRESSABLE : notPressable(againAs);
-    },
-    // The record the real builder writes for a gate's refusal (`results.ts`): its reason word leads `actual`.
-    rejected: (action: BrowserActionCommand, startedAt: number, code: string, expected: string, actual: string): BrowserActionResult => ({
-      commandId: action.commandId,
-      actionType: action.actionType,
-      status: "failed",
-      message: `Action rejected: ${actual}`,
-      validation: { status: "failed", expected, actual },
-      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, { expected, actual: `${code}: ${actual}` }),
-      startedAt,
-      finishedAt: startedAt
-    }),
-    describeElement: () => ({}) as ReturnType<ContentActionDependencies["describeElement"]>,
-    captureSnapshot: () => ({}) as ReturnType<ContentActionDependencies["captureSnapshot"]>,
-    watchInPlaceEffect,
-    watchRateLimitNotice: notices.make,
-    watchRobotCheck: checks.make,
-    watchIgnoredPress: ignored.make,
-    needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: RobotCheckSighting): BrowserActionResult => {
-      checks.record.handedOver.push(sighting);
-      return {
-        commandId: action.commandId,
-        actionType: action.actionType,
-        status: "failed",
-        validation: { status: "failed", expected: "the page answers the press", actual: "a robot check" },
-        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, { actual: "captcha: a robot check" }),
-        startedAt,
-        finishedAt: startedAt
-      };
-    },
-    rateLimited: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice): BrowserActionResult => {
-      notices.record.refusedWith.push(notice);
-      return {
-        commandId: action.commandId,
-        actionType: action.actionType,
-        status: "failed",
-        validation: { status: "failed", expected: "the page accepts the press", actual: "refused" },
-        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { retryAfterMs: notice.retryAfterMs }),
-        startedAt,
-        finishedAt: startedAt
-      };
-    },
-    refusedByPage: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice): BrowserActionResult => {
-      notices.record.refusedByPageWith.push(notice);
-      return {
-        commandId: action.commandId,
-        actionType: action.actionType,
-        status: "failed",
-        validation: { status: "failed", expected: "the page accepts the press", actual: "refused: needs something first" },
-        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.REFUSED_BY_PAGE),
-        startedAt,
-        finishedAt: startedAt
-      };
-    },
-    // As the real builder (`results.ts`): a failed validation carries the code the verb named, when it named one.
-    success: (action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionValidation, _evidence?: unknown, failureCode?: WebAutomationFailureCode): BrowserActionResult => ({
-      commandId: action.commandId,
-      actionType: action.actionType,
-      status: validation.status === "failed" ? "failed" : "succeeded",
-      message,
-      validation,
-      ...(validation.status === "failed" && failureCode ? { failure: webAutomationFailureRecord(failureCode, { expected: validation.expected, actual: validation.actual }) } : {}),
-      startedAt,
-      finishedAt: startedAt
-    })
-  };
-  return new Proxy(provided as ContentActionDependencies, {
-    get(target, property: string | symbol) {
-      const found = (target as unknown as Record<string | symbol, unknown>)[property];
-      if (found !== undefined || typeof property === "symbol") return found;
-      throw new Error(`the click verb reached for ${property}, which this test does not provide`);
-    }
-  });
-}
-
-/** The gate's answer for a control that can be pressed. */
-const PRESSABLE: ActionabilityReport = { actionable: true, point: { x: 10, y: 20 }, detail: "the point 10,20 landed on the target" };
-
-/** What the gate says of a layer over the control: what the point landed on, and the layer it belongs to (`covering-layer.ts`). */
-const COVER_DETAIL = `the point 10,20 landed on a card, which covers the target; it is under the layer "Hi, I'm Val"`;
-
-/** The gate's answer for a control that can no longer be pressed, for each of its reasons. */
-function notPressable(code: ActionabilityRejectionCode): ActionabilityReport {
-  if (code === "covered") return { actionable: false, code, detail: COVER_DETAIL, point: { x: 10, y: 20 } };
-  return { actionable: false, code, detail: code === "disabled" ? "the element is disabled" : "the element is not in the document" };
-}
-
-async function click(
-  t: TestContext,
-  behaviour: PageBehaviour,
-  effect: InPlaceEffect | undefined,
-  action: BrowserActionCommand = CLICK,
-  notice?: RateLimitNotice,
-  sighting?: RobotCheckSighting,
-  startedAt = 1_000,
-  pressing: PressOptions = {}
-) {
-  installMouseEvent(t);
-  const page = fakePage(behaviour);
-  const watch = fakeWatch(effect, page.events);
-  const notices = fakeNoticeWatch(notice, page.events, pressing.secondNotice);
-  const checks = fakeCheckWatch(sighting, page.events);
-  // A page that answers the press unless a row says it ignored it, so every
-  // row written before the extra press existed keeps its meaning.
-  const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events, pressing.secondSeen, pressing.settledUnchanged);
-  const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true, pressing.againAs);
-  const result = await clickAction(action, deps, startedAt);
-  return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record, unchangedAsked: ignored.unchangedAsked };
-}
-
-/** What the page did about the first press, for the rows about pressing once more. */
-type PressOptions = {
-  /** The signs the ignored-press watch saw; `[]` is a press the page ignored. */
-  seen?: PressSignal[];
-  /** Whether the control can still be pressed when it is judged again; true unless a row says otherwise. */
-  pressableAgain?: boolean;
-  /** Why it cannot, when it cannot: covered unless a row says otherwise. */
-  againAs?: ActionabilityRejectionCode;
-  /** The rate-limit notice the press made once more is answered with. */
-  secondNotice?: RateLimitNotice;
-  /** The signs the press made once more was answered with; the page answers it unless a row says otherwise. */
-  secondSeen?: PressSignal[];
-  /** Whether the page, once settled, was exactly as before the press (t517); it was not unless a row says so. */
-  settledUnchanged?: boolean;
-};
-
-/** The events of one press, from the hover to the click, with the watches a first press on a button starts. */
-const FIRST_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "ignored-watch", "mousedown", "mouseup", "click"];
-/** A press made once more: the same gesture and the same three watches, since whether it was answered decides the result. */
-const SECOND_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "ignored-watch", "mousedown", "mouseup", "click"];
-const IGNORED: PressOptions = { seen: [] };
 
 test("a link the page cancelled and then answered by changing its content passes, and says so", async (t) => {
   const { result, watch } = await click(t, { link: true, prevent: true }, { kind: "content", afterMs: 202 });
@@ -630,65 +335,6 @@ test("a link is never watched for an ignored press, and never pressed twice: its
   const { ignored, events } = await click(t, { link: true, prevent: true }, undefined, CLICK, undefined, undefined, 1_000, IGNORED);
   assert.equal(ignored.made, 0);
   assert.equal(events.filter((event) => event === "click").length, 1);
-});
-
-// A press that certainly did nothing (t517): social-network-feed's Post spins on its first press and turns back,
-// posting nothing. The settled look (`ignored-press/settled-look.ts`) decides, and such a press fails as NO_EFFECT,
-// marked certainNoEffect, for Core to make once more. Take the look out of `clickAction` and the first row goes red.
-const SETTLE_MS = 1_500; // `NO_EFFECT_SETTLE_MS` in the verb
-
-test("a button that shows a brief busy state and then reverts, leaving the page as it was, fails as certainly without effect", async (t) => {
-  const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true });
-  assert.equal(result.status, "failed");
-  assert.deepEqual(events, FIRST_PRESS, "the click itself presses once: the press made once more is Core's");
-  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
-  assert.deepEqual(result.failure, {
-    category: "action_failed",
-    code: "web.action.no_effect",
-    retryable: true,
-    stage: "execution",
-    expected: "the page answers the press",
-    actual: "the point 10,20 landed on the target; the page changed only for a moment, and once it settled nothing on it had changed: no request, no navigation, no focus move, nothing outside the control's section, and the section exactly as before the press; the control can still be pressed",
-    effect: "unacted",
-    certainNoEffect: true
-  });
-});
-
-test("a press whose answer stayed on the page passes as before, after the settled look", async (t) => {
-  const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: false });
-  assert.equal(result.status, "succeeded");
-  assert.deepEqual(events, FIRST_PRESS);
-  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
-});
-
-test("a press answered by a request, a navigation or a focus move is never looked at again: it was answered", async (t) => {
-  for (const signal of ["request", "navigation", "focus"] as PressSignal[]) {
-    const { result, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change", signal], settledUnchanged: true });
-    assert.equal(result.status, "succeeded", signal);
-    assert.deepEqual(unchangedAsked, [], signal);
-  }
-});
-
-test("no command control is held to an answer, and a control no longer pressable once settled was answered", async (t) => {
-  const plain = await click(t, { link: false, prevent: false, plain: true }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true });
-  assert.equal(plain.result.status, "succeeded");
-  assert.deepEqual(plain.unchangedAsked, []);
-  for (const againAs of ["disabled", "hidden", "covered"] as ActionabilityRejectionCode[]) {
-    const { result } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, pressableAgain: false, againAs });
-    assert.equal(result.status, "succeeded", againAs);
-  }
-});
-
-test("the press the click made once more is never handed to Core to press a third time", async (t) => {
-  const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: [], secondSeen: ["change"], settledUnchanged: true });
-  assert.equal(result.status, "succeeded");
-  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
-  assert.deepEqual(unchangedAsked, [], "only a first press is looked at again");
-});
-
-test("a command's own timeout shortens the settled look's window, and never lengthens it", async (t) => {
-  const shorter = await click(t, { link: false, prevent: false }, undefined, { ...CLICK, timeoutMs: 600 }, undefined, undefined, 1_000, { seen: ["change"] });
-  assert.deepEqual(shorter.unchangedAsked, [600]);
 });
 
 // The press the page refused because it needs something first (t174 F40):
