@@ -171,6 +171,15 @@ export type WebAutomationElementFingerprint = ElementFingerprint & {
    * every consumer downstream of the Flow node.
    */
   context?: WebAutomationElementContext | undefined;
+  /**
+   * The step reads this element's words: they are its value, not a veto. An
+   * earlier step of the same Flow may have changed them, so the page finds the
+   * element by everything else and lets the words only break a tie
+   * (`runtime/llm-evidence/plan-resolution/read-identity.ts`,
+   * `apps/extension/src/content/identity/read-words.ts`). Absent on every
+   * other target.
+   */
+  readsWords?: boolean | undefined;
 };
 
 export type WebAutomationActionVisualTarget = {

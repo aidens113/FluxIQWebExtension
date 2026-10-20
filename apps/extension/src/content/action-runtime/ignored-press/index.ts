@@ -3,7 +3,10 @@
 // `press-again.ts` holds the rule, and `command-presses.ts` counts the extra
 // press across the in-page recovery's attempts; the rest reads the page for it.
 // `settled-look.ts` says whether a press certainly did nothing once the page
-// settled (t517), which the click reports for Core to press once more.
+// settled (t517), which the click reports for Core to press once more, or that
+// it brought nothing but a notice in one of the page's own notice regions
+// (`live-region.ts`, t743), which the click reports as the page saying the
+// press failed.
 
 export { watchIgnoredPress } from "./ignored-press-watch";
 export { extraPressesMade, noteExtraPress } from "./command-presses";

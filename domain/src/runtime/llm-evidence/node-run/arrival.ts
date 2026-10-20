@@ -56,8 +56,16 @@
 // held one does, and nothing else changes -- the opening still re-arms, still
 // forgets the last build, and arrives only by navigating.
 //
+// **And the build's places** (t743, office rerun round 4,
+// `run-mvgvyaip-d856e135`). A repair and a reset brief were refused navigations
+// to pages the build had stood on, which Core's own words had named to them.
+// Every brief's opening call (build, repair, reset) may carry the locations
+// Core prints for the build under `places` (`webNodeOpeningPlaces`): each counts
+// as shown (`./shown-addresses.ts`), and nothing else changes -- a place is no
+// arrival and no step.
+//
 // **Only Core's own opening call.** Every key Core sets on its opening call
-// (`held`, `repairs`, `arrived`) is read only on a call Core's frame marks as
+// (`held`, `repairs`, `places`, `arrived`) is read only on a call Core's frame marks as
 // its opening (`opening`, t728), scoped or not. Before t728 this domain read
 // Core's opening call id, `initial.<toolId>` or `initial.<toolId>.<scope>`, for
 // it, and a model could write an id of that shape. A model-written call never
@@ -142,6 +150,23 @@ export function webNodeRepairedFlow(call: WebNodeOpeningCall): { look: JsonObjec
   if (call.opening === undefined || !Array.isArray(repairs)) return undefined;
   const { [REPAIRS_KEY]: _repairs, ...look } = call.value;
   return { look, addresses: navigationAddresses(repairs as JsonValue[]) };
+}
+
+/** The key under which Core's opening call of any brief carries the build's places, as Core prints them (t743). */
+const PLACES_KEY = "places";
+
+/**
+ * When this call is Core's opening call of a brief carrying the build's places:
+ * the call without them, and each place that is text. Otherwise nothing.
+ *
+ * Read only on Core's own opening call (header), as `repairs` is; anywhere else
+ * `places` is an unexpected key and refused as one.
+ */
+export function webNodeOpeningPlaces(call: WebNodeOpeningCall): { look: JsonObject; places: string[] } | undefined {
+  const places = call.value[PLACES_KEY];
+  if (call.opening === undefined || !Array.isArray(places)) return undefined;
+  const { [PLACES_KEY]: _places, ...look } = call.value;
+  return { look, places: places.filter((place): place is string => typeof place === "string") };
 }
 
 /**

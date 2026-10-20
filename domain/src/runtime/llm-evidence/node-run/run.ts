@@ -74,7 +74,7 @@ import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
 import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
-import { webNodeHeldFlow, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
+import { webNodeHeldFlow, webNodeOpeningPlaces, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
 import { webNodeBuildOf, type WebNodeBuildKey } from "./build-state";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webNodeCallWithDeclarationBeside } from "./nested-consequences";
@@ -151,11 +151,12 @@ type WebNodeCallRecord = {
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
-  // Whether this is Core's opening call of a round, as Core's frame says (`./build-state/`, t728). A repair's
-  // opening call carries the repaired proposal's calls, and runs without them (`./arrival.ts`, t648).
-  const { opening } = webNodeBuildOf(run.request);
+  // Core's frame says whether this is its opening call of a round, or a move it makes itself (`./build-state/`, t728, t743).
+  const { opening, coreMove } = webNodeBuildOf(run.request);
+  // An opening carries a repaired proposal's calls (t648) and the build's places (t743), and runs without them (`./arrival.ts`).
   const repaired = webNodeRepairedFlow({ value: run.request.value, opening });
-  const opened = repaired?.look ?? run.request.value;
+  const placed = webNodeOpeningPlaces({ value: repaired?.look ?? run.request.value, opening });
+  const opened = placed?.look ?? repaired?.look ?? run.request.value;
   // The opening look of a round that continues a Flow carries the Flow's calls, and runs without them (`./arrival.ts`).
   const continuing = webNodeHeldFlow({ value: opened, opening });
   // A builder's opening look on the entry Core prepared for it is marked so, and runs without the mark (`./arrival.ts`).
@@ -186,7 +187,6 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // told no start location is not touched. A round that continues a Flow forgets nothing, and each navigation the
   // Flow holds is an address shown and, told a start location, the build's arrival.
   if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), opening);
-  if (!continuing) run.addresses.opening(buildOf(run), opening);
   if (!continuing) run.layers.opening(buildOf(run), opening);
   if (!continuing) run.held.opening(buildOf(run), opening);
   else run.held.hold(buildOf(run), continuing.calls);
@@ -194,8 +194,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     run.addresses.held(buildOf(run), address, run.request.startLocation);
     if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
   }
-  // A repaired proposal's addresses are shown, after the opening forgot the last build; it arrives nowhere (t648).
-  for (const address of repaired?.addresses ?? []) run.addresses.held(buildOf(run), address, run.request.startLocation);
+  // A repaired proposal's addresses and the build's places are shown; neither arrives anywhere (t648, t743).
+  for (const address of [...(repaired?.addresses ?? []), ...(placed?.places ?? [])]) run.addresses.held(buildOf(run), address, run.request.startLocation);
   // Re-armed above like any fresh build, then arrived: the steps that reached its entry began at the start location.
   if (entered && run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
   const node = webRunnableNode(value.node);
@@ -359,8 +359,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), record);
     }
-    // And only to an address this build was shown, with the page back so the link that goes there can be pressed.
-    if (run.addresses.refuses(buildOf(run), node, ran, { location: current?.evidence.location, startLocation: run.request.startLocation })) {
+    // And only to an address this build was shown, with the page back so the link that goes there can be pressed. Core's own move is not the model's (t743).
+    if (!coreMove && run.addresses.refuses(buildOf(run), node, ran, { location: current?.evidence.location, startLocation: run.request.startLocation })) {
       // This refusal hands the look back, so from here it is a packet shown.
       if (current) run.shown(current);
       return refusal(current, "address_not_shown", webUnshownAddressRefusal(run.request.startLocation), record);

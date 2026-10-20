@@ -55,6 +55,11 @@
 // the name, the label, the id or the test id -- must agree exactly, because a
 // partial agreement is what a different action with a similar label looks like.
 //
+// `read-words.ts` is the one exception to words deciding: a target a read step
+// marked `readsWords` is judged by the veto and ranked by the scorer without
+// the words it reads, which only break an exact tie or confirm a winner, since
+// an earlier step of its Flow may have changed them (t743 D2b).
+//
 // `page-tokens.ts` is the one place scoring asks the page a question: whether
 // any element still carries an id or selector token the recording named. One
 // that nothing carries is evidence of nothing and is left out of the score.

@@ -77,6 +77,23 @@
 // Core is asked once per candidate, and the ranking is put in Core's own order
 // (`coreOrder`) rather than a new one.
 //
+// **And the words a read step reads** (`./read-words.ts`, t743 D2b). A target
+// marked `readsWords` is ranked without the words it reads -- an earlier step
+// of its Flow may have changed them -- and the words come back only to break a
+// tie among candidates that otherwise score exactly equally, or to confirm a
+// winner nothing else it named agrees with exactly. Equal, not within the
+// margin: measured on a loan summary, the paragraph the read's selector named
+// scored 1 and its neighbour showing the read's old words 0.86, and a margin
+// tie-break chose the neighbour. They never lower
+// a candidate. Only when that settles nothing is the target scored with its
+// words, as before, and that answer taken only if it resolves to the element
+// the ranking without them put first: words that still agree may lift the
+// read's own element over the floor, words that changed then cost nothing the
+// answer without them had not already refused, and old words never choose
+// another element over the one the selector and the rest chose. A read
+// whose identity says nothing but its family and its words is scored that way
+// too: there is nothing else to tell one paragraph from the next.
+//
 // Nothing here invents a confidence. What the resolver reports is Core's own
 // `confidence` for the candidate it chose, so a Flow deciding whether to trust a
 // resolution is reading the same number Core would have produced had it scored
@@ -93,6 +110,7 @@ import { corroboratesExactly } from "./corroboration";
 import { DRAWING_ATTRIBUTE } from "./drawing-attribute";
 import { pageTokens, type PageTokens } from "./page-tokens";
 import { agreesWithRecordedDialog } from "./dialog";
+import { readWordsOf } from "./read-words";
 import { agreesWithRecordedRecord, type RecordIdentity } from "./record";
 
 /** A candidate and what Core made of it. */
@@ -158,6 +176,11 @@ export type RecordedIdentity = {
   attributes?: Record<string, string> | undefined;
   /** What a wordless control drew (`./drawing.ts`); compared where a candidate draws the same (header). */
   drawing?: string | undefined;
+  /**
+   * The step reads this element's words, so they are its value and not a veto
+   * (`./read-words.ts`, t743 D2b): they break ties and never lower a candidate.
+   */
+  readsWords?: boolean | undefined;
 };
 
 /**
@@ -231,6 +254,8 @@ const matcher = createAutomationStudioElementMatcher({ weights: { attributes: DR
  */
 export function scoreTargetCandidates(target: RecordedIdentity, candidates: TargetCandidate[]): CandidateSelection {
   if (!candidates.length) return { outcome: "unmatched", ranked: [] };
+  const read = readWordsOf(target);
+  if (read) return scoreReadTarget(target, read, candidates);
   // The record gate, before the ranking rather than after it. A candidate in
   // another row is not the recorded control, so it must not be ranked, reported
   // as a near miss, or allowed to tie with one that is: on a 240-row table it
@@ -265,6 +290,43 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   // far it leads. Checked last, so a tie is still reported as the tie it is.
   if (!corroboratesExactly(chosen.score)) return { outcome: "unmatched", ranked, ...measured };
   return { outcome: "resolved", chosen, runnerUp, ranked, ...measured };
+}
+
+/**
+ * A read target's selection (header): ranked without its words, then a tie --
+ * or a lead nothing else confirms -- settled by the one candidate whose words
+ * agree, then the selection with its words if that resolves. Otherwise the
+ * selection without the words, so a refusal reports the ranking that decided
+ * it -- unless that ranked nothing, when the words were all there was.
+ */
+function scoreReadTarget(target: RecordedIdentity, read: NonNullable<ReturnType<typeof readWordsOf>>, candidates: TargetCandidate[]): CandidateSelection {
+  const plain = scoreTargetCandidates(read.unworded, candidates);
+  if (plain.outcome === "resolved") return plain;
+  const settled = settledByWords(plain, read, candidates);
+  if (settled) return settled;
+  const worded = scoreTargetCandidates({ ...target, readsWords: undefined }, candidates);
+  if (!plain.ranked.length) return worded;
+  // The words may confirm the element the rest chose; they may never choose another over it (header).
+  return worded.outcome === "resolved" && worded.chosen.element === plain.ranked[0]!.element ? worded : plain;
+}
+
+/** How close two scores are to count as the same score, not a lead: float noise only. */
+const LEVEL_EPSILON = 1e-9;
+
+/** The one candidate, among those level at the top of `plain`, whose words agree with the read's; or nothing (header). */
+function settledByWords(plain: CandidateSelection, read: NonNullable<ReturnType<typeof readWordsOf>>, candidates: readonly TargetCandidate[]): CandidateSelection | undefined {
+  const top = plain.ranked[0]?.score.normalizedScore;
+  if (top === undefined || top < TARGET_SCORE_FLOOR || !read.words.length) return undefined;
+  // Level means equal, not within the margin: a paragraph the selector agrees with outscores one that merely shows the old words (header).
+  const level = plain.ranked.filter((scored) => top - scored.score.normalizedScore < LEVEL_EPSILON);
+  const agreeing = level.filter((scored) => {
+    const candidate = candidates.find((entry) => entry.element === scored.element);
+    return candidate !== undefined && read.agrees(candidate.fingerprint);
+  });
+  const chosen = agreeing.length === 1 ? agreeing[0] : undefined;
+  if (!chosen) return undefined;
+  const runnerUp = plain.ranked.find((scored) => scored !== chosen);
+  return { outcome: "resolved", chosen, runnerUp, ranked: plain.ranked, ...(plain.dropped ? { dropped: plain.dropped } : {}) };
 }
 
 /**

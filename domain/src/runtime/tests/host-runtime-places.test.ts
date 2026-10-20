@@ -100,3 +100,31 @@ test("trial and exploration scopes agree on trusted session/tab identity and nev
   assert.notEqual((other.spot as JsonObject).scope, (diff.spot as JsonObject).scope);
   assert.doesNotMatch(JSON.stringify(first.summary), /session\.one|tab:1:frame:0|sourceId|resetResource|p:[0-9a-f]{32}/u);
 });
+
+// Job rerun round 4: a loop pass's diff is given the attempt's inputs, and its
+// spot is the pass row's recipe, not the one the step was recorded on.
+test("a loop pass's diff places its control in the pass row the attempt's inputs carry", async () => {
+  const cards = (): JsonObject => {
+    const elements: JsonObject[] = [{ tagName: "main", selector: "main" }];
+    const rows: ReadonlyArray<readonly [string, string]> = [["Rye loaf", "Ada Baker"], ["Pea soup", "Ben Cook"]];
+    for (const [index, [title, cook]] of rows.entries()) {
+      const record = { keyAttribute: "data-recipe-id", key: `recipe-${index + 1}` };
+      const at = elements.length;
+      elements.push({ tagName: "article", selector: `#card-${index + 1}`, parent: 0, attributes: { class: "card" }, context: { record } });
+      elements.push({ tagName: "h3", selector: `#card-${index + 1} > h3`, text: title, name: title, parent: at, context: { record } });
+      elements.push({ tagName: "p", selector: `#card-${index + 1} > p`, text: cook, parent: at, context: { record } });
+      elements.push({ tagName: "button", selector: `#card-${index + 1} > button`, name: "Save", parent: at, context: { record } });
+    }
+    return { ok: true, payload: { result: { snapshot: { url: "https://recipes.test/cards", title: "Recipes", interactiveElements: elements } } } };
+  };
+  const boundary = createWebAutomationHostRuntime(seam([cards(), cards()]));
+  const pass = { ...node, parameterValues: { selector: "#card-1 > button", element: { selector: "#card-1 > button", context: { record: { keyAttribute: "data-recipe-id", key: "recipe-1" } } } } };
+  const before = await boundary.captureStateSnapshot!({ ...capture("before_action"), node: pass });
+  const after = await boundary.captureStateSnapshot!({ ...capture("after_action"), node: pass });
+  const recorded = await boundary.inspectStateDiff!({ before, after, node: pass, attemptId: "save.attempt.1" });
+  const second = await boundary.inspectStateDiff!({ before, after, node: pass, attemptId: "save.attempt.1", inputs: { item: { title: "Pea soup", cook: "Ben Cook" } } });
+  const own = await boundary.inspectStateDiff!({ before, after, node: { ...node, parameterValues: { selector: "#card-2 > button" } }, attemptId: "save.attempt.1" });
+  assert.match(String((second.spot as JsonObject).item), /^i:[0-9a-f]{32}$/u);
+  assert.notEqual((second.spot as JsonObject).item, (recorded.spot as JsonObject).item);
+  assert.equal((second.spot as JsonObject).item, (own.spot as JsonObject).item);
+});

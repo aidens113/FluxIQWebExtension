@@ -79,7 +79,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../../types";
  * *command* finally reported, and a reader tallying one must not be able to
  * mistake it for the other.
  */
-export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "disabled_target" | "rate_limited" | "no_effect";
+export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "disabled_target" | "rate_limited" | "no_effect" | "page_reported_failure";
 
 /**
  * Each retryable code's fault word. Total over the retryable half of the closed
@@ -104,6 +104,9 @@ export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailur
   // A press that certainly did nothing (t517): named for the totality check,
   // and never absorbed here either (`ABSORBED_ELSEWHERE`).
   [WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT]: "no_effect",
+  // A press answered by nothing but the page's own notice (t743): the same,
+  // named and never absorbed here (`ABSORBED_ELSEWHERE`).
+  [WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE]: "page_reported_failure",
   // A target the gate found not shown. Retryable since t193-1002m, because Core
   // finds the current step by state for it, but this loop meets it first as the
   // obstruction it always was (`OBSTRUCTION_FAULTS` below), so the word here is
@@ -123,9 +126,11 @@ export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailur
  *
  * A press that certainly did nothing is Core's to make once more for the same
  * reason the other way round: Core makes a lasting press so once only, and a
- * press this loop made again would be one Core never counted.
+ * press this loop made again would be one Core never counted. So is a press
+ * the page answered with nothing but its own notice (t743): Core makes it again
+ * under its first attempt plus three retries, and counts each.
  */
-const ABSORBED_ELSEWHERE: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["rate_limited", "no_effect"]);
+const ABSORBED_ELSEWHERE: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["rate_limited", "no_effect", "page_reported_failure"]);
 
 /**
  * The refusal reason words that mean "something was over the target", as

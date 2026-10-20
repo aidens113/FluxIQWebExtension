@@ -1316,6 +1316,66 @@ malformed Flow and still fails as `web.validation.state_mismatch`, as does a
 failed URL claim on a page with no gate. Every producer is listed in
 [the failure taxonomy](failure-taxonomy.md#who-produces-what).
 
+**A read target's words are its value, not its identity (t743).** A step that
+reads an element's text -- `web.dom.extract` in text, value or html mode, or a
+`web.dom.assert` with `kind: "text"` -- keeps that element's words in its saved
+identity, marked `readsWords: true`
+(`domain/src/runtime/llm-evidence/plan-resolution/read-identity.ts`); an
+attribute read, an `exists` assertion and a press are never marked. The
+save-time fingerprint guard counts the words as a signal as before, so a bare
+paragraph read still has the two signals it needs. The mark travels on
+`WebAutomationElementFingerprint` (`domain/src/actions/types.ts`), copied only
+when `true` by `elementFingerprint`
+(`domain/src/output-nodes/targets/targets.ts`); because Core's target
+normalizer has no field for it, `targets.ts` (`withRecordedReadMark`) and
+`domain/src/client/gateway-mapping.ts` (`withReadMark`) carry it from the
+recording onto the wire target whichever source won the identity, as they do
+`record` and `dialog`. On the page the words are never a reason to refuse or
+to prefer: `content/identity/read-words.ts` (`readWordsOf`) splits a marked
+target into its identity without the words (and without an accessible name
+that only repeats them or arrives alone) and the words themselves. The veto
+(`content/identity/veto.ts`) judges the identity without the words, so a read
+whose text changed is not vetoed for it; record and dialog gates, label, ids, a
+distinct name, kind and selector still decide. The scorer
+(`content/identity/score.ts`) ranks a marked target without its words, lets
+the words settle only an exact tie among the top candidates, and takes a
+scoring with words only when it picks the element the wordless ranking put
+first, so old words never choose a different element. Once a marked target's
+selector misses, `content/action-runtime/resolve-target.ts` never looks it up
+by its recorded words: its fingerprint lookup (`content/action-runtime/read-lookup/`)
+uses only stable signals inside the recorded landmark, the stable-name rescue
+is skipped, and Level 2 adds the recorded tag's elements to the candidate pool
+(capped at 60 candidates and 2,000 elements scanned). An unmarked target takes
+exactly the path it took before.
+
+**A press the page answers only with a notice fails (t743).** The click's
+settled look (`content/action-runtime/ignored-press/settled-look.ts`) leaves
+the page's own notice regions out of its comparison
+(`ignored-press/live-region.ts`: `role="alert"`, `role="status"` or
+`aria-live="assertive"`, never a bare `aria-live="polite"`) and is now asked on
+any control, not only command controls. When nothing else answered the press
+and a notice region holds words it did not hold before, `content/actions/click.ts`
+fails it with `web.action.page_reported_failure` (retryable, `effect:
+"unacted"`, `certainNoEffect`), and the in-page recovery loop leaves it to Core
+(`recovery/fault.ts`), which presses again under its first attempt plus three
+retries. A step whose every attempt ends this way is never a landed act. The
+words are compared, never read or sent; the rule and its limits are in
+[the failure taxonomy](failure-taxonomy.md).
+
+**A looped pass's spot follows its row (t743).** Core hands the host's state
+diff the attempt's inputs, and the domain places a looped step's control in
+the record that holds that pass's row (`item`) on the page before the press
+(`domain/src/runtime/state-diff/places/diff.ts`, scoped by
+`webNodeScopedToPassRow` with `webAutomationScopedToRow`, the function a pass's
+dispatch uses). `state-diff/places/pass-row/` reproduces the extension's
+`content/action-runtime/pass-row/` rule over capture elements, without
+importing the extension: a control in no record is the same control on every
+pass; a template whose own record holds every value is used as it is;
+otherwise exactly one other record must hold every value, and the control is
+the element at the template's place in it, passing the same copy check. In
+every other case the diff gives no spot. So each pass's lasting act carries its
+own row's control, state and subject, and a diff with no item is unchanged.
+
 ### Learned Interruption Handlers
 
 A layer that the interference defence closes can become a guarded handler of
@@ -1909,7 +1969,11 @@ A list extraction's text or table-column field containing a visible unexpanded t
 button refuses the read with `incomplete_text` in existing validation feedback.
 The author first reads minimal nonempty stable row-context columns without the
 incomplete field, then uses those records in For Each with an optional explicit
-registered row-bound disclosure click before reading full text. Units without
+registered row-bound disclosure click, and then, after the repeat, reads the
+same listing again with the field, giving both reads the same conditions, so
+every row the final read keeps was disclosed by the repeat
+(`INCOMPLETE_TEXT_NEXT`,
+`domain/src/runtime/llm-evidence/rejection-next/next-sentence.ts`). Units without
 usable context are excluded from that helper; a requested row that lacks it needs
 another context, rather than omission. This order repeats after each Next page
 move; one observed disclosure target acts on its own row. The domain recognizes
@@ -1920,10 +1984,25 @@ Passive discovery and extraction never press the control. Plain
 prose, unrelated controls, and expanded or hidden controls do not establish an
 incomplete field. A typed refusal propagates through the whole list, so the
 runtime cannot store a partial field while reporting complete extraction.
-Executable list filters request the same completeness check. Passive field
+Executable list filters request the same completeness check, on the rows
+described below. Passive field
 sampling and inference retain visible previews, allowing discovery of the
 list and its expansion controls. Scalar extraction uses its separate reader;
 this list-specific guard does not establish completeness for scalar reads.
+
+**Disclosure is checked only on rows the read keeps (t743).** With a `where`,
+`content/extraction/list-reader.ts` reads each item's text as `"visible"`,
+judges the conditions, and only then asserts disclosure (`assertDisclosed`,
+re-reading only the text and column fields as `"complete"`): on a kept item for
+every such field, and on a rejected item only for the fields its rejecting
+conditions name, refusing it only when that rejection was judged on partial
+text. Conditions that read their own value judge visible text the same way
+(`content/extraction/item-filter.ts`): a kept item checks every such
+read-condition, a rejected one only those that rejected it. So one collapsed
+item that a different condition drops no longer refuses the whole read. With no
+`where`, items are still read `"complete"` in one pass, and attribute reads are
+never re-read. A scroll-mode read's has-unread-item key uses `"visible"`, since
+it only compares content.
 
 While a recording is running, the user picks one example item on the page — a
 product card, a table row — and FluxIQ records an extraction of the whole list it
