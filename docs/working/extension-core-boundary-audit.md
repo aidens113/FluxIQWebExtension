@@ -150,6 +150,40 @@ working document before its first Core edit.
 - Outcome: Partial (nothing implemented yet)
 - Follow-up: dispatch lanes G, H, S.
 
+### 2026-10-19 - Lane H phase 0 verified and committed on t727
+- Agent: supervisor (lane-h, workers H1-H4)
+- Changed: provider-call rule (`restricted-references`, Core first then mirrored), `scripts/check/core-mirror*` wired
+  into `pnpm check`, `packages/agent-orchestrator` and `reusable-evidence-coordinator.ts` deleted, one provider key
+  list, the "$0.10" comment, `packages/test-matrix` selects only the ten realistic scenarios for browser jobs.
+  Commits t727: downstream 654e9b1f, Core 4ad4eac2.
+- Validation (supervisor reruns in the t727 trees): `node scripts/structure-audit.mjs` -> `passed (213 warning(s),
+  635 baselined)`, Core -> `passed (408 warning(s), 1152 baselined)`; `node scripts/check/core-mirror.mjs` -> `1
+  mirror set(s) match ... structure-audit (58 files)`; rule and mirror tests -> pass 21 fail 0, Core rule test -> pass
+  15 fail 0; planted `apps/extension/src/zz-planted.ts` with a DeepSeek URL -> `FAIL [restricted-references] ...`,
+  removed -> passed; `pnpm --filter @fluxiq-web-extension/test-matrix test` -> pass 23 fail 0; domain `check` ->
+  current; no remaining reference to either deleted module.
+- Suspicions (lane-h-h4.md): core-web-build duplicates Core's `web:build` (needs a Core publication seam first);
+  `scripts/lab/core/build/` judges Core staleness by mtime (confirmed; swap to Core's `decideStep`); test-matrix
+  synthetic browser selection (confirmed, fixed). Still opening synthetic pages outside lane H's files: the CI
+  workflow's scenario-page step and `apps/scenario-lab/e2e` specs.
+- Outcome: Accepted (unit); merges with phase 5.
+- Follow-up: phase 5; the two remaining suspicions and the synthetic-page specs need owners.
+
+### 2026-10-19 - Lane G unit 1 (offline queue privacy) verified; commit held for unit 2
+- Agent: supervisor (lane-g, workers W-A to W-D)
+- Changed (t726, uncommitted): Core `client-gateway-websocket` outbox, storage-area, reconcile, host-lease,
+  session-pick; the extension queue on Core's outbox in `chrome.storage.session` (`fluxiq.outbox`), the old
+  `fluxiq.queuedEvents` discarded at every background start, flushes bound to the session lineage, project and
+  recording.
+- Validation (supervisor reruns in t726): Core `npx vitest run` in the package -> `Test Files 22 passed, Tests 150
+  passed`, `npx tsc --noEmit` -> exit 0; extension `tsc -p tsconfig.json` and `tsconfig.test.json` -> exit 0;
+  `EXTENSION_TEST_BUILD_LABEL=sup-g1 node apps/extension/scripts/test-extension.mjs` on gateway-session, host-lease,
+  saved-state, storage-queue-discard, outbox -> tests 46 pass 46 fail 0; structure audit -> passed (638 baselined).
+- Held: Core's package index already exports unit 2's `connection/`, and `shared/protocol.ts` changed outside the
+  unit list, so the listed files alone may not compile; committed with unit 2.
+- Follow-up: the session-storage byte risk (~10 MB) sent back to lane G as a fix (byte budget, explicit counted
+  loss, write failure degrades instead of throwing).
+
 ## Open Questions
 
 None requiring user input (the move plan and the tooling policy were approved on 2026-10-19).

@@ -186,6 +186,34 @@ was still running at dispatch and is excluded below by its own file list.
 - Must not touch: lanes G, S, H areas; L1's files until resumed after its merge.
 - Report: `docs/working/trace-offline-trials-plan/reports/lane-t.md` (downstream t729 tree).
 
+### Brief: t730-realistic-specs (lead, t730 realistic-only-browser-specs)
+- Why: lane H's tracing (`lane-h-h4.md`) found browser runs on synthetic pages, which AGENTS.md forbids ("Lab and
+  browser test runs use only the ten realistic scenarios", Playwright specs and the extension's content harness
+  included): 19 of `apps/scenario-lab/e2e/*.spec.ts` (all but local-classifieds and social-network-feed), the
+  workflow's scenario-page step, and any `apps/extension/e2e` spec that opens a synthetic page.
+- Task: for each such spec, name the capability it proves, then retarget it to a realistic scenario that exercises
+  the same capability, or delete it where a realistic spec already proves it, or move browser-free logic to a unit
+  test; never drop coverage silently (a table spec -> capability -> disposition -> new home in the report). Make the
+  Playwright fixtures refuse a non-realistic scenario id the way the Lab's launch entries do, with a test, so the rule
+  holds mechanically. Synthetic scenario packages stay for unit tests that never open a browser.
+- Worktree: `C:/Users/osrs_/FluxStuff/fxwork/t730-realistic-only-browser-specs` (shared Core, read-only).
+- Owns: `apps/scenario-lab/e2e/**`, `apps/extension/e2e/**` except `content/tests/snapshot-fidelity/**` (lane T)
+  and `reconnect.spec.ts` (lane G), `.github/workflows/testing-facility.yml`, `apps/scenario-lab/package.json`,
+  new unit tests beside their subjects; `scenarios/**` only for realistic-scenario test hooks a spec needs.
+- Must not touch: lane files (G, H, S, T, L1 lists above), `packages/test-matrix/**` (lane H, done).
+- Validation: run every rewritten or retargeted spec headed, provider-free, and record the command and pass counts;
+  the fixture refusal test; structure audit; the scenario-lab and extension typechecks.
+- Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t730-realistic-specs.md` in the
+  t730 tree, as a running log with `UNIT READY` markers.
+
+### Brief: sweep-1019b (worker-low, second daily full sweep of `dev`)
+- Detached worktrees of both repositories at `origin/dev` (downstream cedd46af, Core 4077d0a0) under
+  `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019b/` (Core sibling to the downstream checkout); `pnpm install` both;
+  Core `pnpm build`, `pnpm check`, `pnpm test`; downstream `pnpm check`, `pnpm test`, `pnpm build`.
+- Record each command, exit code, totals and the names of failing tests, compared with sweep S1
+  (`breadth-forty-tasks-plan/reports/sweep-1019.md`), in `docs/working/trace-offline-trials-plan/reports/sweep-1019b.md`
+  (main checkout). No fixes, commits, browser or live runs; never touch the lane worktrees.
+
 ## Work Ledger
 
 ### 2026-10-19 - Paired plan filed
@@ -217,6 +245,22 @@ was still running at dispatch and is excluded below by its own file list.
   read-coverage), none in any lane's owned area.
 - Outcome: Partial (lanes running)
 - Follow-up: commit each `UNIT READY` as it lands; finish L1.
+
+### 2026-10-19 - Lane T units U1 (baseline) and U5 (result contract) committed on t729
+- Agent: supervisor (lane-t and its workers)
+- Changed: downstream `packages/test-runner/src/build-time/**` (132a0ebb); Core
+  `model/offline-trial/**` and one `model/index.ts` export (4d9a6b4c).
+- Baseline (25 newest runs with steps, 219.8 build minutes, 129 trials), time-weighted: live trials 49.8%, model calls
+  24.3%, exploration 22.3%, site resets 0.6% (a lower bound: resets inside trials emit no span), other 3.0%. Social
+  run-mvfq957o-40103539: 20.50 of 25.05 minutes in 7 trials, longest 336.8 s.
+- Validation (supervisor reruns in t729): `pnpm --filter @fluxiq-web-extension/test-runner exec tsc -p tsconfig.json`
+  -> exit 0; `node --test packages/test-runner/dist/build-time/tests/*.test.js` -> tests 8 pass 8 fail 0; `node
+  packages/test-runner/dist/build-time/cli.js --limit 25` -> the category table, no unknown kinds; Core `pnpm exec
+  vitest run src/programs/automation-studio/model/offline-trial` -> `Test Files 5 passed, Tests 47 passed`; Core
+  structure audit -> passed (1152 baselined). Downstream audit -> 1 violation, in the uncommitted snapshot-fidelity
+  spike (`statement-packing`, probe.spec.ts line 18), not in either unit.
+- Outcome: Accepted (units)
+- Follow-up: Core should emit a reset span inside `core.test_subflow`/`core.test_candidate`; the spike's packing fix.
 
 ## Open Questions
 
