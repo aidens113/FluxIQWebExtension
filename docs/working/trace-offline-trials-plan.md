@@ -271,6 +271,28 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t745-keyed-content-addresses (lead-xhigh, Core security)
+- Why: lane T (P3) found that Core's content store and trace chunks are addressed by an unkeyed SHA-256 of their
+  contents, so anyone holding a project database can tell equal content apart and confirm a guess about it. Known
+  security weaknesses are fixed, not deferred.
+- Task: keyed (HMAC) addresses for the whole content store and trace chunks, keyed from the project's existing protection
+  key material; reads accept both forms during a tested, idempotent migration that rekeys existing stores in place and
+  removes the unkeyed form only after every reference resolves; deduplication still works within a project; no
+  content ever logged. Design note first (in the report): key source and rotation, migration order, failure and rollback.
+- Validation: tests beside each change (fresh store, migrated store, interrupted migration resumed, cross-project
+  isolation, a guessed-content probe that no longer confirms); Core typecheck; audit; real-SQL marker on tests that open
+  SQLite.
+- Report: `docs/working/trace-offline-trials-plan/reports/t745-keyed-content-addresses.md` in the downstream tree.
+
+### Brief: t746-offline-trials-tier1 (lane T lead, trace plan P4)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P4: the production executor runs against a trace
+  environment (the t734 port), strict operation matching (action type, target fingerprint, arguments, occurrence,
+  preceding operations), a virtual clock, explicit evidence gaps.
+- Gate: source tests T05-T08, T10, T12-T16, T20, T22-T24, and an offline trial of a corrected candidate for the breadth
+  round's social failure (run-mvfq957o-40103539) reproduces the judged result. Offline trials stay out of exploration
+  and never satisfy the whole-run gate (decisions 2 and 3).
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p4.md` in the downstream tree.
+
 ### Brief: t743-rerun4-structural (lead-xhigh, t743 rerun4-structural)
 - Why: four rerun rounds, 0 of 16, each failure a new shape; round-4 debugs name three shared weaknesses. Debug
   notes (lane trees, `docs/working/language-driven-flow-loop-plan/debugs/`): t563 run-mvgvyaip-d856e135 office, t719
@@ -674,6 +696,27 @@ was still running at dispatch and is excluded below by its own file list.
   `pnpm -r --no-bail --filter @fluxiq-web-extension/real-site-policy exec node -e "process.exit(0)"` -> exit 0.
 - Outcome: Partial (two failures to fix forward)
 - Follow-up: t744 for the two failures; extension totals come back in the next sweep.
+
+### 2026-10-20 - t744 and t742 merged: sweep-1020b fixes; trace plan P3 intake parity
+- Agent: supervisor (t744 worker; lane T and its workers)
+- Changed: t744 (test-side only: the deepseek exploration test uses the harness token window, since the write-records
+  catalog growth is counted though never sent; crossborder browser paths read what the page showed on load instead of
+  a 1 s wait). t742 (P3): a harness replays a stored trace through Core's own intake and compares every delivery point;
+  trace payloads chunked and stored once under the content store's protection and lifecycle (migrations 0031-0032);
+  screening keeps session references, digests are not redacted as card numbers, order is checked per causal chain,
+  legacy traces classified by Core; the start hook lands in the build's trace.
+- Validation: t744 gate: deepseek-bootstrap -> 11 passed; crossborder dist tests -> pass 59 fail 0; audit passed;
+  finished both sides. t742 gate after merging dev: Core rebuilt; Core `vitest run` over client-gateway, AS
+  client-gateway, environment, gateway-trace, storage gateway-trace, service/projects, candidate-trial, subflow-trial,
+  service/tests -> 119 files, 775 passed; fluxiq `tsc` 0; downstream checks 0; test-runner trace tests -> pass 70 fail
+  0; audits passed; finished both sides. Lead: all ten realistic sites covered (nine by saved-Flow replays, photo by its
+  round-4 build trace); saved-Flow traces 3,333 of 3,333 delivery points matched; round-4 live traces 4,274 of 6,941
+  matched with 2,667 honest capture gaps (they predate the delivered-value field), 0 intake defects; crossborder and
+  bigbox replayed three times each, stable.
+- Open: content-store and chunk addresses are unkeyed SHA-256 (equality and guesses confirmable from the database):
+  brief t745; P4 offline trials tier 1: brief t746; the size check counts the never-sent node catalog (follow-up).
+- Outcome: Accepted
+- Follow-up: t745, t746; round 5 after t743.
 
 ## Open Questions
 
