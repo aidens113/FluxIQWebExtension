@@ -32,7 +32,7 @@ function showStep(index) {
   q.steps.forEach((id, at) => { byId(id).hidden = at !== index; byId(q.dots[at]).classList.toggle(qc.stepActive, at <= index); });
   byId(q.back).disabled = index === 0;
   byId(q.next).hidden = index === 2;
-  for (const id of [q.send, q.draft]) { const control = byId(id); if (control) control.hidden = index !== 2; }
+  for (const id of [q.send, q.restyledSend, q.draft]) { const control = byId(id); if (control) control.hidden = index !== 2; }
 }
 function setError(name, message) { const slot = byId(q.errors[name]); if (slot) slot.textContent = message; return message === ''; }
 function value(name) { const field = form.elements.namedItem(name); return field && 'value' in field ? String(field.value).trim() : ''; }
@@ -86,7 +86,7 @@ async function submitQuote() {
   const reference = result && result.state && result.state.lastSubmission ? result.state.lastSubmission.reference : null;
   location.href = ${JSON.stringify(receivedPath)} + (reference ? '?ref=' + encodeURIComponent(reference) : '');
 }
-for (const id of [q.send, q.headerSend]) { const control = byId(id); if (control) control.addEventListener('click', startHumanCheck); }
+for (const id of [q.send, q.restyledSend, q.headerSend]) { const control = byId(id); if (control) control.addEventListener('click', startHumanCheck); }
 const draft = byId(q.draft);
 if (draft) draft.addEventListener('click', async () => {
   await mutate('save-quote-draft', {});

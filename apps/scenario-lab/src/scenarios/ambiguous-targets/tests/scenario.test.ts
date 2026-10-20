@@ -82,3 +82,20 @@ test("the two armed renderings differ in context alone", () => {
   const strip = (html: string) => html.replace(/<\/?(?:form|fieldset|legend|div)\b[^>]*>/gu, "").replace(/Primary|Secondary/gu, "").replace(/ type="button"/gu, "");
   assert.equal(strip(render("no-context")), strip(render("form-context")));
 });
+
+test("both armed Continue buttons are live: they bind by position, so the second one chooses secondary", () => {
+  for (const mode of ["no-context", "form-context"] as const) {
+    const html = render(mode);
+    assert.match(html, /document\.querySelectorAll\('button'\)\.forEach\(\(button, index\) => /u, mode);
+    assert.match(html, /const id = index === 0 \? 'primary' : 'secondary'; await mutate\('choose', \{ id \}\)/u, mode);
+    assert.doesNotMatch(html, /\[data-choice\]/u, mode);
+  }
+  assert.deepEqual(scenario.mutate(scenario.createState(106), "choose", { id: "secondary" }), { selected: "secondary" });
+});
+
+test("baseline scopes each Continue inside its own named region, which is what a semantic locator resolves by", () => {
+  const html = render("baseline");
+  assert.match(html, /<section aria-label="Primary"><button data-testid="choice-primary" data-choice="primary">Continue<\/button><\/section>/u);
+  assert.match(html, /<section aria-label="Secondary"><button data-testid="choice-secondary" data-choice="secondary">Continue<\/button><\/section>/u);
+  assert.match(html, /mutate\('choose', \{ id: button\.dataset\.choice \}\)/u);
+});

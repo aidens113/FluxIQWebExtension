@@ -13,8 +13,24 @@
  * - `quiet-market` -- a week with no remote Rust hiring at all: the search
  *   answers with no exact matches and fills the page with "jobs you might
  *   like", in the same cards the real results use.
+ * - `in-place-filters` -- the board's newer results page: choosing an option
+ *   in a filter pill's menu no longer loads a new page. The page fetches the
+ *   filtered results itself and swaps them in, marking the results column
+ *   `aria-busy` while it does, and the address bar keeps the address the
+ *   visitor arrived on. The postings, the cards and the filters themselves are
+ *   the baseline's.
+ * - `extended-application` -- hiring teams that ask Talentloom for the longer
+ *   form: every application form adds "A few more questions", prefilled from
+ *   the candidate's Talentloom profile. Native number, date, time, month,
+ *   week and date-time fields; answers the form holds to (a whole-number
+ *   count that refuses other keys, hours and an assessment day the hiring
+ *   team fixed, a read-only requisition number, referral and agency codes put
+ *   back after an edit); a profile widget that re-renders its field from the
+ *   saved profile; an offer to hide the application from the current
+ *   employer the moment that answer changes; and a password for tracking the
+ *   application. What the form sends, and so the state, is the baseline's.
  */
-export const jobBoardModes = ["baseline", "overflow-save", "posting-closed", "quiet-market"] as const;
+export const jobBoardModes = ["baseline", "overflow-save", "posting-closed", "quiet-market", "in-place-filters", "extended-application"] as const;
 
 export type JobBoardMode = (typeof jobBoardModes)[number];
 

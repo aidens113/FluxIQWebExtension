@@ -24,6 +24,10 @@ const DEPARTMENTS: ReadonlyArray<readonly [string, string]> = [["all", "All"], [
  * away. `redesigned-header` removes it, relabels the button "Search
  * Brightaisle" -- the same name the search box itself has -- moves it left,
  * and puts "Search with your camera" and "Search by voice" where it was.
+ *
+ * `keyboard-suggestions` draws the search box as the combobox that owns the
+ * suggestion list, which is what the page's script then drives from the
+ * arrow keys (`client/suggestion-keys-script.ts`).
  */
 function searchForm(kit: PageKit, keywords: string, department: string): string {
   const { css, ids, state } = kit;
@@ -31,10 +35,13 @@ function searchForm(kit: PageKit, keywords: string, department: string): string 
   const submit = state.mode === "redesigned-header"
     ? `<button class="${css.searchSubmit}" type="submit" aria-label="Search Brightaisle">${MAGNIFIER}</button><button class="${css.searchExtra}" type="button" aria-label="Search by voice" data-action="voice-search">${MICROPHONE}</button><button class="${css.searchExtra}" type="button" aria-label="Search with your camera" data-action="camera-search">${CAMERA}</button>`
     : `<button class="${css.searchSubmit}" type="submit" aria-label="Go" data-testid="nav-search-submit">${MAGNIFIER}</button>`;
+  const combobox = state.mode === "keyboard-suggestions"
+    ? ` role="combobox" aria-autocomplete="list" aria-controls="${ids.suggest}" aria-expanded="false"`
+    : "";
   return `<form class="${css.searchForm}" role="search" action="${STORE_PATHS.search}" method="get" autocomplete="off">
 <label class="${css.srOnly}" for="${ids.searchDept}">Search in</label><select class="${css.searchDept}" id="${ids.searchDept}" name="i">${options}</select>
 <input class="${css.honeypot}" type="text" name="field-keywords" value="" tabindex="-1" autocomplete="off" aria-hidden="true">
-<label class="${css.srOnly}" for="${ids.searchInput}">Search Brightaisle</label><input class="${css.searchInput}" id="${ids.searchInput}" type="text" name="k" value="${escapeHtml(keywords)}" placeholder="Search Brightaisle" autocomplete="off" spellcheck="false">
+<label class="${css.srOnly}" for="${ids.searchInput}">Search Brightaisle</label><input class="${css.searchInput}" id="${ids.searchInput}" type="text" name="k" value="${escapeHtml(keywords)}" placeholder="Search Brightaisle" autocomplete="off" spellcheck="false"${combobox}>
 ${submit}
 <div class="${css.suggestList}" id="${ids.suggest}" role="listbox" aria-label="Search suggestions" hidden></div>
 </form>`;

@@ -11,14 +11,17 @@ import { sitePage } from "./shell.js";
  * the sign-up form the timed offer also stands in for, and, once the visitor
  * has signed up, every address the list holds for them with its 10% code and
  * an "Unsubscribe" button. Signing up again with an address already on the
- * list changes nothing.
+ * list changes nothing. Armed with `confirm-unsubscribe`, "Unsubscribe" asks
+ * the browser's own confirmation first (`client/newsletter-script.ts`).
  */
 export function renderNewsletter(state: CompanyWebsiteState, context: RenderContext): string {
   const c = siteClasses(context.seed);
   const field = generatedId(context.seed, "newsletter:email");
   const rows = state.newsletter.subscribers.map((email) => `<tr><td>${escapeHtml(email)}</td><td>${escapeHtml(newsletterCode(email))}</td><td><button type="button" class="${c.buttonGhost}" data-unsubscribe="${escapeHtml(email)}">Unsubscribe</button></td></tr>`).join("");
+  // Only the armed confirmation answers in place; the default page reloads after an unsubscribe instead.
+  const status = state.mode === "confirm-unsubscribe" ? `<p class="${c.muted}" role="status" data-unsubscribe-status></p>` : "";
   const subscriptions = rows
-    ? `<section class="${c.section}" aria-label="Your subscriptions"><h2 class="${c.sectionTitle}">You are subscribed</h2><table class="${c.priceTable}"><thead><tr><th>Email</th><th>Your 10% code</th><th></th></tr></thead><tbody>${rows}</tbody></table><p class="${c.muted}">Quote your code when you book your next service. One code per address.</p></section>`
+    ? `<section class="${c.section}" aria-label="Your subscriptions"><h2 class="${c.sectionTitle}">You are subscribed</h2><table class="${c.priceTable}"><thead><tr><th>Email</th><th>Your 10% code</th><th></th></tr></thead><tbody>${rows}</tbody></table><p class="${c.muted}">Quote your code when you book your next service. One code per address.</p>${status}</section>`
     : "";
   const main = `<h1 class="${c.sectionTitle}" style="font-size:2rem">Offers &amp; reminders</h1>
 <p class="${c.lead}">One email a month: a reminder when your boiler service is due, seasonal advice, and 10% off your next service.</p>
@@ -28,5 +31,5 @@ ${subscriptions}
 <p class="${c.fieldError}" role="alert" data-newsletter-error></p>
 <button type="submit" class="${c.buttonPrimary}">Sign me up</button>
 <p class="${c.muted}">By signing up you agree to receive marketing email from Kestrel Lane. Unsubscribe at any time on this page.</p></form>`;
-  return sitePage({ state, context, title: "Offers and reminders", section: null, main, pageScript: newsletterScript() });
+  return sitePage({ state, context, title: "Offers and reminders", section: null, main, pageScript: newsletterScript(state.mode === "confirm-unsubscribe") });
 }

@@ -2,19 +2,30 @@ import { randomBytes } from "node:crypto";
 import { expect, test as base } from "@playwright/test";
 import type { ScenarioVariant } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../src/server.js";
+import { assertRealisticScenarios } from "../../../packages/test-runner/src/realistic-scenarios/index.js";
 import { installDeterministicNetworkGuard, type DeterministicNetworkGuard } from "./network-policy.js";
+import { installRealisticScenarioGuard, type RealisticScenarioGuard } from "./realistic-scenario-guard/index.js";
+
+/** The launch entry the realistic-scenarios refusals name. */
+const ENTRY = "Scenario Lab Playwright spec";
 
 type LabFixtures = {
   /**
-   * The seed the lab starts on. The default, 42, is the seed the page specs'
-   * seed-dependent expectations assume; a spec that needs another sets it
-   * once with `test.use({ labSeed })`.
+   * The seed the lab starts on, 42 unless a spec sets it once with
+   * `test.use({ labSeed })`; the realistic specs set their manifest's seed.
    */
   labSeed: number;
   /** An in-process Scenario Lab with a fresh random run token, closed after the test. */
   lab: RunningScenarioLab;
   /** The loopback-only network guard on the test's browser context; any other destination fails the test. */
   networkGuard: DeterministicNetworkGuard;
+  /**
+   * Automatic on every test: refuses any request for a scenario outside the
+   * ten realistic ones, so the page never loads, and fails the test naming
+   * the rule (AGENTS.md, "Lab and browser test runs use only the ten
+   * realistic scenarios").
+   */
+  realisticScenarioGuard: RealisticScenarioGuard;
   /**
    * The console errors the scenario's manifest allows
    * (`expected.allowedConsoleErrors`); none by default. A spec sets it once
@@ -43,6 +54,11 @@ export const test = base.extend<LabFixtures>({
     await use(guard);
     guard.assertClean();
   },
+  realisticScenarioGuard: [async ({ context }, use) => {
+    const guard = await installRealisticScenarioGuard(context, ENTRY);
+    await use(guard);
+    guard.assertClean();
+  }, { auto: true }],
   allowedConsoleErrors: [[], { option: true }],
   consoleErrors: async ({ page, allowedConsoleErrors }, use) => {
     const errors: string[] = [];
@@ -55,6 +71,7 @@ export const test = base.extend<LabFixtures>({
 
 /** A scenario's server-side state from the lab's `/__control/final-state` oracle. */
 export async function readFinalState<TState>(lab: RunningScenarioLab, scenarioId: string): Promise<TState> {
+  assertRealisticScenarios([scenarioId], ENTRY);
   const response = await fetch(`${lab.origin}/__control/final-state?scenario=${scenarioId}`, { headers: { authorization: `Bearer ${lab.runToken}` } });
   expect(response.ok).toBe(true);
   return (await response.json() as { state: TState }).state;
@@ -67,6 +84,7 @@ export async function readFinalState<TState>(lab: RunningScenarioLab, scenarioId
  * `resolveScenarioWorkflow` returned; a workflow resolved without one fails here.
  */
 export async function armVariant(lab: RunningScenarioLab, scenarioId: string, variant: ScenarioVariant | undefined): Promise<void> {
+  assertRealisticScenarios([scenarioId], ENTRY);
   if (!variant) throw new Error(`${scenarioId}: the resolved workflow has no variant to arm`);
   const response = await fetch(`${lab.origin}/api/${scenarioId}/${variant.arm.operation}`, {
     method: "POST",

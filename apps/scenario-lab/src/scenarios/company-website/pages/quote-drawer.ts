@@ -6,7 +6,7 @@ import type { SiteMode } from "../types.js";
 /** The drawer's script hooks: generated ids, new on every seed, so nothing names what a control does. */
 export type QuoteDrawerIds = {
   root: string; title: string; form: string; steps: [string, string, string]; dots: [string, string, string];
-  back: string; next: string; send: string; draft: string; headerSend: string; close: string;
+  back: string; next: string; send: string; draft: string; headerSend: string; restyledSend: string; close: string;
   select: string; list: string; verify: string; fields: Record<string, string>; errors: Record<string, string>;
 };
 
@@ -16,7 +16,7 @@ export function quoteDrawerIds(seed: number): QuoteDrawerIds {
   return {
     root: id("root"), title: id("title"), form: id("form"),
     steps: [id("step1"), id("step2"), id("step3")], dots: [id("dot1"), id("dot2"), id("dot3")],
-    back: id("back"), next: id("next"), send: id("send"), draft: id("draft"), headerSend: id("header-send"), close: id("close"),
+    back: id("back"), next: id("next"), send: id("send"), draft: id("draft"), headerSend: id("header-send"), restyledSend: id("send-restyled"), close: id("close"),
     select: id("select"), list: id("list"), verify: id("verify"),
     fields: Object.fromEntries(names.map((name) => [name, id(`field:${name}`)])),
     errors: Object.fromEntries(["fullName", "email", "phone", "postcode", "service", "privacy"].map((name) => [name, id(`error:${name}`)])),
@@ -34,9 +34,24 @@ export function quoteDrawerIds(seed: number): QuoteDrawerIds {
  * button becomes "Save and finish later", which files a draft and sends
  * nothing, and the real submit moves to the step's header as "Get my free
  * quote", without the analytics test id the old button carried.
+ *
+ * `quotes-paused` keeps the footer's right-hand slot for "Save and finish
+ * later", in the primary style Send request wore, and says on the step why
+ * nothing can be sent; nothing on the step sends.
+ *
+ * `quote-footer-redesign` puts Continue ahead of Back and draws the submit
+ * with the new UI kit's classes: "Send", no analytics test id, the same id.
+ *
+ * `reworded-quote-submit` restyles the footer's submit and nothing else: it
+ * reads "Send", has a new generated id and class and no analytics test id,
+ * and keeps only its accessible name, `aria-label="Send request"`. It still
+ * starts the human check, beside Back as before.
  */
 export function quoteDrawer(c: SiteClasses, ids: QuoteDrawerIds, mode: SiteMode): string {
   const redesigned = mode === "redesigned-quote-submit";
+  const restyled = mode === "reworded-quote-submit";
+  const paused = mode === "quotes-paused";
+  const newFooter = mode === "quote-footer-redesign";
   const f = ids.fields;
   const e = ids.errors;
   const input = (name: string, label: string, type: string, autocomplete: string) => `<label class="${c.field}" for="${f[name]}"><span class="${c.fieldLabel}">${label}</span>
@@ -45,9 +60,15 @@ export function quoteDrawer(c: SiteClasses, ids: QuoteDrawerIds, mode: SiteMode)
   const options = QUOTE_SERVICES.map((service) => `<div class="${c.fauxOption}" data-value="${escapeHtml(service)}">${escapeHtml(service)}</div>`).join("");
   const radios = CONTACT_OPTIONS.map((option, index) => `<label class="${c.radioRow}"><input type="radio" name="contactBy" value="${option}"${index === 0 ? " checked" : ""}> ${option}</label>`).join("");
   const headerSend = redesigned ? `<button type="button" class="${c.buttonPrimary} ${c.stepHeaderAction}" id="${ids.headerSend}">Get my free quote</button>` : "";
-  const rightHand = redesigned
-    ? `<button type="button" class="${c.button}" id="${ids.draft}" hidden>Save and finish later</button>`
-    : `<button type="button" class="${c.buttonPrimary}" id="${ids.send}" data-testid="quote-submit" hidden>Send request</button>`;
+  const rightHand = redesigned || paused
+    ? `<button type="button" class="${paused ? c.buttonPrimary : c.button}" id="${ids.draft}" hidden>Save and finish later</button>`
+    : restyled
+      ? `<button type="button" class="${c.footerSubmit}" id="${ids.restyledSend}" aria-label="Send request" hidden>Send</button>`
+      : newFooter
+        ? `<button type="button" class="ui-button ui-button--accent" id="${ids.send}" hidden>Send</button>`
+        : `<button type="button" class="${c.buttonPrimary}" id="${ids.send}" data-testid="quote-submit" hidden>Send request</button>`;
+  const back = `<button type="button" class="${c.button}" id="${ids.back}" disabled>Back</button>`;
+  const next = `<button type="button" class="${c.buttonPrimary}" id="${ids.next}">Continue</button>`;
   return `<div id="${ids.root}" data-quote-drawer hidden>
   <div class="${c.drawerScrim}"></div>
   <section class="${c.drawer}" role="dialog" aria-modal="true" aria-labelledby="${ids.title}">
@@ -79,6 +100,7 @@ export function quoteDrawer(c: SiteClasses, ids: QuoteDrawerIds, mode: SiteMode)
         <legend><strong>Almost done</strong></legend>
         ${headerSend}
         <p class="${c.muted}">Step 3 of 3. We reply within one working day.</p>
+        ${paused ? `<p class="${c.notice}">We are moving to a new booking system, so new quote requests are paused until 3 November. Save your details and we will email you a link to send them.</p>` : ""}
         <label class="${c.checkRow}" for="${f.marketing}"><input type="checkbox" id="${f.marketing}" name="marketing" checked> <span>Yes, send me Kestrel Lane offers and seasonal reminders by email</span></label>
         <label class="${c.checkRow}" for="${f.privacy}"><input type="checkbox" id="${f.privacy}" name="privacy"> <span>I agree to Kestrel Lane contacting me about this request, as set out in the privacy notice</span></label>
         <span class="${c.fieldError}" id="${e.privacy}"></span>
@@ -86,8 +108,9 @@ export function quoteDrawer(c: SiteClasses, ids: QuoteDrawerIds, mode: SiteMode)
       <div class="${c.verifyBox}" id="${ids.verify}" hidden></div>
     </form>
     <div class="${c.drawerFoot}">
-      <button type="button" class="${c.button}" id="${ids.back}" disabled>Back</button>
-      <button type="button" class="${c.buttonPrimary}" id="${ids.next}">Continue</button>
+      ${newFooter ? `${next}
+      ${back}` : `${back}
+      ${next}`}
       ${rightHand}
     </div>
   </section>

@@ -1,10 +1,11 @@
 import { GEO_PLACES } from "../data/index.js";
 import type { ShellKit } from "../shell/index.js";
 import { companyOptions, type FilterBarIds } from "./filter-bar.js";
+import { inPlacePagingScript } from "./in-place-paging-script.js";
 import type { UpsellIds } from "./people-page.js";
 import type { PeopleQuery } from "./query.js";
 
-type Input = { query: PeopleQuery; resultsId: string; bar: FilterBarIds; upsell: UpsellIds | undefined; skeleton: string };
+type Input = { query: PeopleQuery; resultsId: string; bar: FilterBarIds; upsell: UpsellIds | undefined; skeleton: string; inPlace: boolean };
 
 /**
  * The people page's behaviour:
@@ -18,11 +19,16 @@ type Input = { query: PeopleQuery; resultsId: string; bar: FilterBarIds; upsell:
  *   its box is clicked;
  * - applying a filter reloads the page at page 1 with the filter in the
  *   address.
+ *
+ * With `inPlace` (the `in-place-paging` rendering) the pager's buttons call
+ * `refresh` from `inPlacePagingScript` instead, which rewrites the results
+ * where they stand and leaves the address alone; the first load is the same.
  */
 export function peopleClientScript(kit: ShellKit, input: Input): string {
   const j = JSON.stringify;
   const c = kit.css;
   const places = GEO_PLACES.map((place) => ({ value: place.id, label: place.label }));
+  const go = (page: string) => (input.inPlace ? `refresh(${page})` : `load(${page}, true)`);
   return `const byId = (id) => document.getElementById(id);
 const GL = window.GL;
 const QUERY = ${j(input.query)};
@@ -78,10 +84,10 @@ results.addEventListener('click', (event) => {
   if (!button) return;
   if (button.closest(${j(`.${c.pager}`)})) {
     const label = button.textContent.trim();
-    if (label === 'Next') return void load(current + 1, true);
-    if (label === 'Previous') return void load(Math.max(1, current - 1), true);
+    if (label === 'Next') return void ${go("current + 1")};
+    if (label === 'Previous') return void ${go("Math.max(1, current - 1)")};
     const number = Number(label);
-    if (number) load(number, true);
+    if (number) ${go("number")};
     return;
   }
   const item = button.closest('li[data-urn]');
@@ -151,5 +157,5 @@ byId(bar.allCancel).addEventListener('click', () => { byId(bar.allScrim).hidden 
 byId(bar.allApply).addEventListener('click', () => apply(Object.fromEntries(Object.entries(bar.allLists).map(([name, id]) => [name, checked(byId(id))]))));
 byId(bar.reset).addEventListener('click', () => location.assign(listHref({ ...QUERY, network: [], geo: [], company: [], page: 1 }, false)));
 load(QUERY.page, false);
-`;
+${input.inPlace ? inPlacePagingScript() : ""}`;
 }

@@ -2,12 +2,14 @@ import type { RenderContext, ScenarioRouteRequest, ScenarioRouteResponse } from 
 import { CATALOG, SEARCH_PARAMS, STORE_PATHS } from "./catalog/index.js";
 import {
   cartMainMarkup, cartSummaryMarkup, pageKit, productImageSvg, renderCartPage, renderCheckoutPage, renderConfirmationPage,
-  renderMoreResults, renderPaymentFrame, renderProductPage, renderRobotCheck, renderSearchPage, renderSoftCheck, renderThrottled,
+  receiptResponse, renderMoreResults, renderPaymentFrame, renderProductPage, renderRobotCheck, renderSearchPage, renderSoftCheck, renderThrottled,
 } from "./pages/index.js";
 import { robotCheckActive, STORE_THROTTLE, type StoreState } from "./state/index.js";
 
 const PRODUCT = /^(?:[A-Za-z0-9-]{1,120}\/)?dp\/(B0[A-Z0-9]{8})$/u;
 const IMAGE = /^img\/(B0[A-Z0-9]{8})\.svg$/u;
+/** The printable receipt's address under the store (`STORE_PATHS.receipt`). */
+const RECEIPT = "gp/css/summary/print.html";
 
 function html(body: string, status = 200): ScenarioRouteResponse {
   return { status, body };
@@ -70,7 +72,7 @@ export function routeStore(state: StoreState, request: ScenarioRouteRequest, con
   const fragment = subpath === "s/more" || subpath === "cart/summary" || (subpath === "cart" && query.get("part") === "main");
   const productSku = PRODUCT.exec(subpath)?.[1];
   const product = productSku === undefined ? undefined : CATALOG.bySku(productSku);
-  const known = fragment || product !== undefined || ["s", "cart", "checkout", "checkout/payment-frame", "thankyou", "sspa/click"].includes(subpath);
+  const known = fragment || product !== undefined || ["s", "cart", "checkout", "checkout/payment-frame", "thankyou", "sspa/click", RECEIPT].includes(subpath);
   if (!known) return undefined;
   if (robotCheckActive(state)) return fragment ? { status: 403, body: "" } : html(renderRobotCheck(kit));
   if (subpath === "s") return searchRoute(state, request, context, now);
@@ -81,6 +83,7 @@ export function routeStore(state: StoreState, request: ScenarioRouteRequest, con
   if (subpath === "checkout") return html(renderCheckoutPage(kit));
   if (subpath === "checkout/payment-frame") return html(renderPaymentFrame(kit));
   if (subpath === "thankyou") return html(renderConfirmationPage(kit, query.get("orderId")));
+  if (subpath === RECEIPT) return receiptResponse(state, query.get("orderID"));
   const target = query.get("url") ?? "";
   const promoted = PRODUCT.exec(target.startsWith(`${STORE_PATHS.base}/`) ? target.slice(STORE_PATHS.base.length + 1) : "")?.[1];
   return promoted !== undefined && CATALOG.bySku(promoted) ? { status: 302, headers: { location: target } } : undefined;

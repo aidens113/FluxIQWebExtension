@@ -320,5 +320,15 @@ test("the build: class names move with the lab seed, and ids are generated as un
   await page.goto(`${lab.origin}${ROOT}`);
   await page.locator("[role=\"feed\"] > [role=\"article\"]").first().waitFor();
   expect(await page.locator("[role=\"feed\"] > [role=\"article\"]").first().getAttribute("class")).not.toBe(first);
-  expect(await page.locator("[data-testid]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")))).toEqual(["build-marker"]);
+  // Nothing a person sees carries a test id but the build marker. The oracle's
+  // readouts (the request-audit account, each friend request's answer, the
+  // account's changes; added 2026-10-07 to 10-17) sit in <script> elements the
+  // page never renders, so they give an automation no handle on the feed.
+  const tagged = await page.locator("[data-testid]").evaluateAll((nodes) => nodes.map((node) => ({ tag: node.tagName, id: node.getAttribute("data-testid") })));
+  expect(tagged.filter(({ tag }) => tag !== "SCRIPT").map(({ id }) => id)).toEqual(["build-marker"]);
+  const readouts = tagged.filter(({ tag }) => tag === "SCRIPT").map(({ id }) => id ?? "");
+  expect(readouts).toContain("social-request-audit-account");
+  expect(readouts).toContain("social-account-changes");
+  expect(readouts.some((id) => id.startsWith("social-friend-request-rq_"))).toBe(true);
+  for (const id of readouts) expect(id).toMatch(/^social-(request-audit-account|account-changes|friend-request-rq_[0-9a-z]+)$/u);
 });

@@ -29,7 +29,7 @@ export function renderHome(state: CompanyWebsiteState, context: RenderContext): 
   const main = `<section class="${c.hero}">
   <h1 class="${c.heroTitle}">Warm homes since ${COMPANY.founded}</h1>
   <p>Family-run heating and plumbing engineers across five branches. Boiler servicing, repairs, new boilers and heat pumps, fitted by our own Gas Safe registered team.</p>
-  <div class="${c.heroActions}"><button type="button" class="${c.buttonPrimary}" data-open-quote>Get a free quote</button><a href="${ROOT}book">Book a service online</a></div>
+  <div class="${c.heroActions}">${state.mode === "phone-quotes" ? "" : `<button type="button" class="${c.buttonPrimary}" data-open-quote>Get a free quote</button>`}<a href="${ROOT}book">Book a service online</a></div>
 </section>
 <section class="${c.section}"><div class="${c.stats}"><div><strong>4.9 out of 5</strong><br><span class="${c.muted}">from 1,284 reviews</span></div><div><strong>40 vans</strong><br><span class="${c.muted}">on the road every day</span></div><div><strong>5 branches</strong><br><span class="${c.muted}">and a 24-hour emergency line</span></div></div></section>
 <section class="${c.section}"><h2 class="${c.sectionTitle}">What we do</h2><div class="${c.teaserGrid}">

@@ -8,6 +8,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
 import { extractList } from "../list-reader";
 import type { RefusedPageHost } from "../pagination";
 import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../shared/extraction-continuation";
@@ -736,4 +737,59 @@ test("a declared feed that shows an end note under its last post ended, and says
   const outcome = await readFeed(1, true);
   assert.equal(outcome.records.length, 10);
   assert.equal(outcome.listContinues, undefined);
+});
+
+// The domain's record bound on a read that names none (`itemBound`): an unbounded
+// read of a list longer than `WEB_AUTOMATION_EXTRACT_MAX_ITEMS` stops there and says
+// it was truncated. Formerly a 1,005-item injection in a browser spec; it is arithmetic.
+
+/** Stands `count` items up under `.row` for the length of `body`. */
+async function withList<T>(count: number, body: () => Promise<T>): Promise<T> {
+  const globals = globalThis as Record<string, unknown>;
+  const saved = { document: globals.document, element: globals.HTMLElement, input: globals.HTMLInputElement };
+  const items = Array.from({ length: count }, (_, index) => fakeItem(`Bulk item ${index + 1}`));
+  globals.HTMLElement = class {};
+  globals.HTMLInputElement = class {};
+  globals.document = {
+    readyState: "complete",
+    querySelectorAll: (selector: string) => (selector === ".row" ? items : []),
+    querySelector: () => null
+  };
+  try {
+    return await body();
+  } finally {
+    globals.document = saved.document;
+    globals.HTMLElement = saved.element;
+    globals.HTMLInputElement = saved.input;
+  }
+}
+
+/** A read of one attribute, which is the least a record can be built from without a text reader. */
+const BOUND_READ: WebAutomationExtractListRequest = { item: ".row", fields: { name: { kind: "attribute", attribute: "data-name" } } };
+
+/** A read that begins in this document with nothing handed over, so the reader goes straight to the items. */
+const FRESH_READ = { resume: { records: [], pagesRead: 0, scrolls: 0, missingFields: [] } };
+
+test("the bound is the thousand records the domain allows", () => {
+  assert.equal(WEB_AUTOMATION_EXTRACT_MAX_ITEMS, 1_000);
+});
+
+test("an unbounded read stops at the domain's record bound and says it was truncated", async () => {
+  const outcome = await withList(WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 5, () => extractList(BOUND_READ, FRESH_READ));
+  assert.equal(outcome.records.length, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  assert.equal(outcome.truncated, true);
+  assert.deepEqual(outcome.records[0], { name: "Bulk item 1" });
+  assert.deepEqual(outcome.records.at(-1), { name: `Bulk item ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}` });
+});
+
+test("a maxItems above the bound is held to it", async () => {
+  const outcome = await withList(WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 5, () => extractList({ ...BOUND_READ, maxItems: 5_000 }, FRESH_READ));
+  assert.equal(outcome.records.length, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  assert.equal(outcome.truncated, true);
+});
+
+test("a list at the bound is read whole and is not truncated", async () => {
+  const outcome = await withList(WEB_AUTOMATION_EXTRACT_MAX_ITEMS, () => extractList(BOUND_READ, FRESH_READ));
+  assert.equal(outcome.records.length, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  assert.equal(outcome.truncated, false);
 });

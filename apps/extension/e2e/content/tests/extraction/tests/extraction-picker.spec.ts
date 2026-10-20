@@ -1,4 +1,5 @@
-// The content-script picker (X4.2) against a real page: the overlay goes up,
+// The content-script picker (X4.2) against a realistic page -- the everything
+// store's search results, every class and id generated: the overlay goes up,
 // one trusted click chooses the list, and the click itself is not recorded.
 //
 // What these rows are really proving:
@@ -11,7 +12,7 @@
 //   observed; here it is observed, on a real click delivered by the browser.
 //   Registering the listeners on `document` instead makes the `dom.click` row
 //   fail.
-// - **The pick does not act on the page.** The product name is a link. Without
+// - **The pick does not act on the page.** The product title is a link. Without
 //   `preventDefault()` the click follows it, so the URL row fails and the page
 //   the proposal describes is gone.
 // - **The overlay is not a page change.** It is added and removed while
@@ -34,8 +35,13 @@ import type { WebAutomationExtractField, WebAutomationExtractionProposal } from 
 import { expect, test } from "../../../index.js";
 import type { ContentHarness, SentMessage } from "../../../index.js";
 
-const PRODUCT_LINK = '[data-testid="product-link"]';
-const PRODUCT_NAME = '[data-testid="product-name"]';
+/** The everything store's Plus wireless-earbud search, the live instruction task's own page. */
+const STORE_SEARCH = "/scenarios/everything-store/s?k=wireless+earbuds&rh=plus";
+/** A drawn result card; the placeholders carry the container attribute and no listing id. */
+const STORE_CARD = '[data-component="search-result"][data-sku]';
+/** The first organic card's title link: a same-tab link to its product page. */
+const PRODUCT_LINK = `${STORE_CARD}:not([data-ad-id]) h2 a`;
+const PRODUCT_NAME = `${STORE_CARD} h2 a`;
 const OVERLAY = "[data-fluxiq-picker]";
 
 /** A picked message as this spec reads it: the closed harness shape, narrowed to the fields the picker sends. */
@@ -47,6 +53,48 @@ type PickedMessage = SentMessage & {
 
 /** The recording settings these rows need: mutations counted, snapshots off so a payload is the event's own. */
 const RECORDING = { captureMutations: true, captureInputValues: true, captureSnapshots: false };
+
+/** One site operation, sent as the site's own scripts send it. */
+async function apply(harness: ContentHarness, operation: string, payload: object = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  expect(response.ok, `${operation} answered ${response.status}`).toBe(true);
+}
+
+/**
+ * The store's results with its consent, nudges and first-visit check already
+ * answered through the store's own operations, its cards drawn, and the page
+ * settled, so what the recorder sees while picking is the pick alone.
+ */
+async function openResults(harness: ContentHarness): Promise<void> {
+  await apply(harness, "consent", { choice: "accept" });
+  await apply(harness, "dismiss-nudge", { nudge: "app-banner" });
+  await apply(harness, "dismiss-nudge", { nudge: "notifications" });
+  await apply(harness, "pass-soft-check");
+  await harness.page.goto(new URL(STORE_SEARCH, harness.lab.origin).href, { waitUntil: "load" });
+  await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+  await expect(harness.page.locator(STORE_CARD).first()).toBeVisible();
+  await harness.page.waitForTimeout(1_000);
+}
+
+/** The text field the proposal reads each card's title with; keys are page structure, so the page is asked. */
+async function titleField(harness: ContentHarness, proposal: WebAutomationExtractionProposal): Promise<WebAutomationExtractionProposal["fields"][number]> {
+  const key = await harness.page.evaluate(({ item, fields }) => {
+    const items = [...document.querySelectorAll(item)];
+    return fields.find((field) => field.spec.kind === "text" && field.spec.selector !== undefined && items.every((row) => {
+      const title = row.querySelector("h2 a");
+      const selected = row.querySelector(field.spec.selector!);
+      return title !== null && selected !== null && (selected === title || title.contains(selected)) && selected.textContent?.trim() === title.textContent?.trim();
+    }))?.key ?? "";
+  }, { item: proposal.item, fields: proposal.fields });
+  const field = proposal.fields.find((candidate) => candidate.key === key);
+  expect(field, "the proposal has a field reading each card's title").toBeTruthy();
+  if (!field) throw new Error("No title field.");
+  return field;
+}
 
 async function startPick(harness: ContentHarness, sessionId: string): Promise<void> {
   const delivery = await harness.deliver({ type: "extraction.pick_start", sessionId, form: "list" });
@@ -66,8 +114,10 @@ function requestFrom(proposal: WebAutomationExtractionProposal): { item: string;
   };
 }
 
-test("product-catalog: a picked product proposes the eight cards, and the pick is neither recorded nor acted on", async ({ openHarness, page }) => {
-  const harness = await openHarness("product-catalog");
+test("everything-store: a picked product proposes the result cards, and the pick is neither recorded nor acted on", async ({ openHarness, page }) => {
+  test.setTimeout(90_000);
+  const harness = await openHarness("everything-store");
+  await openResults(harness);
   await harness.setRecording(true, RECORDING);
   const names = (await page.locator(PRODUCT_NAME).allInnerTexts()).map((name) => name.trim());
   const urlBefore = page.url();
@@ -84,8 +134,9 @@ test("product-catalog: a picked product proposes the eight cards, and the pick i
   const proposal = picked[0]?.proposal;
   expect(proposal, `the pick carried a proposal: ${JSON.stringify(picked[0])}`).toBeTruthy();
   if (!proposal) throw new Error("The pick carried no proposal.");
-  expect(proposal.itemCount).toBe(8);
-  expect(await page.locator(proposal.item).count()).toBe(8);
+  const drawn = await page.locator(STORE_CARD).count();
+  expect(proposal.itemCount).toBe(drawn);
+  expect(await page.locator(proposal.item).count()).toBe(drawn);
 
   // The press that picked is not an action: the recorder never saw it.
   expect(await harness.recordedEvents("dom.click")).toEqual([]);
@@ -101,8 +152,8 @@ test("product-catalog: a picked product proposes the eight cards, and the pick i
   // Confirming it records exactly one executable extraction event.
   const definition = {
     form: "list",
-    datasetId: "products-1a2b3c4d",
-    label: "Products",
+    datasetId: "results-1a2b3c4d",
+    label: "Results",
     request: requestFrom(proposal),
     fieldLabels: Object.fromEntries(proposal.fields.map((field) => [field.key, field.label])),
     itemCount: proposal.itemCount
@@ -121,8 +172,10 @@ test("product-catalog: a picked product proposes the eight cards, and the pick i
   expect(await harness.recordedEvents("dom.mutation")).toEqual([]);
 });
 
-test("product-catalog: Escape ends the pick, and the key that ended it is not recorded either", async ({ openHarness, page }) => {
-  const harness = await openHarness("product-catalog");
+test("everything-store: Escape ends the pick, and the key that ended it is not recorded either", async ({ openHarness, page }) => {
+  test.setTimeout(90_000);
+  const harness = await openHarness("everything-store");
+  await openResults(harness);
   await harness.setRecording(true, RECORDING);
   const urlBefore = page.url();
 
@@ -143,8 +196,10 @@ test("product-catalog: Escape ends the pick, and the key that ended it is not re
   expect(page.url()).not.toBe(urlBefore);
 });
 
-test("product-catalog: a preview reads at most the limit, goes to the panel only, and is never recorded", async ({ openHarness, page }) => {
-  const harness = await openHarness("product-catalog");
+test("everything-store: a preview reads at most the limit, goes to the panel only, and is never recorded", async ({ openHarness, page }) => {
+  test.setTimeout(90_000);
+  const harness = await openHarness("everything-store");
+  await openResults(harness);
   await harness.setRecording(true, RECORDING);
   const names = (await page.locator(PRODUCT_NAME).allInnerTexts()).map((name) => name.trim());
 
@@ -154,9 +209,7 @@ test("product-catalog: a preview reads at most the limit, goes to the panel only
   if (!proposal) throw new Error("The pick carried no proposal.");
 
   const before = await harness.recordedEvents();
-  const nameField = proposal.fields.find((field) => field.label === "product-name");
-  expect(nameField, "the proposal has the product-name field").toBeTruthy();
-  if (!nameField) throw new Error("No product-name field.");
+  const nameField = await titleField(harness, proposal);
   // One column kept, the rest not asked for: an excluded column is never read
   // at all rather than read and hidden (D12).
   const request = { item: proposal.item, fields: { [nameField.key]: nameField.spec as WebAutomationExtractField } };

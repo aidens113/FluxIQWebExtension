@@ -23,6 +23,10 @@
 // only a choice about the person's data is not dismissed on their behalf.
 //
 // The refusals that remain refusals are `dialog-refusal.spec.ts`.
+//
+// Every row runs on one of the ten realistic scenarios. The dialog whose
+// every control is a consequential act is company-website's `account-move`
+// mode, which opens it over every page until one of its buttons is pressed.
 
 import type { Page } from "@playwright/test";
 import type { BrowserActionResult } from "../../../src/shared/protocol.js";
@@ -57,28 +61,6 @@ async function openAndWait(harness: ContentHarness, url: string): Promise<void> 
   await expect
     .poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady"))
     .toBe(true);
-}
-
-/**
- * Opens an aria-modal dialog over the page holding `inner`, as a page's own
- * script would, with every button wired to close it.
- *
- * The wiring is what makes these rows mean anything. A dialog whose controls do
- * nothing cannot be told apart from one the runtime declined to press, so a
- * press that should not happen would look exactly like a press that happened and
- * had no effect -- and the rows below that assert nothing was pressed would
- * prove nothing at all.
- */
-async function openDialog(page: Page, inner: string): Promise<void> {
-  await page.evaluate((html) => {
-    const scrim = document.createElement("div");
-    scrim.setAttribute("style", "position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:rgb(0 0 0 / .5)");
-    scrim.innerHTML = `<div role="dialog" aria-modal="true" aria-label="Test dialog" style="background:#fff;padding:24px;width:360px">${html}</div>`;
-    document.body.append(scrim);
-    for (const button of scrim.querySelectorAll("button")) {
-      button.addEventListener("click", () => { scrim.remove(); });
-    }
-  }, inner);
 }
 
 /** The validation text an operator reads, or the empty string for a result that validated nothing. */
@@ -154,112 +136,164 @@ test.describe("a dialog the page opened over itself", () => {
   });
 });
 
-test.describe("modal-flows", () => {
-  const ADD_SECTION = '[data-testid="add-section"]';
-  const OPEN_INVITE = '[data-testid="open-invite"]';
-  const INVITE_DIALOG = '[data-testid="invite-dialog"]';
-  const INTERSTITIAL = '[data-testid="interstitial"]';
+/** The state of a scenario as its own server last recorded it, read as the shape the row needs. */
+async function siteState<T>(harness: ContentHarness): Promise<T> {
+  return (await harness.finalState()).state as unknown as T;
+}
 
-  test("a dialog whose only way out is Cancel is left alone, and the step still stops", async ({ openHarness, page }) => {
-    // The invite dialog offers "Cancel" and "Confirm" and nothing else. Neither
-    // is a dismissal: "Cancel" is the one word that means both "close this" and
+/**
+ * company-website with its consent wall, chat greeting and newsletter offer
+ * already answered, so nothing but the row's own layer is on the page; `mode`
+ * arms one of the site's renderings first, because arming starts a new visitor.
+ */
+async function settledCompanyHome(harness: ContentHarness, mode?: string): Promise<void> {
+  if (mode) await apply(harness, "set-mode", { mode });
+  await apply(harness, "set-consent", { choice: "essential" });
+  await apply(harness, "dismiss-chat-greeting");
+  await apply(harness, "dismiss-newsletter");
+  await openAndWait(harness, harness.url);
+}
+
+/** The header's "Get a free quote": a plain button whose only effect is opening the quote drawer. */
+const COMPANY_QUOTE_BUTTON = "header [data-open-quote]";
+
+const quoteDrawerOpen = (page: Page): Promise<boolean> => page.locator("[data-quote-drawer]").evaluate((element) => !(element as HTMLElement).hidden);
+
+test.describe("dialogs that open over the page between and before steps", () => {
+  test("photo-social: a dialog whose only ways out are Cancel and the act itself is left alone, and the step still stops", async ({ openHarness, page }) => {
+    // Unfollowing asks "Unfollow @lena.moss?" and offers "Unfollow" and
+    // "Cancel" and nothing else: no close glyph, no "Not now". Neither is a
+    // dismissal. "Cancel" is the one word that means both "close this" and
     // "carry out the cancellation", and the vocabulary is deliberately closed
-    // against it. So the defence runs, finds nothing it may press, and the page's
-    // own refusal stands -- which is the right answer and not a gap.
-    const harness = await openHarness("modal-flows");
-    await page.locator(OPEN_INVITE).click();
-    await expect(page.locator(INVITE_DIALOG)).toBeVisible();
+    // against it. So the defence runs, finds nothing it may press, and the
+    // page's own refusal stands -- which is the right answer and not a gap.
+    const harness = await openHarness("photo-social");
+    await apply(harness, "consent", { choice: "essential" });
+    await apply(harness, "dock", { minimized: true });
+    const profile = new URL("/scenarios/photo-social/lena.moss/", harness.lab.origin).href;
+    await openAndWait(harness, profile);
+    await expect(page.locator('main a[href*="/p/"]').first()).toBeVisible();
+    await page.locator('main header div[role="button"]', { hasText: "Following" }).click();
+    const confirm = page.getByRole("dialog").filter({ hasText: "Unfollow @lena.moss?" });
+    await expect(confirm).toBeVisible();
 
-    const reply = await harness.runAction({ commandId: "click-behind-modal", actionType: "web.dom.click", selector: ADD_SECTION, timeoutMs: 4_000 });
+    const reply = await harness.runAction({ commandId: "click-behind-unfollow", actionType: "web.dom.click", selector: 'main a[href*="/p/"]', timeoutMs: 4_000 });
 
     expect(reply.status).toBe("failed");
     expect(reply.failure?.code).toBe("web.action.blocked_by_dialog");
     // The defence was reached and was not enough, and the record says so rather
-    // than hiding it: three attempts, no dialog closed.
-    expect(reply.failure?.actual).toMatch(/did not recover within its 4 attempts after absorbing blocking_dialog/u);
+    // than hiding it: every attempt spent, no dialog closed.
+    expect(reply.failure?.actual).toMatch(/did not recover within its \d+ attempts after absorbing blocking_dialog/u);
     expect(reply.failure?.actual).not.toMatch(/closing/u);
-    expect((await harness.finalState()).state).toMatchObject({ sectionCount: 0 });
-    await expect(page.locator(INVITE_DIALOG)).toBeVisible();
+    expect((await siteState<{ following: string[] }>(harness)).following).toContain("lena.moss");
+    await expect(confirm).toBeVisible();
+    expect(page.url()).toBe(profile);
   });
 
-  test("W14: the interstitial that opens between two clicks no longer stops the second", async ({ openHarness, page }) => {
-    const harness = await openHarness("modal-flows");
-    await applyAndReload(harness, "arm-interstitial");
-
-    const first = await harness.runAction({ commandId: "add-first", actionType: "web.dom.click", selector: ADD_SECTION });
+  test("auction-marketplace (W14): the promotion that opens between two steps no longer stops the second", async ({ openHarness, page }) => {
+    const harness = await openHarness("auction-marketplace");
+    const promotion = page.getByRole("dialog", { name: "Bid on the go" });
+    // The first step runs before the promotion's 2.5 s timer: nothing is in the way.
+    const first = await harness.runAction({ commandId: "type-first", actionType: "web.dom.type", selector: 'input[name="_nkw"]', text: "kestrel" });
     expect(first.status, first.message).toBe("succeeded");
-    await expect(page.locator(INTERSTITIAL)).toBeVisible();
+    expect(validationActual(first)).not.toMatch(/closing/u);
+    await expect(promotion).toBeVisible({ timeout: 8_000 });
 
-    const second = await harness.runAction({ commandId: "add-second", actionType: "web.dom.click", selector: ADD_SECTION });
+    const second = await harness.runAction({ commandId: "type-second", actionType: "web.dom.type", selector: 'input[name="_nkw"]', text: "camera" });
 
     expect(second.status, second.message).toBe("succeeded");
     expect(validationActual(second)).toMatch(CLOSED_ONE);
-    expect((await harness.finalState()).state).toMatchObject({ sectionCount: 2 });
-    await expect(page.locator(INTERSTITIAL)).toBeHidden();
+    await expect(page.locator('input[name="_nkw"]')).toHaveValue("camera");
+    await expect(promotion).toBeHidden();
+    // The page's own way out is what closed it: the site recorded the dismissal.
+    expect((await siteState<{ promoDismissed: boolean }>(harness)).promoDismissed).toBe(true);
   });
 
-  test("an injected promotion is closed by its Not now", async ({ openHarness, page }) => {
-    const harness = await openHarness("modal-flows");
-    await openDialog(page, '<h2>Get the app</h2><p>Scan the code with your phone.</p><button type="button">Not now</button>');
+  test("local-classifieds: the notifications prompt is closed by its Not now, never by Turn on", async ({ openHarness, page }) => {
+    const harness = await openHarness("local-classifieds");
+    await applyAndReload(harness, "consent", { choice: "essential" });
+    const prompt = page.getByRole("dialog", { name: "Turn on notifications?" });
+    await expect(prompt).toBeVisible({ timeout: 10_000 });
 
-    const reply = await harness.runAction({ commandId: "behind-promotion", actionType: "web.dom.click", selector: ADD_SECTION });
+    const reply = await harness.runAction({ commandId: "behind-notifications", actionType: "web.dom.type", selector: 'input[aria-label="Search Marketplace"]', text: "bike" });
 
     expect(reply.status, reply.message).toBe("succeeded");
     expect(validationActual(reply)).toMatch(CLOSED_ONE);
-    expect((await harness.finalState()).state).toMatchObject({ sectionCount: 1 });
+    await expect(page.locator('input[aria-label="Search Marketplace"]')).toHaveValue("bike");
+    await expect(prompt).toBeHidden();
+    expect((await siteState<{ notificationPrompt: string }>(harness)).notificationPrompt).toBe("dismissed");
   });
 
   // --- What a dismissal may never become ----------------------------------
 
   test("a consequentially-labelled control inside the overlay is not a way out, so nothing is pressed", async ({ openHarness, page }) => {
-    // Every control here begins with a dismissal word and ends in an act on
-    // something the person owns. If any were pressed the dialog would close and
-    // the click would land, so the refusal below is the assertion.
-    const harness = await openHarness("modal-flows");
-    await openDialog(
-      page,
-      '<h2>Before you go</h2><button type="button">Close account</button><button type="button">Skip and delete my drafts</button><button type="button">Not now, cancel my subscription</button>'
-    );
+    // company-website's `account-move` mode: before customer accounts move to
+    // a new booking system, "Before you go" opens over every page. Every
+    // control begins with a dismissal word and ends in an act on something
+    // the person owns. Any of them closes the dialog and the site records
+    // which was pressed, so a press would let the click land and show in the
+    // site's own state: the refusal and the state below are the assertion.
+    const harness = await openHarness("company-website");
+    await settledCompanyHome(harness, "account-move");
+    await expect(page.getByRole("dialog", { name: "Before you go" })).toBeVisible();
 
-    const reply = await harness.runAction({ commandId: "behind-destructive-dialog", actionType: "web.dom.click", selector: ADD_SECTION, timeoutMs: 4_000 });
+    const reply = await harness.runAction({ commandId: "behind-destructive-dialog", actionType: "web.dom.click", selector: COMPANY_QUOTE_BUTTON, timeoutMs: 4_000 });
 
     expect(reply.status).toBe("failed");
     expect(reply.failure?.code).toBe("web.action.blocked_by_dialog");
-    expect((await harness.finalState()).state).toMatchObject({ sectionCount: 0 });
+    expect(await quoteDrawerOpen(page), "the click never landed").toBe(false);
     // Nothing on the dialog was pressed: it is still exactly as the page left it.
     await expect(page.getByRole("button", { name: "Close account" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Skip and delete my drafts" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Not now, cancel my subscription" })).toBeVisible();
+    expect(await siteState<{ mode: string; interstitial: { pressed: string | null } }>(harness)).toMatchObject({ mode: "account-move", interstitial: { pressed: null } });
   });
 
-  test("a challenge is left alone including its own Cancel, and the step still stops for the person", async ({ openHarness, page }) => {
-    const harness = await openHarness("modal-flows");
-    await openDialog(
-      page,
-      '<h2>Security check</h2><p>Type the characters you see in the image.</p><canvas role="img" aria-label="Security image" width="200" height="60"></canvas><input aria-label="Characters"><button type="button">Not now</button><button type="button">Close</button>'
-    );
+  test("company-website: the quote form's human check is left alone including its own close, and the step still stops for the person", async ({ openHarness, page }) => {
+    // The quote drawer turns into "Confirm you are human" once its form is
+    // sent. The drawer keeps its close glyph and its scrim, and a press
+    // behind it must touch neither: a robot check is the person's, way out or
+    // no way out.
+    const harness = await openHarness("company-website");
+    await settledCompanyHome(harness);
+    await page.locator(COMPANY_QUOTE_BUTTON).click();
+    await page.fill('input[name="fullName"]', "Ada Synthetic");
+    await page.fill('input[name="email"]', "ada.synthetic@example.test");
+    await page.fill('input[name="phone"]', "07700 900123");
+    await page.fill('input[name="postcode"]', "KL6 2RN");
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page.getByText("Choose a service", { exact: true }).click();
+    await page.locator('[data-value="Boiler service"]').click();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page.locator('input[name="privacy"]').check();
+    await page.locator('[data-testid="quote-submit"]').click();
+    await expect(page.getByText("Confirm you are human")).toBeVisible({ timeout: 8_000 });
+    const before = page.url();
 
-    const reply = await harness.runAction({ commandId: "behind-robot-check", actionType: "web.dom.click", selector: ADD_SECTION, timeoutMs: 4_000 });
+    const reply = await harness.runAction({ commandId: "behind-human-check", actionType: "web.dom.click", selector: 'nav[aria-label="Main"] a[href$="/branches"]', timeoutMs: 4_000 });
 
     expect(reply.status).toBe("failed");
     expect(reply.failure?.code).toBe("web.intervention.required");
-    expect((await harness.finalState()).state).toMatchObject({ sectionCount: 0 });
-    // The two ways out it offers are untouched: a robot check is the person's,
-    // way out or no way out.
-    await expect(page.getByRole("button", { name: "Not now" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
+    expect(page.url(), "the link behind the check was never followed").toBe(before);
+    expect(await quoteDrawerOpen(page), "the drawer's close and scrim were left alone").toBe(true);
+    await expect(page.getByText("Confirm you are human")).toBeVisible();
+    expect((await siteState<{ quotes: unknown[] }>(harness)).quotes).toEqual([]);
   });
 
-  test("a consent banner over the action is declined, never accepted, and the action then lands", async ({ openHarness }) => {
-    // It is fixed over the action bar and owns the primary action, and its only
-    // controls are Accept and Reject. Since 2026-09-30 declining optional
-    // cookies is a way out of a consent layer and accepting never is
+  test("bigbox-retail: the consent dialog over the step is rejected, never accepted, and the typing then lands", async ({ openHarness, page }) => {
+    // A modal consent dialog over a scrim that takes every click, offering
+    // Accept all, Reject all and Manage choices. Since 2026-09-30 declining
+    // optional cookies is a way out of a consent layer and accepting never is
     // (`interference/vocabulary.ts`): declining consents to nothing, so the
-    // defence presses Reject, and the action under the banner then lands.
-    const harness = await openHarness("modal-flows");
+    // defence presses Reject all, and the step under the dialog then lands.
+    const harness = await openHarness("bigbox-retail");
+    await expect(page.locator('[role="dialog"][aria-modal="true"]')).toBeVisible();
 
-    const reply = await harness.runAction({ commandId: "click-under-banner", actionType: "web.dom.click", selector: '[data-testid="publish-draft"]', timeoutMs: 4_000 });
+    const reply = await harness.runAction({ commandId: "type-under-consent", actionType: "web.dom.type", selector: 'header input[name="q"]', text: "paper towels", timeoutMs: 4_000 });
 
     expect(reply.status, reply.message).toBe("succeeded");
-    expect((await harness.finalState()).state).toMatchObject({ consent: "essential-only", publishCount: 1 });
+    await expect(page.locator('header input[name="q"]')).toHaveValue("paper towels");
+    expect((await siteState<{ consent: string }>(harness)).consent).toBe("rejected");
   });
 });
+

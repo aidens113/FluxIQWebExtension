@@ -1,5 +1,6 @@
+import { randomBytes } from "node:crypto";
+import { startScenarioLab } from "../../scenario-lab/src/server.js";
 import { expect, test } from "./fixtures/extension-context";
-import { startScenarioPage } from "./fixtures/scenario-page";
 
 test("loads the current MV3 artifact and its extension page", async ({ extensionSession }) => {
   const { extensionPage, metadata, worker } = extensionSession;
@@ -58,18 +59,21 @@ test("mounts the shared panel: getting-started steps until connected, and settin
   expect(pageErrors).toEqual([]);
 });
 
-test("injects the content script into a loopback scenario page", async ({ extensionSession }) => {
-  const scenario = await startScenarioPage();
+// The everything store's home page, a realistic Scenario Lab page served on
+// loopback, stands for any site the extension's content script must reach.
+test("injects the content script into a realistic loopback scenario page", async ({ extensionSession }) => {
+  const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url") });
   try {
     const page = await extensionSession.context.newPage();
-    await page.goto(scenario.origin);
+    await page.goto(new URL("/scenarios/everything-store/", lab.origin).href);
+    await expect(page.locator('input[name="k"]')).toBeVisible();
     const tabId = await tabIdFor(extensionSession.extensionPage, page.url());
     const response = await extensionSession.extensionPage.evaluate(async (id) => (
       chrome.tabs.sendMessage(id, { type: "fluxiq.ping" })
     ), tabId);
     expect(response).toMatchObject({ ok: true, active: true, version: 2 });
   } finally {
-    await scenario.close();
+    await lab.close();
   }
 });
 

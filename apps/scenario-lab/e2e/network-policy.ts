@@ -24,7 +24,7 @@ export async function installDeterministicNetworkGuard(context: BrowserContext):
   context.on("request", request => observe(request.url()));
   await context.route("**/*", async (route: Route) => {
     const url = route.request().url();
-    if (isDeterministicBrowserUrlAllowed(url)) await route.continue();
+    if (isDeterministicBrowserUrlAllowed(url)) await route.fallback();
     else { unexpected.add(url); await route.abort("blockedbyclient"); }
   });
   return {

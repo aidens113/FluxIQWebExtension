@@ -14,7 +14,8 @@ export type PeopleFragment = { html: string; cards: Record<string, CardAction>; 
 /**
  * One page of results. The pager lists every page by number, and offers
  * Previous and Next beside them; the page's script is what makes Next not
- * work, not this markup.
+ * work, not this markup. The in-place pager (`in-place-paging`) disables Next
+ * on the last page.
  */
 export function peopleFragment(kit: ShellKit, query: PeopleQuery): PeopleFragment {
   const c = kit.css;
@@ -24,6 +25,7 @@ export function peopleFragment(kit: ShellKit, query: PeopleQuery): PeopleFragmen
     return { html: `<div class="${c.challenge}"><h2>No results found</h2><p class="${c.muted}">Try shortening or rephrasing your search.</p></div>`, cards: {}, page: results.page, pageCount: results.pageCount };
   }
   const items = results.entries.map((entry) => resultEntryMarkup(kit, entry, actions)).join("\n");
+  const lastInPlace = kit.state.mode === "in-place-paging" && results.page >= results.pageCount;
   const numbers = Array.from({ length: results.pageCount }, (_, index) => {
     const number = index + 1;
     const on = number === results.page;
@@ -32,7 +34,7 @@ export function peopleFragment(kit: ShellKit, query: PeopleQuery): PeopleFragmen
   const pager = results.pageCount < 2 ? "" : `<div class="${c.pager}"><span class="${c.muted} ${c.small}" style="margin-right:auto">Page ${results.page} of ${results.pageCount}</span>
 <button class="${c.pagerBtn}" type="button"${results.page === 1 ? " disabled" : ""}>Previous</button>
 <ul style="display:flex;gap:4px;list-style:none;margin:0;padding:0">${numbers}</ul>
-<button class="${c.pagerBtn}" type="button">Next</button></div>`;
+<button class="${c.pagerBtn}" type="button"${lastInPlace ? " disabled" : ""}>Next</button></div>`;
   return {
     html: `<div class="${c.resultCount}">${resultCountText(results.total)}</div>\n<ul class="${c.resultList}" role="list">\n${items}\n</ul>\n${pager}`,
     cards: Object.fromEntries(actions),

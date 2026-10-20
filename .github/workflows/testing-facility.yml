@@ -211,7 +211,12 @@ jobs:
       - name: Install bundled Chromium
         working-directory: "!FluxIQWebExtension"
         run: ${{ matrix.browser_install }}
-      - name: Run all scenario pages without extension or Core
+      # The Scenario Lab's Playwright specs open only the ten realistic
+      # scenarios (AGENTS.md): the lab fixture refuses any other scenario in
+      # the browser, and realistic-scenario-guard/tests/browser-specs-scan
+      # fails on any browser spec, here or in apps/extension/e2e, that opens a
+      # synthetic scenario or serves a page of its own.
+      - name: Run the realistic scenario pages and the realistic-scenario guard without extension or Core
         if: github.event_name == 'schedule' || needs.select.outputs.run_browser_smoke == 'true'
         working-directory: "!FluxIQWebExtension"
         run: pnpm --filter @fluxiq-web-extension/scenario-lab test:e2e
@@ -322,10 +327,11 @@ jobs:
       - name: Build scenario registry and selector
         working-directory: "!FluxIQWebExtension"
         run: pnpm --dir packages/test-matrix build:registry && pnpm --dir packages/test-matrix build
-      # The registry (apps/scenario-lab/src/registry.ts) is the one list of
-      # scenarios, read through the selector's own loader, so a new scenario
-      # joins a shard without this file changing. Round-robin keeps shards
-      # within one scenario of each other.
+      # The selector's catalog (packages/test-matrix, `loadScenarioCatalog`)
+      # is the ten realistic scenarios, in registry order, read from the one
+      # list in packages/test-runner/src/realistic-scenarios, so a change to
+      # that list reaches the shards without this file changing. Round-robin
+      # keeps shards within one scenario of each other.
       - name: Split the registry into shards
         id: shards
         working-directory: "!FluxIQWebExtension"
@@ -349,16 +355,17 @@ jobs:
     if: github.event_name == 'schedule'
     needs: [prerequisites, static, nightly-plan]
     runs-on: ubuntu-latest
-    # Sizing (2026-09-29): 41 registered scenarios x 3 repeats = 123 runs, run
+    # Sizing (2026-10-19): the catalog is the ten realistic scenarios (it was
+    # all 41 registered ones until t727), so 10 x 3 repeats = 30 runs, run
     # strictly one after another inside a job (packages/test-runner/src/cli.ts
     # awaits each run). The only complete deterministic runs on record (21, from
-    # 2026-09-13, Windows, one machine) took 44-108 s, median 62 s. Unsharded
-    # that is 127-221 min in one job: under the 360-minute job cap, but by a
-    # margin measured on only four scenarios. In four shards of 10-11
-    # scenarios (30-33 runs) it is 22-60 min per shard at those rates; the
-    # 150-minute step limit is 2.5x the slowest estimate, so a stall ends as a
-    # named timeout with time left for the evidence upload (`if: always()`).
-    # The first nightly's run.json files replace this estimate.
+    # 2026-09-13, Windows, one machine) took 44-108 s, median 62 s, on synthetic
+    # scenarios; realistic ones are larger and unmeasured here. In four shards
+    # of 2-3 scenarios (6-9 runs) that is 5-17 min per shard at those rates, so
+    # the 150-minute step limit leaves a wide margin for slower realistic runs,
+    # and a stall still ends as a named timeout with time left for the evidence
+    # upload (`if: always()`). The first nightly's run.json files replace this
+    # estimate; the limits can shrink once they do.
     timeout-minutes: 210
     strategy:
       fail-fast: false

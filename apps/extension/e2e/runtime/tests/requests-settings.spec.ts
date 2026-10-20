@@ -1,19 +1,23 @@
-import { createServer } from "node:http";
+// The requests setting in the real extension: unavailable under Core's default
+// policy, a save cannot turn it on, and the person's stored choice survives a
+// restart while effective settings keep requests off. A tab on a realistic Scenario Lab page (the
+// everything store's home page) is where the running content script reports
+// the build identity the check below compares with the artifact's.
+
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { startScenarioLab } from "../../../../scenario-lab/src/server.js";
 import { expect, restartServiceWorker, test } from "../../fixtures/extension-context.js";
 
 test("requests Settings stays unavailable under Core's default, a save cannot turn it on, and a stored choice survives a restart", async ({ extensionSession }, info) => {
-  const server = createServer((_request, response) => response.end("<!doctype html><title>Requests policy fixture</title>"));
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url") });
   try {
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Missing owned fixture port");
   const fixture = await extensionSession.context.newPage();
-  await fixture.goto(`http://127.0.0.1:${address.port}/policy`);
+  await fixture.goto(new URL("/scenarios/everything-store/", lab.origin).href);
   const page = extensionSession.extensionPage;
   const tabId = await page.evaluate(async url => (await chrome.tabs.query({})).find(tab => tab.url === url)?.id, fixture.url());
-  if (tabId === undefined) throw new Error("Missing owned fixture tab");
+  if (tabId === undefined) throw new Error("Missing the scenario tab");
   const expected = JSON.parse(await readFile(path.join(extensionSession.metadata.artifactPath, "build-info.json"), "utf8")).identity;
   const running = await page.evaluate(id => chrome.runtime.sendMessage({ type: "fluxiq.buildIdentity", tabId: id }), tabId);
   expect(running).toMatchObject({ ok: true, background: expected, content: expected });
@@ -47,10 +51,6 @@ test("requests Settings stays unavailable under Core's default, a save cannot tu
   await expect.poll(read).toEqual({ requestsEnabled: true, autoReconnect: false });
   await info.attach("requests-foundation", { contentType: "application/json", body: JSON.stringify({ identity: expected, browser: await page.evaluate(() => navigator.userAgent), available: false, storedChoiceKept: true }) });
   } finally {
-    server.closeAllConnections();
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Owned fixture close timed out")), 2000);
-      server.close(error => { clearTimeout(timeout); if (error) reject(error); else resolve(); });
-    });
+    await lab.close();
   }
 });

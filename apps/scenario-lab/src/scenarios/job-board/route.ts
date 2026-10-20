@@ -68,7 +68,7 @@ function routeEmbed(state: JobBoardState, request: ScenarioRouteRequest, context
     const requisition = request.query.get("token") ?? "";
     const posting = POSTINGS.find((candidate) => candidate.apply.kind === "company" && candidate.apply.careersSlug === slug && candidate.apply.requisition === requisition);
     if (!posting) return undefined;
-    return { status: 200, headers: framed, body: isPostingOpen(state, posting) ? renderApplicationForm(context, posting) : renderEmbedClosed() };
+    return { status: 200, headers: framed, body: isPostingOpen(state, posting) ? renderApplicationForm(context, posting, state.mode) : renderEmbedClosed() };
   }
   if (request.subpath === "embed/places") {
     return { status: 200, headers: { ...framed, "content-type": "application/json; charset=utf-8" }, body: JSON.stringify(suggestPlaces(request.query.get("q") ?? "")) };

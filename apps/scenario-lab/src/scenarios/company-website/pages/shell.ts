@@ -6,6 +6,7 @@ import { shellScript } from "../client/index.js";
 import { COMPANY } from "../data/index.js";
 import { SITE_BUILD, siteClasses, siteStylesheet, type SiteClasses } from "../styles.js";
 import type { CompanyWebsiteState } from "../types.js";
+import { interstitial } from "./interstitial.js";
 
 export type SiteSection = "home" | "services" | "team" | "branches" | "book" | null;
 
@@ -40,6 +41,7 @@ export function sitePage(input: {
     newsletterDue: !state.newsletter.dismissed,
     greetingDue: !state.chat.greetingDismissed,
   };
+  const phoneQuotes = state.mode === "phone-quotes";
   const nav = NAV.map(([id, label, href]) => `<a class="${c.navLink}${id === input.section ? ` ${c.navCurrent}` : ""}" href="${href}"${id === input.section ? ' aria-current="page"' : ""}>${escapeHtml(label)}</a>`).join("");
   return `<!doctype html>
 <html lang="en-GB">
@@ -52,19 +54,19 @@ ${siteStylesheet(c)}
 </head>
 <body>
 <div class="${c.page}">
-<div class="${c.topBar}">No heating or hot water? Our 24-hour emergency line is <a style="color:#fff" href="tel:01632960999">${COMPANY.emergencyPhone}</a></div>
+<div class="${c.topBar}">No heating or hot water? Our 24-hour emergency line is <a style="color:#fff" href="tel:01632960999">${COMPANY.emergencyPhone}</a>${phoneQuotes ? ` ${callButton(c)}` : ""}</div>
 <header class="${c.header}">
   <a class="${c.brand}" href="${ROOT}"><span class="${c.brandMark}">KL</span>${escapeHtml(COMPANY.shortName)}</a>
   <nav class="${c.nav}" aria-label="Main">${nav}</nav>
   <a class="${c.phoneLink}" href="tel:01632960418">${COMPANY.phone}</a>
-  <button type="button" class="${c.headerCta}" data-open-quote>Get a free quote</button>
+  ${phoneQuotes ? "" : `<button type="button" class="${c.headerCta}" data-open-quote>Get a free quote</button>`}
 </header>
 <main class="${c.main}">
 ${input.main}
 </main>
 ${footer(c)}
 </div>
-${consentBanner(state, context.seed)}${winterNotice(state, c)}
+${consentBanner(state, context.seed)}${winterNotice(state, c)}${interstitial(state, c)}
 <script type="application/json" data-testid="company-review-account">${companyReviewAccountFacts(state).replaceAll("<", "\\u003c")}</script>
 <script type="module">
 const qualificationAccountFacts = ${companyReviewAccountFacts.toString()};
@@ -160,6 +162,15 @@ function consentBanner(state: CompanyWebsiteState, seed: number): string {
 <button type="button" class="${k.accept}" data-choice="all">Accept all</button>
 </div>
 </div></template></div>`;
+}
+
+/**
+ * `phone-quotes`' call button: an icon the header's button component draws,
+ * with no words, no label and no id, as an icon-only button often ships.
+ * Pressing it rings the office.
+ */
+function callButton(c: SiteClasses): string {
+  return `<button type="button" class="${c.headerCta}" data-call-office><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></button>`;
 }
 
 function winterNotice(state: CompanyWebsiteState, c: SiteClasses): string {

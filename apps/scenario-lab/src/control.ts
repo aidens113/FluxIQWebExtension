@@ -2,10 +2,24 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { listScenarios } from "./registry.js";
 import type { ScenarioStateStore } from "./state-store.js";
 
-/** Authenticated producer data only: not browser/start/oracle authority. */
-export async function handleScenarioControl(request: IncomingMessage, response: ServerResponse, url: URL, store: ScenarioStateStore, runToken: string): Promise<void> {
+/**
+ * Authenticated producer data only: not browser/start/oracle authority.
+ *
+ * `GET /__control/requests?path=<path>` says how many requests reached a path
+ * since the lab started or was last reset. A path that carries its own query
+ * (`/a/b?v=1`, encoded as one parameter) counts only requests with exactly that
+ * query; a bare path counts them whatever their query.
+ */
+export async function handleScenarioControl(request: IncomingMessage, response: ServerResponse, url: URL, store: ScenarioStateStore, runToken: string, requests: { count(path: string, query: string | undefined): number; clear(): void }): Promise<void> {
   if (request.headers.authorization !== `Bearer ${runToken}`) return send(response, 401, { error: "unauthorized" });
   const path = url.pathname;
+  if (path === "/__control/requests") {
+    if (request.method !== "GET") return send(response, 405, { error: "method_not_allowed" });
+    const asked = url.searchParams.get("path");
+    if (!asked?.startsWith("/")) return send(response, 400, { error: "invalid_path" });
+    const target = new URL(asked, "http://127.0.0.1");
+    return send(response, 200, { path: asked, count: requests.count(target.pathname, asked.includes("?") ? target.search : undefined) });
+  }
   if (path === "/__control/health" && request.method === "GET") return send(response, 200, { status: "ready", seed: store.seed, scenarios: listScenarios().map(value => value.id), provenance: store.provenance() });
   if (path === "/__control/final-state" && request.method === "GET") {
     const id = url.searchParams.get("scenario"), snapshot = id ? store.snapshot(id) : undefined;
@@ -18,7 +32,9 @@ export async function handleScenarioControl(request: IncomingMessage, response: 
   if (!record(body)) return send(response, 400, { error: "invalid_body" });
   if (path === "/__control/reset") {
     if (Object.keys(body).length) return send(response, 400, { error: "invalid_reset" });
-    return send(response, 200, { status: "reset", seed: store.seed, provenance: store.reset() });
+    const provenance = store.reset();
+    requests.clear();
+    return send(response, 200, { status: "reset", seed: store.seed, provenance });
   }
   if (path === "/__control/seed") {
     if (Object.keys(body).length !== 1 || !Number.isSafeInteger(body.seed)) return send(response, 400, { error: "invalid_seed" });

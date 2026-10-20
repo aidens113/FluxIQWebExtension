@@ -108,3 +108,20 @@ test("no expectation in the manifest quotes a planted unlock code, though the pa
   assert.ok(!JSON.stringify(manifest).includes(PLANTED_UNLOCK_CODE), "no expectation may quote a sensitive control's value");
   assert.ok(!JSON.stringify(manifest.workflows ?? []).includes(PLANTED_UNLOCK_CODE));
 });
+
+test("a submission that carried typed secrets retains neither of them, and only a synthetic submission counts", () => {
+  const password = "SYNTHETIC_BROWSER_PASSWORD";
+  const payment = "4242424242424242";
+  const seeded = createState(110);
+  const submitted = sensitiveInputScenario.mutate(seeded, "submit", { synthetic: true, password, payment, billing: "4222222222222220" });
+  assert.deepEqual(submitted, { submitted: true, username: "synthetic-user@example.test", passwordStored: false, paymentStored: false });
+  for (const secret of [password, payment, "4222222222222220", "SYNTHETIC_PASSWORD_DO_NOT_USE"]) {
+    assert.ok(!JSON.stringify(submitted).includes(secret), `${secret} is not retained`);
+  }
+  for (const refused of [{ password, payment }, { synthetic: "true", password }, null, "submit"]) {
+    assert.equal(sensitiveInputScenario.mutate(seeded, "submit", refused), seeded, JSON.stringify(refused));
+  }
+  assert.equal(sensitiveInputScenario.mutate(seeded, "store", { synthetic: true, password }), seeded);
+  // The page's own submit handler sends the synthetic flag and nothing it read from the form.
+  assert.match(page, /await mutate\('submit', \{ synthetic: true \}\)/u);
+});

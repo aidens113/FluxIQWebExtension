@@ -4,6 +4,7 @@ const ID_ROLES = [
   "root", "searchInput", "searchDept", "suggest", "results", "resultsTemplate", "sentinel", "consent", "appBanner", "notify",
   "wheel", "qty", "sideSheet", "offers", "paymentFrame", "captcha", "captchaInput", "priceLow", "priceHigh", "sort",
   "newsletterEmail", "newsletterWebsite", "protection", "giftCard", "plusTrial", "addressList", "zip",
+  "notifySheet",
 ] as const;
 
 export type StoreIdRole = (typeof ID_ROLES)[number];

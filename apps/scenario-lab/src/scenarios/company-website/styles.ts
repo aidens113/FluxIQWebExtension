@@ -19,7 +19,7 @@ const CLASS_ROLES = [
   "vatSwitch", "vatOption", "vatActive", "accordion", "accordionHead", "accordionBody", "priceTable", "partnerRow", "priceCell",
   "drawer", "drawerHead", "drawerBody", "drawerFoot", "drawerScrim", "stepper", "stepDot", "stepActive",
   "field", "fieldLabel", "input", "textarea", "fieldError", "radioRow", "checkRow", "fauxSelect", "fauxSelectList", "fauxOption",
-  "verifyBox", "verifyCheck", "stepHeaderAction",
+  "verifyBox", "verifyCheck", "stepHeaderAction", "footerSubmit",
   "branchCard", "hoursTable", "widgetFrame", "notice", "summary", "summaryRow",
   "modalScrim", "modal", "modalClose", "noticeModal",
 ] as const;
@@ -60,7 +60,7 @@ a{color:#0b5c6b}
 .${c.navLink}{color:#1f2a2e;text-decoration:none;font-size:.95rem;padding:.3rem 0}
 .${c.navCurrent}{border-bottom:2px solid #0b5c6b;font-weight:600}
 .${c.phoneLink}{font-weight:600;color:#0b3b45;text-decoration:none;white-space:nowrap}
-.${c.headerCta},.${c.buttonPrimary}{background:#e0762b;color:#fff;border:0;border-radius:.4rem;padding:.6rem 1.1rem;font:inherit;font-weight:600;cursor:pointer}
+.${c.headerCta},.${c.buttonPrimary},.${c.footerSubmit}{background:#e0762b;color:#fff;border:0;border-radius:.4rem;padding:.6rem 1.1rem;font:inherit;font-weight:600;cursor:pointer}
 .${c.button},.${c.buttonGhost}{background:#fff;color:#0b3b45;border:1px solid #9fb6bb;border-radius:.4rem;padding:.55rem 1rem;font:inherit;cursor:pointer}
 .${c.buttonGhost}{border-color:transparent;text-decoration:underline}
 .${c.linkButton}{color:#0b5c6b;text-decoration:underline;cursor:pointer;display:inline-block}
@@ -150,6 +150,8 @@ a{color:#0b5c6b}
 .${c.modalScrim}{position:fixed;inset:0;background:rgba(10,30,35,.55);z-index:70;display:grid;place-items:center}
 .${c.modal},.${c.noticeModal}{background:#fff;border-radius:.8rem;padding:1.75rem;width:min(30rem,92vw);position:relative;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 .${c.noticeModal}{border-top:6px solid #8a1c1c}
+.ui-button{border-radius:999px;padding:.6rem 1.4rem;font:inherit;font-weight:600;cursor:pointer;border:2px solid transparent}
+.ui-button--accent{background:#0b5c6b;color:#fff}
 .${c.modalClose}{position:absolute;top:.6rem;right:.9rem;cursor:pointer;font-size:1.3rem;color:#66767c}
 </style>`;
 }

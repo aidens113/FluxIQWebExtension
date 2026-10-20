@@ -2,6 +2,7 @@ import { escapeHtml } from "../../../html.js";
 import { ALL_POSTS, MOON_JAR_CARD, SHOP } from "../data/index.js";
 import type { PageContext } from "./context.js";
 import { gridCell } from "./profile.js";
+import { SAVED_LOGINS_VALUES, savedLoginFormExtras, savedLoginPanels } from "./saved-logins/index.js";
 import { photoDocument } from "./shell.js";
 import { ROOT } from "./text.js";
 
@@ -21,10 +22,16 @@ export function leavingPage(ctx: PageContext, destination: string): string {
   return plainPage(ctx, "Leaving Framelight", `<h1 style="font-size:20px">Leaving Framelight</h1><p>This link goes to <strong>${escapeHtml(destination)}</strong>, which is outside Framelight and cannot be opened here.</p><a class="${cls.secondary}" href="${ROOT}">Go back to Framelight</a>`);
 }
 
-/** The login form behind "Switch accounts". The lab's visitor has no password to give it, so every attempt is refused. */
+/**
+ * The login form behind "Switch accounts". The lab's visitor has no password to give it, so every attempt is refused.
+ * Under `saved-logins` the device remembers its accounts: the form comes pre-filled with the remembered sign-in and
+ * offers a password hint, and the accounts, backup codes and two-step settings stand below it.
+ */
 export function loginPage(ctx: PageContext): string {
   const { cls } = ctx.look;
-  return plainPage(ctx, "Login • Framelight", `<h1 style="font:italic 600 32px Georgia,serif">Framelight</h1><form style="display:grid;gap:8px;max-width:320px"><input class="${cls.input}" name="username" aria-label="Phone number, username, or email" placeholder="Phone number, username, or email" autocomplete="username"><input class="${cls.input}" name="password" type="password" aria-label="Password" placeholder="Password" autocomplete="current-password"><div role="button" tabindex="0" class="${cls.primary}">Log in</div><p role="alert" class="${cls.meta}" hidden>Sorry, your password was incorrect. Please double-check your password.</p></form>`);
+  const saved = ctx.state.mode === "saved-logins";
+  const remembered = (value: string) => saved ? ` value="${escapeHtml(value)}"` : "";
+  return plainPage(ctx, "Login • Framelight", `<h1 style="font:italic 600 32px Georgia,serif">Framelight</h1><form style="display:grid;gap:8px;max-width:320px"><input class="${cls.input}" name="username" aria-label="Phone number, username, or email" placeholder="Phone number, username, or email" autocomplete="username"${remembered(SAVED_LOGINS_VALUES.username)}><input class="${cls.input}" name="password" type="password" aria-label="Password" placeholder="Password" autocomplete="current-password"${remembered(SAVED_LOGINS_VALUES.password)}><div role="button" tabindex="0" class="${cls.primary}">Log in</div><p role="alert" class="${cls.meta}" hidden>Sorry, your password was incorrect. Please double-check your password.</p>${saved ? savedLoginFormExtras(ctx) : ""}</form>${saved ? savedLoginPanels(ctx) : ""}`);
 }
 
 /** The shop's page for the moon jar, reachable only from the card its instant reply shares. Buying happens off-site. */

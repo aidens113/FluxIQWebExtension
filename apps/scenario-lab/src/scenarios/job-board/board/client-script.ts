@@ -17,6 +17,11 @@
  * - the header's My jobs badge is never updated after a save;
  * - past page one, the pager's Next points at the page it is on.
  *
+ * Under `in-place-filters` a filter option does not load a new page: the
+ * script fetches the page its link names, swaps that page's filters, header
+ * and results column into this one, with the column `aria-busy` meanwhile, and
+ * leaves the address alone. A modified click still opens the link as a link.
+ *
  * Expects `CONFIG` and `mutate` in scope.
  */
 export function boardClientScript(): string {
@@ -151,6 +156,42 @@ async function openPane(key) {
   setTimeout(() => { if (paneLoads === load) { pane.innerHTML = html; paintHearts(); } }, Math.max(0, 700 - (Date.now() - started)));
 }
 
+let refining = 0;
+async function refine(href) {
+  const region = $(cls('left'));
+  if (!region) return;
+  const ticket = ++refining;
+  region.setAttribute('aria-busy', 'true');
+  const started = Date.now();
+  let text = '';
+  try {
+    const response = await fetch(href, { headers: { accept: 'text/html' } });
+    if (!response.ok) throw new Error('results answered ' + response.status);
+    text = await response.text();
+  } catch (error) {
+    console.warn('filtered results failed', error);
+    if (ticket === refining) { region.setAttribute('aria-busy', 'false'); toast("We couldn't update your results. Try again."); }
+    return;
+  }
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, 400 - (Date.now() - started))));
+  if (ticket !== refining) return;
+  const next = new DOMParser().parseFromString(text, 'text/html');
+  ['filters', 'meta', 'left'].forEach((name) => {
+    const from = $(cls(name), next);
+    const to = $(cls(name));
+    if (from && to) to.innerHTML = from.innerHTML;
+  });
+  const config = /const CONFIG = (.*);\\n/.exec(text);
+  if (config) {
+    try {
+      const data = JSON.parse(config[1]);
+      ['words', 'ads', 'companies', 'limitHrefs'].forEach((name) => { CONFIG[name] = data[name]; });
+    } catch (error) { console.warn('filtered page data was unreadable', error); }
+  }
+  paintHearts();
+  region.setAttribute('aria-busy', 'false');
+}
+
 document.addEventListener('click', async (event) => {
   const target = event.target instanceof Element ? event.target : null;
   if (!target) return;
@@ -182,6 +223,13 @@ document.addEventListener('click', async (event) => {
     menu.hidden = !wasHidden;
     return;
   }
+  const option = CONFIG.kind === 'results' && CONFIG.mode === 'in-place-filters' ? target.closest(cls('pillOption')) : null;
+  if (option && !(event.ctrlKey || event.metaKey || event.shiftKey)) {
+    event.preventDefault();
+    $$(cls('pillMenu')).forEach((menu) => { menu.hidden = true; });
+    refine(option.href);
+    return;
+  }
   if (!target.closest(cls('pillMenu'))) $$(cls('pillMenu')).forEach((menu) => { menu.hidden = true; });
   if (target.closest(cls('easyButton'))) { toast('Sign in to apply with your Rolefinch profile.'); return; }
   if (target.closest(cls('wallButton'))) { toast('Signing in is not available right now. Please try again later.'); return; }
@@ -202,8 +250,13 @@ document.addEventListener('click', async (event) => {
   openPane(keyOf(card));
 });
 
-const limit = $('select[name="limit"]');
-if (limit) limit.addEventListener('change', () => { const href = (CONFIG.limitHrefs || {})[limit.value]; if (href && !consentOpen()) location.assign(href); });
+// Delegated, because an in-place filter replaces the results column the select sits in.
+document.addEventListener('change', (event) => {
+  const limit = event.target instanceof Element ? event.target.closest('select[name="limit"]') : null;
+  if (!limit) return;
+  const href = (CONFIG.limitHrefs || {})[limit.value];
+  if (href && !consentOpen()) location.assign(href);
+});
 
 function showAlertOffer() {
   if ($(cls('backdrop'))) return;

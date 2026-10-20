@@ -12,31 +12,39 @@
 // covers. `blockedBy` reaches the model, so the defect was the model being told
 // a page was obstructed by the very buttons it needed to press.
 
-import type { Page } from "@playwright/test";
 import { expect, test } from "../../../index.js";
+import type { ContentHarness } from "../../../index.js";
 
-/** A fixed corner widget with an open shadow root, holding one button and covering nothing of the page. */
-async function addCornerWidget(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const host = document.createElement("corner-chat");
-    host.setAttribute("style", "position:fixed;right:0;bottom:0;width:120px;height:44px;z-index:2147483000;display:block");
-    const root = host.attachShadow({ mode: "open" });
-    root.innerHTML = '<button style="width:100%;height:100%">Open chat</button>';
-    document.body.append(host);
+/** Sends one of the site's own state operations, as its page script does. */
+async function mutate(harness: ContentHarness, operation: string, payload: Record<string, unknown> = {}): Promise<void> {
+  const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload)
   });
+  if (!response.ok) throw new Error(`${harness.scenarioId} answered ${response.status} to ${operation}.`);
 }
 
-test("a fixed widget's own button is not reported as blocked by the widget", async ({ openHarness, page }) => {
-  const harness = await openHarness("product-catalog");
-  await addCornerWidget(page);
+test("everything-store: the support chat's own button is not reported as blocked by the widget that holds it", async ({ openHarness, page }) => {
+  // The store's support chat is a fixed bubble in the bottom-right corner,
+  // inside an open shadow root on a host `div[data-chat-host]`. With cookies
+  // and the nudges answered, as a returning shopper has them, it covers nothing.
+  const harness = await openHarness("everything-store");
+  await mutate(harness, "consent", { choice: "accept" });
+  await mutate(harness, "dismiss-nudge", { nudge: "notifications" });
+  await mutate(harness, "dismiss-nudge", { nudge: "app-banner" });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Chat with Brightaisle Assistant" })).toBeVisible();
   const snapshot = await harness.capture();
 
   // The button is described, with the chain that addresses it...
-  const button = snapshot.interactiveElements.find((element) => element.accessibleName === "Open chat");
-  expect(button, "the widget's button is in the snapshot").toMatchObject({ context: { shadowHosts: ["body > corner-chat"] } });
+  const button = snapshot.interactiveElements.find((element) => element.accessibleName === "Chat with Brightaisle Assistant");
+  expect(button?.context?.shadowHosts, "the widget's button is in the snapshot, addressed through its host").toHaveLength(1);
+  const host = button!.context!.shadowHosts![0]!;
+  await expect(page.locator(host)).toHaveAttribute("data-chat-host", "");
   // ...and the widget is not reported as covering it.
   const blockers = snapshot.evidence?.overlays?.blockers ?? [];
-  expect(blockers.map((blocker) => blocker.selector)).not.toContain("body > corner-chat");
+  expect(blockers.map((blocker) => blocker.selector)).not.toContain(host);
   for (const blocker of blockers) expect(blocker.blocked ?? []).not.toContain(button!.selector);
 });
 
