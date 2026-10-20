@@ -28,7 +28,7 @@ async function runRead(payload: JsonObject): Promise<{ result: FluxIQRuntimeComm
         snapshot: () => ({
           sessions: [{
             sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.extract"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.extract"], metadata: { domainId: "web-automation" } }]
           }]
         })
       },

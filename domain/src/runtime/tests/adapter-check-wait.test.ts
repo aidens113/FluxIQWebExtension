@@ -26,7 +26,7 @@ async function runClick(payload: JsonObject, status = "succeeded"): Promise<Flux
         snapshot: () => ({
           sessions: [{
             sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.click"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.click"], metadata: { domainId: "web-automation" } }]
           }]
         })
       },

@@ -26,6 +26,7 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";
 import { webAutomationTextSightingValue, type WebAutomationTextSighting } from "../actions/text-sighting";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
+import { pickWebAutomationSession } from "./web-sessions";
 import { outputTargetFromPayload } from "../output-nodes";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRuntimeCapabilities } from "./capabilities";
@@ -162,18 +163,10 @@ async function captureWebAutomationSnapshot(fluxiq: FluxIQ, command: FluxIQRunti
   };
 }
 
+/** The session a snapshot is taken on: the requested one when it is eligible, else the only eligible one (`./web-sessions/pick-web-session.ts`). */
 function selectWebAutomationSession(fluxiq: FluxIQ, metadata: JsonObject | undefined) {
-  const requestedSessionId = typeof metadata?.sessionId === "string" ? metadata.sessionId : undefined;
-  const sessions = fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
-    (session.status === "connected" || session.status === "ready") &&
-    session.clientType === "extension" &&
-    session.capabilities.some((capability) =>
-      capability.id === "web.actions" &&
-      (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.some((actionType) => actionType.startsWith("web.")))
-    )
-  );
-  if (requestedSessionId) return sessions.find((session) => session.sessionId === requestedSessionId);
-  return sessions.length === 1 ? sessions[0] : undefined;
+  const requestedSessionId = typeof metadata?.sessionId === "string" && metadata.sessionId !== "" ? metadata.sessionId : undefined;
+  return pickWebAutomationSession(fluxiq.programs.clientGateway.snapshot().sessions, requestedSessionId);
 }
 
 /**

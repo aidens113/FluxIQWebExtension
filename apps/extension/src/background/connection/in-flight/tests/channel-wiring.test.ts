@@ -16,6 +16,7 @@ import type {
   ClientGatewayServerMessage,
   FluxIQSession,
   FluxIQSettings,
+  JsonObject,
   ServerCommandPayload
 } from "../../../../shared/protocol";
 import type { ActivePage } from "../../active-page";
@@ -23,14 +24,15 @@ import type { ActiveRecording } from "../../active-recording";
 import type { ContentAttachment } from "../../content-attachment";
 import { EventSequence } from "../../event-sequence";
 import type { GatewaySession } from "../../gateway-session";
-import { CommandReconciliation, InFlightRecordStore, workerMemoryRecordArea, type InFlightRecordArea } from "..";
+import { clientGatewayMemoryArea, ClientGatewayInFlightRecordStore, type ClientGatewayStorageArea } from "@fluxiq/client-gateway-websocket";
+import { webCommandReconciliation } from "..";
 import type { RecordingEvidenceReporter } from "../../recording-evidence";
 import { RuntimeStatusTracker } from "../../runtime-status";
 import { ServerCommandChannel, type ServerCommandChannelDeps } from "../../server-command-channel";
 
 type SessionReady = Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>;
 
-function harness(area: InFlightRecordArea, queued: readonly ClientGatewayActionResult[] = []) {
+function harness(area: ClientGatewayStorageArea, queued: readonly ClientGatewayActionResult[] = []) {
   const log: string[] = [];
   const sent: Array<{ type: string; payload: unknown }> = [];
   const runtimeStatus = new RuntimeStatusTracker();
@@ -38,9 +40,9 @@ function harness(area: InFlightRecordArea, queued: readonly ClientGatewayActionR
     log.push(`send ${type}`);
     sent.push({ type, payload });
   }) as ServerCommandChannelDeps["send"];
-  const store = new InFlightRecordStore(area);
-  const reconciliation = new CommandReconciliation({
-    store,
+  const store = new ClientGatewayInFlightRecordStore(area);
+  const reconciliation = webCommandReconciliation({
+    area,
     queuedResult: async (commandId) => queued.find((result) => result.commandId === commandId),
     send: async (result) => await send("client.action_result", result)
   });
@@ -88,6 +90,11 @@ function harness(area: InFlightRecordArea, queued: readonly ClientGatewayActionR
 
 const press: BrowserActionCommand = { commandId: "cmd-press", actionType: "web.dom.click", selector: "#add" };
 
+/** The command as the reconciliation is told of it: its id, action type and parameters. */
+function begun(action: BrowserActionCommand) {
+  return { commandId: action.commandId, actionType: action.actionType, parameters: action.options as JsonObject | undefined };
+}
+
 function execute(action: BrowserActionCommand): ServerCommandPayload {
   return { command: "execute_action", action } as ServerCommandPayload;
 }
@@ -95,8 +102,8 @@ function execute(action: BrowserActionCommand): ServerCommandPayload {
 type ResultReply = { sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> };
 
 test("the result sent for a command clears its record", async () => {
-  const h = harness(workerMemoryRecordArea());
-  await h.reconciliation.begin(press, 3);
+  const h = harness(clientGatewayMemoryArea());
+  await h.reconciliation.begin(begun(press), { tabId: 3 });
   assert.equal((await h.store.all()).length, 1);
   h.runtimeStatus.startAction(press);
   await (h.channel as unknown as ResultReply).sendActionResult({
@@ -107,7 +114,7 @@ test("the result sent for a command clears its record", async () => {
 
 test("an execute_action repeating a command id whose result is queued re-sends that result and is not executed", async () => {
   const queued: ClientGatewayActionResult = { commandId: "cmd-press", status: "succeeded", startedAt: 100, completedAt: 150, payload: { commandId: "cmd-press", status: "succeeded" } };
-  const h = harness(workerMemoryRecordArea(), [queued]);
+  const h = harness(clientGatewayMemoryArea(), [queued]);
   await h.channel.handleCommand(execute(press), "m-1");
   assert.deepEqual(h.sent, [{ type: "client.action_result", payload: queued }]);
   assert.equal(h.runtimeStatus.current().state, "idle", "no runtime status opened");
@@ -116,8 +123,8 @@ test("an execute_action repeating a command id whose result is queued re-sends t
 });
 
 test("an execute_action repeating a command id whose result was just sent re-sends it and is not executed", async () => {
-  const h = harness(workerMemoryRecordArea());
-  await h.reconciliation.begin(press, 3);
+  const h = harness(clientGatewayMemoryArea());
+  await h.reconciliation.begin(begun(press), { tabId: 3 });
   h.runtimeStatus.startAction(press);
   await (h.channel as unknown as ResultReply).sendActionResult({
     commandId: "cmd-press", actionType: "web.dom.click", status: "failed", message: "lost", validation: { status: "none", reason: "not-yet-validated" }, startedAt: 100, finishedAt: 150
@@ -132,8 +139,8 @@ test("an execute_action repeating a command id whose result was just sent re-sen
 });
 
 test("a session becoming ready reports what an earlier worker lost, after the offline queue is flushed", async () => {
-  const area = workerMemoryRecordArea();
-  await harness(area).reconciliation.begin(press, 3);
+  const area = clientGatewayMemoryArea();
+  await harness(area).reconciliation.begin(begun(press), { tabId: 3 });
   // A new worker over the same session storage.
   const h = harness(area);
   await h.channel.handleSessionReady({ type: "server.session_ready", id: "m-0", payload: { sessionId: "s-2", token: "t" } } as unknown as SessionReady);
