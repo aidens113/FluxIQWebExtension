@@ -3,8 +3,8 @@ import { harnessPatchPermissionOutcomes, harnessRecoveryRungs, type HarnessPatch
 import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation-studio/action-permissions";
 import { RunnerFailure } from "./failure.js";
 import {
-  adaptationConsequences, adaptationEvidenceLoop, array, boolean, enumeration, finite, integer, invalid, nullableText, nullableUrl, optionalRecord, positiveInteger, record, stringArray, text,
-  type ExistingAdaptationConsequenceCrossCheck, type ExistingAdaptationConsequences, type ExistingAdaptationDeclaredAction, type ExistingAdaptationEvidenceLoop, type JsonRecord,
+  adaptationConsequences, adaptationEvidenceLoop, array, boolean, enumeration, finite, flowSpendReading, integer, invalid, nullableText, nullableUrl, optionalRecord, positiveInteger, record, stringArray, text,
+  type ExistingAdaptationConsequenceCrossCheck, type ExistingFlowSpend, type ExistingAdaptationConsequences, type ExistingAdaptationDeclaredAction, type ExistingAdaptationEvidenceLoop, type JsonRecord,
 } from "./existing-fluxiq-control/index.js";
 import { skippedAttemptOf, type CreatedFlowBuildRequest, type PersistedFlowActionSkip, type PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
@@ -94,7 +94,7 @@ export type ExistingRunProviderCall = {
 export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting; providerCalls?: ExistingRunProviderCall[]; providerCallsOmitted?: number; permissionRequest?: AutomationStudioActionPermissionRequest };
 export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
 export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
-export type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationConsequences, ExistingAdaptationDeclaredAction, ExistingAdaptationEvidenceLoop };
+export type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationConsequences, ExistingAdaptationDeclaredAction, ExistingAdaptationEvidenceLoop, ExistingFlowSpend };
 export type ExistingFlowAdaptationSummary = { adaptationId: string; flowId: string; projectId: string; status: string };
 export type ExistingFlowAdaptation = ExistingFlowAdaptationSummary & {
   consequences?: ExistingAdaptationConsequences;
@@ -442,6 +442,11 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const runtimePatchAttempts = array(metadata?.runtimePatchAttempts ?? [], "runDetail.metadata.runtimePatchAttempts").map((value, index) => runtimePatchAttempt(value, `runDetail.metadata.runtimePatchAttempts[${index}]`));
     const permissionRequest = runPermissionRequest(metadata?.permissionRequest);
     return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(permissionRequest ? { permissionRequest } : {}), ...(providerCallCount === undefined ? {} : { providerCallCount }), ...(gate === undefined ? {} : { llmGate: gate }), ...(accounting === undefined ? {} : { llmAccounting: accounting }), ...(callRecords === undefined ? {} : { providerCalls: callRecords.calls, providerCallsOmitted: callRecords.omitted }) };
+  }
+
+  /** The Flow's spend as its purse recorded it, by phase where Core itemised it (`get-flow-spend`); `null` when Core holds no record. */
+  async getFlowSpend(projectId: string, flowId: string, bounds: FluxIQHttpOptions = {}): Promise<ExistingFlowSpend | null> {
+    return flowSpendReading(record(await this.automationStudioCall("get-flow-spend", { projectId, flowId }, bounds), "flow spend payload").spend);
   }
 
   async listFlowRuns(projectId: string, flowId: string): Promise<ExistingRunSummary[]> {

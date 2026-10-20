@@ -256,6 +256,28 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
   assert.deepEqual(early.record.failure, { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 });
 });
 
+// Core t728: a refused build's diagnostic names the consequence classes the gate read the instruction to ask for,
+// and never the person's words, so the record keeps the classes with no quote; and an exhausted balance has its own code.
+test("a refused build keeps the consequences its diagnostic named, classes only, and Core's own balance code", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.provider_balance_exhausted",
+    stage: "provider_request",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    accounting: { requestId: "evidence.one", estimatedInputTokens: 900, provider: "deepseek", model: DEFAULT_LLM_MODEL, providerStatus: 402 },
+    totalProviderCallCount: 3,
+    instructedConsequences: ["modify_existing", "create_new"],
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 402, payload: { diagnostic } } });
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.provider_balance_exhausted", stage: "provider_request", httpStatus: 402 });
+  assert.equal(record.providerCalls, 3);
+  assert.deepEqual(record.instructedConsequences, [{ consequence: "modify_existing", quote: null }, { consequence: "create_new", quote: null }]);
+  // A diagnostic that names none keeps none.
+  const { instructedConsequences: _none, ...unread } = diagnostic;
+  assert.equal((await build({ generation: { kind: "refused", status: 402, payload: { diagnostic: unread } } })).record.instructedConsequences, null);
+});
+
 test("an unnamed provider throw publishes its class and codes, never its message", async () => {
   const diagnostic = {
     code: "flow_bootstrap.provider_transport_unknown",

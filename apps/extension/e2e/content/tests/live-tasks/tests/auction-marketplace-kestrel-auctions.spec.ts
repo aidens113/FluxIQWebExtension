@@ -29,8 +29,8 @@
 //   pager's `nav`, and the handle's read goes across the three documents
 //   (`content/extraction/detect-pagination.ts`);
 // - **G3** (fixed by t194-w32) a bound over a price written the continental way
-//   read the wrong number (`domain/src/actions/extraction/condition-match.ts`
-//   `NUMBER`);
+//   read the wrong number (then the domain's own number reader; now Core's
+//   `readAutomationStudioRecordNumber`, `fluxiq/automation-studio/nodes`);
 // - **G4** (fixed by the lead, the supervisor's decision) a read whose every
 //   record is empty passed its post-condition; it now fails
 //   (`content/actions/extract-list.ts` `validationFor`);

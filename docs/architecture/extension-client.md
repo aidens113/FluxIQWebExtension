@@ -447,8 +447,29 @@ when the socket is closed, so it is never replayed.
 
 It is a status display, not a command. `ServerCommandChannel` hands the payload
 to `ActivityRelay` (`background/activity/`) and does nothing else: no runtime
-status opens, no reply is sent, and the connection's error is untouched. The
-relay:
+status opens, no reply is sent, and the connection's error is untouched.
+
+**Who owns what.** FluxIQ Core owns every pure reading of the activity stream
+that this section describes: the paced display and its pacer, the headline,
+the unit readers, the wording and the clock. They live in Core's
+`packages/fluxiq/src/ui/activity-status/` (and its `project/`) and are
+imported from `fluxiq/ui`: `ActivityPacer`, `ACTIVITY_DETAIL_INTERVAL_MS`,
+`activityHeadline`, `endingKindOf`, `SupervisorEnding`, `RunRetry`,
+`CandidateTrial`, `UnitSituation`, `UnitHistory`, `ACTIVITY_HISTORY_LIMITS`,
+`FanOutGate`, `ACTIVITY_FAN_OUT_INTERVAL_MS`, `systemActivityClock`,
+`activityWording`, `cutAtWord`, `longestWordCut`, `isHeadlineEcho`,
+`isModelThought`, `isInternalStep`, `notTriedOutcome`, `declinedSubmission`,
+`stepRecovery`, `stepSkip`, `activityAgent`, `projectCard` and the
+`ActivityDisplay` type. Core's web panel runs the same pacer, so its live line
+and the extension's overlay say the same thing at the same pace. The
+extension's two activity barrels (`background/activity/index.ts`,
+`shared/activity/index.ts`) re-export those names for their importers. What
+stays in the extension is browser plumbing: the relay itself
+(`activity-relay.ts`), the starting status (`send-start.ts`), answers
+(`send-answer.ts`), the overlay target and preference, the content-script
+overlay (`content/activity-overlay/`), and the extension-only message and
+state types (`ACTIVITY_MESSAGES`, `ACTIVITY_DONE_VISIBLE_MS`,
+`ACTIVITY_RECENT_LIMIT`, `ExtensionActivityState`). The relay:
 
 - drops a malformed event and any event whose `sequence` is not greater than
   the last kept one, so a late event never overwrites a newer status. A new
@@ -540,7 +561,7 @@ page. Every delivery is best-effort and the two are independent: a closed panel
 the content script, or a tab that closed mid-send is absorbed and holds nothing
 else back.
 
-**The paced display** (`ActivityDisplay`, `shared/activity/activity-display.ts`)
+**The paced display** (`ActivityDisplay`, Core's `ui/activity-status/activity-display.ts`)
 exists because Core reports every seam of a build -- ask the model, run a tool,
 read its result, ask again -- often inside one second. Drawn as they came, the
 t185 overlay's heading changed 103 times and its sentence 188 times over t174's
@@ -548,7 +569,8 @@ t185 overlay's heading changed 103 times and its sentence 188 times over t174's
 pacer keeps what Core says and changes how often it is said:
 
 - `headline` names the unit of work and changes only when the work, its
-  situation or its outcome does (`background/activity/headline.ts`): "Building
+  situation or its outcome does (`activityHeadline`, Core's
+  `ui/activity-status/headline.ts`): "Building
   your Flow" or "Running your Flow" while it works; "Fixing your Flow" from
   Core's first repair (for a run, until it reports its next step; for a
   build, until it settles) and, for a run only, "Couldn't fix your Flow"
@@ -558,7 +580,8 @@ pacer keeps what Core says and changes how often it is said:
   is the settling row's own name for the work it ends when it gives one --
   "Build failed", "Build stopped: ...", "Not doable: ...", "Build finished"
   end a build; "Run failed", "Run cancelled", "Run finished" a run -- and
-  the event's subject otherwise (`background/activity/ending-kind.ts`): live
+  the event's subject otherwise (`endingKindOf`, Core's
+  `ui/activity-status/ending-kind.ts`): live
   round 1's run A still ended a creation build on "Couldn't fix your Flow ·
   Build stopped: the Flow is not finished yet", and why that row read as a
   run's is not established (t276). A unit keeps the kind its settling row
@@ -567,8 +590,8 @@ pacer keeps what Core says and changes how often it is said:
   Build stopped: a budget ran out" (`run-mux74k5q-1c3c2127`). Core's activity does not say whether a
   build creates a Flow or extends one, so a creation build re-authoring its
   first Flow after its test was refuted also reads "Fixing your Flow".
-  A project build its supervisor ended says why (`background/activity/supervisor-ending.ts`,
-  t649); the toast said it ended and never why. Core's last row says it
+  A project build its supervisor ended says why (`SupervisorEnding`, Core's
+  `ui/activity-status/supervisor-ending.ts`, t649); the toast said it ended and never why. Core's last row says it
   itself: the failure carries the supervisor's screened reason
   (`endedBecause`, set in Core's `service/project-build/run.ts`), and Core's
   `progress.ts` says it after the ending ("Build failed: the supervisor ended
@@ -586,7 +609,7 @@ pacer keeps what Core says and changes how often it is said:
   stays "Running your Flow", the detail says why it tries again ("The page
   was busy, trying again") through the recovery choice that follows, and a
   run that only retried and then failed reads "Run failed"
-  (`background/activity/run-retry.ts`; D12 of the t174 UI review of
+  (`RunRetry`, Core's `ui/activity-status/run-retry.ts`; D12 of the t174 UI review of
   `run-musp8nz1-dbd3905a`, where the overlay said "Fixing your Flow" while
   the chat said "Trying the step again");
   "Waiting for you: finish the check on the page" while a page action's result
@@ -600,10 +623,10 @@ pacer keeps what Core says and changes how often it is said:
   tool event is the only signal, and a run's step that meets one reports only
   a failed step;
 - `detail` is Core's latest sentence in a person's words
-  (`shared/activity/wording.ts`), changed at most once per 1.6 s
+  (`activityWording`, Core's `ui/activity-status/wording.ts`), changed at most once per 1.6 s
   (`ACTIVITY_DETAIL_INTERVAL_MS`, more than half of three seconds, so any
   three seconds show at most two), and at most 160 characters, cut where a
-  word ends (`shared/activity/cut-at-word.ts`). The first change after a quiet interval
+  word ends (`cutAtWord`, Core's `ui/activity-status/cut-at-word.ts`). The first change after a quiet interval
   shows at once; later ones wait for the interval's end, where only the newest
   shows, so no stale sentence is left up. A step that starts while the status
   is still a decision being made ("Deciding the next step") shows at once, so
@@ -623,16 +646,17 @@ pacer keeps what Core says and changes how often it is said:
   list read naming a list ("not tried: the step didn't name its list the way
   FluxIQ needs"), or the code's own last words when they are not a page miss ("not
   tried: a popup or banner on the page was covering it")
-  (`shared/activity/not-tried.ts`; R2-U-6 of `run-muwansvz-a2b4a987`, where
+  (`notTriedOutcome`, Core's `ui/activity-status/not-tried.ts`; R2-U-6 of `run-muwansvz-a2b4a987`, where
   "couldn't find it on the page" was said of a list in plain sight);
 - `phase` and `step` belong to the event the detail came from, so they change
   no faster than it does. A run's step is kept between its step events and
   cleared when it settles. A repair of the Flow itself ("Result repair
   started", "Repairing the Flow…") is on no step of the run, so the count is
-  dropped until the re-run reports its own steps (`unit-situation.ts`; U2 of
+  dropped until the re-run reports its own steps (`UnitSituation`, Core's
+  `ui/activity-status/unit-situation.ts`; U2 of
   t194, "Step 5 of 5" for a four-minute re-author);
 - the model's words are never the detail (`isModelThought`,
-  `shared/activity/model-thought.ts`): a `thought` row with text -- the
+  Core's `ui/activity-status/model-thought.ts`): a `thought` row with text -- the
   model's reason for its next step, said as what was tried, or a recovery
   choice -- keeps the unit's last action line,
   phase and step, and marks the display `kind: "thought"`. Such an event
@@ -832,8 +856,9 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   author, `agent: { role, briefId?, subflowName? }` (`supervisor`, `builder`,
   `repair`, `validator`; absent on a build with one agent), and carries each
   card of the supervisor's work on a `note` row as `detail.project` (`plan`,
-  `brief`, `return`, `receipt`). `shared/activity/project/` reads both in the
-  contract's shape only (`activityAgent`, `projectCard`). Each card is a
+  `brief`, `return`, `receipt`). Core's `activityAgent` and `projectCard`
+  (`fluxiq/ui`, Core's `ui/activity-status/project/`) read both in the
+  contract's shape only. Each card is a
   `project` message of its own (`stream/step/project-message.ts`, words in
   `project-words.ts`): the plan as "Planned 2 subflows" with a card
   "Plan · 3 parts, 2 subflows / Budget $0.18, $0.07 kept back" and its parts
@@ -929,7 +954,8 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     submission of steps Core refused (`core.submit_*` answered with a result
     code, and no words of Core's on how it went) is "Not done: some steps
     weren't written in a way the Flow can run", on the card and the status
-    line alike (`shared/activity/declined-submission.ts`, t649): a project
+    line alike (`declinedSubmission`, Core's
+    `ui/activity-status/declined-submission.ts`, t649): a project
     builder's refusal under a code with no failing word read a green "Done".
     Core now reads every `core.submit_*` and `core.test_*` answer itself and
     says it in words ("Not done: some steps point at things that weren't seen
@@ -1723,7 +1749,9 @@ value to an element descriptor, to a recorded event, to the page selection, or
 to a runtime confirmation; only value *presence* travels, as the descriptor's
 `hasValue`. The `captureInputValues` setting
 ([`shared/browser.ts`](../../apps/extension/src/shared/browser.ts)), which
-defaults to on and reaches the content script with every recording message, is
+defaults to on and reaches the content script with every recording message
+after Core's recording-capture policy has clamped it (see
+[recording-capture policy](#recording-capture-policy)), is
 a preference about ordinary controls — turning it on cannot re-enable a
 sensitive value, and turning it off is not what protects one. The rule is one
 function in `domain/src/sensitivity/`, re-exported for the extension by
@@ -2496,10 +2524,54 @@ runs, or the chat loses its owner. The draft is kept.
 
 Text and autocomplete fields keep per-character synthetic keyboard/input events. Native number, date, time, datetime-local, month and week fields admit the exact requested string through a detached same-type native control before committing one replacement input/change sequence; incomplete prefixes otherwise sanitize to empty. Invalid format, readonly/disabled controls or cancelled keyboard/beforeinput events do not partially clear the field. Production type action still reads the actual value after application handlers and applies existing sensitive-value redaction and submit consequence rules. The original resolved control must remain connected: a detached old value cannot pass readback or authorize a following Enter, and replacements are not silently selected. This is synthetic DOM input, not trusted browser keyboard input; readback follows a bounded 50ms timer observation of queued page handlers and does not certify arbitrary later asynchronous application changes. A requested Enter rechecks actionability after that observation; a field newly covered or disabled is refused without claiming that no typing was dispatched.
 
+## Recording-capture policy
+
+FluxIQ Core owns the policy that decides which recording-capture switches a
+person may turn on and whether direct requests are allowed at all. The
+policy, its default and the clamp are browser-safe and imported from
+`fluxiq/automation-studio/nodes` (never the `fluxiq/automation-studio`
+barrel, which pulls in `node:crypto`):
+`AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY`,
+`clampAutomationStudioRecordingCaptureSettings` and the types
+`AutomationStudioRecordingCapturePolicy`,
+`AutomationStudioRecordingCaptureSettings`,
+`AutomationStudioRecordingCaptureSwitchPolicy` and
+`AutomationStudioRequestedRecordingCaptureSettings`. Each capture switch
+(`captureInputValues`, `captureSnapshots`, `captureMutations`) is
+`{ allowed, default }`; `directRequests` is `{ allowed }`. Core's default
+allows every capture switch, on by default, and forbids direct requests. A
+forbidden switch always clamps to off; an allowed one takes the person's
+boolean, or the policy default. Core serves the live policy from the read
+endpoint `get-recording-capture-policy` (`{ projectId? }` →
+`{ policy }`, permission `programs.read`, on the paired-client allowlist).
+
+The extension enforces Core's policy; it does not define one.
+`background/capture-policy/` holds the reader (`readCapturePolicy`, a strict
+shape check), `effectiveSettings` (the person's settings with Core's clamp
+applied, `requestsEnabled` becoming the clamp's `directRequests`) and
+`CapturePolicySource`, which reads the endpoint through `callCoreProgram` with
+the active recording's or the session's project. It refreshes on session ready
+and at every recording start, keeps the last policy Core gave (Core's default
+until Core has answered; an unreachable Core, a refusal, a 404 from an older
+Core or a malformed answer changes nothing), and, when a refresh changes the
+policy mid-recording, resends the recording state to the recorded tab. The
+person's stored preference is never rewritten: `currentSettings()` still
+returns it for the panel and status, while `ContentAttachment` and
+`ActiveRecording` read `effectiveSettings()`. The `recording` message carries
+the clamped flags and the policy, and `content/message-handler.ts` clamps
+them again with Core's clamp as a second fence; a missing or malformed part
+of a carried policy counts as forbidden, so the fence fails closed.
+
+Known gaps: the panel (`panel/settings/form-fields.ts`, `draft-store.ts`)
+and the `readSavedSettings` / `mergeSettings` callers decide from Core's
+default policy, not the live one, so a stricter live policy is enforced in
+the background and content script but not shown as disabled switches. The
+gateway hello still sends the person's raw capture flags.
+
 ## Direct-request policy foundation
 
-The domain host accepts an optional request policy as the second argument to `createWebAutomationFluxIQ` or `registerWebAutomationDomain`. The domain validates, clones and freezes it before registration, and rejects a conflicting policy for the same FluxIQ instance. Defaults are OFF, no origins, omitted credentials, rejected redirects, a10000ms timeout and262144response bytes; admitted limits are1000..30000ms and1024..1048576bytes, with at most32 unique canonical exact HTTPS origins. An enabled policy requires an origin but supplies no execution grant or executable request capability.
+The domain host accepts an optional request policy as the second argument to `createWebAutomationFluxIQ` or `registerWebAutomationDomain`. The domain validates, clones and freezes it before registration, and rejects a conflicting policy for the same FluxIQ instance. Defaults are OFF, no origins, omitted credentials, rejected redirects, a10000ms timeout and262144response bytes; admitted limits are1000..30000ms and1024..1048576bytes, with at most32 unique canonical exact HTTPS origins. An enabled policy requires an origin but supplies no execution grant or executable request capability. The input is still validated whole, but the stored `enabled` is Core's clamp of it (`clampAutomationStudioRecordingCaptureSettings({ directRequests: enabled }, capturePolicy)`, `domain/src/requests/policy/validation.ts`); `register` takes the capture policy as an optional third argument and uses Core's default otherwise, so under the default every domain request policy comes out `enabled: false`.
 
-The extension's `requestsEnabled` preference remains false through default, saved-state, storage write, Save and draft paths. Settings shows a disabled unchecked Allow direct requests control with Unavailable in this version. Existing browser host permissions do not authorize optional requests. No request executor, passive network capture, debugger permission or script action is enabled by this foundation. A later executable unit must bind explicit preexecution approval to the exact trusted command/session/request/origin policy, enforce unknown/no-retry receipt handling, and keep authenticated site sessions and redirects unsupported until separately designed. Arbitrary DOM-script network confinement, hard interruption and rollback remain unproved.
+The extension's `requestsEnabled` preference is on only when Core's recording-capture policy allows direct requests and the value is exactly `true`: the default settings, saved-state reading (`readSavedSettings`), Save (`mergeSettings`) and the settings draft all go through Core's clamp. Under Core's default policy it is therefore false. `background/storage.ts` additionally still forces `requestsEnabled: false` on every settings read and write (lane G owns that file), so even a policy that allowed direct requests would not keep a stored `true` until that write path also goes through the clamp. Settings shows a disabled unchecked Allow direct requests control with Unavailable in this version, disabled because Core's default policy forbids it. Existing browser host permissions do not authorize optional requests. No request executor, passive network capture, debugger permission or script action is enabled by this foundation. A later executable unit must bind explicit preexecution approval to the exact trusted command/session/request/origin policy, enforce unknown/no-retry receipt handling, and keep authenticated site sessions and redirects unsupported until separately designed. Arbitrary DOM-script network confinement, hard interruption and rollback remain unproved.
 
 Required command execution carries an authentic Core context through registered domain IO/Runtime handlers outside action payload and browser wire metadata. The server commits the parsed receipt before returning the live result; receipt-only replay or unknown cannot authorize continued execution. Required mode refuses adapters without the registered trusted handler callback and preserves normal action/permission mappings. This does not enable arbitrary native web nodes or candidate acceptance; browser protocol/result payloads remain the existing contract.

@@ -3,8 +3,8 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { liveLlmBudgetBreaches } from "../budget.js";
 import { liveLlmBuildUsage } from "../build-usage.js";
-import { liveLlmRunSpend } from "../run-spend.js";
-import type { LiveLlmStepLogSpend } from "../step-log-spend.js";
+import { liveLlmRunSpend } from "../flow-spend.js";
+import { flowPurse } from "./flow-purse.js";
 import { planAtLabCeiling } from "./lab-ceiling.js";
 import type { CreatedFlowBuild, CreatedFlowBuildStep } from "../../flow-lane/index.js";
 
@@ -184,32 +184,21 @@ test("a build whose calls Core says cost more than its purse held them at fails 
   }
 });
 
-// t466, lane D round 8 (`run-mv5jnc5m-a47c3e59`): a candidate-mode build carries no evidence-loop audit, so Core
-// gave no call count and the build was reported as 1 call, with 25 of its calls unattributed. Its step log names
-// 26 explore and 6 judge calls as the creation build's; the run's result check and the chat are in no part.
-test("a build Core gave no call count for is counted from the calls the step log names as the creation build's", () => {
-  const stepLog: LiveLlmStepLogSpend = {
-    calls: 34, estimatedCostUsd: 0.050086,
-    byKind: { chat: { calls: 1, estimatedCostUsd: 0.000091 }, decide: { calls: 26, estimatedCostUsd: 0.041698 }, judge: { calls: 7, estimatedCostUsd: 0.008297 } },
-    byPart: { creation: { explore: { calls: 26, estimatedCostUsd: 0.041698 }, judge: { calls: 6, estimatedCostUsd: 0.006668 } } },
-  };
+// t466, lane D round 8 (`run-mv5jnc5m-a47c3e59`): a candidate-mode build carries no evidence-loop audit, so its
+// record gave no call count and the build was reported as 1 call. Core's Flow purse itemises the build's 26 calls
+// and its 6 trial judges as they settle; the chat's call is a phase of its own and not the build's.
+test("a build its record gave no call count for is counted from the build's calls in the Flow's purse", () => {
+  const purse = liveLlmRunSpend(flowPurse({ build: [26, 0.041698], judge: [6, 0.006668], chat: [1, 0.000091] }), 0.25);
   const candidate = buildWith(null, { providerCalls: null, loopProviderCalls: null, evidenceLoop: null,
     accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 687_932, outputTokens: 9_198, totalTokens: 697_130, estimatedCostUsd: 0.048366 } });
-  const usage = liveLlmBuildUsage(candidate, stepLog);
+  const usage = liveLlmBuildUsage(candidate, purse);
   assert.equal(usage.calls, 32);
   assert.equal(usage.accounting?.calls, 32);
   assert.deepEqual(usage.gate, { invoked: true });
 
-  // The run's spend: the build's own 26, its 6 trial judges with the result check's 1 under judge, nothing unattributed.
-  const spend = liveLlmRunSpend({ build: usage, judge: { interventions: [{ requestId: "check", estimatedCostUsd: 0.001629 }] }, stepLog, ceilingUsd: 0.25 });
-  assert.equal(spend.phases.build?.calls, 26);
-  assert.equal(spend.phases.judge?.calls, 7);
-  assert.equal(spend.phases.chat?.calls, 1);
-  assert.equal(spend.stepLog?.unattributed.calls, 0);
-  assert.equal(spend.calls, 34);
-
-  // Core's own count still wins, and a step log naming no build call leaves the old fallback.
-  assert.equal(liveLlmBuildUsage(buildWith(null), stepLog).calls, 3);
-  assert.equal(liveLlmBuildUsage(candidate, { ...stepLog, byPart: {} }).calls, 1);
+  // The build record's own count still wins; a purse Core never itemised, or none at all, leaves the old fallback.
+  assert.equal(liveLlmBuildUsage(buildWith(null), purse).calls, 3);
+  assert.equal(liveLlmBuildUsage(candidate, liveLlmRunSpend({ ...flowPurse({}), spentUsd: 0.05, calls: null, byPhase: null }, 0.25)).calls, 1);
+  assert.equal(liveLlmBuildUsage(candidate, liveLlmRunSpend(null, 0.25)).calls, 1);
   assert.equal(liveLlmBuildUsage(candidate, null).calls, 1);
 });

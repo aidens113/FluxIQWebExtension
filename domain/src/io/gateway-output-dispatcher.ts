@@ -1,9 +1,10 @@
 import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
-import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
+import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
-import { webAutomationClearedWayOutsOf } from "../cleared-way-outs";
+import { webAutomationClearedWayOutsOf, type WebAutomationClearedWayOutFlow } from "../cleared-way-outs";
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
@@ -66,7 +67,10 @@ export async function dispatchWebAutomationOutput(
     // closed vocabulary, never passed through. The way out each layer was
     // closed by stays here, kept under a reference Core carries instead
     // (`../cleared-way-outs/`, t470), and leaves the client's own result too.
-    const clearedLayers = coreClearedLayers(fluxiq, isRecord(result.payload) ? result.payload.clearedLayers : undefined);
+    // Kept with the Flow the dispatch ran for, when it says which, so a restarted
+    // host still names the way out for that Flow's trials and later runs (t728).
+    const clearedLayers = coreClearedLayers(fluxiq, isRecord(result.payload) ? result.payload.clearedLayers : undefined, dispatchFlow(request));
+    if (clearedLayers?.some((layer) => layer.wayOut !== undefined)) await webAutomationClearedWayOutsOf(fluxiq).settled();
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
@@ -99,15 +103,29 @@ export async function dispatchWebAutomationOutput(
  * it learns presses the way out by that definition and the way out's handle.
  * Undefined when the client reported none.
  */
-function coreClearedLayers(fluxiq: FluxIQ, reported: unknown): JsonObject[] | undefined {
+function coreClearedLayers(fluxiq: FluxIQ, reported: unknown, flow: WebAutomationClearedWayOutFlow | undefined): JsonObject[] | undefined {
   const wayOuts = webAutomationClearedWayOutsOf(fluxiq);
   return webAutomationClearedLayersValue(reported)?.map(({ kind, control, name, controlName, wayOut }) => ({
     kind,
     control,
     ...(name === undefined ? {} : { name }),
     ...(controlName === undefined ? {} : { controlName }),
-    ...(wayOut === undefined ? {} : { wayOut: wayOuts.keep(wayOut), wayOutDefinitionId: WAY_OUT_PRESS_DEFINITION_ID })
+    ...(wayOut === undefined ? {} : { wayOut: wayOuts.keep(wayOut, flow), wayOutDefinitionId: WAY_OUT_PRESS_DEFINITION_ID })
   }));
+}
+
+/**
+ * The Flow a dispatch ran for, when Core says: the owner of a required
+ * command's context (a run's step), or the build Core frames an evidence call
+ * with. Otherwise none, and a way out is kept in this process alone.
+ */
+function dispatchFlow(request: OutputDispatchRequest<JsonObject>): WebAutomationClearedWayOutFlow | undefined {
+  if (request.commandContext !== undefined) {
+    const owner = ClientGatewayCommandContext.owner(request.commandContext);
+    return { projectId: owner.projectId, flowId: owner.flowId };
+  }
+  const scope = automationStudioEvidenceBuildScope();
+  return scope === undefined ? undefined : { projectId: scope.projectId, flowId: scope.flowId };
 }
 
 /** The node definition the clearing's own press is, as a Flow step: the extension pressed the way out as a click does. */

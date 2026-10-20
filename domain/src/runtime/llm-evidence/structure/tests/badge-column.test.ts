@@ -12,10 +12,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  webAutomationExtractConditionHolds,
-  webAutomationExtractListRequestValue
-} from "../../../../actions/extraction";
+import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { webAutomationExtractListRequestValue } from "../../../../actions/extraction";
 import { webAutomationStructureDetectionValue } from "../../../../extraction";
 import { splitDetectedStructure } from "../packet";
 
@@ -60,6 +58,6 @@ test("a presence condition on the badge's key survives the request reader and ho
   assert.deepEqual(condition, { field: "brightaisle_plus", is: "present" });
   // A badged card's record carries the name; an unbadged card's carries null,
   // which the page hands the condition as `undefined` (`item-filter.ts`).
-  assert.equal(webAutomationExtractConditionHolds(condition!, "Brightaisle Plus"), true);
-  assert.equal(webAutomationExtractConditionHolds(condition!, undefined), false);
+  assert.equal(automationStudioRecordConditionHolds(condition!, "Brightaisle Plus"), true);
+  assert.equal(automationStudioRecordConditionHolds(condition!, undefined), false);
 });

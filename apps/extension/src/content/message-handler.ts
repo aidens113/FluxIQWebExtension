@@ -40,6 +40,7 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 
 import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
 import { captureSettings } from "./capture-settings";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import { setRecordingState } from "./recorder";
 import { actionFailure, captureSnapshotForResponse, challengeIn, executeAction, robotCheckIn } from "./action-runtime";
 import { inferListFromElement } from "./extraction";
@@ -83,9 +84,24 @@ function isAddressedToThisFrame(message: { frameId?: number; topFrameOnly?: bool
   return message.frameId === TOP_FRAME_ID ? isTopFrame() : !isTopFrame();
 }
 
+/**
+ * The policy a recording message carried, or Core's default when it carried
+ * none. A part present but malformed counts as forbidden (Core's clamp allows a
+ * switch only on `allowed === true`), so a damaged policy fails closed.
+ */
+function recordingCapturePolicy(value: unknown): AutomationStudioRecordingCapturePolicy {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY;
+  const record = value as Record<string, unknown>;
+  const part = (key: string) => {
+    const entry = record[key];
+    return entry && typeof entry === "object" ? entry as { allowed: boolean; default: boolean } : { allowed: false, default: false };
+  };
+  return { captureInputValues: part("captureInputValues"), captureSnapshots: part("captureSnapshots"), captureMutations: part("captureMutations"), directRequests: part("directRequests") };
+}
+
 export function installMessageHandler(): void {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
+    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; capturePolicy?: unknown; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
     if (typed.type === "fluxiq.ping") {
       sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
       return false;
@@ -97,9 +113,17 @@ export function installMessageHandler(): void {
       return false;
     }
     if (typed.type === "recording") {
-      captureSettings.mutations = typed.settings?.captureMutations ?? captureSettings.mutations;
-      captureSettings.inputValues = typed.settings?.captureInputValues ?? captureSettings.inputValues;
-      captureSettings.snapshots = typed.settings?.captureSnapshots ?? captureSettings.snapshots;
+      // The worker sends settings already under Core's recording-capture
+      // policy; they are clamped again here, a second fence, against the
+      // policy sent beside them or Core's default when none came.
+      const clamped = clampAutomationStudioRecordingCaptureSettings({
+        captureMutations: typed.settings?.captureMutations ?? captureSettings.mutations,
+        captureInputValues: typed.settings?.captureInputValues ?? captureSettings.inputValues,
+        captureSnapshots: typed.settings?.captureSnapshots ?? captureSettings.snapshots
+      }, recordingCapturePolicy(typed.capturePolicy));
+      captureSettings.mutations = clamped.captureMutations;
+      captureSettings.inputValues = clamped.captureInputValues;
+      captureSettings.snapshots = clamped.captureSnapshots;
       setRecordingState(Boolean(typed.recording));
       sendResponse({ ok: true });
       return true;

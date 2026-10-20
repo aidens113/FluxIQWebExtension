@@ -83,7 +83,8 @@ import { present } from "./present";
 import { observeWebLlmResult } from "./result-observation";
 import { observeWebStartState } from "./start-state";
 import { webLlmClearedControlHandles, type WebLlmClearedControlHandlesInput } from "./way-out-handles";
-import { createWebAutomationClearedWayOuts, webAutomationClearedWayOutsOf, type WebAutomationClearedWayOuts } from "../../cleared-way-outs";
+import { createWebAutomationClearedWayOuts, webAutomationBuildStateSource, webAutomationClearedWayOutsOf, type WebAutomationClearedWayOuts } from "../../cleared-way-outs";
+import { createWebNodeBuildStatePersistence, webNodeBuildOf, webNodeBuildSlot, type WebNodeBuildStateSource } from "./node-run/build-state";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmTargetsUnchanged } from "./target";
 import { canonicalWebLlmTargetHandle } from "./handle-spelling";
@@ -293,7 +294,13 @@ export type WebAutomationLlmEvidenceRuntime = {
  */
 const RETAINED_SHOWN_PACKETS = 24;
 
-export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGateway, clearedWayOuts: WebAutomationClearedWayOuts = createWebAutomationClearedWayOuts()): WebAutomationLlmEvidenceRuntime {
+export function createWebAutomationLlmEvidenceRuntime(
+  sessions: WebLlmEvidenceGateway,
+  clearedWayOuts: WebAutomationClearedWayOuts = createWebAutomationClearedWayOuts(),
+  // Core's durable build state, where each build's memories are written through
+  // (`./node-run/build-state/`, t728). None: they live in this process alone.
+  buildState: WebNodeBuildStateSource = () => undefined
+): WebAutomationLlmEvidenceRuntime {
   // Every command a build sends goes out through this gateway, so a click or a
   // navigation the model runs carries the same room to wait out a robot check
   // that clears by itself as the Flow's own (`actions/check-wait.ts`).
@@ -310,22 +317,23 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   // the ones the model is not shown, so a press's before-and-after comparison
   // and its target binding read the same numbering as the packet.
   const stableHandles = createWebLlmStableTargetHandles();
-  // What this runtime last refused each (project, flow, session, tool) with, so
-  // an answer that repeats says so instead of arriving as a new one
-  // (`./repeated-refusal.ts`).
+  // What this runtime last refused each (build, tool) with, so an answer that
+  // repeats says so instead of arriving as a new one (`./repeated-refusal.ts`).
   const repeatedRefusals = createWebLlmRepeatedRefusals();
-  // Whether each (project, flow, session) build told a start location has
-  // navigated there yet, so a tab that was already open does not count as
-  // arrival (`./node-run/arrival.ts`).
-  const arrivals = createWebNodeArrivals();
+  // Each build is the one Core frames the call with (`./node-run/build-state/`),
+  // and every memory below is written through to Core's store as it changes.
+  const persistence = createWebNodeBuildStatePersistence(buildState);
+  // Whether each build told a start location has navigated there yet, so a tab
+  // that was already open does not count as arrival (`./node-run/arrival.ts`).
+  const arrivals = createWebNodeArrivals(persistence);
   // Where each build has been shown it can go, which is where it may navigate
   // (`./node-run/shown-addresses.ts`). Fed from every packet shown, below.
-  const addresses = createWebNodeShownAddresses();
+  const addresses = createWebNodeShownAddresses(persistence);
   // Which layers a press of each build opened, so closing one is a step of the
   // Flow and not an interruption (`./node-run/own-layers/memory.ts`).
-  const layers = createWebNodeOwnLayers();
+  const layers = createWebNodeOwnLayers(persistence);
   // What the Flow each continuing round holds, which a rerun keeps without the model writing it (`./node-run/held-literals/`).
-  const held = createWebNodeHeldLiterals();
+  const held = createWebNodeHeldLiterals(persistence);
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -333,14 +341,14 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   const shown = (input: WebLlmEvidenceToolRequest, sessionId: string, snapshot: WebLlmSnapshotBinding): void => {
     returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
     targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
-    addresses.saw({ projectId: input.projectId, flowId: input.flowId, sessionId }, snapshot);
+    addresses.saw(webNodeBuildOf(input).build, snapshot);
   };
   // The look a node run takes before it acts, which the model is not shown. Cut
   // short, its controls join the page's handles without forgetting any the
   // model was shown; it is never the packet a detection binds its handles through.
-  const looked = (input: WebLlmEvidenceToolRequest, sessionId: string, snapshot: WebLlmSnapshotBinding): void => {
+  const looked = (input: WebLlmEvidenceToolRequest, snapshot: WebLlmSnapshotBinding): void => {
     targetPackets.rememberLook({ projectId: input.projectId, flowId: input.flowId }, snapshot);
-    addresses.saw({ projectId: input.projectId, flowId: input.flowId, sessionId }, snapshot);
+    addresses.saw(webNodeBuildOf(input).build, snapshot);
   };
   // Keyed by the page as the model read it (`./page-view/retention-key.ts`),
   // because Core hands that page back to `validateTargetOverrideEvidence`
@@ -483,9 +491,14 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       boundedIdentifier(input.flowId, "flowId");
       boundedIdentifier(input.callId, "callId");
       const sessionId = selectSession(gateway.eligibleSessionIds());
+      // The build Core frames this call with, and whether the call opens a round of it (`./node-run/build-state/`, t728).
+      const { build, opening } = webNodeBuildOf(input);
       // A new exploration's model has been told nothing yet, so no answer it
       // gets repeats one an earlier exploration's model got (`./repeated-refusal.ts`).
-      if (opensExploration(input)) repeatedRefusals.startedOver(evidenceScope(input, sessionId));
+      // Every round opens with Core's opening call, fresh or continuing, scoped or not.
+      if (opening !== undefined) repeatedRefusals.startedOver(webNodeBuildSlot(build));
+      // A host restarted mid-build reads the build's memories back before any of them is consulted.
+      await Promise.all([arrivals.restore(build), addresses.restore(build), layers.restore(build), held.restore(build)]);
       // Every way out of this call goes through here, because a refusal is
       // returned on one path and thrown on another: `node-run/run.ts` catches
       // its own and answers with it, while a detection and the resolver throw
@@ -499,7 +512,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       // hands back the handle the call named, which that does not print.
       const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution => {
         targetPackets.printed({ projectId: input.projectId, flowId: input.flowId }, answer.evidence, answer.resultReason === undefined ? undefined : input.value);
-        return repeatedRefusals.answered(evidenceScope(input, sessionId), input.toolId, answer);
+        return repeatedRefusals.answered(webNodeBuildSlot(build), input.toolId, answer);
       };
       // The page a detection read the state in, kept here because a detection
       // refuses by throwing, past the result it would have carried it on. A
@@ -514,7 +527,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
             stores: { targets: targetPackets, extractions: extractionHandles },
             restamp: (binding) => retain(stable(input, binding)),
             shown: (binding) => shown(input, sessionId, binding),
-            looked: (binding) => looked(input, sessionId, binding),
+            looked: (binding) => looked(input, binding),
             arrivals,
             addresses,
             layers,
@@ -542,7 +555,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
             sessionId,
             request: input,
             restamp: (binding) => retain(stable(input, binding)),
-            looked: (binding) => looked(input, sessionId, binding)
+            looked: (binding) => looked(input, binding)
           }));
         }
         if (input.toolId === WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID) {
@@ -551,7 +564,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
             sessionId,
             request: input,
             restamp: (binding) => retain(stable(input, binding)),
-            looked: (binding) => looked(input, sessionId, binding)
+            looked: (binding) => looked(input, binding)
           }));
         }
         throw new Error("web evidence tool is not registered");
@@ -572,6 +585,9 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
           return answered(error.personNeeded ? withPersonNeeded(refused, undefined) : refused);
         }
         throw error;
+      } finally {
+        // What this call changed in the build's memories is in Core's store before its answer is (never rejects).
+        await persistence.settled();
       }
     },
     async captureStateDigest(input) {
@@ -706,7 +722,7 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
     eligibleSessionIds: () => eligibleWebSessionIds(fluxiq),
     structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
     executeAction: (sessionId, command) => fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command),
-  }, webAutomationClearedWayOutsOf(fluxiq)));
+  }, webAutomationClearedWayOutsOf(fluxiq), webAutomationBuildStateSource(fluxiq)));
 }
 
 
@@ -734,25 +750,6 @@ function keepNewest(window: Map<string, WebLlmSnapshotBinding>, key: string, bin
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {
   return `${sessionId}\0${input.projectId}\0${input.flowId}`;
-}
-
-/**
- * The call id Core files a loop's free first look under: `initial.<toolId>`,
- * once per evidence loop and before any decision (`AS/runtime/llm/evidence-loop.ts`).
- * This domain's first look is always its run-node tool (`runsNodes.initial`).
- */
-const OPENING_LOOK_CALL_ID = `initial.${WEB_LLM_RUN_NODE_TOOL_ID}`;
-
-/**
- * Whether this call is the look a new Core evidence loop opens with.
- *
- * A model cannot borrow the id inside a loop that took its look: Core files a
- * reused id under `<id>.2` (`AS/runtime/llm/evidence-loop/call-id.ts`). Where a
- * loop took no look the id is the model's to spend, and the only cost of
- * reading it as an opening is one repeat left unsaid.
- */
-function opensExploration(input: WebLlmEvidenceToolRequest): boolean {
-  return input.toolId === WEB_LLM_RUN_NODE_TOOL_ID && input.callId === OPENING_LOOK_CALL_ID;
 }
 
 function requestedUrl(input: unknown): URL {

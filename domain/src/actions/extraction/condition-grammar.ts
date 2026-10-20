@@ -29,21 +29,24 @@
 // - **A number where a number belongs.** A bound is a number, and a text
 //   comparison written with one reads it as its digits rather than refusing.
 //
+// What each phrase *means* -- the comparisons, the reading of a number, the
+// pattern a `matches` compiles to -- is Core's (`automationStudioRecordCondition*`
+// in `fluxiq/automation-studio/nodes`), which the page, the resolver and Core's
+// own dataset processing all run, so a condition reads one way everywhere. What
+// stays here is the lenient reading of how a model *writes* one.
+//
 // What it is not forgiving about is a key it cannot place, or a value it cannot
 // act on: those refuse the condition and name the key, because a dropped
 // condition returns the whole unnarrowed list and reports success having done
 // it.
 
 import {
-  WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
-  WEB_AUTOMATION_EXTRACT_CONDITION_TEXTS,
-  webAutomationExtractConditionPattern
-} from "./condition-match";
-import {
-  WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE,
-  type WebAutomationExtractConditionValue,
-  type WebAutomationExtractItemCondition
-} from "./request";
+  AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
+  AUTOMATION_STUDIO_RECORD_CONDITION_PRESENCES,
+  AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS,
+  automationStudioRecordConditionPattern
+} from "fluxiq/automation-studio/nodes";
+import type { WebAutomationExtractConditionValue, WebAutomationExtractItemCondition } from "./request";
 
 /** Everything a condition says about its value, which is every part of one but the key that names it. */
 export type WebAutomationExtractConditionSaying = Omit<WebAutomationExtractItemCondition, "field" | "read">;
@@ -60,9 +63,9 @@ export type WebAutomationExtractConditionSayingRead =
 /** Every phrase a condition may use, in the order a canonical condition writes them. */
 const SAYING_KEYS = [
   "is",
-  ...WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
+  ...AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
   "equals",
-  ...WEB_AUTOMATION_EXTRACT_CONDITION_TEXTS,
+  ...AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS,
   "not"
 ] as const satisfies readonly (keyof WebAutomationExtractConditionSaying)[];
 
@@ -139,7 +142,7 @@ export const WEB_AUTOMATION_EXTRACT_CONDITION_KEYS: readonly string[] = [
 ];
 
 /** The phrases that compare something, which "the value is not there" cannot be said beside. */
-const COMPARISONS: readonly SayingKey[] = [...WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS, "equals", ...WEB_AUTOMATION_EXTRACT_CONDITION_TEXTS];
+const COMPARISONS: readonly SayingKey[] = [...AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, "equals", ...AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS];
 
 /**
  * What `written` says about its value, with `naming` the keys this caller uses
@@ -180,9 +183,9 @@ export function webAutomationExtractConditionSayingValue(written: Record<string,
 
 /** One phrase's value, canonical, or `undefined` for one the page could not act on. */
 function sayingValue(saying: SayingKey, value: unknown): unknown {
-  if (saying === "is") return (WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE as readonly string[]).includes(value as string) ? value : undefined;
+  if (saying === "is") return (AUTOMATION_STUDIO_RECORD_CONDITION_PRESENCES as readonly string[]).includes(value as string) ? value : undefined;
   if (saying === "not") return booleanValue(value);
-  if ((WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS as readonly string[]).includes(saying)) {
+  if ((AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS as readonly string[]).includes(saying)) {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
   }
   if (saying === "equals") return comparedValues(value);
@@ -219,7 +222,7 @@ function comparedTexts(saying: SayingKey, value: unknown): string[] | undefined 
     if (typeof text !== "string" || text.trim() === "") return undefined;
     // A pattern the page could not compile is refused here rather than run
     // there, where it would fail every row of a list and look like an empty page.
-    if (saying === "matches" && webAutomationExtractConditionPattern(text) === undefined) return undefined;
+    if (saying === "matches" && automationStudioRecordConditionPattern(text) === undefined) return undefined;
     texts.push(text);
   }
   return texts;

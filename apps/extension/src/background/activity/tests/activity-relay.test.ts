@@ -20,7 +20,7 @@ import {
 } from "../../../shared/activity/index";
 import { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "../activity-relay";
 import { OverlayTarget } from "../overlay-target";
-import { ACTIVITY_DETAIL_INTERVAL_MS } from "../pacer";
+import { ACTIVITY_DETAIL_INTERVAL_MS } from "fluxiq/ui";
 import { FakeClock } from "./fake-clock";
 
 function activity(sequence: number, overrides: Partial<ClientGatewayActivity> = {}): ClientGatewayActivity {

@@ -12,20 +12,31 @@
 // next read is clean, and notes the repair where a problem report finds it. A
 // stored pairing token that is not a string is dropped rather than repaired:
 // there is no default token, and the browser pairs again.
+//
+// Direct requests are what Core's recording-capture policy allows: on only when
+// the policy allows them and the stored value is `true`. Under Core's default
+// policy they are always off, as before Core owned the policy.
 
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
 
 export type SavedReading<T> = { value: T; repaired: string[] };
 
 const SETTINGS_FLAGS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const;
 
-export function readSavedSettings(stored: unknown, defaults: FluxIQSettings): SavedReading<FluxIQSettings> {
-  defaults = { ...defaults, requestsEnabled: false };
+export function readSavedSettings(
+  stored: unknown,
+  defaults: FluxIQSettings,
+  policy: AutomationStudioRecordingCapturePolicy = AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY
+): SavedReading<FluxIQSettings> {
+  const allowedRequests = (requested: unknown) => clampAutomationStudioRecordingCaptureSettings({ directRequests: requested === true }, policy).directRequests;
+  defaults = { ...defaults, requestsEnabled: allowedRequests(defaults.requestsEnabled) };
   if (stored === undefined) return { value: { ...defaults }, repaired: [] };
   if (!isRecord(stored)) return { value: { ...defaults }, repaired: ["settings"] };
   const repaired: string[] = [];
   const value: FluxIQSettings = { ...defaults };
-  if (stored.requestsEnabled !== false) repaired.push("requestsEnabled");
+  value.requestsEnabled = allowedRequests(stored.requestsEnabled);
+  if (stored.requestsEnabled !== value.requestsEnabled) repaired.push("requestsEnabled");
   const gatewayUrl = stored.gatewayUrl;
   if (gatewayUrl !== undefined) {
     if (isAddress(gatewayUrl, ["ws:", "wss:"])) value.gatewayUrl = gatewayUrl;

@@ -40,6 +40,7 @@ import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
 import { RecordedStepIndex } from "./recorded-steps";
+import { CapturePolicySource, effectiveSettings } from "./capture-policy/index";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, removeQueuedRecordingEvent, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are
 // siblings of the same name: "./connection" would resolve back to this file.
@@ -93,6 +94,7 @@ export class FluxIQConnection {
   private readonly intake: RecordedEventIntake;
   private readonly commands: ServerCommandChannel;
   private readonly activity: ActivityRelay;
+  private readonly capturePolicy: CapturePolicySource;
 
   // Construction order is dependency order: a collaborator handed to another as
   // an instance is built first. Anything reached through a closure is read when
@@ -107,6 +109,21 @@ export class FluxIQConnection {
     // Forwards exactly the arguments it was given, so an override on the public
     // method sees the same call a direct `this.handleRecordingEvent(...)` made.
     const recordEvent = (...args: Parameters<FluxIQConnection["handleRecordingEvent"]>) => this.handleRecordingEvent(...args);
+    // What a recording captures is the person's settings under Core's policy
+    // (`capture-policy/`): every recording message to a page carries these.
+    const recordingSettings = () => this.effectiveSettings();
+
+    this.capturePolicy = new CapturePolicySource({
+      call: (endpoint, payload) => callCoreProgram(this.coreApiCredentials(), endpoint, payload),
+      projectId: () => this.projects.activeRecordingProject() ?? this.session.projectId,
+      // A policy that arrives once a recording has started reaches the page
+      // being recorded now; a tab attached later is sent it anyway.
+      onChange: () => {
+        const tabId = this.page.tabId();
+        if (this.recording.state() !== "recording" || tabId === undefined) return;
+        void this.attachment.setRecordingState(tabId, true).catch(/* best-effort: a page without the content script gets the policy when it attaches */ () => undefined);
+      }
+    });
 
     this.scriptedNavigation = new ScriptedNavigationIntent({
       recordingState: () => this.recording.state(),
@@ -132,6 +149,7 @@ export class FluxIQConnection {
         },
         onSessionReady: (message) => {
           this.activity.noteSessionReady();
+          void this.capturePolicy.refresh();
           void this.commands.handleSessionReady(message);
         },
         onCommand: (payload, messageId) => void this.commands.handleCommand(payload, messageId),
@@ -150,7 +168,8 @@ export class FluxIQConnection {
     this.attachment = new ContentAttachment({
       sendToTab,
       ensureContentScript,
-      settings: () => this.settings,
+      settings: recordingSettings,
+      capturePolicy: () => this.capturePolicy.current(),
       isRecording: () => this.recording.state() === "recording",
       hasRecordedTab: (tabId) => this.navigation.hasRecordedTab(tabId),
       noteRecordedTab: (tabId, url, timestamp) => this.navigation.noteRecordedTab(tabId, url, timestamp)
@@ -209,7 +228,7 @@ export class FluxIQConnection {
       send: this.gateway.send,
       gatewayState: () => this.gateway.state(),
       session: () => this.session,
-      settings: () => this.settings,
+      settings: recordingSettings,
       persistSession: (session) => this.persistSession(session),
       page: this.page,
       projects: this.projects,
@@ -412,6 +431,10 @@ export class FluxIQConnection {
   }
 
   startRecording(description?: string): Promise<void> {
+    // Asked again at every start, without holding the start up: the policy
+    // that answers in time is in the first recording message, and one that
+    // answers later is sent to the recorded page when it lands.
+    void this.capturePolicy.refresh();
     return this.recording.start(description);
   }
 
@@ -514,6 +537,11 @@ export class FluxIQConnection {
 
   currentSettings(): FluxIQSettings {
     return this.settings;
+  }
+
+  /** The settings under Core's recording-capture policy, which is what a recording uses; `currentSettings` stays the person's own. */
+  effectiveSettings(): FluxIQSettings {
+    return effectiveSettings(this.settings, this.capturePolicy.current());
   }
 
   private emitStatus(): void {

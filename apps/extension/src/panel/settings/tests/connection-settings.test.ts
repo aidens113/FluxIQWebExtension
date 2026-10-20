@@ -92,3 +92,9 @@ test("actual draft writes cannot persist an attempted enabled request preference
     if (previous) Object.defineProperty(globalThis, "chrome", previous); else Reflect.deleteProperty(globalThis, "chrome");
   }
 });
+
+test("under Core's default recording-capture policy every capture switch can be changed", () => {
+  for (const key of ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const) {
+    assert.equal(SETTING_FIELDS.toggles.find((field) => field.key === key)?.disabled, undefined, key);
+  }
+});

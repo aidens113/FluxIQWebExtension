@@ -502,3 +502,28 @@ test("a 400 refusal of a value the Lab sent is a facility contract failure namin
   // Any other refusal is not the Lab's value at fault, and keeps its category.
   await assert.rejects(() => client.automationStudioCall("get-flow", {}), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing");
 });
+
+// `get-flow-spend` (Core t728): the Flow's purse as Core recorded it, which the Lab reads in place of rebuilding it.
+test("reads a Flow's spend by phase, keeps an unitemised record's unknowns unknown, and refuses a malformed one", async (t) => {
+  const byPhase = { build: { calls: 22, usd: 0.04 }, read: { calls: 1, usd: 0.001 }, judge: { calls: 2, usd: 0.002 }, runtime: { calls: 0, usd: 0 }, reauthor: { calls: 0, usd: 0 }, chat: { calls: 1, usd: 0.0003 } };
+  const answers: unknown[] = [
+    { spend: { projectId: "project.web", flowId: "flow.main", spentUsd: 0.0433, builds: 1, calls: 26, byPhase, createdAt: 1, updatedAt: 2 } },
+    { spend: { projectId: "project.web", flowId: "flow.main", spentUsd: 0.05, builds: 2, calls: null, byPhase: null, createdAt: 1, updatedAt: 2 } },
+    { spend: null },
+    { spend: { projectId: "project.web", flowId: "flow.main", spentUsd: 0.05, builds: 1, calls: 3, byPhase: null, createdAt: 1, updatedAt: 2 } },
+    { spend: { projectId: "project.web", flowId: "flow.main", spentUsd: 0.05, builds: 1, calls: 3, byPhase: { ...byPhase, chat: { calls: 1, usd: -1 } }, createdAt: 1, updatedAt: 2 } },
+  ];
+  const requests: unknown[] = [];
+  const client = await mockedClient(t, async (url, init) => {
+    assert.equal(endpoint(url), "get-flow-spend");
+    requests.push(JSON.parse(String(init.body)));
+    return json({ ok: true, payload: answers[requests.length - 1] });
+  });
+  const itemised = await client.getFlowSpend("project.web", "flow.main");
+  assert.deepEqual(requests[0], { projectId: "project.web", flowId: "flow.main" });
+  assert.deepEqual(itemised, { projectId: "project.web", flowId: "flow.main", spentUsd: 0.0433, builds: 1, calls: 26, byPhase, updatedAt: 2 });
+  assert.deepEqual(await client.getFlowSpend("project.web", "flow.main"), { projectId: "project.web", flowId: "flow.main", spentUsd: 0.05, builds: 2, calls: null, byPhase: null, updatedAt: 2 });
+  assert.equal(await client.getFlowSpend("project.web", "flow.main"), null);
+  await assert.rejects(client.getFlowSpend("project.web", "flow.main"), /calls and .*byPhase must be present together/u);
+  await assert.rejects(client.getFlowSpend("project.web", "flow.main"), /byPhase\.chat\.usd must not be negative/u);
+});

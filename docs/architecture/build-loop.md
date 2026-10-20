@@ -183,7 +183,8 @@ to the tool rejection reason `target_not_a_handle` (`tool-rejection.ts`).
   model's, except, in a round that continues a Flow, a parameter whose value is
   the one the Flow already holds for that node -- or a list request with the
   held item -- which a rerun merged from the saved step
-  (`node-run/held-literals/`, fed by the round's opening look's `held` calls).
+  (`node-run/held-literals/`, fed by the `held` calls of the round's opening,
+  which Core marks `continuing`; see [what a build remembers](#what-a-build-remembers)).
   A held value counts as held after the screen of denied keys too: the shown
   copy of a saved element (its `selector` taken out) is put back to the saved
   element, with the saved `selector` beside it, when the call names no handle
@@ -366,18 +367,83 @@ no historical execution proof; whole-Flow testing remains required.
   the domain's `and N more changes` line as not shown (Core's
   `llm-flow-bootstrap.md`, `build-test/change-lines.ts`).
 
+## What A Build Remembers
+
+The domain keeps four memories across the calls of one build: whether it has
+reached its start location (`node-run/arrival.ts`), the addresses it has been
+shown and may navigate to (`node-run/shown-addresses.ts`), the values a
+continued Flow already holds (`node-run/held-literals/`), and the layers its
+own presses opened (`node-run/own-layers/`). Core, not the domain, says which
+build a call belongs to and whether it starts that build afresh. Inside every
+`executeTool` the domain reads `automationStudioEvidenceBuildScope()` (from
+`fluxiq/automation-studio`; Core's
+`runtime/llm/harness-options/evidence-build-scope.ts`), which gives
+`projectId`, `flowId`, `buildId`, `callScope` (present only when project briefs
+run side by side for the same Flow) and `opening`: `"fresh"` on an opening
+that starts the build, `"continuing"` on the opening of a repair or re-author
+round whose draft already holds the Flow, and absent on every other call. The
+domain parses no call ids (`initial.*`) of its own. The memories are keyed by
+`buildId` plus `callScope` (`node-run/build-state/build-key.ts`) and reset only
+on `"fresh"`; a call with no frame for this project and Flow (a direct call or
+a test) is keyed by project and Flow alone, never reset and never stored.
+Repeated refusals (`repeated-refusal.ts`) start over on any opening, per build
+and brief, and their reason, `AUTOMATION_STUDIO_REPEATED_ANSWER_REASON`, is
+Core's (`fluxiq/automation-studio`).
+
+The memories also outlive the process. Core owns a durable, size-bounded
+domain build state (`runtime/domain-build-state/`, exported from
+`fluxiq/automation-studio`) that keeps values opaque under the Flow; the domain
+reaches it with `automationStudioDomainBuildState(fluxiq, "web-automation")`
+(`domain/src/cleared-way-outs/build-state-source.ts`, asked lazily). Each memory writes
+through to scope `{ projectId, flowId, buildId }` under `web.arrival`,
+`web.shown-addresses`, `web.held-literals` or `web.own-layers` (with
+`:<callScope>` for a brief), in order and coalesced, and a call's writes settle
+before its answer returns (`node-run/build-state/persistence.ts`,
+`memory.ts`). The in-process memory stays authoritative: a write Core refuses
+(for example a shown-address set past Core's 64 KiB value bound) leaves the
+last stored copy, and after a restart a memory is read back the first time its
+build calls again. A stopped build that is continued later gets a new
+`buildId`, so its build-scoped memories start empty.
+
+Cleared way-outs -- the references of popups a press cleared, which Core hands
+back for a trial -- are kept per Flow rather than per build
+(`domain/src/cleared-way-outs/registry.ts`): Flow scope with no `buildId`, key
+`web.cleared-way-outs`, at most 256 entries and 60 KiB, oldest first out.
+`find(reference, flow)` reads the process cache, then the Flow's record, so a
+cleared control's handle still resolves after a restart. The output dispatcher
+keeps each way-out with the Flow named by the command context or Core's build
+frame.
+
 ## The Model's Instructions
 
-The Lists line of the web system instructions
-(`runtime/llm-evidence/system-instructions/instructions.ts`, version `web-5`)
-says repetitive work is a loop: list the items with a `where` that keeps only
-the ones to act on, act once on one kept item or write the act (`write true`),
-state `repeat`, never act on every item; and bind a value that changes between
-runs or rows (`{"$input": name}`, `{"$row": field}`). It adds that every page
-of a list is a loop too: read the list, then Next page on the same list, then
-`amend_draft` `repeat` on the read through Next page while it succeeds (`most N`
-for "the first N pages"); the Flow keeps each row once. The build runs Next page
-once live and states the loop; it never repeats a call to reach page two.
+The rules that hold for every domain are Core's, in Core's task prose
+(`packages/fluxiq/src/programs/automation-studio/runtime/llm/deepseek/system-prompt.ts`),
+placed only in the task kinds that act or write steps. Repetitive work is a
+loop, not a sequence: list the items with a `where` that keeps only the ones to
+act on, do or write the act once on one kept item, state `repeat`, never do it
+to every item; and bind a value that changes between runs or rows
+(`{"$input": name}`, `{"$row": field}`)
+(`AUTOMATION_STUDIO_LOOP_AUTHORING_INSTRUCTION`, sent to Flow Bootstrap and the
+runtime, subflow and expectation-target patches; evidence decisions get the
+same rule from Core's loop policy). Keep an item by evidence of its own type,
+and state a loop's repeat by `amend_draft` `repeat` in a draft and by repeat
+lines in a written Flow (`AUTOMATION_STUDIO_LIST_AUTHORING_INSTRUCTION`), and be
+efficient against the build's small cost ceiling
+(`AUTOMATION_STUDIO_EFFICIENCY_INSTRUCTION`), both sent to Flow Bootstrap and
+evidence decisions. Core also says the person's limits (anything a person could
+do, but money, delete and send/publish are asked first; never type a secret;
+`AUTOMATION_STUDIO_PERSON_LIMITS_INSTRUCTION`) and, when a request carries
+recordings, that written instructions outrank them
+(`AUTOMATION_STUDIO_SUPPLEMENTARY_RECORDINGS_INSTRUCTION`).
+
+The web system instructions
+(`runtime/llm-evidence/system-instructions/instructions.ts`, version `web-12`)
+keep only what is web-only. Their Lists line says every page of a list is a
+loop the Flow states: read the list, then Next page on the same list, then
+repeat the read through Next page while it succeeds (`most N` for "the first N
+pages"); the Flow keeps each row once. Exploring needs one page read and one
+Next page: the build runs Next page once live and states the loop; it never
+repeats a call to reach page two.
 
 Core adds its own notes beside these. Its start-location note says the Flow's
 first step may go straight to a stable deeper address on the same site where

@@ -9,6 +9,7 @@ import { createWebAutomationClearedWayOuts } from "../../../../cleared-way-outs"
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { coreBuildStateStore } from "../../node-run/build-state/tests/core-store";
 
 const PAGE_URL = "https://social.test/requests";
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
@@ -69,4 +70,19 @@ test("another Flow's handles are untouched by naming a way out for this one", as
   const named = await runtime.clearedControlHandles!({ projectId: "p", flowId: "other", wayOuts: [reference] });
   assert.deepEqual(named, { [reference]: "t1" });
   assert.equal(await candidateSelector(runtime, "t1"), "#chat-close");
+});
+
+// t728: the registry keeps a Flow's ways out in Core's durable build state, so a runtime made after a restart still
+// names a way out pressed before it, by a handle that resolves to that control.
+test("a way out pressed before a restart is named after it, for its own Flow", async () => {
+  const store = coreBuildStateStore();
+  const before = createWebAutomationClearedWayOuts(() => store);
+  const reference = before.keep({ url: PAGE_URL, element: noticeOk }, { projectId: "p", flowId: "f" });
+  await before.settled();
+
+  const { runtime } = runtimeOver(() => [closeChat], createWebAutomationClearedWayOuts(() => store));
+  await look(runtime);
+  const named = await runtime.clearedControlHandles!({ projectId: "p", flowId: "f", wayOuts: [reference] });
+  assert.deepEqual(named, { [reference]: "t2" });
+  assert.equal(await candidateSelector(runtime, "t2"), "#slow-down-ok");
 });

@@ -4,9 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
-import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
+import type { ExistingFlowSpend, ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { settledBuildOf, type CreatedFlowBuild } from "../../flow-lane/index.js";
+import { flowPurse } from "./flow-purse.js";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
 import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
@@ -15,7 +16,8 @@ import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
  * One live run end to end against a fake Core: ready the build and the created
  * Flow's playback, settle each, and read back `snapshots/live-llm.json`. The
  * fake answers only the endpoints a live run uses; any other request fails the
- * test.
+ * test. Its Flow purse (`get-flow-spend`) is what the test sets it to: by
+ * default the build's five calls, as Core records them when the build settles.
  */
 
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
@@ -41,12 +43,14 @@ function profile(budget: Partial<LlmExecutionProfile["budget"]>): LlmExecutionPr
   };
 }
 
-function fakeCore() {
+function fakeCore(purse: ExistingFlowSpend | null = flowPurse({ build: [5, 0.02] })) {
   const settingsRequests: Array<Record<string, any>> = [];
   let metadata: unknown;
-  return {
+  const core = {
     settingsRequests,
+    purse,
     control: {
+      async getFlowSpend(): Promise<ExistingFlowSpend | null> { return core.purse; },
       async reauthenticate(): Promise<void> {},
       async secretKeysCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
         if (endpoint === "snapshot") return { keys: [] };
@@ -63,6 +67,12 @@ function fakeCore() {
       },
     },
   };
+  return core;
+}
+
+/** A settlement's reader: the run detail and raw reads given, and the fake Core's Flow purse. */
+function reader<T extends object>(core: ReturnType<typeof fakeCore>, reads: T): T & { getFlowSpend: () => Promise<ExistingFlowSpend | null> } {
+  return { getFlowSpend: core.control.getFlowSpend, ...reads };
 }
 
 /** Three real-looking calls: more than the Lab used to allow, well inside every cap. */
@@ -191,8 +201,8 @@ const proposedBuild: CreatedFlowBuild = {
   durationMs: 40_000,
 };
 
-async function settleBuildOnce(build: CreatedFlowBuild, budget: Partial<LlmExecutionProfile["budget"]> = {}) {
-  const core = fakeCore();
+async function settleBuildOnce(build: CreatedFlowBuild, budget: Partial<LlmExecutionProfile["budget"]> = {}, purse?: ExistingFlowSpend | null) {
+  const core = fakeCore(purse);
   // The whole per-request triple is the shared budget's. Overriding only the
   // output and total limits left the input limit at the default, and input plus
   // output may not exceed the total, so every build below was refused unrun.
@@ -223,6 +233,8 @@ test("a create-flow run readies its build with its permitted consequences and re
   assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
   assert.deepEqual(published, [{ calls: 5, interventions: 0, totalEstimatedCostUsd: 0.02, llmGate: { invoked: true } }]);
   assert.equal(run.usage.calls, 5);
+  assert.equal(snapshot.runSpend.source, "flow_purse");
+  assert.deepEqual(snapshot.runSpend.phases.build, { calls: 5, estimatedCostUsd: 0.02 });
 });
 
 test("a refused build's content-free progress survives unchanged in the live snapshot", async () => {
@@ -250,54 +262,48 @@ test("a refused build's content-free progress survives unchanged in the live sna
 });
 
 // `run-murzln6g-11debe1d`: the build stopped at its spending limit, left no
-// proposal, and live-llm.json said `instructedConsequences: null` although
-// `S/0015` had read them.
-test("a build that left no proposal carries the consequences its step log read from the instructions, and says where they came from", async (t) => {
+// proposal, and live-llm.json said `instructedConsequences: null` although the
+// build had read them. Core now publishes the classes on the failure
+// diagnostic (t728; `flow-lane/creation/build-proposal.ts` reads them), so the
+// step log is no longer read for them.
+test("a build that left no proposal carries the consequences Core's diagnostic named, and never reads them from the step log", async (t) => {
   const steps = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-llm-instructed-"));
   t.after(() => rm(steps, { recursive: true, force: true }));
-  // `S/0015/decision.json`'s own list.
-  const instructed = [
-    { consequence: "modify_existing", quote: "Switch my pickup store to Millbrook Crossing Supercenter" },
-    { consequence: "create_new", quote: "add two packs of the ValueRidge Essentials Select-A-Size Paper Towels in the 12 Double Rolls size and one pack of the ValueRidge Everyday Dinner Napkins in the 250 Count size to my cart, both for pickup" },
-  ];
   await mkdir(path.join(steps, "0015-decide"));
   await writeFile(path.join(steps, "0015-decide", "meta.json"), JSON.stringify({ kind: "decide", provider: "deepseek", costUsd: 0.000379548, part: "creation", phase: "read" }));
-  await writeFile(path.join(steps, "0015-decide", "decision.json"), JSON.stringify({ response: { decision: { kind: "complete", result: { instructed } } } }));
-  const stopped: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, instructedConsequences: null, failure: { code: "lab.chat_build_failed", stage: "chat", httpStatus: null } };
+  await writeFile(path.join(steps, "0015-decide", "decision.json"), JSON.stringify({ response: { decision: { kind: "complete", result: { instructed: [{ consequence: "delete", quote: "a step log reading" }] } } } }));
+  const instructed = [{ consequence: "modify_existing", quote: null }, { consequence: "create_new", quote: null }];
+  const stopped: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, instructedConsequences: instructed, failure: { code: "flow_bootstrap.evidence_budget_exhausted", stage: null, httpStatus: null } };
   const { run, written, settle } = await settleBuildOnce(stopped);
   run.readStepLogFrom(steps);
   const answered = await settle();
   const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
   assert.deepEqual(snapshot.build.instructedConsequences, instructed);
-  assert.equal(snapshot.instructedConsequencesFrom, "step_log");
+  assert.equal(snapshot.instructedConsequencesFrom, "failure_diagnostic", "Core's build record, here its failure diagnostic");
   // The lane keeps what the settlement answers, so flow-lane.json holds the very record live-llm.json does.
   assert.equal(answered.build, snapshot.build);
-  assert.equal(answered.instructedConsequencesFrom, "step_log");
+  assert.equal(answered.instructedConsequencesFrom, "failure_diagnostic");
 
-  const fromProposal = await settleBuildOnce(proposedBuild);
-  fromProposal.run.readStepLogFrom(steps);
-  assert.deepEqual(await fromProposal.settle(), { build: proposedBuild, instructedConsequencesFrom: "proposal" });
+  // A build whose record names none stays at none, whatever the step log holds.
+  const unread = await settleBuildOnce({ ...stopped, instructedConsequences: null });
+  unread.run.readStepLogFrom(steps);
+  assert.deepEqual(await unread.settle(), { build: { ...stopped, instructedConsequences: null }, instructedConsequencesFrom: null });
 
-  // A settlement that throws read the step log first and carries what it read
-  // on the error, so flow-lane.json holds the record live-llm.json was given:
-  // a build that reached no provider, and one over its run budget.
+  // A settlement that throws carries the record on the error, so flow-lane.json
+  // holds the one live-llm.json was given: a build that reached no provider,
+  // and one over its run budget.
   for (const throwing of [
     { ...stopped, providerCalls: 0, providerInvocation: "not_attempted" as const, accounting: null, evidenceLoop: null },
     { ...stopped, accounting: { ...proposedBuild.accounting!, totalTokens: Number.MAX_SAFE_INTEGER } },
   ]) {
     const breached = await settleBuildOnce(throwing);
-    breached.run.readStepLogFrom(steps);
     const error = await breached.settle().then(() => assert.fail("the settlement must throw"), (thrown: unknown) => thrown);
     assert.ok(error instanceof RunnerFailure);
     const written = breached.written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
     assert.deepEqual(written.build.instructedConsequences, instructed);
-    assert.equal(written.instructedConsequencesFrom, "step_log");
     assert.equal(settledBuildOf(error)?.build, written.build, "the error carries the very record live-llm.json holds");
-    assert.equal(settledBuildOf(error)?.instructedConsequencesFrom, "step_log");
+    assert.equal(settledBuildOf(error)?.instructedConsequencesFrom, "failure_diagnostic");
   }
-  const proposed = fromProposal.written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
-  assert.deepEqual(proposed.build.instructedConsequences, [], "Core's own record is never replaced");
-  assert.equal(proposed.instructedConsequencesFrom, "proposal");
 });
 
 test("a build that reached no provider fails the run closed, after its evidence is written, and says where Core stopped", async () => {
@@ -307,7 +313,7 @@ test("a build that reached no provider fails the run closed, after its evidence 
     && /Live LLM run reached no provider: --live-llm authorized 26 deepseek call\(s\) for --llm-task create-flow and Core made none\. Core's Flow build stopped at provider_resolution before a provider answered\. \(flow_bootstrap\.provider_resolution_failed\)/u.test(error.message));
   assert.ok(written.some(entry => entry.path === "snapshots/live-llm.json"), "the refusal's evidence is written first");
   // A build that outlived its request with nothing to show counts as having called, so it fails on its own code, never as spend-free.
-  const unfinished = await settleBuildOnce({ ...refused, providerCalls: null, providerInvocation: "unknown", failure: { code: "lab.generation_unfinished", stage: null, httpStatus: null } });
+  const unfinished = await settleBuildOnce({ ...refused, providerCalls: null, providerInvocation: "unknown", failure: { code: "lab.generation_unfinished", stage: null, httpStatus: null } }, {}, null);
   await unfinished.settle();
   assert.equal(unfinished.run.usage.calls, 1);
 });
@@ -343,7 +349,8 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   assert.deepEqual(playbackSettings, buildSettings);
   assert.deepEqual([buildMode, playbackMode], ["manual_approval", "fully_adaptive"]);
 
-  await run.settleRepair({ getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
+  core.purse = flowPurse({ build: [5, 0.02], runtime: [3, 0.003] });
+  await run.settleRepair(reader(core, { getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }), { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
   assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
@@ -377,7 +384,7 @@ async function buildThenRepair(buildCostUsd: number, repairCostUsd: number) {
     interventions: detail.interventions!.map((intervention, _index, all) => ({ ...intervention, estimatedCostUsd: repairCostUsd / all.length })),
     llmAccounting: { ...detail.llmAccounting!, estimatedCostUsd: repairCostUsd },
   };
-  const repair = await run.settleRepair({ getRunDetail: async () => repairDetail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async () => undefined }, async () => undefined)
+  const repair = await run.settleRepair(reader(core, { getRunDetail: async () => repairDetail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }), { projectId: "project-1", runId: "run-1" }, { writeStructured: async () => undefined }, async () => undefined)
     .then(() => undefined, (error: unknown) => error);
   return { core, build, repair };
 }
@@ -440,7 +447,8 @@ test("a created Flow's playback lists every result-verification call Core made, 
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const endpoints: string[] = [];
-  const control = { getRunDetail: async () => detail, automationStudioCall: async (endpoint: string) => { endpoints.push(endpoint); return verifiedRunDetail; } };
+  core.purse = flowPurse({ build: [5, 0.02], runtime: [3, 0.003], judge: [2, 0.00248] });
+  const control = reader(core, { getRunDetail: async () => detail, automationStudioCall: async (endpoint: string) => { endpoints.push(endpoint); return verifiedRunDetail; } });
   await run.settleRepair(control, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined);
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.ok(endpoints.every(endpoint => endpoint === "get-flow-run-detail"));
@@ -466,7 +474,8 @@ test("a verification record that cannot be read says so, and settles the run all
   const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  const control = { getRunDetail: async () => detail, automationStudioCall: async (): Promise<unknown> => { throw new Error("gone"); } };
+  core.purse = flowPurse({ build: [5, 0.02], runtime: [3, 0.003] });
+  const control = reader(core, { getRunDetail: async () => detail, automationStudioCall: async (): Promise<unknown> => { throw new Error("gone"); } });
   await run.settleRepair(control, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined);
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.equal(snapshot.verification.source, "unreadable");
@@ -478,7 +487,7 @@ test("a repair that cannot be read back is recorded, not raised", async () => {
   const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  const unreadable = { getRunDetail: async (): Promise<ExistingRunDetail> => { throw new Error("gone"); }, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) };
+  const unreadable = reader(core, { getRunDetail: async (): Promise<ExistingRunDetail> => { throw new Error("gone"); }, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) });
   await run.settleRepair(unreadable, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined);
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.deepEqual({ observed: snapshot.repair.observed, settlement: snapshot.repair.settlement }, { observed: null, settlement: "run_detail_unreadable" });
@@ -490,8 +499,9 @@ test("a repair over its run budget fails the run, after its spend is written", a
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const overspent: ExistingRunDetail = { ...detail, llmAccounting: { ...detail.llmAccounting!, calls: 27 } };
+  core.purse = flowPurse({ build: [5, 0.02], runtime: [27, 0.003] });
   await assert.rejects(
-    run.settleRepair({ getRunDetail: async () => overspent, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined),
+    run.settleRepair(reader(core, { getRunDetail: async () => overspent, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }), { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined),
     (error: unknown) => error instanceof RunnerFailure,
   );
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
@@ -503,7 +513,8 @@ test("a repair over its run budget fails the run, after its spend is written", a
  * whose answer was judged wrong twice, and a 36-call re-author. The Lab's
  * `observed.totalEstimatedCostUsd` -- the figure the machine's spend ledger
  * records -- was the build's $0.0418 alone, and `llm.calls` was 24, although
- * the run made 60 calls for about $0.0861.
+ * the run made 60 calls for about $0.0861. Core's Flow purse now holds every
+ * one of them by phase, and the Lab reads that figure (t728).
  */
 const JUDGE_1 = "llm.loop_verification.ebec2a7a-d161-4541-8176-8172589d34db";
 const JUDGE_2 = "llm.loop_verification.6cc3d182-9071-4703-a26e-b025de3b3b8a";
@@ -542,13 +553,16 @@ const REAUTHOR_ID = "adaptation.bootstrap.2b83be32-6264-481a-baec-e18bf3dc3922";
 const appliedReauthor = { attempt: 1, routed: true, adaptationId: REAUTHOR_ID, applied: true, durationMs: 173_400, accounting: { requestId: "evidence.aa628a38", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 441_137, outputTokens: 10_071, totalTokens: 451_208, estimatedCostUsd: 0.042481212 } };
 const reauthorAdaptation = () => ({ adaptation: { evidenceLoop: { providerCallCount: 35, additionalProviderCallCount: 1, totalProviderCallCount: 36 } } });
 
-async function settleReauthoredRun(attempts: unknown[], adaptation: () => unknown = reauthorAdaptation, stepsDirectory?: string) {
-  const { core, run, written, published, settle } = await settleBuildOnce(reauthoredBuild, { maxCallsPerRun: 48 });
-  if (stepsDirectory) run.readStepLogFrom(stepsDirectory);
+const REAUTHORED_PURSE = flowPurse({ build: [22, 0.04178802], judge: [2, 0.001830072], reauthor: [36, 0.042481212] });
+
+async function settleReauthoredRun(attempts: unknown[], adaptation: () => unknown = reauthorAdaptation, purse: ExistingFlowSpend | null = REAUTHORED_PURSE) {
+  const { core, run, written, published, settle } = await settleBuildOnce(reauthoredBuild, { maxCallsPerRun: 48 }, flowPurse({ build: [22, 0.04178802] }));
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  core.purse = purse;
   const reads: Array<{ endpoint: string; payload: Record<string, unknown> }> = [];
   const control = {
+    getFlowSpend: core.control.getFlowSpend,
     getRunDetail: async () => reauthoredPlayback,
     automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
       reads.push({ endpoint, payload });
@@ -568,14 +582,21 @@ test("a run that re-authored reports every call it made -- build, checks and re-
   assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.086099304);
   assert.equal(snapshot.observed.calls, 60);
   assert.equal(run.usage.calls, 60, "the evaluation's llm.calls counts the re-author too");
-  // Each phase stays readable on its own; the two checks are counted once, as the judge's.
+  // Each phase stays readable on its own, as Core's purse attributed it; the two checks are the judge's.
   assert.deepEqual(snapshot.runSpend.phases, {
     build: { calls: 22, estimatedCostUsd: 0.04178802 },
-    runtime: { calls: 0, estimatedCostUsd: 0 },
+    read: null,
     judge: { calls: 2, estimatedCostUsd: 0.001830072 },
+    runtime: null,
     reauthor: { calls: 36, estimatedCostUsd: 0.042481212 },
     chat: null,
-    read: null,
+  });
+  assert.deepEqual(snapshot.observed.perBuild, {
+    ceilingUsd: LAB_CEILING_USD,
+    builds: [{ phase: "flow", attempt: null, estimatedCostUsd: 0.086099304, overCeiling: false }],
+    parts: [{ phase: "build", attempt: null, estimatedCostUsd: 0.04178802 }, { phase: "judge", attempt: null, estimatedCostUsd: 0.001830072 }, { phase: "reauthor", attempt: null, estimatedCostUsd: 0.042481212 }],
+    maxBuildCostUsd: 0.086099304,
+    overCeiling: 0,
   });
   assert.deepEqual(snapshot.observed.phases, snapshot.runSpend.phases);
   assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, try: null, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212, ending: null }]);
@@ -591,56 +612,60 @@ test("a run that re-authored reports every call it made -- build, checks and re-
   assert.deepEqual(reads.filter(read => read.endpoint === "get-flow-adaptation").map(read => read.payload), [{ projectId: "project-1", flowId: "flow-1", adaptationId: REAUTHOR_ID }]);
 });
 
-test("a re-author's retries are counted too, and an attempt whose calls cannot be read still adds its cost and says so", async () => {
-  const failedRetry = { attempt: 2, routed: true, code: "flow_bootstrap.evidence_unusable_decision", accounting: { inputTokens: 40_000, outputTokens: 900, estimatedCostUsd: 0.004 }, evidenceLoop: { decisionCount: 4, totalProviderCallCount: 5 } };
-  const counted = await settleReauthoredRun([appliedReauthor, failedRetry]);
-  assert.equal(counted.snapshot.runSpend.phases.reauthor.calls, 36 + 5);
-  assert.deepEqual(counted.snapshot.reauthor.attempts.map((attempt: { callsFrom: string }) => attempt.callsFrom), ["adaptation", "loop"]);
+test("a re-author attempt's calls are read from Core's record of it, and the run's total is the purse's whatever that record says", async () => {
+  const failedRetry = { attempt: 2, routed: true, code: "flow_bootstrap.provider_balance_exhausted", calls: 5, accounting: { inputTokens: 40_000, outputTokens: 900, estimatedCostUsd: 0.004 }, evidenceLoop: { decisionCount: 4 } };
+  const purse = flowPurse({ build: [22, 0.04178802], judge: [2, 0.001830072], reauthor: [41, 0.046481212] });
+  const counted = await settleReauthoredRun([appliedReauthor, failedRetry], reauthorAdaptation, purse);
+  assert.deepEqual(counted.snapshot.reauthor.attempts.map((attempt: { calls: number; callsFrom: string }) => [attempt.calls, attempt.callsFrom]), [[36, "adaptation"], [5, "attempt"]]);
+  assert.deepEqual(counted.snapshot.runSpend.phases.reauthor, { calls: 41, estimatedCostUsd: 0.046481212 });
   assert.equal(counted.snapshot.observed.calls, 22 + 2 + 41);
   assert.equal(counted.snapshot.observed.totalEstimatedCostUsd, 0.090099304);
-  // The retry's count came from its own loop, so only the applied attempt was read from an adaptation.
+  // The retry's count came from its attempt record, so only the applied attempt was read from an adaptation.
   assert.equal(counted.reads.filter(read => read.endpoint === "get-flow-adaptation").length, 1);
 
+  // An attempt whose calls cannot be read says so on the re-author record; the run's total is still the purse's.
   const unreadable = await settleReauthoredRun([appliedReauthor], () => { throw new Error("gone"); });
   assert.equal(unreadable.snapshot.reauthor.attempts[0].calls, null);
   assert.equal(unreadable.snapshot.reauthor.attempts[0].callsFrom, "adaptation_unreadable");
-  assert.equal(unreadable.snapshot.observed.totalEstimatedCostUsd, 0.086099304, "its cost is Core's accounting and still counted");
-  assert.deepEqual(unreadable.snapshot.runSpend.uncountedPhases, ["reauthor"]);
-  assert.deepEqual(unreadable.published.at(-1)?.runTotal, { calls: 24, totalEstimatedCostUsd: 0.086099304, uncountedPhases: ["reauthor"] });
+  assert.equal(unreadable.snapshot.observed.calls, 60);
+  assert.deepEqual(unreadable.published.at(-1)?.runTotal, { calls: 60, totalEstimatedCostUsd: 0.086099304 });
 });
 
-/** A step log as Core writes one: a folder per step, `meta.json` last; tool steps name no provider. */
-async function writeStepLog(t: test.TestContext, steps: Array<[kind: string, costUsd: number | null]>): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-run-steps-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  for (const [index, [kind, costUsd]] of steps.entries()) {
-    const folder = path.join(root, `${String(index + 1).padStart(4, "0")}-${kind}`);
-    await mkdir(folder, { recursive: true });
-    await writeFile(path.join(folder, "meta.json"), JSON.stringify(kind.startsWith("tool-") ? { kind: "tool" } : { kind, provider: "deepseek", model: DEFAULT_LLM_MODEL, costUsd }));
-  }
-  return root;
-}
+// Where Core holds no record of the Flow's spend, or one it never itemised, the
+// figure it does not have is unknown, never rebuilt from the step log or the
+// phase records (`run-muqk713g-d08ad3dc` was the kind of run the rebuild
+// existed for: 35 calls in its step log, 17 in Core's records).
+test("a run whose Flow Core holds no itemised spend for reports the unknown figures as unknown and says why", async (t) => {
+  const steps = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-run-steps-"));
+  t.after(() => rm(steps, { recursive: true, force: true }));
+  await mkdir(path.join(steps, "0001-chat"));
+  await writeFile(path.join(steps, "0001-chat", "meta.json"), JSON.stringify({ kind: "chat", provider: "deepseek", model: DEFAULT_LLM_MODEL, costUsd: 0.0003 }));
 
-// `run-muqk713g-d08ad3dc`: `llm.calls` 17 and a ledger $0.12085128, while its
-// step log held 35 provider calls for $0.121157 -- the failed re-author's 17
-// calls, which Core recorded a cost for and no count, and the chat's own call.
-test("a run whose step log Core wrote counts every call in it -- the chat's and an uncounted re-author's -- in llm.calls and the ledger's total", async (t) => {
-  const steps: Array<[string, number | null]> = [
-    ["chat", 0.0003],
-    ["decide", 0.04178802], ...Array.from({ length: 21 }, (): [string, number] => ["decide", 0]),
-    ["tool-core.run_node", null],
-    ["judge", 0.001247076], ["judge", 0.000582996],
-    ["decide", 0.042481212], ...Array.from({ length: 35 }, (): [string, number] => ["decide", 0]),
-  ];
-  const { run, snapshot, published } = await settleReauthoredRun([appliedReauthor], () => { throw new Error("gone"); }, await writeStepLog(t, steps));
-  assert.equal(snapshot.observed.calls, 1 + 22 + 2 + 36);
-  assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.086399304);
-  assert.equal(run.usage.calls, 61, "the evaluation's llm.calls is the step log's count");
-  assert.deepEqual(snapshot.runSpend.phases.chat, { calls: 1, estimatedCostUsd: 0.0003 });
-  assert.deepEqual(snapshot.runSpend.phases.reauthor, { calls: 36, estimatedCostUsd: 0.042481212 });
-  assert.deepEqual(snapshot.runSpend.uncountedPhases, []);
-  assert.deepEqual(snapshot.runSpend.stepLog, { calls: 61, estimatedCostUsd: 0.086399304, filledReauthorCalls: 36, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: { judge: { calls: 0, estimatedCostUsd: 0 }, read: { calls: 0, estimatedCostUsd: 0 }, calls: 0, estimatedCostUsd: 0 }, largestInputTokens: null, byRole: {} });
-  assert.deepEqual(published.at(-1)?.runTotal, { calls: 61, totalEstimatedCostUsd: 0.086399304 });
+  const none = await settleReauthoredRun([appliedReauthor], reauthorAdaptation, null);
+  assert.equal(none.snapshot.runSpend.source, "no_record");
+  assert.deepEqual([none.snapshot.observed.calls, none.snapshot.observed.totalEstimatedCostUsd], [null, null]);
+  assert.deepEqual(none.snapshot.observed.perBuild, { ceilingUsd: LAB_CEILING_USD, builds: [{ phase: "flow", attempt: null, estimatedCostUsd: null, overCeiling: false }], parts: [], maxBuildCostUsd: null, overCeiling: 0 });
+  assert.deepEqual(none.published.at(-1)?.runTotal, { calls: null, totalEstimatedCostUsd: null, spendSource: "no_record" });
+  // The evaluation needs a number: the calls Core's own phase records reported, a floor and not a total.
+  assert.equal(none.run.usage.calls, 22 + 2, "the build's 22 and the playback detail's 2 priced calls");
+  // The playback's recovery keeps the run detail's own figures, since no purse split the checks out.
+  assert.equal(none.snapshot.repair.observed.calls, 2);
+
+  const unitemised = await settleReauthoredRun([appliedReauthor], reauthorAdaptation, { ...REAUTHORED_PURSE, calls: null, byPhase: null });
+  assert.equal(unitemised.snapshot.runSpend.source, "flow_purse_unitemised");
+  assert.deepEqual([unitemised.snapshot.observed.calls, unitemised.snapshot.observed.totalEstimatedCostUsd], [null, 0.086099304]);
+  assert.deepEqual(unitemised.snapshot.runSpend.phases, { build: null, read: null, judge: null, runtime: null, reauthor: null, chat: null });
+  assert.deepEqual(unitemised.published.at(-1)?.runTotal, { calls: null, totalEstimatedCostUsd: 0.086099304, spendSource: "flow_purse_unitemised" });
+
+  // A read that fails is `unreadable`, and the settlement goes on.
+  const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
+  run.readStepLogFrom(steps);
+  core.control.getFlowSpend = async () => { throw new Error("gone"); };
+  await settle();
+  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.equal(snapshot.runSpend.source, "unreadable");
+  assert.equal(snapshot.observed.totalEstimatedCostUsd, null, "the step log's chat call is listed, never summed into a total");
+  assert.equal(snapshot.observed.observedCalls.length, 1);
 });
 
 // `run-mup2u8o3-6697c4be`: the build ended without a Flow
@@ -688,25 +713,26 @@ const checkedPlayback: ExistingRunDetail = {
   ],
 };
 
-async function settleChecked(playback: ExistingRunDetail, raw: unknown) {
+async function settleChecked(playback: ExistingRunDetail, raw: unknown, purse: ExistingFlowSpend) {
   const { core, run, written, published, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   published.length = 0;
-  await run.settleRepair({ getRunDetail: async () => playback, automationStudioCall: async () => raw }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
+  core.purse = purse;
+  await run.settleRepair(reader(core, { getRunDetail: async () => playback, automationStudioCall: async () => raw }), { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   return { run, snapshot, published };
 }
 
 test("a playback's result checks are not its repair: the repair lists recovery only, the checks get their own event, and the spend is unchanged", async () => {
-  const { run, snapshot, published } = await settleChecked(checkedPlayback, verifiedRunDetail);
+  const { run, snapshot, published } = await settleChecked(checkedPlayback, verifiedRunDetail, flowPurse({ build: [5, 0.02], runtime: [1, 0.001], judge: [2, 0.00248] }));
   assert.equal(snapshot.repair.observed.calls, 1, "only the recovery's call is the repair's");
   assert.equal(snapshot.repair.observed.interventions, 1);
   assert.deepEqual(snapshot.repair.observed.observedCalls.map((call: { requestId: string }) => call.requestId), ["llm.runtime_diagnosis.a"]);
   assert.equal(snapshot.repair.observed.totalEstimatedCostUsd, 0.001);
   assert.deepEqual(snapshot.repair.resultChecks, { calls: 2, totalEstimatedCostUsd: 0.00248, record: "verification" });
   assert.equal(snapshot.verification.calls, 2, "the checks' own record lists them");
-  // The whole run: build 5 calls $0.02, recovery 1 call $0.001, checks 2 calls $0.00248 -- as before the split.
+  // The whole run, as Core's purse attributed it: build 5 calls $0.02, recovery 1 call $0.001, checks 2 calls $0.00248.
   assert.deepEqual(snapshot.runSpend.phases.runtime, { calls: 1, estimatedCostUsd: 0.001 });
   assert.deepEqual(snapshot.runSpend.phases.judge, { calls: 2, estimatedCostUsd: 0.00248 });
   assert.equal(snapshot.observed.calls, 8);
@@ -722,7 +748,7 @@ test("a playback that only had its result checked publishes the check and no rep
   const { llmGate: _noGate, ...ungated } = checkedPlayback;
   const onlyChecked: ExistingRunDetail = { ...ungated, interventions: checkedPlayback.interventions!.slice(1) };
   const raw = { runDetail: { ...verifiedRunDetail.runDetail, interventions: verifiedRunDetail.runDetail.interventions.slice(1) } };
-  const { snapshot, published } = await settleChecked(onlyChecked, raw);
+  const { snapshot, published } = await settleChecked(onlyChecked, raw, flowPurse({ build: [5, 0.02], judge: [2, 0.00248] }));
   assert.deepEqual({ calls: snapshot.repair.observed.calls, interventions: snapshot.repair.observed.interventions, observedCalls: snapshot.repair.observed.observedCalls, cost: snapshot.repair.observed.totalEstimatedCostUsd }, { calls: 0, interventions: 0, observedCalls: [], cost: 0 });
   assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.02248);
   assert.deepEqual(published, [{ resultChecks: { calls: 2, totalEstimatedCostUsd: 0.00248, status: "unverified" }, runTotal: { calls: 7, totalEstimatedCostUsd: 0.02248 } }]);

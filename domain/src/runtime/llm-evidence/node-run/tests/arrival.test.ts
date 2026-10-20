@@ -12,10 +12,11 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioHarnessOptionRegistry } from "fluxiq/automation-studio";
+import { automationStudioHarnessOptionRegistry, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../constants";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { coreBuildStateStore } from "../build-state/tests/core-store";
 
 const PROJECT = { projectId: "project.bigbox", flowId: "flow.bigbox" };
 const START = "http://127.0.0.1:41873/scenarios/bigbox-retail/";
@@ -29,10 +30,10 @@ const NOT_THERE = { reason: "start_location_not_reached", startLocation: START }
 test("the opening look on an already-open start location reads the page as it stands", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
 
-  const looked = await runtime.executeTool({
-    ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+  const looked = await exec(runtime, {
+    ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
-  });
+  }, "fresh");
 
   assert.equal(looked.resultCode, "web.inspect.succeeded");
   assert.equal((looked.evidence as JsonObject).location, START);
@@ -46,7 +47,7 @@ test("a press before the build has navigated is refused the same way, and never 
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   await opening(runtime);
 
-  const pressed = await runtime.executeTool({
+  const pressed = await exec(runtime, {
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
@@ -64,7 +65,7 @@ test("the navigation to the start location runs, and is a proposable step carryi
   const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
   await opening(runtime);
 
-  const went = await runtime.executeTool({
+  const went = await exec(runtime, {
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: NAVIGATE, parameters: { url: START }, consequences: [] }
   });
@@ -84,14 +85,14 @@ test("once the build has navigated, a look and a press run as they always did", 
   await opening(runtime);
   await arrive(runtime);
 
-  const looked = await runtime.executeTool({
+  const looked = await exec(runtime, {
     ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
   });
   assert.equal(looked.resultCode, "web.inspect.succeeded");
   assert.equal((looked.evidence as JsonObject & { location: string }).location, START);
 
-  const pressed = await runtime.executeTool({
+  const pressed = await exec(runtime, {
     ...PROJECT, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
@@ -106,7 +107,7 @@ test("a build's opening call re-arms the rule, so a second build of the flow is 
 
   const again = await opening(runtime);
   assert.equal(again.resultCode, "web.inspect.succeeded");
-  const pressed = await runtime.executeTool({
+  const pressed = await exec(runtime, {
     ...PROJECT, callId: "call.again", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
@@ -156,7 +157,7 @@ test("a builder whose opening look is on its prepared entry has arrived: a typed
   const stubbed = openTab();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
 
-  const looked = await prepared(runtime, "initial.core.run_node");
+  const looked = await prepared(runtime, "fresh");
   assert.equal(looked.resultCode, "web.inspect.succeeded", JSON.stringify(looked.evidence));
   assert.equal(looked.draft?.proposes, false);
 
@@ -177,12 +178,12 @@ test("a builder that never arrived is still refused its typed action", async () 
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.type"), false);
 });
 
-test("the arrival mark on any call but Core's opening look is refused as an unexpected key, and arrives nothing", async () => {
+test("the arrival mark on any call Core did not mark as its opening is refused as an unexpected key, and arrives nothing", async () => {
   const stubbed = openTab();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const looked = await opening(runtime);
 
-  const claimed = await prepared(runtime, "call.claim");
+  const claimed = await prepared(runtime, undefined);
   assert.equal(claimed.resultCode, "web.action.rejected.invalid_input");
   const typed = await type(runtime, fieldHandle(looked));
   assert.equal(typed.resultCode, "web.action.rejected.not_at_start_location");
@@ -191,13 +192,13 @@ test("the arrival mark on any call but Core's opening look is refused as an unex
 test("a build told no start location is unchanged: the open page is read and pressed on", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
 
-  const looked = await runtime.executeTool({
-    ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+  const looked = await exec(runtime, {
+    ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
-  });
+  }, "fresh");
   assert.equal(looked.resultCode, "web.inspect.succeeded");
 
-  const pressed = await runtime.executeTool({
+  const pressed = await exec(runtime, {
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
     value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
@@ -212,7 +213,7 @@ test("the dry run after arrival resets and replays as before, and the build stay
   const answers = await dryRun(runtime);
   assert.deepEqual(answers, ["core.replay.replayed", "core.replay.replayed", "core.replay.replayed"]);
 
-  const looked = await runtime.executeTool({
+  const looked = await exec(runtime, {
     ...PROJECT, callId: "call.after", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
   });
@@ -226,11 +227,44 @@ test("a resumed build replays its saved draft from nothing remembered, and its n
   const answers = await dryRun(runtime);
   assert.deepEqual(answers, ["core.replay.replayed", "core.replay.replayed", "core.replay.replayed"]);
 
-  const looked = await runtime.executeTool({
+  const looked = await exec(runtime, {
     ...PROJECT, callId: "call.after", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
   });
   assert.equal(looked.resultCode, "web.inspect.succeeded");
+});
+
+// t728: arrival is kept in Core's durable build state too, so a host restarted
+// mid-build still knows its build arrived, and Core's opening of a fresh round
+// forgets it there as well.
+test("a host restarted mid-build still knows its build arrived, and a fresh round re-arms the rule in the store too (t728)", async () => {
+  const store = coreBuildStateStore();
+  const before = createWebAutomationLlmEvidenceRuntime(openTab().gateway, undefined, () => store);
+  await opening(before);
+  await arrive(before);
+
+  // A new process over the same storage: the press runs without navigating again.
+  const restarted = openTab();
+  const after = createWebAutomationLlmEvidenceRuntime(restarted.gateway, undefined, () => store);
+  assert.equal((await press(after, "call.after-restart")).resultCode, "web.action.succeeded");
+  assert.equal(restarted.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+
+  // A fresh round re-arms it, and a host restarted after that is held to it again.
+  await opening(after);
+  const again = createWebAutomationLlmEvidenceRuntime(openTab().gateway, undefined, () => store);
+  assert.equal((await press(again, "call.after-reopening")).resultCode, "web.action.rejected.not_at_start_location");
+});
+
+test("another build of the same Flow is not arrived by this one's arrival, before or after a restart (t728)", async () => {
+  const store = coreBuildStateStore();
+  const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway, undefined, () => store);
+  await opening(runtime);
+  await arrive(runtime);
+  const otherBuild = (callId: string) => runWithAutomationStudioEvidenceBuildScope({ ...PROJECT, buildId: "build.other" }, () => runtime.executeTool({
+    ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+    value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
+  }));
+  assert.equal((await otherBuild("call.other")).resultCode, "web.action.rejected.not_at_start_location");
 });
 
 // Across the seam (F31): Core builds a build's opening call from this domain's
@@ -287,32 +321,44 @@ function bound(runtime: Runtime, startLocation: string | undefined) {
     .evidenceLoopBinding(PROJECT, { scope: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID }, stage: "gather", allowSideEffectsWithoutPolicy: true });
 }
 
-/** Core's opening look, named as Core names it (`AS/runtime/llm/evidence-loop.ts`). */
+/** The build Core frames every call of these tests with. */
+const BUILD_ID = "build.bigbox";
+
+/**
+ * A call as Core's registry runs it: inside the build's frame, marked as Core's
+ * opening of a round, fresh or continuing, only where Core would mark it
+ * (`AS/runtime/llm/harness-options/evidence-build-scope.ts`).
+ */
+async function exec(runtime: Runtime, input: Parameters<Runtime["executeTool"]>[0], opening?: "fresh" | "continuing") {
+  return await runWithAutomationStudioEvidenceBuildScope(opening ? { ...PROJECT, buildId: BUILD_ID, opening } : { ...PROJECT, buildId: BUILD_ID }, () => runtime.executeTool(input));
+}
+
+/** Core's opening look of a fresh round. */
 async function opening(runtime: Runtime) {
-  return await runtime.executeTool({
-    ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+  return await exec(runtime, {
+    ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
-  });
+  }, "fresh");
 }
 
 /** Core's opening look of a round whose draft already holds the Flow, carrying its calls. */
 async function continuing(runtime: Runtime, held: JsonObject[]) {
-  return await runtime.executeTool({
-    ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+  return await exec(runtime, {
+    ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [], held }
-  });
+  }, "continuing");
 }
 
-/** Core's opening look of a builder that starts on its prepared entry, marked so (Core `service/project-build/brief-ports.ts`). */
-async function prepared(runtime: Runtime, callId: string) {
-  return await runtime.executeTool({
-    ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+/** Core's opening look of a builder that starts on its prepared entry, marked so (Core `service/project-build/brief-ports.ts`); or, `undefined`, the mark on a call Core did not open with. */
+async function prepared(runtime: Runtime, marked: "fresh" | undefined) {
+  return await exec(runtime, {
+    ...PROJECT, callId: marked ? "call.opening" : "call.claim", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true }
-  });
+  }, marked);
 }
 
 async function type(runtime: Runtime, handle: string) {
-  return await runtime.executeTool({
+  return await exec(runtime, {
     ...PROJECT, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, permission: PERMITTED,
     value: { node: TYPE, parameters: { target: { handle }, text: "paper towels" }, consequences: [] }
   });
@@ -326,14 +372,14 @@ function fieldHandle(looked: { evidence: unknown }): string {
 }
 
 async function press(runtime: Runtime, callId: string) {
-  return await runtime.executeTool({
+  return await exec(runtime, {
     ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
 }
 
 async function arrive(runtime: Runtime): Promise<void> {
-  const went = await runtime.executeTool({
+  const went = await exec(runtime, {
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: NAVIGATE, parameters: { url: START }, consequences: [] }
   });
@@ -349,7 +395,7 @@ async function dryRun(runtime: Runtime): Promise<string[]> {
   ];
   const answers: string[] = [];
   for (const call of calls) {
-    const answered = await runtime.executeTool({ ...PROJECT, ...call, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, permission: PERMITTED });
+    const answered = await exec(runtime, { ...PROJECT, ...call, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, permission: PERMITTED });
     answers.push(answered.resultCode ?? "no result code");
   }
   return answers;

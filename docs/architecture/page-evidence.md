@@ -463,7 +463,7 @@ Every page leaves the domain as `web-llm-page.v3`
   text and a control can look the same.
 - **The model is told how to read it.** The domain binds
   `systemInstructions` (`llm-evidence/system-instructions/`, version
-  `web-9`, under 3,600 characters) on its evidence runtime, and Core places the
+  `web-12`, under 3,600 characters) on its evidence runtime, and Core places the
   text in the system message of every model request made for this domain's
   work (evidence decisions, bootstrap, runtime patch, result checks and the
   chat), after Core's JSON and injection rules and before Core's task prose
@@ -471,11 +471,18 @@ Every page leaves the domain as `web-llm-page.v3`
   a real website in the person's browser on their behalf, how the header lines,
   element lines, states and markers above read, that the site's own search and
   navigation find things while `find_on_page` searches only the current page,
-  that a covering popup is closed with its own control before a retry, that one
-  act on one item is done and `repeat` stated for a list, which acts are asked
-  of the person (money, delete, send/publish), never to type a secret or solve
-  a robot check, and that every build has a small cost ceiling. Change
-  `version` with the text, so a run's step log names what its model read.
+  how a covering popup is handled (press the control; the runtime closes a
+  dismissable layer first; only a refusal with `closeWith` needs a closer),
+  that optional cookies are declined, that a marked option is left alone, that
+  every page of a list is a loop the Flow states and one page read plus one
+  Next page is enough to explore, and never to solve a robot check. The rules
+  that hold for every domain -- written instructions outrank recordings, the
+  person's limits (money, delete, send/publish asked first; never type a
+  secret), the loop and bound-value rules, item type by evidence, stating
+  `repeat`, and efficiency -- are not here: Core says them in its own task
+  prose (`runtime/llm/deepseek/system-prompt.ts`), only to the task kinds
+  that act or write steps ([build loop](build-loop.md#the-models-instructions)).
+  Change `version` with the text, so a run's step log names what its model read.
 
 ### Controls The Markup Does Not Name
 
@@ -677,13 +684,17 @@ What still never reaches a model:
   (`WEB_LLM_WITHHELD_TEXT`, `llm-evidence/withheld.ts`), so one token-shaped
   attribute costs that attribute rather than Core refusing the whole page.
 - **A card number**, in any published string, a text field's `value`
-  included. Core's shapes are credentials and do not match one, so
-  `withheld.ts` also withholds, in place, a run of 13 to 19 digits that passes
-  the Luhn check, is written as a card is (unbroken, in fours, or 4-6-5 and
+  included. Core owns the card rule: a run of 13 to 19 digits that passes the
+  Luhn check, is written as a card is (unbroken, in fours, or 4-6-5 and
   4-6-4) and starts with 2 to 6, as a card issuer's number does. The grouping
   and issuer rules keep an order number (`112-5550123-4567890`) and a
   millisecond timestamp, one in ten of which passes Luhn by chance, as the
-  page wrote them.
+  page wrote them. Core's screen reports such a run as `secretShaped`, and
+  `automationStudioWithoutCardNumbers(text, marker)` (from
+  `fluxiq/automation-studio`) replaces each run with a marker and keeps every
+  other character. `withheld.ts` calls that helper with `WEB_LLM_WITHHELD_TEXT`
+  **before** the credential screen, so a card costs only its own digits; run
+  after, the screen would withhold the whole string.
 - **An address.** No selector, xpath or record key is published; the opaque
   `tN` handle is the only way to name an element.
 

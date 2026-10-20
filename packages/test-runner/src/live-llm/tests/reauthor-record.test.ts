@@ -33,23 +33,29 @@ test("an attempt with no adaptation and no loop is costed but uncounted, and not
 
 // Shapes from run-musp39u8-9ac026ab's decision trace: two failed re-author
 // builds, each with its loop's decisions and a closed ending but no
-// `totalProviderCallCount`.
-test("a failed build is counted from its loop's decisions and keeps its closed ending, never its message", async () => {
+// `totalProviderCallCount`. Core now writes each failed build's count on the
+// attempt (`calls`, t728); the decision count no longer stands in for it.
+test("a failed build is counted from the count Core wrote on its attempt and keeps its closed ending, never its message", async () => {
   const builds = [
-    { attempt: 1, routed: true, code: "flow_bootstrap.evidence_budget_exhausted", accounting: { inputTokens: 730_779, outputTokens: 3_080, estimatedCostUsd: 0.049579026 }, evidenceLoop: { iterationCount: 37, decisionCount: 37, toolCallCount: 18, steps: [] }, ending: { kind: "budget_exhausted", bound: "rounds", message: "Could not finish the private list", notDone: [{ id: "a1", quote: "private quote", todo: "x" }], tried: { rounds: 6, decisions: 37, stepsInFlow: 7, tested: "not_tested" } } },
-    { attempt: 2, routed: true, code: "flow_bootstrap.evidence_budget_exhausted", accounting: { inputTokens: 634_212, outputTokens: 2_981, estimatedCostUsd: 0.043878096 }, evidenceLoop: { iterationCount: 32, decisionCount: 32, toolCallCount: 17, steps: [] }, ending: { kind: "budget_exhausted", bound: "cost", tried: { rounds: 5, decisions: 32, stepsInFlow: 7, tested: "not_tested", stops: [{ round: 1, stopped: "budget" }, { round: 2, stopped: "made up" }] } } },
+    { attempt: 1, routed: true, calls: 38, code: "flow_bootstrap.evidence_budget_exhausted", accounting: { inputTokens: 730_779, outputTokens: 3_080, estimatedCostUsd: 0.049579026 }, evidenceLoop: { iterationCount: 37, decisionCount: 37, toolCallCount: 18, steps: [] }, ending: { kind: "budget_exhausted", bound: "rounds", message: "Could not finish the private list", notDone: [{ id: "a1", quote: "private quote", todo: "x" }], tried: { rounds: 6, decisions: 37, stepsInFlow: 7, tested: "not_tested" } } },
+    { attempt: 2, routed: true, calls: 33, code: "flow_bootstrap.evidence_budget_exhausted", accounting: { inputTokens: 634_212, outputTokens: 2_981, estimatedCostUsd: 0.043878096 }, evidenceLoop: { iterationCount: 32, decisionCount: 32, toolCallCount: 17, steps: [] }, ending: { kind: "budget_exhausted", bound: "cost", tried: { rounds: 5, decisions: 32, stepsInFlow: 7, tested: "not_tested", stops: [{ round: 1, stopped: "budget" }, { round: 2, stopped: "made up" }] } } },
   ];
   const record = await readLiveLlmReauthor({ automationStudioCall: async () => ({ runDetail: { summary: { flowId: "flow-1" }, metadata: { resultReauthor: { attempts: builds } } } }) }, scope);
   assert.deepEqual(record.attempts.map((item) => [item.attempt, item.calls, item.callsFrom, item.estimatedCostUsd]), [
-    [1, 37, "loop_decisions", 0.049579026],
-    [2, 32, "loop_decisions", 0.043878096],
+    [1, 38, "attempt", 0.049579026],
+    [2, 33, "attempt", 0.043878096],
   ]);
   assert.deepEqual(record.attempts[0]?.ending, { kind: "budget_exhausted", bound: "rounds", tried: { rounds: 6, decisions: 37, stepsInFlow: 7, tested: "not_tested" } });
   // A stop outside Core's closed words is dropped rather than published.
   assert.deepEqual(record.attempts[1]?.ending, { kind: "budget_exhausted", bound: "cost", tried: { rounds: 5, decisions: 32, stepsInFlow: 7, tested: "not_tested", stops: [{ round: 1, stopped: "budget" }] } });
-  assert.equal(record.calls, 69);
+  assert.equal(record.calls, 71);
   assert.equal(record.uncountedAttempts, 0);
   assert.equal(JSON.stringify(record).includes("private"), false);
+
+  // Without Core's count the attempt is uncounted: its decisions are not read as calls.
+  const older = await readLiveLlmReauthor({ automationStudioCall: async () => ({ runDetail: { summary: { flowId: "flow-1" }, metadata: { resultReauthor: { attempts: builds.map(({ calls: _calls, ...build }) => build) } } } }) }, scope);
+  assert.deepEqual(older.attempts.map((item) => [item.calls, item.callsFrom]), [[null, "not_recorded"], [null, "not_recorded"]]);
+  assert.equal(older.uncountedAttempts, 2);
 });
 
 test("an ending keeps only the words Core allows on its kind, and an unknown kind publishes none", async () => {

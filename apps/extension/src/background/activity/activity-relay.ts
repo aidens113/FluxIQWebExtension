@@ -1,6 +1,6 @@
 // What FluxIQ is doing now, as the background worker knows it. Core pushes
 // `server.activity` over the gateway; the relay keeps the latest state, paces
-// it into the one status a person reads (`pacer.ts`), and fans it
+// it into the one status a person reads (`ActivityPacer`, `fluxiq/ui`), and fans it
 // out: the whole state to the panel pages, and the paced display to the top
 // frame of the tab the automation drives and of the tab in front of the person
 // when that is another one (`overlay-target.ts`), where the overlay draws it.
@@ -8,13 +8,13 @@
 // (moment 8 and screenshot 00013 of the run-murwd8le-79e735a8 UI review), and
 // the person must see the status on the page they are looking at.
 //
-// Fan-out is rate-bound (`fan-out-gate.ts`): at most four sends a second to
+// Fan-out is rate-bound (`FanOutGate`, `fluxiq/ui`): at most four sends a second to
 // each audience, the last change of a burst always sent, and only to whom it
 // concerns -- the panels when the display or the event list changed, the page
 // when the display or the overlay preference did.
 //
 // The chat tells every unit of work as step messages, so the relay also keeps
-// each recent unit's whole story (`unit-history.ts`), beside `recent`, which
+// each recent unit's whole story (`UnitHistory`, `fluxiq/ui`), beside `recent`, which
 // stays the last 60 events of every kind. Neither feeds the pacer: it sees
 // every event as it arrives.
 //
@@ -56,12 +56,9 @@ import {
   type ExtensionActivityState,
   ACTIVITY_DONE_VISIBLE_MS
 } from "../../shared/activity/index";
-import { systemActivityClock, type ActivityClock } from "./clock";
-import { ActivityPacer } from "./pacer";
-import { FanOutGate } from "./fan-out-gate";
+import { ActivityPacer, FanOutGate, systemActivityClock, UnitHistory, type ActivityClock } from "fluxiq/ui";
 import { sendStartedWork } from "./send-answer";
 import { SendStart, STARTING_HOLD_MS } from "./send-start";
-import { UnitHistory } from "./unit-history";
 
 /** The top frame's id in every tab; the overlay lives only there. */
 const TOP_FRAME_ID = 0;

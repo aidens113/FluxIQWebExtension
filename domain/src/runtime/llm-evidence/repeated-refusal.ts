@@ -12,7 +12,7 @@
 //
 // **What this does, and what it deliberately does not.** It compares the
 // serialized refusal a call is about to return against the last one this
-// project, flow, session and tool produced. When the two are the same bytes it
+// build and tool produced. When the two are the same bytes it
 // says so on the refusal the model reads -- `repeatedAnswer`, counting from 2 --
 // and on the trace row a reader of the run sees, as the reason
 // `answered_the_same_again`. It does not refuse the call and it does not end
@@ -40,8 +40,15 @@
 // run ended on, came back `answered_the_same_again`, `repeatedAnswer: 2`. The
 // re-author's model had heard nothing: the memory had outlived the loop that
 // heard it. So the caller says when a loop opens (`startedOver`), and every
-// slot of that project, flow and session is let go.
+// slot of that build is let go. A loop opens where Core's frame marks a call as
+// its opening, fresh or continuing (`./node-run/build-state/`, t728); a brief
+// run beside others is a build of its own here, by its call scope, so its
+// opening lets go of its own slots and no other brief's.
+//
+// The reason a repeat is filed under is Core's (`AUTOMATION_STUDIO_REPEATED_ANSWER_REASON`),
+// because Core reads it back off its trace rows.
 
+import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation-studio";
 import type { JsonValue } from "fluxiq/core";
 import type { WebLlmEvidenceToolExecution } from "./capture";
 import {
@@ -52,7 +59,7 @@ import {
 } from "./tool-rejection";
 
 /**
- * How many (project, flow, session, tool) slots are remembered at once.
+ * How many (build, tool) slots are remembered at once.
  *
  * Small on purpose: this compares one answer with the one before it, so a slot
  * holds a single serialization and the oldest is let go. A build that has moved
@@ -64,7 +71,7 @@ export type WebLlmRepeatedRefusals = {
   /**
    * The call's own answer, with the fact that it repeats written on it when it
    * does. Returned unchanged the first time, and for every answer that is not a
-   * refusal. `scope` is the project, flow and session the call was made in,
+   * refusal. `scope` is the build the call was made in (`webNodeBuildSlot`),
    * and the answer is compared with the last one `toolId` gave there.
    */
   answered(scope: string, toolId: string, answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution;
@@ -99,7 +106,7 @@ export function createWebLlmRepeatedRefusals(): WebLlmRepeatedRefusals {
       // -- one member too many there is the whole call refused
       // (`capture.ts`, WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS).
       packet.detail = repeatedRejectionDetail(packet.detail, times);
-      answer.resultReason = "answered_the_same_again";
+      answer.resultReason = AUTOMATION_STUDIO_REPEATED_ANSWER_REASON;
       answer.repeatedAnswer = times;
       return answer;
     },
@@ -122,7 +129,7 @@ export function createWebLlmRepeatedRefusals(): WebLlmRepeatedRefusals {
  */
 export function repeatedRejectionDetail(detail: WebLlmToolRejectionDetail | undefined, repeatedAnswer: number): WebLlmToolRejectionDetail {
   return rejectionDetail({
-    reason: detail?.reason ?? "answered_the_same_again",
+    reason: detail?.reason ?? AUTOMATION_STUDIO_REPEATED_ANSWER_REASON,
     target: detail?.target,
     instead: detail?.instead,
     missing: detail?.missing,
