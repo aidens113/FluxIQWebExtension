@@ -271,6 +271,32 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t741-rerun3-fixes (lead-xhigh, t741 rerun3-fixes)
+- Why: rerun round 3 went 0 of 4, each run further than round 2 and every cause a product or generic-guidance defect.
+  Debug notes (lane trees, `docs/working/language-driven-flow-loop-plan/debugs/`): t563 run-mvgo5xft-25460ba2 office,
+  t719 run-mvgo9wzn-fad4e050 job, t566 run-mvgoawg4-ed85dd5a social, t567 run-mvgobp8h-b99ede98 photo. Read all four.
+- Unit A, reset settlement (Core site-reset, reset calls, ledger, loop budget): structural, not another shape patch:
+  Core settles trial and entry-preparation acts that sit in no list itself (office's address confirm); a settling look
+  reports what it settled and every open act across the build; `reset_acts_in_place` and the witness refusal list the
+  open acts and issued references; a look that names a reset destination without `undoes` gets a note; the candidate
+  wrap-up no longer refuses the undo calls a trial demands (`loop-budget.ts` `withholds`, photo).
+- Unit B, plan, script and brief (Core): one port-name rule shared by plan and script (`item`, office); the script
+  format names `extractList.sort` beside the `where` line with a generic example on another kind of site, and a
+  process sort or limit on a listing whose repeat makes a lasting act is refused (photo); the supervisor's recording
+  excerpt reaches the builder's opening words (`run-brief.ts`, photo); scoped `unchanged_submission` refusals carry
+  translated digests and a stable revision (`submission-numbering.ts`); endings tell the truth (photo's "a like
+  remains", job's repeated sentence).
+- Unit C, domain and extension: the retry wrapper reports an earlier rate-limited failure with its retry-after over
+  later failures (`node-run/retries/dispatch.ts`, job); `markRenumbered` marks only when `navigation.timeOrigin` changes
+  (`plan-resolution/target-packets.ts`, social); `incomplete_text` names the field and its hint says to read the list
+  again after the presses (`refusal.ts`, `next-sentence.ts`, social); `find_on_page` with no match names the page's
+  wordless icons (`page-find/search.ts`, job).
+- Unit D, judge guidance (Core, generic only): a feed's continuation past its end marker is not rows missing from the
+  task's range, and repeated identical advice is not repeated to the builder (social); never mirror a realistic task.
+- Rules: model guidance generic and never shaped like a realistic task; prompt contract gate tests for any model-facing
+  text; provider-free reproductions where feasible (site-reset installed-gateway specs); usual lane rules; no paid runs.
+- Report: `docs/working/trace-offline-trials-plan/reports/t741-rerun3-fixes.md` in the t741 downstream tree.
+
 ### Brief: sql-test-pool (worker-high, Core vitest isolation for real-SQL tests)
 - Why: every daily sweep produces a different set of 15 s timeouts in Core's heavy real-SQLite tests (S1, sweep-1019b,
   sweep-1020: canonical-authority, database-manager, controller, command-execution service, provider-unavailable,
