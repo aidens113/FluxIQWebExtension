@@ -26,12 +26,16 @@ function words(store: ReturnType<typeof coreBuildStateStore>) {
 }
 
 test("the build is the one Core frames the call with, its opening only where Core marks one, and none outside a frame", () => {
-  assert.deepEqual(webNodeBuildOf(FLOW), { build: { ...FLOW, buildId: undefined, callScope: undefined }, opening: undefined });
+  assert.deepEqual(webNodeBuildOf(FLOW), { build: { ...FLOW, buildId: undefined, callScope: undefined }, opening: undefined, coreMove: false });
   const framed = runWithAutomationStudioEvidenceBuildScope({ ...FLOW, buildId: "build.one", callScope: "brief-3", opening: "fresh" }, () => webNodeBuildOf(FLOW));
-  assert.deepEqual(framed, { build: { ...FLOW, buildId: "build.one", callScope: "brief-3" }, opening: "fresh" });
+  assert.deepEqual(framed, { build: { ...FLOW, buildId: "build.one", callScope: "brief-3" }, opening: "fresh", coreMove: false });
+  // A move Core makes itself is framed so (t743), and only then.
+  const moved = runWithAutomationStudioEvidenceBuildScope({ ...FLOW, buildId: "build.one", move: "core" }, () => webNodeBuildOf(FLOW));
+  assert.deepEqual(moved, { build: { ...FLOW, buildId: "build.one", callScope: undefined }, opening: undefined, coreMove: true });
   // A frame for another Flow is not this call's.
-  const other = runWithAutomationStudioEvidenceBuildScope({ ...FLOW, flowId: "flow.two", buildId: "build.two" }, () => webNodeBuildOf(FLOW));
+  const other = runWithAutomationStudioEvidenceBuildScope({ ...FLOW, flowId: "flow.two", buildId: "build.two", move: "core" }, () => webNodeBuildOf(FLOW));
   assert.deepEqual(other.build.buildId, undefined);
+  assert.equal(other.coreMove, false);
 });
 
 test("a memory written in one process is read back by the next over the same store, and a fresh forget drops it there too", async () => {

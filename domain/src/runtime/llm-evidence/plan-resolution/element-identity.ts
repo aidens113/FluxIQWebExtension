@@ -24,7 +24,10 @@
 // packet is:
 //
 // - a text field's, textarea's or select's text is its contents or its
-//   options, not its identity, and is left out;
+//   options, not its identity, and is left out (a step that reads an
+//   element's text keeps those words, marked as the value it reads:
+//   `read-identity.ts`, applied where the node kind is known,
+//   `resolve-plan-node.ts`, t743);
 // - a name or text the packet withheld as shaped like a secret
 //   (`../withheld.ts`) is not the element's, and is left out rather than
 //   compared as though it were;

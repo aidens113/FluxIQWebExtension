@@ -146,6 +146,14 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
         capture.observations.push({ conditionIndex: index, state: value === undefined ? "absent" : "present", ...(value === undefined ? {} : { value }), source: entry.value.kind, ...(declared === undefined ? {} : { readKind: declared.kind }), page: capture.page, item: capture.item });
       }
     }
+    // A condition judges the text the page shows. Held to full disclosure
+    // after: every condition that read its own value, on an item they all held
+    // of, and on a rejected item only one that rejected it, since that
+    // rejection judged partial text (`list-reader.ts`).
+    for (const [index, entry] of conditions.entries()) {
+      if (entry.value.kind !== "read" || (entry.value.reader.kind !== "text" && entry.value.reader.kind !== "column")) continue;
+      if (rejectedBy === undefined || rejectedBy.includes(index)) readField(item, entry.name, entry.value.reader, "complete");
+    }
     if (rejectedBy) return rejectedBy;
     if (kept) noteKept(kept, values);
     return KEPT;
@@ -186,7 +194,7 @@ function normalize(condition: WebAutomationExtractItemCondition, index: number, 
 function valueOf(entry: Condition, item: Element, record: ReadRecord): string | undefined {
   return entry.value.kind === "field"
     ? valueInRecord(record, entry.value.key)
-    : readField(item, entry.name, entry.value.reader, "complete") ?? undefined;
+    : readField(item, entry.name, entry.value.reader, "visible") ?? undefined;
 }
 
 /**

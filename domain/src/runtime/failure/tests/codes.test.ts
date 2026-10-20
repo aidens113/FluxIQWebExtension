@@ -54,6 +54,8 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   // and nothing done. The page's state, not retryable, and unacted.
   ["REFUSED_BY_PAGE", "web.action.refused_by_page", "unexpected_state", false, "execution"],
   ["NO_EFFECT", "web.action.no_effect", "action_failed", true, "execution"],
+  // t743: a press answered by nothing but the page's own live-region notice. Unacted and certain, like NO_EFFECT.
+  ["PAGE_REPORTED_FAILURE", "web.action.page_reported_failure", "action_failed", true, "execution"],
   // t163's finding 2. A manifest-permission refusal reported as the retryable
   // `web.action.failed` cost run-muht9lpw-a39aa056 three attempts and then the
   // run, so the refusal has its own non-retryable row and the dead channel it
@@ -68,10 +70,10 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
 ];
 
 /** The rows whose producer can prove the act did not happen, which carry `effect: "unacted"`. Every other row states nothing. */
-const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT"]);
+const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
 
-/** The rows whose producer saw the act certainly change nothing (t517), which also carry `certainNoEffect`. */
-const CERTAIN_NO_EFFECT: ReadonlySet<string> = new Set(["NO_EFFECT"]);
+/** The rows whose producer saw the act certainly change nothing (t517, t743), which also carry `certainNoEffect`. */
+const CERTAIN_NO_EFFECT: ReadonlySet<string> = new Set(["NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
 
 /** A row's effect, spread onto the record the row builds. */
 function effectOf(name: string): { effect?: "unacted"; certainNoEffect?: true } {

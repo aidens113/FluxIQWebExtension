@@ -241,11 +241,12 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   Flow's own first step, because the Flow is built from the steps that ran.
  *
  * Where the call would go (`address_not_shown`):
- * - `address_not_shown`: the address is not the start location, a page this
- *   build has been on, a link a packet showed, an address a read returned, or
- *   a site search this build ran itself, with other words. `instead` names the
- *   two ways there: press the link that goes there, or navigate to an address
- *   the evidence gave. `startLocation` names where the Flow starts, if known.
+ * - `address_not_shown`: the address is not the start location, a page any
+ *   brief of this build has been on, a link a packet showed, an address a read
+ *   returned, or a site search this build ran itself, with other words. `instead`
+ *   names the ways there: press the link that goes there, navigate to an address
+ *   the build was shown, or type a search into the site's own field again (t743).
+ *   `startLocation` names where the Flow starts, if known.
  *
  * The input the call wrote (`invalid_input`):
  * - `unexpected_input_keys` and `missing_input_keys`: the call's keys are not
@@ -337,6 +338,9 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   press again; the same press first is answered the same way.
  * - `page_busy_try_later`: the page said it was busy, or that presses came too
  *   fast, and did nothing. The same press may work a moment later.
+ * - `page_reported_press_failed`: the press brought nothing but a notice in
+ *   the page's own status or alert region, after every automatic retry (t743).
+ *   Read the notice on the page before pressing again or choosing another way.
  *
  * What this domain already said (`answered_the_same_again`):
  * - the answer to this call is byte-for-byte the one it was given last time,
@@ -414,6 +418,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "outcome_uncertain",
   "page_needs_something_first",
   "page_busy_try_later",
+  "page_reported_press_failed",
   "press_had_no_effect",
   // Core's value (`answered_the_same_again`), shared with its activity and repair readers.
   AUTOMATION_STUDIO_REPEATED_ANSWER_REASON,

@@ -205,6 +205,20 @@ element the model had written (`run-mv4912r9-53b05a51`, t942 and t870). A
 stale handle on such a rerun is answered by the handle refusals
 (`handle_not_in_packet`, `renumbered_by_reload`).
 
+**Known limit: two documents at one address are one view (t743).** The store
+that turns a handle into its element
+(`runtime/llm-evidence/plan-resolution/target-packets.ts`) keeps one view per
+location, so a site that opens an item as a dialog over a list and pushes the
+item's own address, while loading that address gives a different document, has
+its dialog view replaced by the standalone page once the build looks at both.
+A handle then names the standalone page's control, and a Flow that opens the
+dialog and presses it can be refused `web.target.ambiguous` among the dialog's
+look-alike controls. Keeping the two documents as two views, with the acted
+identity kept per handle and address, was tried in t743 and reverted: it let a
+control's identity from a press in one view override the view that showed the
+handle last. The fix needs the view a Flow step stands on chosen from the step
+before it, or handles that differ between the two documents.
+
 ## Choice Changes And Stable Handles
 
 A live press that changes a control's chosen state on the same page sends
@@ -379,16 +393,44 @@ build a call belongs to and whether it starts that build afresh. Inside every
 `fluxiq/automation-studio`; Core's
 `runtime/llm/harness-options/evidence-build-scope.ts`), which gives
 `projectId`, `flowId`, `buildId`, `callScope` (present only when project briefs
-run side by side for the same Flow) and `opening`: `"fresh"` on an opening
+run side by side for the same Flow), `opening`: `"fresh"` on an opening
 that starts the build, `"continuing"` on the opening of a repair or re-author
-round whose draft already holds the Flow, and absent on every other call. The
-domain parses no call ids (`initial.*`) of its own. The memories are keyed by
-`buildId` plus `callScope` (`node-run/build-state/build-key.ts`) and reset only
-on `"fresh"`; a call with no frame for this project and Flow (a direct call or
-a test) is keyed by project and Flow alone, never reset and never stored.
-Repeated refusals (`repeated-refusal.ts`) start over on any opening, per build
-and brief, and their reason, `AUTOMATION_STUDIO_REPEATED_ANSWER_REASON`, is
-Core's (`fluxiq/automation-studio`).
+round whose draft already holds the Flow, and absent on every other call, and
+`move: "core"` on a call that is a move Core makes itself (the site reset's
+arrivals and looks), which Core sets from its own async-context marker and
+never from the call id. The domain parses no call ids (`initial.*`) of its own;
+`webNodeBuildOf` (`node-run/build-state/build-key.ts`) answers the key, the
+opening and `coreMove`. The arrival, held-literals and own-layers memories are
+keyed by `buildId` plus `callScope` and reset only on `"fresh"`; a call with no
+frame for this project and Flow (a direct call or a test) is keyed by project
+and Flow alone, never reset and never stored. Repeated refusals
+(`repeated-refusal.ts`) start over on any opening, per build and brief, and
+their reason, `AUTOMATION_STUDIO_REPEATED_ANSWER_REASON`, is Core's
+(`fluxiq/automation-studio`).
+
+**Shown addresses belong to the build (t743).** The address rule exists to stop
+the model navigating to addresses it made up, and an address the site showed to
+any brief of a build is not made up. So `node-run/shown-addresses.ts` keys its
+memory by the build alone, without `callScope`: briefs that run side by side
+share one in-process memory and one stored value, and no opening forgets it --
+a repair or reset brief's fresh opening still admits the pages an earlier
+brief searched for or stood on. A new `buildId` is a new key, so a new build
+starts empty. What counts as shown: a link's href, the location of a page any
+brief of the build was shown or stood on, a read's address, the start
+location, a repaired step's address (`repairs`), and Core's `places`. Core puts
+`places` -- the locations of the build's issued lists -- on every brief's
+opening call; `webNodeOpeningPlaces` (`node-run/arrival.ts`) strips it, read
+only when Core's frame marks the call an opening, and `node-run/run.ts` passes
+each entry to the memory as held, as it does repaired addresses: shown, not an
+arrival and not a step. On any later call `places` stays on the value and is
+refused `unexpected_input_keys`. A call framed `move: "core"` skips the address
+rule only; the cross-origin check, the permission gate and the rest still run.
+A navigation the rule refuses is answered `address_not_shown`, and its
+`instead` names three ways around it: press, by its handle, the link that goes
+there; navigate to an address this build was shown (a link's href, a page any brief stood on, a
+read's address or the start location); or reach a page a typed search reached
+by typing the search into the site's own search field and submitting it, never
+by writing the page's address.
 
 The memories also outlive the process. Core owns a durable, size-bounded
 domain build state (`runtime/domain-build-state/`, exported from
@@ -397,7 +439,8 @@ reaches it with `automationStudioDomainBuildState(fluxiq, "web-automation")`
 (`domain/src/cleared-way-outs/build-state-source.ts`, asked lazily). Each memory writes
 through to scope `{ projectId, flowId, buildId }` under `web.arrival`,
 `web.shown-addresses`, `web.held-literals` or `web.own-layers` (with
-`:<callScope>` for a brief), in order and coalesced, and a call's writes settle
+`:<callScope>` for a brief, except `web.shown-addresses`, which is one key for
+the whole build), in order and coalesced, and a call's writes settle
 before its answer returns (`node-run/build-state/persistence.ts`,
 `memory.ts`). The in-process memory stays authoritative: a write Core refuses
 leaves the last stored copy, and after a restart a memory is read back the

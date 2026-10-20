@@ -224,9 +224,21 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
 function commandElementFingerprint(target: JsonObject, parameters: JsonObject): WebAutomationElementFingerprint | undefined {
   for (const source of elementFingerprintSources(target, parameters)) {
     const fingerprint = elementFingerprint(source);
-    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint as unknown as WebAutomationElementFingerprint;
+    if (fingerprint && Object.keys(fingerprint).length > 0) return withReadMark(fingerprint, parameters);
   }
   return undefined;
+}
+
+/**
+ * The recording's `readsWords` mark on whichever description won (t743): it
+ * says the step reads the element's words, which no adapted source -- Core's
+ * normalized target has no field for it -- can say otherwise about. The wire
+ * target already carries it (`output-nodes/targets.ts`); this covers a command
+ * whose identity came from the adapted target on the parameters instead.
+ */
+function withReadMark(fingerprint: WebAutomationElementFingerprint, parameters: JsonObject): WebAutomationElementFingerprint {
+  if (fingerprint.readsWords === true) return fingerprint;
+  return jsonObject(parameters.element)?.readsWords === true ? { ...fingerprint, readsWords: true } : fingerprint;
 }
 
 /**

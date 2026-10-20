@@ -10,7 +10,9 @@
 // the build it belongs to (`automationStudioEvidenceBuildScope()`): its
 // `buildId`, the `callScope` of a brief run beside others, and, on Core's own
 // opening call of a round only, whether that round starts the build `fresh` or
-// continues it. A model-written call never carries `opening`.
+// continues it. A model-written call never carries `opening`. Since t743 the
+// frame also says when a call is a move Core makes itself (`move: "core"`: its
+// own looks before a trial and on a reset), which a model's call never is.
 //
 // A call made outside any registry binding -- a test driving the runtime
 // directly, or a host that binds none -- has no build: it is keyed by its
@@ -32,16 +34,17 @@ export type WebNodeBuildKey = {
 };
 
 /**
- * The build the current call belongs to, and its opening when it is Core's
- * opening call of a round. A frame for another project or Flow than the
- * request names is not this call's, and is read as no frame.
+ * The build the current call belongs to, its opening when it is Core's opening
+ * call of a round, and whether it is a move Core makes itself (`coreMove`,
+ * t743). A frame for another project or Flow than the request names is not
+ * this call's, and is read as no frame.
  */
-export function webNodeBuildOf(request: { projectId: string; flowId: string }): { build: WebNodeBuildKey; opening: WebNodeOpening | undefined } {
+export function webNodeBuildOf(request: { projectId: string; flowId: string }): { build: WebNodeBuildKey; opening: WebNodeOpening | undefined; coreMove: boolean } {
   const scope = automationStudioEvidenceBuildScope();
   if (scope === undefined || scope.projectId !== request.projectId || scope.flowId !== request.flowId) {
-    return { build: { projectId: request.projectId, flowId: request.flowId, buildId: undefined, callScope: undefined }, opening: undefined };
+    return { build: { projectId: request.projectId, flowId: request.flowId, buildId: undefined, callScope: undefined }, opening: undefined, coreMove: false };
   }
-  return { build: { projectId: request.projectId, flowId: request.flowId, buildId: scope.buildId, callScope: scope.callScope }, opening: scope.opening };
+  return { build: { projectId: request.projectId, flowId: request.flowId, buildId: scope.buildId, callScope: scope.callScope }, opening: scope.opening, coreMove: scope.move === "core" };
 }
 
 /** One string per build and brief, for an in-process map. */

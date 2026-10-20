@@ -14,7 +14,8 @@ test("incomplete text loads every row first, then one row-context read, the per-
   assert.match(next, /cannot hold another repeat/u);
   assert.match(next, /Load every row first.*Scroll step with mode untilStable.*Next page in its own repeat-while span.*Then read only nonempty stable row-context columns.*without.*incomplete text field.*repeat over that read.*registered row-bound click.*After that repeat.*read the same listing again with the text field/u);
   assert.match(next, /not inside it/u);
-  assert.match(next, /every row is disclosed/u);
+  assert.match(next, /give both reads the same conditions, so every row the final read keeps was disclosed by the repeat/u);
+  assert.doesNotMatch(next, /every row is disclosed/u, "the repeat discloses only the rows its read kept");
   assert.doesNotMatch(next, /only after|only once/iu, "no only-after instruction ties the read to the loop");
   assert.doesNotMatch(next, /after each Next page/iu);
   assert.doesNotMatch(next, /private column|private control|private row/u);

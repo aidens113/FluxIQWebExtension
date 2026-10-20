@@ -5,6 +5,12 @@
 //   what it and that page are about (Core t719) -- `webTargetSpot` of the
 //   element the node's selector addresses there. Absent when the node names no
 //   selector, the page before held no such element, or it gave none of them.
+//   **A loop pass's spot is its own row's (job rerun round 4).** The node
+//   keeps the selector recorded on the build's row; given the pass's `item`,
+//   the node is scoped as dispatch scoped it (`./scoped-node.ts`) and its
+//   control is placed in the record holding the row's values by the page's
+//   own rule (`./pass-row/`). Where no record holding the row was on the page
+//   before, there is no spot, never the build's row's.
 // - `items`: `{ before, after }`, the tokens of the items of the lists the diff
 //   vouches for, on each page. Core counts an item the step created when it is
 //   in `after` and not in `before` (`service/candidate-trial/landed-acts.ts`).
@@ -52,24 +58,28 @@
 //   still found for the spot by its selector, since a toggle's place needs none
 //   of them.
 
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webControlSpotToken, webControlStates, webTargetSpot } from "../../llm-evidence";
 import { isWebStatefulControl, webResetCollections } from "../../llm-evidence/control-spot";
 import { webStatePlaceKey } from "./key";
+import { webNodeRowValues } from "./node-row-values";
 import { webNodeTargetPlaceKey } from "./node-target";
+import { webPassRowHandle } from "./pass-row";
+import { webNodeScopedToPassRow } from "./scoped-node";
 import type { WebStateSnapshotPlaces } from "./snapshot";
 
 /** Core's bound on a page's items (`landed-acts.ts`, `MAX_ITEMS`). */
 const MAX_ITEMS = 2_000;
 
-/** The `spot` and `items` keys of a step's diff, from the places of its two pages; each absent where they say nothing (header). */
+/** The `spot` and `items` keys of a step's diff, from the places of its two pages and the pass row `item` it ran on, if any; each absent where they say nothing (header). */
 export function webStateDiffPlaces(
   before: WebStateSnapshotPlaces | undefined,
   after: WebStateSnapshotPlaces | undefined,
   node: { definitionId: string; parameterValues?: JsonObject | undefined },
-  documentChanged: boolean
+  documentChanged: boolean,
+  item?: JsonValue
 ): JsonObject {
-  const spot = before ? spotOf(before, node) : undefined;
+  const spot = before ? spotOf(before, webNodeScopedToPassRow(node, item)) : undefined;
   const items = before && after && !documentChanged ? vouched(before, after) : undefined;
   const was = before && !documentChanged ? webResetCollections(before).collections : [];
   const now = after && !documentChanged ? webResetCollections(after).collections : [];
@@ -94,7 +104,11 @@ function controlsAt(place: string, before: WebStateSnapshotPlaces, after: WebSta
 
 function spotOf(before: WebStateSnapshotPlaces, node: { definitionId: string; parameterValues?: JsonObject | undefined }): JsonObject | undefined {
   const key = webNodeTargetPlaceKey(node);
-  const handle = key === undefined ? undefined : before.handles.get(key) ?? statefulHandle(before, key);
+  const template = key === undefined ? undefined : before.handles.get(key) ?? statefulHandle(before, key);
+  if (template === undefined) return undefined;
+  // A pass's control, in the record holding its row; none where no record does (header).
+  const values = webNodeRowValues(node);
+  const handle = values ? webPassRowHandle(before, template, values) : template;
   if (handle === undefined) return undefined;
   const spot = webTargetSpot(before, handle);
   return Object.keys(spot).length > 0 ? spot : undefined;

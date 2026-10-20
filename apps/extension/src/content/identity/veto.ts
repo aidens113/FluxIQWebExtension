@@ -123,6 +123,19 @@
 // dialog its control sat in (`dialog.ts`) refuses a candidate in a dialog of
 // another name, or in none, as `other-dialog`.
 //
+// ## A read's words are its value, not a veto (t743 D2b)
+//
+// A step that reads an element's words saves them marked `readsWords`
+// (`read-words.ts`): an earlier step of its Flow may have changed them, and
+// office rerun round 4 failed when this veto refused the paragraph its selector
+// found for showing the new address. So a marked target is judged by everything
+// but those words -- the record and dialog gates, its label, ids, a name beside
+// different words, its kind and selector -- and a candidate is never refused or
+// marked down because its words differ. A read target that names nothing else
+// distinguishing asks no question here, as any such recording does, and the
+// selector's lone match is acted on. A press is not marked and is judged as it
+// always was.
+//
 // ## What the veto reports back, and why an accept now reports it too
 //
 // The veto scores every Level 1 match. Until 2026-09-12 it returned that number
@@ -148,6 +161,7 @@
 import { candidateFingerprint, candidateLabel, type TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
 import { agreesWithRecordedDialog } from "./dialog";
+import { readWordsOf } from "./read-words";
 import { agreesWithRecordedRecord } from "./record";
 import { scoreTargetCandidate, type RecordedIdentity } from "./score";
 
@@ -232,7 +246,9 @@ export type ExactMatchVerdict = TargetVerdict & {
  * scores, so it is the whole of the rule with none of the DOM, and it is what
  * `tests/veto.test.ts` pins both populations against.
  */
-export function vetoCandidate(target: RecordedIdentity, candidate: TargetCandidate): TargetVerdict {
+export function vetoCandidate(recorded: RecordedIdentity, candidate: TargetCandidate): TargetVerdict {
+  // A read is judged without the words it reads (header).
+  const target = judgedIdentity(recorded);
   // Asked first, and asked whether or not the recording named a distinguisher.
   // A row action labelled "Row actions" on all 240 rows names one -- it is just
   // the same one every time -- so the rules below cannot separate it from its
@@ -259,7 +275,8 @@ export function vetoCandidate(target: RecordedIdentity, candidate: TargetCandida
  * be checked, or Core weighed the element, found it no worse than even, and
  * found at least one thing the recording named agreeing on it exactly.
  */
-export function vetoExactMatch(target: RecordedIdentity, element: Element): ExactMatchVerdict {
+export function vetoExactMatch(recorded: RecordedIdentity, element: Element): ExactMatchVerdict {
+  const target = judgedIdentity(recorded);
   // The record rule is asked before the fingerprint is built, because a
   // candidate in another record is refused whatever it scores and
   // `candidateFingerprint` reads layout.
@@ -302,6 +319,11 @@ function refusedRecord(element: Element): ExactMatchVerdict {
  */
 function refusedDialog(element: Element): ExactMatchVerdict {
   return { refusedBecause: "other-dialog", summary: `refused ${candidateLabel(element)} in another dialog` };
+}
+
+/** What the veto judges a recording by: all of it, or for a read everything but the words it reads (header). */
+function judgedIdentity(recorded: RecordedIdentity): RecordedIdentity {
+  return readWordsOf(recorded)?.unworded ?? recorded;
 }
 
 /**

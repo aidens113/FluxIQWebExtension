@@ -191,6 +191,28 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    */
   NO_EFFECT: "web.action.no_effect",
   /**
+   * The page reported the press failed: once it settled, the press had brought
+   * nothing but an announcement in one of the page's own live regions (an
+   * element marked `role="alert"`, `role="status"` or `aria-live`) -- no
+   * request, no navigation, no focus move, no change elsewhere, and the
+   * control and its section, outside their live regions, back exactly as they
+   * were before the press. Produced by `content/actions/click.ts` from what
+   * `content/action-runtime/ignored-press/settled-look.ts` saw (t743); the
+   * record carries none of the page's words, and nothing here reads them.
+   *
+   * A success the page carried out leaves a trace beyond its notice: a request
+   * that reached the server, or a lasting change in the control or the page.
+   * A press whose only answer is a notice did no act the page shows, whatever
+   * the notice says, so it states the act did not happen (`effect:
+   * "unacted"`), is retryable and carries `certainNoEffect`: Core makes it
+   * again under the ordinary first attempt plus three retries, and a step
+   * whose every attempt ends here fails with this code. Rerun round 4's job
+   * trial saved nothing on its first save, the page said so in a status
+   * notice, and the step was counted as a landed act
+   * (`run-mvgw1854-5d10955b`).
+   */
+  PAGE_REPORTED_FAILURE: "web.action.page_reported_failure",
+  /**
    * The browser refused the action because this extension may not touch that
    * page: a host the manifest does not request, a `chrome://` or gallery URL, or
    * an enterprise policy that forbids scripting it.
@@ -338,6 +360,8 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   "web.action.refused_by_page": { category: "unexpected_state", retryable: false, stage: "execution", effect: "unacted" },
   // The press certainly did nothing, so making it once more is not a second act (the code's own comment above).
   "web.action.no_effect": { category: "action_failed", retryable: true, stage: "execution", effect: "unacted", certainNoEffect: true },
+  // The press brought only the page's own announcement and no act, so making it again is not a second act (the code's own comment above).
+  "web.action.page_reported_failure": { category: "action_failed", retryable: true, stage: "execution", effect: "unacted", certainNoEffect: true },
   // A page this extension may not touch answers the same way however many times
   // it is asked, so the row says so: `dispatch`, because the browser refused
   // before the verb was reached, and not retryable.
