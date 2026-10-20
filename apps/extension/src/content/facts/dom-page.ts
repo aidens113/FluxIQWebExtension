@@ -119,7 +119,7 @@ function fieldValues(element: Element): ReturnType<FactPage["values"]> {
 
 function checkedState(element: Element): ReturnType<FactPage["checked"]> {
   const input = checkableInput(element);
-  if (input) return isSensitiveFormControl(input) ? "sensitive" : input.checked;
+  if (input) return isWithinSensitiveControl(input) ? "sensitive" : input.checked;
   return readChosenState(element)?.chosen;
 }
 

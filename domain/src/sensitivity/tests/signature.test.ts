@@ -73,6 +73,36 @@ test("ordinary fields are not sensitive", () => {
   assert.equal(isSensitiveFieldSignature({}), false);
 });
 
+test("a card security code is sensitive by its name, its id or its label on a text-entry input", () => {
+  // bigbox-retail's card frame: `<input name="cvc" inputmode="numeric">`,
+  // labelled "Security code", no `autocomplete`. Its typed value reached the
+  // snapshot, every keydown and the recorded `dom.input` (t730 c2) while the
+  // rule read only type, autocomplete and data-sensitive.
+  assert.equal(isSensitiveFieldSignature({ inputType: "text", names: ["cvc"] }), true);
+  assert.equal(isSensitiveFieldSignature({ inputType: "text", names: [undefined, "card-cvv"] }), true);
+  assert.equal(isSensitiveFieldSignature({ inputType: "text", labels: ["Security code"] }), true);
+  assert.equal(isSensitiveFieldSignature({ inputType: "tel", labels: [undefined, "", "CVC"] }), true);
+  assert.equal(isSensitiveFieldSignature({ inputType: "number", names: ["securityCode"] }), true);
+  // A serialized descriptor's raw `type` attribute, absent for an input that never wrote one.
+  assert.equal(isSensitiveFieldSignature({ controlType: "", names: ["cvc"] }), true);
+  assert.equal(isSensitiveFieldSignature({ controlType: "TEXT", labels: ["Card verification value"] }), true);
+});
+
+test("a security-code name does not mark what is not a text-entry input", () => {
+  // A button that says "Security code", a checkbox named for one, or a control
+  // whose type nobody reported holds no typed code to withhold.
+  for (const type of ["button", "submit", "checkbox", "radio", "hidden", "file"]) {
+    assert.equal(isSensitiveFieldSignature({ inputType: type, names: ["cvc"], labels: ["Security code"] }), false, type);
+  }
+  assert.equal(isSensitiveFieldSignature({ names: ["cvc"], labels: ["Security code"] }), false);
+});
+
+test("ordinary names and labels leave a text input ordinary", () => {
+  assert.equal(isSensitiveFieldSignature({ inputType: "text", names: ["zip", "postal_code"], labels: ["ZIP code"] }), false);
+  assert.equal(isSensitiveFieldSignature({ inputType: "text", names: ["promo"], labels: ["Promo code", "Gift card code"] }), false);
+  assert.equal(isSensitiveFieldSignature({ inputType: "text", names: [], labels: [] }), false);
+});
+
 test("hidden and file controls are not sensitive, deliberately", () => {
   // `reusable-evidence.ts` keeps them out of a reusable fingerprint, and asks
   // its own separately named question to do so. Folding them in here would

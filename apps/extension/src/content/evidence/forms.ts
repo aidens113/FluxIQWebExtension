@@ -28,7 +28,8 @@
 // eight forms and thirty controls a form, and text cut to 200 characters.
 
 import { selectorFor } from "../selector";
-import { hasEnteredValue, isSensitiveFormControl } from "../element-traits";
+import { hasEnteredValue } from "../element-traits";
+import { isWithinSensitiveControl } from "../sensitive-text";
 import { accessibleNameFor, normalizedText } from "../identity";
 import { queryComposedInOrder } from "../shadow-dom";
 import { present } from "../../shared/present";
@@ -87,7 +88,8 @@ function describeControl(element: Element): FormControlEvidence {
     disabled: isDisabled(element) ? true : undefined,
     hasValue: valuePresent,
     autocomplete: autocomplete || undefined,
-    sensitive: isSensitiveFormControl(element) ? true : undefined
+    // A control inside a marked group is withheld as a marked control is (decision D2); only this side sees the tree.
+    sensitive: isWithinSensitiveControl(element) ? true : undefined
   });
 }
 

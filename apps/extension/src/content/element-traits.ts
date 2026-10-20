@@ -89,13 +89,46 @@ export function shouldRecordChangeEvent(element: Element): boolean {
     type === "range";
 }
 
-/** Passwords, one-time codes, card fields and anything marked `data-sensitive`, by the shared rule. */
+/**
+ * Passwords, one-time codes, card fields -- a card security code named only by
+ * its `name`, `id` or label among them -- and anything marked `data-sensitive`,
+ * by the shared rule. The element alone: whether it sits inside a marked
+ * element is `isWithinSensitiveControl` (`sensitive-text.ts`), which every path
+ * that reads what a control holds asks.
+ *
+ * An input's names and label words are handed to the rule because a real card
+ * form often writes no `autocomplete`: bigbox-retail's `<input name="cvc">`
+ * under "Security code" leaked what was typed into it (t730 c2). The rule
+ * consults them for a text-entry input only.
+ */
 export function isSensitiveFormControl(element: Element): boolean {
+  const input = element instanceof HTMLInputElement ? element : undefined;
   return isSensitiveFieldSignature({
-    inputType: element instanceof HTMLInputElement ? element.type : undefined,
+    inputType: input?.type,
     autocomplete: element.getAttribute("autocomplete") ?? undefined,
-    dataSensitive: element.getAttribute("data-sensitive") ?? undefined
+    dataSensitive: element.getAttribute("data-sensitive") ?? undefined,
+    names: input ? [element.getAttribute("name") ?? undefined, element.getAttribute("id") ?? undefined] : undefined,
+    labels: input ? labelWords(input) : undefined
   });
+}
+
+/**
+ * The words that label an input, as the page wrote them: its `aria-label`,
+ * `placeholder`, every `<label>` of it, and what `aria-labelledby` points at.
+ * Read raw rather than through `identity/`, whose readers ask this predicate
+ * of what they read; the words are only inspected by the rule, never carried.
+ * A page without a document -- a Node test's stand-in -- has no labelled-by
+ * targets to find, and an input the platform gives no `labels` has none.
+ */
+function labelWords(input: HTMLInputElement): Array<string | undefined> {
+  const words: Array<string | undefined> = [input.getAttribute("aria-label") ?? undefined, input.getAttribute("placeholder") ?? undefined];
+  for (const label of input.labels ?? []) words.push(label.textContent ?? undefined);
+  const labelledBy = input.getAttribute("aria-labelledby");
+  const document = labelledBy ? input.ownerDocument : undefined;
+  if (labelledBy && typeof document?.getElementById === "function") {
+    for (const id of labelledBy.split(/\s+/u)) if (id) words.push(document.getElementById(id)?.textContent ?? undefined);
+  }
+  return words;
 }
 
 /** Input types whose `value` is not something a user entered, so its presence says nothing. */
