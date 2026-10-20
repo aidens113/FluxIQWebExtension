@@ -8,6 +8,7 @@
 // methods that report its outcome only make sense beside each other.
 
 import type { ClientGatewayCommandReconciliation, ClientGatewayHostLeaseLedger } from "@fluxiq/client-gateway-websocket";
+import type { ClientGatewayTraceResultMetadata } from "fluxiq/client-gateway";
 import {
   createWebAutomationRecordingEvent,
   webAutomationActionResultPayload,
@@ -30,7 +31,8 @@ import type {
 } from "../../shared/protocol";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import { allTabFrames, sendToTab } from "../tabs";
-import { ExtensionRuntimeCommandRouter, gatewayActionResultFromBrowserResult } from "../../runtime";
+import { currentAutomationTabId, ExtensionRuntimeCommandRouter, gatewayActionResultFromBrowserResult } from "../../runtime";
+import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
 import type { ActivePage } from "./active-page";
 import type { ActiveRecording } from "./active-recording";
 import type { ContentAttachment } from "./content-attachment";
@@ -87,11 +89,19 @@ export type ServerCommandChannelDeps = {
    * in the browser's session storage.
    */
   readonly hostLeases?: ClientGatewayHostLeaseLedger;
+  /**
+   * The page capture a traced command's result references (traces and offline
+   * trials, P2; `background/trace-capture/`). Absent, a traced command answers
+   * as an untraced one.
+   */
+  readonly traceCapture?: TraceCapture;
 };
 
 export class ServerCommandChannel {
   private readonly reconciliation: ClientGatewayCommandReconciliation;
   private readonly hostLeases: ClientGatewayHostLeaseLedger;
+  /** The commands Core asked to trace, noted off the raw message before the command runs. */
+  private readonly traced = new TracedCommands();
 
   constructor(private readonly deps: ServerCommandChannelDeps) {
     this.reconciliation = deps.reconciliation ?? ownReconciliation(deps);
@@ -100,6 +110,9 @@ export class ServerCommandChannel {
 
   async handleMessage(message: ClientGatewayServerMessage): Promise<void> {
     this.deps.gateway.noteMessageReceived();
+    // Synchronously, before the socket dispatches the command itself: the
+    // action mapping drops `metadata`, where Core asks for a trace.
+    this.traced.note(message);
 
     if (message.type === "server.ping") {
       this.deps.gateway.noteMessageReceived();
@@ -217,6 +230,8 @@ export class ServerCommandChannel {
       // A check under a lease that moved is refused like any leased command.
       const refusal = await this.leaseRefusal(payload.check.commandId, payload.lease);
       if (refusal !== undefined) {
+        // A refused check read nothing, so nothing is traced for it.
+        this.traced.take(payload.check.commandId);
         await this.deps.send("client.action_result", refusal);
         return;
       }
@@ -234,6 +249,7 @@ export class ServerCommandChannel {
       // its id gets the refusal and Core asking about it never hears `not_seen`.
       const refusal = await this.leaseRefusal(commandId, payload.lease);
       if (refusal !== undefined) {
+        this.traced.take(commandId);
         try {
           await this.deps.send("client.action_result", refusal);
           await this.reconciliation.settled(refusal).catch((error: unknown) => this.inFlightRecordFailed(error));
@@ -306,7 +322,7 @@ export class ServerCommandChannel {
       attachTabForRecording: (tabId) => this.deps.attachment.attachTabForRecording(tabId),
       captureActiveSnapshot: (label) => this.deps.evidence.captureActiveSnapshot(label),
       sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId),
-      sendGatewayResult: (result) => this.deps.send("client.action_result", result),
+      sendGatewayResult: (result) => this.sendGatewayResult(result),
       noteDispatch: async (commandId, tabId, frameId) => {
         await this.noteDispatch(commandId, tabId, frameId).catch((error: unknown) => this.inFlightRecordFailed(error));
       },
@@ -331,10 +347,15 @@ export class ServerCommandChannel {
       ...(frameId !== undefined ? { frameId } : {})
     });
     await this.deps.captureActionBoundary("after", result);
+    // The page as this command left it, uploaded and referenced from the
+    // gateway result only: never on `result`, which the recorded event below
+    // carries raw into recording evidence.
+    const trace = await this.traceFor(result.commandId, () => tabId ?? this.deps.page.tabId());
     const visualTarget = result.visualTarget ?? (result.element
       ? webAutomationActionVisualTargetFromElement(result.element as never)
       : undefined);
-    const gatewayResult = gatewayActionResultFromBrowserResult(result, { tabId, frameId });
+    const mapped = gatewayActionResultFromBrowserResult(result, { tabId, frameId });
+    const gatewayResult = trace === undefined ? mapped : withTraceMetadata(mapped, trace);
     await this.deps.send("client.action_result", gatewayResult);
     // Sent or queued: the record is cleared, and a repeat of this id is answered with this result.
     await this.reconciliation.settled(gatewayResult).catch((error: unknown) => this.inFlightRecordFailed(error));
@@ -350,6 +371,29 @@ export class ServerCommandChannel {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
+  }
+
+  /**
+   * A fact check's answer (plan B1), with the page it read referenced when
+   * Core traced it: the automation tab, or the active one before any action
+   * has driven a tab, as `runtime/command-router.ts` reads.
+   */
+  private async sendGatewayResult(result: ClientGatewayActionResult): Promise<void> {
+    const trace = await this.traceFor(result.commandId, () => currentAutomationTabId() ?? this.deps.page.tabId());
+    await this.deps.send("client.action_result", trace === undefined ? result : withTraceMetadata(result, trace));
+  }
+
+  /** The trace references for a command Core asked to trace, or `undefined` -- and no work at all -- for any other. */
+  private async traceFor(commandId: string, tabId: () => number | undefined): Promise<ClientGatewayTraceResultMetadata | undefined> {
+    if (!this.traced.take(commandId) || this.deps.traceCapture === undefined) return undefined;
+    try {
+      return await this.deps.traceCapture.capture(tabId());
+    } catch (error) {
+      // The capture answers its own failures as counts; one that throws all
+      // the same still never costs the command its result.
+      this.deps.onActivity("runtime", "Could not capture the page for the trace", error instanceof Error ? error.name : typeof error, "warning");
+      return { artifacts: [], unavailable: 1 };
+    }
   }
 
   // A succeeded runtime action is also something the recording must contain:

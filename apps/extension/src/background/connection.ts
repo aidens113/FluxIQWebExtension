@@ -72,6 +72,7 @@ import {
   type TabSnapshotTransport
 } from "./connection/index";
 import { inFlightRecordArea } from "./connection/in-flight/index";
+import { TracePageCapturer } from "./trace-capture/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
 type ActivityDisplayListener = (display: ActivityDisplay | null) => void;
@@ -308,7 +309,8 @@ export class FluxIQConnection {
       recordEvent,
       acceptActivity: (activity) => void this.activity.accept(activity),
       stopRecording: (notifyServer) => this.stopRecording(notifyServer),
-      disconnect: () => this.disconnect()
+      disconnect: () => this.disconnect(),
+      traceCapture: new TracePageCapturer({ credentials: () => this.coreApiCredentials() })
     });
     // The page the automation drives, never an extension page or FluxIQ's
     // own web panel (`activity/overlay-target.ts` says why the active tab

@@ -9,16 +9,20 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { WEB_AUTOMATION_ACTION_TYPES, WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
+import type { ClientGatewayTraceResultMetadata } from "fluxiq/client-gateway";
 import type {
   ActivityEntry,
   BrowserActionCommand,
   BrowserActionResult,
   BrowserActionType,
+  ClientGatewayActionResult,
   ClientGatewayServerMessage,
   FluxIQSession,
   FluxIQSettings,
+  RecordingEventPayload,
   ServerCommandPayload
 } from "../../../shared/protocol";
+import type { TraceCapture } from "../../trace-capture/index";
 import type { ActivePage } from "../active-page";
 import type { ActiveRecording } from "../active-recording";
 import type { ContentAttachment } from "../content-attachment";
@@ -343,4 +347,184 @@ test("server.activity goes to the activity relay and nothing else: no status, no
   assert.deepEqual(h.activities, []);
   assert.equal(h.lastError(), "stale error");
   assert.equal(h.runtimeStatus.current().state, "idle");
+});
+
+// The trace path: a command Core
+// marked traced (`metadata.trace.artifacts === true` on the raw
+// `server.execute_action`) answers with the page capture's references on its
+// gateway result's `metadata.trace`, for browser actions and fact checks
+// alike; an untraced command's result is exactly what it was before tracing
+// existed and no capture runs; and the references never reach the browser
+// result or the recorded event, which travel raw into recording evidence.
+
+const TRACE: ClientGatewayTraceResultMetadata = {
+  artifacts: [
+    { sha256: "a".repeat(64), mediaType: "text/html", byteLength: 120, role: "primary", source: "https://shop.test/" },
+    { sha256: "b".repeat(64), mediaType: "image/png", byteLength: 7, role: "resource", source: "https://shop.test/a.png" }
+  ],
+  unavailable: 1
+};
+
+type TraceReply = {
+  sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void>;
+  sendGatewayResult(result: ClientGatewayActionResult): Promise<void>;
+};
+
+function traceHarness(capture: TraceCapture["capture"] | undefined = async () => TRACE) {
+  const sent: Array<{ type: string; payload: unknown }> = [];
+  const recorded: RecordingEventPayload[] = [];
+  const captures: Array<number | undefined> = [];
+  const activities: string[] = [];
+  const runtimeStatus = new RuntimeStatusTracker();
+  const deps: ServerCommandChannelDeps = {
+    send: (async (type: string, payload: unknown) => {
+      sent.push({ type, payload });
+    }) as ServerCommandChannelDeps["send"],
+    gateway: { noteMessageReceived: () => undefined } as unknown as GatewaySession,
+    recording: {} as ActiveRecording,
+    page: { url: () => "https://shop.test/", tabId: () => 9, noteActionResult: () => undefined } as unknown as ActivePage,
+    runtimeStatus,
+    attachment: {} as ContentAttachment,
+    evidence: {} as RecordingEvidenceReporter,
+    sequence: new EventSequence(),
+    session: () => ({ clientId: "client-1" }) as FluxIQSession,
+    settings: () => ({ gatewayUrl: "ws://gateway.test" }) as FluxIQSettings,
+    persistSession: async () => undefined,
+    captureActionBoundary: async () => undefined,
+    setLastError: () => undefined,
+    onActivity: (_kind, label) => {
+      activities.push(label);
+    },
+    emitStatus: () => undefined,
+    recordEvent: async (payload) => {
+      recorded.push(payload);
+    },
+    acceptActivity: () => undefined,
+    stopRecording: async () => undefined,
+    disconnect: () => undefined,
+    ...(capture === undefined ? {} : {
+      traceCapture: {
+        capture: async (tabId: number | undefined) => {
+          captures.push(tabId);
+          return await capture(tabId);
+        }
+      }
+    })
+  };
+  const channel = new ServerCommandChannel(deps);
+  return { channel, reply: channel as unknown as TraceReply, sent, recorded, captures, activities, runtimeStatus };
+}
+
+/** The raw message as the socket hands it to `handleMessage`, before the typed dispatch. */
+function executeAction(commandId: string, metadata?: object): ClientGatewayServerMessage {
+  return {
+    type: "server.execute_action",
+    id: `m-${commandId}`,
+    payload: { commandId, actionType: "web.dom.click", parameters: { selector: "#buy" }, ...(metadata === undefined ? {} : { metadata }) }
+  } as unknown as ClientGatewayServerMessage;
+}
+
+function browserResult(commandId: string): BrowserActionResult {
+  return {
+    commandId,
+    actionType: "web.dom.click",
+    status: "succeeded",
+    validation: { status: "none", reason: "not-yet-validated" },
+    startedAt: 100,
+    finishedAt: 150,
+    url: "https://shop.test/",
+    element: { tagName: "button", selector: "#buy" }
+  };
+}
+
+function actionResults(sent: Array<{ type: string; payload: unknown }>): ClientGatewayActionResult[] {
+  return sent.filter((message) => message.type === "client.action_result").map((message) => message.payload as ClientGatewayActionResult);
+}
+
+test("a traced action's result carries the capture's references on metadata.trace, captured from the command's tab", async () => {
+  const h = traceHarness();
+  await h.channel.handleMessage(executeAction("c-1", { trace: { artifacts: true } }));
+  const result = browserResult("c-1");
+  const before = structuredClone(result);
+  await h.reply.sendActionResult(result, 4, 0);
+
+  assert.deepEqual(h.captures, [4]);
+  const [sent] = actionResults(h.sent);
+  assert.deepEqual(sent?.metadata, {
+    trace: {
+      artifacts: [
+        { sha256: "a".repeat(64), mediaType: "text/html", byteLength: 120, role: "primary", source: "https://shop.test/" },
+        { sha256: "b".repeat(64), mediaType: "image/png", byteLength: 7, role: "resource", source: "https://shop.test/a.png" }
+      ],
+      unavailable: 1
+    }
+  });
+  assert.deepEqual(result, before, "the browser result is not changed");
+  assert.equal(h.recorded.length, 1);
+  const recorded = JSON.stringify(h.recorded[0]);
+  assert.doesNotMatch(recorded, /a{64}|b{64}|"trace"/u, "the recorded event carries no trace reference");
+  assert.deepEqual(h.recorded[0]?.actionResult, before);
+});
+
+test("an untraced action's result is exactly the result it was before tracing, and no capture runs", async () => {
+  const traced = traceHarness();
+  const untraced = traceHarness(undefined);
+  await traced.channel.handleMessage(executeAction("c-2"));
+  await traced.channel.handleMessage(executeAction("c-3", { trace: { artifacts: false } }));
+  await traced.reply.sendActionResult(browserResult("c-2"), 4, 0);
+  await traced.reply.sendActionResult(browserResult("c-3"), 4, 0);
+  await untraced.reply.sendActionResult(browserResult("c-2"), 4, 0);
+  await untraced.reply.sendActionResult(browserResult("c-3"), 4, 0);
+
+  assert.deepEqual(traced.captures, []);
+  // The recording confirmations carry a clock-based sequence, so the results are compared, and the message order.
+  assert.deepEqual(traced.sent.map((message) => message.type), untraced.sent.map((message) => message.type));
+  assert.equal(JSON.stringify(actionResults(traced.sent)), JSON.stringify(actionResults(untraced.sent)), "byte for byte what a channel with no trace capture sends");
+  assert.ok(actionResults(traced.sent).every((result) => result.metadata === undefined));
+});
+
+test("a trace mark is used once: a second result for the same id is untraced", async () => {
+  const h = traceHarness();
+  await h.channel.handleMessage(executeAction("c-4", { trace: { artifacts: true } }));
+  await h.reply.sendActionResult(browserResult("c-4"), 4, 0);
+  await h.reply.sendActionResult(browserResult("c-4"), 4, 0);
+  assert.equal(h.captures.length, 1);
+  const [first, second] = actionResults(h.sent);
+  assert.ok(first?.metadata?.trace !== undefined);
+  assert.equal(second?.metadata, undefined);
+});
+
+test("a traced result with no tab named is captured from the page's tab", async () => {
+  const h = traceHarness();
+  await h.channel.handleMessage(executeAction("c-5", { trace: { artifacts: true } }));
+  await h.reply.sendActionResult(browserResult("c-5"));
+  assert.deepEqual(h.captures, [9]);
+});
+
+test("a capture that throws costs the command nothing: the result goes out, counting the capture unavailable", async () => {
+  const h = traceHarness(async () => {
+    throw new TypeError("crypto.subtle is not available");
+  });
+  await h.channel.handleMessage(executeAction("c-6", { trace: { artifacts: true } }));
+  await h.reply.sendActionResult(browserResult("c-6"), 4, 0);
+  const [sent] = actionResults(h.sent);
+  assert.equal(sent?.status, "succeeded");
+  assert.deepEqual(sent?.metadata, { trace: { artifacts: [], unavailable: 1 } });
+  assert.ok(h.activities.includes("Could not capture the page for the trace"));
+  assert.equal(h.recorded.length, 1, "the recorded event still follows");
+});
+
+test("a traced fact check's answer carries the references; an untraced one is sent unchanged", async () => {
+  const h = traceHarness();
+  await h.channel.handleMessage(executeAction("f-1", { trace: { artifacts: true } }));
+  const answer: ClientGatewayActionResult = { commandId: "f-1", status: "succeeded", startedAt: 1, completedAt: 2, payload: { answers: [] } };
+  await h.reply.sendGatewayResult(answer);
+  const untraced: ClientGatewayActionResult = { commandId: "f-2", status: "succeeded", startedAt: 1, completedAt: 2, payload: { answers: [] } };
+  await h.reply.sendGatewayResult(untraced);
+
+  assert.deepEqual(h.captures, [9], "the fact check reads the automation tab, or the page's before any action drove one");
+  const [traced, plain] = actionResults(h.sent);
+  assert.deepEqual(traced, { ...answer, metadata: { trace: { artifacts: TRACE.artifacts, unavailable: 1 } } });
+  assert.equal(plain, untraced, "the very object the router handed over");
+  assert.equal(answer.metadata, undefined, "the router's answer is not changed");
 });
