@@ -395,6 +395,29 @@ was still running at dispatch and is excluded below by its own file list.
 - Outcome: Accepted (P0; P1 contract and port)
 - Follow-up: U7 consumer wiring after L1 merges, as a new task; the extract_list stall needs a trace.
 
+### 2026-10-19 - L1, t732 and t731 merged; t733 and t735 verified on their branches
+- Agent: supervisor (L1 lead and workers; t732, t731, t733, t735 workers and leads)
+- Changed: t724 L1 merged (Core bcb2c0ec, downstream c375501a); t732 security fix merged (downstream, with the
+  sensitive-values doc updated by the supervisor); t731 merged (Core 2737ad56: canonical-authority, flows creation and
+  database-manager tests do only their subject in the timed body; no source changed). t733 (capture cost, group
+  sensitive marker, in-place busy race) and t735 (sync-core bootstrap) committed or verified on their branches.
+- Validation: L1 merged tree: Core `vitest run` over flow-bootstrap, project-build, candidate-trial, subflow-trial,
+  project-agents, action-permissions, llm -> 543 files, 5486 passed, 2 skipped; fluxiq `tsc` 0; downstream checks 0;
+  changed domain 71, extension 14 pass; headed `playwright test -c e2e/playwright.config.ts e2e/site-reset` -> 6
+  passed (4.5m); after t732 merged in: extension content+shared 1469 pass, domain 1350 pass, four `tsc` 0. t732:
+  four `tsc` 0, extension content+shared 1460 pass, domain sensitivity+recording 121 pass; the worker's headed probe
+  showed the code absent with the fix and present with the old classifier. t731: 14 files / 106 tests passed on its
+  branch; after merging dev, one combined run showed 2 owner-store failures, then the canonical-authority directory on
+  dev with t731 -> 59/59 three times, and on the pre-t731 commit -> factory-provenance failed (the test t731 fixed).
+  t733: four `tsc` 0; extension identity, action-runtime, evidence, shared, connection -> 1030 pass; domain
+  sensitivity 27 pass; audit passed; lead's headed runs: large-page rows 1-2 in 12.7 s and 9.0 s (were 30 s timeouts),
+  click.spec.ts:524 5 of 5 (was 1 of 5), a 6,000-link snapshot 3,917 ms (was 303,764 ms). t735: script tests 171
+  pass; audit passed; the fixture sync-core test failed before the fix with the reported error.
+- Supervisor error: the t731 finish was chained after its recheck without gating on the result, so it merged and
+  pushed Core despite the 2 failures; the follow-up runs above show t731 is sound, but merges are gated from now on.
+- Outcome: Accepted
+- Follow-up: merge t733 after its doc/runtime-status unit; merge t735 after t730's combined run (shared Core).
+
 ## Open Questions
 
 None requiring user input.
