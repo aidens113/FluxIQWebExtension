@@ -87,3 +87,64 @@ This was a read-only analysis: no source edit, build, browser or paid run.
   would have failed at trial. That is normal loop work, but it was not reached.
 - Do not run an unchanged paid retry. Rerun once after the ledger fix lands and
   the trees are synced.
+
+## Terminal r2 failure
+
+Run `run-mvfq94ff-c8c21493` (bf-slot-1, workspace
+`claude-office-checkout-t563-20261019-r2`, real extension chat, $0.25 ceiling)
+failed with `lab.chat_build_failed`. No Flow was created. It made 101 calls,
+cost $0.0695 and took about 13 minutes, on dev 79fbbb7a and Core e11549a8,
+which include F1 and F3. The full debug is
+`docs/working/language-driven-flow-loop-plan/debugs/run-mvfq94ff-c8c21493.md`.
+This was a read-only analysis: no source edit, build, browser or paid run.
+
+- **How far it got.** It got further than r1. F1 worked for exploration acts:
+  each Buy Now press sent with `resetDestination` was settled by the next
+  complete, unchanged cart read (act-11 at 0064, act-15 at 0135 and 0137). The
+  trial of revision 1 ran (0066) and the judge correctly found the home
+  address, giving exact advice. Revision 2 added the office-address steps but
+  was never tried.
+- **First divergent step: 0078.** The retest of revision 2 was refused for
+  act-12, which is the trial's own Buy Now. The ledger records a trial step's
+  act with no destination (`site-reset/ledger.ts` `trialRan`), so no amount of
+  unchanged cart reads settles it. F1's only way out is for the model to name
+  `resetDestination` on a look under `undoes`. The model missed the ref at
+  0080, 0084 and 0094, and malformed the call at 0088. It then named cannotUndo
+  (0092), which makes a strict act "kept" and refuses every trial
+  (`trial_reset_unproved`).
+- **Dead end.** A look moves neither of the loop's epochs, so the identical
+  retest after a settling look is answered from memory
+  (`llm_evidence_loop.already_answered`, 0096-0110), and brief-2 ended on
+  `repeat_without_progress`. In repair brief-4 the model did exactly what the
+  instruction asks (0151: a complete read, `undoes: act-12`,
+  `resetDestination: destination-1`). It then resubmitted unchanged instead of
+  testing, and the brief ended (0155-0161). Even a retest there would have been
+  answered from memory. The owner is `runtime/llm/evidence-loop.ts` `runCall`,
+  with `repeat-policy.ts` `automationStudioLlmEvidenceRequestSignature`.
+- **F3 held.** The reset brief ran, passed preflight, and its completions
+  parsed with `cannotUndo` intact. It could not finish, though. Its
+  instructions (`reset-loop.ts`, and the reset brief body in `brief-ports.ts`)
+  say cannotUndo keeps an act as done, but a strict act stays claimable and in
+  place, so `project.reset_acts_in_place` was answered four times. Core
+  correctly refused the reset's attempt to delete a pre-existing cart item
+  (0193, `candidate.undo_unproved`).
+- **Cause class.** A Core product defect: F1's stricter rule has a dead end for
+  a trial's own act. Contributing model mistakes were each caught by the
+  product: a false claim that the office address was already set (caught by the
+  trial judge), a plan output nobody makes (recovered by `amend_plan`), and the
+  unchanged resubmission. The task wording is not the cause.
+- **Proposed fix, least general first.**
+  1. In `ledger.ts` `trialRan`, a trial act inherits the destination of the
+     explored act it repeats (same control, consequences and page). Tests go in
+     `site-reset/tests/ledger.test.ts`: an admit case, plus other-control,
+     changed-read and no-read refusals. This alone would have let 0082 run
+     revision 2.
+  2. In `evidence-loop.ts` `runCall`, an action refused unrun stays "answered"
+     only until the next call runs, so a retest after a look reaches the ledger.
+     The no-progress guard still bounds it. Test in
+     `runtime/llm/tests/evidence-loop.test.ts`.
+  3. Correct the reset words for strict acts, using
+     `site-reset/words.ts` `nameDestination`.
+  None of these touches the task, the oracle or model guidance about this site.
+- Do not run an unchanged paid retry. Rerun once after fixes 1 and 2 land with
+  their tests and the lane trees are synced.

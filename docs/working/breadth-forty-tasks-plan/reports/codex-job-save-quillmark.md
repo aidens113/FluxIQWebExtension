@@ -181,3 +181,42 @@ menu; and a `contains "Quillmark"` condition that also keeps the similarly named
 employer, which would have failed the oracle had a trial finished. The earlier
 icon-visibility hypothesis is refuted: every heart is in the page view. No source was
 edited, nothing was built or run, and no paid retry is proposed until both fixes are in.
+
+## Terminal r2 failure (2026-10-19, read-only diagnosis, brief R9)
+
+Run `run-mvfq94fg-64e82826` (workspace `claude-job-save-t719-20261019-r2`, downstream `79fbbb7a` / Core `e11549a8`,
+with F1 and F2) failed: no Flow, 118 calls, $0.059999844. Full evidence is in
+`docs/working/language-driven-flow-loop-plan/debugs/run-mvfq94fg-64e82826.md`. Task wording, fixture and oracle
+are not implicated and stay unchanged. The site was left as found: My jobs held the same two jobs from the first
+look to the last, and no pre-existing save was touched.
+
+What "kept failing" was: three trials ran. Revision 1 failed twice at "open the job" (`web.target.not_found`, 4
+attempts each). Its read had no conditions, so pass 1 was a sponsored card for another company. Revision 2
+filtered correctly (3 of 7 kept, the similarly named employer excluded) and pressed the heart on its own row; the
+site rejected that first save ("Couldn't save this job. Try again."), so the "Saved" wait timed out. That
+no-effect press (act-7), and two exploration presses the site also rejected (acts 9 and 15), then refused every
+later trial (`candidate.trial_reset_required` at 0075 and 0172), and no undo could ever be proved.
+
+Cause (product defect): Core's reset can settle a no-effect act only against a complete list it recorded before
+the act. The web domain reports a list as complete only when its items carry `aria-setsize` and `aria-posinset`
+(`domain/src/runtime/llm-evidence/control-spot/collection.ts`, `webResetCollections`). The job board's lists are
+plain `<ol>` lists, as on most real sites, so Core never recorded My jobs (read whole at 0045, before any act) and
+never issued a `resetDestination` reference. F1's new exit, and the older ones, could therefore never open. F1
+also removed the old escape of admitting a trial after a stalled refusal, so the dead end became certain. F1 did
+not create the gap; it relies on evidence this site cannot yield.
+
+F2 did not cause a dead end. Its joined-value gate held "Quillmark · Remote (UK)" live, and its refusal of the
+sponsored card's ad-redirect link was defensible and immaterial. Secondary: the "test this same revision again,
+unchanged" advice after a pass-row miss cost one trial (Core `target-on-page.ts`, fed by the extension's miss
+metadata).
+
+Proposed fix: `webResetCollections` accepts a native list as complete when the capture is untruncated, each item
+holds exactly one distinct subject, and the extension's existing continuation detectors (Next, Load more, growing
+or declared feed) find no way on. The detectors would be reported as one closed fact per list. Tests:
+`domain/src/runtime/llm-evidence/control-spot/tests/collection.test.ts` and the extension's
+`read-coverage/tests/`, on a non-job example. Do not add set-size markers to this fixture instead.
+
+After that fix, the next likely blocker is a model mistake: the Flow presses save once, and this site saves only
+on the second press of a page load. That must not be taught in model guidance.
+
+No source edits, builds, paid or browser runs, or commits.

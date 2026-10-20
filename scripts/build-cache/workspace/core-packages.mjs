@@ -9,7 +9,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { readWorkspacePackages } from "./workspace-packages.mjs";
+import { coreEngine } from "../core-engine.mjs";
 
 /**
  * @param {string[]} links absolute link targets
@@ -27,7 +27,7 @@ export function linkedCorePackages(links) {
       found.set(dir, { coreRoot: null, dir, name: path.basename(dir) });
       continue;
     }
-    if (!workspaces.has(coreRoot)) workspaces.set(coreRoot, readWorkspacePackages(coreRoot));
+    if (!workspaces.has(coreRoot)) workspaces.set(coreRoot, coreEngine.readWorkspacePackages(coreRoot));
     const packages = workspaces.get(coreRoot);
     const own = [...packages.values()].find((candidate) => path.resolve(candidate.dir) === dir);
     if (own === undefined) throw new Error(`${dir} is linked but is not a package of the workspace at ${coreRoot}`);

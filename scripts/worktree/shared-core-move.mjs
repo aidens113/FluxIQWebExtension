@@ -32,11 +32,14 @@
 
 import path from "node:path";
 import { fullCoreDistPaths, FULL_CORE_PACKAGES } from "./core-build.mjs";
-import { gitAnsweredNo, runGit } from "./git-command.mjs";
+import { importCoreScript } from "../core-scripts/index.mjs";
 import { planSideMove } from "./move-plan.mjs";
-import { samePath } from "./path-identity.mjs";
 import { processesUsingRoots } from "./processes-using-roots.mjs";
 import { readSideState } from "./side-state.mjs";
+
+const { gitAnsweredNo } = await importCoreScript("scripts/task/git-answered-no.mjs");
+const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
+const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /**
  * @param {{
@@ -106,8 +109,8 @@ async function containedByAnyRef(root, commit) {
  * So a build is planned when the move itself invalidates the old one, when
  * there is no output at all, or when a marker positively names another commit.
  * A build wrong for some other reason is still caught before it can matter:
- * the Lab refuses to start a run whose Core `dist` is older than Core's source
- * (`scripts/lab/core/build/stale.mjs`).
+ * the Lab refuses to start a run whose Core build its own build cache would
+ * rebuild (`scripts/lab/core/build/currency.mjs`).
  */
 function rebuilds(plan, state) {
   if (!state.buildable) return false;

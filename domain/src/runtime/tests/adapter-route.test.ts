@@ -23,7 +23,7 @@ async function runNextPage(payload: JsonObject): Promise<FluxIQRuntimeCommandRes
         snapshot: () => ({
           sessions: [{
             sessionId: "session.one", clientId: "client.one", status: "ready", clientType: "extension",
-            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.next_page"] }]
+            capabilities: [{ id: "web.actions", actionTypes: ["web.dom.next_page"], metadata: { domainId: "web-automation" } }]
           }]
         })
       },

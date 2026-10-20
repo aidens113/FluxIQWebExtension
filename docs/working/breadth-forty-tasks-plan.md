@@ -1,7 +1,7 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: 12 tasks accepted across 9 sites (auction seller-shop accepted 2026-10-19); photo-social has no pass yet. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
+Status detail: Paused 2026-10-19 for traces and the boundary move plan; 12 tasks accepted across 9 sites, photo-social has no pass; reset redesign L1 (t724) in flight. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
 Created: 2026-10-17
 Last updated: 2026-10-19
 Owner: Senior supervisor agent
@@ -57,14 +57,19 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
-**Now (2026-10-19):** nine fixes (F1-F9) and their integration (t722) are on `dev` in both repos; rerun round 1
-is live on all four slots (office checkout, job save, social group posts, photo newest likes). Sweep fixes for
-failures already on `dev` are on t723 (S2 done, S3 running).
+**Now (2026-10-19, handoff):** paused by the user for two larger efforts run from
+[trace-offline-trials-plan.md](./trace-offline-trials-plan.md): Core traces and offline trials, and the
+extension/Core boundary audit's move plan. Fixes F1-F9, the dev-sweep fixes (t723) and t725 (judge split, time
+honesty, scroll schema, social wording) are on `dev` in both repos. Rerun round 1 went 0 of 4 ($0.234): reset
+settlement blocked photo, office and job; social reached the exact answer but lost it to a split judge and the
+deadline (now fixed). Lead L1 (reset settlement redesign, t724) was still running at handoff, uncommitted; its report
+is `fxwork/t724/!FluxIQWebExtension/docs/working/breadth-forty-tasks-plan/reports/l1-reset-settlement.md`.
 
-**Next, in order:** read R2-R6; fix the causes on the lane branches (paired Core branches where needed) with
-tests beside the changed files; integrate to `dev` on narrow checks, publish both repositories and sync the lane
-trees; then release one rerun per repaired failure, the owed reruns (job halvard-labs-office-jobs, social
-hide-suggested-posts), and photo-social tasks until that site has a pass. No unchanged retries.
+**Next, in order:** finish and integrate L1 (see the hub document's "Next"); then rerun office checkout, job save,
+photo newest likes and social group posts on fresh workspaces, supervised; then the owed reruns (job
+halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries. Lane trees must merge `dev` and rebuild
+their Core (`pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build`) before
+any launch, or the Lab refuses at $0 as stale.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -598,6 +603,90 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
   slot-2 job save-quillmark-remote (`claude-job-save-t719-20261019-r2`), slot-3 social recent-group-posts
   (`claude-social-groups-t566-20261019-r4`), slot-4 photo newest-likes (`claude-photo-likes-t567-20261019-r2`).
   Live guard admitted slots 1-3 (`"state":"admitted"`); slot 4 still in its prelude at the first check.
+
+### 2026-10-19 - Rerun round 1: 0 of 4; site reset is the common blocker
+
+- Validation: first launch refused at $0 in the prelude on all four slots (`"state":"stale"`: lane Core builds
+  behind source after the dev merge; no ledger entries written). Rebuilt Core libraries per lane
+  (`core-build` current x4) and relaunched. Spend-ledger finish records: photo `run-mvfq959u-b7afdf80` failed
+  $0.039545478; office `run-mvfq94ff-c8c21493` failed $0.06946167; job `run-mvfq94fg-64e82826` failed
+  $0.059999844; social `run-mvfq957o-40103539` failed $0.064833378; all `buildCeilingUsd 0.25`, none over.
+  Round total $0.233840370; no balance error. No Flow in any run.
+- Findings: R7 photo (t567 876a3af8): F6/F2/F5 behaved at read and submit, but an Unlike undoing an exploration
+  Like was refused `undo_unproved` at 0067, so no trial ran. R8 office (t563 ef1c07dd): F3 held (the reset
+  brief ran), F1 settled exploration presses, but the trial's own Buy Now got no destination (`ledger.ts
+  trialRan`), a retest after a settling look was answered `already_answered` 7 times, and the reset wording is
+  wrong for trial acts. R9 job (t719 3fa223dc): settlement needs a complete-list record that the domain only
+  grants with aria-setsize/posinset (`control-spot/collection.ts webResetCollections`), which 8 of 10 realistic
+  sites lack; F2's joined value worked live. R10 (social) running.
+- Decision: reset failures have now recurred in seven shapes; stop patching instances. Lead L1 (t724, paired,
+  lead-xhigh) redesigns settlement on observed state (control state plus generically complete destination,
+  inverse undo on the same page, trial acts inheriting the explored act's destination, a retest reaching the
+  ledger), keeps every invariant, and turns all seven shapes into a provider-free regression corpus.
+- Validation: t723 sweep fixes finished in both repos (downstream audit passed; Core `pnpm check` passed) and
+  pushed. Before finishing, supervisor checks on merged t723: Core `npx vitest run` over the three contract tests,
+  executor, result-verification, refuted-result, authoring-mode, handlers and conversations -> 228 files, 1980
+  passed; S5 `node --test scripts/task/tests/*.test.mjs` -> 32/32; web capabilities/tests/authoring/instructions
+  -> 245/245, web tsc exit 0; downstream adapter + client tests 70/70, pagination 34/34, `pnpm check` exit 0.
+
+### 2026-10-19 - Social r4 diagnosed (R10); t725 fixes dispatched
+
+- Finding (R10, t566 e91de996): not a reset failure. Revision 9 (trial 0083) stored exactly the three expected
+  records (a comparison against `expected.ts` printed True for every value). Judge call 1 said no (0.6) without
+  naming any wrong row; call 2 said yes. Core made it unsure, the gate said a retest would "likely be judged the
+  same way", the builder broke the answer (revision 10, correctly judged no), reverted, and the deadline cancelled
+  the retest (last test 337 s, about 150 s left). The ending then said "never tested from its start" and a
+  "Your Flow is ready" toast showed with no Flow. F8 fired accurately; F9 was not exercised. An `untilStable`
+  scroll without `maxScrolls` passed submit and failed at run time with "it names mode".
+- Dispatched t725 (paired, from dev): G1 re-ask a split's no once for a named defect, else it counts as yes with
+  advice; no "likely judged the same" for a split (Core `result-verification/agreement`, trial-gate wording). G2
+  no trial the remaining time cannot cover; truthful time-limit ending; no success toast for a draft (Core
+  project-build run, conversation build command, activity). G3 `untilStable` needs `maxScrolls` at submit, and a
+  run-time message naming the key (domain schemas, extension scroll). G4 reword the social task so posts not in a
+  group are plainly left out, keeping intent and oracle (catalog and baseline).
+- Validation: not validated yet; workers running. L1 (reset redesign, t724) running in parallel; G1's trial-gate
+  edit is wording only to keep the overlap with L1 small.
+
+### 2026-10-19 - t725 (judge split, time honesty, scroll schema, social wording) published
+
+- Validation: supervisor on t725 Core after G1+G2: `npx vitest run` over result-verification, flow-bootstrap
+  candidate and subflow-candidate, candidate-trial, project-agents, project-build, activity, conversations and the
+  three prompt contract tests -> 363 files, 2822 passed; `pnpm --filter ./packages/fluxiq check` exit 0; audit
+  passed. Downstream after merging dev and rebuilding Core: domain actions/output-nodes/client -> 332/332;
+  extension `content/actions/tests` -> 185/185; scenario-lab live-task tests -> 33/33; `pnpm check` exit 0.
+- Published: `pnpm task finish t725` downstream (audit passed) -> bda526b4; Core (`pnpm check` plus the new
+  contract gate, `"contracts":{"ran":true}`) -> 762372b1. Both pushed.
+- Changes: G1 a split's no is re-asked once and must name a wrongly kept or left-out row or a wrong value, else it
+  counts as yes with advice (every split now costs a third judge call; seven tests updated); G2 a whole trial is
+  refused (`project.trial_out_of_time`) when the time left is below the last comparable test plus 20%, a draft
+  reports its latest finished test, and a draft ends "Build ended: no Flow was built"; G3 `untilStable` without
+  `maxScrolls` refused at submit through the scroll node's parameter contract, and the run-time refusal names the
+  key; G4 the social task says plainly that posts outside a group and from unjoined groups are left out.
+- Not covered: G2's time check in candidate (non-project) mode; an end-to-end test from a cut test to the chat.
+
+### 2026-10-19 - Handoff: breadth round paused for traces and the boundary move plan
+
+- Validation: `git status --short` and `git rev-list --left-right --count origin/dev...dev` in both main checkouts
+  -> clean and 0/0 (only the user's `.clinerules/fluxiq.md` edit, not ours, is uncommitted downstream). t724 (L1)
+  worktrees -> Core 52 and downstream 34 uncommitted files; lead running; sub-reports l1-c1, c2, c3, c5, c6, d1, d2
+  present, C4 and D3 not yet.
+- Decision: the user paused the breadth round; the next session runs the lanes in `trace-offline-trials-plan.md`
+  and finishes L1 first.
+
+### 2026-10-19 - L1 browser proof found two defects; supervisor decisions
+- Agent: supervisor (L1 worker l1-d3-browser-proof)
+- Changed: nothing on `dev`; decisions sent to the L1 lead.
+- Why: D3 (`fxwork/t724/.../reports/l1-d3-browser-proof.md`), headed and provider-free on the installed extension:
+  both existing cases, job D+F and office C pass; office E fails on a Core defect (a builder's whole-run act lands in
+  the supervisor's ledger, whose repeat matching has no explored acts, so act-2 never links to its explored press);
+  photo G fails because icon-only buttons capture `accessibleName: null`, so Like and Unlike share one state token.
+- Validation: not validated by the supervisor; the worker's diagnosis rests on saved diagnostics (`d3-run11`).
+- Decisions: fix both inside L1 before merge (two of the four breadth reruns depend on them); repeat matching spans
+  every ledger of the build; accessible-name capture takes a descendant `svg[aria-label]`/`title`, the state digest
+  falls back to the printed words; a navigation with no lasting effect is a look, never an undo attempt (settles
+  `unchanged`); `NODE_OPTIONS=--no-experimental-strip-types` in the extension's Playwright config (L1 owns it).
+- Outcome: Partial
+- Follow-up: L1 reruns D3's five cases green, then integration.
 
 ## Open Questions
 

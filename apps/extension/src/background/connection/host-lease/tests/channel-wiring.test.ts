@@ -12,7 +12,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { WebAutomationFactCheckCommand, WebAutomationHostLease } from "@fluxiq-web-extension/domain/client";
+import { clientGatewayMemoryArea, ClientGatewayInFlightRecordStore, type ClientGatewayHostLease, type ClientGatewayStorageArea } from "@fluxiq/client-gateway-websocket";
+import type { WebAutomationFactCheckCommand } from "@fluxiq-web-extension/domain/client";
 import type {
   BrowserActionCommand,
   ClientGatewayActionResult,
@@ -26,8 +27,8 @@ import type { ActiveRecording } from "../../active-recording";
 import type { ContentAttachment } from "../../content-attachment";
 import { EventSequence } from "../../event-sequence";
 import type { GatewaySession } from "../../gateway-session";
-import { HostLeaseLedger } from "..";
-import { CommandReconciliation, InFlightRecordStore, workerMemoryRecordArea, type InFlightRecordArea } from "../../in-flight/index";
+import { sessionHostLeaseLedger } from "..";
+import { webCommandReconciliation } from "../../in-flight/index";
 import type { RecordingEvidenceReporter } from "../../recording-evidence";
 import { RuntimeStatusTracker } from "../../runtime-status";
 import { ServerCommandChannel, type ServerCommandChannelDeps } from "../../server-command-channel";
@@ -44,7 +45,7 @@ async function handle(channel: ServerCommandChannel, payload: ServerCommandPaylo
   });
 }
 
-function harness(area: InFlightRecordArea = workerMemoryRecordArea()) {
+function harness(area: ClientGatewayStorageArea = clientGatewayMemoryArea()) {
   const log: string[] = [];
   const sent: Array<{ type: string; payload: unknown }> = [];
   const recorded: unknown[] = [];
@@ -53,8 +54,8 @@ function harness(area: InFlightRecordArea = workerMemoryRecordArea()) {
     log.push(`send ${type}`);
     sent.push({ type, payload });
   }) as ServerCommandChannelDeps["send"];
-  const store = new InFlightRecordStore(area);
-  const reconciliation = new CommandReconciliation({ store, queuedResult: async () => undefined, send: async (result) => await send("client.action_result", result) });
+  const store = new ClientGatewayInFlightRecordStore(area);
+  const reconciliation = webCommandReconciliation({ area, queuedResult: async () => undefined, send: async (result) => await send("client.action_result", result) });
   const deps: ServerCommandChannelDeps = {
     send,
     gateway: { noteMessageReceived: () => undefined } as unknown as GatewaySession,
@@ -87,7 +88,7 @@ function harness(area: InFlightRecordArea = workerMemoryRecordArea()) {
     stopRecording: async () => undefined,
     disconnect: () => undefined,
     reconciliation,
-    hostLeases: new HostLeaseLedger(area)
+    hostLeases: sessionHostLeaseLedger(area)
   };
   return { channel: new ServerCommandChannel(deps), store, log, sent, recorded, runtimeStatus, statusBefore: runtimeStatus.current() };
 }
@@ -100,7 +101,7 @@ function forgetEarlier(h: ReturnType<typeof harness>): void {
   h.statusBefore = h.runtimeStatus.current();
 }
 
-const lease = (epoch: number, briefId = "brief-1"): WebAutomationHostLease => ({ resourceKey: "web.automation:client-a", epoch, holder: { role: "builder", briefId } });
+const lease = (epoch: number, briefId = "brief-1"): ClientGatewayHostLease => ({ resourceKey: "web.automation:client-a", epoch, holder: { role: "builder", briefId } });
 
 function press(commandId: string): BrowserActionCommand {
   return { commandId, actionType: "web.dom.click", selector: "#add" };
@@ -186,7 +187,7 @@ test("a command without a lease, with no lease ever seen, runs as it always has"
 });
 
 test("a restarted worker still refuses a lease below the one the worker before it saw", async () => {
-  const area = workerMemoryRecordArea();
+  const area = clientGatewayMemoryArea();
   await handle(harness(area).channel, execute(press("cmd-current"), lease(8)), "m-1");
   const restarted = harness(area);
   await handle(restarted.channel, execute(press("cmd-late"), lease(7)), "m-2");

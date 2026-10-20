@@ -11,12 +11,14 @@
 // move or delete a tree that has something running inside it. Written once,
 // those refusals are the same refusals; written twice, one copy drifts.
 //
-// By responsibility: `git-command.mjs` and `pnpm-command.mjs` run the two
-// tools; `checkout-repository.mjs` says which repository a directory is the top of;
+// By responsibility: FluxIQ Core owns the git runner, the reading of a git
+// refusal as an answer, and path identity, which both repositories' task tooling
+// share (Core's `scripts/task/`); they are loaded from the Core beside this
+// checkout and re-exported below. `pnpm-command.mjs` runs pnpm;
+// `checkout-repository.mjs` says which repository a directory is the top of;
 // `core-build.mjs` builds the Core packages a domain links and
 // `cache-delegation.mjs` says when Core's own build cache owns that build;
-// `path-identity.mjs` compares paths the way Windows does; `markers.mjs`
-// records what finished in a worktree and `side-state.mjs` reads one
+// `markers.mjs` records what finished in a worktree and `side-state.mjs` reads one
 // worktree's whole state; `process-list.mjs` and `processes-using-roots.mjs`
 // find what is running inside one; `disposable-root.mjs` decides whether a
 // path may be deleted at all; `core-sibling.mjs` finds and proves the Core
@@ -28,6 +30,8 @@
 // may be moved up to Core's `dev`; `progress-note.mjs` is how a long step
 // says it is running.
 
+import { importCoreScript } from "../core-scripts/index.mjs";
+
 export { applyMove } from "./apply-move.mjs";
 export { buildCore, coreDistPaths, fullCoreDistPaths, CORE_PACKAGES, FULL_CORE_PACKAGES } from "./core-build.mjs";
 export { coreCacheOwnsBuild } from "./cache-delegation.mjs";
@@ -36,12 +40,10 @@ export { resolveCoreSibling } from "./core-sibling.mjs";
 export { createWorktree } from "./create.mjs";
 export { assertDisposable } from "./disposable-root.mjs";
 export { copyEnvLocal } from "./env-local.mjs";
-export { gitAnsweredNo, runGit } from "./git-command.mjs";
 export { installWorktree } from "./install-worktree.mjs";
 export { installedLockfile } from "./installed-lockfile.mjs";
 export { clearMarker, readMarker, writeMarker } from "./markers.mjs";
 export { planSideMove } from "./move-plan.mjs";
-export { pathInside, samePath } from "./path-identity.mjs";
 export { runPnpm } from "./pnpm-command.mjs";
 export { listProcesses } from "./process-list.mjs";
 export { processesUsingRoots } from "./processes-using-roots.mjs";
@@ -49,3 +51,10 @@ export { noteProgress } from "./progress-note.mjs";
 export { removeWorktree } from "./remove.mjs";
 export { planSharedCoreMove } from "./shared-core-move.mjs";
 export { readSideState } from "./side-state.mjs";
+
+const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
+const { gitAnsweredNo } = await importCoreScript("scripts/task/git-answered-no.mjs");
+const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
+const { pathInside } = await importCoreScript("scripts/task/path-inside.mjs");
+
+export { gitAnsweredNo, pathInside, runGit, samePath };

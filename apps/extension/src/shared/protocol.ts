@@ -6,6 +6,8 @@ import {
   type ClientGatewayClientHello,
   type ClientGatewayClientMessage,
   type ClientGatewayClientType,
+  type ClientGatewayConnectionState,
+  type ClientGatewayHostLease,
   type ClientGatewayRecordingEvent,
   type ClientGatewayServerMessage,
   type ClientGatewaySnapshot,
@@ -18,7 +20,6 @@ import {
   type WebAutomationActionType,
   type WebAutomationActionVisualTarget,
   type WebAutomationFactCheckCommand,
-  type WebAutomationHostLease,
   type WebAutomationRecordedExtraction,
   type WebAutomationRecordedTab
 } from "@fluxiq-web-extension/domain/client";
@@ -54,7 +55,8 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
-export type ConnectionState = "disconnected" | "connecting" | "pairing" | "connected" | "reconnecting" | "error";
+/** Where the gateway connection stands: Core's reconnecting connection decides it (`FluxIQClientGatewayConnection`). */
+export type ConnectionState = ClientGatewayConnectionState;
 export type RecordingState = "idle" | "recording" | "paused";
 
 export type FluxIQSettings = {
@@ -630,10 +632,10 @@ export type ServerCommandPayload =
   // the wire (automation-project-agents plan); the action mapping drops every
   // field it does not know, so it rides beside the action rather than in it.
   // Absent, no lease is in force and the command runs as it always has.
-  | { command: "execute_action"; action: BrowserActionCommand; lease?: WebAutomationHostLease | undefined }
+  | { command: "execute_action"; action: BrowserActionCommand; lease?: ClientGatewayHostLease | undefined }
   // A fact check (plan B1) arrives as an `execute_action` under its own action
   // type and is split off before the action path, which would refuse it.
-  | { command: "evaluate_facts"; check: WebAutomationFactCheckCommand; lease?: WebAutomationHostLease | undefined }
+  | { command: "evaluate_facts"; check: WebAutomationFactCheckCommand; lease?: ClientGatewayHostLease | undefined }
   | { command: "set_active_tab"; tabId: string }
   | { command: "disconnect"; reason?: string | undefined }
   | { command: "ping"; nonce?: string | undefined };
