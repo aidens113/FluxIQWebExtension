@@ -677,3 +677,13 @@ apps/extension/src/panel/settings/toggle-view.ts
 docs/working/extension-core-boundary-audit/reports/lane-s-f5-storage-hello.md
 ```
 
+### Final tree, after F5's last edit (lead runs)
+- `pnpm --filter @fluxiq-web-extension/extension build` -> chrome, firefox, e2e-chromium each "verified 22 files".
+- Headed chat check, label lane-s-f6 (script `lane-s-f6-check.sh`, same command and env as lane-s-f3), Chrome side
+  panel, everything-store, no provider key -> CHECK EXIT 0, all 14 checks true including `theMessageIsTheInstruction`.
+- `lane-s-f6-headed-rerun.md` is the worker's partial note (it handed back mid-build); this entry supersedes it. This
+  report (`lane-s.md`) and `lane-s-f6-headed-rerun.md` can go with any follow-up unit.
+- The supervisor committed the follow-ups during this validation (downstream 00104ab5, Core 9fedacc4) and then merged
+  `dev` (37dc7c8e, b6d9a953). The follow-up UNIT READY lists above are already committed. The lead's runs above were
+  made on the follow-up tree; whether they ran before or after the dev merge commits was not pinned, so rerun narrow
+  checks after the merge before t728 finishes. Only this report is uncommitted.
