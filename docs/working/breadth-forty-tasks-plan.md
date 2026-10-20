@@ -533,6 +533,27 @@ The 2026-10-18 entries are archived in
 - Outcome: Partial (running)
 - Follow-up: verdicts, spend, debugs; hand the four traces to lane T for P3.
 
+### 2026-10-20 - Rerun round 4: 0 of 3 so far; three shared weaknesses named
+- Agent: supervisor (debuggers debug-rr4-office, -job, -photo; social still running at this entry)
+- Changed: nothing in the repositories; debug notes in each lane tree (copied to dev).
+- Validation: spend-ledger records: office run-mvgvyaip-d856e135 failed $0.046426512 (128 steps); job
+  run-mvgw1854-5d10955b failed $0.05910921 (229 steps; furthest yet: save found, one judged trial, then three briefs
+  failing to reset); photo run-mvgw7320-de416190 failed $0.058458126 (158 steps). All under $0.25; no balance error.
+  These are the first traced live runs.
+- Office cause: t741's A1 adopted every issued list as an act's witness, including another brief's search page; a
+  fresh brief's address memory forgets earlier briefs' pages, so Core's own look and the model's navigation to the
+  printed address were refused `address_not_shown`; a read target's identity kept the text it reads, so reads broke
+  once the Flow changed it.
+- Job cause: every pass of a looped save was recorded on the template row, so the undo check never matched the row a
+  pass saved; the refusal named no failed condition and kept listing the act as undoable.
+- Photo cause: a Like in a post dialog named a list whose address opens a different document, so Core kept demanding a
+  re-read it could never get and refused all 8 trials, though the undo had landed.
+- Shared weaknesses (the debugs' conclusion): build-wide site facts held per brief; refusals that do not say which
+  condition failed or whether any call can meet it (builders repeat until the repeat guard ends the brief); the
+  supervisor ending the build after one failed brief with money left. t743 makes all three structural.
+- Outcome: Partial (social pending)
+- Follow-up: t743; social debug.
+
 ## Open Questions
 
 None requiring user input.

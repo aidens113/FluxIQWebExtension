@@ -271,6 +271,28 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t743-rerun4-structural (lead-xhigh, t743 rerun4-structural)
+- Why: four rerun rounds, 0 of 16, each failure a new shape; round-4 debugs name three shared weaknesses. Debug
+  notes (lane trees, `docs/working/language-driven-flow-loop-plan/debugs/`): t563 run-mvgvyaip-d856e135 office, t719
+  run-mvgw1854-5d10955b job, t567 run-mvgw7320-de416190 photo (social pending; the supervisor forwards it).
+- Unit S1, one build-scoped site memory: places, shown addresses and issued lists belong to the build, not the brief
+  (domain `shown-addresses.ts`, `run.ts`, Core brief seeding); Core-framed reset looks are exempt from the shown-address
+  rule; A1's witness adoption is limited to lists the act could have changed (office).
+- Unit S2, an actionable-answer contract: every gate refusal names the condition that failed and whether any call on
+  the page can meet it; when none can, the act leaves `actsToUndo` with a closed `gate_unsatisfiable` reason and the
+  brief is offered an honest exit (job, photo); `undo-admission.ts` answers "already back" closed (photo).
+- Unit S3, repair before ending: with money left, the supervisor's completion refuses an ending until each failed
+  subflow has had one changed brief, unless the failure reason is closed and terminal (`completion.ts`, photo).
+- Unit S4, specific defects: a read target's identity does not include the text it reads
+  (`plan-resolution/element-identity.ts`, office); a looped save's pass row reaches `inspectStateDiff` and the control
+  resolves in that row (Core `executor/host-state.ts`, domain `state-diff/places/diff.ts`, job); when Core's own look
+  cannot restamp a group, the group is unreachable and a toggle act whose undo landed settles restored, the judge told
+  (`ledger.ts`, `settlement-group-witness.ts`, `create-baselines.ts` wording, photo); a press the page reports as failed
+  is not counted as succeeded (job, trace it).
+- Rules: generic guidance only, never shaped like a realistic task; prompt contract gate tests; provider-free headed
+  reproductions of each shape in `apps/extension/e2e/site-reset` with a scripted provider; usual lane rules.
+- Report: `docs/working/trace-offline-trials-plan/reports/t743-rerun4-structural.md` in the t743 downstream tree.
+
 ### Brief: t742-trace-intake-parity (lane T lead, trace plan P3)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P3 (traces fed through the same ingress; a parity
   harness over real Lab traces from all ten realistic sites; gate: the original run matches at every delivery point).
