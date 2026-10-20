@@ -253,7 +253,7 @@ was still running at dispatch and is excluded below by its own file list.
 - Baseline (25 newest runs with steps, 219.8 build minutes, 129 trials), time-weighted: live trials 49.8%, model calls
   24.3%, exploration 22.3%, site resets 0.6% (a lower bound: resets inside trials emit no span), other 3.0%. Social
   run-mvfq957o-40103539: 20.50 of 25.05 minutes in 7 trials, longest 336.8 s.
-- Validation (supervisor reruns in t729): `pnpm --filter @fluxiq-web-extension/test-runner exec tsc -p tsconfig.json`
+- Validation: supervisor reruns in t729: `pnpm --filter @fluxiq-web-extension/test-runner exec tsc -p tsconfig.json`
   -> exit 0; `node --test packages/test-runner/dist/build-time/tests/*.test.js` -> tests 8 pass 8 fail 0; `node
   packages/test-runner/dist/build-time/cli.js --limit 25` -> the category table, no unknown kinds; Core `pnpm exec
   vitest run src/programs/automation-studio/model/offline-trial` -> `Test Files 5 passed, Tests 47 passed`; Core

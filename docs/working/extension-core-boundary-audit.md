@@ -156,7 +156,7 @@ working document before its first Core edit.
   into `pnpm check`, `packages/agent-orchestrator` and `reusable-evidence-coordinator.ts` deleted, one provider key
   list, the "$0.10" comment, `packages/test-matrix` selects only the ten realistic scenarios for browser jobs.
   Commits t727: downstream 654e9b1f, Core 4ad4eac2.
-- Validation (supervisor reruns in the t727 trees): `node scripts/structure-audit.mjs` -> `passed (213 warning(s),
+- Validation: supervisor reruns in the t727 trees: `node scripts/structure-audit.mjs` -> `passed (213 warning(s),
   635 baselined)`, Core -> `passed (408 warning(s), 1152 baselined)`; `node scripts/check/core-mirror.mjs` -> `1
   mirror set(s) match ... structure-audit (58 files)`; rule and mirror tests -> pass 21 fail 0, Core rule test -> pass
   15 fail 0; planted `apps/extension/src/zz-planted.ts` with a DeepSeek URL -> `FAIL [restricted-references] ...`,
@@ -175,7 +175,7 @@ working document before its first Core edit.
   session-pick; the extension queue on Core's outbox in `chrome.storage.session` (`fluxiq.outbox`), the old
   `fluxiq.queuedEvents` discarded at every background start, flushes bound to the session lineage, project and
   recording.
-- Validation (supervisor reruns in t726): Core `npx vitest run` in the package -> `Test Files 22 passed, Tests 150
+- Validation: supervisor reruns in t726: Core `npx vitest run` in the package -> `Test Files 22 passed, Tests 150
   passed`, `npx tsc --noEmit` -> exit 0; extension `tsc -p tsconfig.json` and `tsconfig.test.json` -> exit 0;
   `EXTENSION_TEST_BUILD_LABEL=sup-g1 node apps/extension/scripts/test-extension.mjs` on gateway-session, host-lease,
   saved-state, storage-queue-discard, outbox -> tests 46 pass 46 fail 0; structure audit -> passed (638 baselined).
