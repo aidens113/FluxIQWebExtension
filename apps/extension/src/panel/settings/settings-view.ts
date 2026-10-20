@@ -191,6 +191,8 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
     dot.className = `dot dot-${copy.dot}`;
     stateLine.textContent = copy.sentence;
     open.observe(status);
+    // Before filling, so a switch Core's policy forbids fills as off.
+    form.allow(status.captureAllowed);
     if (!dirty) form.fill(savedSettings(status));
   }
 

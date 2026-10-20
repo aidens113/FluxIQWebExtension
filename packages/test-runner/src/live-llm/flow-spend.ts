@@ -17,6 +17,13 @@
 // publish. Where Core holds no record, or one it never itemised, the figure it
 // does not have is reported as unknown (`null`) and `source` says why; it is
 // never rebuilt from another record.
+//
+// The same record carries the two diagnostics the step-log reading used to
+// give a project build (A8): `largestInputTokens`, the largest input of any one
+// call, and `byRole`, the calls and cost of each agent role. They keep the
+// names they had there, now at `runSpend.largestInputTokens` and
+// `runSpend.byRole`. Core tallies roles only, not briefs, so a role's entry is
+// its calls and cost without the per-brief split or a per-role largest input.
 
 import type { ExistingFlowSpend, ExistingFlowSpendPhase } from "../existing-fluxiq-control/index.js";
 
@@ -49,6 +56,9 @@ export type LiveLlmRunSpendPhases = {
   chat: LiveLlmSpendPhase | null;
 };
 
+/** One agent role's calls and cost, as Core's purse tallied them. */
+export type LiveLlmRoleSpend = { calls: number; estimatedCostUsd: number };
+
 export type LiveLlmRunSpend = {
   source: LiveLlmSpendSource;
   /** Every call Core's purse counted; `null` where Core kept no itemised record. */
@@ -61,6 +71,15 @@ export type LiveLlmRunSpend = {
   phases: LiveLlmRunSpendPhases;
   /** The spend judged against the ceiling as one Flow, with each phase listed beside it. */
   perBuild: LiveLlmPerBuildSpend;
+  /** The largest input, in tokens, of any one call: how big a single decision's context grew. `null` when no call reported one or Core kept no figure. */
+  largestInputTokens: number | null;
+  /**
+   * A project build's calls by the agent role that made them (`supervisor`,
+   * `builder`, `repair`, `validator`). A call no agent named -- every call of a
+   * candidate build, the chat, a playback run -- is in no entry, so it is empty
+   * for them; `null` where Core kept no tally.
+   */
+  byRole: Record<string, LiveLlmRoleSpend> | null;
 };
 
 /** The Flow's spend against the ceiling; `estimatedCostUsd` is `null` when Core holds no figure for it. */
@@ -98,6 +117,8 @@ export function liveLlmRunSpend(spend: ExistingFlowSpend | null, ceilingUsd: num
       builds: null,
       phases: { ...NO_PHASES },
       perBuild: { ceilingUsd, builds: unknownBecause === "not_settled" ? [] : [{ phase: "flow", attempt: null, estimatedCostUsd: null, overCeiling: false }], parts: [], maxBuildCostUsd: null, overCeiling: 0 },
+      largestInputTokens: null,
+      byRole: null,
     };
   }
   const total = nano(spend.spentUsd);
@@ -130,6 +151,8 @@ export function liveLlmRunSpend(spend: ExistingFlowSpend | null, ceilingUsd: num
       maxBuildCostUsd: spent ? total : 0,
       overCeiling: spent && overCeiling ? 1 : 0,
     },
+    largestInputTokens: spend.largestInputTokens,
+    byRole: spend.byRole ? Object.fromEntries(Object.entries(spend.byRole).map(([role, item]) => [role, { calls: item.calls, estimatedCostUsd: nano(item.usd) }])) : null,
   };
 }
 

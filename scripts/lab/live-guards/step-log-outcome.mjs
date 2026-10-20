@@ -10,8 +10,8 @@
 // folder per model and tool step there, `meta.json` last, naming the provider,
 // the HTTP status, any error code and what the call cost.
 //
-// Counted the way `packages/test-runner/src/live-llm/step-log-spend.ts`
-// counts: a complete `meta.json` that names a provider is one call. A call in
+// Counted on its own, for a run killed before the runner's finalize (the
+// runner's totals are Core's Flow purse, `live-llm/flow-spend.ts`): a complete `meta.json` that names a provider is one call. A call in
 // flight when the run was killed has no meta yet and is not counted, so the
 // figure is what the log proves was spent, not an upper bound.
 

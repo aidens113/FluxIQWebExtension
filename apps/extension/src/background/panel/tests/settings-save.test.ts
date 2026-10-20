@@ -4,10 +4,13 @@ import { defaultSettings } from "../../../shared/browser";
 import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY } from "fluxiq/automation-studio/nodes";
 import { mergeSettings } from "../settings-save";
 
-test("saving requests always stays OFF while ordinary switches still save", () => {
-  for (const requested of [undefined, { requestsEnabled: true }, { requestsEnabled: "yes" }, { requestsEnabled: false }]) {
-    assert.equal(mergeSettings({ ...defaultSettings(), requestsEnabled: true }, requested).requestsEnabled, false);
+test("under Core's default a save never changes the stored request choice, while ordinary switches still save", () => {
+  for (const stored of [true, false]) {
+    for (const requested of [undefined, { requestsEnabled: true }, { requestsEnabled: "yes" }, { requestsEnabled: false }]) {
+      assert.equal(mergeSettings({ ...defaultSettings(), requestsEnabled: stored }, requested).requestsEnabled, stored);
+    }
   }
+  assert.equal(mergeSettings(defaultSettings(), { requestsEnabled: true }).requestsEnabled, false, "a save under the default cannot turn requests on");
   assert.equal(mergeSettings(defaultSettings(), { captureSnapshots: false }).captureSnapshots, false);
 });
 

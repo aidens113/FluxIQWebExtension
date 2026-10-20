@@ -28,3 +28,12 @@ test("other failures, a plain rate limit, and an empty or absent payload are not
   assert.equal(detectBalanceFailure({ records: [] }), null);
   assert.equal(detectBalanceFailure(null), null);
 });
+
+test("a record carrying either Core balance code is a balance failure; an unrelated code is not", () => {
+  for (const code of ["llm.provider_balance_exhausted", "flow_bootstrap.provider_balance_exhausted"]) {
+    const found = detectBalanceFailure({ records: [{ provider: { provider: "deepseek", httpStatus: 400, code, body: { message: "balance is exhausted" } } }] });
+    assert.equal(found?.code, code);
+    assert.equal(found?.evidence, `Core code ${code}`);
+  }
+  assert.equal(detectBalanceFailure({ records: [{ provider: { httpStatus: 400, code: "flow_bootstrap.provider_http_error", body: "bad request" } }] }), null);
+});

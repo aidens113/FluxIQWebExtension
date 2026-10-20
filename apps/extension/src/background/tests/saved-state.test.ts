@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY } from "fluxiq/automation-studio/nodes";
 import type { FluxIQSettings } from "../../shared/protocol";
 import { readSavedClientId, readSavedOutbox, readSavedSession, readSavedSettings } from "../saved-state";
 
@@ -24,7 +23,7 @@ test("well-formed settings are kept, and nothing stored reads as the defaults", 
 test("each malformed settings field is replaced by its default and named", () => {
   const reading = readSavedSettings({ gatewayUrl: "http://not-a-socket", coreApiUrl: 42, autoReconnect: "yes", captureSnapshots: false }, defaults);
   assert.deepEqual(reading.value, { ...defaults, captureSnapshots: false });
-  assert.deepEqual(reading.repaired, ["requestsEnabled", "gatewayUrl", "coreApiUrl", "autoReconnect"]);
+  assert.deepEqual(reading.repaired, ["gatewayUrl", "coreApiUrl", "autoReconnect"]);
   assert.deepEqual(readSavedSettings("garbage", defaults), { value: defaults, repaired: ["settings"] });
   assert.deepEqual(readSavedSettings([1, 2], defaults), { value: defaults, repaired: ["settings"] });
 });
@@ -76,15 +75,11 @@ test("a client id must be a non-blank string", () => {
 });
 
 
-test("request preference stays OFF for missing, malformed and attempted true saved settings", () => {
-  for (const stored of [undefined, {}, { requestsEnabled: true }, { requestsEnabled: "yes" }, { requestsEnabled: false }]) {
-    assert.equal(readSavedSettings(stored, defaults).value.requestsEnabled, false);
-  }
-});
-
-test("request preference reads ON only when Core's policy allows it and it was stored as true", () => {
-  const allowing = { ...AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, directRequests: { allowed: true } };
-  assert.deepEqual(readSavedSettings({ ...defaults, requestsEnabled: true }, defaults, allowing), { value: { ...defaults, requestsEnabled: true }, repaired: [] });
-  assert.deepEqual(readSavedSettings({ ...defaults, requestsEnabled: "yes" }, defaults, allowing).repaired, ["requestsEnabled"]);
-  assert.equal(readSavedSettings({ ...defaults, requestsEnabled: true }, defaults, AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY).value.requestsEnabled, false);
+test("the stored request choice is read as the person set it, before any policy is known, and never repaired away", () => {
+  assert.deepEqual(readSavedSettings({ ...defaults, requestsEnabled: true }, defaults), { value: { ...defaults, requestsEnabled: true }, repaired: [] });
+  assert.deepEqual(readSavedSettings({ ...defaults, requestsEnabled: false }, defaults), { value: defaults, repaired: [] });
+  assert.equal(readSavedSettings({}, defaults).value.requestsEnabled, false, "nothing stored is the default, off");
+  const malformed = readSavedSettings({ ...defaults, requestsEnabled: "yes" }, defaults);
+  assert.equal(malformed.value.requestsEnabled, false);
+  assert.deepEqual(malformed.repaired, ["requestsEnabled"]);
 });

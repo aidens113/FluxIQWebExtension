@@ -510,3 +510,170 @@ docs/working/extension-core-boundary-audit/reports/lane-s.md
 - `shown-addresses` can exceed Core's 64 KiB per-value bound; the write is then refused and that memory survives only
   in process (best effort, as before this task). `run.ts` sits at the 800-line limit.
 - `summarize-task.mjs:39` (scripts, lane H) may double-count repair calls; pre-existing.
+
+## Supervisor follow-ups (2026-10-20), after units 1-2 were committed and dev merged
+
+### Results
+- F1 host-aware wording: `ActivityPacerOptions.hostWords` and `activityHeadline(kind, outcome, words, situation?)` take
+  each host's words (required). Extension unchanged ("Waiting for you: answer in the FluxIQ panel" / "finish the check
+  on the page"); Core web "Waiting for your answer" / "Waiting for you: finish the check in your browser". Report
+  `lane-s-f1-host-words.md`.
+- F2 tallies: Core's Flow spend record and `get-flow-spend` carry `largestInputTokens` and `byRole` ({role: {calls,
+  estimatedCostUsd}}, null when unknown); the Lab writes them as `runSpend.largestInputTokens` / `runSpend.byRole`
+  (moved from `runSpend.stepLog.*`; no script read the old names). Report `lane-s-f2-tallies.md`.
+- F3 instruction fold: not caused by lane S. `dev` (main checkouts, dev Core rebuilt as authorised) fails the same
+  check 13/14 with the same folded instruction. Cause: Core `runtime/conversations/person-words.ts` read a build's
+  instruction from every person turn since the thread last "showed something done", and a plain reply (words-only
+  `whatICanDo`, or any model reply) never counted (Core 1f16b6e9, 2026-10-07). Fix (exact, after the lead rejected a
+  first question-mark heuristic): Core records its decision kind (`reply` | `clarify` | `invoke`) on each answer turn
+  (migration `0026_responded_turn_decision`, nullable `decision_kind`; never projected to any client read);
+  `reply`/`invoke` close the earlier request, `clarify` keeps it open, turns without a record behave as before. Core's
+  `dev` needs this when t728 merges. Report `lane-s-f3-instruction-fold.md`.
+- F4 balance guards: `balance-failure.mjs` matches `llm.provider_balance_exhausted` and
+  `flow_bootstrap.provider_balance_exhausted` (step-log codes already flow through `step-log-outcome.mjs`); 402 and text
+  matches kept; stale script comments fixed; lead updated `docs/architecture/testing-facility.md`. Report
+  `lane-s-f4-balance-guards.md`.
+- F5 storage and hello: storage applies no policy and keeps the person's stored choice (a restart read before any
+  policy writes nothing back); saves under a known live policy go through Core's clamp (`requestsChoice`); the hello
+  reports the effective settings via a new `effectiveSettings` dep from D6's `CapturePolicySource`; the panel receives
+  `captureAllowed` booleans and disables what Core forbids. Report `lane-s-f5-storage-hello.md`.
+
+### Lead validation (final trees)
+- Core: `pnpm --filter fluxiq build` current; fluxiq and web checks pass; structure audit "passed (419 warning(s), 1152
+  baselined)"; contract tests + `ui/activity-status`, `runtime/conversations`, schema tests, creation-spend,
+  build-purse, runs and conversations handler tests -> 62 files, 558 tests passed.
+- Downstream: core-build gate current; extension, domain, test-runner checks pass (gated); structure audit "passed
+  (208 warning(s), 625 baselined)"; extension `background/` + `panel/settings/` -> 618/618; test-runner live-llm,
+  control and flow-lane/creation -> 361/361; `scripts/lab/live-guards` -> 50/50.
+- Headed: F3's t728 rerun (label lane-s-f3) -> CHECK EXIT 0, 14/14, saved instruction exactly the typed sentence.
+
+UNIT READY: follow-up F1
+- Core:
+```
+apps/web/src/features/automation-studio/conversation/activity/index.ts
+apps/web/src/features/automation-studio/conversation/activity/paced-status.ts
+apps/web/src/features/automation-studio/conversation/activity/steps/messages.ts
+apps/web/src/features/automation-studio/conversation/activity/tests/pacing.test.ts
+apps/web/src/features/automation-studio/conversation/activity/tests/paused.test.ts
+packages/fluxiq/src/ui/activity-status/headline.ts
+packages/fluxiq/src/ui/activity-status/index.ts
+packages/fluxiq/src/ui/activity-status/pacer.ts
+packages/fluxiq/src/ui/activity-status/tests/candidate-trial-live.test.ts
+packages/fluxiq/src/ui/activity-status/tests/candidate-trial.test.ts
+packages/fluxiq/src/ui/activity-status/tests/headline.test.ts
+packages/fluxiq/src/ui/activity-status/tests/pacer.test.ts
+packages/fluxiq/src/ui/activity-status/tests/supervisor-ending.test.ts
+apps/web/src/features/automation-studio/conversation/activity/host-words.ts
+packages/fluxiq/src/ui/activity-status/host-words.ts
+packages/fluxiq/src/ui/activity-status/tests/test-host-words.ts
+```
+- downstream:
+```
+apps/extension/src/background/activity/activity-relay.ts
+apps/extension/src/background/activity/index.ts
+apps/extension/src/background/activity/tests/activity-relay.test.ts
+apps/extension/src/background/activity/host-words.ts
+docs/working/extension-core-boundary-audit/reports/lane-s-f1-host-words.md
+```
+
+UNIT READY: follow-up F2
+- Core:
+```
+packages/fluxiq/src/programs/automation-studio/api/contracts/run.ts
+packages/fluxiq/src/programs/automation-studio/api/handlers/runs.ts
+packages/fluxiq/src/programs/automation-studio/api/handlers/tests/runs.test.ts
+packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/creation-spend/parse.ts
+packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/creation-spend/record.ts
+packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/creation-spend/tests/parse.test.ts
+packages/fluxiq/src/programs/automation-studio/runtime/llm/build-purse/settlement-ledger.ts
+packages/fluxiq/src/programs/automation-studio/runtime/llm/build-purse/tests/settlement-ledger.test.ts
+packages/fluxiq/src/programs/automation-studio/runtime/llm/build-purse/types.ts
+packages/fluxiq/src/programs/automation-studio/runtime/service/creation-spend.ts
+packages/fluxiq/src/programs/automation-studio/runtime/service/tests/creation-spend-itemised.test.ts
+```
+- downstream:
+```
+packages/test-runner/src/existing-fluxiq-control/flow-spend.ts
+packages/test-runner/src/live-llm/flow-spend.ts
+packages/test-runner/src/live-llm/index.ts
+packages/test-runner/src/live-llm/tests/flow-purse.ts
+packages/test-runner/src/live-llm/tests/flow-spend.test.ts
+packages/test-runner/src/live-llm/tests/live-llm-run.test.ts
+packages/test-runner/src/tests/existing-fluxiq-control.test.ts
+docs/working/extension-core-boundary-audit/reports/lane-s-f2-tallies.md
+packages/test-runner/src/existing-fluxiq-control/tests/flow-spend.test.ts
+```
+
+UNIT READY: follow-up F3
+- Core:
+```
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/conversations.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/inputs.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/instructions/respond.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/instructions/tests/respond-to-turn.test.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/person-words.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/rows.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/store.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/tests/person-words.test.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/tests/store.test.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/turn.ts
+packages/fluxiq/src/programs/automation-studio/runtime/conversations/writer.ts
+packages/fluxiq/src/programs/automation-studio/storage/project/administration.ts
+packages/fluxiq/src/programs/automation-studio/storage/project/schema/index.ts
+packages/fluxiq/src/programs/automation-studio/storage/project/schema/conversation-turn-decision.ts
+packages/fluxiq/src/programs/automation-studio/storage/project/schema/tests/conversation-turn-decision.test.ts
+```
+- downstream:
+```
+docs/working/extension-core-boundary-audit/reports/lane-s-f3-instruction-fold.md
+```
+
+UNIT READY: follow-up F4
+- downstream:
+```
+docs/architecture/testing-facility.md
+scripts/lab/live-campaign/row/build-spend.mjs
+scripts/lab/live-campaign/row/reported-spend.mjs
+scripts/lab/live-guards/balance-failure.mjs
+scripts/lab/live-guards/step-log-outcome.mjs
+scripts/lab/live-guards/tests/balance-failure.test.mjs
+docs/working/extension-core-boundary-audit/reports/lane-s-f4-balance-guards.md
+scripts/lab/live-guards/tests/step-log-outcome.test.mjs
+```
+
+UNIT READY: follow-up F5
+- downstream:
+```
+apps/extension/e2e/runtime/tests/requests-settings.spec.ts
+apps/extension/src/background/capture-policy/index.ts
+apps/extension/src/background/connection.ts
+apps/extension/src/background/connection/gateway-session.ts
+apps/extension/src/background/connection/host-lease/tests/gateway-carriage.test.ts
+apps/extension/src/background/connection/tests/gateway-session.test.ts
+apps/extension/src/background/index.ts
+apps/extension/src/background/panel/panel-control-deps.ts
+apps/extension/src/background/panel/panel-control.ts
+apps/extension/src/background/panel/settings-save.ts
+apps/extension/src/background/panel/tests/panel-control.test.ts
+apps/extension/src/background/panel/tests/settings-save.test.ts
+apps/extension/src/background/saved-state.ts
+apps/extension/src/background/storage.ts
+apps/extension/src/background/tests/connection-status.test.ts
+apps/extension/src/background/tests/saved-state.test.ts
+apps/extension/src/background/tests/storage-settings.test.ts
+apps/extension/src/panel/settings/address-form.ts
+apps/extension/src/panel/settings/draft-store.ts
+apps/extension/src/panel/settings/form-fields.ts
+apps/extension/src/panel/settings/index.ts
+apps/extension/src/panel/settings/settings-view.ts
+apps/extension/src/panel/settings/tests/connection-settings.test.ts
+apps/extension/src/shared/protocol.ts
+apps/extension/src/background/capture-policy/allowed-capture.ts
+apps/extension/src/background/capture-policy/requests-choice.ts
+apps/extension/src/background/capture-policy/tests/allowed-capture.test.ts
+apps/extension/src/background/capture-policy/tests/requests-choice.test.ts
+apps/extension/src/panel/settings/tests/policy-toggles.test.ts
+apps/extension/src/panel/settings/toggle-view.ts
+docs/working/extension-core-boundary-audit/reports/lane-s-f5-storage-hello.md
+```
+

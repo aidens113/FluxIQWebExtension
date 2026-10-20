@@ -13,11 +13,12 @@
 // stored pairing token that is not a string is dropped rather than repaired:
 // there is no default token, and the browser pairs again.
 //
-// Direct requests are what Core's recording-capture policy allows: on only when
-// the policy allows them and the stored value is `true`. Under Core's default
-// policy they are always off, as before Core owned the policy.
+// The direct-requests choice is read as the person stored it, like every other
+// switch: it is read before Core's recording-capture policy is known, so
+// clamping it here would overwrite a choice a later policy allows. Core's policy
+// is applied where settings are used (`capture-policy/effective-settings.ts`),
+// which keeps direct requests off under Core's default.
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import {
   CLIENT_GATEWAY_OUTBOX_LOSS_REASONS,
   clientGatewayOutboxLossMerge,
@@ -30,21 +31,13 @@ import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "
 
 export type SavedReading<T> = { value: T; repaired: string[] };
 
-const SETTINGS_FLAGS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const;
+const SETTINGS_FLAGS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled"] as const;
 
-export function readSavedSettings(
-  stored: unknown,
-  defaults: FluxIQSettings,
-  policy: AutomationStudioRecordingCapturePolicy = AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY
-): SavedReading<FluxIQSettings> {
-  const allowedRequests = (requested: unknown) => clampAutomationStudioRecordingCaptureSettings({ directRequests: requested === true }, policy).directRequests;
-  defaults = { ...defaults, requestsEnabled: allowedRequests(defaults.requestsEnabled) };
+export function readSavedSettings(stored: unknown, defaults: FluxIQSettings): SavedReading<FluxIQSettings> {
   if (stored === undefined) return { value: { ...defaults }, repaired: [] };
   if (!isRecord(stored)) return { value: { ...defaults }, repaired: ["settings"] };
   const repaired: string[] = [];
   const value: FluxIQSettings = { ...defaults };
-  value.requestsEnabled = allowedRequests(stored.requestsEnabled);
-  if (stored.requestsEnabled !== value.requestsEnabled) repaired.push("requestsEnabled");
   const gatewayUrl = stored.gatewayUrl;
   if (gatewayUrl !== undefined) {
     if (isAddress(gatewayUrl, ["ws:", "wss:"])) value.gatewayUrl = gatewayUrl;

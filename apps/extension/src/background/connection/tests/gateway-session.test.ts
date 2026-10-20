@@ -16,8 +16,10 @@ import {
   type ClientGatewayOutboxBinding,
   type ClientGatewayOutboxContext
 } from "@fluxiq/client-gateway-websocket";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../shared/protocol";
+import { effectiveSettings } from "../../capture-policy/index";
 import { GatewaySession, type GatewaySessionDeps } from "../gateway-session";
 
 const SYNTHETIC_TOKEN = "synthetic-token.0";
@@ -64,7 +66,11 @@ type HarnessInput = {
   context?: ClientGatewayOutboxContext;
   onQueueLoss?: GatewaySessionDeps["handlers"]["onQueueLoss"];
   keepAlive?: () => void;
+  // Core's recording-capture policy the hello's effective settings are clamped by.
+  policy?: AutomationStudioRecordingCapturePolicy;
 };
+
+const PERSON_SETTINGS = { gatewayUrl: "ws://gateway.test", autoReconnect: false, captureMutations: true, captureInputValues: false, captureSnapshots: true, requestsEnabled: true } as FluxIQSettings;
 
 function harness(input: HarnessInput = {}) {
   const store = clientGatewayMemoryOutboxStore();
@@ -81,7 +87,8 @@ function harness(input: HarnessInput = {}) {
     markReady = resolve;
   });
   const deps: GatewaySessionDeps = {
-    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false, captureMutations: true, captureInputValues: false, captureSnapshots: true }) as FluxIQSettings,
+    settings: () => PERSON_SETTINGS,
+    effectiveSettings: () => effectiveSettings(PERSON_SETTINGS, input.policy ?? AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY),
     session: () => state.session,
     persistSession: async (session) => {
       state.persisted.push(session);
@@ -172,6 +179,22 @@ test("every socket opens with the extension's hello: identity, capabilities, dom
   assert.equal(payload.metadata.domainId, "web-automation");
   assert.equal(payload.metadata.browser.extensionVersion, "0.0.0-test");
   assert.deepEqual(payload.metadata.settings, { captureMutations: true, captureInputValues: false, captureSnapshots: true });
+});
+
+test("the hello reports the settings under Core's policy, not the person's raw switches", async () => {
+  const h = harness({ policy: {
+    captureInputValues: { allowed: true, default: true },
+    captureSnapshots: { allowed: false, default: true },
+    captureMutations: { allowed: true, default: false },
+    directRequests: { allowed: false }
+  } });
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withOpenSession(h, async (socket) => {
+    hello = socket.messages()[0];
+  });
+  const metadata = (hello!.payload as { metadata: { settings: Record<string, boolean> } }).metadata;
+  assert.deepEqual(metadata.settings, { captureMutations: true, captureInputValues: false, captureSnapshots: false }, "a forbidden switch is reported off");
+  assert.equal(PERSON_SETTINGS.captureSnapshots, true, "the person's preference is unchanged");
 });
 
 test("a hello without a saved token carries none", async () => {

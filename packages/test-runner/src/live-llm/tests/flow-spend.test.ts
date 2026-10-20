@@ -53,8 +53,22 @@ test("a Flow Core says spent nothing lists no Flow, and an unknown figure is unk
 
   for (const why of ["no_record", "flow_unknown", "unreadable"] as const) {
     const unknown = liveLlmRunSpend(null, CEILING, why);
-    assert.deepEqual([unknown.source, unknown.calls, unknown.totalEstimatedCostUsd, unknown.builds], [why, null, null, null]);
+    assert.deepEqual([unknown.source, unknown.calls, unknown.totalEstimatedCostUsd, unknown.builds, unknown.largestInputTokens, unknown.byRole], [why, null, null, null, null, null]);
     assert.deepEqual(unknown.perBuild, { ceilingUsd: CEILING, builds: [{ phase: "flow", attempt: null, estimatedCostUsd: null, overCeiling: false }], parts: [], maxBuildCostUsd: null, overCeiling: 0 });
   }
   assert.deepEqual(liveLlmRunSpend(null, CEILING, "not_settled").perBuild.builds, [], "nothing has settled, so there is no Flow to report yet");
+});
+
+// A8: a project build's largest call input and per-role spend, as Core's purse kept them, under the names the step-log reading gave them.
+test("Core's largest input and role tallies are reported as they were kept, and unknown where Core kept none", () => {
+  const byRole = { supervisor: { calls: 1, usd: 0.002 }, builder: { calls: 3, usd: 0.0060000001 } };
+  const project = liveLlmRunSpend(flowPurse({ build: [4, 0.008] }, { largestInputTokens: 21_000, byRole }), CEILING);
+  assert.equal(project.largestInputTokens, 21_000);
+  assert.deepEqual(project.byRole, { supervisor: { calls: 1, estimatedCostUsd: 0.002 }, builder: { calls: 3, estimatedCostUsd: 0.006 } });
+
+  const candidate = liveLlmRunSpend(flowPurse({ build: [2, 0.004] }, { largestInputTokens: null, byRole: {} }), CEILING);
+  assert.deepEqual([candidate.largestInputTokens, candidate.byRole], [null, {}], "a build no agent named has no roles, and no call reported its input");
+
+  const older = liveLlmRunSpend(flowPurse({ build: [2, 0.004] }), CEILING);
+  assert.deepEqual([older.largestInputTokens, older.byRole], [null, null], "a record kept before Core tallied them");
 });

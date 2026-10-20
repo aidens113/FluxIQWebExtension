@@ -5,12 +5,13 @@
 // failure for an edit that had worked. This stores exactly the known fields,
 // each only when it has the right type, and never touches the socket.
 //
-// Direct requests are stored on only when Core's recording-capture policy
-// allows them and the request asked for them; under Core's default policy they
-// stay off, as before Core owned the policy.
+// The stored direct-requests choice changes only when Core's recording-capture
+// policy allows direct requests (`requestsChoice`); otherwise it is kept as the
+// person set it, and effective settings keep requests off where they are used.
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
 import type { FluxIQSettings } from "../../shared/protocol";
+import { requestsChoice } from "../capture-policy/index";
 
 const TEXT_FIELDS = ["gatewayUrl", "coreApiUrl"] as const;
 const SWITCH_FIELDS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const;
@@ -25,11 +26,10 @@ export function mergeSettings(
   requested: unknown,
   policy: AutomationStudioRecordingCapturePolicy = AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY
 ): FluxIQSettings {
-  const allowedRequests = (asked: unknown) => clampAutomationStudioRecordingCaptureSettings({ directRequests: asked === true }, policy).directRequests;
-  const next: FluxIQSettings = { ...current, requestsEnabled: allowedRequests(current.requestsEnabled) };
+  const next: FluxIQSettings = { ...current };
   if (!requested || typeof requested !== "object" || Array.isArray(requested)) return next;
   const record = requested as Record<string, unknown>;
-  if (typeof record.requestsEnabled === "boolean") next.requestsEnabled = allowedRequests(record.requestsEnabled);
+  next.requestsEnabled = requestsChoice(current.requestsEnabled, record.requestsEnabled, policy);
   for (const field of TEXT_FIELDS) {
     const value = record[field];
     if (typeof value === "string" && value.trim()) next[field] = value.trim();

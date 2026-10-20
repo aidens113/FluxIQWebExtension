@@ -235,6 +235,17 @@ test("a create-flow run readies its build with its permitted consequences and re
   assert.equal(run.usage.calls, 5);
   assert.equal(snapshot.runSpend.source, "flow_purse");
   assert.deepEqual(snapshot.runSpend.phases.build, { calls: 5, estimatedCostUsd: 0.02 });
+  assert.deepEqual([snapshot.runSpend.largestInputTokens, snapshot.runSpend.byRole], [null, null], "this purse kept no tallies");
+});
+
+// A8: a project build's largest call input and per-role spend reach the snapshot from Core's purse.
+test("the snapshot carries Core's largest call input and per-role spend", async () => {
+  const byRole = { supervisor: { calls: 1, usd: 0.004 }, builder: { calls: 4, usd: 0.016 } };
+  const { written, settle } = await settleBuildOnce(proposedBuild, {}, flowPurse({ build: [5, 0.02] }, { largestInputTokens: 21_000, byRole }));
+  await settle();
+  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.equal(snapshot.runSpend.largestInputTokens, 21_000);
+  assert.deepEqual(snapshot.runSpend.byRole, { supervisor: { calls: 1, estimatedCostUsd: 0.004 }, builder: { calls: 4, estimatedCostUsd: 0.016 } });
 });
 
 test("a refused build's content-free progress survives unchanged in the live snapshot", async () => {

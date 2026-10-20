@@ -13,6 +13,7 @@ export {
   UnitSituation,
   type ActivityClock,
   type ActivityHeadlineSituation,
+  type ActivityHostWords,
   type ActivityPacerOptions,
   type ActivityTimer,
   type ActivityWaitReason,
@@ -20,6 +21,7 @@ export {
   type UnitState
 } from "fluxiq/ui";
 export { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "./activity-relay";
+export { EXTENSION_ACTIVITY_HOST_WORDS } from "./host-words";
 export { isActivityOverlayPreference } from "./is-activity-overlay-preference";
 export { sendStartedWork } from "./send-answer";
 export { SendStart, STARTING_HEADLINE, STARTING_HOLD_MS, type StartingOverride } from "./send-start";

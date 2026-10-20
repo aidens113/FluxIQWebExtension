@@ -6,20 +6,16 @@
 // A viewer convenience only: every read and write is wrapped, and a panel whose
 // storage fails simply starts from the saved settings.
 //
-// Direct requests in a draft are what Core's default recording-capture policy
-// allows, which is off: the panel has no other policy to go by.
+// A draft keeps the direct-requests switch as the form read it, like every
+// other switch: the form reads a switch Core's policy forbids as off, and the
+// background decides what a save may change (`capture-policy/requests-choice.ts`).
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings } from "fluxiq/automation-studio/nodes";
 import type { FluxIQSettings } from "../../shared/protocol";
 
 export const CONNECTION_DRAFT_KEY = "fluxiq.ui.connectionDraft";
 
 const TEXT = ["gatewayUrl", "coreApiUrl"] as const;
 const SWITCHES = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const;
-
-function allowedRequests(requested: unknown): boolean {
-  return clampAutomationStudioRecordingCaptureSettings({ directRequests: requested === true }, AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY).directRequests;
-}
 
 /** A stored draft, or undefined for anything that is not a whole, well-typed set of settings. */
 export function parseConnectionDraft(value: unknown): FluxIQSettings | undefined {
@@ -34,7 +30,7 @@ export function parseConnectionDraft(value: unknown): FluxIQSettings | undefined
     captureMutations: record.captureMutations as boolean,
     captureInputValues: record.captureInputValues as boolean,
     captureSnapshots: record.captureSnapshots as boolean,
-    requestsEnabled: allowedRequests(record.requestsEnabled)
+    requestsEnabled: record.requestsEnabled === true
   };
 }
 
@@ -58,7 +54,7 @@ export function writeConnectionDraft(values: FluxIQSettings | undefined): void {
       void chrome.runtime.lastError;
     };
     if (values === undefined) chrome.storage.local.remove(CONNECTION_DRAFT_KEY, done);
-    else chrome.storage.local.set({ [CONNECTION_DRAFT_KEY]: { ...values, requestsEnabled: allowedRequests(values.requestsEnabled) } }, done);
+    else chrome.storage.local.set({ [CONNECTION_DRAFT_KEY]: { ...values, requestsEnabled: values.requestsEnabled === true } }, done);
   } catch {
     /* best-effort: the draft is a viewer convenience, and Save works the same without it */
   }

@@ -41,7 +41,8 @@ import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants"
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
-import { CapturePolicySource, effectiveSettings } from "./capture-policy/index";
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { allowedCapture, CapturePolicySource, effectiveSettings } from "./capture-policy/index";
 import { reportSavedStateRepair, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are
 // siblings of the same name: "./connection" would resolve back to this file.
@@ -123,6 +124,8 @@ export class FluxIQConnection {
       // A policy that arrives once a recording has started reaches the page
       // being recorded now; a tab attached later is sent it anyway.
       onChange: () => {
+        // The panel's settings form disables what the new policy forbids.
+        this.emitStatus();
         const tabId = this.page.tabId();
         if (this.recording.state() !== "recording" || tabId === undefined) return;
         void this.attachment.setRecordingState(tabId, true).catch(/* best-effort: a page without the content script gets the policy when it attaches */ () => undefined);
@@ -137,6 +140,9 @@ export class FluxIQConnection {
 
     this.gateway = new GatewaySession({
       settings: () => this.settings,
+      // The hello reports what this client captures: the same effective
+      // settings every recording message carries, from the one policy source.
+      effectiveSettings: recordingSettings,
       session: () => this.session,
       persistSession: (session) => this.persistSession(session),
       emitStatus,
@@ -344,6 +350,7 @@ export class FluxIQConnection {
       recordingState: this.recording.state(),
       gatewayUrl: this.settings.gatewayUrl,
       settings: this.settings,
+      captureAllowed: allowedCapture(this.capturePolicy.current()),
       clientId: this.session.clientId,
       paired: this.isPaired(),
       queueSize: gateway.queueSize,
@@ -561,6 +568,11 @@ export class FluxIQConnection {
 
   currentSettings(): FluxIQSettings {
     return this.settings;
+  }
+
+  /** Core's recording-capture policy as last read, or Core's default when none was: what saved settings are clamped by. */
+  currentCapturePolicy(): AutomationStudioRecordingCapturePolicy {
+    return this.capturePolicy.current();
   }
 
   /** The settings under Core's recording-capture policy, which is what a recording uses; `currentSettings` stays the person's own. */

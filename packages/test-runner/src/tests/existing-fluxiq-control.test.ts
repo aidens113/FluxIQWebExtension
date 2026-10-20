@@ -521,8 +521,8 @@ test("reads a Flow's spend by phase, keeps an unitemised record's unknowns unkno
   });
   const itemised = await client.getFlowSpend("project.web", "flow.main");
   assert.deepEqual(requests[0], { projectId: "project.web", flowId: "flow.main" });
-  assert.deepEqual(itemised, { projectId: "project.web", flowId: "flow.main", spentUsd: 0.0433, builds: 1, calls: 26, byPhase, updatedAt: 2 });
-  assert.deepEqual(await client.getFlowSpend("project.web", "flow.main"), { projectId: "project.web", flowId: "flow.main", spentUsd: 0.05, builds: 2, calls: null, byPhase: null, updatedAt: 2 });
+  assert.deepEqual(itemised, { projectId: "project.web", flowId: "flow.main", spentUsd: 0.0433, builds: 1, calls: 26, byPhase, largestInputTokens: null, byRole: null, updatedAt: 2 });
+  assert.deepEqual(await client.getFlowSpend("project.web", "flow.main"), { projectId: "project.web", flowId: "flow.main", spentUsd: 0.05, builds: 2, calls: null, byPhase: null, largestInputTokens: null, byRole: null, updatedAt: 2 });
   assert.equal(await client.getFlowSpend("project.web", "flow.main"), null);
   await assert.rejects(client.getFlowSpend("project.web", "flow.main"), /calls and .*byPhase must be present together/u);
   await assert.rejects(client.getFlowSpend("project.web", "flow.main"), /byPhase\.chat\.usd must not be negative/u);

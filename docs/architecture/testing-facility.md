@@ -3526,10 +3526,14 @@ run that failed on the facility before any provider call), so the ledger records
 no rule limits it. The loop rule counts starts, so a crashed run still counts. A start whose launcher died, or
 that is older than six hours, is closed from its run directory
 (`"reconciled": true`) before the next admission. When a finished run's
-`provider-failures.local.json` shows an empty balance or exhausted quota
-(provider HTTP 402, or text such as DeepSeek's `Insufficient Balance` or
-`insufficient_quota`), the Lab writes `STOP-balance` with the reason. A plain
-429 rate limit is not a balance failure.
+`provider-failures.local.json` or step log shows an empty balance or exhausted quota,
+the Lab writes `STOP-balance` with the reason. Core classifies it itself
+(`llm.provider_balance_exhausted` on the step's `meta.error.code`,
+`flow_bootstrap.provider_balance_exhausted` on a failed build or re-author), and
+`scripts/lab/live-guards/balance-failure.mjs` matches those codes; provider HTTP
+402 and text such as DeepSeek's `Insufficient Balance` or `insufficient_quota`
+still match records written before Core published the codes. A plain 429 rate
+limit is not a balance failure.
 
 The fingerprint is a SHA-256 over every file `git ls-files --cached --others
 --exclude-standard` lists in this repository and in the FluxIQ Core beside it,

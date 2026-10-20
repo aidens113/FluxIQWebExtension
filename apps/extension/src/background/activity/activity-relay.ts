@@ -57,6 +57,7 @@ import {
   ACTIVITY_DONE_VISIBLE_MS
 } from "../../shared/activity/index";
 import { ActivityPacer, FanOutGate, systemActivityClock, UnitHistory, type ActivityClock } from "fluxiq/ui";
+import { EXTENSION_ACTIVITY_HOST_WORDS } from "./host-words";
 import { sendStartedWork } from "./send-answer";
 import { SendStart, STARTING_HOLD_MS } from "./send-start";
 
@@ -142,6 +143,7 @@ export class ActivityRelay {
     this.clock = clock;
     this.pacer = new ActivityPacer({
       clock,
+      hostWords: EXTENSION_ACTIVITY_HOST_WORDS,
       onChange: () => {
         this.displayChangedAt = clock.now();
         this.displayChanged();
