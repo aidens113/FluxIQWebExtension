@@ -12,7 +12,7 @@ test("positive in-field expansion controls refuse partial text with generic repa
       const failure = (error as { failure: { code: string; actual: string } }).failure;
       assert.equal(failure.code, "web.validation.output_not_observed");
       assert.match(failure.actual, /incomplete_text.*description.*registered row-bound click/u);
-      assert.match(failure.actual, /row-context.*without.*For Each.*optional.*registered row-bound click.*Next page/u);
+      assert.match(failure.actual, /load every row first.*row-context.*without.*For Each.*optional.*registered row-bound click.*a repeat cannot hold another repeat/u);
       assert.doesNotMatch(failure.actual, /partial description/u);
       return true;
     });

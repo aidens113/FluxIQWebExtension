@@ -745,6 +745,21 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
 - Outcome: Partial
 - Follow-up: t738 fixes all four causes (brief in trace-offline-trials-plan.md); rerun the four after it merges.
 
+### 2026-10-20 - Rerun round 3 launched after t738 fixed round 2's causes
+- Agent: supervisor
+- Changed: nothing in the repositories; lane trees t563, t719, t566, t567 fast-forwarded to dev (downstream e1363c31,
+  Core e74e0890), installed and rebuilt, untracked copies of tracked debug notes removed first.
+- Why: t738 merged (reset witnesses, real trial-act addresses, write-records rows, truthful feedback, one lifecycle
+  store per process, the load-every-row-first hint) and t739 fixed the photo-social optimistic heart; no other agreed
+  change that affects live behaviour is in flight (t736 capture runs only in tracing mode; t740 is test config).
+- Validation: each tree `git rev-list --count HEAD..dev` -> 0 in both repositories; `core-build.mjs` -> current x4;
+  live guard -> `"state":"admitted"` for rr3-slot-1 to 4.
+- Launch: as round 2 ($0.25 via both settings, headed, `--model-reset-only`), fresh workspaces
+  `claude-office-checkout-t563-20261020-r4`, `claude-job-save-t719-20261020-r4`,
+  `claude-social-groups-t566-20261020-r6`, `claude-photo-likes-t567-20261020-r4`.
+- Outcome: Partial (running)
+- Follow-up: verdicts, spend and debugs.
+
 ## Open Questions
 
 None requiring user input.

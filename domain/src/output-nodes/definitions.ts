@@ -217,6 +217,18 @@ export function webAutomationOutputNodeId(outputId: WebAutomationActionType): st
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
 
+/**
+ * What a model reads about the scroll request: Core shows an object
+ * parameter's description and example whole (`flow-bootstrap/plan/parameter-text.ts`).
+ * Until t738 it read neither, and wrote keys the request does not have (social
+ * `run-mvgf7ij5-a9747575`). The example must stay one
+ * `webAutomationScrollRequestIssues` reads with no issue.
+ */
+const SCROLL_REQUEST_DESCRIPTION = "The scroll request, with only the keys mode, x, y and maxScrolls. "
+  + "mode is by (scroll by x and y pixels), toElement (scroll the target into view) or untilStable (scroll down until the page stops growing). "
+  + "untilStable requires maxScrolls, a whole number above zero: the most scrolls it makes. "
+  + "Use untilStable to load every row of a list that grows in place as it scrolls before reading it.";
+
 export const webAutomationOutputNodeDefinitions: AutomationStudioNodeDefinition[] = webAutomationActionDefinitions.map((definition) =>
   createWebAutomationOutputNodeDefinition(definition)
 );
@@ -336,7 +348,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "x", label: "X", valueType: "number", defaultValue: 0 },
     { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
     { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
-    structured("scroll", "Scroll Mode")
+    { ...structured("scroll", "Scroll Mode"), description: SCROLL_REQUEST_DESCRIPTION, example: { mode: "untilStable", maxScrolls: 20 } }
   ];
   if (outputId === "web.dom.extract") return [...selectorParameters, webAutomationExtractReadParameter()];
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
