@@ -1,8 +1,6 @@
-// In-flight command reconciliation (plan B3): the record kept of every action
-// sent toward a page, the report of one an earlier worker lost, and the answer
-// to a repeated command id.
-export { CommandReconciliation, type CommandReconciliationDeps, type RepeatAnswer } from "./command-reconciliation";
+// In-flight command reconciliation (plan B3): Core's reconciliation with the
+// web domain's facts, the session-long area it keeps its records in, and the
+// document a frame holds, which names where a command went.
 export { frameDocumentId } from "./frame-document";
-export { inFlightRecordArea, workerMemoryRecordArea } from "./record-area";
-export { InFlightRecordStore, type InFlightCommandRecord, type InFlightRecordArea } from "./record-store";
-export { SeenCommandStore } from "./seen-store";
+export { inFlightRecordArea } from "./record-area";
+export { webCommandReconciliation } from "./web-reconciliation";

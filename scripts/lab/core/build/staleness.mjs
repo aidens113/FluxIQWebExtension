@@ -1,24 +1,10 @@
-// Whether FluxIQ Core's build is older than the source it was built from.
+// The newest shipped file under a directory, by modification time.
 //
-// The Lab loads Core's COMPILED output, never its source. So a Core fix can sit
-// in the working tree while every live run silently exercises the old build,
-// and nothing anywhere says so. That is not hypothetical: on 2026-09-17 a token
-// ceiling was raised in Core's source and three whole campaign slices -- 30
-// live tasks across three agents -- ran to completion afterwards without
-// reaching the provider once, every one rejected by the previous build's
-// ceiling. Zero provider calls, zero tokens, and three reports whose real
-// subject was the build rather than the product.
-//
-// `build-watch.mjs` could not catch it. It watches Core's OUTPUT, to keep
-// a rebuild from deleting modules a run is importing, and by that measure a
-// stale build looks perfectly quiet -- quieter than a fresh one. The two guards
-// are complementary: that one asks "is Core changing under me?", this one asks
-// "is Core's build what its source says?".
-//
-// Sources are compared against output by modification time, which is coarse and
-// deliberately so. It cannot tell a meaningful edit from a touched file, and it
-// does not need to: the cost of a false alarm is one rebuild, and the cost of a
-// miss is a campaign that measures nothing and reads as a product result.
+// This repository's own builds are held to it (`../../domain-build-staleness.mjs`):
+// a source newer than its output means the output is stale. It is coarse and
+// deliberately so: it cannot tell a meaningful edit from a touched file, and the
+// cost of a false alarm is one rebuild. FluxIQ Core's build is no longer judged
+// this way; Core's own build cache answers that exactly (`currency.mjs`).
 
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -36,31 +22,10 @@ function shippedSource(name) {
 }
 
 /**
- * @param {string} coreRoot
- * @returns {Promise<{ newestMs: number, newestPath: string | null }>} the newest source file under Core's packages
- */
-export async function scanCoreSources(coreRoot) {
-  const found = { newestMs: 0, newestPath: null };
-  let packages;
-  try {
-    packages = await readdir(path.join(coreRoot, "packages"), { withFileTypes: true });
-  } catch {
-    // No Core beside this checkout is not this module's problem to report; the
-    // caller already fails on a Core it cannot resolve.
-    return found;
-  }
-  for (const entry of packages) {
-    if (entry.isDirectory()) await walk(path.join(coreRoot, "packages", entry.name, "src"), found);
-  }
-  return found;
-}
-
-/**
  * The newest shipped file under one directory, by modification time.
  *
- * The same walk `scanCoreSources` does, asked of an arbitrary root, so this
- * repository's own builds can be held to the rule Core's build is held to
- * (`../../domain-build-staleness.mjs`) instead of a second copy of it.
+ * Test files and the build's own directories are skipped: they say nothing
+ * about whether the output matches what will run.
  *
  * @param {string} root
  * @returns {Promise<{ newestMs: number, newestPath: string | null }>}

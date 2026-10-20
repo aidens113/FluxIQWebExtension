@@ -297,8 +297,9 @@ function formControl(item: unknown): JsonObject {
   const control = record<WebAutomationFormControlEvidence>(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : undefined;
+  // The name and label are handed over raw, as `autocomplete` is: the rule reads only strings, and reads them whole.
   const sensitive = control?.sensitive === true
-    || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
+    || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete, names: [control?.name], labels: [control?.label] });
   return compactJsonObject({
     selector: text(control?.selector),
     controlType,

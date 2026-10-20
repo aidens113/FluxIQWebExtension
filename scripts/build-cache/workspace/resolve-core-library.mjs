@@ -1,11 +1,13 @@
 // One FluxIQ Core library package (`packages/<directory>` of a Core checkout)
-// resolved as a build step, in the shape `resolveStep` returns, so
-// `runStep` can decide, lock, restore from the shared store and stamp it like
-// any step of this repository. `scripts/worktree/core-build.mjs` runs it with
-// the same `pnpm --filter <name> build` it always ran.
+// resolved as a build step, in the shape a resolver returns (Core's
+// `scripts/build-cache/workspace/resolve-step.mjs`), so `runStep` can decide,
+// lock, restore from this repository's part of the shared store and stamp it
+// like any step of this repository. `scripts/worktree/core-build.mjs` runs it
+// with the same `pnpm --filter <name> build` it always ran, for a Core whose
+// own cache does not yet own that build.
 //
-// Inputs, each labelled relative to the Core root so two Core checkouts with
-// the same content fingerprint the same:
+// Inputs, each walked and labelled relative to the Core root, so two Core
+// checkouts with the same content fingerprint the same:
 //   - the package's `src/`, `package.json` and every `tsconfig*.json`;
 //   - every script its `build` script runs with `node <path>` (Core's
 //     `scripts/rewrite-declaration-imports.mjs`);
@@ -13,16 +15,17 @@
 //     -- what its compiler reads of them;
 //   - Core's root `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`,
 //     `tsconfig*.json` and installed `node_modules/.pnpm/lock.yaml`;
-//   - this repository's build-cache sources.
+//   - the build-cache sources: this repository's and the engine's
+//     (`engine-sources.mjs`).
 // Outputs: `dist/` and the `tsconfig.build.tsbuildinfo` the build writes
 // beside it. Stamp, lock and stat cache live under Core's `node_modules/.cache`,
-// which is build state, not Core source.
+// which is build state, not Core source, in this repository's directory there
+// (`fluxiq-build`), apart from Core's own (`fluxiq-core-build`).
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { REPOSITORY_ROOT } from "../repository-root.mjs";
-import { STAMP_VERSION } from "../stamp/index.mjs";
-import { readWorkspacePackages } from "./workspace-packages.mjs";
+import { coreEngine } from "../core-engine.mjs";
+import { engineSourceRoots } from "./engine-sources.mjs";
 
 const ROOT_FILES = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "node_modules/.pnpm/lock.yaml"];
 const TSCONFIG = /^tsconfig.*\.json$/u;
@@ -32,14 +35,13 @@ const CACHE_DIRECTORY = path.join("node_modules", ".cache", "fluxiq-build");
 /**
  * @param {string} coreRoot a FluxIQ Core checkout
  * @param {string} directory the package's directory under `packages/`
- * @param {{ env?: NodeJS.ProcessEnv, repoRoot?: string }} [options] `repoRoot` is the checkout whose build-cache sources are hashed
+ * @param {{ env?: NodeJS.ProcessEnv }} [options]
  */
 export function resolveCoreLibrary(coreRoot, directory, options = {}) {
   const root = path.resolve(coreRoot);
   const env = options.env ?? process.env;
-  const repoRoot = path.resolve(options.repoRoot ?? REPOSITORY_ROOT);
   const packageDir = path.join(root, "packages", directory);
-  const packages = readWorkspacePackages(root);
+  const packages = coreEngine.readWorkspacePackages(root);
   const own = [...packages.values()].find((candidate) => samePath(candidate.dir, packageDir));
   if (own === undefined) throw new Error(`build-cache: ${packageDir} is not a package of the Core workspace at ${root}`);
   const manifest = JSON.parse(readFileSync(path.join(packageDir, "package.json"), "utf8"));
@@ -47,17 +49,20 @@ export function resolveCoreLibrary(coreRoot, directory, options = {}) {
   if (typeof buildScript !== "string") throw new Error(`build-cache: ${own.name} has no build script`);
 
   const roots = [];
-  const add = (target) => roots.push({ label: `core:${label(root, target)}`, path: target, exclude: [] });
+  const add = (target) => {
+    const shown = `core:${label(root, target)}`;
+    roots.push({ kind: "walk", label: shown, labelBase: shown, path: target, exclude: [] });
+  };
   add(path.join(packageDir, "src"));
   add(path.join(packageDir, "package.json"));
   for (const config of tsconfigsIn(packageDir)) add(path.join(packageDir, config));
   for (const [, script] of buildScript.matchAll(NODE_SCRIPT)) add(path.resolve(packageDir, script));
-  for (const dependency of transitiveDependencies(own, packages)) add(path.join(dependency.dir, "dist"));
+  const dependencies = transitiveDependencies(own, packages);
+  for (const dependency of dependencies) add(path.join(dependency.dir, "dist"));
   for (const file of [...ROOT_FILES, ...tsconfigsIn(root)]) add(path.join(root, file));
-  const cacheSources = path.join(repoRoot, "scripts", "build-cache");
-  roots.push({ label: "build-cache:scripts/build-cache", path: cacheSources, exclude: [path.join(cacheSources, "tests")] });
+  roots.push(...engineSourceRoots("build-cache:"));
 
-  const outputs = ["dist", "tsconfig.build.tsbuildinfo"].map((entry) => ({ label: label(root, path.join(packageDir, entry)), path: path.join(packageDir, entry), match: null }));
+  const outputs = ["dist", "tsconfig.build.tsbuildinfo"].map((entry) => ({ label: label(root, path.join(packageDir, entry)), path: path.join(packageDir, entry), exclude: [], match: null }));
   const name = `core:${own.name}:build`;
   const command = `pnpm --filter ${own.name} build`;
   return {
@@ -66,17 +71,21 @@ export function resolveCoreLibrary(coreRoot, directory, options = {}) {
     command,
     repoRoot: root,
     packageDir,
+    packageName: own.name,
+    dependencies: dependencies.map((dependency) => dependency.name),
     roots,
     outputs,
     outputBase: packageDir,
     required: ["dist/index.js", "dist/index.d.ts"].map((file) => path.join(packageDir, file)),
     tsconfigs: [],
     bundles: false,
+    traces: false,
+    replayOutput: false,
     stampPath: path.join(packageDir, CACHE_DIRECTORY, "build.json"),
     statCachePath: path.join(root, CACHE_DIRECTORY, "stat-cache.json"),
     relocationRoots: [root],
     meta: {
-      version: STAMP_VERSION,
+      version: coreEngine.STAMP_VERSION,
       step: name,
       command,
       script: buildScript,

@@ -151,7 +151,27 @@ export type WebLlmEvidenceElement = {
   within?: string;
   /** Only on elements still alike after `dialog` and `within`: which of them this is, top to bottom, of how many. */
   alike?: { index: number; total: number };
+  /**
+   * On a list or table holding at least one item: how the capture saw it go on
+   * past what it shows -- a Next, a Load more, a declared feed, or `none`
+   * (`apps/extension/src/content/extraction/read-coverage/list-way-on.ts`,
+   * l1 D1). A closed word, never page text. Never printed: the page view and
+   * `web.describe_element` leave it out, and only `./control-spot/collection.ts`
+   * reads it, where `none` lets a list with no ARIA set sizes vouch that it is
+   * whole. Absent says nothing, which is read as "may go on".
+   */
+  listWayOn?: WebLlmListWayOn;
 } & WebLlmLayerMarks;
+
+/** How a list goes on past what a capture shows of it (`WebLlmEvidenceElement.listWayOn`). */
+export type WebLlmListWayOn = "none" | "next_page" | "load_more" | "feed";
+
+const LIST_WAYS_ON: ReadonlySet<string> = new Set<WebLlmListWayOn>(["none", "next_page", "load_more", "feed"]);
+
+/** The capture's word, where it is one of the closed set; anything else says nothing. */
+function listWayOnValue(input: unknown): WebLlmListWayOn | undefined {
+  return typeof input === "string" && LIST_WAYS_ON.has(input) ? input as WebLlmListWayOn : undefined;
+}
 
 /** A packet element with its selector put back, which only domain code ever holds. */
 export type ResolvedWebLlmEvidenceElement = WebLlmEvidenceElement & { selector: string };
@@ -304,7 +324,8 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     // Joined across the whole capture by `./layers.ts`, which writes them.
     isDialog: undefined, inDialog: undefined, covers: undefined, coversCount: undefined, kind: undefined, coveredBy: undefined,
     frontLayer: trueFlag(raw.frontLayer),
-    statement: trueFlag(raw.leadStatement)
+    statement: trueFlag(raw.leadStatement),
+    listWayOn: listWayOnValue(raw.listWayOn)
   });
   return {
     element,

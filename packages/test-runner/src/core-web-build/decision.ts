@@ -1,21 +1,17 @@
-import path from "node:path";
-import { coreWebBuildCacheRoot } from "./cache-root.js";
-import { collectCoreWebBuildInputs } from "./inputs.js";
-import { coreWebBuildKey } from "./key.js";
-import { readPublishedCoreWebBuild } from "./publication.js";
+import { coreWebBuildEnvironment } from "./build-environment.js";
+import { loadCoreWebBuildSeam } from "./core-seam.js";
 
 /** What preparing Core's web build would do now: the key it would use, and whether a complete build is already published for it. */
 export type CoreWebBuildDecision = { key: string; cached: boolean };
 
 /**
  * The decision `prepareCoreWebBuild` would make, made without acting on it:
- * the same inputs, key and cache root, and only reads -- no directory is
- * created, no lock taken and nothing built. A Core missing an input fails the
- * same way the real preparation would.
+ * Core's own dry run (`inspectWebBuild`) over the same base environment a
+ * real preparation from `env` would build with, so it names the same key --
+ * no directory is created, no lock taken, nothing generated or built.
  */
 export async function inspectCoreWebBuild(fluxiqRepositoryRoot: string, env: NodeJS.ProcessEnv = process.env): Promise<CoreWebBuildDecision> {
-  const { inputs, nextExecutable } = await collectCoreWebBuildInputs(fluxiqRepositoryRoot);
-  const key = coreWebBuildKey(inputs);
-  const published = await readPublishedCoreWebBuild(path.join(coreWebBuildCacheRoot(fluxiqRepositoryRoot, env), key), key, nextExecutable);
-  return { key, cached: published !== undefined };
+  const seam = await loadCoreWebBuildSeam(fluxiqRepositoryRoot);
+  const declared = env.FLUXIQ_CORE_WEB_BUILD_CACHE?.trim();
+  return await seam.inspectWebBuild({ repoRoot: fluxiqRepositoryRoot, ...(declared ? { cacheRoot: declared } : {}), env: coreWebBuildEnvironment(env) });
 }

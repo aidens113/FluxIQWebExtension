@@ -19,8 +19,9 @@
 // links, and a half-built one is a Core whose web panel the next person to run
 // `pnpm dev` has to build themselves, inside a checkout three other tasks are
 // reading. Note what this does NOT do: a Lab run does not serve this output.
-// The Lab stages its own copy of Core's `apps/web` and builds it into a cache
-// keyed by Core's content (packages/test-runner/src/core-web-build/), so the
+// The Lab serves Core's keyed web build (Core's scripts/web-build/, called
+// from packages/test-runner/src/core-web-build/): a staged copy keyed by
+// Core's `web:build` fingerprint, so the
 // duplicate web builds four worktrees were each running are stopped by sharing
 // that cache, not by this.
 //

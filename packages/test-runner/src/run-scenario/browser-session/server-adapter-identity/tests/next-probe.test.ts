@@ -6,10 +6,10 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { FluxIQ } from "fluxiq";
-import { prepareCoreWebBuild, coreWebServerProcessSpec, serverAdapterBuild } from "../../../../core-web-build/index.js";
+import { prepareCoreWebBuild, coreWebServerProcessSpec } from "../../../../core-web-build/index.js";
 import { ProcessSupervisor } from "../../../../process-supervisor.js";
 import { withoutProviderSecrets } from "../../../../environment.js";
-import { verifyRunningServerAdapterIdentity } from "../index.js";
+import { expectedServerAdapterIdentity, verifyRunningServerAdapterIdentity } from "../index.js";
 
 async function freePort(): Promise<number> {
   const server = createServer(); await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
@@ -35,7 +35,7 @@ globalThis.fetch = (input, options) => { const url = new URL(typeof input === 's
     const user = await seed.programs.identityAccess.upsertUser({ username: "isolated-identity-proof", displayName: "Isolated proof", roleId: "viewer" });
     const session = await seed.programs.identityAccess.createSession(user.id); await seed.close(); seed = undefined;
     const build = await prepareCoreWebBuild({ fluxiqRepositoryRoot: core, cacheRoot: path.join(root, "cache"), supervisor, logPath: path.join(root, "build.log") });
-    await serverAdapterBuild.validateCopy(core, build.webDirectory);
+    assert.deepEqual(await expectedServerAdapterIdentity(core, path.join(build.webDirectory, ".server-runtime/client-gateway-server.mjs")), await expectedServerAdapterIdentity(core), "the served copy carries the canonical gateway artifact");
     const port = await freePort(), gatewayPort = await freePort(), origin = `http://127.0.0.1:${port}`;
     supervisor.start(coreWebServerProcessSpec({ name: "owned-next-identity-proof", build, port, logPath: path.join(root, "next.log"), env: { ...withoutProviderSecrets(process.env),
       FLUXIQ_ROOT: stateRoot, FLUXIQ_MODEL_PROVIDERS_ENABLED: "false", FLUXIQ_CLIENT_GATEWAY_ENABLED: "true", FLUXIQ_CLIENT_GATEWAY_PORT: String(gatewayPort),

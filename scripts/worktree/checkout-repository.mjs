@@ -17,8 +17,10 @@
 // "a worktree of the Core I mean" from "a Core somebody left beside it".
 
 import { realpath } from "node:fs/promises";
-import { runGit } from "./git-command.mjs";
-import { samePath } from "./path-identity.mjs";
+import { importCoreScript } from "../core-scripts/index.mjs";
+
+const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
+const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /** @param {string} root @returns {Promise<string>} the shared git directory of the repository `root` is the top of */
 export async function checkoutRepository(root) {

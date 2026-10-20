@@ -20,7 +20,9 @@
 import { constants } from "node:fs";
 import { copyFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { samePath } from "./path-identity.mjs";
+import { importCoreScript } from "../core-scripts/index.mjs";
+
+const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 const NAME = ".env.local";
 

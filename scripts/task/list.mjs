@@ -4,8 +4,10 @@
 // to surface a conflict, or worse, a semantic clash git will not report at all.
 
 import { runGit, samePath } from "../worktree/index.mjs";
-import { parseTaskBranch } from "./branch-name.mjs";
+import { importCoreScript } from "../core-scripts/index.mjs";
 import { listWorktrees } from "./locate.mjs";
+
+const { parseTaskBranch } = await importCoreScript("scripts/task/branch-name.mjs");
 
 export async function listTasks(repositoryRoot, { integrationBranch = "dev" } = {}) {
   const stdout = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", "task/*"]);

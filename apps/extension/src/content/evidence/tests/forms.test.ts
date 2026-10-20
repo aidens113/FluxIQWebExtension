@@ -194,6 +194,32 @@ test("the deciding token survives a page that buries it past every text bound", 
   assert.equal(project(withoutProducerVerdict(described)).control.sensitive, true);
 });
 
+// bigbox-retail's card frame (t730 c2): `<input name="cvc">` under "Security
+// code", no `autocomplete`. The probe found the producer describing it with no
+// `sensitive` flag; both halves now read its name and label.
+test("a card security code named only by its name or label is marked by the producer and withheld by the domain without that mark", () => {
+  for (const attributes of [{ name: "cvc" }, { name: "field-7", "aria-label": "Security code" }]) {
+    const described = producedControl(textInput(attributes));
+    assert.equal(described.sensitive, true, attributes.name);
+    const projected = project(withoutProducerVerdict(described));
+    assert.equal(projected.control.sensitive, true, attributes.name);
+    assert.equal(projected.control.hasValue, undefined, attributes.name);
+    assert.equal(projected.serialized.includes(CONTROL_CONTENTS), false);
+  }
+});
+
+// A control inside an element marked `data-sensitive`, not marked itself, holds
+// part of what that element holds (decision D2). The producer is the only side
+// that sees the tree, so its flag is what carries that to the domain.
+test("a control inside a marked group is marked by the producer", () => {
+  const field = textInput({ name: "recoveryPhrase", "aria-label": "Recovery phrase" });
+  const group = { getAttribute: (name: string) => (name === "data-sensitive" ? "true" : null), parentElement: null };
+  Object.defineProperty(field, "parentElement", { value: group });
+  const described = producedControl(field);
+  assert.equal(described.sensitive, true);
+  assert.equal(project(described).control.hasValue, undefined);
+});
+
 test("an ordinary field loses nothing: the second check protects secrets, not every control", () => {
   const described = producedControl(textInput({ autocomplete: "billing street-address" }));
   assert.equal(described.sensitive, undefined);

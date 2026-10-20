@@ -4,7 +4,7 @@ import { browserDescriptor, defaultSettings } from "../shared/browser";
 import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../shared/protocol";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
-import { clearSession, onSavedStateRepaired, readOrCreateClientId, readQueuedEvents, readSession, readSettings, writeSession, writeSettings } from "./storage";
+import { clearSession, discardPersistentQueue, onSavedStateRepaired, readOrCreateClientId, readSession, readSettings, writeSession, writeSettings } from "./storage";
 import { acceptActionEvidencePort } from "./action-evidence";
 import { handleScriptedNavigationControl } from "./scripted-navigation-control";
 import { clearExtractionTab, handleExtractionControl } from "./extraction";
@@ -35,6 +35,9 @@ const problemLog = new ProblemLog(localProblemLogStore(), () => [connection?.cor
 const problemNoticer = new ProblemNoticer((input) => problemLog.note(input));
 const reconnectWatchdog = new ReconnectWatchdog(browserReconnectAlarms());
 onSavedStateRepaired((message) => void problemLog.note({ source: "saved-state", message }));
+// The offline queue older builds kept in local storage, page data and all, is
+// removed at every start; the queue now lives in session storage.
+void discardPersistentQueue().catch(noteMessageFailure);
 
 function getConnection(): Promise<FluxIQConnection> {
   if (connection) return Promise.resolve(connection);
@@ -320,10 +323,11 @@ function reportProblemDeps(manager: FluxIQConnection): ReportProblemDeps {
   };
 }
 
+// A restarted worker's gateway starts at a queue size of zero while session
+// storage still holds what an earlier worker queued; the gateway reads it.
 async function statusWithQueue(manager: FluxIQConnection): Promise<ExtensionStatus> {
-  const status = manager.status();
-  status.queueSize = (await readQueuedEvents()).length;
-  return status;
+  await manager.refreshQueueSize();
+  return manager.status();
 }
 
 async function enableSidePanelFirst(): Promise<void> {

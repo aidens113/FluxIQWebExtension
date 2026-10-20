@@ -13,8 +13,40 @@ test("the three signals are read from where the wire descriptor puts them", () =
       inputType: "text",
       attributes: { type: "text", autocomplete: "billing cc-number", "data-sensitive": "false" }
     }),
-    { inputType: "text", controlType: "text", autocomplete: "billing cc-number", dataSensitive: "false" }
+    { inputType: "text", controlType: "text", autocomplete: "billing cc-number", dataSensitive: "false", names: [], labels: [] }
   );
+});
+
+test("the names and labels are read from where the wire descriptor puts them", () => {
+  assert.deepEqual(
+    sensitiveFieldSignatureOfDescriptor({
+      tagName: "input",
+      inputType: "text",
+      id: "pay-cvc",
+      label: "Security code",
+      accessibleName: "Security code",
+      attributes: { name: "cvc", id: "pay-cvc", "aria-label": "CVC", placeholder: "123" }
+    }),
+    {
+      inputType: "text",
+      controlType: undefined,
+      autocomplete: undefined,
+      dataSensitive: undefined,
+      names: ["cvc", "pay-cvc", "pay-cvc"],
+      labels: ["Security code", "Security code", "CVC", "123"]
+    }
+  );
+});
+
+test("a card security code's descriptor is sensitive without autocomplete", () => {
+  // The wire shape of bigbox-retail's card frame field (t730 c2): a name and a label, nothing else.
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", attributes: { name: "cvc", inputmode: "numeric" } }), true);
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", label: "Security code", attributes: { name: "field-7" } }), true);
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", accessibleName: "CVV" }), true);
+  // A label is page text and arrives as anything; only a string is read.
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", label: ["Security code"], attributes: { name: 7 } }), false);
+  assert.equal(isSensitiveElementDescriptor({ tagName: "button", text: "Security code", attributes: { name: "cvc" } }), false);
+  assert.equal(isSensitiveElementDescriptor({ tagName: "input", inputType: "text", label: "ZIP code", attributes: { name: "zip" } }), false);
 });
 
 test("a descriptor naming a secret-bearing control is sensitive", () => {

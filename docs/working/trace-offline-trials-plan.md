@@ -14,61 +14,46 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 ## Current State
 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
-progress. Get it done." Then: hand off first and continue in a new chat.
+progress. Get it done."
 
-**Dispatched 2026-10-19 16:25:** lanes G, H, S and T running (briefs under "Worker Briefs"), each branch fast-forwarded
-to `dev` first. L1 still running (C4 reset-words report landed; D3 installed-gateway proof remained). Core paired
-document for the boundary moves: Core `docs/working/extension-boundary-moves.md`.
+**Merged to `dev` and pushed (both repositories), 2026-10-19 evening:**
+- t726 lane G: offline queue scoped to session/project/recording with a byte budget and explicit loss marker; the
+  gateway client protocol (reconnect, heartbeat, outbox, reconciliation, lease fencing, one session pick) in Core's
+  `client-gateway-websocket`; the extension's gateway session is a web adapter over it.
+- t727 lane H: provider-call structure rule, Core-mirror drift check in `pnpm check`, agent-orchestrator and the
+  unused coordinator deleted, one provider key list, test-matrix realistic-only; Core owns the build-cache engine,
+  task rules and a web-build seam, imported here; Core staleness by Core's `decideStep`.
+- t729 lane T: P0 (build-time baseline: live trials 49.8% of build time; capture-boundary inventory; snapshot spike:
+  DOM serialization + resource map reloads faithfully, MHTML does not) and P1 to the L1 stop point (trace contract,
+  result contract, gateway channel scope, environment port, trace-fed fixture). No live behaviour changed.
+- t724 L1: one site-reset settlement model grounded in observed state; both browser-proof defects fixed (build-wide
+  repeat matching; icon-only control names); six headed site-reset cases pass.
+- t732: card security codes and group-marked controls withheld on every capture path (headed probe proved the leak
+  closed); inert file input reports `not_shown`; a blank text wait is refused at once.
 
-**Plans being executed:**
-- Traces and offline trials: Core `docs/working/trace-offline-trials-plan.md` (decisions, tiers, phases P0-P7,
-  tests, risks), consultant's source beside it.
-- Boundary audit move plan: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) (findings 1-12,
-  phases 0-5). The user approved implementation; the tooling recommendation (Core owns build-cache and shared task
-  rules, this repository imports them, drift checks on any copy left) is adopted.
+**In flight:**
+- t728 lane S (phases 2 and 4) committed on its branch and merged with `dev`; the lead is doing five follow-ups
+  before merge (panel wording in Core's own panel, the largestInputTokens/byRole diagnostics, the chat check that
+  folded an earlier turn into the instruction, the Lab's balance codes, requestsEnabled and the hello's capture flags).
+- t730 realistic-only browser specs: all workers done, tree committed and merged with `dev`; shared Core being moved
+  to `dev`; then the lead's combined headed run, baseline, green scan and disposition table.
+- t731 sweep fixes: reran each failing file on the recovered machine; re-applying fixes only where a file still fails.
+- New: the identity-capture cost regression (`content/identity/control-row.ts`: a 6,000-anchor page takes 372 s,
+  about 4 s in September) plus the wire sensitive marker for group-marked controls; and trace U7 consumer wiring.
 
-**Lanes (paired task branches created, worktrees at `C:/Users/osrs_/FluxStuff/fxwork/t7NN/`, both repos clean):**
+**Next, in order:** merge t728 after its follow-ups; merge t730 and t731; land the identity-capture fix; sync the four
+live lane trees (t563, t719, t566, t567: both repos to `dev`, Core rebuilt); then rerun the breadth round's four
+repaired tasks (office checkout, job save, photo newest likes, social group posts) on fresh workspaces, supervised,
+$0.25 each via both `FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`. Live runs wait for every agreed
+change (lane S changes model-facing prompt rules).
 
-| Lane | Branch | Work, in order | Lead |
-| --- | --- | --- | --- |
-| G gateway | t726 `task/t726-gateway-client-into-core` | Audit P1: offline queue (`fluxiq.queuedEvents`, `background/storage.ts`, `gateway-session.ts`) scoped to its browser session, project and recording; then audit P3: reconnect, heartbeat, queue, reconciliation, lease fencing and one session-picking rule into Core's `client-gateway-websocket` client, the domain keeping only the web adapter | lead-xhigh |
-| H guards and tooling | t727 `task/t727-guards-and-tooling` | Audit P0: a structure-audit rule failing on provider hosts/SDKs/key reads downstream; drift checks for every mirror of Core code; delete `packages/agent-orchestrator` and `reusable-evidence-coordinator.ts`; one provider key list; the stale "$0.10" comment; trace the three suspicions (test-matrix synthetic CI browser scenarios, core-web-build, Lab staleness by mtime). Last, audit P5: Core owns the build-cache engine and shared task rules, downstream imports them, keeping `pnpm task` CLI-compatible while other lanes use it | lead |
-| S single sources and telemetry | t728 `task/t728-single-sources-telemetry` | Audit P2: Core publishes run accounting and the build lifecycle; the Lab and the domain's build memories read them (no `initial.<toolId>` parsing). Then audit P4: one Core source each for activity headline/pacer/wording, `where`/number reading, dedupe/sort (`order-rows.ts`); generic rules out of `WEB_LLM_SYSTEM_INSTRUCTIONS` into Core's prompt (contract gate tests apply); recording-capture and `requestsEnabled` policy owned by Core; the card-number screen into Core's secret screen. Not `gateway-session.ts`/`storage.ts` (lane G) | lead |
-| T traces | t729 `task/t729-traces-offline-trials` | Trace P0: baseline from Lab per-step files (about 25 recent runs: share of build time in trials, resets, exploration, model calls); inventory of every client message Core accepts and everything it reads later; the page-snapshot spike (reload a captured page in a sandboxed browser, scripts and network off, run the extension's extraction and target code; realistic sites only, headed, provider-free). Then P1 contract and environment port; P1's evidence-loop/executor edits wait for L1 to merge | lead-xhigh |
-| L1 reset redesign | t724 `task/t724-reset-settlement-redesign` | Running at handoff, uncommitted (Core 52 files, downstream 34). Report `fxwork/t724/!FluxIQWebExtension/docs/working/breadth-forty-tasks-plan/reports/l1-reset-settlement.md` and sub-reports `l1-c1`..`l1-d2`; C1-C3, C5, C6, D1, D2 reported; C4 (reset words) and D3 (installed-gateway browser proof) remained | lead-xhigh (running) |
+**Open defects found this session (owners above):** reconnect.spec.ts `:85`/`:122` flake on the shared extension
+fixture (teardown over 30 s under load; an intermittent missing hello after a worker restart), pre-existing before
+lane G; photo-social `web.dom.extract_list` stalls (likely the identity-capture regression); a job-board
+in-place-filters `aria-busy` race in click.spec.
 
-**Lane rules for every brief:** follow both AGENTS.md files (structure, one export per file, barrels, tests in
-`tests/` beside the subject, budgets, never extract-and-drop); tests first; narrow checks only (tests beside the
-change, touched packages' typechecks, both structure audits; Core's `pnpm task finish` also runs the prompt contract
-tests); no paid or live Lab runs (the supervisor runs those, supervised, $0.25 via both
-`FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`); browser tests only on the ten realistic scenarios,
-headed, provider-free; model guidance never mirrors a realistic task; no commits by leads or workers; each lead keeps a
-running progress log in its own report `docs/working/<this-doc or audit-doc>/reports/<lane>.md` in its downstream
-worktree.
-
-**Conflict map:** G owns the extension background gateway files and Core's socket client; S must avoid them. T's
-evidence-loop and executor work waits for L1 (both touch `llm/evidence-loop.ts`). H's tooling change lands last. L1
-and S both touch Core prompt-adjacent text only through their own files; the contract gate catches pin drift.
-
-**Next, in order:**
-1. `/resume trace-offline-trials-plan`.
-2. Check L1: if its final report says Done, verify (rerun its tests), commit by explicit paths on t724, merge `dev`
-   in, narrow checks, `pnpm task finish t724` downstream then in Core, push. If it is still running or stopped
-   mid-way, read its report and sub-reports and continue it with a lead resumed from the report.
-3. Write the four lane briefs (at most 40 lines each, from the table above) under "Worker Briefs" here and in the
-   audit document, then dispatch G, H, S, T in parallel.
-4. Verify and commit each lane's units as they land; record every check in the ledgers here, in the audit
-   document and in Core's plan.
-5. When L1 and the reset rules are on `dev`: rerun the breadth round's four repaired tasks (office checkout, job
-   save, photo newest likes, social group posts) on fresh workspaces, supervised.
-
-**This repository's part of the trace plan (unchanged):** P0 prerequisites (audit P0 and P1, lanes H and G); the
-page-snapshot spike (lane T); P2 extension lane after Core's P1 contract (in-band artifacts, page snapshots in
-tracing mode, Chrome and Edge first, tracing on for every Lab live run); P5 the domain's offline resolver.
-
-**Rules that carry over:** traces never feed model guidance; no recorded page data, tokens or typed secrets in
-logs, reports or commits; Core's secret screening runs before a trace is stored; offline trials only in the test and
-repair phases, never during exploration; the final judged whole run stays live with a site reset.
+**Environment:** OneDrive.Sync.Service had leaked to 14.4 GB (machine has 12 GB); restarted with the user's approval
+at ~19:50; a monitor alerts above 4 GB. Results recorded between ~14:34 and 19:50 were rerun before use.
 
 **Blocked:** nothing needs the user.
 
@@ -206,6 +191,83 @@ was still running at dispatch and is excluded below by its own file list.
 - Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t730-realistic-specs.md` in the
   t730 tree, as a running log with `UNIT READY` markers.
 
+### Brief: t731-sweep-fixes (lead, t731 sweep-1019b-fixes)
+- Why: sweep-1019b (`reports/sweep-1019b.md`) left 10 Core fluxiq failures, all timeouts or EBUSY, and one
+  scenario-lab browser failure. Full suites are fixed forward; "machine load" is not a cause until proven.
+- Task: rerun each failing file alone in the t731 trees; for each, find the root cause and fix the side that is wrong
+  (a test that does slow real I/O it need not do, a writer admission that waits on a lock never released, a SQLite
+  handle left open before an unlink on Windows), never by raising a timeout or loosening an assertion. If a file
+  passes alone, find what it contends on when run with its package (shared temp paths, ports, a global) and remove
+  the contention. Core files (under `packages/fluxiq/src/programs/`): `runtime/service/flows/tests/creation.test.ts`,
+  `runtime/tests/service-adaptation/tests/promotion-tier.test.ts`, `runtime/tests/service-flows/tests/cancel-parked-run.test.ts`,
+  `storage/canonical-authority/tests/whole-operation.test.ts` (also failed in S1), `.../whole-sql.test.ts`,
+  `testing/tests/scale-graph-store.test.ts` (EBUSY), `database-manager/tests/index.test.ts`. Downstream:
+  `scenarios/crossborder-marketplace/tests/browser-paths.test.ts`, step traffic-check (`waitForState`, 6000 ms).
+  Then run the downstream packages that `pnpm test` did not reach after scenario-lab and fix what fails there.
+- Worktrees: `C:/Users/osrs_/FluxStuff/fxwork/t731/!FluxIQWebExtension` and `.../t731/!FluxIQ`.
+- Owns: those test files and the source modules their root causes lead to; `scenarios/crossborder-marketplace/**`.
+- Must not touch: lane files (G, H, S, T, t730 and L1 lists above); if a root cause lands in one, stop and report.
+- Validation: each fixed file run alone and then with its package directory, three times, pass counts recorded.
+- Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t731-sweep-fixes.md` in the t731
+  downstream tree, running log with `UNIT READY` markers.
+
+### Brief: t732-sensitive-capture (worker-high, t732 sensitive-cvc-capture)
+- Why: t730 worker C2 (`fxwork/t730-realistic-only-browser-specs/.../reports/t730-c2-bigbox-hooks.md`) confirmed
+  in a headed probe that bigbox-retail's checkout "Security code" field (`input[name=cvc]`, in the card frame) leaks
+  its typed value into the page snapshot, every recorded keydown and the recorded `dom.input`; and that a checkbox
+  marked sensitive only through its group (hook B-1) carries no sensitive marker on the wire descriptor. Typed
+  secrets must never leave the page. C1 also found `upload.ts` reporting an inert file input as `disabled`
+  (`not_actionable`) where the contract since ba9fea58 says `not_shown`.
+- Task: unit 1, find the extension's sensitive-field classification and every capture path it gates (snapshot,
+  keydown/input recording, descriptors); make card security codes (name, autocomplete `cc-csc`, labels such as
+  "Security code", "CVC", "CVV") and any control inside a sensitive-marked ancestor sensitive by one rule applied on
+  every path, tests first beside each subject. Unit 2, the inert file input reports `not_shown`, test beside it.
+- Worktree: `C:/Users/osrs_/FluxStuff/fxwork/t732/!FluxIQWebExtension` (own Core, read-only).
+- Owns: the classification module(s) and capture paths it leads to under `apps/extension/src/content/**` and
+  `apps/extension/src/shared/**`, `upload.ts`, their `tests/`.
+- Must not touch: L1's files (`git -C C:/Users/osrs_/FluxStuff/fxwork/t724/!FluxIQWebExtension status --short`,
+  which include `shared/dom-element.ts` and `content/dom-snapshot.ts`): if the fix must go there, stop and report
+  the exact change; `apps/extension/e2e/**` (t730); Core.
+- Validation: tests beside each change; extension `tsc` src and test; structure audit; a headed provider-free probe
+  on bigbox-retail's checkout (script in your scratchpad, not the tree) showing the typed code absent from snapshot,
+  keydown and input events.
+- Report: `docs/working/trace-offline-trials-plan/reports/t732-sensitive-capture.md` in the t732 tree, with
+  `UNIT READY` markers. No commits; never write a typed value into logs or the report.
+
+### Brief: t733-content-runtime-fixes (lead, t733 identity-capture-cost)
+- Why: three product defects found while moving specs onto realistic sites. (1) Identity capture cost: per snapshot
+  element, `content/identity/control-row.ts` `recordIdentity`/`recordSubject` run up to three walks of 2,000 nodes
+  with `accessibleNameFor` each (6db9ca04, 2026-10-12; 62eb9b41, 2026-10-17): a 6,000-anchor page takes 372 s, about
+  4 s on 2026-09-12 (`t730-c3-everything-store-hooks.md`); likely behind photo-social `extract_list` stalls. (2) The
+  wire descriptor carries no sensitive marker for a control sensitive only through its group (`t732-sensitive-
+  capture.md`, open question 2: the exact change in `shared/dom-element.ts` and `accessible-name.ts:104`). (3) A click
+  answers "changed in place" before fetched rows land: `content/action-runtime/in-place-effect.ts` settles while a
+  region it saw change is `aria-busy="true"` (`t730-realistic-specs.md`, click.spec.ts:524 analysis).
+- Task: one unit each, partitioned by file, tests first. (1) Restore capture cost to seconds without losing what the
+  two commits added (memoize or bound the walks per snapshot, one shared pass); add a cost test that fails on the
+  regression. (2) The marker on the wire, one rule with the domain's descriptor reader. (3) `watchInPlaceEffect`
+  waits, within its existing window, until busy regions it saw change clear (reuse `content/evidence/loading.ts`).
+- Worktree: `C:/Users/osrs_/FluxStuff/fxwork/t733/!FluxIQWebExtension` (own Core, read-only).
+- Owns: `apps/extension/src/content/identity/**`, `shared/dom-element.ts`, the accessible-name module,
+  `content/action-runtime/in-place-effect.ts`, `content/evidence/loading.ts`, domain `sensitivity/descriptor.ts`, tests.
+- Must not touch: `apps/extension/e2e/**` (t730), `apps/scenario-lab/**`, Core, lane S's files.
+- Validation: tests beside each change; extension and domain `tsc`; structure audit; headed on realistic sites:
+  large-page-resolution rows 1-2 within their budget, click.spec.ts:524 green five runs in a row, and the measured
+  capture time of a large realistic page before and after.
+- Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t733-content-runtime-fixes.md`.
+
+### Brief: t734-trace-consumer-wiring (lane T lead resumed, t734 trace-consumer-wiring)
+- Why: P1's consumer wiring (U7) waited for L1, which merged (Core bcb2c0ec, downstream c375501a).
+- Task: the remaining-wiring table in `trace-offline-trials-plan/reports/lane-t.md` (on `dev`): the executor,
+  evidence loop and trial runner go through the environment port (clock plus channel scope, decision D3), so live or
+  offline is configuration, never a second code path; live behaviour unchanged and proven by the existing tests.
+  Lane S's lifecycle accessor may become the explicit request field if `binding.ts`/`evidence-loop.ts` allow it now;
+  coordinate through the supervisor, since t728 is not yet merged.
+- Worktree: `C:/Users/osrs_/FluxStuff/fxwork/t734/` (both repositories, own Core).
+- Validation: Core tests beside each change and the flow-bootstrap, llm, project-build and candidate-trial
+  directories; fluxiq `tsc`; both audits; prompt contract tests if any model-facing text moves.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-u7.md` in the t734 downstream tree.
+
 ### Brief: sweep-1019b (worker-low, second daily full sweep of `dev`)
 - Detached worktrees of both repositories at `origin/dev` (downstream cedd46af, Core 4077d0a0) under
   `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019b/` (Core sibling to the downstream checkout); `pnpm install` both;
@@ -261,6 +323,64 @@ was still running at dispatch and is excluded below by its own file list.
   spike (`statement-packing`, probe.spec.ts line 18), not in either unit.
 - Outcome: Accepted (units)
 - Follow-up: Core should emit a reset span inside `core.test_subflow`/`core.test_candidate`; the spike's packing fix.
+
+### 2026-10-19 - Second daily sweep (sweep-1019b)
+- Agent: supervisor (worker sweep-1019b)
+- Changed: `trace-offline-trials-plan/reports/sweep-1019b.md`; worktrees `fxwork/sweep-1019b/` (Core 4077d0a0,
+  downstream cedd46af)
+- Why: the second allowed full sweep of the day, after t722, t723 and t725 merged.
+- Validation: worker's runs (not rerun by the supervisor): Core `pnpm build` 0, `pnpm check` 0, `pnpm test` 1
+  (fluxiq 10 failed / 12852 passed in 7 files, every one `Test timed out in 15000ms`, a hook timeout or `EBUSY ...
+  project.sqlite-shm`; apps/web 3123/3123; contracts 178/178); downstream `pnpm check` 0, `pnpm build` 0, `pnpm test`
+  1 (domain 2177/2177, extension 3271/3271, scenario-lab 873/874: crossborder-marketplace `browser-paths.test.ts`
+  step traffic-check `waitForState` 6000 ms timeout; packages after scenario-lab not reached). Against S1: Core's 56
+  apps/web and 27 of 29 fluxiq failures, the TS7006 errors and the domain adapter failure are gone; whole-operation's
+  2 timeouts remain; 8 Core timeouts/EBUSY and the scenario-lab failure are new.
+- Outcome: Partial (fix forward)
+- Follow-up: brief sweep-1019b-fixes.
+
+### 2026-10-19 - Machine out of commit memory; OneDrive restarted with the user's approval
+- Agent: supervisor (found by lane G while tracing its spec flakes)
+- Changed: nothing in either repository; OneDrive restarted (`OneDrive.exe /shutdown`, then `/background`).
+- Why: OneDrive.Sync.Service (started 14:34) held 14,451 MB private memory on a 12,220 MB machine; Playwright
+  workers died with "Fatal process out of memory: Zone", a run exited 127, a page rendered blank. Every browser and
+  test result between about 14:34 and 19:50 may be affected, the 17:00 sweep included.
+- Validation: `Get-CimInstance Win32_OperatingSystem` -> free commit 3,192 MB before, 14,599 MB after; `Get-Process`
+  -> OneDrive 28 MB after restart. A monitor alerts if the sync service passes 4 GB or free commit drops under 4 GB.
+- Outcome: Accepted (environment)
+- Follow-up: lanes G, L1, T, t730 and t731 told to rerun pre-19:50 failures before acting on them.
+
+### 2026-10-19 - Lane G unit 2b held: headed specs flaky
+- Agent: supervisor
+- Changed: nothing committed; lane G resumed.
+- Validation: supervisor reruns in t726: Core package vitest -> 27 files, 179 tests passed, `tsc` 0; extension `tsc`
+  src and test 0; `EXTENSION_TEST_BUILD_LABEL=sup-g3 node apps/extension/scripts/test-extension.mjs
+  background/connection` -> pass 313 fail 0; headed `npx playwright test -c e2e/playwright.config.ts e2e/gateway-session
+  e2e/reconnect.spec.ts [lease/tests/stale-holder.spec.ts]` four times -> 3/2, all pass, 4/0, 3/1 (queue-across-
+  reconnects, worker-restart reconnect, saved-settings reconnect), all before the memory fix.
+- Recording start marker (g-recording-start-marker.md): by design; it crosses as a `client.state_update`
+  (`browser.tab`, `recordingState: started`) and Core needs no marker; the new spec will assert that.
+- Outcome: Partial
+- Follow-up: lane G reruns on the recovered machine, compares with pre-G sweep-1019b, fixes any race, five green runs.
+
+### 2026-10-19 - Lane T P0 complete and P1 to the L1 stop point, committed on t729
+- Agent: supervisor (lane-t and workers U2a, U2b, U3, U4, U6, U8)
+- Changed: Core b529bd02 (`client-gateway/trace/**` contract, `client-gateway/service/channel-scope/**`, bridge
+  `attachScopedSession`/`isScopedSession`, `runtime/environment/**` port and trace-fed fixture); downstream 791bb235
+  (`apps/extension/e2e/content/tests/snapshot-fidelity/**`, reports u2a-u8).
+- Findings: a DOM serialization with a resource map, reloaded with scripts and network off, matched live reads and
+  sampled targets on all four sites tried (MHTML did not), so P2 captures that way; P1's single environment port
+  is really a clock plus a gateway channel scope (D3), and the chat, asks, run control, screenshot upload and start
+  hook bypass the gateway and need capture where Core accepts them (D1). Possible defect: photo-social
+  `web.dom.extract_list` stalled over 4 minutes in 2 of about 6 spike runs.
+- Validation: supervisor reruns in t729: Core `pnpm exec vitest run src/client-gateway
+  src/programs/automation-studio/runtime/environment src/programs/automation-studio/client-gateway
+  src/programs/automation-studio/model/offline-trial` -> 42 files, 303 tests passed; `npx tsc --noEmit -p
+  tsconfig.json` (fluxiq) -> 0; Core audit passed (1152 baselined); extension `tsc -p tsconfig.test.json` -> 0;
+  downstream audit passed (638). The spike's headed run (lead, 20:17, after the memory fix: 4 passed, 0 requests
+  leaked, 0 page scripts run) was not repeated by the supervisor.
+- Outcome: Accepted (P0; P1 contract and port)
+- Follow-up: U7 consumer wiring after L1 merges, as a new task; the extract_list stall needs a trace.
 
 ## Open Questions
 

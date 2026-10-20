@@ -16,10 +16,9 @@ import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { withBuildLock } from "./build-lock.mjs";
 import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core/index.mjs";
-import { coreBuildMissing, coreBuildStaleness, scanCoreBuildEntries } from "./core/index.mjs";
+import { coreBuildCurrency, coreBuildMissing, scanCoreBuildEntries } from "./core/index.mjs";
 import { repositoryBuilds, staleRepositoryBuild } from "./domain-build-staleness.mjs";
 import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
-import { scanCoreSources } from "./core/index.mjs";
 import { labInvocationEnvironment } from "./lab-invocation.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 import { admitLiveRun, formatRefusals, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
@@ -161,9 +160,9 @@ Set FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 to run against it anyway.
   // product's. On 2026-09-17 that cost three campaign slices -- thirty live
   // tasks, zero provider calls -- against a ceiling that had been raised in
   // source hours earlier.
-  const staleness = coreBuildStaleness(await timer.time("core-staleness", () => scanCoreSources(coreRoot)), guard.scan);
+  const staleness = await timer.time("core-staleness", () => coreBuildCurrency(coreRoot));
   if (staleness.stale) {
-    note({ lab: "core-build", state: "stale", root: coreRoot, behindMs: staleness.behindMs, why: staleness.message });
+    note({ lab: "core-build", state: "stale", root: coreRoot, steps: staleness.steps, why: staleness.message });
     if (process.env.FLUXIQ_LAB_ALLOW_STALE_CORE !== "1") {
       process.stderr.write(`${staleness.message}
 Rebuild with: pnpm --filter fluxiq build (in ${coreRoot}). Set FLUXIQ_LAB_ALLOW_STALE_CORE=1 to run anyway.

@@ -89,6 +89,23 @@ test("an ordinary field keeps its value-presence flag: the rule protects secrets
   }
 });
 
+// bigbox-retail's card frame (t730 c2): `<input name="cvc">` under "Security
+// code", with no `autocomplete`. The projection asks the one rule with the name
+// and label the producer reported, so a producer that missed it is caught here.
+test("a card security code the producer failed to mark is protected by its name or its label", () => {
+  for (const control of [
+    { ...unmarked(undefined), name: "cvc", label: "Pay" },
+    { ...unmarked(undefined), name: "field-7", label: "Security code" }
+  ]) {
+    const projected = projectedControl(control);
+    assert.equal(projected.sensitive, true, String(control.name));
+    assert.equal(projected.hasValue, undefined, String(control.name));
+  }
+  const promo = projectedControl({ ...unmarked(undefined), name: "promo", label: "Promo code" });
+  assert.equal(promo.sensitive, undefined);
+  assert.equal(promo.hasValue, true);
+});
+
 // `read.ts`'s `text()` collapses and slices to 200 characters. Reading the
 // attribute through it would drop the token that decides the question, which is
 // exactly how a truncating copy of this rule let a card field through before.

@@ -12,7 +12,17 @@
 // leaked a billing card number in Wave 2.
 //
 // Signature, never value. Nothing here is given a control's contents; the
-// decision is made from three attributes, so a caller can ask before it reads.
+// decision is made from what the control is -- its type, its `autocomplete`,
+// its `data-sensitive`, what its author called it and the words that label it
+// -- so a caller can ask before it reads.
+//
+// What the rule cannot see is where the control sits. A control inside an
+// element marked `data-sensitive` holds part of what that element holds; the
+// extension's content script asks this rule of every ancestor
+// (`isWithinSensitiveControl`, `content/sensitive-text.ts`), because only it
+// holds the live tree.
+
+import { namesCardSecurityCode } from "./card-security-code";
 
 /**
  * The attributes the rule reads.
@@ -28,6 +38,10 @@ export type SensitiveFieldSignature = {
   controlType?: string | undefined;
   autocomplete?: string | undefined;
   dataSensitive?: string | undefined;
+  /** What the author called the control: its `name` and `id`. Consulted for a text-entry input only; anything but a string is ignored, so a wire value may be handed over as it came. */
+  names?: ReadonlyArray<unknown> | undefined;
+  /** The words that label the control: its `<label>`, `aria-label`, accessible name or placeholder. Consulted for a text-entry input only; anything but a string is ignored, so a wire value may be handed over as it came. */
+  labels?: ReadonlyArray<unknown> | undefined;
 };
 
 /**
@@ -46,6 +60,14 @@ const SENSITIVE_AUTOCOMPLETE_TOKENS = new Set(["current-password", "new-password
 const SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
 
 /**
+ * Input types a person types a code into; `""` is an input whose `type`
+ * attribute was never written, as a serialized descriptor reports it. A name or
+ * label is consulted only for these: a button that says "Security code" or a
+ * checkbox named `cvc` holds no typed code.
+ */
+const TEXT_ENTRY_TYPES: ReadonlySet<string> = new Set(["", "text", "tel", "number", "password", "search"]);
+
+/**
  * Whether the control this signature describes must never yield its value.
  *
  * `autocomplete` is a space-separated token list -- an optional `section-*`,
@@ -60,10 +82,23 @@ const SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
 export function isSensitiveFieldSignature(signature: SensitiveFieldSignature): boolean {
   if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
   if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-  return (signature.autocomplete ?? "")
+  const cardToken = (signature.autocomplete ?? "")
     .toLowerCase()
     .split(/\s+/u)
     .some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+  return cardToken || namedCardSecurityCode(signature);
+}
+
+/**
+ * A text-entry input whose name, id or label names a card security code
+ * (`card-security-code.ts`). The effective type wins over the raw attribute,
+ * as the browser's does; a signature that reports neither is not an input.
+ */
+function namedCardSecurityCode(signature: SensitiveFieldSignature): boolean {
+  const type = signature.inputType ?? signature.controlType;
+  if (type === undefined || !TEXT_ENTRY_TYPES.has(type.trim().toLowerCase())) return false;
+  return [...(signature.names ?? []), ...(signature.labels ?? [])]
+    .some((words) => typeof words === "string" && namesCardSecurityCode(words));
 }
 
 function isSensitiveControlType(type: string | undefined): boolean {

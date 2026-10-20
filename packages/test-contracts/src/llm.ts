@@ -53,7 +53,9 @@ export const LLM_LAB_MAX_CALLS_PER_RUN = 250 as const;
  * The most `--llm-max-cost-usd` may declare: Core's largest configurable
  * per-build ceiling (`AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD`), not the
  * ceiling itself. The ceiling is `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default
- * $0.10), set per run, so a static bound can only be its maximum; the Lab's
+ * $0.25, Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_DEFAULT_USD`; $0.10
+ * was the old test default, and Lab tests run at $0.25 since 2026-10-12), set
+ * per run, so a static bound can only be its maximum; the Lab's
  * plan then holds the build to the ceiling Core resolved, and a declared number
  * may only lower it. Mirrored because this package depends only on Core's
  * public contracts; the test runner's plan tests pin it to Core's export.

@@ -5,7 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { serverAdapterBuild } from "../../../../core-web-build/index.js";
 import { assertServerAdapterIdentityMatch, expectedServerAdapterIdentity, normalizeServerAdapterArtifact, verifyRunningServerAdapterIdentity, type ServerAdapterBuildIdentity } from "../index.js";
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const slot = JSON.stringify("__FLUXIQ_SERVER_IDENTITY_BEGIN__" + Buffer.from('{"fluxiqServerIdentityPlaceholder":310}').toString("base64") + "__FLUXIQ_SERVER_IDENTITY_END__");
@@ -40,7 +39,7 @@ test("complete intended inventory and canonical/staged executable freshness refu
       if (defect === "bad-copy") {
         const copied = path.join(root, "staged/apps/web"); await mkdir(copied, { recursive: true }); await cp(path.dirname(artifact), path.join(copied, ".server-runtime"), { recursive: true });
         await writeFile(path.join(copied, ".server-runtime/client-gateway-server.mjs"), code + "changed semantics");
-        await assert.rejects(() => serverAdapterBuild.validateCopy(root, copied), /provider dispatch refused/); assert.equal(await serverAdapterBuild.hasArtifacts(copied), false); return;
+        await assert.rejects(() => expectedServerAdapterIdentity(root, path.join(copied, ".server-runtime/client-gateway-server.mjs")), /provider dispatch refused/); return;
       }
       let calls = 0; await assert.rejects(() => verifyRunningServerAdapterIdentity({ readRuntimeBuildIdentity: async () => { calls++; return {}; } }, root, async () => undefined), /provider dispatch refused/); assert.equal(calls, 0);
     } finally { await rm(root, { recursive: true, force: true }); }
