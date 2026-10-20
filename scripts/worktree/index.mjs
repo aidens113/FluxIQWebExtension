@@ -13,9 +13,16 @@
 //
 // By responsibility: FluxIQ Core owns the git runner, the reading of a git
 // refusal as an answer, and path identity, which both repositories' task tooling
-// share (Core's `scripts/task/`); they are loaded from the Core beside this
-// checkout and re-exported below. `pnpm-command.mjs` runs pnpm;
-// `checkout-repository.mjs` says which repository a directory is the top of;
+// share (Core's `scripts/task/`). They are re-exported below from the verbatim,
+// drift-checked copies in `scripts/core-scripts/`, not loaded from the Core
+// beside this checkout: moving that Core up to date (`shared-core-move.mjs`,
+// `apply-move.mjs`) must work when it is too old to have them, so nothing in
+// this directory loads anything from Core when it is imported. `core-build.mjs`
+// loads the build cache, and with it Core's engine, only when it builds a Core
+// whose own cache does not own the build -- after any move has happened.
+//
+// `pnpm-command.mjs` runs pnpm; `checkout-repository.mjs` says which repository
+// a directory is the top of;
 // `core-build.mjs` builds the Core packages a domain links and
 // `cache-delegation.mjs` says when Core's own build cache owns that build;
 // `markers.mjs` records what finished in a worktree and `side-state.mjs` reads one
@@ -29,8 +36,6 @@
 // `shared-core-move.mjs` decides whether the Core flat task worktrees share
 // may be moved up to Core's `dev`; `progress-note.mjs` is how a long step
 // says it is running.
-
-import { importCoreScript } from "../core-scripts/index.mjs";
 
 export { applyMove } from "./apply-move.mjs";
 export { buildCore, coreDistPaths, fullCoreDistPaths, CORE_PACKAGES, FULL_CORE_PACKAGES } from "./core-build.mjs";
@@ -51,10 +56,4 @@ export { noteProgress } from "./progress-note.mjs";
 export { removeWorktree } from "./remove.mjs";
 export { planSharedCoreMove } from "./shared-core-move.mjs";
 export { readSideState } from "./side-state.mjs";
-
-const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
-const { gitAnsweredNo } = await importCoreScript("scripts/task/git-answered-no.mjs");
-const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
-const { pathInside } = await importCoreScript("scripts/task/path-inside.mjs");
-
-export { gitAnsweredNo, pathInside, runGit, samePath };
+export { gitAnsweredNo, pathInside, runGit, samePath } from "../core-scripts/index.mjs";

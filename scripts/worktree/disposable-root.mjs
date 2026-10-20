@@ -18,10 +18,7 @@
 // which is a directory away from a task's own Core and is nobody's to delete.
 
 import path from "node:path";
-import { importCoreScript } from "../core-scripts/index.mjs";
-
-const { pathInside } = await importCoreScript("scripts/task/path-inside.mjs");
-const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
+import { pathInside, samePath } from "../core-scripts/index.mjs";
 
 /**
  * @param {{ base: string, root: string, repositoryRoot: string, workingRoots?: string[] }} input
