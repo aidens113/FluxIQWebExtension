@@ -17,7 +17,8 @@
 //
 // The sensitivity test is deliberately not here. It is the one shared
 // `isSensitiveFieldSignature` (src/shared/sensitive-field.ts), which each verb
-// reaches through `isSensitiveFormControl` and passes in as `withheld`: a
+// reaches through `isWithinSensitiveControl` -- the target or any element it
+// sits in -- and passes in as `withheld`: a
 // second rule in this file is exactly how a billing card number leaked once
 // already.
 

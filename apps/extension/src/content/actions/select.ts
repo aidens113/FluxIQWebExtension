@@ -32,8 +32,8 @@
 // publish the secret three ways in one string -- and narrow it to a twenty-item
 // list even where no single string held it. Whether the select ended up holding
 // the chosen option is still reported; nothing about the option is quoted. The
-// sensitivity test is the one shared rule, reached through
-// `isSensitiveFormControl`.
+// sensitivity test is the one shared rule, asked of the select and of every
+// element it sits in (`isWithinSensitiveControl`).
 //
 // Every validation this verb builds declares that redaction with
 // `redacted: withheld`, because the domain cannot tell an already-redacted
@@ -68,7 +68,7 @@
 // `findOption`): the words are what the page view shows of a select.
 
 import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
-import { isSensitiveFormControl } from "../element-traits";
+import { isWithinSensitiveControl } from "../sensitive-text";
 import type { BrowserActionCommand, BrowserActionResult, WebAutomationOptionSelector } from "../types";
 import type { ContentActionDependencies } from "./types";
 import { closestOfferedOptions } from "./closest-options";
@@ -85,7 +85,7 @@ const OPTION_POLL_MS = 100;
 
 export async function selectAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
-  const withheld = isSensitiveFormControl(element);
+  const withheld = isWithinSensitiveControl(element);
   const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
   const request = requestedOption(action);
 

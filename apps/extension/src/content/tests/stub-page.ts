@@ -90,6 +90,13 @@ class StubInput extends StubElement {
   constructor(public type: string, public value: string, attributes: Record<string, string> = {}) {
     super("input", attributes, []);
   }
+
+  /** `HTMLInputElement.labels`, as far as a page with no document can answer: the `<label>`s wrapping it, nearest first. */
+  get labels(): StubElement[] {
+    const wrapping: StubElement[] = [];
+    for (let node = this.parentElement; node; node = node.parentElement) if (node.tagName === "LABEL") wrapping.push(node);
+    return wrapping;
+  }
 }
 
 class StubTextArea extends StubElement {}

@@ -54,7 +54,7 @@
 // runtime retried it three times, telling the model it might yet pass.
 
 import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
-import { isSensitiveFormControl } from "../element-traits";
+import { isWithinSensitiveControl } from "../sensitive-text";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 import { describeFieldValue } from "./value-redaction";
@@ -62,7 +62,7 @@ import { describeFieldValue } from "./value-redaction";
 export async function typeAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const text = action.text ?? action.value ?? "";
-  const withheld = isSensitiveFormControl(element);
+  const withheld = isWithinSensitiveControl(element);
   const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
 
   const report = deps.checkActionability(element);
