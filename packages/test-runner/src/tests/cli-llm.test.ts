@@ -3,13 +3,15 @@ import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:f
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { runCli } from "../cli.js";
-import { collectCoreWebBuildInputs, coreWebBuildKey, markBuildComplete, newBuildAttemptName, publishBuildAttempt } from "../core-web-build/index.js";
-import { writeServerAdapterFixture } from "../core-web-build/tests/server-adapter-fixture.js";
+import { coreWebBuildEnvironment, loadCoreWebBuildSeam } from "../core-web-build/index.js";
 import { catalogScenario, datasetTask } from "../flow-lane/creation/tests/scenario-fixture.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..", "..", "src");
+/** The Core this package links: `<core>/packages/fluxiq/dist/index.js`, four levels up. */
+const LINKED_CORE = path.resolve(fileURLToPath(import.meta.resolve("fluxiq")), "..", "..", "..", "..");
 const source = (relative: string) => readFile(path.join(sourceRoot, relative), "utf8");
 
 /**
@@ -90,28 +92,11 @@ async function stubLab(t: test.TestContext): Promise<{ root: string; env: NodeJS
   await mkdir(path.join(dist, "scenarios"), { recursive: true });
   await writeFile(path.join(dist, "registry.js"), `export function listScenarioManifests() { return [${JSON.stringify(realisticCatalogScenario)}]; }\n`);
   await writeFile(path.join(dist, "scenarios", "live-instructions.js"), `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify([datasetTask({ scenarioId: REALISTIC }), datasetTask({ id: "catalog-reworded", scenarioId: REALISTIC, variantId: "text-variant" })])};\n`);
-  // A stub Core holding only what a Core web build's key is computed from, so a dry run can report that build's key.
-  const core = path.join(root, "core");
-  const coreFiles: Record<string, string> = {
-    "tsconfig.base.json": "{}\n",
-    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
-    "package.json": "{}\n",
-    "apps/web/package.json": "{}\n",
-    // The gateway server's sources, which the key covers in place of its generated artifact.
-    "apps/web/src/server/client-gateway-websocket.ts": "export {};\n",
-    "apps/web/src/lib/fluxiq.ts": "export {};\n",
-    "apps/web/src/instrumentation.ts": "export {};\n",
-    "apps/web/scripts/build-client-gateway-server.mjs": "// generator\n",
-    "scripts/build-cache/cli.mjs": "// build cache\n",
-    "apps/web/node_modules/next/package.json": JSON.stringify({ version: "15.5.24" }),
-    ...Object.fromEntries(["client-gateway-websocket", "contracts", "fluxiq"].flatMap(name => [[`packages/${name}/package.json`, "{}\n"], [`packages/${name}/dist/index.js`, `${name}\n`]])),
-  };
-  for (const [relative, content] of Object.entries(coreFiles)) {
-    const file = path.join(core, ...relative.split("/"));
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, content);
-  }
-  return { root, env: { FLUXIQ_WEB_EXTENSION_ROOT: root, FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(dist, "server.js"), FLUXIQ_CORE_ROOT: core } };
+  // A dry run reports the Core web build it would serve, which Core keys from
+  // its own checkout (`<core>/scripts/web-build/`), so these runs name the real
+  // Core this package links, with a cache of their own: nothing is built, and
+  // nothing is written where a real run would look for a build.
+  return { root, env: { FLUXIQ_WEB_EXTENSION_ROOT: root, FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(dist, "server.js"), FLUXIQ_CORE_ROOT: LINKED_CORE, FLUXIQ_CORE_WEB_BUILD_CACHE: path.join(root, "web-build-cache") } };
 }
 
 async function captureCli(argv: readonly string[], env: NodeJS.ProcessEnv): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -178,38 +163,47 @@ test("a create-flow dry run resolves the task, plans the build and starts nothin
 test("a dry run reports the Core web build it would serve, and whether it is cached, without building or creating anything", async (t) => {
   const lab = await stubLab(t);
   const env = { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY };
-  const core = lab.env.FLUXIQ_CORE_ROOT!;
   const argv = ["run", "everything-store", ...CREATE_FLOW, "--instruction-task", "catalog-first-page", "--dry-run"];
-  const cacheRoot = path.join(core, ".tmp", "core-web-build");
-  const expectedKey = coreWebBuildKey((await collectCoreWebBuildInputs(core)).inputs);
+  const cacheRoot = lab.env.FLUXIQ_CORE_WEB_BUILD_CACHE!;
+  const seam = await loadCoreWebBuildSeam(LINKED_CORE);
+  // The key a real preparation from this environment would build under: Core's, over the Lab's scrubbed environment.
+  const expected = await seam.inspectWebBuild({ repoRoot: LINKED_CORE, cacheRoot, env: coreWebBuildEnvironment(env) });
+  assert.match(expected.key, /^[0-9a-f]{24}$/u);
 
   const cold = await captureCli(argv, env);
   assert.equal(cold.code, 0, cold.stderr);
   const coldPrinted = JSON.parse(cold.stdout) as Record<string, any>;
   assert.equal(coldPrinted.providerCallCount, 0);
-  assert.deepEqual(coldPrinted.coreWeb, { key: expectedKey, cached: false });
+  assert.deepEqual(coldPrinted.coreWeb, { key: expected.key, cached: false });
   await assert.rejects(access(cacheRoot), "a dry run created no cache directory, lock or build");
   await assert.rejects(access(path.join(lab.root, "test-runs")), "a dry run wrote no run");
 
   // A complete, published build for that key is reported as cached, and the dry run still builds nothing.
-  const keyDirectory = path.join(cacheRoot, expectedKey);
-  const attempt = newBuildAttemptName();
-  await mkdir(path.join(keyDirectory, attempt, "apps", "web", ".next"), { recursive: true });
-  await writeFile(path.join(keyDirectory, attempt, "apps", "web", ".next", "BUILD_ID"), "stub-build\n");
-  // A published build is reusable only with its gateway server artifact beside it (t310).
-  await writeServerAdapterFixture(path.join(keyDirectory, attempt, "apps", "web"));
-  await markBuildComplete(path.join(keyDirectory, attempt), expectedKey, "stub-build");
-  await publishBuildAttempt(keyDirectory, expectedKey, attempt);
+  const core = await import(pathToFileURL(path.join(LINKED_CORE, "scripts", "web-build", "index.mjs")).href) as {
+    markBuildComplete(directory: string, key: string, buildId: string): Promise<void>;
+    newBuildAttemptName(): string;
+    publishBuildAttempt(keyDirectory: string, key: string, attempt: string): Promise<void>;
+  };
+  const keyDirectory = path.join(cacheRoot, expected.key);
+  const attempt = core.newBuildAttemptName();
+  const web = path.join(keyDirectory, attempt, "apps", "web");
+  for (const [file, text] of [[".next/BUILD_ID", "stub-build\n"], [".server-runtime/client-gateway-server.mjs", "export {};\n"], [".server-runtime/client-gateway-server.mjs.identity.json", "{}\n"]] as const) {
+    await mkdir(path.dirname(path.join(web, file)), { recursive: true });
+    await writeFile(path.join(web, file), text);
+  }
+  await core.markBuildComplete(path.join(keyDirectory, attempt), expected.key, "stub-build");
+  await core.publishBuildAttempt(keyDirectory, expected.key, attempt);
   const warm = await captureCli(argv, env);
   assert.equal(warm.code, 0, warm.stderr);
-  assert.deepEqual((JSON.parse(warm.stdout) as Record<string, any>).coreWeb, { key: expectedKey, cached: true });
+  assert.deepEqual((JSON.parse(warm.stdout) as Record<string, any>).coreWeb, { key: expected.key, cached: true });
 
-  // A Core missing a build input refuses the dry run exactly as it would refuse the run.
-  await rm(path.join(core, "pnpm-lock.yaml"));
-  const missing = await captureCli(argv, env);
+  // A Core without the keyed web build refuses the dry run exactly as it would refuse the run.
+  await mkdir(path.join(lab.root, "old-core", "apps", "web"), { recursive: true });
+  await writeFile(path.join(lab.root, "old-core", "apps", "web", "package.json"), "{}\n");
+  const missing = await captureCli(argv, { ...env, FLUXIQ_CORE_ROOT: path.join(lab.root, "old-core") });
   assert.equal(missing.code, 1);
   assert.equal(missing.stdout, "");
-  assert.match(missing.stderr, /"category":"environment.missing".*pnpm-lock\.yaml/u);
+  assert.match(missing.stderr, /"category":"environment.missing".*scripts\/web-build\/index\.mjs/u);
 });
 
 test("CLI creation and resume discriminate serial from saved logical-shard authority without overrides", async () => {

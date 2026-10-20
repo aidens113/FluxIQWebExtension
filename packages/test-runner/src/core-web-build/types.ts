@@ -1,33 +1,10 @@
-// Shapes shared across the cached production build of Core's web panel.
-
-/** Everything a published build depends on. A change to any of them yields a different build key. */
-export type CoreWebBuildInputs = {
-  /**
-   * SHA-256 of Core's `pnpm-lock.yaml`: the exact versions of every installed
-   * dependency the build resolves (React, the UI libraries, `@types/node`),
-   * which no other input names. It stands in for the installation itself.
-   */
-  lockfileHash: string;
-  /** Content hash of the `apps/web` entries the staged workspace copies, except the generated gateway server, and of Core's `tsconfig.base.json`. */
-  webSourceHash: string;
-  /**
-   * Digest of every source Core's gateway server generator reads, equal to a
-   * fresh receipt's `sourceInputsDigest`. It stands in for the generated
-   * artifact, which a run regenerates before keying and a dry run never does.
-   */
-  serverAdapterSourcesHash: string;
-  /** Content hash of each built Core package the panel consumes -- its `dist` tree and its `package.json` -- by package directory name. */
-  packageHashes: Readonly<Record<string, string>>;
-  /** The exact `next.config.mjs` text the staged workspace receives. */
-  nextConfig: string;
-  /** The version of the `next` package installed for Core's web app. */
-  nextVersion: string;
-};
+// Shapes of the Core web build the Lab serves, and of Core's keyed-build
+// seam (`<core>/scripts/web-build/index.mjs`) as this package calls it.
 
 /** One complete, published production build of Core's web panel. */
 export type CoreWebBuild = {
   key: string;
-  /** The staged Core workspace the build ran in. It is never moved, so paths the build recorded stay valid. */
+  /** The attempt directory the build ran in. It is never moved, so paths the build recorded stay valid. */
   directory: string;
   /** `<directory>/apps/web`, the directory `next start` serves from. */
   webDirectory: string;
@@ -35,4 +12,31 @@ export type CoreWebBuild = {
   nextExecutable: string;
   /** The `.next/BUILD_ID` the completion marker recorded. */
   buildId: string;
+};
+
+/** A command Core's seam asks its caller to run: the gateway server generator, or `next build` in a staged attempt. */
+export type CoreWebBuildCommand = {
+  name: "gateway-server-build" | "web-build";
+  command: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  shell: boolean;
+};
+
+/** An error Core's seam raises on purpose: `environment` when no build can be made there, `build` when a build was refused. */
+export type CoreWebBuildError = Error & { kind: "environment" | "build"; details: Readonly<Record<string, unknown>> };
+
+/** The part of Core's `scripts/web-build/index.mjs` this package calls. */
+export type CoreWebBuildSeam = {
+  prepareWebBuild(options: {
+    repoRoot: string;
+    cacheRoot?: string;
+    env: NodeJS.ProcessEnv;
+    run: (command: CoreWebBuildCommand) => Promise<void>;
+    log: (line: string) => void;
+    signal?: AbortSignal;
+    waitTimeoutMs?: number;
+  }): Promise<CoreWebBuild & { reused: boolean }>;
+  inspectWebBuild(options: { repoRoot: string; cacheRoot?: string; env: NodeJS.ProcessEnv }): Promise<{ key: string; cached: boolean }>;
 };

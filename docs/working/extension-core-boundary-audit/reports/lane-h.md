@@ -179,3 +179,41 @@ UNIT READY: EXT `scripts/lab/core/build/**` (`currency.mjs`, `tests/currency.tes
 new; `stale.mjs`, `tests/stale.test.mjs` deleted; `index.mjs`, `staleness.mjs`, `unbuilt.mjs`,
 `tests/unbuilt.test.mjs`), `scripts/check/core-build/freshness.mjs`, `scripts/check/core-build/tests/freshness.test.mjs`,
 `scripts/lab/run-lab.mjs`, `scripts/worktree/shared-core-move.mjs`, `.structure-baseline.json`, `lane-h.md`.
+
+### 2026-10-19 - Core owns the panel build; downstream duplicate deleted (supervisor addition 2, H8)
+
+What changed (details and line counts in `lane-h-h8.md`):
+
+- **Core identity defect fixed.** `apps/web/next.config.ts` gives a production build `tsconfig.build.json` (no
+  source `paths`, extends nothing because Turbopack merges `paths` through `extends`), so `web:build` resolves
+  the stamped `dist`; `next dev` stays on source. `web:build` now ends with
+  `scripts/web-build/identity/check-web-build.mjs`, which fails the step when server output still embeds the
+  identity placeholder. Registry entry and `apps/web/package.json` build script changed together; registry test
+  guards the build tsconfig.
+- **Core publication seam.** New Core `scripts/web-build/` (about 1,000 source and 670 test lines): keyed from the
+  build's inputs, create-only lock, atomic publish, read-only reuse; cache at `<core>/.tmp/web-build`.
+- **Downstream.** `packages/test-runner/src/core-web-build/` keeps only supervision and serving (355 lines, from
+  about 1,060): `build-environment.ts`, `build-step.ts`, `server-process.ts`, `decision.ts`, `prepare.ts`,
+  `types.ts`, and `core-seam.ts`, which loads Core's seam at run time from the Core being built and refuses an
+  older Core with `environment.missing` and what to do. Callers switched; 14 duplicate files and their tests deleted.
+- **Lead.** Core root `package.json`: `scripts/web-build/**/tests/*.test.mjs` added to `check`, plus a
+  `web-build:test` script.
+
+Checks (observed): H8 real Core `pnpm --filter @fluxiq/web build` -> exit 0, `no placeholder in 1107 server
+files`; `grep -rl fluxiqRuntimeIdentityPlaceholder apps/web/.next/server` -> empty; a real keyed build through
+the seam from EXT -> built in 444 s, the second call reused it in 7.8 s (worker's run, not repeated by the lead).
+Lead reruns: Core `node --test` build-cache + web-build -> `pass 112, fail 0`; Core web-build, build-cache, task and
+`scripts/tests` -> `pass 170, fail 0`; Core audit -> `passed (409 warning(s), 1152 baselined)`; Core libraries
+rebuilt (`inputs changed: package.json`), EXT `node scripts/check/core-build.mjs` -> current, exit 0; EXT
+test-runner `check` -> exit 0; test-runner build, then `node --test` core-web-build, server-adapter-identity,
+cli-llm and environment dist tests -> `pass 51, fail 0, skipped 2` (opt-in probes); EXT worktree, lab, check and
+build-cache script tests -> `pass 343, fail 0`; EXT audit -> `passed (211 warning(s), 627 baselined)`;
+core-mirror -> 58 files match.
+
+Not verified: `next start` serving a keyed build (needs a Lab run, not done); `next dev` after the config change.
+
+UNIT READY: EXT `packages/test-runner/src/core-web-build/**`,
+`packages/test-runner/src/run-scenario/browser-session/server-adapter-identity/tests/{identity,next-probe}.test.ts`,
+`packages/test-runner/src/tests/cli-llm.test.ts`, `scripts/worktree/core-build.mjs`, `.structure-baseline.json`,
+`lane-h.md`, `lane-h-h8.md`; Core `apps/web/next.config.ts`, `apps/web/tsconfig.build.json`, `apps/web/package.json`,
+`scripts/build-cache/steps.mjs`, `scripts/build-cache/tests/registry.test.mjs`, `scripts/web-build/**`, root `package.json`.
