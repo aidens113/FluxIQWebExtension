@@ -60,6 +60,20 @@ test("gives Core a step log folder only when the run has one, never an inherited
   assert.equal(buildFluxIQEnvironment(allocation, paths, inherited).INHERITED, "yes");
 });
 
+test("takes the provider key list and its filter from the one root-script source", async () => {
+  // environment.js sits in src/ or dist/, three levels below the repository root; this test one deeper.
+  const source = await import(new URL("../../../../scripts/provider-secret-environment.mjs", import.meta.url).href) as {
+    PROVIDER_SECRET_ENVIRONMENT_VARIABLES: readonly string[];
+    withoutProviderSecrets: (base: NodeJS.ProcessEnv) => Record<string, string>;
+  };
+  assert.equal(PROVIDER_SECRET_ENVIRONMENT_VARIABLES, source.PROVIDER_SECRET_ENVIRONMENT_VARIABLES, "the same frozen array, not a copy");
+  assert.ok(Object.isFrozen(PROVIDER_SECRET_ENVIRONMENT_VARIABLES));
+  const probe: NodeJS.ProcessEnv = { SAFE_VALUE: "kept", [source.PROVIDER_SECRET_ENVIRONMENT_VARIABLES[0] ?? ""]: "fixture", missing: undefined };
+  assert.deepEqual(withoutProviderSecrets(probe), source.withoutProviderSecrets(probe));
+  const own = await readFile(new URL("../environment.js", import.meta.url), "utf8");
+  assert.doesNotMatch(own, /"OPENAI_API_KEY"|"DEEPSEEK_API_KEY"/u, "environment.ts must not restate the list");
+});
+
 test("removes provider credentials case-insensitively without mutating the driver environment", () => {
   const source: NodeJS.ProcessEnv = { SAFE_VALUE: "retained", DEEPSEEK_API_KEY: "deepseek-fixture", openai_api_key: "openai-fixture" };
   const sanitized = withoutProviderSecrets(source);

@@ -1,14 +1,14 @@
-// The build's environment: a build-only FluxIQ root with its gateway disabled,
-// and nothing inherited that its key does not cover.
+// The base environment the Lab gives Core's keyed web build: nothing from the
+// invoking shell or a run, and no provider credential. Core adds the build's
+// own FluxIQ root inside the attempt.
 import assert from "node:assert/strict";
-import path from "node:path";
 import test from "node:test";
 import { coreWebBuildEnvironment } from "../build-environment.js";
 
-test("the build sees only a build-only FluxIQ root with its gateway disabled", () => {
-  const root = path.join("runs", ".core-web-build", "0".repeat(24), "b-0123456789ab", "fluxiq-root");
-  const env = coreWebBuildEnvironment(root, {
+test("the build sees no FluxIQ setting, no inlined public value, no NODE_ENV or PORT, and no provider credential", () => {
+  const env = coreWebBuildEnvironment({
     PATH: "bin",
+    NEXT_TELEMETRY_DISABLED: "1",
     FLUXIQ_HOST_MODULE: "host.mjs",
     FLUXIQ_ROOT: "a-run-root",
     fluxiq_client_gateway_port: "4777",
@@ -17,13 +17,5 @@ test("the build sees only a build-only FluxIQ root with its gateway disabled", (
     PORT: "3000",
     OPENAI_API_KEY: "synthetic-provider-value",
   });
-  assert.deepEqual(env, {
-    PATH: "bin",
-    FLUXIQ_ROOT: root,
-    FLUXIQ_IMPORTER_ROOT: root,
-    FLUXIQ_HOST_ROOT: root,
-    FLUXIQ_DATA_DIR: path.join(root, ".fluxiq"),
-    FLUXIQ_DATABASES_DIR: path.join(root, ".fluxiq"),
-    FLUXIQ_CLIENT_GATEWAY_ENABLED: "false",
-  });
+  assert.deepEqual(env, { PATH: "bin", NEXT_TELEMETRY_DISABLED: "1" });
 });

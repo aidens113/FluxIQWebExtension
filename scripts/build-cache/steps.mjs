@@ -173,7 +173,6 @@ export const STEPS = Object.freeze({
     tsconfigs: ["tsconfig.json", "tsconfig.e2e.json"],
     env: ["NODE_ENV"]
   },
-  ...library("agent-orchestrator", { required: ["dist/index.js", "dist/cli.js"] }),
   ...library("boundary-audit", { required: ["dist/index.js", "dist/cli.js"] }),
   ...library("real-site-policy", { required: ["dist/index.js", "dist/cli.js"] }),
   ...library("test-contracts", { required: ["dist/index.js", "dist/index.d.ts"] }),

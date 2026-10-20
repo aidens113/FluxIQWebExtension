@@ -1,3 +1,7 @@
+// The one list of provider credential variables, and the filter that strips
+// them from a child's environment. Root scripts import it before any package
+// is built; packages/test-runner/src/environment.ts loads this same file at
+// run time and re-exports both, so the list is never restated.
 export const PROVIDER_SECRET_ENVIRONMENT_VARIABLES = Object.freeze([
   "ANTHROPIC_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
   "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_KEY", "BEDROCK_API_KEY", "COHERE_API_KEY",
