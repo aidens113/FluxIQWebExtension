@@ -44,6 +44,30 @@ test("only the closed incomplete_text prefix on an unobserved output gives discl
   assert.notEqual(webActionFailureRefusal({ status: "timed_out", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } }).detail?.reason, "incomplete_text");
 });
 
+// social rerun 3 (steps 0029, 0056, 0083, 0186, 0241): the field was dropped,
+// so the build sent the same field again. It is named now, but only when it is
+// a key of the `extractList.fields` this domain sent.
+test("an incomplete text refusal names the field only when it is a key of the fields the request sent", () => {
+  const actual = "incomplete_text: field summary contains unexpanded text; then read full text";
+  const failure = { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual };
+  const sent = { actionType: "web.dom.extract_list", parameters: { extractList: { item: "t4", fields: { title: "h3", summary: "p" } } } };
+  const named = webActionFailureRefusal({ status: "failed", failure }, sent);
+  assert.equal(named.detail?.reason, "incomplete_text");
+  assert.deepEqual(named.detail?.missing, ["summary"]);
+  assert.match(named.detail?.next ?? "", /without the field `summary`/u);
+  assert.match(named.detail?.next ?? "", /with the field `summary`/u);
+  assert.equal(repeatedRejectionDetail(named.detail, 2)?.next, named.detail?.next, "a repeat names the field again");
+  const unsent = webActionFailureRefusal({ status: "failed", failure: { ...failure, actual: "incomplete_text: field secretColumn contains unexpanded text" } }, sent);
+  assert.equal(unsent.detail?.reason, "incomplete_text");
+  assert.equal(unsent.detail?.missing, undefined);
+  assert.equal(JSON.stringify(unsent).includes("secretColumn"), false, "a key the request never sent is never echoed");
+  const noRequest = webActionFailureRefusal({ status: "failed", failure });
+  assert.equal(noRequest.detail?.missing, undefined);
+  assert.equal(JSON.stringify(noRequest).includes("summary"), false, "without the request nothing is named");
+  const otherRequest = webActionFailureRefusal({ status: "failed", failure }, { actionType: "web.dom.extract_list", parameters: { extractList: { item: "t4", fields: ["summary"] } as unknown as JsonObject } });
+  assert.equal(otherRequest.detail?.missing, undefined, "fields that are not a key map name nothing");
+});
+
 test("target ambiguity retains a closed distinct reason without exposing the failure's page text", () => {
   const ambiguous = webActionFailureRefusal({
     status: "failed",
@@ -341,4 +365,64 @@ test("an unreadable scroll names its missing and unknown keys and the closed key
   assert.deepEqual(webActionFailureRefusal(invalid, { actionType: "web.dom.scroll", parameters: { x: 0 } }).detail, { reason: "parameter_not_readable" });
   const other = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED } }, { actionType: "web.dom.scroll", parameters: { scroll: {} } });
   assert.equal(other.detail, undefined);
+});
+
+// t741 C1b, live run `run-mvgo9wzn-fad4e050` step 0116: a press the site
+// refused for now reached the model as `page_busy_try_later`, and the model was
+// not told how long the site asked it to wait or that the tab had been taken
+// back to the page the press was made on, so it could not tell when the same
+// press would be worth making or that a menu it had opened was now closed. The
+// actual sentence below is the extension's own shape
+// (`apps/extension/src/runtime/click-landing.ts`) on a library catalogue page.
+const RATE_LIMITED_RETURNED =
+  "the server answered HTTP 429 for /catalogue/available: the site refused the load for now and nothing was loaded; " +
+  "the tab was taken back to the page the click was pressed on (/catalogue); the same click may be made again after 5000 ms";
+
+/**
+ * A failed result whose record carries the extension's `retryAfterMs`. Built
+ * apart from the call, as a real record arrives, because `WebFailedActionResult`
+ * (`../result.ts`) declares only the record's code and sentence.
+ */
+function withRecord(status: string, failure: { code: string; actual?: string; retryAfterMs?: unknown }): { status: string; failure: typeof failure } {
+  return { status, failure };
+}
+
+test("a press the site refused for now names the wait the site asked for and that the tab was taken back, and nothing of the page", () => {
+  const refusal = webActionFailureRefusal(withRecord("failed", { code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, actual: RATE_LIMITED_RETURNED, retryAfterMs: 5000 }));
+  assert.equal(refusal.code, "refused_by_page");
+  assert.equal(refusal.detail?.reason, "page_busy_try_later");
+  assert.equal(refusal.detail?.retryAfterMs, 5000);
+  assert.equal(refusal.detail?.tabReturned, true);
+  assert.match(refusal.detail?.next ?? "", /The site asked to wait 5 seconds/u);
+  assert.match(refusal.detail?.next ?? "", /The tab was taken back to the page it showed before the press/u);
+  // A repeat of the same refusal says the wait and the return again.
+  const repeated = repeatedRejectionDetail(refusal.detail, 2);
+  assert.equal(repeated.retryAfterMs, 5000);
+  assert.equal(repeated.tabReturned, true);
+  assert.equal(repeated.next, refusal.detail?.next);
+  const said = JSON.stringify(refusal);
+  assert.equal(said.includes("/catalogue"), false, `a refusal repeated the page's path: ${said}`);
+});
+
+test("a refused press with no wait and no confirmed return is told what it was told before, and only RATE_LIMITED is read for either", () => {
+  const bare = webActionFailureRefusal(withRecord("failed", { code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED }));
+  assert.deepEqual(bare.detail, { reason: "page_busy_try_later" });
+  // A tab the extension could not confirm was the pressed page is not said to be returned.
+  const unconfirmed = webActionFailureRefusal(withRecord("failed", {
+    code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED,
+    actual: "the server answered HTTP 429 for /a: the site refused the load for now and nothing was loaded; the tab was taken back to /b, but whether that is the page the click was pressed on is unconfirmed, because the address before the click went unread; the same click may be made again after 2000 ms",
+    retryAfterMs: 2000
+  }));
+  assert.equal(unconfirmed.detail?.tabReturned, undefined);
+  assert.equal(unconfirmed.detail?.retryAfterMs, 2000);
+  assert.match(unconfirmed.detail?.next ?? "", /wait 2 seconds/u);
+  // A wait that is not a whole positive count is not passed on.
+  for (const retryAfterMs of [-1, 1.5, Number.NaN, "5000"]) {
+    assert.equal(webActionFailureRefusal(withRecord("failed", { code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, retryAfterMs })).detail?.retryAfterMs, undefined);
+  }
+  // Another code carrying the same words and wait says neither.
+  const other = webActionFailureRefusal(withRecord("failed", { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN, actual: RATE_LIMITED_RETURNED, retryAfterMs: 5000 }));
+  assert.equal(other.detail?.retryAfterMs, undefined);
+  assert.equal(other.detail?.tabReturned, undefined);
+  assert.equal(webActionFailureRefusal(withRecord("timed_out", { code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, actual: RATE_LIMITED_RETURNED, retryAfterMs: 5000 })).detail?.retryAfterMs, undefined);
 });

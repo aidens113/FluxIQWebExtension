@@ -63,7 +63,7 @@
 import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation-studio";
 import { publishedWebLlmPage, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
-import { webLlmRejectionNext } from "./rejection-next";
+import { webLlmRejectionNext, webLlmRejectionNextWithWait } from "./rejection-next";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 
 export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as const;
@@ -554,6 +554,10 @@ export type WebLlmToolRejectionDetail = {
   filtersDropped?: number;
   /** How many times in a row this same answer has now been given, counting from 2 (`repeated-refusal.ts`). */
   repeatedAnswer?: number;
+  /** On `page_busy_try_later` only: the wait the site asked for, in ms, a field of the extension's failure record (t741 C1b). */
+  retryAfterMs?: number;
+  /** On the same refusal only: the extension confirmed it took the tab back to the press's page (t741 C1b). */
+  tabReturned?: true;
 };
 
 export type WebLlmToolRejection = {
@@ -723,10 +727,14 @@ export function rejectionDetail(fields: {
   filtersDropped?: number | undefined;
   repeatedAnswer?: number | undefined;
   closeWith?: readonly string[] | undefined;
+  retryAfterMs?: number | undefined;
+  tabReturned?: boolean | undefined;
 }): WebLlmToolRejectionDetail {
   const reason = fields.reason === "parameters_not_resolved" && fields.instead !== undefined
     ? webLlmHandleRejectionReason(fields.instead)
     : fields.reason;
+  const retryAfterMs = fields.retryAfterMs !== undefined && fields.retryAfterMs > 0 ? wholeCount(fields.retryAfterMs) : undefined;
+  const tabReturned = fields.tabReturned === true ? true : undefined;
   return present<WebLlmToolRejectionDetail>({
     reason,
     target: fields.target,
@@ -738,7 +746,8 @@ export function rejectionDetail(fields: {
     useNode: (reason === "handle_wrong_kind_of_control" || reason === "handle_not_a_field") && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
     // Read off the reason and the codes, so a repeat that passes them back says it again (`./rejection-next/`).
-    next: webLlmRejectionNext(reason, fields.instead, fields.closeWith, fields.target),
+    // The site's wait and the tab's return follow the reason's own next (`./rejection-next/wait-words.ts`).
+    next: webLlmRejectionNextWithWait(webLlmRejectionNext(reason, fields.instead, fields.closeWith, fields.target), retryAfterMs, tabReturned),
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,
@@ -757,7 +766,9 @@ export function rejectionDetail(fields: {
     waitStoppedOn: fields.waitStoppedOn,
     paginationStop: fields.paginationStop,
     filtersDropped: wholeCount(fields.filtersDropped),
-    repeatedAnswer: wholeCount(fields.repeatedAnswer)
+    repeatedAnswer: wholeCount(fields.repeatedAnswer),
+    retryAfterMs,
+    tabReturned
   });
 }
 

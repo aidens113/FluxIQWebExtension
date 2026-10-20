@@ -23,7 +23,8 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
     : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
     : reason === "option_not_offered" ? OPTION_NOT_OFFERED_NEXT
-    : reason === "incomplete_text" ? INCOMPLETE_TEXT_NEXT
+    // Read off the field code in `instead`, so a repeat that passes it back says it again.
+    : reason === "incomplete_text" ? incompleteTextNext(instead)
     : reason === "next_leaves_filtered_list" ? FILTERED_LIST_NEXT
     // Read off the key codes in `instead`, so a repeat that passes them back says it again.
     : reason === "parameter_not_readable" ? scrollKeysNext(instead)
@@ -36,19 +37,35 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
 
 /**
  * What to do about a read whose text field came back cut short: a helper read
- * of the row context, a per-row disclosure over it, then the full read.
+ * of the row context, a per-row disclosure over it, then the full read after
+ * that repeat. The field is named when `instead` carries its code
+ * (`web.text.incomplete_field.<key>`, `../action-failure/refusal.ts`), which
+ * is set only for a key of the fields the request itself sent.
  *
  * Until t738 it ended "Repeat this ordering after each Next page move", which
  * prescribes a row loop inside a page loop, and Core's script grammar refuses
  * a repeat inside a repeat (social `run-mvgf7ij5-a9747575`: the build wrote
  * that nesting, was refused, and wrote it again). So the rows are loaded first,
  * by a step of its own, and the row loop runs once over everything loaded.
+ *
+ * Until t741 it ended "Then read the full text." with no field named, and the
+ * builds sent the same field again (social rerun 3): it did not say where the
+ * read goes. It goes after the repeat, not inside it, with no condition tying
+ * it to the loop, because by then every row is disclosed.
  */
-const INCOMPLETE_TEXT_NEXT = "A repeat cannot hold another repeat, so do this in order, once, on one listing. "
-  + "Load every row first: a Scroll step with mode untilStable where the list grows in place as it scrolls, or Next page in its own repeat-while span. "
-  + "Then read only nonempty stable row-context columns, without the incomplete text field. "
-  + "Then, with repeat over that read (For Each), an optional explicit registered row-bound click on each row's own disclosure. "
-  + "Then read the full text. Exclude units with no row context from that helper; find another context for any requested row this would omit.";
+function incompleteTextNext(instead: readonly string[] | undefined): string {
+  const key = instead?.find((code) => code.startsWith(INCOMPLETE_FIELD_CODE))?.slice(INCOMPLETE_FIELD_CODE.length);
+  const field = key !== undefined && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(key) ? `the field \`${key}\`` : undefined;
+  return "A repeat cannot hold another repeat, so do this in order, once, on one listing. "
+    + "Load every row first: a Scroll step with mode untilStable where the list grows in place as it scrolls, or Next page in its own repeat-while span. "
+    + `Then read only nonempty stable row-context columns, without ${field ?? "the incomplete text field"}. `
+    + "Then, with repeat over that read (For Each), an optional explicit registered row-bound click on each row's own disclosure. "
+    + `After that repeat, not inside it, read the same listing again with ${field ?? "the text field"}: by then every row is disclosed. `
+    + "Exclude units with no row context from that helper; find another context for any requested row this would omit.";
+}
+
+/** The code an incomplete-text refusal carries its field in (`../action-failure/refusal.ts`). */
+const INCOMPLETE_FIELD_CODE = "web.text.incomplete_field.";
 
 /**
  * The codes a scroll's INVALID_PARAMETER refusal carries in `instead`, one per

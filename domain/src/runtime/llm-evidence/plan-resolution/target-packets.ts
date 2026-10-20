@@ -65,6 +65,17 @@
 // a reload (`renumberedByReload`). A handle shown again loses its mark; a
 // control that left the page, or a drop with no reload, is never marked.
 //
+// **Only the first view of a new document marks (t741, C2).** `navigation.type`
+// stays `reload` for the document's whole life, so every later view of a page
+// once reloaded counted as a reload: a "Read more" exploration pressed expanded
+// its review and left the page while another "Read more" still showed, and the
+// pressed handle was marked and refused before the view history and its acted
+// identity could name it (social round 3, 0137-0165, no reload made). So a view
+// marks only when its document (`navigation.timeOrigin`, one value per
+// document) differs from the one the page's previous whole view showed, kept per
+// page beside the marks (`documents`). Where either view lacks it, any reload
+// view marks, as before.
+//
 // **A re-viewed handle keeps only what its views agree on (t356, C1).** A newer
 // view of a page replaces its handles, and used to replace each handle's
 // identity with the newest one: after exploration pressed "Get coupons" the page
@@ -272,7 +283,9 @@ type PageTargets = Map<string, PageTarget>;
  * themselves (header, t496).
  */
 type FlowPages = {
-  pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget>;
+  pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>;
+  /** Per page, the document (`navigation.timeOrigin`) its newest whole view showed, where it said (header, t741 C2). */
+  documents: Map<string, number>; history: WebLlmViewHistory<PageTarget>;
   printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>; selfChanging: WebLlmSelfChangingNames;
 };
 /** A control as the first act on it found it, and what that act made true when it added anything (`act-effect.ts`). */
@@ -287,6 +300,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       pages: new Map<string, PageTargets>(),
       letGo: new Set<string>(),
       renumbered: new Map<string, Set<string>>(),
+      documents: new Map<string, number>(),
       history: createWebLlmViewHistory(acrossView),
       printed: new Set<string>(),
       pressed: new Set<string>(),
@@ -583,15 +597,22 @@ const RELOAD_NAVIGATION_TYPE = "reload";
 
 /**
  * Before `targets` replace the page's view: unmark the handles it shows again,
- * and, when it arrived by reload, mark each handle it dropped whose control --
- * tag and words -- it shows under another handle (see the header).
+ * and, when it is the first view of a document reached by reload, mark each
+ * handle it dropped whose control -- tag and words -- it shows under another
+ * handle (see the header).
  */
 function markRenumbered(flow: FlowPages, binding: WebLlmSnapshotBinding, targets: PageTargets): void {
   const location = binding.evidence.location;
   const marked = flow.renumbered.get(location) ?? new Set<string>();
   for (const handle of targets.keys()) marked.delete(handle);
   const before = flow.pages.get(location);
-  if (before !== undefined && binding.evidence.navigation?.type === RELOAD_NAVIGATION_TYPE) {
+  const origin = binding.evidence.navigation?.timeOrigin;
+  const previous = flow.documents.get(location);
+  // The same document both views name is no new load, whatever its type says (header).
+  const newDocument = origin === undefined || previous === undefined || origin !== previous;
+  if (origin === undefined) flow.documents.delete(location);
+  else flow.documents.set(location, origin);
+  if (before !== undefined && newDocument && binding.evidence.navigation?.type === RELOAD_NAVIGATION_TYPE) {
     const shown = new Set([...targets.values()].map(controlWords).filter((words): words is string => words !== undefined));
     for (const [handle, target] of before) {
       const words = controlWords(target);
@@ -621,6 +642,7 @@ function keep(flow: FlowPages, location: string, targets: PageTargets): void {
     if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
     flow.pages.delete(oldest);
     flow.renumbered.delete(oldest);
+    flow.documents.delete(oldest);
     flow.partial.delete(oldest);
     flow.letGo.add(oldest);
   }

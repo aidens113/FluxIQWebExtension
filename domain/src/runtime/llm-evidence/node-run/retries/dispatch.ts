@@ -57,6 +57,7 @@ import type { WebLlmEvidenceGateway } from "../../capture";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import type { WebNodeRun } from "../context";
+import { webNodeRetriedAnswer } from "./answer";
 import { webNodeRetryWait } from "./wait";
 
 /** What the gateway answers one command with. */
@@ -71,7 +72,9 @@ export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: 
 
 /**
  * Dispatches one node command, and dispatches it again after each fault Core's
- * default policy absorbs. The answer is the last attempt's own.
+ * default policy absorbs. The answer is the last attempt's own, except where
+ * an earlier attempt the site refused for now caused the later ones' failures
+ * (`./answer.ts`, t741 C1): then it is that refusal, with the total attempts.
  *
  * `node` is the catalog's description of the node: its definition id,
  * whether running it changes the page, and the consequences the call declared
@@ -85,10 +88,16 @@ export async function webNodeDispatchWithRetries(
   noted?: { attempts?: number },
   checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>
 ): Promise<WebNodeRetriedDispatch> {
+  // Every attempt's answer, in order, so a refusal that caused the later failures can answer for the node (`./answer.ts`).
+  const answers: WebNodeDispatchResult[] = [];
   const outcome = await automationStudioDispatchWithNodeRetries<WebNodeDispatchResult>({
     node: { id: node.definitionId, definitionId: node.definitionId, metadata: nodeMetadata(node) },
     // Core sends nothing more once the build is cancelled between attempts.
-    dispatch: async () => await run.gateway.executeAction(run.sessionId, command),
+    dispatch: async () => {
+      const answer = await run.gateway.executeAction(run.sessionId, command);
+      answers.push(answer);
+      return answer;
+    },
     read: (result) => webNodeRetryReading(result, command),
     checkEffect,
     delay: webNodeRetryWait,
@@ -96,7 +105,9 @@ export async function webNodeDispatchWithRetries(
   });
   // On the call's own record too, when one is given, so a refusal raised after the retries says how many there were.
   if (noted) noted.attempts = outcome.attempts;
-  return present<WebNodeRetriedDispatch>({ result: outcome.result, attempts: outcome.attempts, lastingAct: outcome.lastingAct });
+  // A lasting act Core settled keeps the answer it settled on.
+  const result = outcome.lastingAct === undefined ? webNodeRetriedAnswer(answers, outcome.result) : outcome.result;
+  return present<WebNodeRetriedDispatch>({ result, attempts: outcome.attempts, lastingAct: outcome.lastingAct });
 }
 
 /**
