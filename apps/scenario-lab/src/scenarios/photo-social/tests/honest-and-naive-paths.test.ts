@@ -237,3 +237,25 @@ it("qualification final: correct seven-post union plus a like fails current comp
     assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
   } finally { await opened.close(); }
 });
+
+describe("lasting controls show done only once the server has it", { timeout: 120_000 }, () => {
+  it("a dock collapsed just before leaving the page stays collapsed on the next page, although the server answers late", async () => {
+    const s = await session();
+    try {
+      await s.page.getByText("Decline optional cookies", { exact: true }).click();
+      await s.page.goto(`${s.lab.origin}${ROOT}p/${GIVEAWAY_POST.code}/`);
+      await s.context.route("**/api/photo-social/**", async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await route.continue().catch(() => undefined);
+      });
+      await s.page.locator(`fl-dock [part="collapse-button"]`).click({ timeout: 6000 });
+      // What a person sees as done: the dock drawn as its pill. They leave the page straight away.
+      await s.page.locator(`fl-dock [part="pill"]`).waitFor({ state: "visible", timeout: 6000 });
+      await s.page.goto(`${s.lab.origin}${ROOT}harbourlight.studio/`);
+      await s.page.locator(`fl-dock [part="pill"]`).waitFor({ state: "visible", timeout: 6000 });
+      // The dock expands itself 1.5 s after it appears unless the account has it collapsed.
+      await s.page.waitForTimeout(2500);
+      assert.equal(await s.page.locator(`fl-dock [part="collapse-button"]`).count(), 0, "the dock expanded again: the collapse never reached the server");
+    } finally { await s.close(); }
+  });
+});

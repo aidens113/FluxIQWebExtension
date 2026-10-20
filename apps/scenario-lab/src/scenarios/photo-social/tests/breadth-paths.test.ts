@@ -58,6 +58,24 @@ describe("breadth honest paths: each recording meets its dataset and its final s
   }
 });
 
+describe("breadth honest paths on a slow server: what the page shows done, the server holds", { timeout: 600_000 }, () => {
+  // Under load the server answers late. The heart turns only on its answer, so the recording, which waits for the
+  // turned heart before it opens the next page, never leaves a like behind in a request the navigation drops.
+  it("newest-likes: every like the hearts show reaches the account although each answer takes a while", async () => {
+    const s = await session();
+    try {
+      await s.context.route("**/api/photo-social/**", async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await route.continue().catch(() => undefined);
+      });
+      const { expected, recordingScript } = workflow("newest-likes");
+      const extracted = await runScript(s.page, s.lab.origin, recordingScript);
+      assert.deepEqual(extracted.get("extract-newest-likes"), dataset("newest-likes").records);
+      await assertFactsSettle(s.page, expected.finalState!, "slow server");
+    } finally { await s.close(); }
+  });
+});
+
 describe("breadth wrong paths: each plausible mistake fails an oracle", { concurrency: true, timeout: 600_000 }, () => {
   it("priya-tags: reading without the replies, without loading more, or every comment naming her each gives the wrong rows", async () => {
     const { recordingScript } = workflow("priya-tags");

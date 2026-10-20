@@ -2,6 +2,9 @@
  * A post's own behaviour, wherever the post is shown: the feed, its own page,
  * or the grid's modal.
  *
+ * - The heart turns once the server has the like, as the bookmark does. A
+ *   heart that turned first would show a like the server never got whenever
+ *   the visitor left the page before the request went out.
  * - The bookmark saves to "All posts" and, for a few seconds, offers "Save to
  *   collection". Pressed when filled, it unsaves: the post leaves saved and
  *   every collection holding it.
@@ -100,8 +103,8 @@ document.addEventListener('click', async (event) => {
   const inActions = control.parentElement && control.parentElement.classList.contains(H.actions);
   if (inActions && (label === 'Like' || label === 'Unlike')) {
     const liked = label === 'Like';
-    setIconLabel(control, liked ? 'Unlike' : 'Like');
     await act('like', { code: codeOf(scope), liked });
+    setIconLabel(control, liked ? 'Unlike' : 'Like');
   } else if (inActions && label === 'Save') {
     const code = codeOf(scope);
     await act('save', { code, saved: true });

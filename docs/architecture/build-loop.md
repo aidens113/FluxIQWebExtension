@@ -400,9 +400,16 @@ through to scope `{ projectId, flowId, buildId }` under `web.arrival`,
 `:<callScope>` for a brief), in order and coalesced, and a call's writes settle
 before its answer returns (`node-run/build-state/persistence.ts`,
 `memory.ts`). The in-process memory stays authoritative: a write Core refuses
-(for example a shown-address set past Core's 64 KiB value bound) leaves the
-last stored copy, and after a restart a memory is read back the first time its
-build calls again. A stopped build that is continued later gets a new
+leaves the last stored copy, and after a restart a memory is read back the
+first time its build calls again. A memory that can grow past Core's 64 KiB
+value bound stores a bounded copy instead of having its writes refused
+(`node-run/build-state/stored-prefix.ts`, t737): `web.shown-addresses` keeps,
+within three quarters of that bound, every typed text it can and then the
+most recently shown addresses (a page's own location counts as newer than its
+links, and an address shown again as newly shown). Forgetting an old address
+after a restart can only refuse a navigation, never allow one; the set is not
+split over several keys because they would share the build's 256 KiB scope
+with the other memories. A stopped build that is continued later gets a new
 `buildId`, so its build-scoped memories start empty.
 
 Cleared way-outs -- the references of popups a press cleared, which Core hands

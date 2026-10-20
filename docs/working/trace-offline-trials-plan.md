@@ -271,6 +271,61 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: sql-test-pool (worker-high, Core vitest isolation for real-SQL tests)
+- Why: every daily sweep produces a different set of 15 s timeouts in Core's heavy real-SQLite tests (S1, sweep-1019b,
+  sweep-1020: canonical-authority, database-manager, controller, command-execution service, provider-unavailable,
+  flow-index-read, ...): they pass alone in about a second and run 8 to 15 times slower inside the full package run
+  (t731 and t739 reports). Rerunning each set is the patch; the structural fix is isolation.
+- Task: in the Core worktree, give the real-SQL integration tests their own vitest project (or pool) with low
+  concurrency so the full `pnpm test` never starves them, selected by a rule (path or a marker) that new tests follow
+  without a list to maintain; `pnpm test` and `vitest run <path>` keep working; no timeout raised, no test skipped.
+  Document the rule in Core's testing docs and AGENTS.md if it states where tests run.
+- Validation: run the previously timed-out files together under the new pool and alone; run the whole
+  `packages/fluxiq` vitest once at the end and report its duration and failures (one full package run is allowed for
+  this change); both audits.
+- Report: `docs/working/trace-offline-trials-plan/reports/sql-test-pool.md` in the task's downstream tree.
+
+### Brief: t739-sweep-1020-fixes (lead, t739 sweep-1020-fixes)
+- Why: sweep-1020 (`reports/sweep-1020.md`, logs `fxwork/sweep-1020/logs/`, Core ca23a8ba, downstream 6dd2d724).
+- Task, partitioned by file, root causes only (never raise a timeout or loosen an assertion): (1) scenario-lab
+  photo-social: the newest-likes scenario test fails a real assertion (the liked list misses one expected post) and
+  the Glaze collection test times out on a close-dialog click; find whether a recent change (t730's photo-social
+  `saved-logins` mode, t733, L1) or the test is wrong, and fix that side. This gates rerun round 3, since
+  photo-social-newest-likes is one of its tasks. (2) Core fluxiq: four new 15 s timeouts (controller,
+  command-execution service, provider-unavailable, flow-index-read): rerun each alone and in its directory, fix
+  real causes, record environmental ones with evidence. (3) downstream `scripts/build-cache/tests/registry.test.mjs`:
+  `git check-ignore` "empty string is not a valid pathspec"; fix if real, show it is worktree-specific if not.
+  (4) Run the extension package tests (cut off in the sweep) and agent-orchestrator's absence is expected (deleted in
+  t727); fix anything that fails.
+- Report: `docs/working/trace-offline-trials-plan/reports/t739-sweep-fixes.md` in the t739 downstream tree.
+
+### Brief: t738-rerun2-fixes (lead-xhigh, t738 rerun2-fixes)
+- Why: breadth rerun round 2 went 0 of 4, every cause a product defect (debug notes, one per lane tree, under
+  `docs/working/language-driven-flow-loop-plan/debugs/`: t719 run-mvgf4pk5-55343613 job, t563 run-mvgf04kw-310fc169
+  office, t566 run-mvgf7ij5-a9747575 social, t567 run-mvgf801u-cc23575e photo). Read all four first.
+- Unit A, reset witnesses and trial acts (Core `flow-bootstrap/site-reset/**`, `service/candidate-trial/landed-acts.ts`):
+  before the seal, refuse without running any reversible press with no witness (no complete list it sits in, no
+  stated control state, no issued reference), as `create_new` already is (job; office's address step); settle words
+  never ask for a reference that cannot exist and never print "[withheld]"; an invented `resetDestination` is refused
+  explicitly, not ignored; trial acts are built from the in-memory trace before withholding (photo).
+- Unit B, script format (Core `nodes/data` write-records, `flow-bootstrap/authoring/locate-issue.ts`,
+  `draft-routing.ts`): write-records takes a `records` parameter of `$step` values with a derived schema and a generic
+  example; key-named node issues point at their own step; the loop-in-loop refusal points at the inner loop and names
+  the `NO_ROW_LOOP_IN_PAGE_LOOP` alternative (office, social).
+- Unit C, loop feedback and trial views (Core `llm/repeat-guard/candidate-feedback.ts`, `subflow-candidate/builder-loop.ts`,
+  activity/chat wording): "test it" for an unchanged submission; `core.test_subflow` answers wrapped in the
+  candidate-trial view so they carry the page; a refused test says where it moved the tab; trace and fix
+  `unexpected_input_keys` on later briefs' opening calls (office); the final chat message and "one more change" tell
+  the truth (office, job).
+- Unit D, downstream (`rejection-next/next-sentence.ts`, `output-nodes/definitions.ts`, the refusal that drops keys):
+  the cut-short hint says "load every row first, then loop over one read"; `scroll` gets a description and example;
+  the refusal names the bad keys (social).
+- Rules: model guidance never mirrors a realistic task, site, product or answer (examples use another kind of site);
+  prompt contract gate tests when model-facing text changes; provider-free reproductions of each shape (the
+  site-reset installed-gateway specs with a scripted provider where the shape is a reset one); usual lane rules; no
+  paid runs (the supervisor reruns live).
+- Report: `docs/working/trace-offline-trials-plan/reports/t738-rerun2-fixes.md` in the t738 downstream tree.
+
 ### Brief: t736-trace-capture (lane T lead, t736 trace-capture)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P2, with decisions D1-D7 in `reports/lane-t.md`.
 - Task: Core lane: capture at the client gateway into the workspace's existing store, through the same intake it uses
@@ -442,6 +497,51 @@ was still running at dispatch and is excluded below by its own file list.
   pushed Core despite the 2 failures; the follow-up runs above show t731 is sound, but merges are gated from now on.
 - Outcome: Accepted
 - Follow-up: merge t733 after its doc/runtime-status unit; merge t735 after t730's combined run (shared Core).
+
+### 2026-10-20 - t728, t730, t734, t735, t737 merged; rerun round 2 0 of 4; t738 fixing its causes
+- Agent: supervisor (lanes S, T; t730, t735, t737 leads and workers; four debuggers)
+- Changed: merged and pushed in order t735, t728 (lane S with follow-ups, including the chat instruction-fold fix,
+  migration 0026), t730 (realistic-only browser specs, one conflict in requests-settings.spec.ts resolved to lane S's
+  test on t730's realistic page), t734 (trace U7), t737 (install handler, shown-addresses, repair count, scan, reset
+  step). Rerun round 2 ran on the synced lane trees: 0 of 4, $0.567236172 (ledger in breadth-forty-tasks-plan.md).
+- Validation: t728 gated recheck after merging dev: Core `vitest run` over flow-bootstrap, llm, conversations, service,
+  ui/activity-status, client-gateway -> 669 files, 6488 passed; fluxiq `tsc` 0; web check 0; extension background,
+  identity, action-runtime, shared, panel/settings -> 1236 pass; domain runtime, sensitivity, client -> 1625 pass;
+  audits passed. t730: headed `requests-settings.spec.ts` -> 1 passed, scan -> 4 passed, Scenario Lab suite -> 45
+  passed, the unblocked specs -> 32 passed. t734 gated: Core 664 files, 6407 passed; tsc 0; audits passed. t735:
+  171 pass; its sync-core moved the shared Core bcb2c0ec -> 2d7bf003 -> 3dcd0355 for real. t737: five `tsc` 0;
+  extension background 573, domain 398, row 41, build-time 12, Core 84 pass; headed `reconnect.spec.ts` -> 3 passed
+  twice (the flaky `:85`/`:122` included); scan -> 9 passed.
+- Outcome: Accepted (merges); Partial (live)
+- Follow-up: t738 (four rerun causes), then rerun round 3; t736 P2 capture; sweep-1020.
+
+### 2026-10-20 - First daily sweep (sweep-1020)
+- Agent: supervisor (worker sweep-1020)
+- Changed: `reports/sweep-1020.md`; worktrees `fxwork/sweep-1020/` (Core ca23a8ba, downstream 6dd2d724).
+- Validation: worker's runs, not rerun by the supervisor: installs, Core build and check, downstream build -> 0; Core
+  `pnpm test` -> 1 (fluxiq 13310 passed, 4 failed: new 15 s timeouts in controller, command-execution service,
+  provider-unavailable, flow-index-read; contracts 250/250; client-gateway-websocket 179/179; apps/web 3129/3129);
+  downstream `pnpm check` -> 1 (build-cache registry.test.mjs: `git check-ignore` empty pathspec; audit and `pnpm -r
+  check` not reached); downstream `pnpm test` -> 1 (scenario-lab 996 passed, 2 failed, both photo-social: newest-likes
+  assertion, Glaze close-dialog timeout; domain 2212/2212; extension cut off without totals). All 10 Core failures
+  and the crossborder failure of sweep-1019b are gone; no out-of-memory error.
+- Outcome: Partial (fix forward in t739)
+- Follow-up: t739; the photo-social fixture result gates rerun round 3.
+
+### 2026-10-20 - t739 merged: photo-social fixture defect, build-cache fingerprint gap
+- Agent: supervisor (t739 lead and workers)
+- Changed: downstream merged (Core side had no change): photo-social's heart and dock show done only once the server
+  has the act (newest-likes lost likes when a navigation followed the optimistic heart; a live-run risk too); the
+  recording driver keeps Playwright's call log; `scenario-lab:check` declares its read of `packages/test-runner`
+  (t730 had left the realistic-scenarios list outside the cache fingerprint).
+- Validation: supervisor reruns in t739: `node --test dist/scenarios/photo-social/tests/*.test.js
+  dist/scenarios/photo-social/breadth/tests/*.test.js` -> pass 46 fail 0; live-task and instruction tests -> pass 17;
+  `node --test scripts/build-cache/tests/*.test.mjs` -> pass 25 fail 0; `prove-inputs.mjs scenario-lab:check` ->
+  `inputs proved complete for 2 listing(s)`; scenario-lab e2e `tsc` 0; audit passed; gated `pnpm task finish t739`
+  -> merged. Lead: extension suite alone 3220/3220; the four Core timeouts pass alone (0.4-1.5 s) and in their
+  directories (218/218), load-only.
+- Outcome: Accepted
+- Follow-up: sql-test-pool (structural fix for the recurring sweep timeouts).
 
 ## Open Questions
 
