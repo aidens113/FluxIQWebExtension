@@ -9,9 +9,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListDispatch } from "../../../../output-nodes/extract-list";
-import { webAutomationExtractConditionHolds, type WebAutomationExtractItemCondition } from "../../../../actions/extraction";
+import type { WebAutomationExtractItemCondition } from "../../../../actions/extraction";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -225,7 +226,7 @@ const HOME_CARDS = [
 ];
 
 function filteredRead(condition: JsonObject): { read: { rejectedRows?: JsonObject; rejectedRowsNote?: string }; parameters: JsonObject } {
-  const rejected = HOME_CARDS.filter((card) => !webAutomationExtractConditionHolds(condition as WebAutomationExtractItemCondition, card[condition.field as "name" | "mutual"]));
+  const rejected = HOME_CARDS.filter((card) => !automationStudioRecordConditionHolds(condition as WebAutomationExtractItemCondition, card[condition.field as "name" | "mutual"]));
   const kept = HOME_CARDS.filter((card) => !rejected.includes(card));
   const payload: JsonObject = {
     extracted: kept,
@@ -258,7 +259,7 @@ test("a text condition on a column that does not read as numbers adds no sentenc
 test("a numeric condition, and a read given no parameters, add no sentence", () => {
   assert.equal(filteredRead({ field: "mutual", atLeast: 5 }).read.rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
   const condition: JsonObject = { field: "mutual", matches: "/(?:[5-9]|[1-9][0-9]+) mutual/" };
-  const rejected = HOME_CARDS.filter((card) => !webAutomationExtractConditionHolds(condition as WebAutomationExtractItemCondition, card.mutual));
+  const rejected = HOME_CARDS.filter((card) => !automationStudioRecordConditionHolds(condition as WebAutomationExtractItemCondition, card.mutual));
   const payload: JsonObject = { extracted: [], extraction: { recordCount: 1, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "mutual"], conditions: { applied: 4, kept: 1, rejected: [3], unfiltered: false }, rejectedSamples: [rejected], rejectedSamplesAlone: [3] } };
   assert.equal((webNodeReadWithRejectedRows(payload).read as { rejectedRowsNote?: string }).rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
 });

@@ -41,18 +41,25 @@
 //
 // **What is not touched.** Replaying the draft and running a saved Flow go to
 // what the step holds (`./replay.ts`), which this rule already let through when
-// the step first ran. A build's opening call forgets the last build of the same
-// flow, as arrival does (`./arrival.ts`); the opening look of a round that
-// continues a Flow forgets nothing, since it continues the same build.
+// the step first ran. Core's opening of a fresh round forgets what the build
+// was shown before it, as arrival does (`./arrival.ts`); the opening look of a
+// round that continues a Flow forgets nothing, since it continues the same
+// build.
+//
+// **Kept across a restart** (t728). What a build was shown and typed is kept in
+// Core's durable build state as well as here (`./build-state/`), so a host
+// restarted mid-build does not refuse a link its model was shown before the
+// restart. Core bounds one stored value; a build shown more than that keeps
+// its last stored copy, which can only refuse more, never allow more.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";
-import { webNodeOpensBuild, type WebNodeBuildKey } from "./arrival";
+import { createWebNodeBuildMemory, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "./build-state";
 import type { WebRunnableNode } from "./catalog";
 import { WEB_NAVIGATION_ACTION } from "./start-location";
 
-/** How many builds are remembered at once, as arrival remembers them. */
+/** How many builds this process remembers at once, as arrival remembers them. */
 const REMEMBERED_BUILDS = 16;
 // A build remembers every address it was shown, every text it typed and every
 // address a read returned, for as long as the build lasts (a new build of the
@@ -77,8 +84,10 @@ type Address = { path: string; query: Query };
 type BuildMemory = { addresses: Map<string, Address>; typed: string[] };
 
 export type WebNodeShownAddresses = {
-  /** Forget what the last build of this flow was shown, when this call opens a new one. */
-  opening(build: WebNodeBuildKey, callId: string): void;
+  /** Read what this build was shown back from Core's store when this process holds none of it (`./build-state/memory.ts`). */
+  restore(build: WebNodeBuildKey): Promise<void>;
+  /** Forget what this build was shown before, when this call is Core's opening of a fresh round. */
+  opening(build: WebNodeBuildKey, opening: WebNodeOpening | undefined): void;
   /** A packet this build has been shown. */
   saw(build: WebNodeBuildKey, page: WebLlmSnapshotBinding): void;
   /** An address a navigation of the Flow this round continues goes to, read against `base` as the step was. */
@@ -89,50 +98,49 @@ export type WebNodeShownAddresses = {
   refuses(build: WebNodeBuildKey, node: WebRunnableNode, parameters: JsonObject, where: { location: string | undefined; startLocation: string | undefined }): boolean;
 };
 
-export function createWebNodeShownAddresses(): WebNodeShownAddresses {
-  const builds = new Map<string, BuildMemory>();
-  const key = (build: WebNodeBuildKey): string => `${build.sessionId}\u0000${build.projectId}\u0000${build.flowId}`;
-  const memory = (build: WebNodeBuildKey): BuildMemory => {
-    const slot = key(build);
-    const found = builds.get(slot) ?? { addresses: new Map<string, Address>(), typed: [] };
-    builds.delete(slot);
-    builds.set(slot, found);
-    for (const oldest of builds.keys()) {
-      if (builds.size <= REMEMBERED_BUILDS) break;
-      builds.delete(oldest);
-    }
-    return found;
+export function createWebNodeShownAddresses(persistence?: WebNodeBuildStatePersistence): WebNodeShownAddresses {
+  const builds = createWebNodeBuildMemory<BuildMemory>({ name: "web.shown-addresses", bound: REMEMBERED_BUILDS, encode: encoded, decode: decoded, persistence });
+  const memory = (build: WebNodeBuildKey): BuildMemory => builds.entry(build, () => ({ addresses: new Map<string, Address>(), typed: [] }));
+  // Written through only when something new was remembered: most packets show addresses the build already has.
+  const changing = (build: WebNodeBuildKey, change: (held: BuildMemory) => void): void => {
+    const held = memory(build);
+    const before = `${held.addresses.size}\u0000${held.typed.join("\u0000")}`;
+    change(held);
+    if (`${held.addresses.size}\u0000${held.typed.join("\u0000")}` !== before) builds.saved(build);
   };
   return {
-    opening(build, callId) {
-      if (webNodeOpensBuild(callId)) builds.delete(key(build));
+    restore: (build) => builds.restore(build),
+    opening(build, opening) {
+      if (opening === "fresh") builds.forget(build);
     },
     saw(build, page) {
-      const held = memory(build);
-      // The page's own query rides with its location: the page is one the build stood on.
-      remember(held, parsed(page.evidence.location, undefined), page.pageQuery ?? []);
-      // A link's query is shown with it, so it is remembered with it.
-      for (const element of page.evidence.elements) {
-        if (element.href === undefined) continue;
-        const link = parsed(element.href, undefined);
-        remember(held, link, link === undefined ? [] : [...link.searchParams]);
-      }
+      changing(build, (held) => {
+        // The page's own query rides with its location: the page is one the build stood on.
+        remember(held, parsed(page.evidence.location, undefined), page.pageQuery ?? []);
+        // A link's query is shown with it, so it is remembered with it.
+        for (const element of page.evidence.elements) {
+          if (element.href === undefined) continue;
+          const link = parsed(element.href, undefined);
+          remember(held, link, link === undefined ? [] : [...link.searchParams]);
+        }
+      });
     },
     held(build, address, base) {
       const url = parsed(address, base);
-      remember(memory(build), url, url === undefined ? [] : [...url.searchParams]);
+      changing(build, (held) => remember(held, url, url === undefined ? [] : [...url.searchParams]));
     },
     ran(build, step) {
-      const held = memory(build);
-      const text = step.actionType === TYPE_ACTION ? step.parameters.text : undefined;
-      if (typeof text === "string" && normalised(text) !== "") {
-        held.typed = [normalised(text), ...held.typed.filter((typed) => typed !== normalised(text))];
-      }
-      if (step.read === undefined) return;
-      for (const written of addressStrings(step.read)) {
-        const url = parsed(written, step.location);
-        if (url) remember(held, url, [...url.searchParams]);
-      }
+      changing(build, (held) => {
+        const text = step.actionType === TYPE_ACTION ? step.parameters.text : undefined;
+        if (typeof text === "string" && normalised(text) !== "") {
+          held.typed = [normalised(text), ...held.typed.filter((typed) => typed !== normalised(text))];
+        }
+        if (step.read === undefined) return;
+        for (const written of addressStrings(step.read)) {
+          const url = parsed(written, step.location);
+          if (url) remember(held, url, [...url.searchParams]);
+        }
+      });
     },
     refuses(build, node, parameters, where) {
       if (node.actionType !== WEB_NAVIGATION_ACTION || typeof parameters.url !== "string") return false;
@@ -156,8 +164,28 @@ export function webUnshownAddressRefusal(startLocation: string | undefined): Web
 /** Keep an address for the rest of the build. */
 function remember(held: BuildMemory, url: URL | undefined, query: Query): void {
   if (url === undefined) return;
-  const address: Address = { path: pathKey(url), query: [...query] };
+  keep(held, { path: pathKey(url), query: [...query] });
+}
+
+function keep(held: BuildMemory, address: Address): void {
   held.addresses.set(`${address.path}?${JSON.stringify(address.query)}`, address);
+}
+
+/** A build's memory as Core stores it: each address as `[path, [[key, value], ...]]`, and the texts typed. Nothing else. */
+function encoded(held: BuildMemory): JsonValue {
+  return { addresses: [...held.addresses.values()].map((address) => [address.path, address.query.map(([key, value]) => [key, value])]), typed: [...held.typed] };
+}
+
+/** The memory a stored value holds; an entry that is not one is skipped, and a value that is not one at all is none. */
+function decoded(stored: JsonValue): BuildMemory | undefined {
+  if (stored === null || typeof stored !== "object" || Array.isArray(stored) || !Array.isArray(stored.addresses) || !Array.isArray(stored.typed)) return undefined;
+  const held: BuildMemory = { addresses: new Map(), typed: stored.typed.filter((typed): typed is string => typeof typed === "string") };
+  for (const entry of stored.addresses) {
+    if (!Array.isArray(entry) || typeof entry[0] !== "string" || !Array.isArray(entry[1])) continue;
+    const pairs = entry[1].filter((pair): pair is [string, string] => Array.isArray(pair) && pair.length === 2 && typeof pair[0] === "string" && typeof pair[1] === "string");
+    keep(held, { path: entry[0], query: pairs.map(([key, value]) => [key, value] as const) });
+  }
+  return held;
 }
 
 /**

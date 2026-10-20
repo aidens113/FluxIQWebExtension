@@ -7,8 +7,13 @@
 // providers say it with other words -- OpenAI answers 429
 // `insufficient_quota`, "You exceeded your current quota"; Anthropic 400
 // "credit balance is too low" -- so the text is matched as well as the status.
+// Core classifies an empty balance itself, as `llm.provider_balance_exhausted`
+// (step-log meta.error.code) or `flow_bootstrap.provider_balance_exhausted`
+// (build failure code); its safe message does not match the text, so the
+// code is matched too.
 // A plain 429 rate limit is not a balance failure: it clears by itself.
 
+const CORE_BALANCE_CODES = new Set(["llm.provider_balance_exhausted", "flow_bootstrap.provider_balance_exhausted"]);
 const BALANCE_TEXT = /insufficient[\s_-]*(?:balance|quota|credits?|funds)|exceeded your current quota|credit balance is too low|out of credits/iu;
 
 /**
@@ -22,14 +27,15 @@ export function detectBalanceFailure(payload) {
     const status = typeof provider.httpStatus === "number" ? provider.httpStatus : null;
     const text = [record?.core?.body, provider.body, provider.thrown].map(textOf).join("\n");
     const match = BALANCE_TEXT.exec(text);
-    if (status !== 402 && match === null) continue;
+    const coreCode = typeof provider.code === "string" && CORE_BALANCE_CODES.has(provider.code) ? provider.code : null;
+    if (status !== 402 && match === null && coreCode === null) continue;
     return {
       at: typeof record.at === "string" ? record.at : null,
       provider: typeof provider.provider === "string" ? provider.provider : null,
       model: typeof provider.model === "string" ? provider.model : null,
       httpStatus: status,
       code: typeof provider.code === "string" ? provider.code : null,
-      evidence: match === null ? `provider HTTP ${status} (payment required)` : match[0],
+      evidence: coreCode !== null ? `Core code ${coreCode}` : match === null ? `provider HTTP ${status} (payment required)` : match[0],
     };
   }
   return null;

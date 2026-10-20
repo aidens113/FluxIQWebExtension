@@ -13,6 +13,12 @@
 // The first row is that page; restore a document-only observer, or the body-only
 // text reading, and it goes red.
 //
+// The rows from "the menu closing is not the answer" on are job-board's
+// in-place filters (t733): pressing a filter link closes the pill menu, marks
+// the results column `aria-busy="true"`, fetches, swaps the rows in and clears
+// the flag. The menu closing alone once answered the click while the rows were
+// still loading; drop the hold on a busy region and they go red.
+//
 // Whether a real browser delivers the same records is the content harness's.
 
 import assert from "node:assert/strict";
@@ -49,7 +55,38 @@ class FakeElement {
   /** Its own box: false for `display: none` or `hidden`. */
   rendered = true;
   display = "block";
+  /** Set on `<html>` only: an element whose ancestors reach it is connected. */
+  isDocumentElement = false;
   constructor(public ownText = "") {}
+  get parentElement(): FakeElement | null {
+    return this.parentNode instanceof FakeElement ? this.parentNode : null;
+  }
+  get isConnected(): boolean {
+    let current: FakeElement = this;
+    for (;;) {
+      const parent: FakeElement | FakeRoot | null = current.parentNode;
+      if (!parent) return current.isDocumentElement;
+      current = parent instanceof FakeRoot ? parent.host : parent;
+    }
+  }
+  getAttribute(name: string): string | null {
+    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
+  }
+  hasAttribute(name: string): boolean {
+    return this.getAttribute(name) !== null;
+  }
+  /** Attribute selectors only -- `[name]` and `[name='value']`, comma-separated -- which is all the watch asks. */
+  matches(selector: string): boolean {
+    return selector.split(",").some((part) => {
+      const match = /^\[([\w-]+)(?:='([^']*)')?\]$/u.exec(part.trim());
+      if (!match) return false;
+      const value = this.getAttribute(match[1]!);
+      return value !== null && (match[2] === undefined || value === match[2]);
+    });
+  }
+  getBoundingClientRect(): { width: number; height: number } {
+    return this.getClientRects().length > 0 ? { width: 200, height: 20 } : { width: 0, height: 0 };
+  }
   get children(): FakeElement[] {
     return this.childNodes;
   }
@@ -72,6 +109,10 @@ class FakeElement {
       element.parentNode = this;
       this.childNodes.push(element);
     }
+  }
+  removeChild(element: FakeElement): void {
+    this.childNodes.splice(this.childNodes.indexOf(element), 1);
+    element.parentNode = null;
   }
   attachShadow(): FakeRoot {
     this.shadowRoot = new FakeRoot(this);
@@ -115,7 +156,13 @@ function inTree(ancestor: FakeElement | FakeRoot, node: FakeElement | FakeRoot):
   return false;
 }
 
-function deliver(record: { type: string; target: FakeElement | FakeRoot; addedNodes?: FakeElement[] }): void {
+function deliver(record: {
+  type: string;
+  target: FakeElement | FakeRoot;
+  addedNodes?: FakeElement[];
+  removedNodes?: FakeElement[];
+  attributeName?: string;
+}): void {
   const full = { addedNodes: [], removedNodes: [], ...record };
   for (const observer of observers) {
     if (observer.targets.some((target) => inTree(target, record.target))) observer.queued.push(full);
@@ -126,6 +173,19 @@ function deliver(record: { type: string; target: FakeElement | FakeRoot; addedNo
 function setHidden(element: FakeElement, hidden: boolean): void {
   element.rendered = !hidden;
   deliver({ type: "attributes", target: element });
+}
+
+/** Sets an attribute, and records it as the browser would. */
+function setAttribute(element: FakeElement, name: string, value: string): void {
+  const existing = element.attributes.find((attribute) => attribute.name === name);
+  if (existing) existing.value = value;
+  else element.attributes.push({ name, value });
+  deliver({ type: "attributes", target: element, attributeName: name });
+}
+
+function remove(parent: FakeElement, child: FakeElement): void {
+  parent.removeChild(child);
+  deliver({ type: "childList", target: parent, removedNodes: [child] });
 }
 
 function add(parent: FakeElement | FakeRoot, child: FakeElement): void {
@@ -140,6 +200,7 @@ function page() {
   const main = new FakeElement("Product page");
   const link = new FakeElement("Change store");
   link.attributes.push({ name: "href", value: "/stores" });
+  html.isDocumentElement = true;
   html.append(body);
   body.append(main);
   main.append(link);
@@ -165,6 +226,63 @@ function storePicker(main: FakeElement) {
   flyout.rendered = false;
   root.append(heading, flyout);
   return { host, root, flyout };
+}
+
+/**
+ * job-board's results page as the press finds it: the filter link inside an
+ * open pill menu, and a results column holding the rows of the last search.
+ */
+function jobBoard() {
+  const built = page();
+  const menu = new FakeElement("Remote\nHybrid\nOn-site");
+  const results = new FakeElement();
+  results.append(new FakeElement("Barista, Riverside -- on-site"));
+  built.main.append(menu, results);
+  /** What the page's handler does at once: the menu closes and the column goes busy. */
+  const press = (): void => {
+    remove(built.main, menu);
+    setAttribute(results, "aria-busy", "true");
+  };
+  /** What it does once the fetch lands: the rows are swapped in and the column clears. */
+  const land = (): void => {
+    remove(results, results.childNodes[0]!);
+    add(results, new FakeElement("Backend developer, Harbor -- remote"));
+    setAttribute(results, "aria-busy", "false");
+  };
+  return { ...built, menu, results, press, land };
+}
+
+const PENDING = Symbol("pending");
+
+/** The promise's value if it settles within `ms`, or `PENDING`. */
+function within<T>(promise: Promise<T>, ms: number): Promise<T | typeof PENDING> {
+  return Promise.race([promise, new Promise<typeof PENDING>((resolve) => setTimeout(() => resolve(PENDING), ms))]);
+}
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A test whose page the busy-region rule reads: `getComputedStyle` answers
+ * from the fakes for its duration and is put back after. Per test, not in a
+ * hook, because a top-level hook runs before every test of every file bundled
+ * into the same run.
+ */
+function styledTest(name: string, body: () => Promise<void>): void {
+  test(name, async () => {
+    const globals = globalThis as { getComputedStyle?: unknown };
+    const previous = Object.getOwnPropertyDescriptor(globals, "getComputedStyle");
+    globals.getComputedStyle = (element: FakeElement) => ({
+      display: element.rendered ? element.display : "none",
+      visibility: "visible",
+      opacity: "1"
+    });
+    try {
+      await body();
+    } finally {
+      if (previous) Object.defineProperty(globals, "getComputedStyle", previous);
+      else delete globals.getComputedStyle;
+    }
+  });
 }
 
 let saved: unknown;
@@ -287,4 +405,76 @@ test("a panel inside a display: contents wrapper at the top of a root is read th
   const watching = watch();
   setHidden(panel, false);
   assert.equal((await watching.settle(0))?.kind, "content");
+});
+
+styledTest("the menu closing is not the answer while the results column it marked busy is still loading", async () => {
+  const { watch, press, land } = jobBoard();
+  const watching = watch();
+  press();
+  const settled = watching.settle(2000);
+  assert.equal(await within(settled, 300), PENDING, "answered before the rows landed");
+  land();
+  await settled;
+});
+
+styledTest("once the busy column clears with the new rows, the click is answered with content", async () => {
+  const { watch, press, land } = jobBoard();
+  const watching = watch();
+  press();
+  const settled = watching.settle(2000);
+  await delay(300);
+  land();
+  const effect = await settled;
+  assert.equal(effect?.kind, "content");
+  assert.ok(effect.afterMs >= 300, `answered after ${effect.afterMs} ms, before the rows landed`);
+});
+
+styledTest("an element added busy since the press holds the answer until it leaves the page", async () => {
+  const { main, menu, watch } = jobBoard();
+  const watching = watch();
+  remove(main, menu);
+  const wrapper = new FakeElement();
+  const skeleton = new FakeElement();
+  skeleton.attributes.push({ name: "aria-busy", value: "true" });
+  wrapper.append(skeleton);
+  add(main, wrapper);
+  const settled = watching.settle(2000);
+  assert.equal(await within(settled, 300), PENDING, "a busy descendant of an added element did not hold the answer");
+  remove(main, wrapper);
+  assert.equal((await settled)?.kind, "content");
+});
+
+styledTest("a region busy since before the press that never changes does not delay the answer", async () => {
+  const { main, menu, results, watch } = jobBoard();
+  // A perpetual spinner: busy at the press and never touched again.
+  results.attributes.push({ name: "aria-busy", value: "true" });
+  const watching = watch();
+  remove(main, menu);
+  const effect = await watching.settle(2000);
+  assert.equal(effect?.kind, "content");
+  assert.ok(effect.afterMs < 100, `held for ${effect.afterMs} ms on a region that never changed`);
+});
+
+styledTest("a region inside the link that goes busy is the link's own, and does not hold the answer", async () => {
+  const { main, menu, link, watch } = jobBoard();
+  const badge = new FakeElement();
+  link.append(badge);
+  const watching = watch();
+  setAttribute(badge, "aria-busy", "true");
+  const spinner = new FakeElement();
+  spinner.attributes.push({ name: "aria-busy", value: "true" });
+  add(link, spinner);
+  remove(main, menu);
+  const effect = await watching.settle(2000);
+  assert.equal(effect?.kind, "content");
+  assert.ok(effect.afterMs < 100, `held for ${effect.afterMs} ms on a region inside the link`);
+});
+
+styledTest("at the deadline a region still busy no longer holds: the content answer is given, as before the hold", async () => {
+  const { watch, press } = jobBoard();
+  const watching = watch();
+  press();
+  const effect = await watching.settle(300);
+  assert.equal(effect?.kind, "content");
+  assert.ok(effect.afterMs >= 250, `answered after ${effect.afterMs} ms, before the deadline`);
 });

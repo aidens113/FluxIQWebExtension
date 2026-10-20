@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
+import { flowPurse } from "./flow-purse.js";
 import { planAtLabCeiling } from "./lab-ceiling.js";
 import { LiveLlmRun } from "../live-llm-run.js";
 
@@ -23,6 +24,8 @@ const profile: LlmExecutionProfile = {
 function fakeCore() {
   let metadata: unknown;
   return {
+    // Core's purse counts the same four calls the step log lists: the chat's, the build's two and its judge.
+    async getFlowSpend() { return flowPurse({ chat: [1, 0.00119988], build: [2, 0.018550884], judge: [1, 0.0021] }); },
     async reauthenticate(): Promise<void> {},
     async secretKeysCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
       return endpoint === "snapshot" ? { keys: [] } : { id: "key-1", name: payload.name, kind: "llm", provider: "DeepSeek", scope: "global", enabled: true };
@@ -78,7 +81,7 @@ test("live-llm.json lists every call the step log holds, each with its request i
   assert.deepEqual(rows.map(row => [row.requestId, row.taskKind, row.provider, row.model, row.inputTokens, row.outputTokens, row.totalTokens, row.estimatedCostUsd]), metas.map(meta => [meta.requestId, meta.taskKind, "deepseek", DEFAULT_LLM_MODEL, meta.inputTokens, meta.outputTokens, meta.inputTokens + meta.outputTokens, meta.costUsd]));
   assert.equal(snapshot.observed.perCallRecords, "recorded");
   assert.equal(snapshot.observed.unrecordedCalls, 0);
-  assert.equal(snapshot.observed.calls, 4);
+  assert.equal(snapshot.observed.calls, 4, "the total beside the rows is the purse's");
   // The build's own record is the build's, untouched.
   assert.equal(snapshot.build.evidenceLoop.steps.length, 2);
 });

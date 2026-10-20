@@ -75,6 +75,7 @@ import { webLabelledIdentity, webObservedControl } from "./observed-control";
 import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
+import { webNodeBuildOf, type WebNodeBuildKey } from "./build-state";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webNodeCallWithDeclarationBeside } from "./nested-consequences";
 import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRefusal } from "./start-location";
@@ -150,14 +151,16 @@ type WebNodeCallRecord = {
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
-  // A repair's opening call carries the repaired proposal's calls, and runs without them (`./arrival.ts`, t648).
-  const repaired = webNodeRepairedFlow(run.request);
-  const opened = repaired ? { ...run.request, value: repaired.look } : run.request;
+  // Whether this is Core's opening call of a round, as Core's frame says (`./build-state/`, t728). A repair's
+  // opening call carries the repaired proposal's calls, and runs without them (`./arrival.ts`, t648).
+  const { opening } = webNodeBuildOf(run.request);
+  const repaired = webNodeRepairedFlow({ value: run.request.value, opening });
+  const opened = repaired?.look ?? run.request.value;
   // The opening look of a round that continues a Flow carries the Flow's calls, and runs without them (`./arrival.ts`).
-  const continuing = webNodeHeldFlow(opened);
+  const continuing = webNodeHeldFlow({ value: opened, opening });
   // A builder's opening look on the entry Core prepared for it is marked so, and runs without the mark (`./arrival.ts`).
-  const entered = continuing ? undefined : webNodePreparedEntry(opened);
-  let value = continuing?.look ?? entered?.look ?? opened.value;
+  const entered = continuing ? undefined : webNodePreparedEntry({ value: opened, opening });
+  let value = continuing?.look ?? entered?.look ?? opened;
   // A call Core made rather than the model: the draft being run again before it
   // may be proposed (`./replay.ts`). It goes to the same executor so it passes
   // the same permission gate, and it is answered in Core's closed replay
@@ -179,14 +182,13 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     return replayed;
   }
-  // The build's opening call starts it not there, whatever the tab shows
-  // (`./arrival.ts`). A build told no start location is not touched. A round
-  // that continues a Flow forgets nothing, and each navigation the Flow holds
-  // is an address shown and, told a start location, the build's arrival.
-  if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
-  if (!continuing) run.addresses.opening(buildOf(run), run.request.callId);
-  if (!continuing) run.layers.opening(buildOf(run), run.request.callId);
-  if (!continuing) run.held.opening(buildOf(run), run.request.callId);
+  // Core's opening of a fresh round starts the build not there, whatever the tab shows (`./arrival.ts`). A build
+  // told no start location is not touched. A round that continues a Flow forgets nothing, and each navigation the
+  // Flow holds is an address shown and, told a start location, the build's arrival.
+  if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), opening);
+  if (!continuing) run.addresses.opening(buildOf(run), opening);
+  if (!continuing) run.layers.opening(buildOf(run), opening);
+  if (!continuing) run.held.opening(buildOf(run), opening);
   else run.held.hold(buildOf(run), continuing.calls);
   for (const address of continuing?.addresses ?? []) {
     run.addresses.held(buildOf(run), address, run.request.startLocation);
@@ -784,9 +786,9 @@ async function readablePage(run: WebNodeRun, request: WebLlmEvidenceToolRequest)
   }
 }
 
-/** The build this call belongs to, as the arrival memory keys it. */
-function buildOf(run: WebNodeRun): { projectId: string; flowId: string; sessionId: string } {
-  return { projectId: run.request.projectId, flowId: run.request.flowId, sessionId: run.sessionId };
+/** The build this call belongs to, as Core's frame names it and every build memory keys it (`./build-state/`). */
+function buildOf(run: WebNodeRun): WebNodeBuildKey {
+  return webNodeBuildOf(run.request).build;
 }
 
 /** The refusal for a call made before the Flow has reached where it starts. */

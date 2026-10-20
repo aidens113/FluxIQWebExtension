@@ -10,7 +10,7 @@
 //
 // The Flow's figure is the runner's, where it recorded one
 // (`observed.perBuild.builds`, one `flow` entry,
-// `packages/test-runner/src/live-llm/run-spend.ts`). A snapshot from before
+// `packages/test-runner/src/live-llm/flow-spend.ts`, Core's Flow purse). A snapshot from before
 // that listed parts instead; its Flow is the larger of the run's recorded total
 // (`observed.totalEstimatedCostUsd`) and the sum of those parts, and so is an
 // older snapshot's build accounting and repair. A part whose cost was not

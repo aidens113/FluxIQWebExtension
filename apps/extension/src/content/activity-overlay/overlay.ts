@@ -5,8 +5,8 @@
 // out of the page's way.
 //
 // It draws each display as it arrives, as the panel's status row does. The
-// background's pacer is the one pace both follow (`background/activity/
-// pacer.ts`: any three seconds show at most two paced changes). A dwell of the
+// background's pacer is the one pace both follow (`ActivityPacer` from
+// `fluxiq/ui`: any three seconds show at most two paced changes). A dwell of the
 // overlay's own, on top of that pace, made it lag the panel by most of a
 // second, so the two said different things at the same moment (D7 of the t174
 // UI review of run-musp8nz1-dbd3905a).

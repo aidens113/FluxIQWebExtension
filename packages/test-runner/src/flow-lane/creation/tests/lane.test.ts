@@ -536,19 +536,19 @@ const MURZLN6G_READ = [
   { consequence: "create_new", quote: "add two packs of the ValueRidge Essentials Select-A-Size Paper Towels in the 12 Double Rolls size and one pack of the ValueRidge Everyday Dinner Napkins in the 250 Count size to my cart, both for pickup" },
 ] as const;
 
-// `run-murzln6g-11debe1d`: Core publishes a build's instructed consequences
+// `run-murzln6g-11debe1d`: Core published a build's instructed consequences
 // only on its proposal, so the build that left none read `null` in both
-// snapshots. The live settlement now fills them from the step log, and the lane
+// snapshots. Core now publishes them on its failure diagnostic too (t728), and the lane
 // keeps the build the settlement answered with, so `flow-lane.json` carries
 // the same record as `live-llm.json` rather than its own unsettled copy.
 test("a build that left no proposal keeps the instructed consequences its settlement read, and where they came from", async () => {
   const diagnostic = { code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received" };
-  const fromStepLog = async (build: CreatedFlowBuild): Promise<CreatedFlowSettledBuild> => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "step_log" });
-  const { run, settled, incomplete } = await runLane(fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } }), { settle: fromStepLog });
+  const fromDiagnostic = async (build: CreatedFlowBuild): Promise<CreatedFlowSettledBuild> => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "failure_diagnostic" });
+  const { run, settled, incomplete } = await runLane(fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } }), { settle: fromDiagnostic });
   await assert.rejects(run, /FluxIQ did not build a Flow/u);
   assert.equal(settled[0]?.instructedConsequences, null, "Core's record had none");
   assert.deepEqual(incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
-  assert.equal(incomplete[0]?.instructedConsequencesFrom, "step_log");
+  assert.equal(incomplete[0]?.instructedConsequencesFrom, "failure_diagnostic");
 
   // A settlement that refused answered nothing: the build is Core's own, and nothing is claimed about where its consequences came from.
   const refusal = new RunnerFailure("runtime.behavior", "Live LLM run reached no provider");
@@ -559,11 +559,11 @@ test("a build that left no proposal keeps the instructed consequences its settle
 
 test("a chat build, and a direct build that proposed a Flow, are judged and published on the build their settlement answered with", async () => {
   const { core, entry } = chatCore();
-  const chat = await runLane(core, { entry, settle: async (build) => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "step_log" }) });
+  const chat = await runLane(core, { entry, settle: async (build) => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "failure_diagnostic" }) });
   const outcome = await chat.run;
   assert.deepEqual(outcome.build.instructedConsequences, MURZLN6G_READ);
   assert.deepEqual(createdFlowLaneSnapshot(outcome).build.instructedConsequences, MURZLN6G_READ);
-  assert.equal(createdFlowLaneSnapshot(outcome).instructedConsequencesFrom, "step_log");
+  assert.equal(createdFlowLaneSnapshot(outcome).instructedConsequencesFrom, "failure_diagnostic");
 
   const direct = await runLane(fakeCreationCore());
   const proposed = await direct.run;
@@ -572,12 +572,12 @@ test("a chat build, and a direct build that proposed a Flow, are judged and publ
 });
 
 // The settlement that throws -- a Lab budget breach, a build that reached no
-// provider -- ends the run that most needs reading. It had already filled the
-// record from the step log and written it to live-llm.json, and it carries that
+// provider -- ends the run that most needs reading. It had already settled the
+// record from Core's failure diagnostic and written it to live-llm.json, and it carries that
 // answer on the error, so the incomplete flow-lane.json says the same.
-test("a settlement that throws still hands the lane the build it filled from the step log, and the error is unchanged", async () => {
-  const fromStepLog = (build: CreatedFlowBuild): CreatedFlowSettledBuild => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "step_log" });
-  const breach = (build: CreatedFlowBuild) => withSettledBuild(new RunnerFailure("performance.budget", "Live LLM run exceeded its budget", { details: { calls: 34 } }), fromStepLog(build));
+test("a settlement that throws still hands the lane the build it settled, and the error is unchanged", async () => {
+  const fromDiagnostic = (build: CreatedFlowBuild): CreatedFlowSettledBuild => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "failure_diagnostic" });
+  const breach = (build: CreatedFlowBuild) => withSettledBuild(new RunnerFailure("performance.budget", "Live LLM run exceeded its budget", { details: { calls: 34 } }), fromDiagnostic(build));
 
   const diagnostic = { code: "flow_bootstrap.evidence_budget_exhausted", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received" };
   let thrown: unknown;
@@ -585,7 +585,7 @@ test("a settlement that throws still hands the lane the build it filled from the
   await assert.rejects(direct.run, (error: unknown) => error === thrown && error instanceof RunnerFailure && error.category === "performance.budget");
   assert.equal(direct.settled[0]?.instructedConsequences, null, "Core's record had none");
   assert.deepEqual(direct.incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
-  assert.equal(direct.incomplete[0]?.instructedConsequencesFrom, "step_log");
+  assert.equal(direct.incomplete[0]?.instructedConsequencesFrom, "failure_diagnostic");
   assert.deepEqual(direct.incomplete[0]?.build?.failure, direct.settled[0]?.failure, "the rest of the record is Core's own");
   // The answer rides on the error unseen: nothing that serializes the failure writes it a second time.
   assert.equal(JSON.stringify(thrown).includes("Millbrook"), false);
@@ -593,10 +593,10 @@ test("a settlement that throws still hands the lane the build it filled from the
 
   // A chat build the settlement refused carries the filled record the same way.
   const { core, entry } = chatCore();
-  const chat = await runLane(core, { entry, settle: async (build) => { throw withSettledBuild(new RunnerFailure("runtime.behavior", "Live LLM run reached no provider"), fromStepLog(build)); } });
+  const chat = await runLane(core, { entry, settle: async (build) => { throw withSettledBuild(new RunnerFailure("runtime.behavior", "Live LLM run reached no provider"), fromDiagnostic(build)); } });
   await assert.rejects(chat.run, /reached no provider/u);
   assert.deepEqual(chat.incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
-  assert.equal(chat.incomplete[0]?.instructedConsequencesFrom, "step_log");
+  assert.equal(chat.incomplete[0]?.instructedConsequencesFrom, "failure_diagnostic");
 });
 
 test("created-lane snapshots preserve terminal evidence without copying Core's trace message", async () => {

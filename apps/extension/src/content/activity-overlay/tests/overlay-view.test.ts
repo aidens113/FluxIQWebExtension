@@ -2,7 +2,7 @@
 // detail and the step as the background paced them, a mark and colour that
 // follow the unit of work rather than Core's phase, and which preference
 // shows what. Every word comes from the display, which the background words
-// (`shared/activity/wording.ts`); the real build is checked end to end
+// (`activityWording` from `fluxiq/ui`); the real build is checked end to end
 // in `background/activity/tests/activity-replay.test.ts`.
 
 import assert from "node:assert/strict";

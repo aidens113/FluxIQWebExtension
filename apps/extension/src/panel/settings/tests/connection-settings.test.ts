@@ -69,16 +69,17 @@ test("parseConnectionDraft trusts only a whole, well-typed set of settings", () 
 });
 
 
-test("requests are visibly unavailable and saved drafts cannot enable them", () => {
+test("requests are visibly unavailable under Core's default, and a draft keeps the switch as the form read it", () => {
   const field = SETTING_FIELDS.toggles.find(field => field.key === "requestsEnabled");
   assert.ok(field);
   assert.equal(field.disabled, true);
   assert.equal(field.hint, "Unavailable in this version.");
-  assert.equal(parseConnectionDraft({ ...values(), requestsEnabled: true })?.requestsEnabled, false);
+  assert.equal(parseConnectionDraft({ ...values(), requestsEnabled: true })?.requestsEnabled, true);
+  assert.equal(parseConnectionDraft({ ...values(), requestsEnabled: "yes" })?.requestsEnabled, false);
 });
 
 
-test("actual draft writes cannot persist an attempted enabled request preference", async () => {
+test("draft writes keep the request switch as a boolean, as the form read it", async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "chrome");
   let saved: unknown;
   Object.defineProperty(globalThis, "chrome", { configurable: true, value: { runtime: {}, storage: { local: {
@@ -87,8 +88,16 @@ test("actual draft writes cannot persist an attempted enabled request preference
   try {
     const { writeConnectionDraft, CONNECTION_DRAFT_KEY } = await import("../draft-store");
     writeConnectionDraft(values({ requestsEnabled: true }));
+    assert.equal((saved as Record<string, FluxIQSettings>)[CONNECTION_DRAFT_KEY]!.requestsEnabled, true);
+    writeConnectionDraft(values({ requestsEnabled: "yes" as unknown as boolean }));
     assert.equal((saved as Record<string, FluxIQSettings>)[CONNECTION_DRAFT_KEY]!.requestsEnabled, false);
   } finally {
     if (previous) Object.defineProperty(globalThis, "chrome", previous); else Reflect.deleteProperty(globalThis, "chrome");
+  }
+});
+
+test("under Core's default recording-capture policy every capture switch can be changed", () => {
+  for (const key of ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const) {
+    assert.equal(SETTING_FIELDS.toggles.find((field) => field.key === key)?.disabled, undefined, key);
   }
 });

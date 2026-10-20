@@ -2,7 +2,7 @@
 // link (photo newest-likes r1, `run-mvecxeci-1c2cc227`, Cause 3).
 //
 // `record.ts` finds a control's row by markup -- a `tr`, an `li`, an
-// `article`, a keyed element -- and `control-row.ts` by a twin control of the
+// `article`, a keyed element -- and `control-row/` by a twin control of the
 // same name in the neighbouring row. A gallery drawn as a `<div>` of `<a href>`
 // tiles has neither: each tile is the link, with nothing around it but the
 // grid, and each tile's name is its own counts, so no two tiles are alike by

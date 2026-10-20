@@ -29,6 +29,17 @@ export type DomElementDescriptor = {
    * they hold, so a sensitive one reports none and no other control reports one.
    */
   checked?: boolean | undefined;
+  /**
+   * The element is, or sits inside, a control the shared sensitivity rule
+   * marks (`content/sensitive-text.ts` `isWithinSensitiveControl`, t733): a
+   * field sensitive only through its marked group carries nothing on its own
+   * attributes that says so, and this is how the domain's reader
+   * (`domain/src/sensitivity/descriptor.ts`) agrees with the content side,
+   * which already withholds its value at source. Present only when true. A
+   * marker of its own rather than a written `data-sensitive`: saved
+   * fingerprints and selectors read `attributes`.
+   */
+  sensitive?: true | undefined;
   hasValue?: boolean | undefined;
   selectedValue?: string | undefined;
   bounds?: RectDescriptor | undefined;

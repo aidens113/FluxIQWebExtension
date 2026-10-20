@@ -11,13 +11,17 @@
 // spent on a Flow that could never have been proposed. Core cannot write the
 // missing step itself, because only this domain knows which node navigates.
 //
-// **What is remembered.** One bit per (project, flow, session): a navigation
-// node succeeded in this build. A key never seen has not arrived, so a new
-// process -- a resumed build -- starts every build not there, which is also
-// what the finished Flow meets the first time it runs on its own. The build's
-// opening call re-arms its key, so a second build of the same flow in one
-// process is held to the rule again rather than inheriting the first one's
-// arrival.
+// **What is remembered.** One bit per build: a navigation node succeeded in
+// it. The build is the one Core frames the call with (`./build-state/`): its
+// `buildId`, and the brief's `callScope` when briefs run side by side. A build
+// never seen has not arrived. Core's opening call of a round that starts the
+// build afresh (`opening: "fresh"`) re-arms it, so a second round of the same
+// build -- a project brief's reset loop, a legacy round -- is held to the rule
+// again rather than inheriting the first one's arrival. The bit is kept in
+// Core's durable build state as well (t728), so a host restarted mid-build
+// still knows its build arrived; a build Core starts anew has a new id, and
+// starts not there, which is also what the finished Flow meets the first time
+// it runs on its own.
 //
 // **Except a round that continues a Flow.** A repair or re-author round whose
 // draft already holds the Flow opens with Core's look on the page where the
@@ -52,59 +56,34 @@
 // held one does, and nothing else changes -- the opening still re-arms, still
 // forgets the last build, and arrives only by navigating.
 //
-// **Core's opening id, scoped or not.** A loop run beside others for one Flow
-// (a project brief, when the host runs several agents) opens with
-// `initial.<toolId>.<scope>` rather than `initial.<toolId>` (Core
-// `llm/evidence-loop/call-id.ts`, t537). Every key Core sets on its opening
-// call is read on both shapes (`coreOpening`); before t648 only the unscoped
-// one was, so a scoped builder's `arrived` mark was refused as an unexpected
-// key. A model may write an id of that shape itself; Core does not reserve the
-// `initial.` prefix for its own calls, which is Core's to close.
+// **Only Core's own opening call.** Every key Core sets on its opening call
+// (`held`, `repairs`, `arrived`) is read only on a call Core's frame marks as
+// its opening (`opening`, t728), scoped or not. Before t728 this domain read
+// Core's opening call id, `initial.<toolId>` or `initial.<toolId>.<scope>`, for
+// it, and a model could write an id of that shape. A model-written call never
+// carries Core's `opening`, so anywhere else each key is an unexpected key and
+// refused as one.
 //
 // **What it holds back.** Every node that acts or reads for the Flow. A look
 // (the observation node) is not held: it reads the page as it stands, because
 // it runs nothing and is never a step of the Flow (`./run.ts`).
 //
-// **Bounded like the repeated-refusal memory** (`../repeated-refusal.ts`,
-// REMEMBERED_ANSWERS), and for the same reason: a build that has moved on to
-// another flow has nothing to remember here, and letting its slot go costs at
-// most one refused call before the navigation that re-arrives.
+// **Bounded in this process like the repeated-refusal memory**
+// (`../repeated-refusal.ts`, REMEMBERED_ANSWERS), and for the same reason: a
+// build that has moved on has nothing to remember here. A build let go here is
+// read back from Core's store if it calls again (`./build-state/memory.ts`).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { isJsonRecord } from "../untrusted-json";
+import { createWebNodeBuildMemory, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "./build-state";
 import { webRunnableNode } from "./catalog";
 import { webMovesThePage } from "./start-location";
 
-/** How many (project, flow, session) builds are remembered at once. */
+/** How many builds this process remembers at once. */
 const REMEMBERED_BUILDS = 16;
 
-/**
- * Core names the build's opening call `initial.<toolId>`
- * (`AS/runtime/llm/evidence-loop.ts`). That naming is Core's, not this
- * domain's; it is read here only to tell where a build begins, and read the
- * same way by what a build has been shown (`./shown-addresses.ts`).
- */
-const OPENING_CALL_PREFIX = "initial.";
-
-/** Whether this call is a build's opening call, which starts the build's memory afresh. */
-export function webNodeOpensBuild(callId: string): boolean {
-  return callId.startsWith(OPENING_CALL_PREFIX);
-}
-
-/** A call scope as Core writes it into a scoped opening id (Core `llm/evidence-loop/call-id.ts`): no dot, at most 40 characters. */
-const CALL_SCOPE = /^[A-Za-z0-9_-]{1,40}$/u;
-
-/**
- * Whether this call is Core's own opening call of this tool: `initial.<toolId>`,
- * or `initial.<toolId>.<scope>` for a loop run beside others (header). Core makes
- * that call before the round's first decision and files a model's later call of
- * the same id under another.
- */
-function coreOpening(request: { callId: string; toolId: string }): boolean {
-  const own = `${OPENING_CALL_PREFIX}${request.toolId}`;
-  if (request.callId === own) return true;
-  return request.callId.startsWith(`${own}.`) && CALL_SCOPE.test(request.callId.slice(own.length + 1));
-}
+/** One call as Core's opening keys are read off it: the value it carries, and the opening Core's frame marks it with, if any. */
+export type WebNodeOpeningCall = { value: JsonObject; opening: WebNodeOpening | undefined };
 
 /** The address of each call that navigates, as written; nothing else a call carries. */
 function navigationAddresses(calls: readonly JsonValue[]): string[] {
@@ -130,13 +109,13 @@ const HELD_KEY = "held";
  * every step of a Flow ran after the Flow arrived, and each navigation passed
  * the address rule when it first ran (run 38, C3 and C8).
  *
- * Read only on Core's own opening id, `initial.<this tool>` or its scoped form
- * (`coreOpening`). Anywhere else `held` is an unexpected key and refused as one.
+ * Read only on Core's own opening call (header). Anywhere else `held` is an
+ * unexpected key and refused as one.
  */
-export function webNodeHeldFlow(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject; addresses: string[]; calls: JsonValue[] } | undefined {
-  const held = request.value[HELD_KEY];
-  if (!coreOpening(request) || !Array.isArray(held)) return undefined;
-  const { [HELD_KEY]: _held, ...look } = request.value;
+export function webNodeHeldFlow(call: WebNodeOpeningCall): { look: JsonObject; addresses: string[]; calls: JsonValue[] } | undefined {
+  const held = call.value[HELD_KEY];
+  if (call.opening === undefined || !Array.isArray(held)) return undefined;
+  const { [HELD_KEY]: _held, ...look } = call.value;
   // The calls themselves, for what the Flow holds that the model never wrote (`./held-literals/`, t432).
   return { look, addresses: navigationAddresses(held as JsonValue[]), calls: held as JsonValue[] };
 }
@@ -155,13 +134,13 @@ const REPAIRS_KEY = "repairs";
  *
  * Only a navigation's own address is read (header): it passed the address rule
  * when the proposal's builder ran it. Unlike `held`, this continues nothing --
- * the repair still opens afresh. Read only on Core's own opening id; anywhere
+ * the repair still opens afresh. Read only on Core's own opening call; anywhere
  * else `repairs` is an unexpected key and refused as one.
  */
-export function webNodeRepairedFlow(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject; addresses: string[] } | undefined {
-  const repairs = request.value[REPAIRS_KEY];
-  if (!coreOpening(request) || !Array.isArray(repairs)) return undefined;
-  const { [REPAIRS_KEY]: _repairs, ...look } = request.value;
+export function webNodeRepairedFlow(call: WebNodeOpeningCall): { look: JsonObject; addresses: string[] } | undefined {
+  const repairs = call.value[REPAIRS_KEY];
+  if (call.opening === undefined || !Array.isArray(repairs)) return undefined;
+  const { [REPAIRS_KEY]: _repairs, ...look } = call.value;
   return { look, addresses: navigationAddresses(repairs as JsonValue[]) };
 }
 
@@ -174,42 +153,43 @@ const ARRIVED_KEY = "arrived";
 /**
  * When this call is Core's opening look of a builder on its prepared entry:
  * the look without the mark (header). Otherwise nothing. Read only on Core's
- * own opening id, scoped or not, as `webNodeHeldFlow` is.
+ * own opening call, scoped or not, as `webNodeHeldFlow` is.
  */
-export function webNodePreparedEntry(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject } | undefined {
-  if (!coreOpening(request) || request.value[ARRIVED_KEY] !== true) return undefined;
-  const { [ARRIVED_KEY]: _arrived, ...look } = request.value;
+export function webNodePreparedEntry(call: WebNodeOpeningCall): { look: JsonObject } | undefined {
+  if (call.opening === undefined || call.value[ARRIVED_KEY] !== true) return undefined;
+  const { [ARRIVED_KEY]: _arrived, ...look } = call.value;
   return { look };
 }
 
-/** The build a call belongs to, as this memory keys it. */
-export type WebNodeBuildKey = { projectId: string; flowId: string; sessionId: string };
-
 export type WebNodeArrivals = {
+  /** Read this build's arrival back from Core's store when this process holds none for it (`./build-state/memory.ts`). */
+  restore(build: WebNodeBuildKey): Promise<void>;
   /** Whether a navigation node has succeeded in this build. */
   arrived(build: WebNodeBuildKey): boolean;
   /** A navigation node succeeded in this build. */
   arrive(build: WebNodeBuildKey): void;
-  /** Forget the arrival when this call is the build's opening call. */
-  opening(build: WebNodeBuildKey, callId: string): void;
+  /** Forget the arrival when this call is Core's opening of a fresh round. */
+  opening(build: WebNodeBuildKey, opening: WebNodeOpening | undefined): void;
 };
 
-export function createWebNodeArrivals(): WebNodeArrivals {
-  const reached = new Set<string>();
-  const key = (build: WebNodeBuildKey): string => `${build.sessionId}\u0000${build.projectId}\u0000${build.flowId}`;
+export function createWebNodeArrivals(persistence?: WebNodeBuildStatePersistence): WebNodeArrivals {
+  const reached = createWebNodeBuildMemory<true>({
+    name: "web.arrival",
+    bound: REMEMBERED_BUILDS,
+    encode: () => true,
+    decode: (stored) => (stored === true ? true : undefined),
+    persistence
+  });
   return {
-    arrived: (build) => reached.has(key(build)),
+    restore: (build) => reached.restore(build),
+    arrived: (build) => reached.get(build) === true,
     arrive(build) {
-      const slot = key(build);
-      reached.delete(slot);
-      reached.add(slot);
-      for (const oldest of reached) {
-        if (reached.size <= REMEMBERED_BUILDS) break;
-        reached.delete(oldest);
-      }
+      const before = reached.get(build);
+      reached.entry(build, () => true);
+      if (before === undefined) reached.saved(build);
     },
-    opening(build, callId) {
-      if (webNodeOpensBuild(callId)) reached.delete(key(build));
+    opening(build, opening) {
+      if (opening === "fresh") reached.forget(build);
     }
   };
 }

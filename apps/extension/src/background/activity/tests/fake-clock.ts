@@ -2,7 +2,7 @@
 // the clock passes them; a timer a timer sets runs in the same advance if it
 // falls inside it.
 
-import type { ActivityClock } from "../clock";
+import type { ActivityClock } from "fluxiq/ui";
 
 type Timer = { id: number; due: number; callback: () => void };
 

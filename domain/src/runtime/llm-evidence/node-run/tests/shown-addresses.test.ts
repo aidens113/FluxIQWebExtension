@@ -9,9 +9,11 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { coreBuildStateStore } from "../build-state/tests/core-store";
 
 const PROJECT = { projectId: "project.bigbox", flowId: "flow.bigbox" };
 const ORIGIN = "https://store.test";
@@ -29,6 +31,18 @@ const CLICK = "web.output.dom-click";
 const TYPE = "web.output.dom-type";
 
 type Call = { node: string; parameters: JsonObject };
+type Runtime = ReturnType<typeof createWebAutomationLlmEvidenceRuntime>;
+/** How Core frames a call: its opening of a round, if it is one, and the brief it runs under beside others. */
+type Frame = { opening?: "fresh" | "continuing"; callScope?: string };
+
+/**
+ * A call as Core's registry runs it: inside the build's frame, marked as Core's
+ * opening of a round only where Core would mark it
+ * (`AS/runtime/llm/harness-options/evidence-build-scope.ts`).
+ */
+function exec(runtime: Runtime, input: Parameters<Runtime["executeTool"]>[0], frame: Frame = {}) {
+  return runWithAutomationStudioEvidenceBuildScope({ projectId: input.projectId, flowId: input.flowId, buildId: "build.one", ...frame }, () => runtime.executeTool(input));
+}
 
 test("a navigation to an item address no evidence showed is refused, and nothing is dispatched", async () => {
   const site = bigbox();
@@ -123,7 +137,7 @@ test("an address a read gave back may be navigated to, query and all", async () 
 
 test("a replay of a saved step navigates where the step says, as it always did", async () => {
   const site = bigbox();
-  const replayed = await site.runtime.executeTool({
+  const replayed = await exec(site.runtime, {
     ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: async () => ({ permitted: true as const }),
     value: { replay: "step", node: NAVIGATE, parameters: { url: MADE_UP_ITEM }, consequences: [] }
   });
@@ -131,7 +145,7 @@ test("a replay of a saved step navigates where the step says, as it always did",
   assert.equal(site.navigations().includes(MADE_UP_ITEM), true);
 });
 
-test("a new build of the flow forgets what the last one was shown and searched", async () => {
+test("Core's opening of a fresh round forgets what the build was shown and searched before it", async () => {
   const site = bigbox();
   await arrive(site);
   const looked = await call(site, "call.look", { node: SNAPSHOT, parameters: {} });
@@ -184,17 +198,30 @@ test("a round that continues the Flow forgets nothing its build was shown and se
   assert.equal(again.resultCode, "web.action.succeeded");
 });
 
-test("held calls count only on Core's own opening look, never on a call the model names", async () => {
+test("held calls count only on Core's own opening look, never on a call Core did not mark as one, whatever its id", async () => {
   const site = bigbox();
   await arrive(site);
   const held = [{ node: NAVIGATE, parameters: { url: FLOW_ITEM } }];
 
-  for (const callId of ["call.held", "initial.model.1"]) {
-    const sent = await site.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: SNAPSHOT, parameters: {}, consequences: [], held } });
+  for (const callId of ["call.held", "initial.core.run_node", "initial.model.1"]) {
+    const sent = await exec(site.runtime, { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: SNAPSHOT, parameters: {}, consequences: [], held } });
     assert.equal(sent.resultCode, "web.action.rejected.invalid_input", callId);
   }
   const went = await call(site, "call.flow-step", { node: NAVIGATE, parameters: { url: FLOW_ITEM } });
   assert.equal(went.resultCode, "web.action.rejected.address_not_shown");
+});
+
+// t728: what a build was shown is kept in Core's durable build state too.
+test("a host restarted mid-build may still go where its build was shown before the restart, and nowhere else (t728)", async () => {
+  const store = coreBuildStateStore();
+  const site = bigbox({ store });
+  await arrive(site);
+  await call(site, "call.look", { node: SNAPSHOT, parameters: {} });
+
+  const restarted = bigbox({ store });
+  restarted.at(START);
+  assert.equal((await call(restarted, "call.shown", { node: NAVIGATE, parameters: { url: SHOWN_ITEM } })).resultCode, "web.action.succeeded");
+  assert.equal((await call(restarted, "call.made-up", { node: NAVIGATE, parameters: { url: MADE_UP_ITEM } })).resultCode, "web.action.rejected.address_not_shown");
 });
 
 // The guard remembers everything a build was shown (2026-09-30). It kept the
@@ -232,7 +259,7 @@ test("every address a read returned may be followed, however many and however de
  */
 async function arrive(site: ReturnType<typeof bigbox>): Promise<void> {
   const blank = site.location() === undefined;
-  const opening = await call(site, "initial.core.run_node", { node: SNAPSHOT, parameters: {} });
+  const opening = await call(site, "call.opening", { node: SNAPSHOT, parameters: {} }, { opening: "fresh" });
   assert.equal(opening.resultCode, blank ? "web.action.rejected.not_at_start_location" : "web.inspect.succeeded");
   const went = await call(site, "call.start", { node: NAVIGATE, parameters: { url: START } });
   assert.equal(went.resultCode, "web.action.succeeded");
@@ -240,11 +267,11 @@ async function arrive(site: ReturnType<typeof bigbox>): Promise<void> {
 
 /** Core's opening look of a round whose draft already holds the Flow (`AS/runtime/llm/evidence-loop.ts`). */
 function continuing(site: ReturnType<typeof bigbox>, held: Call[]) {
-  return site.runtime.executeTool({ ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: SNAPSHOT, parameters: {}, consequences: [], held } });
+  return exec(site.runtime, { ...PROJECT, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: SNAPSHOT, parameters: {}, consequences: [], held } }, { opening: "continuing" });
 }
 
-function call(site: ReturnType<typeof bigbox>, callId: string, value: Call) {
-  return site.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { ...value, consequences: [] } });
+function call(site: ReturnType<typeof bigbox>, callId: string, value: Call, frame: Frame = {}) {
+  return exec(site.runtime, { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { ...value, consequences: [] } }, frame);
 }
 
 function handleOf(looked: { evidence: unknown }, name: string): string {
@@ -256,7 +283,7 @@ function handleOf(looked: { evidence: unknown }, name: string): string {
  * product, a search box whose button goes to a results address carrying the
  * typed words and the chosen store, and whatever a read is told to return.
  */
-function bigbox(options: { readRows?: JsonObject[]; extraLinks?: number } = {}) {
+function bigbox(options: { readRows?: JsonObject[]; extraLinks?: number; store?: ReturnType<typeof coreBuildStateStore> } = {}) {
   let location: string | undefined;
   let typed = "";
   const navigated: string[] = [];
@@ -286,7 +313,7 @@ function bigbox(options: { readRows?: JsonObject[]; extraLinks?: number } = {}) 
     }
   };
   return {
-    runtime: createWebAutomationLlmEvidenceRuntime(gateway),
+    runtime: createWebAutomationLlmEvidenceRuntime(gateway, undefined, () => options.store),
     navigations: () => [...navigated],
     location: () => location,
     /** The tab back to the blank one a browser opens on. */
@@ -335,7 +362,7 @@ const REPAIRED: Call[] = [
 test("a repair may go to the repaired proposal's own navigation address, and only with its query as written (t648)", async () => {
   const site = library();
 
-  const opened = await repairOpening(site, "initial.core.run_node", REPAIRED);
+  const opened = await repairOpening(site, {}, REPAIRED);
   assert.equal(opened.resultCode, "web.action.succeeded");
   // The opening is still the build's arrival: it navigated to the start location.
   assert.deepEqual(site.navigations(), [LIBRARY_START]);
@@ -353,25 +380,27 @@ test("a repair may go to the repaired proposal's own navigation address, and onl
 
 test("a repair opening still forgets the last build of the flow (t648)", async () => {
   const site = library();
-  await repairOpening(site, "initial.core.run_node", REPAIRED);
+  await repairOpening(site, {}, REPAIRED);
   assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } })).resultCode, "web.action.succeeded");
 
   // The next build opens with no repairs: the last build's held address is gone.
-  await repairOpening(site, "initial.core.run_node", undefined);
+  await repairOpening(site, {}, undefined);
   const again = await libraryCall(site, "call.again", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } });
   assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
 });
 
-test("repairs count on Core's scoped opening id too, never on a call the model names (t648)", async () => {
+test("repairs count on a brief's scoped opening too, never on a call Core did not mark as one (t648, t728)", async () => {
   const site = library();
-  // A brief run beside others opens with `initial.<toolId>.<scope>` (Core `llm/evidence-loop/call-id.ts`).
-  assert.equal((await repairOpening(site, "initial.core.run_node.brief-6", REPAIRED)).resultCode, "web.action.succeeded");
-  assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } })).resultCode, "web.action.succeeded");
+  // A brief run beside others is framed with its call scope (Core `llm/harness-options/evidence-build-scope.ts`).
+  assert.equal((await repairOpening(site, { callScope: "brief-6" }, REPAIRED)).resultCode, "web.action.succeeded");
+  assert.equal((await libraryCall(site, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { callScope: "brief-6" })).resultCode, "web.action.succeeded");
+  // Another brief of the same build was shown none of it.
+  assert.notEqual((await libraryCall(site, "call.other-brief", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } }, { callScope: "brief-7" })).resultCode, "web.action.succeeded");
 
   const other = library();
-  await repairOpening(other, "initial.core.run_node", undefined);
-  for (const callId of ["call.repairs", "initial.model.1", "initial.core.run_node.has.dots"]) {
-    const sent = await other.runtime.executeTool({ ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [], repairs: REPAIRED } });
+  await repairOpening(other, {}, undefined);
+  for (const callId of ["call.repairs", "initial.model.1", "initial.core.run_node.brief-6"]) {
+    const sent = await exec(other.runtime, { ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [], repairs: REPAIRED } });
     assert.equal(sent.resultCode, "web.action.rejected.invalid_input", callId);
   }
   const went = await libraryCall(other, "call.repaired-item", { node: NAVIGATE, parameters: { url: REPAIRED_ITEM } });
@@ -381,21 +410,21 @@ test("repairs count on Core's scoped opening id too, never on a call the model n
 test("a scoped opening look marked arrived is the builder's arrival, as the unscoped one is (t585, t648)", async () => {
   const site = library();
   site.at(LIBRARY_START);
-  const looked = await site.runtime.executeTool({ ...LIBRARY_BUILD, callId: "initial.core.run_node.brief-3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true } });
+  const looked = await exec(site.runtime, { ...LIBRARY_BUILD, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true } }, { opening: "fresh", callScope: "brief-3" });
   assert.equal(looked.resultCode, "web.inspect.succeeded");
-  const typed = await libraryCall(site, "call.type", { node: TYPE, parameters: { target: { handle: handleOf(looked, "Search the catalogue") }, text: "river atlas" } });
+  const typed = await libraryCall(site, "call.type", { node: TYPE, parameters: { target: { handle: handleOf(looked, "Search the catalogue") }, text: "river atlas" } }, { callScope: "brief-3" });
   assert.equal(typed.resultCode, "web.action.succeeded");
 });
 
 /** Core's opening call of a repair brief: the arrival navigation, the repaired proposal's calls beside it (Core `run-brief.ts`, `shownAtOpening`). */
-function repairOpening(site: ReturnType<typeof library>, callId: string, repairs: Call[] | undefined) {
+function repairOpening(site: ReturnType<typeof library>, frame: { callScope?: string }, repairs: Call[] | undefined) {
   const value: JsonObject = { node: NAVIGATE, parameters: { url: LIBRARY_START }, consequences: [] };
   if (repairs) value.repairs = repairs;
-  return site.runtime.executeTool({ ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value });
+  return exec(site.runtime, { ...LIBRARY_BUILD, callId: "call.opening", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value }, { ...frame, opening: "fresh" });
 }
 
-function libraryCall(site: ReturnType<typeof library>, callId: string, value: Call) {
-  return site.runtime.executeTool({ ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { ...value, consequences: [] } });
+function libraryCall(site: ReturnType<typeof library>, callId: string, value: Call, frame: Frame = {}) {
+  return exec(site.runtime, { ...LIBRARY_BUILD, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: LIBRARY_START, value: { ...value, consequences: [] } }, frame);
 }
 
 /** The catalogue: a blank tab until a navigation, then a page with a search box and no item links. */

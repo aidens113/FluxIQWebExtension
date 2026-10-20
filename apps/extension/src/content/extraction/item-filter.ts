@@ -16,10 +16,11 @@
 // prose, which is the guess this repository deleted on 2026-09-18.
 //
 // **What may be said about the value is not decided here**, and deliberately so:
-// `webAutomationExtractConditionHolds` in the domain package
-// (`domain/src/actions/extraction/condition-match.ts`) is the one judge of
-// whether a value satisfies a condition, and the plan resolver that accepts a
-// model's condition is held to the same function. A second implementation of
+// Core's `automationStudioRecordConditionHolds` (`fluxiq/automation-studio/nodes`)
+// is the one judge of whether a value satisfies a condition, and the plan
+// resolver that accepts a model's condition, and Core's own dataset processing,
+// are held to the same function. A blank or whitespace-only value is one the
+// page does not have, by Core's rule. A second implementation of
 // "under $50" or "not a charging case" living here would be a row set that
 // differs between the page and everything that reasons about the page, and
 // nothing would report it. In short, a condition may test whether the page has
@@ -70,7 +71,8 @@
 // (`domain/src/actions/extraction/kept-values.ts`): values it already tested,
 // never more of the item.
 
-import { WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST, webAutomationExtractConditionHolds, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
+import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
@@ -133,7 +135,7 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
     for (const [index, entry] of conditions.entries()) {
       const value = valueOf(entry, item, record);
       values.push(value);
-      if (webAutomationExtractConditionHolds(entry.says, value)) {
+      if (automationStudioRecordConditionHolds(entry.says, value)) {
         if (seen?.[index] === null && value) seen[index] = value;
         continue;
       }

@@ -123,7 +123,8 @@ type Nothing<T extends never> = T;
 const WIRE_ELEMENT_FIELDS = [
   "selector", "tagName", "xpath", "id", "classNames", "visibleText", "text", "value",
   "role", "name", "href", "inputType", "checked", "bounds", "documentBounds", "isVisibleOnViewport",
-  "hasClickHandler", "attributes", "testId", "accessibleName", "label", "implicitRole", "context", "drawing"
+  "hasClickHandler", "attributes", "testId", "accessibleName", "label", "implicitRole", "context", "drawing",
+  "sensitive"
 ] as const satisfies readonly (keyof WireElementTarget)[];
 
 export type EveryWireFieldListed = Nothing<Exclude<keyof WireElementTarget, typeof WIRE_ELEMENT_FIELDS[number]>>;
@@ -175,7 +176,10 @@ function wireElement(element: DomElementDescriptor): Record<string, unknown> {
 
 test("the wire element target carries every field the contract declares, and only those", () => {
   const wire = wireElement(fullyDescribed);
-  assert.deepEqual(Object.keys(wire).sort(), [...WIRE_ELEMENT_FIELDS].sort());
+  // `sensitive` withholds the contents the other fields carry, so the fully
+  // described control is an ordinary one and the marker is pinned below.
+  assert.deepEqual(Object.keys(wire).sort(), WIRE_ELEMENT_FIELDS.filter((field) => field !== "sensitive").sort());
+  assert.equal(wireElement({ ...fullyDescribed, sensitive: true }).sensitive, true);
 });
 
 test("every identity signal the protocol declares reaches the wire", () => {
@@ -249,6 +253,26 @@ test("a sensitive control sends no contents, and keeps the identity the author w
   assert.deepEqual(wire.context, { formName: "sign-in" });
   assert.equal(wire.testId, "password-field");
   assert.equal(wire.implicitRole, "textbox");
+});
+
+// A field sensitive only through its marked group carries nothing on its own
+// attributes that says so; the producer's marker is what tells the rule here,
+// and it crosses so the stored target is judged by the same rule (t733).
+test("a control sensitive through its group sends the marker and no contents", () => {
+  const secret = "group-marked-should-never-cross";
+  const wire = wireElement({
+    tagName: "input",
+    selector: "#code",
+    inputType: "text",
+    value: secret,
+    accessibleName: secret,
+    label: "Code",
+    attributes: { type: "text" },
+    sensitive: true
+  });
+  assert.equal(JSON.stringify(wire).includes(secret), false, "no field carries the control's contents");
+  assert.equal(wire.sensitive, true);
+  assert.equal(wire.label, "Code");
 });
 
 // A card field is marked by its `autocomplete` token rather than its type, and

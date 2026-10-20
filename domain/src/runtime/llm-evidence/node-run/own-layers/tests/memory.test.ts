@@ -6,9 +6,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { WebLlmPageEvidence } from "../../../sanitize";
 import { fixturePacket, type FixtureElement } from "../../../page-view/tests/packet-fixture";
+import { createWebNodeBuildStatePersistence, type WebNodeBuildKey } from "../../build-state";
+import { coreBuildStateStore } from "../../build-state/tests/core-store";
 import { createWebNodeOwnLayers } from "../memory";
 
-const BUILD = { projectId: "project.one", flowId: "flow.one", sessionId: "session.one" };
+const BUILD: WebNodeBuildKey = { projectId: "project.one", flowId: "flow.one", buildId: "build.one", callScope: undefined };
 const OTHER = { ...BUILD, flowId: "flow.two" };
 const PAGE: FixtureElement[] = [{ tag: "button", target: "t10", text: "Pickup or delivery?", box: { x: 10, y: 10, width: 100, height: 20 } }];
 const CHOOSER: FixtureElement[] = [
@@ -54,11 +56,31 @@ test("a layer that appeared on another page, or with a look missing, is not reme
   assert.equal(layers.owns(BUILD, "t20"), false);
 });
 
-test("the build's opening call forgets what the last build opened; any other call keeps it", () => {
+test("Core's opening of a fresh round forgets what the build opened; a continuing round or any other call keeps it", () => {
   const layers = createWebNodeOwnLayers();
   layers.pressed(BUILD, page(PAGE), page([...CHOOSER, ...PAGE]));
-  layers.opening(BUILD, "call.press");
+  layers.opening(BUILD, undefined);
+  layers.opening(BUILD, "continuing");
   assert.equal(layers.owns(BUILD, "t20"), true);
-  layers.opening(BUILD, "initial.web.llm.run_node");
+  layers.opening(BUILD, "fresh");
   assert.equal(layers.owns(BUILD, "t20"), false);
+});
+
+test("a host restarted mid-build still knows the layers its build opened, and a fresh round forgets them in the store too (t728)", async () => {
+  const store = coreBuildStateStore();
+  const persistence = createWebNodeBuildStatePersistence(() => store);
+  createWebNodeOwnLayers(persistence).pressed(BUILD, page(PAGE), page([...CHOOSER, ...PAGE]));
+  await persistence.settled();
+
+  const restarted = createWebNodeOwnLayers(createWebNodeBuildStatePersistence(() => store));
+  assert.equal(restarted.owns(BUILD, "t20"), false);
+  await restarted.restore(BUILD);
+  assert.equal(restarted.owns(BUILD, "t20"), true);
+
+  const again = createWebNodeBuildStatePersistence(() => store);
+  createWebNodeOwnLayers(again).opening(BUILD, "fresh");
+  await again.settled();
+  const forgotten = createWebNodeOwnLayers(createWebNodeBuildStatePersistence(() => store));
+  await forgotten.restore(BUILD);
+  assert.equal(forgotten.owns(BUILD, "t20"), false);
 });

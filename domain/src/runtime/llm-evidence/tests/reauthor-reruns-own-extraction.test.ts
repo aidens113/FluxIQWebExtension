@@ -11,6 +11,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
 import type { WebLlmRepeatingStructure } from "../structure";
@@ -34,12 +35,14 @@ test("an amended rerun of the Flow's own extraction reaches the page with what t
       return { status: "succeeded", payload: { snapshot, structure: structuredClone(CAPTURE.structure) as JsonValue } };
     }
   });
-  const look = (callId: string) => runtime.executeTool({ ...SCOPE, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const extract = (callId: string, extractList: JsonObject) => runtime.executeTool({ ...SCOPE, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: EXTRACT_NODE, parameters: { extractList }, consequences: [] } });
+  // Each call as Core's registry runs it, inside the build's frame; a round's opening look marked fresh.
+  const inBuild = <T>(run: () => T, opening?: "fresh"): T => runWithAutomationStudioEvidenceBuildScope(opening ? { ...SCOPE, buildId: "build.one", opening } : { ...SCOPE, buildId: "build.one" }, run);
+  const look = (callId: string) => inBuild(() => runtime.executeTool({ ...SCOPE, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } }), "fresh");
+  const extract = (callId: string, extractList: JsonObject) => inBuild(() => runtime.executeTool({ ...SCOPE, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: EXTRACT_NODE, parameters: { extractList }, consequences: [] } }));
 
   // The build.
-  await look(`initial.${WEB_LLM_RUN_NODE_TOOL_ID}`);
-  const detected = await runtime.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  await look("call.opening");
+  const detected = await inBuild(() => runtime.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} }));
   const handle = (detected.evidence as WebLlmRepeatingStructure).extraction;
   const byHandle = { handle, fields: { name: "product-name", price: "product-price" }, minItems: 0 };
   assert.equal((await extract("call.extract", byHandle)).resultCode, "web.inspect.succeeded");
@@ -49,7 +52,7 @@ test("an amended rerun of the Flow's own extraction reaches the page with what t
   const kept = (assembled as { parameters: JsonObject }).parameters.extractList as { item: string; fields: Record<string, JsonObject> };
 
   // The re-author, a new loop, reruns the step as its draft showed it, with a condition added.
-  await look(`initial.${WEB_LLM_RUN_NODE_TOOL_ID}`);
+  await look("call.opening");
   const shownFields: JsonObject = {};
   for (const [key, spec] of Object.entries(kept.fields)) {
     const shown = structuredClone(spec);

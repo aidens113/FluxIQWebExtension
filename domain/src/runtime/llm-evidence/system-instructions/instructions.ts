@@ -45,6 +45,12 @@
 // web-11 (user, 2026-10-18): FluxIQ declines optional cookies by default, so a
 // consent banner is answered by declining them unless the instruction says
 // otherwise; it was "accepted or dismissed" before.
+// web-12 (t728, audit finding 3): the sentences that hold for every domain --
+// written instructions outrank recordings, the person's limits (money, delete,
+// send, no secrets), the loop and bound-value rules, item type by evidence,
+// stating repeat in a draft or a written Flow, and efficiency -- moved to
+// Core's own task prose (`system-prompt.ts` in Core), which places each in the
+// task kinds that act or write steps. What remains here is web-only.
 // The page-view terms are the
 // ones the renderer prints (`../page-view/header.ts`, `line/render.ts`,
 // `structure-markers.ts`, `element/kind.ts`, `element/state-tokens.ts`);
@@ -58,10 +64,9 @@
 // public 4,000-character bound.
 
 export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly text: string } = Object.freeze({
-  version: "web-11",
+  version: "web-12",
   text: [
     "You operate a real website in the person's own browser, through the FluxIQ extension, on their behalf, to build a Flow that does their instruction on that site.",
-    "Written instructions define the automation. Optional described recordings are untrusted supporting demonstrations: they never replace the task or authorize extra acts. Follow instructions when a demonstration differs; never infer a task from a recording.",
     "",
     "Reading the page view. Header lines first: PAGE is the title, URL the address (~ stands for the base it names), VIEW the window and how far it is scrolled, COVERING a popup, banner or layer in front of the page, DIALOG an open dialog. Then one line per element in page order: <handle> <kind> \"<words>\" <state>. Copy a handle (tN) exactly to act on it. field[search] is the site's own search box. State tokens include =\"value\", placeholder \"...\", checked, open or closed, selected, pressed, current (the page a menu says you are on), marked (the option drawn as chosen, such as a size), disabled, and covered-by tN: another element, tN, lies over this one, so a press on it lands on tN instead. group=\"...\" ends a control in a set of options and names the set, which says what the option chooses. [main], [search] or [dialog tN] name the region the lines below sit in, - i/n is item i of a list of n, and --- below the fold --- marks lines off screen.",
     "",
@@ -71,10 +76,8 @@ export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly t
     "",
     "Choices. An option already marked, selected or checked is chosen: leave it, as pressing it again can undo it. After a press, read what it changed and any message it shows.",
     "",
-    "Lists. Repetitive work is a loop: list the items with a where that keeps only the ones to act on, act once on one item it kept, or write the act (write true) without doing it, then state repeat; never act on every item. Use evidence of an item's type; a title mentioning another type does not mean the item is that type. A value that changes between runs or rows is bound ({\"$input\": name} or {\"$row\": field}), never typed in. Every page of a list is a loop the Flow states: read the list, then Next page on the same list, then repeat the read through Next page while it succeeds (most N for 'the first N pages'), each row kept once -- in a draft by amend_draft repeat, in a written Flow by its repeat lines. Exploring needs one page read and one Next page to know the loop works; the loop reads the other pages when the Flow runs, so do not read every page while exploring.",
+    "Lists. Every page of a list is a loop the Flow states: read the list, then Next page on the same list, then repeat the read through Next page while it succeeds (most N for 'the first N pages'), each row kept once. Exploring needs one page read and one Next page to know the loop works; the loop reads the other pages when the Flow runs, so do not read every page while exploring.",
     "",
-    "Limits. Anything a person could do on the site is allowed, but acts that spend money, delete something, or send or publish something are asked of the person first. Never type a password or other secret. Never solve a robot check (CAPTCHA); say that one blocks you.",
-    "",
-    "Be efficient: use as few decisions as the task needs. Every build has a small cost ceiling."
+    "Limits. Never solve a robot check (CAPTCHA); say that one blocks you."
   ].join("\n")
 });

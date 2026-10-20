@@ -92,12 +92,13 @@
 // no name similarity), never as a name match, and only where the caller allows a
 // guess.
 
-import { automationStudioMatchName, type AutomationStudioNameMatch, type AutomationStudioNameValueShape } from "fluxiq/automation-studio/nodes";
 import {
-  WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
-  type WebAutomationExtractConditionSaying,
-  type WebAutomationExtractField
-} from "../../actions/extraction";
+  AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
+  automationStudioMatchName,
+  type AutomationStudioNameMatch,
+  type AutomationStudioNameValueShape
+} from "fluxiq/automation-studio/nodes";
+import type { WebAutomationExtractConditionSaying, WebAutomationExtractField } from "../../actions/extraction";
 import { webExtractionNameSwapsPart } from "./swapped-name";
 
 /** The column a written name resolved to, and how much of that was a guess. */
@@ -157,7 +158,7 @@ function unswapped(written: string, named: AutomationStudioNameMatch, aliases: r
  */
 export function webExtractionComparedShape(says: WebAutomationExtractConditionSaying | undefined): AutomationStudioNameValueShape | undefined {
   if (says === undefined) return undefined;
-  if (WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS.some((key) => says[key] !== undefined)) return "number";
+  if (AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS.some((key) => says[key] !== undefined)) return "number";
   const equals = says.equals;
   if (typeof equals === "number") return "number";
   return Array.isArray(equals) && equals.some((entry) => typeof entry === "number") ? "number" : undefined;

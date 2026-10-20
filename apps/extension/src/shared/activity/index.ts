@@ -1,22 +1,34 @@
+// The activity display, its wording and the readers of an event's closed fields
+// are Core's (`fluxiq/ui`), shared with Core's panel chat; they are re-exported
+// here beside the extension-only page messages and activity state.
+export {
+  ACTIVITY_HISTORY_LIMITS,
+  activityAgent,
+  activityWording,
+  cutAtWord,
+  declinedSubmission,
+  isHeadlineEcho,
+  isInternalStep,
+  isModelThought,
+  longestWordCut,
+  notTriedOutcome,
+  projectCard,
+  stepRecovery,
+  stepSkip,
+  type ActivityAgent,
+  type ActivityDisplay,
+  type ActivityProjectCard,
+  type ActivityStepRecovery,
+  type ActivityStepSkip,
+  type ActivityWording,
+  type ClientGatewayActivity,
+  type ClientGatewayActivityPhase
+} from "fluxiq/ui";
 export { ACTIVITY_MESSAGES } from "./activity-messages.js";
-export type { ActivityDisplay } from "./activity-display.js";
 export { ACTIVITY_DONE_VISIBLE_MS } from "./done-visible.js";
-export { cutAtWord } from "./cut-at-word.js";
-export { declinedSubmission } from "./declined-submission.js";
-export { isHeadlineEcho } from "./headline-echo.js";
-export { ACTIVITY_HISTORY_LIMITS } from "./history-limits.js";
-export { isInternalStep } from "./internal-step.js";
-export { isModelThought } from "./model-thought.js";
-export { activityWording, type ActivityWording } from "./wording.js";
-export { notTriedOutcome } from "./not-tried.js";
-export { activityAgent, projectCard, type ActivityAgent, type ActivityProjectCard } from "./project/index.js";
-export { stepRecovery, type ActivityStepRecovery } from "./step-recovery.js";
-export { stepSkip, type ActivityStepSkip } from "./step-skip.js";
-export { longestWordCut } from "./word-cut.js";
 export {
   ACTIVITY_RECENT_LIMIT,
   type ActivityContentMessage,
   type ActivityOverlayPreference,
   type ExtensionActivityState
 } from "./extension-activity-state.js";
-export type { ClientGatewayActivity, ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocket";

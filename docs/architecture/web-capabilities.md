@@ -357,6 +357,33 @@ instead of pointing at the act after the read
 (`AS/runtime/llm/repeat-guard/narrowed-nothing.ts`). Run
 `run-mvbr0w7e-6a01c05b`'s repair resent such a condition six times.
 
+**What a condition means, how a value reads as a number or date, a row's
+identity and the sort order are Core's.** The domain and the content script
+call Core's record-process functions from the browser-safe
+`fluxiq/automation-studio/nodes` (re-exported from
+`@fluxiq/contracts/automation-studio`, `record-sets/process/`), the same code
+Core runs over collected rows, so a page-side filter or order never disagrees
+with Core's: `automationStudioRecordConditionHolds` (the `where` judge; a
+blank or whitespace-only value is absent, so it fails `present` and every
+comparison and holds `absent`), `automationStudioRecordConditionPattern`,
+`readAutomationStudioRecordNumber`, `readAutomationStudioRecordDate`,
+`automationStudioRecordRowIdentity`, `sortAutomationStudioRecordRows`,
+`countAutomationStudioRecordUnsortableRows` and the condition-word lists
+`AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS`, `..._TEXTS` and `..._PRESENCES`.
+Core's parity table (`AUTOMATION_STUDIO_RECORD_VALUE_READING_CASES`) holds every
+number and date case the web domain relies on. What stays downstream is the
+web wire and its binding: the lenient alias reading of condition phrases
+(`domain/src/actions/extraction/condition-grammar.ts`), the wire types
+`WebAutomationExtractItemCondition` (with its `read` key) and
+`WebAutomationExtractConditionValue`, the `domain/client` names
+`webAutomationExtractConditionHolds` and `webAutomationExtractConditionNumber`
+(renamed re-exports of Core's functions, not wrappers), the per-item filter and
+its rejection observations (`content/extraction/item-filter.ts`, which still
+labels a blank value `state: "present"` in an observation), and the page
+request's binding in `content/extraction/order-rows.ts`: keeping only readable
+columns, the whole-row dedupe fallback, `ListRowOrder`, the bound cut, and the
+duplicates and unsortable report, over rows wrapped as `{ values }` for Core.
+
 A Flow read moves its ordering off the page. Dispatch
 (`domain/src/output-nodes/extract-list/dispatch.ts`) writes `dedupe`, `sort`,
 `maxItems` and `minItems` into the record output's `process` (`maxItems` as

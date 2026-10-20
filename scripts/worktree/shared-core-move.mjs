@@ -32,14 +32,10 @@
 
 import path from "node:path";
 import { fullCoreDistPaths, FULL_CORE_PACKAGES } from "./core-build.mjs";
-import { importCoreScript } from "../core-scripts/index.mjs";
+import { gitAnsweredNo, runGit, samePath } from "../core-scripts/index.mjs";
 import { planSideMove } from "./move-plan.mjs";
 import { processesUsingRoots } from "./processes-using-roots.mjs";
 import { readSideState } from "./side-state.mjs";
-
-const { gitAnsweredNo } = await importCoreScript("scripts/task/git-answered-no.mjs");
-const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
-const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /**
  * @param {{

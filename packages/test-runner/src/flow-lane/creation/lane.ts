@@ -63,7 +63,7 @@ export type CreatedFlowLaneEntry =
  */
 export type CreatedFlowSettledBuild = Readonly<{
   build: CreatedFlowBuild;
-  instructedConsequencesFrom: "proposal" | "step_log" | null;
+  instructedConsequencesFrom: "proposal" | "failure_diagnostic" | null;
 }>;
 
 /** Where a settlement's answer rides on the error it threw; a symbol, so no serializer of the error ever writes it. */
