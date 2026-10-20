@@ -373,3 +373,90 @@ test("a candidate submission is not held to it: its steps act on many pages", as
   assert.equal(answer.status, "resolved", JSON.stringify(answer));
   assert.deepEqual(answer, await resolveWebPlanNodeParameters(candidate({}), stores));
 });
+
+// A reload marks only the first view of a new document (`../target-packets.ts`,
+// `markRenumbered`, t741 C2).
+//
+// `navigation.type` is how the document was reached, and it stays `reload` for
+// the document's whole life. A review list on a page that was once reloaded
+// shows two "Read more" buttons; exploration presses the first, it expands its
+// review and leaves the page, and the next view of the same document -- still
+// `reload` -- shows the other "Read more". Marking the pressed handle as
+// renumbered by a reload then refused it before the view history and the
+// acted identity could name it (social round 3, 0137-0165,
+// `web.handle.renumbered_by_reload` with no reload made). The browser's own
+// identity of a document, `navigation.timeOrigin`, says whether a view is the
+// first of a new document; where either view lacks it, the old rule holds.
+
+const REVIEWS_SCOPE = { projectId: "project.reviews", flowId: "flow.reviews" };
+const REVIEWS_PAGE = "https://library.test/book/42/reviews";
+
+const MORE = (review: number): JsonObject => ({ tagName: "button", selector: `#review-${review} > button.more`, visibleText: "Read more" });
+const TEXT = (review: number, words: string): JsonObject => ({ tagName: "p", selector: `#review-${review} > p`, visibleText: words });
+
+/** One store and stable handles, as exploration numbers its views. */
+function reviews() {
+  const targets = createWebLlmTargetPackets();
+  const handles = createWebLlmStableTargetHandles();
+  const capture = (elements: JsonObject[], timeOrigin: number | undefined) => {
+    const navigation: JsonObject = { url: REVIEWS_PAGE, type: "reload" };
+    if (timeOrigin !== undefined) navigation.timeOrigin = timeOrigin;
+    return handles.restamp(REVIEWS_SCOPE, sanitizeWebLlmSnapshotWithBindings({ url: REVIEWS_PAGE, interactiveElements: elements, evidence: { navigation } }));
+  };
+  const handleOf = (binding: ReturnType<typeof capture>, selector: string): string => {
+    const found = binding.evidence.elements.find((element) => binding.selectors.get(element.target) === selector);
+    if (found === undefined) throw new Error(`no handle for ${selector}`);
+    return found.target;
+  };
+  return { targets, capture, handleOf };
+}
+
+/** The first view, the press on the first "Read more", and the view it left: the second "Read more" still shows. */
+function pressedFirst(firstOrigin: number | undefined, secondOrigin: number | undefined) {
+  const { targets, capture, handleOf } = reviews();
+  const first = capture([TEXT(1, "A fine read."), MORE(1), TEXT(2, "Slow start."), MORE(2)], firstOrigin);
+  const pressed = handleOf(first, "#review-1 > button.more");
+  const other = handleOf(first, "#review-2 > button.more");
+  targets.remember(REVIEWS_SCOPE, first);
+  const second = capture([TEXT(1, "A fine read. The ending surprised me."), TEXT(2, "Slow start."), MORE(2)], secondOrigin);
+  assert.equal(handleOf(second, "#review-2 > button.more"), other, "the other Read more keeps its handle");
+  targets.acted(REVIEWS_SCOPE, pressed, first, second);
+  targets.remember(REVIEWS_SCOPE, second);
+  return { targets, pressed, location: first.evidence.location };
+}
+
+test("a control a press took off the page, in a later view of the same reloaded document, is not marked renumbered and resolves from the view history as the act found it", () => {
+  const { targets, pressed, location } = pressedFirst(1_000, 1_000);
+  assert.deepEqual(targets.resolve(REVIEWS_SCOPE, pressed, location), { ok: false, code: "unknown" }, "it left the page, and no reload renumbered it");
+  const reached = targets.resolve(REVIEWS_SCOPE, pressed, location, "view_history");
+  assert.equal(reached.ok, true, JSON.stringify(reached));
+  if (!reached.ok) return;
+  assert.equal(reached.selector, "#review-1 > button.more");
+  assert.equal(reached.element.visibleText, "Read more", "the acted identity");
+  assert.equal(reached.element.tagName, "button");
+});
+
+test("the first view of a new document still marks a dropped handle whose control it shows under another", () => {
+  const { targets, pressed, location } = pressedFirst(1_000, 2_000);
+  assert.deepEqual(targets.resolve(REVIEWS_SCOPE, pressed, location), { ok: false, code: "unknown", renumberedByReload: true });
+  assert.deepEqual(targets.resolve(REVIEWS_SCOPE, pressed, location, "view_history"), { ok: false, code: "unknown", renumberedByReload: true });
+});
+
+test("where either view lacks timeOrigin, a reload marks as it always has", () => {
+  for (const [first, second] of [[undefined, 1_000], [1_000, undefined], [undefined, undefined]] as const) {
+    const { targets, pressed, location } = pressedFirst(first, second);
+    assert.deepEqual(targets.resolve(REVIEWS_SCOPE, pressed, location), { ok: false, code: "unknown", renumberedByReload: true }, `${first} then ${second}`);
+  }
+});
+
+test("a look the capture cut short does not stand in for the page's document: the next whole view of a new document still marks", () => {
+  const { targets, capture, handleOf } = reviews();
+  const first = capture([MORE(1), MORE(2)], 1_000);
+  const gone = handleOf(first, "#review-1 > button.more");
+  targets.remember(REVIEWS_SCOPE, first);
+  const cut = capture([MORE(2)], 2_000);
+  cut.evidence.truncated = true;
+  targets.rememberLook(REVIEWS_SCOPE, cut);
+  targets.remember(REVIEWS_SCOPE, capture([MORE(2)], 2_000));
+  assert.deepEqual(targets.resolve(REVIEWS_SCOPE, gone, first.evidence.location), { ok: false, code: "unknown", renumberedByReload: true });
+});

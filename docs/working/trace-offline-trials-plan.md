@@ -271,6 +271,41 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t743-rerun4-structural (lead-xhigh, t743 rerun4-structural)
+- Why: four rerun rounds, 0 of 16, each failure a new shape; round-4 debugs name three shared weaknesses. Debug
+  notes (lane trees, `docs/working/language-driven-flow-loop-plan/debugs/`): t563 run-mvgvyaip-d856e135 office, t719
+  run-mvgw1854-5d10955b job, t567 run-mvgw7320-de416190 photo (social pending; the supervisor forwards it).
+- Unit S1, one build-scoped site memory: places, shown addresses and issued lists belong to the build, not the brief
+  (domain `shown-addresses.ts`, `run.ts`, Core brief seeding); Core-framed reset looks are exempt from the shown-address
+  rule; A1's witness adoption is limited to lists the act could have changed (office).
+- Unit S2, an actionable-answer contract: every gate refusal names the condition that failed and whether any call on
+  the page can meet it; when none can, the act leaves `actsToUndo` with a closed `gate_unsatisfiable` reason and the
+  brief is offered an honest exit (job, photo); `undo-admission.ts` answers "already back" closed (photo).
+- Unit S3, repair before ending: with money left, the supervisor's completion refuses an ending until each failed
+  subflow has had one changed brief, unless the failure reason is closed and terminal (`completion.ts`, photo).
+- Unit S4, specific defects: a read target's identity does not include the text it reads
+  (`plan-resolution/element-identity.ts`, office); a looped save's pass row reaches `inspectStateDiff` and the control
+  resolves in that row (Core `executor/host-state.ts`, domain `state-diff/places/diff.ts`, job); when Core's own look
+  cannot restamp a group, the group is unreachable and a toggle act whose undo landed settles restored, the judge told
+  (`ledger.ts`, `settlement-group-witness.ts`, `create-baselines.ts` wording, photo); a press the page reports as failed
+  is not counted as succeeded (job, trace it).
+- Rules: generic guidance only, never shaped like a realistic task; prompt contract gate tests; provider-free headed
+  reproductions of each shape in `apps/extension/e2e/site-reset` with a scripted provider; usual lane rules.
+- Report: `docs/working/trace-offline-trials-plan/reports/t743-rerun4-structural.md` in the t743 downstream tree.
+
+### Brief: t742-trace-intake-parity (lane T lead, trace plan P3)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P3 (traces fed through the same ingress; a parity
+  harness over real Lab traces from all ten realistic sites; gate: the original run matches at every delivery point).
+- Task: a harness that replays a stored trace through Core's own client-gateway intake (no second code path) and
+  compares, at every delivery point, what Core received and derived against the original; traces from provider-free
+  saved-flow replays on all ten realistic sites (tracing is on by default since t736), plus any live round-4 traces;
+  every divergence classified (capture gap, nondeterminism, intake defect) and fixed at its source or recorded as an
+  explicit evidence gap. Also: the start hook lands in the build's trace (t737's `run.ts` is merged), and stored event
+  JSON (92-96% of bytes, ~34 MB per run) stores repeated content once.
+- Rules: traces never feed model guidance; no page data, tokens or typed secrets in logs or reports; usual lane rules;
+  provider-free, headed, realistic scenarios only; no paid runs.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p3.md` in the task's downstream tree.
+
 ### Brief: t741-rerun3-fixes (lead-xhigh, t741 rerun3-fixes)
 - Why: rerun round 3 went 0 of 4, each run further than round 2 and every cause a product or generic-guidance defect.
   Debug notes (lane trees, `docs/working/language-driven-flow-loop-plan/debugs/`): t563 run-mvgo5xft-25460ba2 office,
@@ -586,6 +621,59 @@ was still running at dispatch and is excluded below by its own file list.
   unscoped presses or a lone `create_new`; the rewritten job spec no longer checks the wrong-job undo.
 - Outcome: Accepted
 - Follow-up: rerun round 3 on synced lane trees; then the open points.
+
+### 2026-10-20 - t736 merged: trace plan P2 capture
+- Agent: supervisor (lane T and its workers)
+- Changed: Core and downstream merged and pushed: capture at the client gateway and Core's own ingress into each
+  project's store (indexed, explicit completeness, secrets screened before storage, per-trace artifact scope); the
+  extension's page snapshots and in-band artifacts; the offline queue keeps original envelopes; the Lab traces every
+  live run (`--no-tracing` opts out). Five new gateway-trace tests carry t740's real-SQL marker (the guard flagged
+  them after the merge, as designed).
+- Validation: supervisor reruns on t736 after merging dev: Core `vitest run` over client-gateway, AS client-gateway,
+  environment, gateway-trace, storage gateway-trace, candidate-trial, subflow-trial, project-build, service/tests, api,
+  parking -> 149 passed, 1 failed (`cancel-runtime-session.test.ts` "stops a queued run", then 6/6 alone three times
+  and the api directory 27 files, 165 passed on the re-gate); fluxiq and web `tsc` 0; extension `tsc` both 0;
+  extension trace-capture, connection, background -> pass 477; test-runner trace-inspection, saved-flow-replay,
+  commands, environment -> pass 101; the first gate held on a stale Core build after the marker edit, the re-gate
+  (Core rebuilt) passed domain, extension, test-runner checks and both audits; finish merged both sides. Lead: the
+  capture overhead is about +11.5% over 36 provider-free replays on four realistic tasks; a default-settings headed
+  replay wrote a complete trace (127 events, 22 snapshots held, 0 secret hits).
+- Outcome: Accepted
+- Follow-up: P3 intake parity (t742).
+
+### 2026-10-20 - t741 merged: the four rerun round 3 causes fixed
+- Agent: supervisor (t741 lead and workers)
+- Changed: Core and downstream merged and pushed: Core settles witnessless trial and entry-preparation acts against
+  the build's issued lists (A1, structural), settling looks report what they settled and every open act, the wrap-up
+  allows the undo calls a trial demands; one port-name rule for plan and script; `extractList.sort` in the script
+  format and a refusal of process sort/limit on a lasting-act listing; the recording excerpt reaches the builder;
+  stable scoped revisions; truthful endings; the judge no longer reads a feed's continuation as missing rows and does
+  not repeat identical advice; downstream: rate-limited retries reported first, reload marks by time origin, named
+  incomplete fields, wordless icons named; a headed spec reproducing office round 3's address-confirm shape.
+- Validation: supervisor's gate on t741 after merging dev: Core `vitest run` over flow-bootstrap, llm, service,
+  project-agents, result-verification, ui -> 854 files, 8072 passed; fluxiq `tsc` 0; downstream checks 0; domain
+  runtime/io/client -> pass 1873; extension content+background -> pass 2055; audits passed; headed `e2e/site-reset`
+  -> 7 passed (4.2m). The script's own gate printed ok=0 because a test title contains "failed"; the silent checks were
+  rerun (`tsc` 0, core-build current) and the finish merged both sides. Lead: the new office spec fails exactly as
+  round 3 did with A1 switched off and passes with it on.
+- Open (lead): a press that reloads the page drops the control's name from trial feedback; several directories are at
+  their 25-file budget.
+- Outcome: Accepted
+- Follow-up: rerun round 4 (tracing on for the first live runs).
+
+### 2026-10-20 - Second daily sweep (sweep-1020b); root test script runs every package
+- Agent: supervisor (worker sweep-1020b)
+- Changed: `reports/sweep-1020b.md`; root `package.json` `test` is now `pnpm -r --no-bail test` (the sweep stopped at
+  scenario-lab's failure, so the extension's tests never ran; the exit code still fails on any failure).
+- Validation: worker's runs (Core 3b13e394, downstream 72b7fab3): installs, Core build and check 0; Core test 1
+  (contracts 250/250; client-gateway-websocket 182/182; fluxiq parallel group 12115 passed in 952 s, real-SQL group
+  1531 passed, 1 failed in 943 s; web 3142/3142); downstream check 0; test 1 (domain 2244/2244, scenario-lab 999/1000);
+  build 0. Gone since sweep-1020: all four 15 s timeouts (t740 works), the registry test, both photo-social tests.
+  New: Core `deepseek-bootstrap/exploration.test.ts` token ceiling (`pre_provider_request_total_exceeded`), and
+  scenario-lab crossborder flash-deal-on-arrival `locator.waitFor` 1000 ms. Supervisor check of the flag:
+  `pnpm -r --no-bail --filter @fluxiq-web-extension/real-site-policy exec node -e "process.exit(0)"` -> exit 0.
+- Outcome: Partial (two failures to fix forward)
+- Follow-up: t744 for the two failures; extension totals come back in the next sweep.
 
 ## Open Questions
 

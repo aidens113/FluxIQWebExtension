@@ -157,10 +157,18 @@ export function webActionFailureRefusal(result: WebFailedActionResult, sent?: { 
   // This marker is the client's closed reason, never its field/page text.
   const incompleteText = result.status !== "timed_out" && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED
     && typeof result.failure.actual === "string" && result.failure.actual.startsWith("incomplete_text:");
+  const incompleteField = incompleteText ? incompleteTextField(result, sent) : undefined;
+  const wait = siteWait(result);
   const refusal: WebActionRefusal = {
     code,
     detail: incompleteText
-      ? rejectionDetail({ reason: "incomplete_text", target: undefined, instead: undefined, missing: undefined, requestId: undefined })
+      ? rejectionDetail({
+        reason: "incomplete_text",
+        target: undefined,
+        instead: incompleteField === undefined ? undefined : [`${INCOMPLETE_FIELD_CODE}${incompleteField}`],
+        missing: incompleteField === undefined ? undefined : [incompleteField],
+        requestId: undefined
+      })
       : shortfall !== undefined
       ? readDetail(shortfall)
       : withoutValue !== undefined
@@ -171,7 +179,7 @@ export function webActionFailureRefusal(result: WebFailedActionResult, sent?: { 
         ? rejectionDetail({ reason: "next_leaves_filtered_list", target: undefined, instead: undefined, missing: undefined, requestId: undefined, paginationStop: "page_fault", filtersDropped })
         : reason === undefined
           ? undefined
-          : rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined })
+          : rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined, retryAfterMs: wait.retryAfterMs, tabReturned: wait.tabReturned })
   };
   if (webActionNeedsPerson(result)) refusal.personNeeded = true;
   return refusal;
@@ -195,6 +203,26 @@ export function webActionFailureRejectionCode(result: WebFailedActionResult): We
   }
   return typeof code === "string" && Object.prototype.hasOwnProperty.call(BY_FAILURE_CODE, code) ? BY_FAILURE_CODE[code]! : "action_failed";
 }
+
+/**
+ * The wait a press the site refused for now asked for, and whether the tab was
+ * taken back to the page the press was made on (t741 C1b), or nothing: read off
+ * RATE_LIMITED alone. The wait is the record's own `retryAfterMs`, a number the
+ * extension wrote (`apps/extension/src/runtime/click-landing.ts`); the return is
+ * the extension's closed words for a confirmed return in `actual`, matched and
+ * never passed on, as `covered:` is read above -- the page path beside them
+ * stays behind. An unconfirmed or failed return says nothing.
+ */
+function siteWait(result: WebFailedActionResult): { retryAfterMs: number | undefined; tabReturned: true | undefined } {
+  const failure = result.failure;
+  if (result.status === "timed_out" || failure?.code !== WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED) return { retryAfterMs: undefined, tabReturned: undefined };
+  const retryAfterMs = "retryAfterMs" in failure && typeof failure.retryAfterMs === "number" ? failure.retryAfterMs : undefined;
+  const tabReturned = typeof failure.actual === "string" && TAB_RETURNED.test(failure.actual) ? true : undefined;
+  return { retryAfterMs, tabReturned };
+}
+
+/** The extension's closed words for a tab it took back to the page the act was made on, after a refused load. */
+const TAB_RETURNED = /nothing was loaded; the tab was taken back to the page the (?:click|check|choice) was (?:pressed|made) on \(/u;
 
 /**
  * How many filters the page shows applied that a Next page step's Next would
@@ -253,6 +281,32 @@ function unreadableScrollKeys(result: WebFailedActionResult, sent: { actionType:
 
 /** A key a refusal may name: an identifier, as the parameter names above are. */
 const KEY_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/u;
+
+/**
+ * The field an incomplete-text refusal was about, or nothing. The client's
+ * marker reads `incomplete_text: field <name> ...`; the name is passed on only
+ * when it is an identifier and a key of the `extractList.fields` this domain
+ * sent, so a refusal never echoes a key the request did not carry, the way
+ * `unreadableScrollKeys` names only the request's own keys. Until this was
+ * read, the field was dropped and builders re-sent the same field again
+ * (social rerun 3, steps 0029, 0056, 0083, 0186, 0241).
+ */
+function incompleteTextField(result: WebFailedActionResult, sent: { actionType: string; parameters: JsonObject } | undefined): string | undefined {
+  const actual = result.failure?.actual;
+  const key = typeof actual === "string" ? INCOMPLETE_FIELD.exec(actual)?.[1] : undefined;
+  if (key === undefined || !KEY_NAME.test(key)) return undefined;
+  const extractList = sent?.parameters.extractList;
+  if (extractList === null || typeof extractList !== "object" || Array.isArray(extractList)) return undefined;
+  const fields = extractList.fields;
+  if (fields === null || typeof fields !== "object" || Array.isArray(fields)) return undefined;
+  return Object.prototype.hasOwnProperty.call(fields, key) ? key : undefined;
+}
+
+/** The closed words an incomplete-text marker starts with, and the field name after them. */
+const INCOMPLETE_FIELD = /^incomplete_text: field (\S+)(?=\s|$)/u;
+
+/** The code an incomplete-text refusal carries its field in, read back by `../rejection-next/next-sentence.ts`. */
+const INCOMPLETE_FIELD_CODE = "web.text.incomplete_field.";
 
 /** The read's account as a refusal may carry it: counts, one closed word, and the call's own field keys. */
 function readDetail(shortfall: WebActionReadShortfall): WebLlmToolRejectionDetail {

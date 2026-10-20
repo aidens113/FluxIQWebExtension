@@ -59,7 +59,7 @@
     "structure:test": "node --test \"scripts/structure-audit/rules/tests/*.test.mjs\" \"scripts/structure-audit/tests/*.test.mjs\"",
     "task": "node scripts/task/run-task.mjs",
     "task:test": "node --test \"scripts/task/tests/*.test.mjs\" \"scripts/worktree/tests/*.test.mjs\" \"scripts/core-scripts/tests/*.test.mjs\"",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --no-bail test",
     "ui:e2e": "pnpm --filter @fluxiq-web-extension/scenario-lab build && pnpm --filter @fluxiq-web-extension/extension test:e2e:build && pnpm --filter @fluxiq-web-extension/test-runner... build && node scripts/run/ui-e2e.mjs",
     "build-cache:test": "node --test \"scripts/build-cache/tests/*.test.mjs\"",
     "build-cache:prove": "node scripts/build-cache/prove-inputs.mjs",

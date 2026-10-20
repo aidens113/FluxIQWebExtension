@@ -111,3 +111,18 @@ test("dedupe, then sort, then the bound: the answer is the first rows of the sor
   assert.equal(ordered.cut, true);
   assert.equal(order.sorts, true);
 });
+
+// Photo note (rerun 3): a list's only date sat inside an image's alt text, a
+// sentence around it, and a sort `as: "date"` must still read it.
+test("a date inside prose is read by its first full date, as an image's alt text states one", () => {
+  const order = listRowOrderFor({ sort: [{ field: "posted", order: "desc", as: "date" }] }, FIELDS)!;
+  const rows: Row[] = [
+    { title: "oct2", posted: "Picture by A. Baker on October 2, 2026. May show a bowl." },
+    { title: "sep14", posted: "Picture by C. Doyle on September 14, 2026. May show a jar of 3 spoons." },
+    { title: "oct9", posted: "Picture by E. Fenn on 9 October 2026, edited on 1 January 2026. May show a loaf." },
+    { title: "iso", posted: "Uploaded 2026-09-30 by G. Hale." }
+  ];
+  const ordered = order.apply(rows, 100, NOW);
+  assert.deepEqual(titles(ordered.rows), ["oct9", "oct2", "iso", "sep14"]);
+  assert.equal(ordered.unsortable, 0);
+});

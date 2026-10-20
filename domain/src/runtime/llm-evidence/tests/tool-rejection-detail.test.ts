@@ -519,3 +519,22 @@ test("a choice step on a scripted listbox is told it is one and to press the opt
   assert.deepEqual(clicks, ["#colour-list div"]);
 });
 
+
+test("a refusal carrying the site's wait and a returned tab says both after its own next, and one without them is unchanged (t741 C1b)", () => {
+  const plain = rejectionDetail({ reason: "page_busy_try_later" });
+  assert.deepEqual(plain, { reason: "page_busy_try_later" });
+  const both = rejectionDetail({ reason: "page_busy_try_later", retryAfterMs: 5000, tabReturned: true });
+  assert.equal(both.retryAfterMs, 5000);
+  assert.equal(both.tabReturned, true);
+  assert.equal(both.next, "The site asked to wait 5 seconds before this is made again. The tab was taken back to the page it showed before the press, so anything the press had opened, such as a menu, is closed again.");
+  // A wait under a second, and one that is not a whole count of milliseconds.
+  assert.match(rejectionDetail({ reason: "page_busy_try_later", retryAfterMs: 400 }).next ?? "", /wait 1 second before/u);
+  assert.equal(rejectionDetail({ reason: "page_busy_try_later", retryAfterMs: 0 }).retryAfterMs, undefined);
+  assert.equal(rejectionDetail({ reason: "page_busy_try_later", retryAfterMs: 2.5 }).next, undefined);
+  assert.equal(rejectionDetail({ reason: "page_busy_try_later", tabReturned: false }).tabReturned, undefined);
+  // A reason that has its own next keeps it, with the wait after it.
+  const covered = rejectionDetail({ reason: "covered_by_layer", retryAfterMs: 3000 });
+  const coveredBare = rejectionDetail({ reason: "covered_by_layer" });
+  if (coveredBare.next !== undefined) assert.ok(covered.next?.startsWith(coveredBare.next));
+  assert.match(covered.next ?? "", /wait 3 seconds/u);
+});
