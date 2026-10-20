@@ -206,6 +206,26 @@ was still running at dispatch and is excluded below by its own file list.
 - Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t730-realistic-specs.md` in the
   t730 tree, as a running log with `UNIT READY` markers.
 
+### Brief: t731-sweep-fixes (lead, t731 sweep-1019b-fixes)
+- Why: sweep-1019b (`reports/sweep-1019b.md`) left 10 Core fluxiq failures, all timeouts or EBUSY, and one
+  scenario-lab browser failure. Full suites are fixed forward; "machine load" is not a cause until proven.
+- Task: rerun each failing file alone in the t731 trees; for each, find the root cause and fix the side that is wrong
+  (a test that does slow real I/O it need not do, a writer admission that waits on a lock never released, a SQLite
+  handle left open before an unlink on Windows), never by raising a timeout or loosening an assertion. If a file
+  passes alone, find what it contends on when run with its package (shared temp paths, ports, a global) and remove
+  the contention. Core files (under `packages/fluxiq/src/programs/`): `runtime/service/flows/tests/creation.test.ts`,
+  `runtime/tests/service-adaptation/tests/promotion-tier.test.ts`, `runtime/tests/service-flows/tests/cancel-parked-run.test.ts`,
+  `storage/canonical-authority/tests/whole-operation.test.ts` (also failed in S1), `.../whole-sql.test.ts`,
+  `testing/tests/scale-graph-store.test.ts` (EBUSY), `database-manager/tests/index.test.ts`. Downstream:
+  `scenarios/crossborder-marketplace/tests/browser-paths.test.ts`, step traffic-check (`waitForState`, 6000 ms).
+  Then run the downstream packages that `pnpm test` did not reach after scenario-lab and fix what fails there.
+- Worktrees: `C:/Users/osrs_/FluxStuff/fxwork/t731/!FluxIQWebExtension` and `.../t731/!FluxIQ`.
+- Owns: those test files and the source modules their root causes lead to; `scenarios/crossborder-marketplace/**`.
+- Must not touch: lane files (G, H, S, T, t730 and L1 lists above); if a root cause lands in one, stop and report.
+- Validation: each fixed file run alone and then with its package directory, three times, pass counts recorded.
+- Shared lane rules apply. Report: `docs/working/trace-offline-trials-plan/reports/t731-sweep-fixes.md` in the t731
+  downstream tree, running log with `UNIT READY` markers.
+
 ### Brief: sweep-1019b (worker-low, second daily full sweep of `dev`)
 - Detached worktrees of both repositories at `origin/dev` (downstream cedd46af, Core 4077d0a0) under
   `C:/Users/osrs_/FluxStuff/fxwork/sweep-1019b/` (Core sibling to the downstream checkout); `pnpm install` both;
@@ -261,6 +281,21 @@ was still running at dispatch and is excluded below by its own file list.
   spike (`statement-packing`, probe.spec.ts line 18), not in either unit.
 - Outcome: Accepted (units)
 - Follow-up: Core should emit a reset span inside `core.test_subflow`/`core.test_candidate`; the spike's packing fix.
+
+### 2026-10-19 - Second daily sweep (sweep-1019b)
+- Agent: supervisor (worker sweep-1019b)
+- Changed: `trace-offline-trials-plan/reports/sweep-1019b.md`; worktrees `fxwork/sweep-1019b/` (Core 4077d0a0,
+  downstream cedd46af)
+- Why: the second allowed full sweep of the day, after t722, t723 and t725 merged.
+- Validation: worker's runs (not rerun by the supervisor): Core `pnpm build` 0, `pnpm check` 0, `pnpm test` 1
+  (fluxiq 10 failed / 12852 passed in 7 files, every one `Test timed out in 15000ms`, a hook timeout or `EBUSY ...
+  project.sqlite-shm`; apps/web 3123/3123; contracts 178/178); downstream `pnpm check` 0, `pnpm build` 0, `pnpm test`
+  1 (domain 2177/2177, extension 3271/3271, scenario-lab 873/874: crossborder-marketplace `browser-paths.test.ts`
+  step traffic-check `waitForState` 6000 ms timeout; packages after scenario-lab not reached). Against S1: Core's 56
+  apps/web and 27 of 29 fluxiq failures, the TS7006 errors and the domain adapter failure are gone; whole-operation's
+  2 timeouts remain; 8 Core timeouts/EBUSY and the scenario-lab failure are new.
+- Outcome: Partial (fix forward)
+- Follow-up: brief sweep-1019b-fixes.
 
 ## Open Questions
 
