@@ -154,3 +154,28 @@ test("a row and the summary say which authoring mode the run's Core was in", () 
   const summary = { startedAt: "2026-10-07T00:00:00.000Z", finishedAt: null, options: { profiles: { create: "c", repair: "r" }, provider: "deepseek", model: "deepseek-flash", authoringMode: "legacy", maxAttempts: 1 }, totals: totalsOf([]), tasks: [] };
   assert.match(renderSummaryMarkdown(summary), /authoring mode `legacy`/u);
 });
+
+// `snapshots/live-llm.json` as `live-llm-run.ts` `writeSnapshot` writes it once
+// a created Flow's repair has settled and Core's purse was read: `observed.calls`
+// is the run's whole count (`runSpend.calls`), its `observedCalls` are the step
+// log's rows (`steps/NNNN-*/meta.json`, `call-rows.ts`), and `repair.observed`
+// keeps the repair's own calls beside it. Synthetic: 4 build, 1 judge, 1 chat
+// and 3 repair calls, so a row that adds the repair again reads 12, not 9.
+test("a created Flow's row counts its repair calls once when the snapshot's call count is already the run's whole", () => {
+  const stepRow = (n, stage) => ({ requestId: `llm.call.${n}`, taskKind: stage, stage, provider: "deepseek", model: "deepseek-flash", totalTokens: 1000, estimatedCostUsd: 0.001, promptVersion: null, validationOk: null, validationCodes: [] });
+  const buildRows = [1, 2, 3, 4].map((n) => stepRow(n, "build"));
+  const repairRows = [7, 8, 9].map((n) => stepRow(n, "runtime"));
+  const phases = { build: { calls: 4, estimatedCostUsd: 0.004 }, read: null, judge: { calls: 1, estimatedCostUsd: 0.001 }, runtime: { calls: 3, estimatedCostUsd: 0.003 }, reauthor: null, chat: { calls: 1, estimatedCostUsd: 0.001 } };
+  const runSpend = { source: "flow_purse", calls: 9, totalEstimatedCostUsd: 0.009, builds: 1, phases };
+  const build = { providerCalls: 4, accounting: { provider: "deepseek", model: "deepseek-flash", totalTokens: 4000, estimatedCostUsd: 0.004 }, outcome: "proposed", failure: null };
+  const liveLlm = {
+    observed: { calls: 9, interventions: 0, observedCalls: [...buildRows, stepRow(5, "judge"), stepRow(6, "chat"), ...repairRows], totalEstimatedCostUsd: 0.009, phases },
+    runSpend, build,
+    repair: { purpose: "explore_and_adapt", runId: "run.repair", observed: { calls: 3, interventions: 3, observedCalls: repairRows, totalEstimatedCostUsd: 0.003 } },
+  };
+  const bundle = { evaluation: { flowCreated: true, oracleVerdict: "failed", actions: [], extraction: [], llm: { mode: "live", calls: 9 } }, run: null, liveLlm, flowLane: { lane: "created-flow", build, flowId: "flow.1", failure: null } };
+  const row = summarizeTask(CATALOG[0], [{ attempt: 1, exitCode: 1, ramFault: null }], attempt({ stdout: resultLine({}) }), bundle);
+  assert.equal(row.providerCalls, 9, "the run's whole count, which already holds the repair's three");
+  assert.equal(row.providerCalls, bundle.evaluation.llm.calls, "the same figure the evaluation records");
+  assert.deepEqual([row.spendSource, row.reportedCostUsd], ["run", 0.009]);
+});

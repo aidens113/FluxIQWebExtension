@@ -42,6 +42,19 @@ async function extract(page: Page, step: ScenarioStep): Promise<ExtractedRecord[
   return records;
 }
 
+/**
+ * A step's failure: Playwright's message and the last lines of its call log,
+ * which say what the action was still waiting on (a cover over the target, an
+ * element that never settled, one that never appeared) when it gave up.
+ */
+function describeFailure(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  // Playwright dims its call log with terminal colour codes.
+  const lines = error.message.replace(/\u001b\[[0-9;]*m/gu, "").split("\n").map((line) => line.trimEnd()).filter((line) => line.trim() !== "");
+  const log = lines.indexOf("Call log:");
+  return log < 0 ? lines[0] ?? "" : [lines[0], ...lines.slice(log + 1).slice(-4)].join("\n");
+}
+
 /** Runs `script` against `page` at `origin`, returning what each extract step read, by step id. */
 export async function runScript(page: Page, origin: string, script: readonly ScenarioStep[]): Promise<Map<string, ExtractedRecord[]>> {
   const extracted = new Map<string, ExtractedRecord[]>();
@@ -63,7 +76,7 @@ export async function runScript(page: Page, origin: string, script: readonly Sce
         default: throw new Error(`the driver does not run ${step.operation}`);
       }
     } catch (error) {
-      throw new Error(`step ${step.id} (${step.operation}) failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      throw new Error(`step ${step.id} (${step.operation}) failed: ${describeFailure(error)}`);
     }
   }
   return extracted;

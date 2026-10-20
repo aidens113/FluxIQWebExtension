@@ -23,13 +23,61 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
     : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
     : reason === "option_not_offered" ? OPTION_NOT_OFFERED_NEXT
-    : reason === "incomplete_text" ? "First read only nonempty stable row-context columns without the incomplete text field. Use those records in For Each with an optional explicit registered row-bound click on each row's own disclosure, then read full text. Exclude units with no row context from that helper; find another context for any requested row this would omit. Repeat this ordering after each Next page move."
+    : reason === "incomplete_text" ? INCOMPLETE_TEXT_NEXT
     : reason === "next_leaves_filtered_list" ? FILTERED_LIST_NEXT
+    // Read off the key codes in `instead`, so a repeat that passes them back says it again.
+    : reason === "parameter_not_readable" ? scrollKeysNext(instead)
     // Read off the kind code in `instead`, so a repeat that passes it back says it again.
     : reason === "handle_not_a_field" ? notAFieldNext(instead) : reason === "handle_wrong_kind_of_control" ? webPlanScriptedChoiceMove(instead)
     // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
     : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
     : undefined;
+}
+
+/**
+ * What to do about a read whose text field came back cut short: a helper read
+ * of the row context, a per-row disclosure over it, then the full read.
+ *
+ * Until t738 it ended "Repeat this ordering after each Next page move", which
+ * prescribes a row loop inside a page loop, and Core's script grammar refuses
+ * a repeat inside a repeat (social `run-mvgf7ij5-a9747575`: the build wrote
+ * that nesting, was refused, and wrote it again). So the rows are loaded first,
+ * by a step of its own, and the row loop runs once over everything loaded.
+ */
+const INCOMPLETE_TEXT_NEXT = "A repeat cannot hold another repeat, so do this in order, once, on one listing. "
+  + "Load every row first: a Scroll step with mode untilStable where the list grows in place as it scrolls, or Next page in its own repeat-while span. "
+  + "Then read only nonempty stable row-context columns, without the incomplete text field. "
+  + "Then, with repeat over that read (For Each), an optional explicit registered row-bound click on each row's own disclosure. "
+  + "Then read the full text. Exclude units with no row context from that helper; find another context for any requested row this would omit.";
+
+/**
+ * The codes a scroll's INVALID_PARAMETER refusal carries in `instead`, one per
+ * key that made the request the domain sent unreadable
+ * (`../action-failure/refusal.ts`): `web.scroll.key.<problem>[.<key>]`, the
+ * key named only when it is an identifier.
+ */
+const SCROLL_KEY_PREFIX = "web.scroll.key.";
+const SCROLL_KEY_PROBLEMS = ["missing", "unknown", "invalid"] as const;
+const SCROLL_KEY_WORDS: Readonly<Record<(typeof SCROLL_KEY_PROBLEMS)[number], string>> = Object.freeze({ missing: "missing", unknown: "not taken", invalid: "not readable" });
+
+/**
+ * What to do about a scroll request whose keys the dispatch would not read:
+ * which keys were missing, not taken or not readable, and the closed list it
+ * takes. Nothing where `instead` carries no scroll key code, as before t738.
+ */
+function scrollKeysNext(instead: readonly string[] | undefined): string | undefined {
+  const codes = instead?.filter((code) => code.startsWith(SCROLL_KEY_PREFIX)) ?? [];
+  if (codes.length === 0) return undefined;
+  const named = SCROLL_KEY_PROBLEMS.flatMap((problem) => {
+    const keys = codes.flatMap((code) => {
+      const [said, key] = code.slice(SCROLL_KEY_PREFIX.length).split(".", 2);
+      return said !== problem ? [] : key !== undefined && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(key) ? [key] : ["a key that is no name"];
+    });
+    return keys.length === 0 ? [] : [`${SCROLL_KEY_WORDS[problem]}: ${keys.join(", ")}`];
+  });
+  return `Nothing was scrolled: the scroll request is not one it reads (${named.join("; ")}). `
+    + "A scroll request takes only the keys mode, x, y and maxScrolls. mode is by, toElement or untilStable; untilStable requires maxScrolls, a whole number above zero. "
+    + "Write the scroll parameter again with those keys only.";
 }
 
 /** The resolver's code naming what a type or clear step's element is (`plan-resolution/resolve-plan-node.ts`), and the words for each kind. */

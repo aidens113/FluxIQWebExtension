@@ -6,18 +6,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { chromium } from "@playwright/test";
 import { verifyRunningCoreIdentity } from "../index.js";
 
 // Synthetic authenticated transport, actual built Core service/handler. No user's panel.
-test("retained actual service refuses a regenerated artifact and fresh Chromium-reached server matches", { timeout: 180_000, skip: process.env.FLUXIQ_CORE_IDENTITY_PROBE !== "1" }, async (t) => {
+test("retained actual service refuses a regenerated artifact and fresh Node-client-reached server matches", { timeout: 180_000, skip: process.env.FLUXIQ_CORE_IDENTITY_PROBE !== "1" }, async (t) => {
   const coreRoot = process.env.FLUXIQ_IDENTITY_CORE_ROOT ?? fileURLToPath(new URL("../../../../../../../../!FluxIQ", import.meta.url));
   const extensionPath = process.env.FLUXIQ_IDENTITY_EXTENSION_PATH ?? fileURLToPath(new URL("../../../../../../../apps/extension/dist/e2e-chromium", import.meta.url));
   const root = await mkdtemp(path.join(tmpdir(), "actual-core-identity-probe-"));
   const copiedCore = path.join(root, "core");
   let child: ChildProcess | undefined;
-  const browser = await chromium.launch({ headless: false });
-  const page = await browser.newPage();
   try {
     for (const pkg of ["fluxiq", "contracts"]) {
       for (const dir of ["src", "dist"]) await cp(path.join(coreRoot, `packages/${pkg}/${dir}`), path.join(copiedCore, `packages/${pkg}/${dir}`), { recursive: true });
@@ -37,7 +34,6 @@ let endpoint, dispatches = 0;
 for (const method of ['runRuntimeSession', 'generateFlowBootstrapAdaptation']) service[method] = () => { dispatches++; throw new Error('Provider/chat dispatch forbidden in identity proof'); };
 registerRuntimeIdentityEndpoint({ registry: { register: entry => { endpoint = entry; } }, service });
 const server = createServer(async (request, response) => {
-  if (request.url === '/') { response.setHeader('content-type','text/html'); response.end('<!doctype html><title>Owned identity probe</title>'); return; }
   if (request.headers.authorization !== 'Bearer isolated-public-test-token') { response.writeHead(401); response.end('{}'); return; }
   let body = ''; for await (const bytes of request) body += bytes;
   response.setHeader('content-type', 'application/json');
@@ -65,12 +61,11 @@ process.on('message', async message => {
     };
     const close = async () => { if (child && child.exitCode === null) { const ended = new Promise<void>(resolve => child!.once("exit", () => resolve())); child.send("close"); await ended; } child = undefined; };
     let origin = await launch();
-    await page.goto(origin);
-    const request = async (reachedInputs: string[]) => page.evaluate(async ({ origin, reachedInputs }) => (await fetch(`${origin}/api/programs/automation-studio/get-runtime-build-identity`, { method: "POST", headers: { authorization: "Bearer isolated-public-test-token", "content-type": "application/json" }, body: JSON.stringify({ reachedInputs }) })).json(), { origin, reachedInputs });
+    const request = async (reachedInputs: string[]) => (await fetch(`${origin}/api/programs/automation-studio/get-runtime-build-identity`, { method: "POST", headers: { authorization: "Bearer isolated-public-test-token", "content-type": "application/json" }, body: JSON.stringify({ reachedInputs }) })).json();
     const reports: unknown[] = [];
     let admittedDispatches = 0;
     const dispatch = async () => { await verifyRunningCoreIdentity({ readRuntimeBuildIdentity: request }, copiedCore, extensionPath, async record => { reports.push(record); }); admittedDispatches++; };
-    assert.equal((await page.request.post(`${origin}/api/programs/automation-studio/get-runtime-build-identity`, { data: {} })).status(), 401);
+    assert.equal((await fetch(`${origin}/api/programs/automation-studio/get-runtime-build-identity`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 401);
     await dispatch(); assert.equal(admittedDispatches, 1);
     const before = (reports.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest;
     const sourcePath = path.join(copiedCore, "packages/fluxiq/src/runtime/build-identity/read.ts");
@@ -87,18 +82,17 @@ process.on('message', async message => {
     child!.send("reload-route"); assert.deepEqual(await reloaded, { reloaded: true });
     await assert.rejects(dispatch, /provider dispatch refused/); assert.equal(admittedDispatches, 1);
     assert.equal((reports.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest, before);
-    const count = await (await page.request.get(`${origin}/dispatch-count`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json();
+    const count = await (await fetch(`${origin}/dispatch-count`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json() as { dispatches: number };
     assert.equal(count.dispatches, 0);
-    await close(); origin = await launch(); await page.goto(origin);
+    await close(); origin = await launch();
     await dispatch(); assert.equal(admittedDispatches, 2);
     assert.equal((reports.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest, after.artifactDigest);
-    const finalCount = await (await page.request.get(`${origin}/dispatch-count`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json();
+    const finalCount = await (await fetch(`${origin}/dispatch-count`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json() as { dispatches: number };
     assert.equal(finalCount.dispatches, 0);
-    t.diagnostic(`Headed Chromium ${browser.version()}; actual Core service/handler; initial match, stale source refused, regenerated disk/reloaded route/retained service refused, fresh process matched; zero chat/provider calls; normalized artifact ${after.artifactDigest}`);
+    t.diagnostic(`Node ${process.version} fetch client; actual Core service/handler; initial match, stale source refused, regenerated disk/reloaded route/retained service refused, fresh process matched; zero chat/provider calls; normalized artifact ${after.artifactDigest}`);
     await close();
   } finally {
     if (child && child.exitCode === null) { child.kill(); await new Promise<void>(resolve => child!.once("exit", () => resolve())); }
-    await browser.close();
     await rm(path.join(copiedCore, "packages/fluxiq/node_modules"), { force: true });
     await rm(root, { recursive: true, force: true });
   }

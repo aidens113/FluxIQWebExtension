@@ -60,7 +60,7 @@ const BUILD: (Step | null)[] = [
   { kind: "judge", from: 80, to: 81, provider: "deepseek", phase: "judge", part: null }
 ];
 
-test("divides build wall time under trial > reset > model > exploration, with the remainder as other", async t => {
+test("divides build wall time under reset > trial > model > exploration, with the remainder as other", async t => {
   const { steps, incomplete } = await readStepTimings(await writeSteps(await scratch(t), BUILD));
   assert.deepEqual(incomplete, ["0016-tool-x"]);
   const m = measureBuildTime(steps);

@@ -3745,6 +3745,7 @@ lab-runs/
       NNNN-<kind>/              a model step: decide, judge, repair, chat, ...
       NNNN-tool-<toolId>/       a tool call in the build loop
       NNNN-test-<toolId>/       a test replay of the build
+      NNNN-reset/               a trial's start hook or site check, inside its trial tool's window
       NNNN-run-<actionType>/    a created Flow's playback command, written after Core stops
       NNNN-run-skipped/         a playback step skipped without dispatching a command
         meta.json               written last: a folder holding it is complete
@@ -3754,6 +3755,17 @@ lab-runs/
     snapshots/live-llm.json  snapshots/flow-lane.json  logs/core.log
     provider-failures.local.json
 ```
+
+A reset step (t737) times the reset a `core.test_subflow` or
+`core.test_candidate` trial makes before it acts, which no tool call marks. Its
+`meta.json` alone holds kind `reset`, `stage` (`start_hook`, the deployment's
+fixture reset, or `site_check`, the build's check that its own lasting acts
+were undone), `trialToolId` (`null` for a start hook), `outcome` (`reset`,
+`failed`, `admit` or `refuse`) and the timing, never what the reset saw. The
+build-time baseline (`packages/test-runner/src/build-time/`, rule
+`trial-reset`) counts its window as reset time, taken out of the trial once:
+the precedence there is reset > trial > model > exploration. Runs from before
+t737 have no reset steps, so their in-trial resets still count as trial.
 
 A model step's `meta.json` says whose money it spent. `part` is `creation` for
 a call inside a Flow's creation build, `reauthor` for one inside a refuted

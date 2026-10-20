@@ -2,7 +2,8 @@ import { classifyStep } from "./classify-step.js";
 import { IntervalSet } from "./interval-set.js";
 import type { BuildCategory, Interval, RunBuildTime, StepClass, StepTiming } from "./types.js";
 
-const PRECEDENCE: readonly Exclude<BuildCategory, "other">[] = ["trial", "reset", "model", "exploration"];
+/** Reset first: a reset step Core writes inside a trial's window is reset time, taken out of the trial once. */
+const PRECEDENCE: readonly Exclude<BuildCategory, "other">[] = ["reset", "trial", "model", "exploration"];
 
 type Classified = { step: StepTiming; category: StepClass; rule: string };
 
@@ -60,8 +61,10 @@ const zero = (): Record<BuildCategory, number> => ({ trial: 0, reset: 0, model: 
  * non-playback step's start to the last one's end, less the playback windows
  * inside that span (the Lab's replay of the applied Flow; a repair build after
  * it still counts). Each category is an interval union clipped to that time;
- * the exclusive shares apply trial > reset > model > exploration, and `other`
- * is what is left: bookkeeping steps, unknown steps and idle gaps.
+ * the exclusive shares apply reset > trial > model > exploration, and `other`
+ * is what is left: bookkeeping steps, unknown steps and idle gaps. So the reset
+ * steps Core writes inside a trial come out of that trial's time, and two
+ * overlapping reset steps count once (each category is an interval union).
  */
 export function measureBuildTime(steps: readonly StepTiming[]): RunBuildTime {
   const ordered = [...steps].sort((a, b) => a.index - b.index);

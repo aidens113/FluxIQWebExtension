@@ -2,10 +2,11 @@
 export type Interval = { start: number; end: number };
 
 /**
- * The four measured shares of a build's wall time plus the remainder, in
- * precedence order: where intervals overlap, the earlier category owns the
- * time (a judge call inside a trial is trial time; a decide inside a reset
- * brief is reset time).
+ * The four measured shares of a build's wall time plus the remainder. Where
+ * intervals overlap, the category earlier in the precedence reset > trial >
+ * model > exploration owns the time: a reset step Core runs inside a trial is
+ * reset time; a judge call inside a trial is trial time; a decide inside a
+ * reset brief is reset time.
  */
 export type BuildCategory = "trial" | "reset" | "model" | "exploration" | "other";
 
@@ -94,9 +95,10 @@ export type RunBuildTime = {
   idleMs: number;
   /** Model-call time inside trial windows (counted as trial in `exclusive`). */
   modelInTrialMs: number;
-  /** Reset-labelled time inside trial windows (counted as trial in `exclusive`). */
+  /** Reset time inside trial windows: Core's reset steps there (t737), counted as reset in `exclusive`, not trial. */
   resetInTrialMs: number;
   trialCount: number;
+  /** The longest trial tool window (or dry-run round), its resets included. */
   longestTrialMs: number;
   /** Steps measured, playback steps included. */
   stepCount: number;

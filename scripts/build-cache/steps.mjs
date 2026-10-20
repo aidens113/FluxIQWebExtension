@@ -171,6 +171,10 @@ export const STEPS = Object.freeze({
     command: `${checkProject("tsconfig.json", "check-src")} && ${checkProject("tsconfig.e2e.json", "check-e2e", { noEmit: false })}`,
     generated: ["dist"],
     tsconfigs: ["tsconfig.json", "tsconfig.e2e.json"],
+    // tsconfig.e2e.json compiles e2e/, whose realistic-scenario guard imports
+    // the one list of realistic scenarios from test-runner's sources by
+    // relative path.
+    reads: ["packages/test-runner"],
     env: ["NODE_ENV"]
   },
   ...library("boundary-audit", { required: ["dist/index.js", "dist/cli.js"] }),

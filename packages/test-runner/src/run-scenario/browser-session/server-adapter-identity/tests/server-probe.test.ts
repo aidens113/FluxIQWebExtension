@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { chromium } from "@playwright/test";
 import { verifyRunningServerAdapterIdentity } from "../index.js";
 
 function tail(previous: string, bytes: Buffer): string { return Buffer.concat([Buffer.from(previous), bytes.subarray(-4096)]).subarray(-4096).toString("utf8"); }
@@ -24,7 +23,6 @@ test("executing native socket identity survives route reload, refuses changed fa
   const downstream = process.env.FLUXIQ_SERVER_ADAPTER_DOWNSTREAM_ROOT ?? fileURLToPath(new URL("../../../../../../..", import.meta.url));
   const core = process.env.FLUXIQ_SERVER_ADAPTER_CORE_ROOT ?? path.resolve(downstream, "../!FluxIQ");
   const root = await mkdtemp(path.join(tmpdir(), "actual-server-identity-")), copied = path.join(root, "core");
-  const browser = await chromium.launch({ headless: true }); const page = await browser.newPage();
   let child: ChildProcess | undefined, build: ChildProcess | undefined;
   try {
     for (const dir of ["apps/web/src/server", "apps/web/scripts", "scripts/build-cache", "apps/web/.server-runtime"]) await cp(path.join(core, dir), path.join(copied, dir), { recursive: true });
@@ -50,7 +48,6 @@ await new Promise((resolve, reject) => { handle.server.once('listening', resolve
 const register = module => module.registerRuntimeIdentityEndpoint({ registry: { register: entry => { endpoint = entry; } }, service, clientGateway: gateway });
 register(await import(pathToFileURL(routePath)));
 const http = createServer(async (request, response) => {
-  if (request.url === '/') { response.setHeader('content-type', 'text/html'); response.end('<!doctype html><title>Owned adapter proof</title>'); return; }
   if (request.headers.authorization !== 'Bearer isolated-public-test-token') { response.writeHead(401); response.end('{}'); return; }
   let body = ''; for await (const chunk of request) body += chunk;
   response.setHeader('content-type', 'application/json');
@@ -75,14 +72,14 @@ process.on('message', async message => {
       let errors = ""; child.stderr!.on("data", bytes => { errors = tail(errors, bytes as Buffer); });
       return new Promise<{ port: number; socketPort: number }>((resolve, reject) => { const timer = setTimeout(() => reject(new Error(`Owned adapter startup timeout: ${errors}`)), 20_000); child!.once("message", value => { clearTimeout(timer); resolve(value as { port: number; socketPort: number }); }); child!.once("exit", code => { clearTimeout(timer); reject(new Error(`Owned adapter exited ${code}: ${errors}`)); }); });
     };
-    let started = await launch(), origin = `http://127.0.0.1:${started.port}`; await page.goto(origin);
-    const request = async (reachedInputs: string[]) => page.evaluate(async ({ origin, reachedInputs }) => (await fetch(`${origin}/identity`, { method: "POST", headers: { authorization: "Bearer isolated-public-test-token", "content-type": "application/json" }, body: JSON.stringify({ reachedInputs }) })).json(), { origin, reachedInputs });
+    let started = await launch(), origin = `http://127.0.0.1:${started.port}`;
+    const request = async (reachedInputs: string[]): Promise<{ payload: { serverTransportIdentity: unknown } }> => (await fetch(`${origin}/identity`, { method: "POST", headers: { authorization: "Bearer isolated-public-test-token", "content-type": "application/json" }, body: JSON.stringify({ reachedInputs }) })).json();
     const records: unknown[] = []; let admissions = 0;
     const admit = async () => { await verifyRunningServerAdapterIdentity({ readRuntimeBuildIdentity: request }, copied, async record => { records.push(record); }); admissions++; };
-    assert.equal((await page.request.post(`${origin}/identity`, { data: {} })).status(), 401);
+    assert.equal((await fetch(`${origin}/identity`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 401);
     await admit(); assert.equal(admissions, 1);
-    await page.evaluate(async port => new Promise<void>((resolve, reject) => { const socket = new WebSocket(`ws://127.0.0.1:${port}/client`); const timer = setTimeout(() => { socket.close(); reject(new Error("Actual socket timeout")); }, 5000); socket.onopen = () => socket.close(); socket.onclose = () => { clearTimeout(timer); resolve(); }; socket.onerror = () => { clearTimeout(timer); reject(new Error("Actual socket failed")); }; }), started.socketPort);
-    const counts = async () => (await page.request.get(`${origin}/counts`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json();
+    await new Promise<void>((resolve, reject) => { const socket = new WebSocket(`ws://127.0.0.1:${started.socketPort}/client`); const timer = setTimeout(() => { socket.close(); reject(new Error("Actual socket timeout")); }, 5000); socket.onopen = () => socket.close(); socket.onclose = () => { clearTimeout(timer); resolve(); }; socket.onerror = () => { clearTimeout(timer); reject(new Error("Actual socket failed")); }; });
+    const counts = async () => (await fetch(`${origin}/counts`, { headers: { authorization: "Bearer isolated-public-test-token" } })).json() as Promise<{ dispatches: number; connects: number; listeners: number }>;
     assert.equal((await counts()).connects, 1);
     const before = (records.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest;
     const reader = path.join(copied, "apps/web/src/server/build-identity/read.ts"), source = await readFile(reader, "utf8"); assert.ok(source.includes("return Object.freeze(identity);"));
@@ -98,11 +95,11 @@ process.on('message', async message => {
     assert.deepEqual(await message("rebind"), { refused: true, listeners: 0 });
     assert.deepEqual(await message("legacy"), { legacy: true }); assert.equal((await request(["packages/fluxiq/dist/index.js"])).payload.serverTransportIdentity, null); await assert.rejects(admit, /provider dispatch refused/);
     assert.deepEqual(await message("rebind"), { refused: true, listeners: 0 }); assert.equal((await counts()).dispatches, 0);
-    await stop(child!, true); child = undefined; started = await launch(); origin = `http://127.0.0.1:${started.port}`; await page.goto(origin); await admit(); assert.equal(admissions, 2);
+    await stop(child!, true); child = undefined; started = await launch(); origin = `http://127.0.0.1:${started.port}`; await admit(); assert.equal(admissions, 2);
     assert.equal((records.at(-1) as { actual: { artifactDigest: string } }).actual.artifactDigest, after.artifactDigest); assert.equal((await counts()).dispatches, 0);
-    t.diagnostic(`Chromium ${browser.version()}; actual built Core + generated native server + real socket; retained/reloaded route refused current artifact, changed factory refused before listener IO, legacy cleared without resetting anchor, fresh process matched ${after.artifactDigest}; zero provider/chat invocation; synthetic authenticated HTTP only, no Next.`);
+    t.diagnostic(`Node ${process.version} fetch/WebSocket client; actual built Core + generated native server + real socket; retained/reloaded route refused current artifact, changed factory refused before listener IO, legacy cleared without resetting anchor, fresh process matched ${after.artifactDigest}; zero provider/chat invocation; synthetic authenticated HTTP only, no Next.`);
     await stop(child!, true); child = undefined;
   } finally {
-    try { if (child) await stop(child); } finally { try { if (build) await stop(build); } finally { await browser.close(); await rm(path.join(copied, "apps/web/node_modules"), { force: true }); await rm(path.join(copied, "node_modules"), { force: true }); await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } }
+    try { if (child) await stop(child); } finally { try { if (build) await stop(build); } finally { await rm(path.join(copied, "apps/web/node_modules"), { force: true }); await rm(path.join(copied, "node_modules"), { force: true }); await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } }
   }
 });

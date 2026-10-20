@@ -49,13 +49,29 @@
 // **Kept across a restart** (t728). What a build was shown and typed is kept in
 // Core's durable build state as well as here (`./build-state/`), so a host
 // restarted mid-build does not refuse a link its model was shown before the
-// restart. Core bounds one stored value; a build shown more than that keeps
-// its last stored copy, which can only refuse more, never allow more.
+// restart.
+//
+// **What the stored copy keeps** (t737). Core refuses a value past 64 KiB
+// (`AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS.maxValueBytes`), and a page of
+// a thousand links passes that, after which every write was refused and a
+// restart knew only what the build was shown before. So the stored copy keeps,
+// within `STORED_BYTES` (three quarters of Core's bound, leaving room in the
+// build's 256 KiB scope for its other memories): every typed text it can,
+// newest first, then the addresses most recently shown, newest first. An
+// address shown again counts as newly shown. This process still forgets
+// nothing; only the copy a restarted host reads back is bounded. Forgetting an
+// address can only refuse more, never allow more, and what a build was shown
+// longest ago is what it is least likely to go to next: a refused navigation
+// tells the model to use a link from the packet, and the packet it then looks
+// at is remembered again. Splitting the set over several keys was not chosen:
+// they would share that one 256 KiB scope with arrival and the other memories,
+// whose writes Core would then refuse as the scope filled.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";
-import { createWebNodeBuildMemory, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "./build-state";
+import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS } from "fluxiq/automation-studio";
+import { createWebNodeBuildMemory, webNodeStoredPrefix, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "./build-state";
 import type { WebRunnableNode } from "./catalog";
 import { WEB_NAVIGATION_ACTION } from "./start-location";
 
@@ -69,6 +85,8 @@ const REMEMBERED_BUILDS = 16;
 // than that pushed earlier ones out, and a navigation to a link the model had
 // been shown was refused as unshown.
 const TYPE_ACTION = "web.dom.type";
+/** The most the stored copy of one build's memory takes, as Core counts bytes (header, "What the stored copy keeps"). */
+const STORED_BYTES = Math.floor((AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS.maxValueBytes * 3) / 4);
 
 /**
  * The two ways to get where the refused navigation meant to go, in this
@@ -115,14 +133,15 @@ export function createWebNodeShownAddresses(persistence?: WebNodeBuildStatePersi
     },
     saw(build, page) {
       changing(build, (held) => {
-        // The page's own query rides with its location: the page is one the build stood on.
-        remember(held, parsed(page.evidence.location, undefined), page.pageQuery ?? []);
         // A link's query is shown with it, so it is remembered with it.
         for (const element of page.evidence.elements) {
           if (element.href === undefined) continue;
           const link = parsed(element.href, undefined);
           remember(held, link, link === undefined ? [] : [...link.searchParams]);
         }
+        // The page's own query rides with its location: the page is one the build stood on. Remembered
+        // last, as the newest of this packet, so a bounded stored copy keeps it before its links (header).
+        remember(held, parsed(page.evidence.location, undefined), page.pageQuery ?? []);
       });
     },
     held(build, address, base) {
@@ -167,13 +186,26 @@ function remember(held: BuildMemory, url: URL | undefined, query: Query): void {
   keep(held, { path: pathKey(url), query: [...query] });
 }
 
+/** Keep `address` as the most recently shown: one shown again moves to the end, so the map runs oldest to newest. */
 function keep(held: BuildMemory, address: Address): void {
-  held.addresses.set(`${address.path}?${JSON.stringify(address.query)}`, address);
+  const key = `${address.path}?${JSON.stringify(address.query)}`;
+  held.addresses.delete(key);
+  held.addresses.set(key, address);
 }
 
-/** A build's memory as Core stores it: each address as `[path, [[key, value], ...]]`, and the texts typed. Nothing else. */
+/**
+ * A build's memory as Core stores it: each address as `[path, [[key, value], ...]]`,
+ * oldest first, and the texts typed, newest first. Nothing else. Within
+ * `STORED_BYTES`, typed texts first and then the newest addresses (header).
+ */
 function encoded(held: BuildMemory): JsonValue {
-  return { addresses: [...held.addresses.values()].map((address) => [address.path, address.query.map(([key, value]) => [key, value])]), typed: [...held.typed] };
+  // `{"addresses":,"typed":}` around the two lists.
+  const frame = JSON.stringify({ addresses: [], typed: [] }).length - 4;
+  const typed = webNodeStoredPrefix(held.typed, STORED_BYTES - frame - 2);
+  const typedBytes = new TextEncoder().encode(JSON.stringify(typed)).length;
+  const newest: JsonValue[] = [...held.addresses.values()].reverse().map((address) => [address.path, address.query.map(([key, value]) => [key, value])]);
+  const addresses = webNodeStoredPrefix(newest, STORED_BYTES - frame - typedBytes).reverse();
+  return { addresses, typed };
 }
 
 /** The memory a stored value holds; an entry that is not one is skipped, and a value that is not one at all is none. */
