@@ -115,6 +115,22 @@ test("an element inside a sensitive control yields no value: a span in a marked 
   });
 });
 
+// bigbox-retail's card frame (t730 c2): `<input name="cvc">` under "Security
+// code", no `autocomplete`. Its typed value reached the snapshot, every keydown
+// and the recorded `dom.input`, all of which read values through here.
+test("a card security code named only by its name or its label yields no value", async () => {
+  await withStubPage(load, ({ readElementValue }) => {
+    assert.equal(readElementValue(input("text", "SYNTHETIC_TYPED_CODE", { name: "cvc", inputmode: "numeric" })), undefined);
+    const labelled = input("text", "SYNTHETIC_TYPED_CODE", { name: "field-7" });
+    element("label", {}, "Security code ", labelled);
+    assert.equal(readElementValue(labelled), undefined);
+    // Its neighbours on the card form are not swept up with it.
+    const zip = input("text", "SYNTHETIC_ZIP", { name: "zip" });
+    element("label", {}, "ZIP code ", zip);
+    assert.equal(readElementValue(zip), "SYNTHETIC_ZIP");
+  });
+});
+
 test("visibleText and directVisibleText give nothing for a sensitive control or anything inside one", async () => {
   await withStubPage(load, ({ visibleText, directVisibleText }) => {
     const note = element("textarea", { "data-sensitive": "true" }, "SYNTHETIC_RECOVERY_NOTE");

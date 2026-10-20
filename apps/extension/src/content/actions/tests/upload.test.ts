@@ -14,9 +14,10 @@
 //
 // The last rows are the gate the verb reads before it assigns anything. It is
 // deliberately only the part of actionability that bears on a file input: an
-// input the page disabled, or one in a subtree it made inert, takes the files
-// and submits none of them, while an input with no visible box is how most of
-// the web ships one and works perfectly well.
+// input the page disabled (refused as `disabled`), or one in a subtree it made
+// inert (refused as `hidden`, not shown), takes the files and submits none of
+// them, while an input with no visible box is how most of the web ships one
+// and works perfectly well.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -143,11 +144,16 @@ test("a disabled input is refused before anything is assigned, however the gate 
   }
 });
 
-test("an input inside an inert subtree is refused: the page has stopped listening to it", () => {
+// Inert is not disabled: the page took the input out of interaction, as a
+// dialog standing over it does, so it is a target that is there and not shown
+// -- `hidden`, which the result builder reports as web.target.not_shown
+// (ba9fea58) -- and a Flow run finds the current step by page state rather
+// than repairing a control the page will give back.
+test("an input inside an inert subtree is refused as not shown: the page has stopped listening to it", () => {
   const built = upload([RECEIPTS], { ok: true, fileNames: [RECEIPTS] }, { inert: true });
   assert.deepEqual(built, {
     builder: "rejected",
-    code: "disabled",
+    code: "hidden",
     expected: "1 file, named as requested",
     actual: "the file input is inert"
   });

@@ -8,14 +8,29 @@ source on 2026-09-15.
 
 `isSensitiveFieldSignature`
 ([`domain/src/sensitivity/signature.ts`](../../domain/src/sensitivity/signature.ts))
-is the rule. It reads three attributes and returns a verdict:
+is the rule. It reads a control's type, `autocomplete`, `data-sensitive`, and,
+for text-entry inputs only, its names and labels, and returns a verdict:
 
 - a control whose type is `password`, or `one-time-code` or `credit-card`
   given as a type (both are `autocomplete` tokens rather than input types, and
   the rule accepts them in either place);
 - `data-sensitive="true"`;
 - an `autocomplete` **token** that is `current-password`, `new-password`,
-  `one-time-code`, or begins `cc-`.
+  `one-time-code`, or begins `cc-`;
+- a text-entry input (no type, text, tel, number, password, search) whose name,
+  id, label, accessible name, `aria-label` or placeholder names a card security
+  code (`namesCardSecurityCode` in
+  [`domain/src/sensitivity/card-security-code.ts`](../../domain/src/sensitivity/card-security-code.ts)):
+  the whole words cvc, cvv, csc, cvn, cvc2, cvv2 or securitycode, split at
+  camelCase boundaries, or the phrases "security code", "card verification" and
+  "card validation". "Verification code" alone is a one-time code and is left to
+  the `autocomplete` rule. A real card frame's `<input name="cvc">` labelled
+  "Security code" often carries no `autocomplete`, which is why names count.
+
+A control inside an element the rule marks is withheld too: every capture path,
+the type, clear and select verbs' validations, the forms producer's `sensitive`
+flag and the fact page's checkbox state ask the rule of the element and each
+ancestor (`content/sensitive-text.ts` `isWithinSensitiveControl`).
 
 `autocomplete` is a space-separated token list, so every token is checked:
 `billing cc-number` is what a real card field carries, and matching the whole

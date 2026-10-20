@@ -17,7 +17,12 @@
 // never read what is assigned: a disabled input, which submits nothing, and an
 // inert subtree, which the page has taken out of interaction entirely (the
 // everything-store's notification prompt does exactly that to the page behind
-// it). Either is a refusal rather than a success nothing acts on.
+// it). Either is a refusal rather than a success nothing acts on, and each
+// keeps the code the actionability gate gives it everywhere else: a disabled
+// input is `disabled` (web.target.not_actionable), an inert one `hidden`
+// (web.target.not_shown, ba9fea58) -- the input is there and the page is not
+// showing it, so a Flow run finds the current step by page state rather than
+// repairing a control the page will hand back once its dialog closes.
 //
 // The validation compares names but quotes none. A chosen file's name is the
 // user's data, as a typed value is, and whatever this verb writes into
@@ -38,7 +43,7 @@ export function uploadAction(action: BrowserActionCommand, deps: ContentActionDe
   const expected = describeFiles(requested.length, true);
 
   const unusable = unusableReason(element, deps);
-  if (unusable) return deps.rejected(action, startedAt, "disabled", expected, unusable, evidence);
+  if (unusable) return deps.rejected(action, startedAt, unusable.code, expected, unusable.detail, evidence);
 
   const outcome = deps.setInputFiles(element, files);
   if (!outcome.ok) {
@@ -53,25 +58,29 @@ export function uploadAction(action: BrowserActionCommand, deps: ContentActionDe
   }, evidence);
 }
 
+/** Why the page would never read the files, under the gate's code for that reason. */
+type Unusable = { code: "disabled" | "hidden"; detail: string };
+
 /**
  * Why the page would never read the files, if it would not: the input is
  * disabled, or it sits in a subtree the page has made inert. Being out of
  * sight is not a reason, and neither is something covering it, since nothing
  * is pressed.
  */
-function unusableReason(element: Element, deps: ContentActionDependencies): string | undefined {
+function unusableReason(element: Element, deps: ContentActionDependencies): Unusable | undefined {
   // The gate's own answer first: it is the only reading that accounts for an
   // ancestor claiming `aria-disabled`, which a composite upload widget does.
   const report = deps.checkActionability(element);
-  if (!report.actionable && report.code === "disabled") return report.detail;
+  if (!report.actionable && report.code === "disabled") return { code: "disabled", detail: report.detail };
   // The gate answers `hidden` before it looks at `disabled`, and hidden is how
   // most file inputs ship, so the platform rule is asked for again here -- it
   // is what would refuse the file, and `:disabled` carries a disabled
   // `<fieldset>` above the input with it.
-  if (element.matches(":disabled")) return "the file input is disabled";
+  if (element.matches(":disabled")) return { code: "disabled", detail: "the file input is disabled" };
   // An inert subtree reaches the gate as `hidden` too, and it means the page
-  // has taken interaction away rather than merely drawn the input elsewhere.
-  return element.closest("[inert]") ? "the file input is inert" : undefined;
+  // has taken interaction away rather than merely drawn the input elsewhere:
+  // the input is there and not shown, which is what `hidden` reports.
+  return element.closest("[inert]") ? { code: "hidden", detail: "the file input is inert" } : undefined;
 }
 
 /** How many files, and whether their names are the requested ones -- never a name. */
