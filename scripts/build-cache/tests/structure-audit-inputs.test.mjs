@@ -5,6 +5,7 @@
 // was answered from the stamp: the check that should have failed was reused.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -47,6 +48,11 @@ beforeEach(async () => {
     await put(root, "scripts/structure-audit/rules/browser-imports.mjs", "export const id = 'browser-imports';\n");
     await put(root, "scripts/structure-audit/rules/tests/browser-imports.test.mjs", "// test\n");
   }
+  // This repository is fingerprinted through what git shows, so its stamps
+  // under node_modules must be ignored as they are in the real checkout; the
+  // linked Core is walked.
+  await put(repo, ".gitignore", "node_modules/\n");
+  execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "ignore" });
 });
 afterEach(async () => { await rm(base, { recursive: true, force: true }); });
 

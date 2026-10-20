@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { coreBuildMissing, coreBuildStaleness, scanCoreBuildEntries, scanCoreOutput, scanCoreSources } from "../index.mjs";
+import { coreBuildMissing, scanCoreBuildEntries } from "../index.mjs";
 
 /** A Core shaped like the real one: three packages, each promising `dist` files through `exports`. */
 const PACKAGES = {
@@ -48,10 +48,9 @@ test("a fresh checkout -- sources, no dist -- is refused as unbuilt, and the mes
   assert.ok(verdict.message.includes(root), "the message says which Core it looked at");
 }));
 
-test("the gap this closes: staleness still calls a never-built Core not stale, and this check refuses it", () => withCore({ installed: true, packages: PACKAGES }, async (root) => {
-  // coreBuildStaleness keeps its contract -- nothing built is not "stale" --
-  // which is exactly why a fresh checkout used to pass every guard.
-  assert.equal(coreBuildStaleness(await scanCoreSources(root), await scanCoreOutput(root)).stale, false);
+test("the gap this closes: a never-built Core is refused here, before any currency question is asked", () => withCore({ installed: true, packages: PACKAGES }, async (root) => {
+  // An absent dist is neither changing nor out of date, so the other guards
+  // cannot be the ones to refuse a fresh checkout; this one does.
   assert.equal(coreBuildMissing(await scanCoreBuildEntries(root)).built, false);
 }));
 

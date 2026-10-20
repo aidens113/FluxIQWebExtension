@@ -9,22 +9,34 @@ import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_EN
 /**
  * Provider credentials belong to the test driver. Child processes receive an
  * opaque key reference through FluxIQ state, never the source credential.
- * Keep this list explicit so unrelated runner tokens and application settings
- * are not accidentally removed.
+ * The list is explicit so unrelated runner tokens and application settings
+ * are not accidentally removed, and it is defined once, in
+ * `scripts/provider-secret-environment.mjs`: the root scripts import it before
+ * any package is built, so it cannot live in compiled TypeScript. This module
+ * loads that file at run time, from `src/` and `dist/` alike (both sit three
+ * levels below the repository root), the way `webPanelHostModulePath` reads
+ * `domain/package.json`. The specifier is a URL rather than a literal so tsc
+ * does not pull a file outside this package into its program, which would put
+ * it outside the build cache's fingerprint.
  */
-export const PROVIDER_SECRET_ENVIRONMENT_VARIABLES = Object.freeze([
-  "ANTHROPIC_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
-  "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_KEY", "BEDROCK_API_KEY", "COHERE_API_KEY",
-  "DEEPSEEK_API_KEY", "FIREWORKS_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
-  "GROQ_API_KEY", "HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "LLM_API_KEY",
-  "MISTRAL_API_KEY", "OLLAMA_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
-  "PERPLEXITY_API_KEY", "TOGETHER_API_KEY", "VERTEX_AI_API_KEY", "XAI_API_KEY",
-] as const);
+const PROVIDER_SECRET_ENVIRONMENT_SOURCE = new URL("../../../scripts/provider-secret-environment.mjs", import.meta.url);
 
-const PROVIDER_SECRET_ENVIRONMENT_KEYS = new Set<string>(PROVIDER_SECRET_ENVIRONMENT_VARIABLES);
+const providerSecretSource = await import(PROVIDER_SECRET_ENVIRONMENT_SOURCE.href) as {
+  PROVIDER_SECRET_ENVIRONMENT_VARIABLES?: unknown;
+  withoutProviderSecrets?: unknown;
+};
+const sourceVariables = providerSecretSource.PROVIDER_SECRET_ENVIRONMENT_VARIABLES;
+const sourceFilter = providerSecretSource.withoutProviderSecrets;
+if (!Array.isArray(sourceVariables) || sourceVariables.length === 0 || !sourceVariables.every((name) => typeof name === "string") || typeof sourceFilter !== "function") {
+  throw new Error(`${fileURLToPath(PROVIDER_SECRET_ENVIRONMENT_SOURCE)} must export PROVIDER_SECRET_ENVIRONMENT_VARIABLES (a nonempty string list) and withoutProviderSecrets`);
+}
+
+export const PROVIDER_SECRET_ENVIRONMENT_VARIABLES: readonly string[] = sourceVariables as readonly string[];
+
+const filterProviderSecrets = sourceFilter as (base: NodeJS.ProcessEnv) => Record<string, string>;
 
 export function withoutProviderSecrets(base: NodeJS.ProcessEnv): Record<string, string> {
-  return Object.fromEntries(Object.entries(base).filter((entry): entry is [string, string] => entry[1] !== undefined && !PROVIDER_SECRET_ENVIRONMENT_KEYS.has(entry[0].toUpperCase())));
+  return filterProviderSecrets(base);
 }
 export type TopologyPaths = {
   repositoryRoot: string;

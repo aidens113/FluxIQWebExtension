@@ -155,11 +155,11 @@ runs using the workspace before manually removing
 `test-runs/persistent-isolated/<name>` when a clean state is required.
 
 Run the finite CLI with `pnpm lab run`, `matrix`, `auth`, `clone-cache`, `inspect`, or
-`compare`; root safety tools are exposed as `pnpm boundary:audit`,
-`pnpm agent:orchestrator`, and `pnpm real-site:policy`. See the
+`compare`; root safety tools are exposed as `pnpm boundary:audit` and
+`pnpm real-site:policy`. See the
 [testing facility architecture](docs/architecture/testing-facility.md) for
 target fields and Core compatibility limits, commands,
-evidence/security boundaries, and remaining Linux, automatic-agent,
+evidence/security boundaries, and remaining Linux,
 Core-promotion, and real-site limits.
 
 To prepare the deterministic target-drift Flow for later LLM diagnosis work,
