@@ -194,3 +194,12 @@ test("a --model-reset-only candidate build's Core gets no start hook, inherited 
   const byDefault = buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" }, inherited, ["--authoring-mode", "candidate"]);
   assert.equal(byDefault.FLUXIQ_CANDIDATE_START_URL, `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`);
 });
+
+test("every Lab-started Core traces its client gateway unless the topology turns it off, and an inherited value never switches it (D11)", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" };
+  assert.equal(buildFluxIQEnvironment(allocation, paths, {}, []).FLUXIQ_CLIENT_GATEWAY_TRACE, "1");
+  assert.equal(buildFluxIQEnvironment(allocation, paths, { FLUXIQ_CLIENT_GATEWAY_TRACE: "0" }, []).FLUXIQ_CLIENT_GATEWAY_TRACE, "1");
+  assert.equal(buildFluxIQEnvironment(allocation, { ...paths, tracing: true }, { FLUXIQ_CLIENT_GATEWAY_TRACE: "0" }, []).FLUXIQ_CLIENT_GATEWAY_TRACE, "1");
+  assert.equal(buildFluxIQEnvironment(allocation, { ...paths, tracing: false }, {}, []).FLUXIQ_CLIENT_GATEWAY_TRACE, "0");
+  assert.equal(buildFluxIQEnvironment(allocation, { ...paths, tracing: false }, { FLUXIQ_CLIENT_GATEWAY_TRACE: "1" }, []).FLUXIQ_CLIENT_GATEWAY_TRACE, "0");
+});

@@ -271,6 +271,45 @@ was still running at dispatch and is excluded below by its own file list.
   `scripts/build-cache/**`, their tests. Never runs against the real shared Core or a lane tree.
 - Report: `docs/working/trace-offline-trials-plan/reports/t735-sync-core-bootstrap.md` in the t735 tree.
 
+### Brief: t742-trace-intake-parity (lane T lead, trace plan P3)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P3 (traces fed through the same ingress; a parity
+  harness over real Lab traces from all ten realistic sites; gate: the original run matches at every delivery point).
+- Task: a harness that replays a stored trace through Core's own client-gateway intake (no second code path) and
+  compares, at every delivery point, what Core received and derived against the original; traces from provider-free
+  saved-flow replays on all ten realistic sites (tracing is on by default since t736), plus any live round-4 traces;
+  every divergence classified (capture gap, nondeterminism, intake defect) and fixed at its source or recorded as an
+  explicit evidence gap. Also: the start hook lands in the build's trace (t737's `run.ts` is merged), and stored event
+  JSON (92-96% of bytes, ~34 MB per run) stores repeated content once.
+- Rules: traces never feed model guidance; no page data, tokens or typed secrets in logs or reports; usual lane rules;
+  provider-free, headed, realistic scenarios only; no paid runs.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p3.md` in the task's downstream tree.
+
+### Brief: t741-rerun3-fixes (lead-xhigh, t741 rerun3-fixes)
+- Why: rerun round 3 went 0 of 4, each run further than round 2 and every cause a product or generic-guidance defect.
+  Debug notes (lane trees, `docs/working/language-driven-flow-loop-plan/debugs/`): t563 run-mvgo5xft-25460ba2 office,
+  t719 run-mvgo9wzn-fad4e050 job, t566 run-mvgoawg4-ed85dd5a social, t567 run-mvgobp8h-b99ede98 photo. Read all four.
+- Unit A, reset settlement (Core site-reset, reset calls, ledger, loop budget): structural, not another shape patch:
+  Core settles trial and entry-preparation acts that sit in no list itself (office's address confirm); a settling look
+  reports what it settled and every open act across the build; `reset_acts_in_place` and the witness refusal list the
+  open acts and issued references; a look that names a reset destination without `undoes` gets a note; the candidate
+  wrap-up no longer refuses the undo calls a trial demands (`loop-budget.ts` `withholds`, photo).
+- Unit B, plan, script and brief (Core): one port-name rule shared by plan and script (`item`, office); the script
+  format names `extractList.sort` beside the `where` line with a generic example on another kind of site, and a
+  process sort or limit on a listing whose repeat makes a lasting act is refused (photo); the supervisor's recording
+  excerpt reaches the builder's opening words (`run-brief.ts`, photo); scoped `unchanged_submission` refusals carry
+  translated digests and a stable revision (`submission-numbering.ts`); endings tell the truth (photo's "a like
+  remains", job's repeated sentence).
+- Unit C, domain and extension: the retry wrapper reports an earlier rate-limited failure with its retry-after over
+  later failures (`node-run/retries/dispatch.ts`, job); `markRenumbered` marks only when `navigation.timeOrigin` changes
+  (`plan-resolution/target-packets.ts`, social); `incomplete_text` names the field and its hint says to read the list
+  again after the presses (`refusal.ts`, `next-sentence.ts`, social); `find_on_page` with no match names the page's
+  wordless icons (`page-find/search.ts`, job).
+- Unit D, judge guidance (Core, generic only): a feed's continuation past its end marker is not rows missing from the
+  task's range, and repeated identical advice is not repeated to the builder (social); never mirror a realistic task.
+- Rules: model guidance generic and never shaped like a realistic task; prompt contract gate tests for any model-facing
+  text; provider-free reproductions where feasible (site-reset installed-gateway specs); usual lane rules; no paid runs.
+- Report: `docs/working/trace-offline-trials-plan/reports/t741-rerun3-fixes.md` in the t741 downstream tree.
+
 ### Brief: sql-test-pool (worker-high, Core vitest isolation for real-SQL tests)
 - Why: every daily sweep produces a different set of 15 s timeouts in Core's heavy real-SQLite tests (S1, sweep-1019b,
   sweep-1020: canonical-authority, database-manager, controller, command-execution service, provider-unavailable,
@@ -560,6 +599,25 @@ was still running at dispatch and is excluded below by its own file list.
   unscoped presses or a lone `create_new`; the rewritten job spec no longer checks the wrong-job undo.
 - Outcome: Accepted
 - Follow-up: rerun round 3 on synced lane trees; then the open points.
+
+### 2026-10-20 - t736 merged: trace plan P2 capture
+- Agent: supervisor (lane T and its workers)
+- Changed: Core and downstream merged and pushed: capture at the client gateway and Core's own ingress into each
+  project's store (indexed, explicit completeness, secrets screened before storage, per-trace artifact scope); the
+  extension's page snapshots and in-band artifacts; the offline queue keeps original envelopes; the Lab traces every
+  live run (`--no-tracing` opts out). Five new gateway-trace tests carry t740's real-SQL marker (the guard flagged
+  them after the merge, as designed).
+- Validation: supervisor reruns on t736 after merging dev: Core `vitest run` over client-gateway, AS client-gateway,
+  environment, gateway-trace, storage gateway-trace, candidate-trial, subflow-trial, project-build, service/tests, api,
+  parking -> 149 passed, 1 failed (`cancel-runtime-session.test.ts` "stops a queued run", then 6/6 alone three times
+  and the api directory 27 files, 165 passed on the re-gate); fluxiq and web `tsc` 0; extension `tsc` both 0;
+  extension trace-capture, connection, background -> pass 477; test-runner trace-inspection, saved-flow-replay,
+  commands, environment -> pass 101; the first gate held on a stale Core build after the marker edit, the re-gate
+  (Core rebuilt) passed domain, extension, test-runner checks and both audits; finish merged both sides. Lead: the
+  capture overhead is about +11.5% over 36 provider-free replays on four realistic tasks; a default-settings headed
+  replay wrote a complete trace (127 events, 22 snapshots held, 0 secret hits).
+- Outcome: Accepted
+- Follow-up: P3 intake parity (t742).
 
 ## Open Questions
 

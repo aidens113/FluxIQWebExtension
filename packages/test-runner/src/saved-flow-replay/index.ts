@@ -13,3 +13,5 @@ export * from "./run-flow.js";
 export * from "./saved-navigation-origins.js";
 export * from "./profile-handover-probe.js";
 export * from "./receipt-error.js";
+export * from "./extension-session-token.js";
+export * from "./stored-traces.js";

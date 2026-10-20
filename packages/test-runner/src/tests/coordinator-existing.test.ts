@@ -208,6 +208,50 @@ test("lab run sends a startup failure's process logs through the bundle's own lo
   assert.match(source, /async function copyProcessLogs\(bundle: EvidenceBundle, logsDir: string\)/u, "the same redacting copy a run that started uses");
 });
 
+test("an isolated topology traces its Core's client gateway by default, and passes tracing: false through to turn it off (D11)", async () => {
+  assert.equal((await isolatedCoreEnvironment(undefined)).FLUXIQ_CLIENT_GATEWAY_TRACE, "1");
+  assert.equal((await isolatedCoreEnvironment(true)).FLUXIQ_CLIENT_GATEWAY_TRACE, "1");
+  assert.equal((await isolatedCoreEnvironment(false)).FLUXIQ_CLIENT_GATEWAY_TRACE, "0");
+});
+
+/** Starts an isolated topology over fake processes up to Core's readiness wait, and answers the environment Core was spawned with. */
+async function isolatedCoreEnvironment(tracing: boolean | undefined): Promise<NodeJS.ProcessEnv> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-isolated-tracing-"));
+  const repositoryRoot = path.join(root, "repository");
+  const fluxiqRepositoryRoot = path.join(root, "core");
+  const scenarioEntrypoint = path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
+  const hostModulePath = path.join(repositoryRoot, "domain", "dist", "web-panel-host.mjs");
+  for (const file of [scenarioEntrypoint, hostModulePath, path.join(fluxiqRepositoryRoot, "apps", "web", "package.json")]) {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "", "utf8");
+  }
+  const build = { key: "0".repeat(24), directory: root, webDirectory: root, nextExecutable: path.join(fluxiqRepositoryRoot, "next"), buildId: "build-1" };
+  const spawned = new Map<string, NodeJS.ProcessEnv>();
+  const supervisor = new ProcessSupervisor((command, _args, options) => {
+    spawned.set(command, options.env ?? {});
+    return fakeChild();
+  }, async child => exitChild(child as FakeChild, 0));
+  const coreHealthReached = new Error("core health reached");
+  try {
+    await assert.rejects(startTopology({
+      repositoryRoot, fluxiqRepositoryRoot, hostModulePath, scenarioEntrypoint,
+      runsDirectory: path.join(root, "runs"), prepareHost: false,
+      ...(tracing === undefined ? {} : { tracing }),
+    }, supervisor, {
+      prepareCoreWebBuild: async () => build,
+      waitForHttp: async (_url, options) => {
+        if (options?.operationStage === "core.health") throw coreHealthReached;
+        return new Response("ok");
+      },
+    }), (error: unknown) => error === coreHealthReached);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+  const core = spawned.get(build.nextExecutable);
+  assert.ok(core, "the Core child was spawned");
+  return core;
+}
+
 type FakeChild = ChildProcess & { stdout: PassThrough; stderr: PassThrough };
 
 function fakeChild(): FakeChild {

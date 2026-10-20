@@ -1,8 +1,9 @@
 // HTTP calls the extension makes to FluxIQ Core, outside the client-gateway
 // socket: listing recordings, reading the gateway snapshot for project context,
-// storing a captured screenshot as a state asset, and the program calls the
-// panel's relays make (`background/panel/`).
+// storing a captured screenshot as a state asset, storing a traced command's
+// artifacts, and the program calls the panel's relays make (`background/panel/`).
 
+import type { CLIENT_GATEWAY_TRACE_ARTIFACT_PATH } from "fluxiq/client-gateway";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import type { CoreRecordingSummary, CoreRecordingsPage, PanelRelayResponse } from "../../shared/protocol";
 import { arrayValue, compactObject, numberValue, objectValue, parseJsonBody, stringValue, timestampValue } from "./value-readers";
@@ -101,6 +102,48 @@ export async function uploadStateAsset(
     throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
   }
   return contentRef;
+}
+
+/**
+ * Where a traced command's artifacts are stored (`CLIENT_GATEWAY_TRACE_ARTIFACT_PATH`).
+ * Core's constant is imported as a type only, so the background bundle never
+ * loads Core's gateway service; the declared type makes a drift a compile error.
+ */
+const TRACE_ARTIFACT_PATH: typeof CLIENT_GATEWAY_TRACE_ARTIFACT_PATH = "/api/client-gateway/trace-artifacts";
+
+/**
+ * PUTs one trace artifact (traces and offline trials, P2, D13) to Core's trace
+ * store under its lower-case hex SHA-256, with the pairing token as the bearer
+ * credential and its media type as the content type. Core binds it to this
+ * browser's gateway session and keeps one copy per digest. Any answer but a
+ * success rejects, naming only the status, and so does a request that takes
+ * longer than `timeoutMs`; the caller counts the artifact unavailable.
+ */
+export async function uploadTraceArtifact(
+  credentials: CoreApiCredentials,
+  sha256: string,
+  bytes: Uint8Array<ArrayBuffer>,
+  mediaType: string,
+  timeoutMs: number
+): Promise<void> {
+  if (!credentials.token) throw new Error("This browser is not paired with FluxIQ yet.");
+  const url = new URL(`${TRACE_ARTIFACT_PATH}/${sha256}`, credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+  // The call's own timer, as `callCoreProgram` keeps one: it ends the request
+  // whether or not headers have arrived.
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new DOMException("FluxIQ did not store the trace artifact in time.", "TimeoutError")), timeoutMs);
+  try {
+    const response = await fetch(url.toString(), {
+      method: "PUT",
+      credentials: "omit",
+      headers: { "content-type": mediaType, authorization: `Bearer ${credentials.token}` },
+      body: bytes,
+      signal: deadline.signal
+    });
+    if (!response.ok) throw new Error(`FluxIQ trace artifact upload failed (${response.status}).`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** How long a program call may take, unless its endpoint has a limit of its own below. */

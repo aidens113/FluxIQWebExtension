@@ -760,6 +760,39 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
 - Outcome: Partial (running)
 - Follow-up: verdicts, spend and debugs.
 
+### 2026-10-20 - Rerun round 3: 0 of 4, each further than round 2
+- Agent: supervisor (debuggers debug-rr3-office, -job, -social, -photo)
+- Changed: nothing in the repositories; debug notes in each lane tree.
+- Validation: spend-ledger records: office run-mvgo5xft-25460ba2 failed $0.049308276 (140 steps); job
+  run-mvgo9wzn-fad4e050 failed $0.034347282 (127 steps); social run-mvgoawg4-ed85dd5a failed $0.194274486 (244 steps;
+  ends on `web.action.rejected.output_not_observed` x3); photo run-mvgobp8h-b99ede98 failed $0.141608127 (421 steps;
+  reached a repair brief; ends on `repeat_refused (same_result)` x3). All under $0.25; round total $0.419538171; no
+  balance error.
+- Office cause (debug-rr3-office): the plan accepted an output named `item` that the script rules ban, so the
+  checkout-reading part could never be built; leftover trial and entry-preparation acts that sit in no list (confirm the
+  office address) each needed their own look under `undoes`, a successful look reports nothing back, and the
+  `reset_acts_in_place` refusal listed no open acts, so the builder gave up one look short; t738's witness rule never
+  fired (it covers exploration presses only). Progress: row saving accepted, the opening-call refusal gone, the checkout
+  part passed in two revisions.
+- Job cause (debug-rr3-job): the Remote only filter's first attempt hit the site's every-sixth-results-page rate limit;
+  the extension went back, which closed the menu, and three retries failed on the hidden link; the retry wrapper
+  (`domain node-run/retries/dispatch.ts`) reports only the last attempt, so the builder saw `target_not_actionable`
+  instead of `page_busy_try_later` and the repeat guard refused the right retry; `find_on_page` found no wordless save
+  icon. Progress: My jobs read complete and returned a destination reference (R9's fix holds live).
+- Social cause (debug-rr3-social): brief 3 wrote the right structure (0164), but a false "page was reloaded" refusal on
+  its See more press threw it away: domain `plan-resolution/target-packets.ts` `markRenumbered()` marks a control the
+  build's own press removed as renumbered, because every view of a reloaded document reports a reload; the
+  `incomplete_text` refusal names no field and its hint does not say to read the list again; the judge took the
+  feed's continuation past its end marker as rows missing. Trials 0141 and 0214 kept exactly the oracle's 3 posts,
+  lacking only the text column. Round-2 causes gone.
+- Photo cause (debug-rr3-photo, furthest yet: 7 trials, 4 judged, every "no" correct): revision 8 stored exactly the
+  oracle's three links but liked the first three posts in page order (the pinned ones): the script format teaches only
+  the saved table's sort, not `extractList.sort`, which the domain already supports; the supervisor's recording
+  excerpt never reaches the builder; the candidate wrap-up refuses the undo calls a trial demands. Round-2 causes gone.
+- Outcome: Partial
+- Follow-up: t741 fixes all four causes; reset settlement has failed in a new shape for a third round, so t741 makes Core
+  settle no-list trial and entry acts itself instead of patching the shape.
+
 ## Open Questions
 
 None requiring user input.
