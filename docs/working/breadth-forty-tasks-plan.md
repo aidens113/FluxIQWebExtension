@@ -688,6 +688,63 @@ Earlier briefs (Codex continuation, 2026-10-17 to 2026-10-18): [archive](./bread
 - Outcome: Partial
 - Follow-up: L1 reruns D3's five cases green, then integration.
 
+### 2026-10-20 - Rerun round 2 launched after L1 and the boundary lanes merged
+- Agent: supervisor
+- Changed: nothing in the repositories; four lane trees fast-forwarded to `dev` (downstream ddf41bf4, Core ca23a8ba)
+  and rebuilt (lane-sync-1020).
+- Why: every agreed change is merged: L1 reset settlement (both browser-proof defects fixed), lanes G/H/S/T, t730,
+  t731, t732, t733 (identity capture back to seconds; in-place busy race), t734, t735, and lane S's fix for the chat
+  defect that folded earlier turns into a build's instruction.
+- Validation: `git rev-list --count HEAD..dev` -> 0 in both repositories of t563, t719, t566, t567; each tree's
+  `node scripts/check/core-build.mjs` -> current; the four launches' live guard -> `"state":"admitted"` (instances
+  rr2-slot-1 to 4).
+- Launch: process `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` plus `--llm-max-cost-usd 0.25`, headed, `--model-reset-only`,
+  `--replays 1`, `--llm-max-calls 250`, fresh workspaces: slot-1 office-checkout-review
+  (`claude-office-checkout-t563-20261020-r3`), slot-2 job save-quillmark-remote (`claude-job-save-t719-20261020-r3`),
+  slot-3 social recent-group-posts (`claude-social-groups-t566-20261020-r5`), slot-4 photo newest-likes
+  (`claude-photo-likes-t567-20261020-r3`).
+- Outcome: Partial (running)
+- Follow-up: read each run's verdict, spend and steps; debug every failure before any rerun.
+
+### 2026-10-20 - Rerun round 2: 0 of 4; no Flow in any run
+- Agent: supervisor (debuggers debug-rr2-job, -office, -social, -photo)
+- Changed: nothing in the repositories; debug notes in each lane tree.
+- Validation: spend-ledger records (live guard `"state":"recorded"`): office run-mvgf04kw-310fc169 failed $0.169056852
+  (250 steps, the call cap; ends on `candidate.undo_unproved` then `web.action.rejected.action_failed`); job
+  run-mvgf4pk5-55343613 failed $0.080696568 (153 steps; `candidate.undo_unproved`, completion refused
+  `project.reset_acts_in_place`); social run-mvgf7ij5-a9747575 failed $0.180737856 (153 steps;
+  `core.submit_subflow` -> `flow_bootstrap.evidence_completion_plan_invalid` twice, then `repeat_refused` x3);
+  photo run-mvgf801u-cc23575e failed $0.136744896 (224 steps; `web.action.rejected.page_changed`, then the same
+  `core.run_node` refused `repeat_refused` x3). All under the $0.25 ceiling; round total $0.567236172; no balance
+  error.
+- Job cause (debug-rr2-job): in exploration the builder pressed save (`modify_existing`, step 0033) before it had read
+  My jobs (0035); Core checks for a baseline only on `create_new`, so the press ran and sealed the reset baselines with
+  no witness, no reference was ever issued, the trial was refused `candidate.trial_reset_required` and the reset could
+  never settle. Fix: before the seal, refuse without running any reversible press that has no witness (no complete
+  list it sits in, no stated control state, no issued reference), as `create_new` already is; secondary: settle words
+  that ask for an impossible reference, an invented `resetDestination` ignored silently, the chat's "one more change".
+- Office cause (debug-rr2-office, one step from a pass): the judged whole run (0208) did every checkout act right, but
+  no Core node the script format can feed stores single reads as a one-row table: `builtin.data.write-records` takes
+  rows only through an input port the script cannot connect; a `records` synonym produced an output with no schema
+  (`not_derivable`); the unconnected-port refusal pointed at the wrong line (`locate-issue.ts` matches node paths by
+  number); `repeat-guard/candidate-feedback.ts` said "submit again" for an unchanged submission, ending two briefs; a
+  refused test moved the tab without saying where; every later brief's opening call was refused
+  `unexpected_input_keys` (untraced); the final chat message said the checkout part never passed its own test. All
+  three R8 causes are gone; a trial act in no list (confirming the address) has the job run's witness gap.
+- Social cause (debug-rr2-social): a downstream "text cut short" hint (`rejection-next/next-sentence.ts`) told the
+  model to click each row's See more after every Next page move, a loop inside a loop that Core refuses; Core's
+  refusal (`draft-routing.ts` `scriptSpan`) pointed at the outer loop and left out the alternative it already has
+  (`NO_ROW_LOOP_IN_PAGE_LOOP`), so the model resent a byte-identical script three times. The first brief failed on a
+  `scroll` parameter with no description or example (`output-nodes/definitions.ts`) and a refusal that drops the bad
+  key names. None of L1, lane S or lane T touched this path.
+- Photo cause (debug-rr2-photo, furthest yet: R7 is gone, four trials ran, revision 5 liked all 24 posts): Core
+  `service/candidate-trial/landed-acts.ts` `controlsOf` took each trial act's page address from the withheld trace, so
+  every reset instruction said "at [withheld]", no undo could be tied to its post, and the reset brief looped until
+  the repeat guard stopped it (0219-0223); `core.test_subflow` answers carry no page, which caused brief 1's
+  stale-handle loop.
+- Outcome: Partial
+- Follow-up: t738 fixes all four causes (brief in trace-offline-trials-plan.md); rerun the four after it merges.
+
 ## Open Questions
 
 None requiring user input.
