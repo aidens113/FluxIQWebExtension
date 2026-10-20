@@ -158,6 +158,18 @@ test("a failure Core did not settle as uncertain keeps the failure's own refusal
   assert.deepEqual(webNodeFailureRefusal(ANSWER_LOST, "landed").detail, { reason: "channel_to_page_failed" });
 });
 
+// t738, social `run-mvgf7ij5-a9747575`: the node's own refusal hands on the
+// command it dispatched, so an unreadable scroll names its keys on every path
+// that reports a node's failure (exploration and replay).
+test("a node's failure refusal names an unreadable scroll's keys from the command it dispatched", () => {
+  const invalid = { status: "failed" as const, failure: { code: WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER } };
+  const refused = webNodeFailureRefusal(invalid, undefined, { actionType: "web.dom.scroll", parameters: { scroll: { until: "stable" } } });
+  assert.equal(refused.detail?.reason, "parameter_not_readable");
+  assert.deepEqual(refused.detail?.missing, ["mode"]);
+  assert.deepEqual(refused.detail?.instead, ["web.scroll.key.missing.mode", "web.scroll.key.unknown.until"]);
+  assert.deepEqual(webNodeFailureRefusal(invalid, undefined).detail, { reason: "parameter_not_readable" });
+});
+
 // t361: one definition of a lasting act on every path. Exploration and test
 // replays used to mark every page-changing node as acting, so typing and
 // navigation lost their retries after an ambiguous failure there, while

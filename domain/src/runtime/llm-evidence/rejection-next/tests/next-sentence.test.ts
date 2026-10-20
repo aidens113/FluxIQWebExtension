@@ -6,9 +6,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { webLlmRejectionNext } from "../next-sentence";
 
-test("incomplete text names the supported helper, per-row optional disclosure, full read order after each page move", () => {
+// social `run-mvgf7ij5-a9747575`: "Repeat this ordering after each Next page
+// move" prescribed a row loop inside a page loop, which Core's script grammar
+// refuses, and the build spent its briefs writing that nesting.
+test("incomplete text loads every row first, then one row-context read, the per-row disclosure over it, then the full read, with no loop inside a page loop", () => {
   const next = webLlmRejectionNext("incomplete_text", ["private column"], ["private control"], "private row") ?? "";
-  assert.match(next, /nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click.*then read.*Next page/u);
+  assert.match(next, /cannot hold another repeat/u);
+  assert.match(next, /Load every row first.*Scroll step with mode untilStable.*Next page in its own repeat-while span.*Then read only nonempty stable row-context columns.*without.*incomplete text field.*repeat over that read.*registered row-bound click.*Then read the full text/u);
+  assert.doesNotMatch(next, /after each Next page/iu);
   assert.doesNotMatch(next, /private column|private control|private row/u);
 });
 

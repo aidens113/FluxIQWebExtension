@@ -306,6 +306,63 @@ test("a round whose draft holds the Flow opens, through Core's registry, with th
   assert.notEqual(pressed.resultCode, "web.action.rejected.not_at_start_location", JSON.stringify(pressed.evidence));
 });
 
+// Office run `run-mvgf04kw-310fc169` (t738): every dependent builder's opening
+// look on its prepared entry, `initial.core.run_node` carrying Core's
+// `arrived`, was refused `unexpected_input_keys`.
+test("a builder on its prepared entry opens, through Core's registry, with the look marked arrived, and is arrived", async () => {
+  const stubbed = openTab();
+  const loop = bound(createWebAutomationLlmEvidenceRuntime(stubbed.gateway), START);
+  const look = loop.tools.find((tool) => tool.toolId === WEB_LLM_RUN_NODE_TOOL_ID)?.initialObservation?.input as JsonObject;
+
+  const opened = await loop.executeTool({ callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { ...look, arrived: true } }) as unknown as Execution;
+  assert.equal(opened.resultCode, "web.inspect.succeeded", JSON.stringify(opened.evidence));
+
+  const typed = await loop.executeTool({ callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { node: TYPE, parameters: { target: { handle: fieldHandle(opened) }, text: "paper towels" }, consequences: [] } }) as unknown as Execution;
+  assert.equal(typed.resultCode, "web.action.succeeded", JSON.stringify(typed.evidence));
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+});
+
+// The cause on that run: the web panel bundles Core and ran the build with its
+// copy, while this domain imports Core's `dist`, so the frame Core set was in
+// the other copy. Core keeps one frame per process (its
+// `llm/harness-options/evidence-build-scope.ts`); this sets it through a second
+// copy of that module, as the panel's bundled one.
+test("a builder on its prepared entry has arrived when Core's frame is set by another copy of Core, as the web panel's", async () => {
+  const panel = await import(new URL("./runtime/llm/harness-options/evidence-build-scope.js?copy=panel", import.meta.resolve("fluxiq/automation-studio")).href) as { runWithAutomationStudioEvidenceBuildScope: typeof runWithAutomationStudioEvidenceBuildScope };
+  assert.notEqual(panel.runWithAutomationStudioEvidenceBuildScope, runWithAutomationStudioEvidenceBuildScope);
+  const framed = <T>(opening: "fresh" | undefined, fn: () => T) => panel.runWithAutomationStudioEvidenceBuildScope(opening ? { ...PROJECT, buildId: BUILD_ID, opening } : { ...PROJECT, buildId: BUILD_ID }, fn);
+  const stubbed = openTab();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+
+  const looked = await framed("fresh", () => runtime.executeTool({
+    ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+    value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true }
+  }));
+  assert.equal(looked.resultCode, "web.inspect.succeeded", JSON.stringify(looked.evidence));
+
+  const typed = await framed(undefined, () => runtime.executeTool({
+    ...PROJECT, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, permission: PERMITTED,
+    value: { node: TYPE, parameters: { target: { handle: fieldHandle(looked) }, text: "paper towels" }, consequences: [] }
+  }));
+  assert.equal(typed.resultCode, "web.action.succeeded", JSON.stringify(typed.evidence));
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+
+  // A model-written call carrying the mark, in the same frame, is still refused.
+  const claimed = await framed(undefined, () => runtime.executeTool({
+    ...PROJECT, callId: "call.claim", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+    value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true }
+  }));
+  assert.equal(claimed.resultCode, "web.action.rejected.invalid_input");
+});
+
+test("a model-written call carrying the arrival mark, through Core's registry, is refused as an unexpected key", async () => {
+  const loop = bound(createWebAutomationLlmEvidenceRuntime(openTab().gateway), START);
+  const look = loop.tools.find((tool) => tool.toolId === WEB_LLM_RUN_NODE_TOOL_ID)?.initialObservation?.input as JsonObject;
+
+  const claimed = await loop.executeTool({ callId: "call.claim", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { ...look, arrived: true } }) as unknown as Execution;
+  assert.equal(claimed.resultCode, "web.action.rejected.invalid_input", JSON.stringify(claimed.evidence));
+});
+
 test("a build told no start location opens, through Core's registry, with the look", () => {
   const runNode = bound(createWebAutomationLlmEvidenceRuntime(openTab().gateway), undefined).tools.find((tool) => tool.toolId === WEB_LLM_RUN_NODE_TOOL_ID);
   assert.equal(runNode?.initialObservation?.arrival, undefined);

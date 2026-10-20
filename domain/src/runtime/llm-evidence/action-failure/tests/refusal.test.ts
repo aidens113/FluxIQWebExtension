@@ -307,3 +307,38 @@ test("a parameter with no value is named by its closed words on INVALID_PARAMETE
   assert.equal(refused(invalid, "no value: url-x").detail?.reason, "parameter_not_readable");
   assert.equal(refused(invalid, undefined).detail?.reason, "parameter_not_readable");
 });
+
+// t738, social `run-mvgf7ij5-a9747575`: a scroll refused INVALID_PARAMETER was
+// told only `parameter_not_readable`. The keys are read off the request this
+// domain sent, never off the client's sentence.
+test("an unreadable scroll names its missing and unknown keys and the closed key list, from the request sent alone", () => {
+  const invalid = { status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, actual: `scroll request refused near ${PAGE_WORDS[0]}` } };
+  const refused = webActionFailureRefusal(invalid, { actionType: "web.dom.scroll", parameters: { scroll: { direction: "down", amount: 3 } } });
+  assert.equal(refused.code, "invalid_input");
+  assert.equal(refused.detail?.reason, "parameter_not_readable");
+  assert.deepEqual(refused.detail?.missing, ["mode"]);
+  assert.deepEqual(refused.detail?.instead, ["web.scroll.key.missing.mode", "web.scroll.key.unknown.direction", "web.scroll.key.unknown.amount"]);
+  const next = refused.detail?.next ?? "";
+  assert.match(next, /missing: mode; not taken: direction, amount/u);
+  assert.match(next, /takes only the keys mode, x, y and maxScrolls/u);
+  assert.match(next, /untilStable requires maxScrolls/u);
+  for (const word of PAGE_WORDS) assert.equal(JSON.stringify(refused).includes(word), false);
+  assert.equal(repeatedRejectionDetail(refused.detail, 2)?.next, next, "a repeat says the same keys");
+
+  // untilStable without its bound, and a bad bound, are named; a key that is no name is counted, not quoted.
+  const unbounded = webActionFailureRefusal(invalid, { actionType: "web.dom.scroll", parameters: { scroll: { mode: "untilStable" } } });
+  assert.deepEqual(unbounded.detail?.missing, ["maxScrolls"]);
+  const odd = webActionFailureRefusal(invalid, { actionType: "web.dom.scroll", parameters: { scroll: { mode: "untilStable", maxScrolls: 0, "a b<c>": 1 } } });
+  assert.deepEqual(odd.detail?.instead, ["web.scroll.key.unknown", "web.scroll.key.invalid.maxScrolls"]);
+  assert.equal(odd.detail?.missing, undefined);
+  assert.equal(JSON.stringify(odd).includes("a b<c>"), false);
+  assert.match(odd.detail?.next ?? "", /not taken: a key that is no name; not readable: maxScrolls/u);
+
+  // No request, another node, a readable request or another code keeps the old answer.
+  assert.deepEqual(webActionFailureRefusal(invalid), { code: "invalid_input", detail: { reason: "parameter_not_readable" } });
+  assert.deepEqual(webActionFailureRefusal(invalid, { actionType: "web.dom.click", parameters: { scroll: { direction: "down" } } }).detail, { reason: "parameter_not_readable" });
+  assert.deepEqual(webActionFailureRefusal(invalid, { actionType: "web.dom.scroll", parameters: { scroll: { mode: "untilStable", maxScrolls: 20 } } }).detail, { reason: "parameter_not_readable" });
+  assert.deepEqual(webActionFailureRefusal(invalid, { actionType: "web.dom.scroll", parameters: { x: 0 } }).detail, { reason: "parameter_not_readable" });
+  const other = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED } }, { actionType: "web.dom.scroll", parameters: { scroll: {} } });
+  assert.equal(other.detail, undefined);
+});

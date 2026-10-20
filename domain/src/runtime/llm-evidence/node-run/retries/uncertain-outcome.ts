@@ -22,8 +22,9 @@ import type { WebNodeRetriedDispatch } from "./dispatch";
  * unless Core settled it as a lasting act whose outcome is uncertain, which
  * then says so instead of whatever the failure's reason implied.
  */
-export function webNodeFailureRefusal(result: WebFailedActionResult, lastingAct: WebNodeRetriedDispatch["lastingAct"]): WebActionRefusal {
-  const refused = webActionFailureRefusal(result);
+export function webNodeFailureRefusal(result: WebFailedActionResult, lastingAct: WebNodeRetriedDispatch["lastingAct"], sent?: Parameters<typeof webActionFailureRefusal>[1]): WebActionRefusal {
+  // `sent`: the command dispatched, so a refusal can name the keys of a request it could not read (`../../action-failure/refusal.ts`, t738).
+  const refused = webActionFailureRefusal(result, sent);
   if (lastingAct !== "uncertain") return refused;
   return { ...refused, detail: rejectionDetail({ reason: "outcome_uncertain", target: undefined, instead: undefined, missing: undefined, requestId: undefined }) };
 }

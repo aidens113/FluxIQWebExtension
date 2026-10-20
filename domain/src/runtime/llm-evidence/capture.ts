@@ -695,7 +695,7 @@ export async function actAndCapture(
 ): Promise<WebLlmSnapshotBinding> {
   const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
   assertActive(signal);
-  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRefusal(result), signal);
+  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRefusal(result, { actionType, parameters }), signal);
   const after = await captureAfterAction(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
   return after ?? recoverable("page_unreadable");
 }

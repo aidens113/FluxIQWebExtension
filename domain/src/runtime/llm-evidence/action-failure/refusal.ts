@@ -25,7 +25,9 @@
 // -- it read the code and passed `detail: undefined` beside it -- and a
 // signature that hands back only a code is what made forgetting possible.
 
+import type { JsonObject } from "fluxiq/core";
 import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
+import { webAutomationScrollRequestIssues } from "../../../actions/scroll-request-issues";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { rejectionDetail, type WebLlmToolRejectionCode, type WebLlmToolRejectionDetail, type WebLlmToolRejectionReason } from "../tool-rejection";
 import { webActionReadShortfall, type WebActionReadShortfall } from "./read-shortfall";
@@ -140,13 +142,18 @@ const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = O
  * it is read whatever the code was: an extraction that ran out of time still
  * counted what it had read, and telling the model only `action_timed_out` would
  * throw that away exactly as the bare `action_failed` did.
+ *
+ * `sent` is the command this domain sent, when the caller has it: only a
+ * scroll's own request is read from it, to name the keys an INVALID_PARAMETER
+ * refusal of that scroll was about (`unreadableScrollKeys`).
  */
-export function webActionFailureRefusal(result: WebFailedActionResult): WebActionRefusal {
+export function webActionFailureRefusal(result: WebFailedActionResult, sent?: { actionType: string; parameters: JsonObject }): WebActionRefusal {
   const code = webActionFailureRejectionCode(result);
   const shortfall = webActionReadShortfall(result.payload);
   const reason = typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
   const filtersDropped = droppedFilters(result);
   const withoutValue = parameterWithoutValue(result);
+  const scrollKeys = withoutValue === undefined ? unreadableScrollKeys(result, sent) : undefined;
   // This marker is the client's closed reason, never its field/page text.
   const incompleteText = result.status !== "timed_out" && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED
     && typeof result.failure.actual === "string" && result.failure.actual.startsWith("incomplete_text:");
@@ -158,6 +165,8 @@ export function webActionFailureRefusal(result: WebFailedActionResult): WebActio
       ? readDetail(shortfall)
       : withoutValue !== undefined
         ? rejectionDetail({ reason: "parameter_has_no_value", target: undefined, instead: undefined, missing: [withoutValue], requestId: undefined })
+      : scrollKeys !== undefined
+        ? rejectionDetail({ reason: "parameter_not_readable", target: undefined, instead: scrollKeys.codes, missing: scrollKeys.missing.length > 0 ? scrollKeys.missing : undefined, requestId: undefined })
       : filtersDropped !== undefined
         ? rejectionDetail({ reason: "next_leaves_filtered_list", target: undefined, instead: undefined, missing: undefined, requestId: undefined, paginationStop: "page_fault", filtersDropped })
         : reason === undefined
@@ -218,6 +227,32 @@ function parameterWithoutValue(result: WebFailedActionResult): string | undefine
 
 /** The closed words a missing-value refusal's `actual` starts with, and the parameter it names. */
 const NO_VALUE = /^no value: ([A-Za-z][A-Za-z0-9_]{0,63})(?=\s|$)/u;
+
+/**
+ * What made a scroll request unreadable, key by key, for an INVALID_PARAMETER
+ * refusal of a scroll (t738; social `run-mvgf7ij5-a9747575`, where a scroll
+ * refused this way was told only `parameter_not_readable` and written again
+ * with the same keys). Read off the request this domain sent, through
+ * `webAutomationScrollRequestIssues`, never off the client's sentence, which is
+ * not safe to pass on. Each issue becomes a code `web.scroll.key.<problem>`,
+ * with the key after it only when the key is an identifier, and the missing
+ * keys are listed beside them. Nothing for any other refusal, or a request
+ * with no `scroll` or no issue.
+ */
+function unreadableScrollKeys(result: WebFailedActionResult, sent: { actionType: string; parameters: JsonObject } | undefined): { codes: string[]; missing: string[] } | undefined {
+  if (result.status === "timed_out" || result.failure?.code !== WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER) return undefined;
+  if (sent?.actionType !== "web.dom.scroll" || sent.parameters.scroll === undefined) return undefined;
+  const issues = webAutomationScrollRequestIssues(sent.parameters.scroll);
+  if (issues.length === 0) return undefined;
+  const named = (key: string) => KEY_NAME.test(key);
+  return {
+    codes: issues.map((issue) => named(issue.key) ? `web.scroll.key.${issue.problem}.${issue.key}` : `web.scroll.key.${issue.problem}`),
+    missing: issues.filter((issue) => issue.problem === "missing" && named(issue.key)).map((issue) => issue.key)
+  };
+}
+
+/** A key a refusal may name: an identifier, as the parameter names above are. */
+const KEY_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/u;
 
 /** The read's account as a refusal may carry it: counts, one closed word, and the call's own field keys. */
 function readDetail(shortfall: WebActionReadShortfall): WebLlmToolRejectionDetail {
