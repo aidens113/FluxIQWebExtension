@@ -20,12 +20,9 @@
 import { rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { checkoutRepository } from "./checkout-repository.mjs";
-import { importCoreScript } from "../core-scripts/index.mjs";
+import { runGit, samePath } from "../core-scripts/index.mjs";
 import { processesUsingRoots } from "./processes-using-roots.mjs";
 import { noteProgress } from "./progress-note.mjs";
-
-const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
-const { samePath } = await importCoreScript("scripts/task/path-identity.mjs");
 
 /**
  * @param {{ repositoryRoot: string, root: string, allowRunning?: boolean, note?: (line: Record<string, unknown>) => void }} input

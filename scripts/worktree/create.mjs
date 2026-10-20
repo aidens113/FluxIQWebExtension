@@ -48,12 +48,9 @@ import path from "node:path";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 import { checkoutRepository } from "./checkout-repository.mjs";
 import { resolveCoreSibling } from "./core-sibling.mjs";
-import { importCoreScript } from "../core-scripts/index.mjs";
+import { pathInside, runGit } from "../core-scripts/index.mjs";
 import { installWorktree } from "./install-worktree.mjs";
 import { noteProgress } from "./progress-note.mjs";
-
-const { runGit } = await importCoreScript("scripts/task/git-command.mjs");
-const { pathInside } = await importCoreScript("scripts/task/path-inside.mjs");
 
 /**
  * @param {{

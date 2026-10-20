@@ -6,8 +6,12 @@
 // The rules this shares with FluxIQ Core's own `pnpm task` -- task id
 // allocation and the refs that record it, branch naming, the git runner -- are
 // Core's (`scripts/task/` there) and are loaded from the Core beside this
-// checkout through `scripts/core-scripts/`; this directory keeps only the
-// worktree, Core-pairing, sync and prune half, and its own command wiring.
+// checkout through `scripts/core-scripts/` -- except the git runner and path
+// identity, which `sync-core` needs before an outdated Core can provide them and
+// which are therefore drift-checked copies there. This directory keeps only the
+// worktree, Core-pairing, sync and prune half, and its own command wiring;
+// `run-task.mjs` enters through `command-line.mjs`, not this barrel, so a
+// command loads only its own module.
 
 export { parseTaskArguments } from "./arguments.mjs";
 export { COMMAND_OPTIONS } from "./command-options.mjs";
