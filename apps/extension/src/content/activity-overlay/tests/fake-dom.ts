@@ -156,3 +156,18 @@ export function withFakeDom<T>(run: (dom: FakeDom) => T): T {
     globals["matchMedia"] = saved.matchMedia;
   }
 }
+
+/** `withFakeDom` for a test that awaits: the fake document stays installed until `run` settles. */
+export async function withFakeDomAsync<T>(run: (dom: FakeDom) => Promise<T>): Promise<T> {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const saved = { document: globals["document"], matchMedia: globals["matchMedia"] };
+  const dom = new FakeDom();
+  globals["document"] = dom;
+  globals["matchMedia"] = () => ({ matches: false });
+  try {
+    return await run(dom);
+  } finally {
+    globals["document"] = saved.document;
+    globals["matchMedia"] = saved.matchMedia;
+  }
+}

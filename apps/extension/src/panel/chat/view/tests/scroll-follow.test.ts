@@ -214,3 +214,23 @@ test("dragging the scroll bar or a scroll key counts as the person; a click insi
   view.scrollTop = 1200; fire("scroll");
   assert.equal(follower.following(), false, "PageUp is the person");
 });
+
+// Round 5: the welcome opened scrolled, its title cut off at the top.
+test("resting holds the view at its top through content changes and its own scrolls, then follows from the bottom", () => {
+  const view = host();
+  const jumps: boolean[] = [];
+  const follower = createScrollFollower(view, (show) => jumps.push(show));
+  view.grow(500);
+  follower.contentChanged();
+  assert.equal(view.scrollTop, view.bottom(), "a conversation follows its newest");
+  follower.rest(true);
+  assert.equal(view.scrollTop, 0, "the welcome starts at its top");
+  view.grow(100);
+  follower.contentChanged();
+  view.shift(0);
+  assert.equal(view.scrollTop, 0, "nothing pins a welcome to the bottom");
+  assert.equal(jumps.includes(true), false, "and Jump to latest never shows over it");
+  follower.rest(false);
+  assert.equal(view.scrollTop, view.bottom(), "the first message is followed from the bottom");
+  assert.equal(follower.following(), true);
+});

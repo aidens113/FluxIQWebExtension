@@ -16,4 +16,4 @@ export { StatusPill } from "./status-pill";
 export { activityOverlayView, type ActivityOverlayView } from "./overlay-view";
 export { ACTIVITY_PHASE_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
 export { PhaseMark } from "./phase-mark";
-export { anchorStyle, choosePlacement, PlacementKeeper, type OverlayAnchor, type OverlayPlacement, type PointCover } from "./placement";
+export { anchorStyle, choosePlacement, PlacementKeeper, type OverlayAnchor, type OverlayPlacement, type PlacementMemory, type PointCover } from "./placement";

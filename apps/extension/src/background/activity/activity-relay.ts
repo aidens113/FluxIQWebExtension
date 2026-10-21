@@ -38,6 +38,17 @@
 // overlay then draws without an entry animation (`status-pill.ts`), so the
 // only gap a person or the Lab's sampler sees is the browser's own reload.
 //
+// While work runs, the overlay is never taken down because a tab lookup found
+// no page to draw on, or failed: a lookup made while the driven tab is between
+// two documents, or while the tab list cannot be read for a moment, says
+// nothing about where the work is. The status keeps going to the tabs it was
+// drawn in, so the new document there is answered at once when it asks
+// (round 5 of the breadth reruns: the pill vanished across some page loads --
+// taken down by such a lookup, and the new document, no longer among the tabs
+// drawn in, looked the target up again and was left without it until the
+// status next changed). A lookup that names other tabs still moves it, and
+// once the work has settled an empty lookup takes it down as before.
+//
 // The person's own send is the other gap. A message the panel sends passes
 // through `sending`, which puts "Starting…" on the page and in the panels the
 // moment it leaves, holds it until Core's first activity replaces it, and
@@ -349,14 +360,16 @@ export class ActivityRelay {
   }
 
   private async deliverOnce(): Promise<void> {
-    let targets: readonly number[];
+    let found: readonly number[] | undefined;
     try {
-      targets = await this.targets();
+      found = await this.targets();
     } catch {
-      /* best-effort: the tab list could not be read, so this frame of the status is drawn nowhere */
-      return;
+      /* best-effort: the tab list could not be read; while work runs the tabs drawn in keep the status, otherwise this frame is drawn nowhere */
+      found = undefined;
     }
     const message = this.contentMessage();
+    const targets = found !== undefined && found.length > 0 ? found : isUnderWay(message.display) ? [...this.drawnIn] : found;
+    if (targets === undefined) return;
     const previous = this.drawnIn;
     this.drawnIn = new Set(targets);
     // A tab the overlay no longer belongs in is cleared: the status left there
@@ -411,6 +424,11 @@ export class ActivityRelay {
     );
     return this.loaded;
   }
+}
+
+/** Work running or waiting on the person: a status that must stay on the page it is drawn on. */
+function isUnderWay(display: ActivityDisplay | null): boolean {
+  return display !== null && (display.working || display.outcome === "waiting");
 }
 
 function isActivity(value: unknown): value is ClientGatewayActivity {

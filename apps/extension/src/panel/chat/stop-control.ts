@@ -15,6 +15,12 @@ const STOPPING_SOON = "Stopping as soon as it starts.";
  * the overlay said "Starting…". There is nothing to name in a stop request
  * yet, so a press then is held and sent for the first live work Core reports
  * after it; if the send starts nothing, the press is dropped with it.
+ *
+ * It reads "Stop" from that first moment to the end, whatever the work turns
+ * out to be: it read "Stop" at the start and "Stop build" once Core named the
+ * build (round 5), a button that changed under the person's pointer. Its
+ * accessible name says what it stops once that is known ("Stop build", "Stop
+ * run"), which still holds the word on the button.
  */
 export function createStopControl(request: PanelStore["request"], eligible: () => boolean) {
   let current: ClientGatewayActivity | null = null;
@@ -32,7 +38,11 @@ export function createStopControl(request: PanelStore["request"], eligible: () =
     const waiting = starting && !active();
     element.hidden = !(active() || waiting) || !eligible();
     button.disabled = held || pending === current?.activityId;
-    button.textContent = button.disabled ? "Stopping…" : waiting ? "Stop" : current?.subject.kind === "build" ? "Stop build" : "Stop run";
+    const label = button.disabled ? "Stopping…" : "Stop";
+    if (button.textContent !== label) button.textContent = label;
+    const named = button.disabled || waiting ? null : current?.subject.kind === "build" ? "Stop build" : "Stop run";
+    if (named === null) button.removeAttribute("aria-label");
+    else if (button.getAttribute("aria-label") !== named) button.setAttribute("aria-label", named);
     status.textContent = notice;
   }
   function send(target: ClientGatewayActivity) {

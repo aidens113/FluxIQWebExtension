@@ -126,7 +126,8 @@ test("no-op/old-flow names are fenced; explicit open still follows", async () =>
   assert.equal(core.sent.length, calls);
   assert.equal(scroller.scrollTop, 90);
   chat.open({ kind: "automation", flowId: "f", name: "Explicit rename" });
-  assert.equal(scroller.scrollTop, 1000);
+  // This automation's chat is empty: an explicit open shows its welcome from the top (t753), where a passive rename left the view alone.
+  assert.equal(scroller.scrollTop, 0);
   assert.equal(changes, 1);
   chat.open({ kind: "latest" });
   chat.updateAutomationName({ flowId: "f", name: "Stale" });

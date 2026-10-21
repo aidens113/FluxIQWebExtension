@@ -10,7 +10,13 @@
 //
 // A message that is an action itself (an action with no reason before it, a
 // check, a question to the person, a run's step) is only its card; a note,
-// or anything with no card, is only its words. A recovery on a run step is
+// or anything with no card, is only its words.
+//
+// A note, or a step's marker with no card (a build's ending), is a message of
+// its own: its title on one line and its words under it as paragraphs
+// (`chat-step-body`), never joined by a dash. The build's ending read as a
+// bold title, " — " and one dense paragraph (round 5). A decision's reason
+// stays after its title: the two are one thought. A recovery on a run step is
 // both: what happened and why, then its card.
 //
 // While the unit of work is under way or waiting, its newest card says
@@ -35,6 +41,7 @@
 import { ACTIVITY_ACTION_ICONS } from "fluxiq/ui";
 import { createElement } from "../../dom";
 import { lucideIcon } from "../../icons";
+import { parseAssistantText, renderTextBlocks } from "../format";
 import type { StepMessage } from "../stream";
 import type { ProjectCardWords } from "../stream/step";
 import { createActionCardView, type ActionCardView } from "./action-card-view";
@@ -56,9 +63,11 @@ export function createStepMessageView(): StepMessageView {
   const title = createElement("strong", { className: "chat-step-title" });
   const text = createElement("span", { className: "chat-step-text" });
   const line = createElement("p", { className: "chat-step-line" }, [title, text]);
+  const body = createElement("div", { className: "chat-step-body", hidden: true });
   const cards = createElement("div", { className: "chat-cards", hidden: true });
   const lane = createElement("p", { className: "chat-step-lane", hidden: true });
-  const element = createElement("li", { className: "chat-entry chat-step-msg" }, [lane, line, cards]);
+  const element = createElement("li", { className: "chat-entry chat-step-msg" }, [lane, line, body, cards]);
+  let bodyText = "";
   // Made only for a project message, which every other message never needs.
   let project: ProjectCardView | undefined;
   const views = new Map<string, ActionCardView>();
@@ -81,9 +90,18 @@ export function createStepMessageView(): StepMessageView {
       const spoken = SPOKEN.has(message.kind) || message.actions.length === 0;
       if (line.hidden === spoken) line.hidden = !spoken;
       setText(title, message.title);
-      const reason = message.text !== undefined && message.text !== message.title ? ` — ${message.text}` : "";
+      const words = message.text !== undefined && message.text.trim() !== "" && message.text !== message.title ? message.text : "";
+      const ownMessage = message.actions.length === 0 && (message.kind === "note" || message.kind === "step");
+      const paragraphs = ownMessage ? words : "";
+      const reason = words !== "" && paragraphs === "" ? ` — ${words}` : "";
       setText(text, reason);
       if (text.hidden !== (reason === "")) text.hidden = reason === "";
+      if (paragraphs !== bodyText) {
+        bodyText = paragraphs;
+        body.replaceChildren(...renderTextBlocks(parseAssistantText(paragraphs)));
+      }
+      const noBody = !spoken || paragraphs === "";
+      if (body.hidden !== noBody) body.hidden = noBody;
 
       const last = message.actions.length - 1;
       const shown = message.actions.map((card, index) => {

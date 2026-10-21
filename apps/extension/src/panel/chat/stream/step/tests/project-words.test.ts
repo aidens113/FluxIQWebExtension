@@ -52,18 +52,18 @@ test("a return and a receipt are named by the brief's subflow, else the plan's, 
   assert.equal(projectWords(returned, { briefs: new Map(), subflows: names.subflows }, undefined).title, "Couldn't build Cart");
   assert.equal(projectWords(returned, NONE, { role: "builder", subflowName: "Basket" }).title, "Couldn't build Basket");
   const unnamed = projectWords(returned, NONE, undefined);
-  assert.deepEqual([unnamed.title, unnamed.text, unnamed.card.target, unnamed.card.outcome, unnamed.card.state], ["Couldn't build", "The cart needs a sign-in.", null, "Spent $0.10 · 1 call · 0 trials", "failed"]);
+  assert.deepEqual([unnamed.title, unnamed.text, unnamed.card.target, unnamed.card.outcome, unnamed.card.state], ["Couldn't build", "The cart needs a sign-in.", null, "Spent $0.10 · 1 call · 0 tests", "failed"]);
   const receipt = projectWords({ kind: "receipt", briefId: "b1", receipt: "subflow_trial", receiptId: "r", verdict: "failed" }, names, undefined);
   assert.deepEqual([receipt.title, receipt.card.target, receipt.card.outcome, receipt.card.state], ["Tested Checkout", "Checkout", "Didn't pass", "failed"]);
-  assert.equal(projectWords({ kind: "receipt", receipt: "subflow_trial", receiptId: "r", verdict: "passed" }, NONE, undefined).title, "Tested a subflow");
+  assert.equal(projectWords({ kind: "receipt", receipt: "subflow_trial", receiptId: "r", verdict: "passed" }, NONE, undefined).title, "Tested one part");
 });
 
 test("a plan with no budget says no budget; one with only a reserve says what is kept back", () => {
   const plan = (fields: Partial<Extract<ActivityProjectCard, { kind: "plan" }>>): ActivityProjectCard => ({ kind: "plan", parts: [{ id: "p", words: "Find it" }], subflows: [{ key: "s", name: "Search", purpose: "Find it", parts: ["p"] }], ...fields });
   assert.equal(projectWords(plan({}), NONE, undefined).card.outcome, null);
   assert.equal(projectWords(plan({ reserveUsd: 0.05 }), NONE, undefined).card.outcome, "$0.05 kept back");
-  assert.deepEqual(projectWords(plan({}), NONE, undefined).card.rows, [{ heading: "Parts", items: ["Find it"] }, { heading: "Subflows", items: ["Search: Find it"] }]);
-  assert.equal(projectWords(plan({}), NONE, undefined).title, "Planned 1 subflow");
+  assert.deepEqual(projectWords(plan({}), NONE, undefined).card.rows, [{ heading: "Parts", items: ["Find it"] }, { heading: "Pieces", items: ["Search: Find it"] }]);
+  assert.equal(projectWords(plan({}), NONE, undefined).title, "Planned 1 piece");
 });
 
 test("each agent's lane is its role, and the subflow it works on", () => {

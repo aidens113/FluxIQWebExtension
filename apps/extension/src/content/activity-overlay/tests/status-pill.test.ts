@@ -11,7 +11,9 @@ import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../../picker-host";
 import { StatusPill } from "../status-pill";
 import type { OverlayTextMeasure } from "../text-measure";
 import type { ActivityOverlayView } from "../overlay-view";
-import { withFakeDom, type FakeNode } from "./fake-dom";
+import type { OverlayPlacement, PlacementMemory } from "../placement";
+import { withFakeClock } from "./fake-clock";
+import { withFakeDom, withFakeDomAsync, type FakeNode } from "./fake-dom";
 
 function view(overrides: Partial<ActivityOverlayView> = {}): ActivityOverlayView {
   return {
@@ -99,7 +101,7 @@ test("a line too long for the card is cut where a word ends, never inside one", 
     const headline = "Couldn't fix your Flow because every one of its repair rounds ran out";
     surface.update(view({ headline, detail }));
     const texts = hostOf(surface).descendants().filter((node) => node.children.length === 0 && node.textContent !== "").map((node) => node.textContent);
-    // 352 - 24 (the mark and its gap) - 2 (slack) leaves 326 pixels: 46 characters a line. The
+    // 352 - 24 (the mark and its gap) - 2% (the margin) leaves about 321 pixels: 45 characters a line. The
     // detail wraps onto its second line whole (lane D finding 9: "A step didn't work in the test: the…").
     assert.ok(texts.includes(detail), texts.join(" | "));
     assert.ok(texts.includes("Couldn't fix your Flow because every one of…"), texts.join(" | "));
@@ -269,4 +271,78 @@ test("a page with every corner busy keeps a pill with its text, never a dot, dra
       restore();
     }
   });
+});
+
+// Round 5 of the breadth reruns: the pill's text must change only when what it
+// shows changes. The background re-sends the same status to every new page and
+// whenever the overlay preference is set; a re-send is not a new status.
+test("a status re-sent unchanged neither redraws the pill nor restarts its fade", () => {
+  withFakeClock((clock) => {
+    withFakeDom((dom) => {
+      const surface = new StatusPill();
+      surface.update(view({ mark: "check", headline: "Flow ready", detail: "", fades: true }));
+      const host = hostOf(surface);
+      const writes = dom.textWrites;
+      clock.advance(4_000);
+      surface.update(view({ mark: "check", headline: "Flow ready", detail: "", fades: true }));
+      assert.equal(dom.textWrites, writes, "nothing written for a status already drawn");
+      clock.advance(2_000);
+      assert.equal(host.animations.length, 1, "the fade runs six seconds after the status first showed, not after the re-send");
+    });
+  });
+});
+
+// A new page starts from the place the overlay held on the last one
+// (`placement/placement-keeper.ts`). The place is read before the pill shows, so
+// it never appears in one corner and jumps to another.
+test("a new page's overlay shows where the last page's was, and never before that place is known", async () => {
+  await withFakeDomAsync(async () => {
+    let answer: ((placement: OverlayPlacement | undefined) => void) | undefined;
+    const kept: OverlayPlacement[] = [];
+    const memory: PlacementMemory = {
+      recall: () => new Promise((resolve) => { answer = resolve; }),
+      keep: (placement) => kept.push(placement)
+    };
+    const surface = new StatusPill(undefined, memory);
+    surface.update(view());
+    const host = hostOf(surface);
+    assert.equal(host.style.getPropertyValue("visibility"), "hidden", "not shown while its place is being read");
+    answer?.({ shape: "pill", anchor: "top-left" });
+    for (let round = 0; round < 5; round += 1) await Promise.resolve();
+    assert.equal(host.style.getPropertyValue("visibility"), "visible");
+    assert.deepEqual([host.style.getPropertyValue("top"), host.style.getPropertyValue("bottom")], ["16px", "auto"], "at the top-left, where the last page had it");
+  });
+});
+
+// Round 5: the pill vanished across some page loads. A page script that
+// rebuilds the document's top level (hydrating it, replacing what it does not
+// know) takes the host with it; while a status is up the pill puts itself back.
+test("a host the page removes is put back while a status is up, and left out once it is taken down", () => {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const saved = globals["MutationObserver"];
+  const observers: Array<(records: Array<{ type: string; removedNodes: unknown[]; addedNodes: unknown[]; target: unknown }>) => void> = [];
+  globals["MutationObserver"] = class {
+    constructor(private readonly callback: (records: unknown[]) => void) {}
+    observe(): void {
+      observers.push((records) => this.callback(records));
+    }
+    disconnect(): void {
+      observers.length = 0;
+    }
+  };
+  try {
+    withFakeDom((dom) => {
+      const surface = new StatusPill();
+      surface.update(view());
+      const host = hostOf(surface);
+      host.remove();
+      for (const notify of [...observers]) notify([{ type: "childList", removedNodes: [host], addedNodes: [], target: dom.documentElement }]);
+      assert.equal(host.isConnected, true, "put back");
+      assert.equal(hostOf(surface), host, "the same host");
+      surface.update(null);
+      assert.equal(dom.querySelectorAll(`[${ACTIVITY_OVERLAY_HOST_ATTRIBUTE}]`).length, 0, "taken down stays down");
+    });
+  } finally {
+    globals["MutationObserver"] = saved;
+  }
 });
