@@ -1,6 +1,7 @@
 // The offline-trial experiment's command line (trace plan P4, the social gate
-// experiment). Provider-free: it never calls a model, starts a Lab run or
-// reaches a browser. Point `--store` at a copied workspace's `.fluxiq`
+// experiment). Provider-free: it never calls a model or starts a Lab run, and
+// reaches a browser only for tier 2 (`trial --tier2`, `reads`), over recorded
+// page snapshots with the network off. Point `--store` at a copied workspace's `.fluxiq`
 // directory under `test-runs/` (opening its store applies Core's migrations).
 //
 //   node packages/test-runner/dist/offline-trial-experiment/cli.js survey \
@@ -20,7 +21,8 @@
 //     | --process <process.json> [--from-revision <n>] [--step-label posts] )
 //                                                        a hand tier-1 correction: revision --from-revision with only the
 //                                                        labelled step's recordOutput.process replaced by the file's object
-//     [--brief brief-1] [--request-out <file under test-runs/>] [--work <new dir under test-runs/>] [--session-view declared|none] [--out <file>]
+//     [--brief brief-1] [--request-out <file under test-runs/>] [--work <new dir under test-runs/>] [--session-view declared|none]
+//     [--tier2 [--channel chrome|msedge]] [--out <file>]
 //
 //   Prepares the offline trial of that candidate against the source trace and,
 //   with `--work`, runs it through Core's exported offline runner
@@ -38,6 +40,28 @@
 //   `sessionView` (`./run/declared-session-view.ts`): Core uses it only where
 //   the source trace recorded none, and reports it as `supplied`. The default,
 //   `none`, supplies nothing, so a trace that recorded no view is refused.
+//   `--tier2` (P5) hands Core's runner the web domain's offline reevaluator
+//   over a headed snapshot page (Chrome, or Edge by `--channel`) running the
+//   extension's production content code (`./tier2/`; build it first with
+//   `pnpm --filter @fluxiq-web-extension/extension build`): a changed read is
+//   then answered from the trace's recorded page snapshot where the domain's
+//   rule allows, and the report lists the operations so answered and every
+//   ask with its outcome. This reaches a browser, over recorded pages only.
+//
+//   node packages/test-runner/dist/offline-trial-experiment/cli.js reads //     --store <copied .fluxiq dir> --project <projectId> --work <new dir under test-runs/> //     [--pairs strict|same-snapshot|none] [--pair-list <trace>@<seq>/<trace>@<seq>,...] //     [--one-per-fields <cap>] [--fidelity all|none] [--channel chrome|msedge] [--out <file>]
+//
+//   The changed-read gate tool (P5; `./reads/`). `--store` is copied to
+//   `--work` and only the copy is opened. Every trace is admitted as Core's
+//   offline runner admits it; each changed-read pair (A, B) -- the named ones
+//   (a trace is its id or the 8 hex digits after `trace.`), then every strict
+//   pair (default) or same-snapshot pair, or one per differing-path set up to
+//   `--one-per-fields` -- is asked of tier 2's reevaluator with Core's own
+//   request at A's cursor carrying B's recorded command, and the answer is
+//   compared with B's recorded live result (status, failure code, records one
+//   by one with cell counts, summary counts); a gap is reported with its
+//   reason, never as a match. With `--fidelity all` (default) every recorded
+//   read is also run over its own snapshot and compared with its live result.
+//   Headed Chrome (or Edge) over recorded snapshots, network off.
 //
 // Exit codes: 0 done; 2 usage; 3 prepared, not run (no --work); 4 the
 // candidate could not be prepared (refused or unverified rebuild).
@@ -48,17 +72,20 @@ import { fileURLToPath } from "node:url";
 import { EXPERIMENT_USAGE, parseExperimentArguments } from "./cli-arguments.js";
 import { openExperimentSession } from "./experiment-session.js";
 import { offlineTrialRequest } from "./offline-trial-request.js";
+import { READS_USAGE, readsCommand } from "./reads/index.js";
 import { withRecordProcessing } from "./rebuild/index.js";
-import { freshStoreCopy, loadCoreTrialSeams, runExperimentTrial } from "./run/index.js";
+import { freshStoreCopy, runExperimentTrial } from "./run/index.js";
 import { surveyExperiment } from "./survey-experiment.js";
+import { openTier2Reevaluation } from "./tier2/index.js";
 
-const parsed = parseExperimentArguments(process.argv.slice(2));
-if ("error" in parsed) {
-  process.stderr.write(`${parsed.error}\n${EXPERIMENT_USAGE}\n`);
-  process.exit(2);
-}
 // dist/offline-trial-experiment -> repository root.
 const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+if (process.argv[2] === "reads") process.exit(await readsCommand(process.argv.slice(3), repositoryRoot));
+const parsed = parseExperimentArguments(process.argv.slice(2));
+if ("error" in parsed) {
+  process.stderr.write(`${parsed.error}\n${EXPERIMENT_USAGE}\n${READS_USAGE}\n`);
+  process.exit(2);
+}
 // With --work, only a fresh copy of --store is ever opened (header).
 const copy = parsed.command === "trial" && parsed.work !== null ? await freshStoreCopy({ sourceFluxiqDir: parsed.store, work: parsed.work }) : null;
 const session = await openExperimentSession({
@@ -117,5 +144,12 @@ if (copy === null) {
   process.exit(3);
 }
 const script = correction === null && parsed.process === null ? submission.script : withRecordProcessing(submission.script, parsed.stepLabel, correction);
-const result = await runExperimentTrial({ session, stepsDir: parsed.steps, rootDir: copy.rootDir, request, script, seams: await loadCoreTrialSeams(), sessionView: parsed.sessionView });
-await emit({ ...prepared, ran: true, ...result });
+// Tier 2: the domain's reevaluator over a headed snapshot page running the extension's production content code.
+const tier2 = parsed.tier2 ? await openTier2Reevaluation({ extensionDir: path.join(repositoryRoot, "apps", "extension"), channel: parsed.channel }) : null;
+let result;
+try {
+  result = await runExperimentTrial({ session, stepsDir: parsed.steps, rootDir: copy.rootDir, request, script, sessionView: parsed.sessionView, ...(tier2 === null ? {} : { reevaluator: tier2.reevaluator }) });
+} finally {
+  await tier2?.close();
+}
+await emit({ ...prepared, ran: true, ...result, tier2: tier2 === null ? null : { channel: tier2.channel, asks: tier2.asks() } });

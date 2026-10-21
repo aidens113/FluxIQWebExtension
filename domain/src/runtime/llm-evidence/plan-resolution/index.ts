@@ -19,6 +19,10 @@ export {
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./resolve-plan-node";
+// How an extraction step's `where` clause is read into the conditions it runs.
+// From its own module, not the extraction barrel: that barrel's slot reader
+// leads back here through the evidence barrel, a module cycle.
+export { keptWebExtractionConditions, type WebExtractionConditionColumns, type WebExtractionConditions } from "./extraction/conditions";
 // The first target handle a node call's parameters name: the control the call acts on.
 export { webPlanFirstTargetHandle } from "./first-target-handle";
 // The key a step's argument carries its row under, declared to Core (`rowContextKeys`).

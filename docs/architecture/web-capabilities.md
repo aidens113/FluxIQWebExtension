@@ -100,7 +100,9 @@ A gateway-issued action then runs as follows:
    is resolved (`runtime/browser-tab.ts`, `runtime/browser-download.ts`);
    navigate runs there too, through `resolveAutomationTab`
    (`runtime/automation-tab.ts`). Every other action is sent to the tab's
-   content script, in the frame the command named and otherwise in frame 0 with
+   content script as the `executeAction` message `executeActionMessage` builds
+   ([`domain/src/client/execute-action-message.ts`](../../domain/src/client/execute-action-message.ts)),
+   in the frame the command named and otherwise in frame 0 with
    `topFrameOnly`, so a page of iframes cannot answer from whichever frame
    replies first. A command recorded in a child frame also names that frame by
    its document's path, and goes to the frame now at that path
@@ -842,8 +844,10 @@ it closed are in [the failure taxonomy](failure-taxonomy.md).
 Validation text is whitespace-collapsed, never empty, and bounded to 1 024
 characters on both sides of the wire, because Core's parser drops an
 over-long record whole rather than truncating it. The record survives the
-boundary: `gatewayActionResultFromBrowserResult` (`runtime/result-mapping.ts`)
-forwards `result.failure` and gives every non-succeeded status its message as
+boundary: `gatewayActionResultFromBrowserResult`
+([`domain/src/client/browser-result-mapping.ts`](../../domain/src/client/browser-result-mapping.ts),
+the builder the background answers a live command with and the offline
+reevaluator answers a changed read with) forwards `result.failure` and gives every non-succeeded status its message as
 the `error`, and `dispatchWebAutomationOutput`
 (`domain/src/io/gateway-output-dispatcher.ts`) passes the command's own status
 through, so Core sees `timed_out` rather than a bare failure. `cancelled` is

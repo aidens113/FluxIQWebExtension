@@ -20,6 +20,8 @@ export * from "../recording/state";
 export * from "../recording/web-state";
 export * from "./capabilities";
 export * from "./gateway-mapping";
+export { gatewayActionResultFromBrowserResult } from "./browser-result-mapping";
+export { executeActionMessage, type ExecuteActionMessage } from "./execute-action-message";
 export * from "./fact-check-mapping";
 export * from "./close-opened-tabs-parameter";
 export * from "./interrupted-action";

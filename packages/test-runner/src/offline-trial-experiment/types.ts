@@ -85,7 +85,11 @@ export type CandidateRebuild = Readonly<{
   whole: Readonly<{ recorded: Readonly<{ revision: number; digest: string }> | null; rebuiltDigest: string | null; matches: boolean | null }>;
   /** The whole candidate Core's controller made; null when any stage refused. Its `revision` is the fresh controller's, not the recorded one. */
   candidate: AutomationStudioFlowCandidate | null;
-  refusal: Readonly<{ stage: "subflow" | "assembly" | "composed"; codes: readonly string[]; unresolved: readonly UnresolvedStep[] }> | null;
+  /**
+   * The stage Core's rebuild refused at and its codes: `plan` (the record's latest plan is not one single subflow,
+   * `project.whole_trial_not_this_plan`), `subflow` (the scoped submission), `assembly` or `composed` (the whole candidate).
+   */
+  refusal: Readonly<{ stage: "plan" | "subflow" | "assembly" | "composed"; codes: readonly string[]; unresolved: readonly UnresolvedStep[] }> | null;
 }>;
 
 /** The task's own oracle over a run's stored rows: counts and codes only. */

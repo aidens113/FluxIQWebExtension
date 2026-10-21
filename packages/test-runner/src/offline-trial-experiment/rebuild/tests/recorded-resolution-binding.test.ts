@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { automationStudioCandidateFingerprint } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import type { CoreAuthoring } from "../core-authoring.js";
-import { recordedResolutionBinding, type ResolutionRequest } from "../recorded-resolution-binding.js";
+import { keptWebExtractionConditions, type WebExtractionConditionColumns } from "@fluxiq-web-extension/domain/node";
+import { recordedResolutionBinding, type ExtractionConditionsReader, type ResolutionRequest } from "../recorded-resolution-binding.js";
 import type { RecordedResolution } from "../../types.js";
 
 const canonical = (value: unknown): string => JSON.stringify(automationStudioCandidateFingerprint.snapshot(value));
@@ -11,7 +11,7 @@ const CLICK = "web.output.dom-click";
 const READ = "web.output.dom-extract_list";
 
 /** A condition reader that canonicalises each condition by adding a mark, as a stand-in for the domain's. */
-const conditions: CoreAuthoring["extractionConditions"] = (where) => {
+const conditions: ExtractionConditionsReader = (where) => {
   const list = Array.isArray(where) ? where : [where];
   if (list.some((entry) => (entry as JsonObject).field === "unknown")) return { ok: false, issue: "web.handle.unknown_field", path: ["where"] };
   return { ok: true, where: list.map((entry) => ({ ...(entry as JsonObject), read: true })) };
@@ -79,4 +79,23 @@ test("a read differing only in its Core-side record processing carries that proc
   const resolved = (answer as { parameters: JsonObject }).parameters;
   assert.deepEqual((resolved.recordOutput as JsonObject).process, { limit: 3 });
   assert.deepEqual((resolved.extractList as JsonObject).where, (read.resolved.extractList as JsonObject).where);
+});
+
+test("without a stand-in the where seam reads clauses with the domain's own condition reader", async () => {
+  const kept = { group: { kind: "text", selector: "a", required: false } } as unknown as WebExtractionConditionColumns["kept"];
+  const domainRead = (where: unknown) => {
+    const reading = keptWebExtractionConditions(where, { detected: { col_a: kept.group! }, kept }, ["where"]);
+    assert.equal(reading.ok, true);
+    return (reading as { where: unknown[] }).where as JsonObject[];
+  };
+  const recordedWhere = [{ field: "group", equals: ["x"] }];
+  const recorded: RecordedResolution = {
+    nodeDefinitionId: READ, written: writtenRead,
+    resolved: { extractList: { item: "li", fields: kept as JsonObject, where: domainRead(recordedWhere) }, recordOutput: { datasetId: "d", process: { minRows: 0 }, schema: { fields: [] } } },
+  };
+  const seam = recordedResolutionBinding({ resolutions: [recorded], runsNodes: {}, canonical });
+  const changed = [{ field: "group", is: "present" }];
+  const answer = await ask(seam, { nodeDefinitionId: READ, parameters: { ...writtenRead, extractList: { ...(writtenRead.extractList as JsonObject), where: changed } } });
+  assert.equal(answer.status, "resolved");
+  assert.deepEqual(((answer as { parameters: JsonObject }).parameters.extractList as JsonObject).where, domainRead(changed));
 });

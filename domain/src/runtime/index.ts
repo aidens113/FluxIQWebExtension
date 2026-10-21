@@ -7,6 +7,7 @@ export * from "./host-runtime";
 export * from "./lasting-act-statement";
 export * from "./state-diff";
 export * from "./llm-evidence";
+export * from "./offline-reads";
 export * from "./reusable-evidence";
 export * from "./route-state";
 export * from "./service";
