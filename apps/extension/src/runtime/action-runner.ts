@@ -1,4 +1,4 @@
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApiFailureCode } from "@fluxiq-web-extension/domain/client";
+import { executeActionMessage, WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApiFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import { paceNavigation, withPagePace, withPaceNote, type OriginPace } from "../background/page-pace";
@@ -434,7 +434,7 @@ async function runActionInFrame(
       return withTarget(unreachableFrameFailure(action, startedAt, targetFrameId, unreachable), tabId, targetFrameId);
     }
   }
-  const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
+  const message = executeActionMessage(action, frameId);
   const send = () => sendAction(action, tabId, message, targetFrameId, pace, delivery);
   // The last moment before the page can act: the in-flight record names where it went.
   await noteDispatch?.(tabId, targetFrameId);

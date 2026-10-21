@@ -240,6 +240,35 @@ export const CONFIG = {
     }
   ],
 
+  // Modules that must never reach others through any chain of imports, for the
+  // module-reach rule; the same shape as Core's. A `from` entry that names no
+  // audited script fails; a `to` entry may name a module not written yet.
+  //
+  // Trace content never reaches model guidance (trace plan D36). `from` is the
+  // text this domain gives a model: its system instructions, its tool
+  // definitions, and the catalogue text of its read and next-page nodes. `to`
+  // is what reads recorded pages back offline: the domain's offline reads and
+  // the test runner's offline trial experiment and snapshot page.
+  reachBoundaries: [
+    {
+      name: "trace-free model guidance",
+      from: [
+        "domain/src/runtime/llm-evidence/system-instructions/",
+        "domain/src/runtime/llm-evidence/tools.ts",
+        "domain/src/output-nodes/extract/catalog-text.ts",
+        "domain/src/output-nodes/extract-list/catalog-text.ts",
+        "domain/src/output-nodes/next-page/catalog-text.ts"
+      ],
+      to: [
+        "domain/src/runtime/offline-reads/",
+        "packages/test-runner/src/offline-trial-experiment/",
+        "packages/test-runner/src/offline-snapshot-page/"
+      ],
+      reason: "A recorded trace holds what one site showed during one build. Once it can flow into the text a model reads, that text can start describing a test site, and a Lab pass stops measuring whether FluxIQ generalises",
+      remedy: "Keep guidance built from generic words and the current call's own inputs. If a recorded fact must reach the model, pass it as the call's evidence, not through a guidance module's imports."
+    }
+  ],
+
   workingDocsDir: "docs/working",
   workingDocsIndexKind: "ext"
 };

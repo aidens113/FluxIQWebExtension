@@ -1,7 +1,10 @@
 // A FluxIQ host over a copied workspace, built the way the FluxIQ web process
 // builds one for a Lab run (`!FluxIQ/apps/web/src/lib/fluxiq.ts`,
 // `createFluxIQWebInstance`): `FluxIQ.create` on the workspace root with the
-// web domain active, then the web domain's host entry (`registerFluxIQHost`).
+// web domain active, then the web domain's host entry (`registerFluxIQHost`,
+// exported by the domain). Its traces are read through Core's exported trace
+// store for the host's own service (`automationStudioGatewayTraceServiceStore`),
+// over the same pool and content protection the host's episodes write through.
 // Client gateway tracing is on, as for every Core the Lab starts
 // (`FLUXIQ_CLIENT_GATEWAY_TRACE`), so the offline trial's own episode is
 // captured into the copy.
@@ -13,11 +16,10 @@
 // under `test-runs/`: opening a store applies Core's migrations and the trial
 // writes its session, rows and trace into it.
 
-import { WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/node";
+import { registerFluxIQHost, WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/node";
 import { FluxIQ } from "fluxiq";
-import type { AutomationStudioService } from "fluxiq/automation-studio";
+import { automationStudioGatewayTraceServiceStore, type AutomationStudioService } from "fluxiq/automation-studio";
 import type { ClientGatewayService, ClientGatewayTraceStore } from "fluxiq/client-gateway";
-import type { CoreTrialSeams } from "../core-trial-seams.js";
 
 const TRACE_ENV = "FLUXIQ_CLIENT_GATEWAY_TRACE";
 /** Variables that would make the host reach outside the copy or past the experiment's limits; the host is built without them. */
@@ -32,7 +34,7 @@ export type OfflineTrialHost = Readonly<{
   close(): Promise<void>;
 }>;
 
-export function openOfflineTrialHost(input: { rootDir: string; seams: CoreTrialSeams }): OfflineTrialHost {
+export function openOfflineTrialHost(input: { rootDir: string }): OfflineTrialHost {
   const saved = new Map<string, string | undefined>([TRACE_ENV, ...WITHHELD_ENV].map((name) => [name, process.env[name]]));
   let fluxiq: FluxIQ;
   try {
@@ -45,14 +47,14 @@ export function openOfflineTrialHost(input: { rootDir: string; seams: CoreTrialS
       else process.env[name] = value;
     }
   }
-  input.seams.registerFluxIQHost(fluxiq);
+  registerFluxIQHost(fluxiq);
   const service = fluxiq.programs.automationStudio;
   return Object.freeze({
     fluxiq,
     service,
     gateway: fluxiq.programs.clientGateway,
     traceStore: (projectId: string) => {
-      const store = input.seams.traceStore(service, projectId);
+      const store = automationStudioGatewayTraceServiceStore(service, projectId);
       if (store === undefined) throw new Error("The host's Automation Studio service opened no project storage, so it holds no trace");
       return store;
     },

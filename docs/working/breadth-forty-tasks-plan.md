@@ -57,6 +57,10 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
+**Handoff (2026-10-20 evening):** the user handed this work to Codex; the in-flight units, gate, lane sync and the
+exact round-6 launch command are in
+[trace-offline-trials-plan/reports/handoff-2026-10-20.md](./trace-offline-trials-plan/reports/handoff-2026-10-20.md).
+
 **Now (2026-10-20):** the four repaired tasks (office checkout, job save, photo newest likes, social group posts)
 were rerun in rounds 1-5 and passed none; every debug found the task and fixture sound and the build doing the task.
 Three of round 5's failures are the site-reset bookkeeping (the class behind most of rounds 2-4), one is judge

@@ -2,7 +2,6 @@
 // Core's own authoring path, with the build's step resolutions read off the
 // persisted candidate and proven by its digests; and the hand tier-1
 // correction of a script, which Core then reads as any submission.
-export * from "./core-authoring.js";
 export * from "./web-authoring-surroundings.js";
 export * from "./differing-paths.js";
 export * from "./recorded-resolution-binding.js";
