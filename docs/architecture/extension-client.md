@@ -2746,6 +2746,13 @@ which returns Core's `ClientGatewayTraceReevaluator`:
   the end), unless the recorded read proves its list ended there
   (`recorded-list-ended.ts`). A sandbox breach, an unresolved target, a wait
   that ran out or a list that never appeared is a `dynamic_content` gap.
+  An `extract_list` control or changed read that reports `incomplete_text`
+  with `OUTPUT_NOT_OBSERVED` under automatic disclosure is also a gap: the
+  inert snapshot could not reveal required text. Automatic disclosure includes
+  the default when `discloseText` is omitted. Explicit `discloseText: false`
+  preserves its deliberate refusal; complete captured text and unrelated
+  validation failures retain the ordinary differential rules. This never
+  falls back to pressing a control in a live tab.
   The answer is built by `gatewayActionResultFromBrowserResult`
   (`domain/src/client/browser-result-mapping.ts`), the same builder a live
   answer uses.
