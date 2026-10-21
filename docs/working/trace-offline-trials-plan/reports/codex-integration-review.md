@@ -52,7 +52,8 @@ Observed post-merge gate report/logs: Core 1633 parallel +111 real-SQL tests, we
 affected package typechecks, both structure audits, current stamped Core/domain builds. Supervisor docs:check exit0.
 Downstream task finish's audit passed; Core task finish's mandatory3prompt-contract files/64tests passed.
 The full Core check was skipped because these narrow gates were actually run and the user limits full sweeps.
-Both task merges completed; only routine paired ledger/baseline updates remain before push.
+Both task merges and paired ledger/baseline updates are pushed: downstream858773fc, Coref08dc4a6.
+Main Core and domain ignored builds were regenerated successfully after the merge; extension bundle regeneration is running.
 
 Root's two t751 fixture files now pass a cleaned grouped two-file gate: real-SQL11tests; emptyparallel0; allgroups0.
 Temporary diagnostics removed. Remaining Core witness issue: a bare own-list/control stamp depends on optional
@@ -74,3 +75,11 @@ Worker t752 excludes these Core files while the supervisor updates them:
 Migrate current negative provider fixtures to the structured defect contract. Keep genuine supported negatives negative;
 empty/action-only claims without evidence must remain unverified. Preserve independently proven refutation and repair-route coverage.
 No other t752 file is in this supervisor editing partition.
+
+## Current checkpoint after independent retained-witness verification
+
+- t751 supervisor service fixtures are frozen and passed the clean two-file real-SQL gate:11tests, native0.
+- Independent retained-witness gate passed3files/36tests: trial-witness18, toggle-baseline5, witnesses13; real-SQL selection empty, allgroups/native0. External evidence survives at lab-runs/2026-10-21/codex-t751-review/supervisor-retained-witness-tests.log.
+- Worker corrected retained control originals, exact resource matching and control-only repeat receipts. Final review then found exploration could still admit a declared control without an actually captured original, and custom project tools could bypass the run-node-specific check. Required bounded closure is authorized, tests first; no reset build or acceptance until this every-door invariant holds. Explicit standalone legacy compatibility remains.
+- t752 integrated owner run:315parallelfiles/2463tests, exactly2 stale label assertions; real-SQL1file/3tests passed. Root reviewed the two assertion diffs: they now require the concrete PART contradiction rather than a generic unsupported label while preserving unsure outcomes. Focused two-file rerun7tests passed, native0; Core types passed. One frozen Core build is running before downstream/browser gates.
+- Independent package export cleanup is dispatched as t754 in its own paired worktrees; no P6 implementation has started before t751 integration.

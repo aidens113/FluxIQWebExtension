@@ -24,8 +24,9 @@ and supervisor-inspected full-panel screenshots; the supervisor also independent
 t752 is checkpointed locally; the supervisor's corrected changed-owner gate passed 32 files / 362 tests after
 structured-negative fixture migrations. P5 compatibility review found unsupported automatic text disclosure must
 be an explicit offline gap; the correction passes 22 unit cases, browser proof remains. t751's migrated real-service
-fixtures pass; review found own-list/control witnesses must also survive missing optional runtime diffs before it
-can be accepted. P6 remains gated on t751. Implementation push follows paired ledger/baseline updates below.
+fixtures pass11 tests; independent retained-witness checks pass36 tests, including absent diffs and resource collisions.
+Exploration must additionally require an actually observed original at every project tool door; this final closure
+is in progress. P6 remains gated on t751. t753 and its paired documentation are pushed in both repositories.
 Detailed findings and observed checks: [supervisor integration review](./trace-offline-trials-plan/reports/codex-integration-review.md).
 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
@@ -61,6 +62,10 @@ baselines, plan order as run order in branching Flows); storage `project/` and `
 
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
+
+**Package exports:** t754 is dispatched in its own paired worktrees at `fxwork/t754/` while reset/judge gates finish.
+Its bounded brief is `trace-offline-trials-plan/reports/codex-t754-brief.md` in that task; source changes stay independent
+of the reset and judge lanes. P6 still waits for the reset merge.
 
 **Blocked:** nothing needs the user.
 
