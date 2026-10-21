@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Boundary move plan and trace P0-P5 merged; Codex recovering t751-t753 before P6 and breadth round 6.
 Created: 2026-10-19
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 Owner: Senior supervisor agent
 Scope: Execution hub for the traces/offline-trials plan and the extension/Core boundary audit's move plan, plus this repository's own part of the trace plan (in-band artifacts, page snapshots, the offline queue fix, the domain's offline read/target resolver). Core owns the trace contract, store, offline-trial runner and build-loop integration.
 Paired document: `docs/working/trace-offline-trials-plan.md` in FluxIQ Core (plan of record)
@@ -17,6 +17,14 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 units t751, t752, t753 and how to resume them, the exact gate and merge steps, how to sync lanes and launch round 6,
 and the ordered next steps) is in [reports/handoff-2026-10-20.md](./trace-offline-trials-plan/reports/handoff-2026-10-20.md).
 Read it after this section.
+
+**Recovery checkpoint (2026-10-21):** t753 is committed locally in both task trees and has merged current `dev`;
+post-merge narrow gates are running. Its headed provider-free Chromium (12) and Firefox (2) rendering cases pass,
+and the supervisor inspected preserved full-panel screenshots and independently passed the 82 overlay unit cases.
+t752 is checkpointed locally; the supervisor's corrected changed-owner gate passed 32 files / 362 tests after
+structured-negative fixture migrations. Its final integrated browser checks remain. t751 remains uncommitted while
+real-service fixtures and final reset gates are completed. No implementation task has merged back or been pushed.
+Detailed findings and observed checks: [supervisor integration review](./trace-offline-trials-plan/reports/codex-integration-review.md).
 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
 progress. Get it done."
@@ -591,3 +599,16 @@ None requiring user input.
 - Review requests sent to t752: earlier advice is context, never exemption from the task; preserve valid ordering/format/missing-action refusals, absence versus empty defects, and advice older than three trials.
 - t753 recovery scope includes its discovered Core apps/web readiness projection bug; retain unknown versus explicitly absent model keys.
 - No source unit accepted, merged or pushed yet. Narrow task checks are running in isolated worktrees; no daily full sweep or paid run started.
+
+### 2026-10-21 — Recovery source checkpoints and independent verification
+- t753 Core `e4f0e0a2`, downstream `c03a2c65`; task branches now include current dev. Generated reference conflicts
+  were regenerated through `docs:reference` (4124 declarations), never hand-edited. Integration review found a
+  candidate-less ending could erase earlier whole-run history; bounded regression/fix is Core `df25f02d`.
+- t752 Core `534c41fb`, downstream `5f0b26ef`; still awaiting current-dev integration and final headed acceptance.
+  Supervisor observed grouped changed-owner gate: 32 files / 362 tests passed, empty real-SQL selection exited 0.
+- t751 review additionally found a project trial without a diff spot could inherit legacy settlement, and the real
+  brief-ports wrapper dropped the shared admission. Both need their focused regressions and final integration gates.
+  Supervisor's migrated two-builder real-SQL test passes, restoring the build's effects before dependent entry and
+  preserving the pre-existing cart line. Remaining reset fixtures are not accepted yet.
+- No paid execution, full suite, panel management, task merge-back or implementation push during this checkpoint.
+  User `.clinerules/fluxiq.md` remains untouched.
