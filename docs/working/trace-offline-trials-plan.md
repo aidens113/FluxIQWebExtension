@@ -20,14 +20,14 @@ progress. Get it done."
 lane G (phases 1, 3), t727 lane H (0, 5), t728 lane S (2, 4). Ledger in
 [extension-core-boundary-audit.md](./extension-core-boundary-audit.md).
 
-**Trace plan: P0-P3 complete, P4 running.** P0 baseline (live trials are 49.8% of build time) and P1 contracts and
-the run environment (t729, t734); P2 capture at the client gateway and Core's ingress, on for every Lab live run,
-about +11.5% overhead (t736); P3 intake parity: a stored trace replays through Core's own intake, 3,333 of 3,333
-saved-Flow delivery points and 4,274 of 6,941 live points matched with honest capture gaps and 0 intake defects
-(t742); t745 keyed every content address in a protected project (trace chunks and boundaries, artifacts, manifests,
-reusable-context digests), rekeying existing data at open. **Running:** t746 P4 offline trials tier 1 (lane T lead;
-gate: T05-T08, T10, T12-T16, T20, T22-T24 and an offline trial reproducing social run-mvfq957o's judged result).
-**Next:** P5 offline reads (tier 2), P6 build-loop integration, P7 measure and roll out.
+**Trace plan: P0-P4 complete, P5 next.** P0 baseline (live trials are 49.8% of build time) and P1 contracts and the
+run environment (t729, t734); P2 capture, on for every Lab live run, about +11.5% overhead (t736); P3 intake parity,
+3,333 of 3,333 saved-Flow points and 4,274 of 6,941 live points matched, 0 intake defects (t742); t745 keyed every
+content address in a protected project and t747 closed the storage follow-ups (sweep race, re-seal job, trace-storage
+layout); P4 offline trials tier 1 (t746): the production trial runner against a recorded trace through Core's real
+intake, strict matching, virtual time, explicit gaps; round 4's social trials reproduce their live judged outcome
+exactly. **Next: t749 (P5 offline reads tier 2)**, which also owns P4's corrected-candidate gate item and replaces the
+experiment's deep loads of Core internals with a public seam plus an audit rule. Then P6 build-loop integration, P7.
 
 **Breadth reruns: rounds 2-4 passed 0 of 12; every cause was a product defect, each fixed** (t738, t741, t743). t743
 (merged) made round 4's three shared weaknesses structural: build-scoped site memory, actionable answers with
@@ -120,14 +120,28 @@ Briefs for work in flight or next; finished briefs are archived in
   `pnpm docs:check`; real-SQL marker on tests that open SQLite.
 - Report: `docs/working/trace-offline-trials-plan/reports/t747-storage-followups.md` in the downstream tree.
 
-### Brief: t746-offline-trials-tier1 (lane T lead, trace plan P4)
-- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P4: the production executor runs against a trace
-  environment (the t734 port), strict operation matching (action type, target fingerprint, arguments, occurrence,
-  preceding operations), a virtual clock, explicit evidence gaps.
-- Gate: source tests T05-T08, T10, T12-T16, T20, T22-T24, and an offline trial of a corrected candidate for the breadth
-  round's social failure (run-mvfq957o-40103539) reproduces the judged result. Offline trials stay out of exploration
-  and never satisfy the whole-run gate (decisions 2 and 3).
-- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p4.md` in the downstream tree.
+### Brief: t749-offline-reads-tier2 (lane T lead, trace plan P5)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P5 (tier 2): a changed read or target is evaluated
+  against the captured page snapshot loaded in a sandboxed browser with scripts and network off, running the same
+  extension extraction and target code; anything dynamic is an evidence gap. Chrome and Edge first.
+- Also owned here:
+  - P4's deferred gate item: an offline trial of a corrected candidate for the breadth round's social failure
+    reproduces the judged result (round 4's correction changes `extractList.where` inside the extension's read, so it
+    needs tier 2). Use the round-4 social traces t746 used; no paid run.
+  - Boundary: t746's experiment loads three unexported Core modules by path (`offline-trial-experiment/rebuild/
+    core-authoring.ts`: brief scope, scoped submission, whole-candidate assembly) and the domain's `where` reading.
+    Replace them with a public Core seam (or move the rebuild into Core's offline-trial runner), delete the deep
+    loads, and add a downstream structure-audit rule (mirrored from Core first if the rule is generic) that refuses any
+    import or load of a Core build path that is not a package export.
+- Gate: on the breadth round's photo, job and social traces a changed read evaluated offline matches what the live
+  read returned; the social corrected-candidate item above; a dynamic or missing snapshot is an explicit gap, never a
+  pass; an offline pass still never satisfies the whole-run gate; no trace content reaches model guidance.
+- Not: t748's files (check `git -C C:/Users/osrs_/FluxStuff/fxwork/t748/<repo> status --short` before editing; it
+  owns domain plan-resolution target packets, Core site reset, candidate-trial feedback, the LLM request size check)
+  and t747's (Core `storage/project/**`). If you need one, stop and report.
+- Validation: tests first; tests beside each change; touched typechecks; both audits; headed provider-free browser
+  checks only on the ten realistic scenarios.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p5.md` in the downstream tree.
 
 ## Work Ledger
 
@@ -344,6 +358,35 @@ Briefs for work in flight or next; finished briefs are archived in
   restructures first. Two-process races and real process kills simulated (two connections, thrown hooks).
 - Outcome: Accepted
 - Follow-up: none beyond the open note.
+
+### 2026-10-20 - t746 merged: trace plan P4 offline trials tier 1
+- Agent: supervisor (lane T lead and workers P4a-P4d)
+- Changed: Core and downstream merged and pushed: an offline trial is the candidate trial runner with a trace
+  environment; a strict trace matcher (`client-gateway/trace-matcher/`) attached to the live gateway answers every
+  command through Core's real intake (action type, canonical target and parameters, occurrence, matched prefix), never
+  delivers anything recorded after the matched point, and answers a mismatch with a classified evidence gap; virtual
+  timers (deadlines fire when explicit waits or recorded latencies pass them); U5 results (recorded origins; gaps,
+  failed deliveries and unjudged trials make it inconclusive; inconclusive marks assertions unverified); the offline
+  trial's own trace is marked derived; judges still run and an offline yes stays evidence only. Downstream: the
+  test-runner's `offline-trial-experiment/`. Fixed on the way: a capability-less default session with no gap had
+  produced a dishonest "fail"; T12's test race (3 of 5, then 10 of 10).
+- Validation: supervisor's gate on t746 after merging dev: Core `vitest run` over client-gateway, environment,
+  executor, runtime gateway-trace, offline-trial, candidate-trial, subflow-trial, flow-bootstrap/candidate, model
+  offline-trial, runtime/tests -> `Test Files 364 passed (364)`, `Tests 2504 passed (2504)`; fluxiq `tsc` 0; Core
+  audit passed; Core build 0; test-runner build 0, offline-trial-experiment + trace-inspection + trace-parity -> pass
+  74 fail 0; downstream audit passed; headed `e2e/site-reset` -> `11 passed (9.2m)` (t746 changes executor timers).
+  `pnpm docs:check` failed on the new exports; after merging dev again (t747) the reference was regenerated and is
+  current; re-run after that merge: Core trace-matcher, trace, gateway-trace, offline-trial, environment, storage
+  gateway-trace, model offline-trial -> `Test Files 62 passed (62)`, `Tests 355 passed (355)`; `tsc` 0; build 0;
+  test-runner -> pass 74 fail 0; both audits passed. Lead experiments (provider-free, copied round-4 social traces):
+  revisions 10 and 16 against their own traces matched 19/19 operations with identical rows, steps and stop point,
+  oracle verdict equal to the live "no"; revision 16 against revision 10's trace gets an explicit `argument_mismatch`
+  gap on `extractList.where`; a trace with no recorded session view is refused.
+- Outcome: Partial. Tests T05-T08, T10, T12-T16, T20, T22-T24 pass; the gate's corrected-candidate item cannot be met
+  in tier 1 (round 4's social correction changes a filter inside the extension's read) and moves to P5 (brief t749),
+  with no paid run. The experiment deep-loads three unexported Core modules (digest-guarded); t749 replaces them with
+  a public seam and adds an audit rule refusing such loads.
+- Follow-up: t749 (P5); P6 passes the live session's view (production does not yet).
 
 ## Open Questions
 
