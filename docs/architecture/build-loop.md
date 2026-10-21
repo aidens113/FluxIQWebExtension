@@ -205,19 +205,48 @@ element the model had written (`run-mv4912r9-53b05a51`, t942 and t870). A
 stale handle on such a rerun is answered by the handle refusals
 (`handle_not_in_packet`, `renumbered_by_reload`).
 
-**Known limit: two documents at one address are one view (t743).** The store
-that turns a handle into its element
+**A candidate's step stands where the steps before it left the page (t748).**
+The store that turns a handle into its element
 (`runtime/llm-evidence/plan-resolution/target-packets.ts`) keeps one view per
-location, so a site that opens an item as a dialog over a list and pushes the
-item's own address, while loading that address gives a different document, has
-its dialog view replaced by the standalone page once the build looks at both.
-A handle then names the standalone page's control, and a Flow that opens the
-dialog and presses it can be refused `web.target.ambiguous` among the dialog's
-look-alike controls. Keeping the two documents as two views, with the acted
-identity kept per handle and address, was tried in t743 and reverted: it let a
-control's identity from a press in one view override the view that showed the
-handle last. The fix needs the view a Flow step stands on chosen from the step
-before it, or handles that differ between the two documents.
+location. A site can open an item as a dialog over a list and push the item's
+own address, while loading that address gives a different document, and one
+Flow handle can name a control in each. Once the build has looked at both, the
+handle names the standalone page's control. On its own, that sent a Flow that
+opens the dialog and presses the handle into the dialog with the standalone
+identity (`web.target.ambiguous` among the dialog's look-alike controls). So
+each Flow also keeps its dialog views and the dialog each exploration press
+opened (`plan-resolution/step-views/`). When Core resolves a candidate's plan,
+it sends each node `precedingSteps`: the plan's steps before it in plan order,
+as the plan held them (handles intact, the consequence declaration removed).
+That list includes the steps Core never asks the domain about, such as an
+untouched inherited step or a handler whose page fact was refused. Page-fact
+targets are not steps, so they are never in the list and are sent none. A node
+with more than 200 steps before it is sent none. The resolver works out how each
+of those steps moves the page (`step-views/move.ts`) and folds them in order:
+- a press stands in the dialog exploration's press of that handle opened;
+- a read, or an act on a control in place, stays where the step before it stood;
+- a navigation, a key, a page fact or any other node stands nowhere in particular.
+
+A handle that the dialog those steps left open shows, inside the dialog,
+resolves to that dialog's control wherever the pages name another control or
+none. It carries the dialog's context, that view as `handleViews`, and the
+identity exploration's first press of the handle found there. Everything else
+resolves as before. A step after a navigation to the item's address names the
+standalone control, with the words that page showed last. Nothing is kept
+between resolutions. Where a step stands comes from the steps Core sent, never
+from the order Core asked. So a plan resolved straight after another starts
+from nothing, and an inherited navigation still moves the page for the steps
+after it. A node sent no steps, which is every node outside a candidate
+submission or from a Core without the field, stands nowhere and resolves exactly
+as before. t743 tried keeping the two documents as two views with the
+acted identity kept per address, and that was reverted: the first act at the
+standalone address was the press that undid the dialog's act, so the Flow saved
+the words that undo found ("Unlike"). The acted identity stays the handle's
+first act's, lent only at the address that act named. One limit remains. Plan
+order is used as run order, so in a Flow whose nodes branch, the node listed
+before a press may not be the step that runs before it. A handler, or any node
+the domain does not run, counts as moving the page anywhere, so a press after one
+resolves as before.
 
 ## Choice Changes And Stable Handles
 
