@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Paused 2026-10-19 for traces and the boundary move plan; 12 tasks accepted across 9 sites, photo-social has no pass; reset redesign L1 (t724) in flight. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
 Created: 2026-10-17
-Last updated: 2026-10-19
+Last updated: 2026-10-20
 Owner: Senior supervisor agent
 Scope: Forty new tasks across ten realistic sites, all provider-free audited, selective full live acceptance per site and repaired failure, plus installed-extension creation and replay proof.
 Paired document: `breadth-forty-tasks-plan.md` in FluxIQ Core
@@ -57,19 +57,15 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 42de21f6 / Core a62d3330). r6 then produced the exact data and a passing zero-call replay, but the paid jury
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
-**Now (2026-10-19, handoff):** paused by the user for two larger efforts run from
-[trace-offline-trials-plan.md](./trace-offline-trials-plan.md): Core traces and offline trials, and the
-extension/Core boundary audit's move plan. Fixes F1-F9, the dev-sweep fixes (t723) and t725 (judge split, time
-honesty, scroll schema, social wording) are on `dev` in both repos. Rerun round 1 went 0 of 4 ($0.234): reset
-settlement blocked photo, office and job; social reached the exact answer but lost it to a split judge and the
-deadline (now fixed). Lead L1 (reset settlement redesign, t724) was still running at handoff, uncommitted; its report
-is `fxwork/t724/!FluxIQWebExtension/docs/working/breadth-forty-tasks-plan/reports/l1-reset-settlement.md`.
+**Now (2026-10-20):** the four repaired tasks (office checkout, job save, photo newest likes, social group posts)
+were rerun in rounds 2-4 and went 0 of 12 ($0.317 in round 4); every cause was a product defect, each fixed (t738,
+t741, t743, ledgers in [trace-offline-trials-plan.md](./trace-offline-trials-plan.md)). t743 made round 4's three
+shared weaknesses structural (build-scoped site memory, actionable answers with `gate_unsatisfiable`, repair before
+ending). Round 5 is held until t748 (t743's open items, several of which a round-5 run can meet) merges.
 
-**Next, in order:** finish and integrate L1 (see the hub document's "Next"); then rerun office checkout, job save,
-photo newest likes and social group posts on fresh workspaces, supervised; then the owed reruns (job
-halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries. Lane trees must merge `dev` and rebuild
-their Core (`pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build`) before
-any launch, or the Lab refuses at $0 as stale.
+**Next, in order:** t748 merges; sync the four lane trees to `dev` (both repositories, installed, Core and extension
+rebuilt; the Lab refuses stale trees); round 5 on fresh workspaces, supervised at $0.25 each via both settings; debug
+every failure; then the owed reruns (job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -559,6 +555,19 @@ The 2026-10-18 entries are archived in
   judge still advises adding the text field to the refused read. Round 3's reload mark and unnamed field are gone.
 - Outcome: Partial
 - Follow-up: t743 (units S1-S4 plus S5 for social).
+
+### 2026-10-20 - t743 merged; rerun round 5 held for t748
+- Agent: supervisor
+- Changed: nothing in this plan's scope beyond this entry; t743 (round 4's three shared weaknesses and each site's
+  causes) is merged and pushed in both repositories (ledger in `trace-offline-trials-plan.md`).
+- Why held: t743's open items, now brief t748, bear on round 5's tasks: trial feedback labels a read with the words
+  captured before a change (office reads a value its own step changed), office debug points C5/C6, a dialog and a
+  standalone page sharing one view (photo), an undo reason no call can meet (job). The standing rule is that a live
+  round never launches with a known fix in flight; round 5 launches when t748 merges and the lane trees are synced.
+- Validation: lane trees checked clean (each has only its round-4 debug note, tracked on dev); launcher ready
+  (`launch-rerun5.sh`, instance `rr5-slot-N`, fresh workspaces `...-20261020-r6`, social `-r8`).
+- Outcome: Partial (held)
+- Follow-up: t748, then sync and round 5.
 
 ## Open Questions
 
