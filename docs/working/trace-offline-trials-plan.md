@@ -1,7 +1,7 @@
 # Traces And Offline Trials (Extension Side)
 
 Status: Active
-Status detail: Boundary move plan, trace P0-P5 and UI t753 merged; reset/judge recovery before P6 and breadth round 6.
+Status detail: Boundary move plan, trace P0-P5, UI t753 and judge/read t752 merged; reset integration before P6 and breadth round 6.
 Created: 2026-10-19
 Last updated: 2026-10-21
 Owner: Senior supervisor agent
@@ -21,12 +21,14 @@ Read it after this section.
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
 and supervisor-inspected full-panel screenshots; the supervisor also independently passed the 82 overlay unit cases.
-t752 is checkpointed locally; the supervisor's corrected changed-owner gate passed 32 files / 362 tests after
-structured-negative fixture migrations. P5 compatibility review found unsupported automatic text disclosure must
-be an explicit offline gap; the correction passes 22 unit cases, browser proof remains. t751's migrated real-service
-fixtures pass11 tests; independent retained-witness checks pass36 tests, including absent diffs and resource collisions.
-Exploration must additionally require an actually observed original at every project tool door; this final closure
-is in progress. P6 remains gated on t751. t753 and its paired documentation are pushed in both repositories.
+t752 is verified and merged (downstream `4da5947c`, Core `149ba69e`): strict grounded negative judgements, retained
+advice, kept-row disclosures and explicit inert-snapshot gaps. Final owning/types/build/audit gates passed; headed
+social5/5 and offline gap1/1 passed. The supervisor independently reviewed source, changed-owner362tests and
+offline reevaluator22tests; Core finish additionally passed68 mandatory prompt-contract tests.
+t751 source is checkpointed (Core `b5a9efcd`, downstream `9bb8ad87`) and integrating accepted dev before final
+owning/build/browser gates. Independent retained-witness36, exploration46 and merged service11tests passed,
+including absent diffs, resource collisions and a custom effect's honest undo cycle. P6 remains gated on t751.
+t753 and its documentation are pushed; paired t752 ledger/baseline updates accompany its implementation push.
 Detailed findings and observed checks: [supervisor integration review](./trace-offline-trials-plan/reports/codex-integration-review.md).
 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
@@ -46,8 +48,8 @@ action changes, gaps and the final judged run) starts when t751 merges, since bo
 **Breadth reruns: rounds 1-5 passed 0 of the four repaired tasks; all framework defects.** Round 5 (0 of 4, $0.499):
 job, office and photo failed on the site-reset bookkeeping (a lasting step reaching a trial unchecked, a toggle the
 site reverted itself deadlocking settle and undo, a reset taking its starting state after the build's own act), social
-on judge consistency (an exact answer judged no) and read speed. **Running:** t751 reset by observed state
-(lead-xhigh), t752 judge consistency and read speed (lead-xhigh), t753 chat and overlay polish (lead). Round 6 only
+on judge consistency (an exact answer judged no) and read speed. **Recovered:** t752 judge/read and t753 UI are merged;
+t751 reset is in final integration. Round 6 only
 after t751's and t752's headed provider-free reproductions pass; trace P6 (offline trials inside builds) starts when t751 merges, since it shares the trial gates. t750 (merged) single-sourced the undo rules.
 
 **Also merged 2026-10-19/20:** t724 L1 reset settlement; t730 browser specs on the ten realistic scenarios only;
@@ -63,9 +65,10 @@ baselines, plan order as run order in branching Flows); storage `project/` and `
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
 
-**Package exports:** t754 is dispatched in its own paired worktrees at `fxwork/t754/` while reset/judge gates finish.
-Its bounded brief is `trace-offline-trials-plan/reports/codex-t754-brief.md` in that task; source changes stay independent
-of the reset and judge lanes. P6 still waits for the reset merge.
+**Package exports:** t754 is checkpointed in paired worktrees at `fxwork/t754/` (Core `cda43b5b`, downstream `bbb66ac3`).
+The supervisor independently verified public imports and8 guard cases; all31 actual help commands and owning gates
+passed. Baselines remove exactly3Core+35downstream keys with all other content identical. Current-dev integration
+remains before mergeback. P6 still waits for the reset merge.
 
 **Blocked:** nothing needs the user.
 
@@ -640,3 +643,11 @@ None requiring user input.
   preserving the pre-existing cart line. Remaining reset fixtures are not accepted yet.
 - No paid execution, full suite, panel management, task merge-back or implementation push during this checkpoint.
   User `.clinerules/fluxiq.md` remains untouched.
+
+### 2026-10-21 — t752 judge/read recovery accepted
+- Agent: supervisor, recover_t752
+- Changed: grounded current negative defects, immutable request/advice history, answer-only counts, automatic kept-row disclosure and later-row control detection; unsupported inert disclosure is an explicit gap. Downstream merge4da5947c; Core149ba69e.
+- Validation: grouped Core owners315parallelfiles/2463tests initially2461pass+2stale assertions; corrected owning rerun2files/7pass; real-SQL1file/3pass. `tsc`0, stamped3library build0, domain768/768 and extension595/595, package checks0, both audits0, docs:check current, Core freshness0. Supervisor independently passed changed-owner362 and offline reevaluator22 tests and reviewed final source/logs.
+- Validation: headed Chromium content harness social3specs/5tests pass; offline-gap1test pass after fixture-only setup correction, actual liveA/control parity and liveB success, inert incomplete_text,0leaks, dynamic_content gap. Core `pnpm.cmd task finish t752 "Ground negative judge findings in measured rows" --skip-checks` independently passed3mandatorycontractfiles/68tests; downstream task finish audit passed. Full suite not repeated.
+- Outcome: Accepted. Exact commands, counts and external evidence in reports/codex-t752-integration.md; no Firefox or paid packaged-extension acceptance claimed.
+- Follow-up: paired ledger/baseline push; final t751 combined gates, then P6. No paid run or panel management performed. User .clinerules edit preserved.

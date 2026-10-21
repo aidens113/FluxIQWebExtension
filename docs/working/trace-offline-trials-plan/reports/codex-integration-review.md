@@ -83,3 +83,18 @@ No other t752 file is in this supervisor editing partition.
 - Worker corrected retained control originals, exact resource matching and control-only repeat receipts. Final review then found exploration could still admit a declared control without an actually captured original, and custom project tools could bypass the run-node-specific check. Required bounded closure is authorized, tests first; no reset build or acceptance until this every-door invariant holds. Explicit standalone legacy compatibility remains.
 - t752 integrated owner run:315parallelfiles/2463tests, exactly2 stale label assertions; real-SQL1file/3tests passed. Root reviewed the two assertion diffs: they now require the concrete PART contradiction rather than a generic unsupported label while preserving unsure outcomes. Focused two-file rerun7tests passed, native0; Core types passed. One frozen Core build is running before downstream/browser gates.
 - Independent package export cleanup is dispatched as t754 in its own paired worktrees; no P6 implementation has started before t751 integration.
+
+## t752 acceptance and reset integration
+
+t752 merged downstream4da5947c and Core149ba69e. Supervisor independently inspected final source, exact browser
+outputs and preserved external logs: social5/5, realistic inert-disclosure1/1, no live fallback. Initial gap fixture
+failed before capture because a shared opener had expanded everything; corrected fresh-fixture setup passed without
+production changes. Final source gates include corrected two-label7test rerun, Core types/build/docs/audits,
+domain768/extension595 tests and checks. Core finish independently passed3mandatoryfiles/68tests.
+
+t751 local checkpoints Coreb5a9efcd/downstream9bb8ad87 now include accepted t752 (Coref86901c5/downstream5309de5).
+Combined generated reference regenerated4135 declarations. Earlier t753 merge required preserving observed-state
+fixture assertions alongside its plain reason-first ending; independent merged service2files11tests passed.
+Final combined owning/type/build/browser gates remain; source accepted only as a local checkpoint. t754 public
+exports are checkpointed Corecda43b5b/downstreambbb66ac3; exact baseline JSON comparison proves only38 export keys
+removed, no other baseline changes. Final current-dev integration remains. No P6 implementation or paid run yet.
