@@ -130,6 +130,7 @@ import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
 import { resolveWebNextPageSlot } from "./next-page-slot";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
+import { webPlanStepMove, type WebLlmPlanStepMove } from "./step-views";
 import { webPlanControlMisfit } from "./control-fit";
 import { WEB_LLM_NOT_A_FIELD_KINDS, type WebLlmNotAFieldKind } from "./typing-targets";
 import { webPlanReadDottedKeys } from "./dotted-keys";
@@ -261,6 +262,8 @@ export type WebPlanNodeResolutionInput = {
   handleReach?: WebLlmTargetReach | undefined;
   /** The page the caller is about to act on: a handle written without `location` resolves there alone (header, t486). Ignored under `handleReach`. */
   onPage?: string | undefined;
+  /** Under `handleReach`, the candidate's steps before this one in the order the Flow runs them, as the plan held them (Core's `precedingSteps`): the dialog they leave open is where this step stands (`step-views/`, t748 U1b). Absent, it stands nowhere in particular. */
+  precedingSteps?: readonly { definitionId: string; parameters: JsonObject }[] | undefined;
   /** Every parameter, or only those named, is the model's own writing (Core's `writtenByModel`, `modelWrittenParameters`; t432). */
   writtenByModel?: true | undefined;
   modelWrittenParameters?: readonly string[] | undefined;
@@ -383,7 +386,7 @@ const NEXT_PAGE_SHAPE: WebPlanHandleIssueCode = "web.handle.expected.next_page.l
 
 type Scope = { projectId: string; flowId: string };
 /** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
-type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean; onPage: string | undefined };
+type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean; onPage: string | undefined; after: readonly WebLlmPlanStepMove[] | undefined };
 /** `notAField`: what the element is, where it holds no typed text (`target-packets.ts`, t486). */
 type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does; `details`, said after every position (`extraction/stored-columns.ts`). */
@@ -429,7 +432,8 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
 /** The answer, and every name it assumed to reach it (`WebPlanNodeOutcome`). */
 export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeOutcome> {
   const step = input.gatedByCaller !== true && input.nodeDefinitionId !== FACT_TARGET_NODE_ID;
-  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step, model: input.writtenByModel === true, modelKeys: input.modelWrittenParameters, onPage: input.onPage };
+  const after = input.handleReach === "view_history" ? input.precedingSteps?.map((before) => webPlanStepMove(actingStep(before.definitionId, before.parameters))) : undefined;
+  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step, model: input.writtenByModel === true, modelKeys: input.modelWrittenParameters, onPage: input.onPage, after };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
@@ -533,7 +537,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   if (webPlanModelWroteAny(scope)) for (const literal of webPlanWrittenLiterals(nodeDefinitionId, parameters, SELECTOR_NODE_IDS.has(nodeDefinitionId), scope)) refusals.push({ code: literal.code, kind: "target", path: literal.path });
   for (const [key, value] of Object.entries(parameters)) {
     if (nextPageNode && key === "nextPage") {
-      const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions, scope.reach);
+      const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions, scope.reach, scope.after);
       if (slot.status === "resolved") {
         const resolved: Resolved = { value: slot.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined };
         if (slot.controlView !== undefined) resolved.views = [slot.controlView];
@@ -741,7 +745,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   // An act on one page names that page's control (header); a written location, or a candidate's view history, decides otherwise.
   const resolution = value.location === undefined && scope.reach === undefined && scope.onPage !== undefined
     ? targets.resolveOn(at, handle, scope.onPage)
-    : targets.resolve(at, handle, value.location as string | undefined, scope.reach);
+    : targets.resolve(at, handle, value.location as string | undefined, scope.reach, scope.after);
   if (!resolution.ok) return resolution.renumberedByReload === true ? "web.handle.renumbered_by_reload" : TARGET_ISSUES[resolution.code];
   if (press && resolution.notAControl === true) return "web.handle.not_a_control";
   const resolved: Resolved = { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };

@@ -25,8 +25,8 @@ const RETAINED_LOCATIONS = 16;
 export type WebLlmTargetView = { view: number; location: string };
 
 export type WebLlmViewHistory<T> = {
-  /** One more capture, at `location`: each handle it carries joins the history, or keeps what its views agree on, and becomes the newest kept. */
-  record(location: string, targets: ReadonlyMap<string, T>): void;
+  /** One more capture, at `location`: each handle it carries joins the history, or keeps what its views agree on, and becomes the newest kept. Answers the capture's number. */
+  record(location: string, targets: ReadonlyMap<string, T>): number;
   /** What the views that carried `handle` agree it names, and the newest of them -- on `location`, when one is named; nothing when none carried it (there). */
   find(handle: string, location: string | undefined): { target: T; shownIn: WebLlmTargetView } | undefined;
 };
@@ -56,6 +56,7 @@ export function createWebLlmViewHistory<T>(across: (earlier: T | undefined, targ
         if (entries.size <= RETAINED_HANDLES) break;
         entries.delete(oldest);
       }
+      return captures;
     },
     find(handle, location) {
       const entry = entries.get(handle);
