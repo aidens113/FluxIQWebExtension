@@ -17,7 +17,8 @@ test("Stop targets build Flow and run ID, waits for final activity and prevents 
     const button = fake(control.element).byClass("chat-stop")[0]!;
     control.update(activity("build"));
     assert.equal(control.element.hidden, false);
-    assert.equal(button.textContent, "Stop build");
+    assert.equal(button.textContent, "Stop");
+    assert.equal(button.getAttribute("aria-label"), "Stop build", "the accessible name says what it stops");
     button.dispatch("click"); button.dispatch("click"); await settle();
     assert.deepEqual(sent, [{ type: "fluxiq.panel.stopRun", projectId: "p", flowId: "f" }]);
     assert.equal(button.disabled, true);
@@ -83,5 +84,25 @@ test("a press during Starting… is dropped when the send starts nothing", async
     control.update(activity("build")); await settle();
     assert.deepEqual(sent, [], "a later build is not stopped by a press its send never led to");
     assert.equal(button.disabled, false);
+  });
+});
+
+// Round 5: the button read "Stop" while the send said "Starting…" and "Stop
+// build" once Core named the build. One label from the first moment to the end.
+test("Stop keeps one label for the whole build, from Starting… until it ends", async () => {
+  await withFakeDocument(async () => {
+    const control = createStopControl(accepting([]), () => true);
+    const button = fake(control.element).byClass("chat-stop")[0]!;
+    const labels: string[] = [];
+    control.update(null, true);
+    labels.push(button.textContent);
+    control.update(activity("build"));
+    labels.push(button.textContent);
+    control.update({ ...activity("build"), sequence: 2, phase: "exploring" });
+    labels.push(button.textContent);
+    assert.deepEqual(labels, ["Stop", "Stop", "Stop"]);
+    control.update(activity("run", "r"));
+    assert.equal(button.textContent, "Stop", "a run's Stop reads the same");
+    assert.equal(button.getAttribute("aria-label"), "Stop run");
   });
 });

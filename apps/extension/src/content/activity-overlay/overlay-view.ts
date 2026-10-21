@@ -10,7 +10,11 @@
 // last status stays up, not what it says. Only "done" fades (U8 of the t174
 // live lane's UI review): a failure stays on the page until new work starts
 // or the person hides the overlay, and waiting for the person never fades.
-// A detail that only repeats the headline is not drawn (U2, `isHeadlineEcho`).
+// A detail never says the headline again, either way round: one that only
+// repeats it is not drawn (U2), and one that opens with it keeps only what it
+// adds (round 5: "Build failed | Build failed: FluxIQ could not finish the
+// Flow…"; `detail-beside-headline.ts`). The view is a value: the same display
+// gives the same view, so a re-sent status draws nothing new (`status-pill.ts`).
 //
 // A run held for the person (Take over: `waiting` in phase `paused`) is drawn
 // as paused, and its detail says how to let it go on. The overlay takes no
@@ -23,7 +27,8 @@
 // during a build, and a mark that flipped with it would be the flicker the
 // pacing exists to remove.
 
-import { cutAtWord, isHeadlineEcho, type ActivityDisplay, type ActivityOverlayPreference } from "../../shared/activity";
+import { cutAtWord, type ActivityDisplay, type ActivityOverlayPreference } from "../../shared/activity";
+import { detailBesideHeadline } from "./detail-beside-headline";
 import { ACTIVITY_PHASE_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
 
 /** The overlay's detail while a run is held for the person. */
@@ -56,7 +61,7 @@ export function activityOverlayView(display: ActivityDisplay | null, preference:
     mark: appearance.mark,
     accent: appearance.accent,
     headline,
-    detail: isHeadlineEcho(headline, detail) ? "" : detail,
+    detail: detailBesideHeadline(headline, detail),
     step: display.working ? stepText(display.step) : "",
     fades: !display.working && display.outcome === "done"
   };

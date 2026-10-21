@@ -793,49 +793,30 @@ their text and attributes changing, a fixed box per shape so nothing shifts,
 and a 220 ms fade-in when the detail changes. It has no entry animation, so a
 page loaded mid-work gets it back at full strength.
 
-**Where it sits** (`content/activity-overlay/placement/`): in a corner where it
-covers no part of the page that stays over the content. `choosePlacement`
-samples the pill's box at each corner, one point about every 36 pixels, and
-`pageProbe` says what is under each point by hit test (`elementFromPoint`,
-stepping into open shadow roots): a `fixed` or `sticky` box or a dialog makes
-the corner busy -- a cookie banner, a chat widget, a sticky header, a cart bar
--- while a fixed box covering 60% or more of the viewport is a modal's backdrop
-and hides nothing the person needs. Ordinary links and buttons, and content a
-person reads (an image, a video, a canvas, an SVG drawing, an embedded frame,
-or an element with its own text), only break ties: among clear corners the
-one over the least content and controls wins. Corners are tried bottom-left, top-left, bottom-right, top-right (the
-side panel covers the right of the Lab's emulated viewport without narrowing
-it, t191 round 1), and a corner the overlay holds is kept while it stays
-clear. When every corner is busy, each corner is also tried **docked**: moved
-in from its top or bottom edge (`offset`) to one margin past the fixed band
-that makes it busy -- above a fixed Add to cart bar, below a sticky header --
-never more than 40% of the viewport's height from its edge and past at most
-three bands. It then stays a pill with its words, at the corner, docked
-corner or side midpoint, full width or narrower (288 or 224 px), that covers
-the fewest fixed points; then one that covers no content and no control; then
-the full pill; then the place it holds; so on a product page with a sticky
-header and a fixed cart bar it sits in the free band above the bar, not on the
-product image the left midpoint would cover (D5 of the `run-musp4h2f-72e8ed99`
-UI review). It never becomes
-a text-less dot, because a status the person cannot read is no status (a feed
-with a sticky header and fixed bottom bars made the dot the common case, t195
-`run-murdouox-c5294247`, U3). A headline too long for the card is measured in its
-own font (an `OffscreenCanvas`) against its line's width and cut after the
-last whole word that fits, then an ellipsis, closing a quote the cut left
-open ("into “Search…”"); it is measured again when the card changes width
-(`fit-line.ts`, `text-measure.ts`). The detail wraps instead of being cut
-(since t378, `fit-lines.ts`): it is measured as the browser will wrap it
-across the card's two lines; when it still does not fit, the whole sentences
-that do are kept, and only when not even one does is it cut where a word
-ends ("A step didn't work in the test: the…" lost its sentence). The style's
-own two-line clamp is the backstop. The browser's own ellipsis cut inside
-words ("Search Bri…", "trying another w…", U-4 of the
-`run-muw60j7c-bb7c9a62` UI review) and is only the backstop where nothing can
-be measured. `PlacementKeeper`
-re-checks on resize, scroll and page DOM changes (its own UI's mutations are
-skipped), at most once per 800 ms; a check only reads, and the host moves --
-one write -- only when the answer changes. A page whose banner lives in a
-closed shadow root, or draws a bar with a canvas, cannot be seen this way.
+**Where it sits** (`content/activity-overlay/placement/`): the chooser samples
+corners and offsets inside the top or bottom 40% of the viewport, including
+positions just beyond fixed bands. The coarse grid uses at most 36px gaps. A candidate that looks completely clear
+is confirmed with vertical gaps of at most 12px, catching thin readable lines
+without refining already occupied candidates or docking scans. Each check
+memoizes point results across both passes. It ranks the share covered by fixed or
+sticky elements first, then controls and readable content, then full width,
+distance from the edge and corner order. It never uses a side midpoint or a
+textless dot. A held place stays unless another clearly improves coverage.
+`PlacementKeeper` checks after resize and page changes, at most every 800 ms,
+and moves only when a better place persists for two seconds. Scrolling resets
+that timer; checks resume after 600 ms of quiet. The last corner, width and
+offset are remembered in extension-local storage across documents. The host
+waits at most 150 ms for this read before appearing, avoiding a corner flash.
+
+The headline is measured in its own font and cut at a whole word (`fit/line.ts`,
+`text-measure.ts`). Details use two lines (`fit/lines.ts`); whole sentences
+are preferred, then whole words. Measurement reserves 2% of the line width
+(or at least 2 px) before the CSS clamp. Headline echoes are removed before
+rendering. Sending the same view again neither rewrites its text nor restarts
+its fade. If page code removes a working overlay, the host is reattached at
+most five times in ten seconds. The background relay retains the last target
+tabs through an empty or failed lookup while work continues, so navigation
+can receive the current display without waiting for another status change.
 
 The overlay never takes input: every element is `pointer-events: none`,
 `inert` and `aria-hidden`, so hit-testing and the automation's own clicks
@@ -2826,3 +2807,17 @@ The domain host accepts an optional request policy as the second argument to `cr
 The extension's `requestsEnabled` preference is on only when Core's recording-capture policy allows direct requests and the value is exactly `true`: the default settings, saved-state reading (`readSavedSettings`), Save (`mergeSettings`) and the settings draft all go through Core's clamp. Under Core's default policy it is therefore false. `background/storage.ts` additionally still forces `requestsEnabled: false` on every settings read and write (lane G owns that file), so even a policy that allowed direct requests would not keep a stored `true` until that write path also goes through the clamp. Settings shows a disabled unchecked Allow direct requests control with Unavailable in this version, disabled because Core's default policy forbids it. Existing browser host permissions do not authorize optional requests. No request executor, passive network capture, debugger permission or script action is enabled by this foundation. A later executable unit must bind explicit preexecution approval to the exact trusted command/session/request/origin policy, enforce unknown/no-retry receipt handling, and keep authenticated site sessions and redirects unsupported until separately designed. Arbitrary DOM-script network confinement, hard interruption and rollback remain unproved.
 
 Required command execution carries an authentic Core context through registered domain IO/Runtime handlers outside action payload and browser wire metadata. The server commits the parsed receipt before returning the live result; receipt-only replay or unknown cannot authorize continued execution. Required mode refuses adapters without the registered trusted handler callback and preserves normal action/permission mappings. This does not enable arbitrary native web nodes or candidate acceptance; browser protocol/result payloads remain the existing contract.
+
+### Build chat wording and endings
+
+Project cards name task parts and pieces, with part tests and whole-Flow tests;
+the framework's routing piece is hidden. The build ending event owns the reason,
+observed test record and remaining site changes. The following chat answer says
+what was kept and what the person can do next. Notes and endings render their
+body as paragraphs. Identical refused cards within the same work and reason
+fold together, while actions actually repeated remain distinct. The Stop label
+stays stable; the composer remains available after a failed or partial build.
+Missing model readiness is refreshed when the composer receives focus or input;
+an absent snapshot list means unknown readiness rather than no configured key.
+The Core person-facing text guard also checks extension project-card and overlay
+rendering so internal terminology and generated control names fail narrow tests.

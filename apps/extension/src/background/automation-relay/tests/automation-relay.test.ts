@@ -95,6 +95,16 @@ test("model readiness asks the secret-keys program and keeps only kind, provider
   assert.deepEqual(h.calls, [{ endpoint: "snapshot", payload: {}, programId: "secret-keys" }]);
 });
 
+// A snapshot with no key list cannot say whether a key exists: passing it on
+// as an empty list made the chat claim "FluxIQ needs a model key" on evidence
+// that could not tell. It goes on with no list, which the chat reads as unknown.
+test("model readiness passes no key list on when Core's snapshot named none", async () => {
+  for (const payload of [{}, { keys: "unreadable" }, null]) {
+    const h = harness({ snapshot: { ok: true, payload } });
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness }), { ok: true, payload: {} }, JSON.stringify(payload));
+  }
+});
+
 test("recording-only generation, test and approval are retired without a Core call", async () => {
   const h = harness();
   for (const type of [AUTOMATION_PANEL_MESSAGES.generateFromRecording, AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation, AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation]) {

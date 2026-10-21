@@ -9,14 +9,13 @@
 // that does not fit. When it still does not fit, its whole sentences that do
 // are said (the first of "Asking it again. The build stops if ..."), and only
 // when not even one does is it cut where a word ends, as one line was
-// (`fit-line.ts`). Nothing that cannot be measured is cut: the style's own
+// (`line.ts`). Nothing that cannot be measured is cut: the style's own
 // clamp is the backstop. Pure: the measuring is passed in.
 
-import { longestWordCut } from "../../shared/activity";
-import { fitLine } from "./fit-line";
+import { longestWordCut } from "../../../shared/activity";
+import { fitLine } from "./line";
+import { fitMargin } from "./margin";
 
-/** Pixels kept free at the end of a line, as `fit-line.ts` keeps them. */
-const SLACK_PX = 2;
 /** Where one sentence ends and the next starts. */
 const SENTENCE_END = /(?<=[.!?])\s+(?=\S)/u;
 
@@ -25,7 +24,7 @@ export function fitLines(text: string, room: number, measure: (text: string) => 
   if (lines <= 1) return fitLine(text, room, measure);
   if (!(room > 0) || measure(text) === undefined) return text;
   const fits = (candidate: string): boolean => {
-    const used = linesOf(candidate, room - SLACK_PX, measure);
+    const used = linesOf(candidate, room - fitMargin(room), measure);
     return used !== undefined && used <= lines;
   };
   if (fits(text)) return text;

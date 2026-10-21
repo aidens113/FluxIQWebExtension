@@ -488,3 +488,54 @@ test("a change of phase on the same tab never takes the overlay down", async () 
   assert.ok(h.delivered.length >= 4);
   assert.ok(h.delivered.every((entry) => entry.message.display !== null), "every send to the page carries a display");
 });
+
+// Round 5 of the breadth reruns: the pill vanished across some page loads. A
+// tab lookup made while the page navigates can find no page to draw on -- the
+// tab list unreadable for a moment, the driven tab between two documents --
+// and the overlay was taken down from the page being worked; the new document
+// then asked, was not in the tabs drawn in, looked the target up again, and
+// was left without the overlay until the status next changed.
+test("while work runs, a lookup that finds no page does not take the overlay down, and the new document is answered", async () => {
+  let tabs: readonly number[] = [7];
+  const h = harness({ overlayTabIds: async () => tabs });
+  await h.relay.accept(activity(1));
+  await settle();
+  h.delivered.length = 0;
+  tabs = [];
+  h.clock.advance(PACED_MS);
+  await h.relay.accept(activity(2));
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 2"]], "still drawn in the tab it was in");
+  h.delivered.length = 0;
+  await h.relay.noteContentReady(7, 0);
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 2"]], "the new document gets the status at once");
+});
+
+test("while work runs, a lookup that fails outright keeps the overlay in the tab it was in", async () => {
+  let failing = false;
+  const h = harness({ overlayTabIds: async () => {
+    if (failing) throw new Error("No tab list for a moment");
+    return [7];
+  } });
+  await h.relay.accept(activity(1));
+  await settle();
+  failing = true;
+  h.delivered.length = 0;
+  h.clock.advance(PACED_MS);
+  await h.relay.accept(activity(2));
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 2"]]);
+});
+
+test("once the work has settled, a tab the lookup no longer finds is cleared as before", async () => {
+  let tabs: readonly number[] = [7];
+  const h = harness({ overlayTabIds: async () => tabs });
+  await h.relay.accept(activity(1));
+  await settle();
+  tabs = [];
+  h.delivered.length = 0;
+  h.clock.advance(PACED_MS);
+  await h.relay.accept(activity(2, { phase: "done", label: "Run finished", final: true }));
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display]), [[7, null]]);
+});

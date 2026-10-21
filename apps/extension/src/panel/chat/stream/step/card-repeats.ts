@@ -36,8 +36,15 @@
 // Done" cards (R3-U-5 of the run-mux6naez-6c20f26e UI review), and are one
 // "Done (5 times)". Only the card just before, so done, failed, done never
 // reads as "Done (2 times)" then a failure; another row count is another
-// result, shown apart; a card still under way or waiting is never folded. No
-// DOM.
+// result, shown apart; a card still under way or waiting is never folded.
+//
+// A decision Core declined in whole folds across decisions too, when the
+// decision that asked for it again gave the same reason: round 5 showed two
+// identical "Choose ... / Not done: it was already tried exactly this way"
+// cards around one Look card, each refused try under its own decision with the
+// same words. The first card counts both, and the repeat's message, which then
+// says nothing new, is gone. A different reason is new words and stays, and so
+// does an action that was really tried again and failed. No DOM.
 
 import type { ActionCard } from "./action-card";
 import type { StepMessage } from "./messages";
@@ -53,6 +60,8 @@ type Stretch = { activityId: string; cards: Shown[]; repeated: boolean };
 /** `messages` (oldest first), with each card that repeats one of its stretch folded into that card. */
 export function foldRepeatedCards(messages: readonly StepMessage[]): StepMessage[] {
   const kept: StepMessage[] = [];
+  // Each refused card shown under a decision, by its unit, the decision's words and its own.
+  const refusals = new Map<string, Shown>();
   let stretch: Stretch | undefined;
   // The card shown just before, when it did its work: an identical one after it is folded into it.
   let last: (Shown & { activityId: string }) | undefined;
@@ -82,15 +91,29 @@ export function foldRepeatedCards(messages: readonly StepMessage[]): StepMessage
         stretch.repeated = true;
         continue;
       }
+      const asked = refusalKey(message, card, words);
+      const before = asked === undefined ? undefined : refusals.get(asked);
+      if (before !== undefined) {
+        fold(before, card, message);
+        continue;
+      }
       if (stretch?.repeated) stretch = undefined;
       copy.actions.push(card);
       stretch ??= { activityId: message.activityId, cards: [], repeated: false };
-      stretch.cards.push({ message: copy, card: copy.actions.length - 1, words });
+      const shown = { message: copy, card: copy.actions.length - 1, words };
+      stretch.cards.push(shown);
+      if (asked !== undefined) refusals.set(asked, shown);
     }
     if (copy.actions.length === 0 && message.actions.length > 0) continue;
     kept.push(copy);
   }
   return kept;
+}
+
+/** Where a refused card under a decision is found again: its unit, the decision's words and the card's; undefined for any other card. */
+function refusalKey(message: StepMessage, card: ActionCard, words: string): string | undefined {
+  if (message.kind !== "decision" || card.refused === undefined) return undefined;
+  return JSON.stringify([message.activityId, message.title, message.text ?? null, words]);
 }
 
 /** `card` folded into the card `into` stands for, which then counts it too. */

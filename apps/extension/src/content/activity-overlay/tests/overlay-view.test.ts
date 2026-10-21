@@ -7,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { personFacingTextFaults } from "fluxiq/ui";
 import type { ActivityDisplay } from "../../../shared/activity";
 import { ACTIVITY_PHASE_APPEARANCE } from "../phase-appearance";
 import { activityOverlayView } from "../overlay-view";
@@ -25,6 +26,17 @@ function display(overrides: Partial<ActivityDisplay> = {}): ActivityDisplay {
     ...overrides
   };
 }
+
+test("the rendered overlay passes Core's person-facing text guard", () => {
+  for (const overrides of [
+    {},
+    { headline: "Build failed", detail: "Build failed: The page needs a sign-in", working: false, outcome: "failed" as const },
+    { headline: "Putting the site back", detail: "Unticking a box" }
+  ]) {
+    const view = activityOverlayView(display(overrides), "expanded")!;
+    assert.deepEqual(personFacingTextFaults(`${view.headline} | ${view.detail}`), []);
+  }
+});
 
 test("an expanded view carries the headline, Core's sentence and the step", () => {
   assert.deepEqual(activityOverlayView(display(), "expanded"), {
@@ -64,7 +76,25 @@ test("the headline is never drawn again as the detail line", () => {
   ];
   for (const [headline, detail] of echoes) assert.equal(activityOverlayView(display({ headline, detail }), "expanded")?.detail, "", detail);
   const adds = activityOverlayView(display({ headline: "Build failed", detail: "Build failed: no list was found" }), "expanded");
-  assert.equal(adds?.detail, "Build failed: no list was found", "a detail that adds something stays");
+  assert.equal(adds?.detail, "No list was found", "a detail that adds something keeps what it adds, without the headline again");
+});
+
+// Round 5 of the breadth reruns: the pill read "Build failed | Build failed:
+// FluxIQ could not finish the Flow…" -- the headline, then the headline again.
+test("a detail never repeats the headline, either way round", () => {
+  const cases: Array<[string, string, string]> = [
+    ["Build failed", "Build failed: FluxIQ could not finish the Flow", "FluxIQ could not finish the Flow"],
+    ["Build failed", "build failed — the page stopped answering", "The page stopped answering"],
+    ["Building your Flow", "Building the Flow: reading the first row", "Reading the first row"],
+    ["Waiting for you: finish the check on the page", "Finish the check on the page.", ""],
+    ["Waiting for you: finish the check on the page", "Waiting for you", ""],
+    ["Run failed", "Run failed:", ""]
+  ];
+  for (const [headline, detail, shown] of cases) {
+    assert.equal(activityOverlayView(display({ headline, detail }), "expanded")?.detail, shown, `${headline} | ${detail}`);
+  }
+  const unrelated = activityOverlayView(display({ headline: "Running your Flow", detail: "Running step 2 of 5: Open the cart" }), "expanded");
+  assert.equal(unrelated?.detail, "Running step 2 of 5: Open the cart", "a detail that only shares a first word with the headline is drawn whole");
 });
 
 test("a step past the flow's count is said plainly", () => {
