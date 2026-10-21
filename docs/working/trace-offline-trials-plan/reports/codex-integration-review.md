@@ -2,7 +2,8 @@
 
 ## State
 
-Recovery in progress. No task implementation accepted or merged yet.
+Recovery in progress. t753 accepted and merged in both repositories (downstream daabd593, Core d1c39c0a);
+t751 and t752 remain in their isolated task trees.
 Recovery documentation pushed on both dev branches: downstream `9c29db20`, Core `5f92d155`.
 The user's `.clinerules/fluxiq.md` edit remains uncommitted and untouched.
 
@@ -44,6 +45,20 @@ The user's `.clinerules/fluxiq.md` edit remains uncommitted and untouched.
 - Finish downstream before Core, preserving each task's merge boundary; push both dev branches together after acceptance.
 - Begin P6 only after t751 is integrated. No paid round with known fixes in flight; full sweeps remain subject to the daily limit.
 - P6 integration review must also cover t753's new whole-run ending counts: recorded/offline evaluations cannot inflate the number of live episodes. t752's automatic disclosures may be unsupported on inert snapshots; those must become explicit gaps, never implicit live clicks.
+
+## t753 acceptance
+
+Observed post-merge gate report/logs: Core 1633 parallel +111 real-SQL tests, web79, domain432, extension1131,
+affected package typechecks, both structure audits, current stamped Core/domain builds. Supervisor docs:check exit0.
+Downstream task finish's audit passed; Core task finish's mandatory3prompt-contract files/64tests passed.
+The full Core check was skipped because these narrow gates were actually run and the user limits full sweeps.
+Both task merges completed; only routine paired ledger/baseline updates remain before push.
+
+Root's two t751 fixture files now pass a cleaned grouped two-file gate: real-SQL11tests; emptyparallel0; allgroups0.
+Temporary diagnostics removed. Remaining Core witness issue: a bare own-list/control stamp depends on optional
+runtime diff data and may lose its original witness. Worker is correcting actual retained witness provenance.
+P5/t752 review also found unsupported automatic disclosures could become answered failures; source correction
+passes root's independent22-case offline reevaluator gate, and realistic browser proof is still required.
 
 ## 2026-10-21 owning-gate follow-up
 

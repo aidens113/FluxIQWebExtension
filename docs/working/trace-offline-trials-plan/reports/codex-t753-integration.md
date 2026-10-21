@@ -36,3 +36,7 @@ No unresolved actual failure. All requested integration tests/types/build/struct
 Core UI/activity formatting, web activity/readiness source, downstream panel/overlay and headed visual harness are unchanged from the verified t753 commits. Previous Chromium 12/12 and Firefox 2/2 provider-free headed browser acceptance therefore remains applicable. No new browser run, authenticated extension/gateway session or paid model call was performed in this integration pass. Prior screenshot evidence and measured Firefox sampling cost limitations remain in `codex-recover-t753.md`; the supervisor separately preserved inspected images outside the disposable task tree.
 
 All integration logs are under ignored absolute directory `C:/Users/osrs_/FluxStuff/fxwork/t753/!FluxIQWebExtension/test-runs/` with filenames listed above. Native exit codes were captured immediately from `$LASTEXITCODE`; PowerShell diagnostic wrappers in redirected logs are not substituted for the observed native codes. No full suite, user-panel management, commit, merge or push was performed by this worker.
+
+Supervisor retention note: task finish removed the disposable downstream worktree, including those ignored logs.
+Commands/results remain in this committed report; inspected browser images were preserved separately under
+`C:/Users/osrs_/FluxStuff/lab-runs/2026-10-21/codex-t753-ui-review/` before removal.

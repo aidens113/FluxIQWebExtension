@@ -1,7 +1,7 @@
 # Traces And Offline Trials (Extension Side)
 
 Status: Active
-Status detail: Boundary move plan and trace P0-P5 merged; Codex recovering t751-t753 before P6 and breadth round 6.
+Status detail: Boundary move plan, trace P0-P5 and UI t753 merged; reset/judge recovery before P6 and breadth round 6.
 Created: 2026-10-19
 Last updated: 2026-10-21
 Owner: Senior supervisor agent
@@ -18,12 +18,14 @@ units t751, t752, t753 and how to resume them, the exact gate and merge steps, h
 and the ordered next steps) is in [reports/handoff-2026-10-20.md](./trace-offline-trials-plan/reports/handoff-2026-10-20.md).
 Read it after this section.
 
-**Recovery checkpoint (2026-10-21):** t753 is committed locally in both task trees and has merged current `dev`;
-post-merge narrow gates are running. Its headed provider-free Chromium (12) and Firefox (2) rendering cases pass,
-and the supervisor inspected preserved full-panel screenshots and independently passed the 82 overlay unit cases.
+**Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
+Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
+and supervisor-inspected full-panel screenshots; the supervisor also independently passed the 82 overlay unit cases.
 t752 is checkpointed locally; the supervisor's corrected changed-owner gate passed 32 files / 362 tests after
-structured-negative fixture migrations. Its final integrated browser checks remain. t751 remains uncommitted while
-real-service fixtures and final reset gates are completed. No implementation task has merged back or been pushed.
+structured-negative fixture migrations. P5 compatibility review found unsupported automatic text disclosure must
+be an explicit offline gap; the correction passes 22 unit cases, browser proof remains. t751's migrated real-service
+fixtures pass; review found own-list/control witnesses must also survive missing optional runtime diffs before it
+can be accepted. P6 remains gated on t751. Implementation push follows paired ledger/baseline updates below.
 Detailed findings and observed checks: [supervisor integration review](./trace-offline-trials-plan/reports/codex-integration-review.md).
 
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
@@ -548,6 +550,27 @@ Briefs for work in flight or next; finished briefs are archived in
   file, open items).
 - Outcome: Accepted
 - Follow-up: package-exports-cleanup; P6 after t751.
+
+### 2026-10-21 — t753 integrated: readable endings, usable chat and stable overlay
+- Validation: `pnpm.cmd task finish t753 "Readable chat endings and stable overlay"` observed the structure gate
+  `passed:true`; paired Core `pnpm.cmd task finish t753 "Readable chat endings and steady activity" --skip-checks`
+  ran its mandatory prompt contracts: `Test Files 3 passed (3)`, `Tests 64 passed (64)`. Supervisor
+  `pnpm.cmd docs:check` printed `Deterministic framework reference is current.` Independent owner gates and
+  post-merge checks are recorded below and in the linked reports, with their actual limits.
+- Merged downstream `daabd593`, Core `d1c39c0a`, preserving task merge boundaries. Downstream finished first through
+  its structure gate; Core finished with manual narrow gates instead of a full sweep, and its mandatory contract
+  gate independently passed 3 files / 64 tests. No hooks were bypassed.
+- Post-dev integration: Core owning groups 185 files / 1633 tests plus real-SQL 11 files / 111 tests; Core package
+  typecheck, web 79 tests/typecheck, domain 432 tests/source/test typechecks/build, extension 1131 tests/check,
+  both audits and stamped paired Core build passed. Supervisor docs:check passed after reference regeneration.
+  Stale domain/dist caused one intermediate extension type failure; owning domain rebuild resolved it.
+- Supervisor independently verified Core UI 277 tests and final extension overlay 82 tests; observed final headed
+  Chromium 12/12 and Firefox 2/2 logs and inspected preserved screenshots. Rendering source did not change at dev
+  integration. This is scripted transport/content-harness proof, not authenticated gateway or live model execution.
+- Reports: [recovery](./trace-offline-trials-plan/reports/codex-recover-t753.md),
+  [post-merge validation](./trace-offline-trials-plan/reports/codex-t753-integration.md).
+  External screenshots: `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-21/codex-t753-ui-review/`.
+- Reset/judge tasks continue in their own paired trees. No paid run, full sweep or user-panel management.
 
 ## Open Questions
 
