@@ -1,7 +1,7 @@
 # Traces And Offline Trials (Extension Side)
 
 Status: Active
-Status detail: Boundary audit move plan complete; trace plan P0-P3 merged, P4 running (t746); breadth round 5 next after t743; t747 and t748 follow-ups.
+Status detail: Boundary move plan and trace P0-P5 merged; Codex recovering t751-t753 before P6 and breadth round 6.
 Created: 2026-10-19
 Last updated: 2026-10-20
 Owner: Senior supervisor agent
@@ -13,7 +13,7 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 
 ## Current State
 
-**Handoff (2026-10-20 evening): the user asked to wrap up and hand this work to Codex.** Operating detail (in-flight
+**Recovery active (2026-10-20): Codex is continuing the three preserved task worktrees.** Operating detail (in-flight
 units t751, t752, t753 and how to resume them, the exact gate and merge steps, how to sync lanes and launch round 6,
 and the ordered next steps) is in [reports/handoff-2026-10-20.md](./trace-offline-trials-plan/reports/handoff-2026-10-20.md).
 Read it after this section.
@@ -544,3 +544,50 @@ Briefs for work in flight or next; finished briefs are archived in
 ## Open Questions
 
 None requiring user input.
+
+### 2026-10-20 — Codex recovery dispatched
+- Agent: supervisor
+- Changed: recovery ownership recorded; preserved t751/t752/t753 worktrees and user `.clinerules/fluxiq.md` edit.
+- Validation: initial main `git status --short` confirmed only the user edit; paired tasks contain reported partial work. Both main `pnpm.cmd structure:baseline` runs exited 0 (downstream 651 entries, Core 1155; no baseline growth).
+- Outcome: Partial; each task requires fresh diff review and narrow checks before acceptance.
+- Follow-up: workers recover one existing task each; supervisor reviews, integrates and verifies both repositories.
+
+## Recovery briefs (2026-10-20)
+
+### Brief: codex-recover-t751
+- Repository: paired fxwork/t751/!FluxIQWebExtension and fxwork/t751/!FluxIQ only.
+- Task: complete existing t751 brief and R1-R6 design, auditing partial edits against every worker report first.
+- Required reads: hub Current State, t751 original brief, handoff, lane report and subordinate reports; both AGENTS.md and Core code-structure.
+- Owns: all files assigned by original t751 brief and wave split, plus new tests needed for those subjects and own recovery report.
+- Must not touch: other task trees, main checkouts, shared plan/index/ledger, user edits; no commits/merges/pushes; no paid runs or panel management.
+- Definition of done: complete waves 2/3, remove replaced paths, narrow grouped tests/types/audits and headed provider-free site-reset specs pass; report exact gaps and commands.
+- Coordinate: no edits to t752/t753 owned files; flag overlaps for supervisor integration. Do not spawn more workers (three slots occupied).
+- Report to: docs/working/trace-offline-trials-plan/reports/codex-recover-t751.md in task tree.
+
+### Brief: codex-recover-t752
+- Repository: paired fxwork/t752/!FluxIQWebExtension and fxwork/t752/!FluxIQ only.
+- Task: complete existing t752 brief; audit partial work against subordinate reports, finish judge/read changes and browser acceptance.
+- Required reads: hub Current State, original t752 brief, handoff, lane/subordinate reports; both AGENTS.md and Core code-structure.
+- Owns: original t752 assigned files, their tests and authored architecture docs, own recovery report.
+- Must not touch: other task trees, main checkouts, shared plan/index/ledger, user edits; no commits/merges/pushes; no paid runs or panel management.
+- Definition of done: original acceptance met; grouped Core tests, affected types, audits, prompt contracts, headed provider-free social shape verified.
+- Coordinate: flag shared files for supervisor; do not spawn more workers. Rebuild only own paired Core.
+- Report to: docs/working/trace-offline-trials-plan/reports/codex-recover-t752.md in task tree.
+
+### Brief: codex-recover-t753
+- Repository: paired fxwork/t753/!FluxIQWebExtension and fxwork/t753/!FluxIQ only.
+- Task: audit all seven finished worker claims; complete original t753 acceptance and repair defects found.
+- Required reads: hub Current State, original t753 brief, handoff, lane/subordinate reports; both AGENTS.md and Core code-structure.
+- Owns: original t753 assigned files, their tests and architecture docs, own recovery report; narrow Core apps/web program-route readiness projection and owning test (preserve unknown versus absent keys).
+- Must not touch: other task trees, main checkouts, shared plan/index/ledger, user edits; no commits/merges/pushes; no paid runs or panel management.
+- Definition of done: grouped tests/types/audits and text guard pass; headed screenshots on two realistic scenarios inspected, limitations explicit.
+- Coordinate: flag shared files for supervisor; do not spawn more workers. Rebuild only own paired Core.
+- Report to: docs/working/trace-offline-trials-plan/reports/codex-recover-t753.md in task tree.
+### Recovery review notes (2026-10-20, supervisor)
+- Both main `dev...origin/dev` comparisons initially returned `0 0`; user `.clinerules/fluxiq.md` edit remains untouched.
+- Supervisor `git diff --check` in all six task worktrees returned exit 0 before recovery edits progressed; this is whitespace validation only.
+- Initial changed-file overlap: t751/t752 Core candidate/contracts.ts and candidate/index.ts. New trial-door edits will require serial integration review.
+- Review requests sent to t751: new unidentified project actions must not use legacy admission; source-derived witness stamps must reject model injection.
+- Review requests sent to t752: earlier advice is context, never exemption from the task; preserve valid ordering/format/missing-action refusals, absence versus empty defects, and advice older than three trials.
+- t753 recovery scope includes its discovered Core apps/web readiness projection bug; retain unknown versus explicitly absent model keys.
+- No source unit accepted, merged or pushed yet. Narrow task checks are running in isolated worktrees; no daily full sweep or paid run started.
