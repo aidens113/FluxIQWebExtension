@@ -1952,22 +1952,46 @@ leaves, optional marks, ambiguous resolutions, sensitive exclusions and
 accessible-name behavior remain separate; no class names or text values are
 interpreted as selection state (`content/extraction/path-equivalence/`).
 
-A list extraction's text or table-column field containing a visible unexpanded text-disclosure
-button refuses the read with `incomplete_text` in existing validation feedback.
-The author first reads minimal nonempty stable row-context columns without the
-incomplete field, then uses those records in For Each with an optional explicit
-registered row-bound disclosure click, and then, after the repeat, reads the
-same listing again with the field, giving both reads the same conditions, so
-every row the final read keeps was disclosed by the repeat
-(`INCOMPLETE_TEXT_NEXT`,
-`domain/src/runtime/llm-evidence/rejection-next/next-sentence.ts`). Units without
-usable context are excluded from that helper; a requested row that lacks it needs
-another context, rather than omission. This order repeats after each Next page
-move; one observed disclosure target acts on its own row. The domain recognizes
+A list extraction's text or table-column field containing a visible unexpanded
+text-disclosure button would refuse the read with `incomplete_text`, so the
+reader presses each such row's own disclosure control itself, by default; a read
+that says `discloseText: false` inside `extractList` presses nothing and is
+refused as every read was before t752. The reader presses on exactly the rows the
+check below would refuse -- every row the read keeps, and a rejected row only
+where a condition that rejected it judged collapsed text, which is then judged
+again on the whole text -- and reads the row again
+(`content/extraction/text-disclosure/read-disclosing.ts`). Only the control the
+refusal found inside the field it read is pressed, once, and never one outside
+the row, a link with a target (or anything inside one), or a form's submit
+button (`text-disclosure/press-disclosure.ts`). A press is given up to 2 s, or
+less where the read's deadline is nearer, to open the text: the control leaves
+the row, says it is expanded, hides, or stops reading as a disclosure. A kept row
+still cut after its press, or whose control is one never pressed, refuses the
+read with `incomplete_text`; its repair is to leave that field out, or narrow the
+conditions so that row is not kept, never a click step or repeat
+(`incompleteTextNext`, `domain/src/runtime/llm-evidence/rejection-next/next-sentence.ts`;
+Core's builder note on a judge's add-this-field advice says the same,
+`flow-bootstrap/subflow-candidate/disclosure-advice.ts`). The read's outcome counts
+the rows it pressed as `disclosedRows`, sent once it pressed any, a count the
+domain's summary declares and copies (`domain/src/actions/extraction/summary.ts`).
+The catalog grammar says the read opens each kept row's own collapsed text itself
+and that `discloseText: false` stops it, and its example declares the default
+`true` (`output-nodes/extract-list/catalog-text.ts`). `discloseText` stays on a Flow's
+one-page request (`output-nodes/extract-list/one-page-read.ts`), since it is
+about this read's rows rather than the collection. Until t752 (2026-10-20) the
+repair was a second Flow shape around the read -- a row-context read, an
+optional row-bound press repeated over it, then the full read -- which failed in
+three social reruns in three ways, the last because its context read had no
+conditions and pressed every row a model step at a time. t752's unit C made the
+press the opt-in `discloseText: true`; its unit C2 made it the default, because a
+kept collapsed row always failed, so no read that passed before reads differently,
+and the refused read and its retries (about 48 s each, 4.8 minutes of one round-5
+build) are gone. The domain recognizes
 only the closed `incomplete_text:` prefix on OUTPUT_NOT_OBSERVED and returns a
-closed incomplete-text reason with generic recovery ordering. Arbitrary failure
+closed incomplete-text reason with generic recovery. Arbitrary failure
 text, field names and page values are not forwarded in that detail.
-Passive discovery and extraction never press the control. Plain
+Passive discovery, and a list read with `discloseText: false`, never press the control.
+Plain
 prose, unrelated controls, and expanded or hidden controls do not establish an
 incomplete field. A typed refusal propagates through the whole list, so the
 runtime cannot store a partial field while reporting complete extraction.
@@ -2703,6 +2727,13 @@ which returns Core's `ClientGatewayTraceReevaluator`:
   the end), unless the recorded read proves its list ended there
   (`recorded-list-ended.ts`). A sandbox breach, an unresolved target, a wait
   that ran out or a list that never appeared is a `dynamic_content` gap.
+  An `extract_list` control or changed read that reports `incomplete_text`
+  with `OUTPUT_NOT_OBSERVED` under automatic disclosure is also a gap: the
+  inert snapshot could not reveal required text. Automatic disclosure includes
+  the default when `discloseText` is omitted. Explicit `discloseText: false`
+  preserves its deliberate refusal; complete captured text and unrelated
+  validation failures retain the ordinary differential rules. This never
+  falls back to pressing a control in a live tab.
   The answer is built by `gatewayActionResultFromBrowserResult`
   (`domain/src/client/browser-result-mapping.ts`), the same builder a live
   answer uses.

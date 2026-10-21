@@ -191,7 +191,9 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
     // so kept rows above stored ones say why (`extraction/list-reader.ts`).
     ...(outcome.earlierPageRepeats === undefined ? {} : { earlierPageRepeats: outcome.earlierPageRepeats }),
     // Whether a read of one page saw its list go on past it: two closed words (`extraction/read-coverage/`).
-    ...(outcome.listContinues ? { listContinues: { kind: outcome.listContinues.kind, evidence: outcome.listContinues.evidence } } : {})
+    ...(outcome.listContinues ? { listContinues: { kind: outcome.listContinues.kind, evidence: outcome.listContinues.evidence } } : {}),
+    // The kept rows whose own collapsed text the read opened itself (`discloseText`, t752).
+    ...(outcome.disclosedRows === undefined ? {} : { disclosedRows: outcome.disclosedRows })
   };
 }
 

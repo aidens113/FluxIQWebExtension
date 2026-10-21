@@ -13,7 +13,8 @@
 // its evidence reported (Core tells the model to add one after exploring):
 //
 // - as the whole value, beside `fields` (or `columns`), `where`, `dedupe`,
-//   `sort`, `minItems` and `maxItems`;
+//   `sort`, `minItems`, `maxItems` and `discloseText` (t752: the read opens each
+//   kept row's own collapsed text itself by default, and `false` stops it);
 // - as the `item`, the literal request's name for which elements are the list;
 // - on a field, as `./columns.ts` reads it.
 //
@@ -112,7 +113,7 @@ const NEXT_PAGE_INSTEAD = "web.handle.expected.extract_list.next_page";
 /** The shape hints a slot refusal may carry beside its reason. */
 type WebExtractionSlotHint = typeof NEXT_PAGE_INSTEAD;
 
-const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "minItems", "maxItems"]);
+const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "minItems", "maxItems", "discloseText"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
 /** The keys a read that paged by itself took, each refused where it is written (`NEXT_PAGE_INSTEAD`). */
 const RETIRED_PAGING_KEYS: ReadonlySet<string> = new Set(["paginate", "maxPages", "maxScrolls"]);
@@ -165,6 +166,12 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (where !== undefined && where.ok && where.where.length > 0) request.where = where.where as unknown as JsonValue;
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
+  // The boolean written is carried, as the reader carries it: `false` stops the
+  // default press (`../../../../actions/extraction/read-request.ts`, t752 C2).
+  if (value.discloseText !== undefined) {
+    if (typeof value.discloseText !== "boolean") return refused("web.handle.malformed", ["discloseText"]);
+    request.discloseText = value.discloseText;
+  }
   // A handle that names one record reads one row, whatever the plan wrote: two
   // rows from what the model chose as one record would be a wrong table
   // (`../../structure/handles.ts`, `oneRecord`).

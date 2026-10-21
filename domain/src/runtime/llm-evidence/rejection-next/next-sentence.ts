@@ -37,36 +37,36 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
 }
 
 /**
- * What to do about a read whose text field came back cut short: a helper read
- * of the row context, a per-row disclosure over it, then the full read after
- * that repeat. The field is named when `instead` carries its code
- * (`web.text.incomplete_field.<key>`, `../action-failure/refusal.ts`), which
- * is set only for a key of the fields the request itself sent.
+ * What to do about a read whose text field came back cut short. The read presses
+ * each kept row's own disclosure control itself before reading it, unless it
+ * says `discloseText: false` (`actions/extraction/request.ts`), so a refusal
+ * means that row's control did not open its text or is one never pressed (a
+ * link or a form button): leave the field out, or narrow the conditions so that
+ * row is not kept. No click step or repeat can do better. The field is
+ * named when `instead` carries its code (`web.text.incomplete_field.<key>`,
+ * `../action-failure/refusal.ts`), which is set only for a key of the fields
+ * the request itself sent.
  *
- * Until t738 it ended "Repeat this ordering after each Next page move", which
- * prescribes a row loop inside a page loop, and Core's script grammar refuses
- * a repeat inside a repeat (social `run-mvgf7ij5-a9747575`: the build wrote
- * that nesting, was refused, and wrote it again). So the rows are loaded first,
- * by a step of its own, and the row loop runs once over everything loaded.
- *
- * Until t741 it ended "Then read the full text." with no field named, and the
- * builds sent the same field again (social rerun 3): it did not say where the
- * read goes. It goes after the repeat, not inside it, with no condition tying
- * it to the loop. Until t743 it promised "by then every row is disclosed",
- * which was false whenever the first read filtered: the repeat disclosed only
- * the rows that read kept (social rerun 4). Giving both reads the same
- * conditions is what makes every row the final read keeps one the repeat
- * disclosed; the reader checks disclosure only on the rows a read keeps.
+ * Until t752 (2026-10-20) it prescribed a two-read shape: load every row, read
+ * only row-context columns, repeat an optional row-bound press over that read,
+ * then read the listing again with the text field and the same conditions. It
+ * was refined after each of social reruns 3 and 4 (a loop inside a page loop
+ * Core refuses, t738; no field named, t741; a first read whose conditions
+ * differed, t743) and failed again in rerun 5, where the context read had no
+ * conditions and pressed every row of the feed, a step and about 14 s each, so
+ * each trial took minutes and the build ran out of time. The read now does the
+ * pressing itself, on only the rows it keeps, in one call. Unit C named
+ * `discloseText: true` on the same read; unit C2 made it the default, since a
+ * kept collapsed row always failed, so the sentence no longer asks for it and
+ * names only what is left: the field out, or the row not kept.
  */
 function incompleteTextNext(instead: readonly string[] | undefined): string {
   const key = instead?.find((code) => code.startsWith(INCOMPLETE_FIELD_CODE))?.slice(INCOMPLETE_FIELD_CODE.length);
-  const field = key !== undefined && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(key) ? `the field \`${key}\`` : undefined;
-  return "A repeat cannot hold another repeat, so do this in order, once, on one listing. "
-    + "Load every row first: a Scroll step with mode untilStable where the list grows in place as it scrolls, or Next page in its own repeat-while span. "
-    + `Then read only nonempty stable row-context columns, without ${field ?? "the incomplete text field"}. `
-    + "Then, with repeat over that read (For Each), an optional explicit registered row-bound click on each row's own disclosure. "
-    + `After that repeat, not inside it, read the same listing again with ${field ?? "the text field"}, and give both reads the same conditions, so every row the final read keeps was disclosed by the repeat. `
-    + "Exclude units with no row context from that helper; find another context for any requested row this would omit.";
+  const field = key !== undefined && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(key) ? `the field \`${key}\`` : "a text field";
+  return `Nothing was stored: ${field} is still cut short behind a disclosure control (such as Read more) on a row this read keeps. `
+    + "The read already presses each kept row's own control itself, so that row's control did not open its text, or is a link or form button. "
+    + "Leave that field out of this read, or narrow the conditions so that row is not kept. "
+    + "No separate click step or repeat will open it. If this read set discloseText: false, remove that instead.";
 }
 
 /** The code an incomplete-text refusal carries its field in (`../action-failure/refusal.ts`). */

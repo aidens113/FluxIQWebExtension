@@ -364,3 +364,38 @@ test("a changed read that failed on the page for another reason is answered as i
   assert.equal(answer.status, "answered");
   assert.equal(answer.status === "answered" ? answer.result.status : undefined, "failed");
 });
+
+test("a changed read needing unsupported automatic disclosure is a gap, including the default", async () => {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, { actual: "incomplete_text: field description contains unexpanded text" });
+  for (const discloseText of [undefined, true]) {
+    const extractList = { ...LIST_COMMAND.parameters.extractList, ...(discloseText !== undefined ? { discloseText } : {}) };
+    const command = { ...LIST_COMMAND, parameters: { extractList } };
+    const page = fakePage({ changed: { result: { status: "failed", failure } } });
+    assert.deepEqual(await reevaluator(page).reevaluate(request({ command })), GAP_DYNAMIC);
+    assert.equal(page.calls.length, 2, "only isolated control/changed evaluation, with no live fallback");
+  }
+});
+
+test("a reproducing control that also needs unsupported disclosure cannot vouch for the snapshot", async () => {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, { actual: "incomplete_text: field description contains unexpanded text" });
+  const result: Partial<WebAutomationActionResult> = { status: "failed", failure };
+  const page = fakePage({ control: { result } });
+  assert.deepEqual(await reevaluator(page).reevaluate(request({ recordedResult: recordedResult(result) })), GAP_DYNAMIC);
+});
+
+test("explicit disclosure opt-out preserves a deliberate incomplete-text failure", async () => {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, { actual: "incomplete_text: field description contains unexpanded text" });
+  const extractList = { ...LIST_COMMAND.parameters.extractList, discloseText: false };
+  const page = fakePage({ changed: { result: { status: "failed", failure } } });
+  const answer = await reevaluator(page).reevaluate(request({ command: { ...LIST_COMMAND, parameters: { extractList } } }));
+  assert.equal(answer.status, "answered");
+  assert.equal(answer.status === "answered" ? answer.result.status : undefined, "failed");
+  assert.equal(page.calls[1]?.action.extractList?.discloseText, false, "the domain preserves opt-out");
+});
+
+test("complete captured text needs no disclosure and remains an answer", async () => {
+  const page = fakePage({ changed: { result: { extracted: [{ description: "A complete captured description." }] } } });
+  const answer = await reevaluator(page).reevaluate(request());
+  assert.equal(answer.status, "answered");
+  assert.deepEqual(answeredPayload(answer)?.extracted, [{ description: "A complete captured description." }]);
+});
