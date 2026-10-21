@@ -388,12 +388,12 @@ type Scope = { projectId: string; flowId: string };
 /** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
 type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean; onPage: string | undefined; after: readonly WebLlmPlanStepMove[] | undefined };
 /** `notAField`: what the element is, where it holds no typed text (`target-packets.ts`, t486). */
-type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined };
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined; spot?: Extract<WebLlmTargetResolution, { ok: true }>["spot"] };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does; `details`, said after every position (`extraction/stored-columns.ts`). */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined; details?: readonly string[]; issues?: readonly WebPlanRefusalIssue[] };
 type NodeOutcome =
   | { status: "unchanged" }
-  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[]; effect?: JsonObject | undefined }
+  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[]; effect?: JsonObject | undefined; spot?: Extract<WebLlmTargetResolution, { ok: true }>["spot"] }
   | { status: "refused"; refusals: Refusal[] };
 
 const TARGET_ISSUES = {
@@ -462,7 +462,8 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
     nodeDefinitionId: acting.nodeDefinitionId,
     declared: input.declaredConsequences,
     check: input.permission,
-    parameters: permissionParameters
+    parameters: permissionParameters,
+    spot: outcome.status === "resolved" ? outcome.spot : undefined
   });
   // A step nobody declared, and a step nobody permitted, both resolved their
   // names first, so both still report what they assumed: the guess happened
@@ -588,7 +589,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       }
       const outcome = resolveTarget(state.fallback, scope, stores.targets, press);
       if (typeof outcome !== "string") replaced.set(key, {
-        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect, notAField: outcome.notAField
+        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect, notAField: outcome.notAField, spot: outcome.spot
       });
       else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key, "$state", "fallback"] });
       continue;
@@ -680,7 +681,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   }
   const views = [...replaced.values()].flatMap((entry) => entry.views ?? []);
   // A step's effect is its element's (t447); a fact's target is read, never acted on, so it has none.
-  return { status: "resolved", parameters: extractionNode && scope.step ? webPlanRunRecordOutput(resolved) : resolved, assumed, views, effect: scope.step ? element?.effect : undefined };
+  return { status: "resolved", parameters: extractionNode && scope.step ? webPlanRunRecordOutput(resolved) : resolved, assumed, views, effect: scope.step ? element?.effect : undefined, spot: element?.spot };
 }
 
 /** Exact supported state grammar; the public Core guard also accepts extras. */
@@ -725,7 +726,7 @@ function resolveRunOutput(parameters: JsonObject, scope: Scoped, stores: WebPlan
   // `parameters.extractList.…` on this node and a reader holding the Run Output
   // node's authored parameters finds it exactly there.
   const assumed = inner?.status === "resolved" ? inner.assumed.map((entry) => nested(entry)) : [];
-  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [], effect: inner?.status === "resolved" ? inner.effect : undefined };
+  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [], effect: inner?.status === "resolved" ? inner.effect : undefined, spot: inner?.status === "resolved" ? inner.spot : undefined };
 }
 
 /** One assumption of a payload, said as a position on the node that carries the payload. */
@@ -752,6 +753,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   if (resolution.shownIn !== undefined) resolved.views = [{ handle, view: resolution.shownIn.view, location: resolution.shownIn.location }];
   if (resolution.effect !== undefined) resolved.effect = resolution.effect;
   if (resolution.notAField !== undefined) resolved.notAField = resolution.notAField;
+  if (resolution.spot !== undefined) resolved.spot = resolution.spot;
   return resolved;
 }
 

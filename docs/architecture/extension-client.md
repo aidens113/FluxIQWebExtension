@@ -2721,3 +2721,20 @@ The domain host accepts an optional request policy as the second argument to `cr
 The extension's `requestsEnabled` preference is on only when Core's recording-capture policy allows direct requests and the value is exactly `true`: the default settings, saved-state reading (`readSavedSettings`), Save (`mergeSettings`) and the settings draft all go through Core's clamp. Under Core's default policy it is therefore false. `background/storage.ts` additionally still forces `requestsEnabled: false` on every settings read and write (lane G owns that file), so even a policy that allowed direct requests would not keep a stored `true` until that write path also goes through the clamp. Settings shows a disabled unchecked Allow direct requests control with Unavailable in this version, disabled because Core's default policy forbids it. Existing browser host permissions do not authorize optional requests. No request executor, passive network capture, debugger permission or script action is enabled by this foundation. A later executable unit must bind explicit preexecution approval to the exact trusted command/session/request/origin policy, enforce unknown/no-retry receipt handling, and keep authenticated site sessions and redirects unsupported until separately designed. Arbitrary DOM-script network confinement, hard interruption and rollback remain unproved.
 
 Required command execution carries an authentic Core context through registered domain IO/Runtime handlers outside action payload and browser wire metadata. The server commits the parsed receipt before returning the live result; receipt-only replay or unknown cannot authorize continued execution. Required mode refuses adapters without the registered trusted handler callback and preserves normal action/permission mappings. This does not enable arbitrary native web nodes or candidate acceptance; browser protocol/result payloads remain the existing contract.
+
+### Plan-step reset witnesses and page order
+
+The domain's plan resolution declares a target's opaque control spot from the
+view that issued its handle. `target-packets.ts` retains the spot with the
+handle, and `step-permission.ts` hands the same item, dialog, subject, page,
+scope, resource, place and state tokens exploration uses to Core's permission
+check. A handle resolved from view history keeps its original view's tokens.
+Core derives the plan step's reset witness; a model cannot supply one. This
+lets every project trial refuse an unwitnessed lasting step before it prepares
+the site, including predecessor steps.
+
+Web list extraction declares `answersRows: "page_order"`. A bounded read in a
+loop can retain the first N rows in page order without inventing a sort when
+the loop also declares `repeat most: N`. Explicit sort still determines order
+when supplied. The domain reports rule errors at the written extraction key,
+and contract tests apply Core's suggested corrections to real resolved plans.

@@ -1,0 +1,42 @@
+# Supervisor fixture migration, t751
+
+## Current state (2026-10-21)
+
+Supervisor editing partition in Core:
+`runtime/service/project-build/tests/project-build-reset.test.ts` and `project-build-trial-reset.test.ts`.
+Recover_t751 retains the shared supervisor helper, single-subflow and brief-port tests.
+
+## Brief
+
+Migrate fake domain declarations/inventory to the real R1/R3 witness contract. Use real admission plumbing,
+matching scoped control identities and an actually observed original where the test needs a lasting act.
+Do not inject stamps manually or restore deleted unrelated-list adoption. Preserve meaningful reset/preparation
+assertions, and explicitly explain any expectation that represented removed behavior.
+
+## Validation
+
+Initial grouped two-file migration gate: 8 failed / 3 passed; stale legacy expectations and missing witnesses.
+Repeated focused failures traced to actual fixture paths, without changing admission policy:
+initial/custom look answers do not publish ledger inventories; use ordinary core.run_node reads;
+source recipe items and new saved-membership items require distinct tokens; cannotUndo cannot admit
+an unresolved project effect; dependent entry must restore the first builder's effects before replaying it.
+
+Observed passes before final cleanup:
+- `node ../../scripts/vitest-groups.mjs --groups=real-sql src/programs/automation-studio/runtime/service/project-build/tests/project-build-trial-reset.test.ts`
+  (selected with the companion file during debugging): two-builder test passed, preserving dish soap and
+  restoring every exploration/entry/trial effect before replay. No legacy duplicate additions remain.
+- Full reset fixture file, same grouped runner: 1 file / 10 tests passed, native exit0, all real-SQL groups passed.
+  Explicit missing declarations still refused, original rows preserved, strict unresolved resets blocked,
+  and DeepSeek pre-send checks passed. This run included temporary fake-only diagnostics.
+- Removed diagnostics, corrected obsolete comments, removed unnecessary cannotUndo from successful reset,
+  and started final grouped two-file gate (parallel then real-SQL). Result pending.
+
+No manual stamps, fake output datasets, timeout increases, full suites or paid calls.
+Final paired build waits for current dev integration and the stable complete owner gate.
+
+Final clean supervisor gate completed: parallel then real-SQL, 2 files / 11 tests passed, native exit 0, all groups passed (session 64949). Both supervisor fixture files are frozen; no temporary diagnostics remain. Subsequent retained-control production changes are being validated separately before paired integration.
+
+Independent retained-witness production check after freeze: node ../../scripts/vitest-groups.mjs --groups=parallel,real-sql with site-reset/tests/trial-witness.test.ts and reset-settlement/tests/{toggle-baseline,witnesses}.test.ts -> parallel 3 files / 36 tests passed; real-SQL empty by selection; all groups passed, native exit 0 (session 2558). Includes retained original across briefs, absent optional trial diff, colliding tokens on another resource, independent resource baselines, control-only repeat receipts. External log: C:/Users/osrs_/FluxStuff/lab-runs/2026-10-21/codex-t751-review/supervisor-retained-witness-tests.log. Initial redirect did not run because the external directory did not yet exist; created it and ran the actual gate above.
+
+Supervisor reviewed the final project exploration guard and positive custom tool cycle: captured original off, effect on, unresolved trial refused, explicit own undo, fresh original observed, next trial admitted; no manual witness stamp and no control metadata leaked into tool args. Independent action-permissions and act-places owning gate (session55444) completed native0 with all groups passed; parallel counts are in external supervisor-project-exploration-tests.log, real-SQL selection empty. Missing ledger/original/control identity are refused before effect; explicit standalone compatibility preserved.
+Exact final exploration owner counts: parallel2files46tests passed (act-places11, action-permissions35); real-SQL empty; allgroups/native0.
