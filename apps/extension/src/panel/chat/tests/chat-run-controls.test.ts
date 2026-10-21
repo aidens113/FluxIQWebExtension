@@ -74,7 +74,8 @@ test("a working run offers Take over beside Stop; held, the chat says whose page
       assert.equal(dock.byClass("chat-hold-control")[0]!.hidden, false);
       assert.equal(take.textContent, "Take over");
       assert.equal(dock.byClass("chat-stop-control")[0]!.hidden, false);
-      assert.equal(dock.byClass("chat-stop")[0]!.textContent, "Stop run");
+      assert.equal(dock.byClass("chat-stop")[0]!.textContent, "Stop");
+      assert.equal(dock.byClass("chat-stop")[0]!.getAttribute("aria-label"), "Stop run");
 
       take.dispatch("click"); await settle();
       assert.deepEqual(h.core.sent.filter((message) => message.type === RUNTIME_MESSAGES.panelTakeOverRun), [{ type: RUNTIME_MESSAGES.panelTakeOverRun, projectId: "project-1", runId: "r1" }]);

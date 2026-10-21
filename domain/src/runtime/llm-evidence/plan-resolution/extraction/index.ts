@@ -4,10 +4,13 @@
 //
 // `slot.ts` is the whole of what a caller needs; `columns.ts` and
 // `conditions.ts` are what it is made of, and are its own to reach. The
-// one exception is the assumption a resolved slot reports, which is part of the
-// answer rather than part of the making of it.
+// exceptions are the assumption a resolved slot reports, which is part of the
+// answer rather than part of the making of it, and the condition reader itself,
+// which a reader of a recorded build calls to read a `where` clause exactly as
+// the build read it (the test runner's offline-trial experiment, trace plan P5).
 
 export { type WebExtractionColumnAssumption } from "./columns";
+export { keptWebExtractionConditions, type WebExtractionConditionColumns, type WebExtractionConditions } from "./conditions";
 export { resolveWebExtractionSlot, type WebExtractionSlotIssue, type WebExtractionSlotResolution } from "./slot";
 export { webPlanSlotRefusal, type WebPlanSlotRefusal } from "./slot-refusal";
 // The step's record output read as its dispatch reads it (t489).

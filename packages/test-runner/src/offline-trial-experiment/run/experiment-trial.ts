@@ -11,17 +11,20 @@
 //   (`../oracle/oracle-verdict.ts`), with the candidate's read count from its
 //   script.
 //
+// With a reevaluator (tier 2) Core's matcher may answer a changed read from the
+// trace's recorded page snapshot; the report lists those operations.
+//
 // The request's revision is the recorded whole revision where the candidate
 // is a recorded one; a hand correction has none and runs under the source
 // trial's whole revision with its own digest.
 
+import type { ClientGatewayTraceReevaluator } from "fluxiq/client-gateway";
 import path from "node:path";
 import type { ExperimentSession } from "../experiment-session.js";
 import type { OfflineTrialRequest } from "../offline-trial-request.js";
 import { judgeTrialDatasets, readTrialDatasets } from "../oracle/index.js";
 import { scriptExtractNodes } from "../rebuild/index.js";
 import type { OracleVerdict, TracedRevision } from "../types.js";
-import type { CoreTrialSeams } from "./core-trial-seams.js";
 import { readLiveTrialFeedback } from "./live-trial-feedback.js";
 import { offlineTrialReport, type OfflineTrialReport } from "./offline-trial/index.js";
 import { runOfflineExperimentTrial, type CapturedTrace, type OfflineExperimentSessionView, type OfflineExperimentTrialRun } from "./run-offline-experiment-trial.js";
@@ -59,8 +62,9 @@ export async function runExperimentTrial(input: {
   request: OfflineTrialRequest;
   /** The candidate's script as Core compiled it, for its read count. */
   script: string;
-  seams: CoreTrialSeams;
   sessionView: OfflineExperimentSessionView;
+  /** Tier 2: the reevaluator handed to Core's runner (`../tier2/`); absent for tier 1. */
+  reevaluator?: ClientGatewayTraceReevaluator | undefined;
 }): Promise<ExperimentTrialResult> {
   const { session, request } = input;
   const projectId = request.store.projectId;
@@ -73,7 +77,8 @@ export async function runExperimentTrial(input: {
     // because the detached runner requires the two equal (`flow-bootstrap/verification/detached-execution.ts`).
     // Core's digest does not cover the revision: the rebuilt digest equals the recorded one (`../rebuild/`).
     candidate: { candidateId: request.candidate.candidateId, revision, digest: request.candidate.wholeDigest, candidate: { ...request.candidate.candidate, revision } },
-    seams: input.seams, sessionView: input.sessionView,
+    sessionView: input.sessionView,
+    ...(input.reevaluator === undefined ? {} : { reevaluator: input.reevaluator }),
   });
   const automationDataDir = path.join(input.rootDir, ".fluxiq", "artifacts", "automation-studio");
   const offline = offlineTrialReport(run.outcome);

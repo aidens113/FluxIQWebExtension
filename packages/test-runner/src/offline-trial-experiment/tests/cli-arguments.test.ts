@@ -45,3 +45,20 @@ test("refuses an unknown command, an unknown argument, a missing value and a num
   assert.match((parseExperimentArguments(["survey", ...base, "--from-revision", "ten"]) as { error: string }).error, /whole number/);
   assert.match((parseExperimentArguments(["survey", "--store", "s"]) as { error: string }).error, /--project is required/);
 });
+
+test("trial --tier2 is a flag that needs --work, and --channel picks its browser", () => {
+  const work = ["--trace", "t", "--revision", "16", "--work", "test-runs/p5w8/e1"];
+  const tier2 = parseExperimentArguments(["trial", ...base, ...work, "--tier2", "--session-view", "declared"]);
+  assert.ok(!("error" in tier2));
+  assert.deepEqual([tier2.tier2, tier2.channel, tier2.sessionView, tier2.work], [true, "chrome", "declared", "test-runs/p5w8/e1"]);
+  const edge = parseExperimentArguments(["trial", ...base, "--tier2", ...work, "--channel", "msedge"]);
+  assert.ok(!("error" in edge));
+  assert.deepEqual([edge.tier2, edge.channel, edge.revision], [true, "msedge", 16]);
+  const tier1 = parseExperimentArguments(["trial", ...base, ...work]);
+  assert.ok(!("error" in tier1));
+  assert.equal(tier1.tier2, false);
+  assert.match((parseExperimentArguments(["trial", ...base, "--trace", "t", "--revision", "16", "--tier2"]) as { error: string }).error, /needs --work/);
+  assert.match((parseExperimentArguments(["trial", ...base, ...work, "--channel", "msedge"]) as { error: string }).error, /needs --tier2/);
+  assert.match((parseExperimentArguments(["trial", ...base, ...work, "--tier2", "--channel", "firefox"]) as { error: string }).error, /chrome or msedge/);
+  assert.match((parseExperimentArguments(["survey", ...base, "--tier2"]) as { error: string }).error, /trial arguments/);
+});

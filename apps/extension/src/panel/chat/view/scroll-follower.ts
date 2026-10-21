@@ -16,6 +16,12 @@
 // (D16, run musq0b1m). After a scroll that is not the person's, a follower
 // goes back down. Content that grows in place (a card's status changing, a
 // line replaced) is followed through a ResizeObserver on the scrolled content.
+//
+// While the chat is empty its welcome is all there is, and it is read from its
+// top: `rest(true)` holds the view there, and nothing pins it to the bottom or
+// shows "Jump to latest" until `rest(false)`, when following starts from the
+// bottom. Pinned while empty, a welcome taller than the view opened scrolled,
+// with its title cut off at the top (round 5).
 
 import { isAtBottom } from "./scroll-follow";
 
@@ -45,6 +51,8 @@ export type ScrollFollower = {
   followNow(): void;
   /** Re-reads the position after something the person did changed the height. */
   recheck(): void;
+  /** True holds the view at its top (an empty chat's welcome); false follows from the bottom again. `followNow` while resting goes to the top. */
+  rest(atTop: boolean): void;
   following(): boolean;
 };
 
@@ -57,6 +65,7 @@ export function createScrollFollower(host: ScrollHost, showJump: (show: boolean)
   let following = true;
   let lastTop = host.scrollTop;
   let jump = false;
+  let resting = false;
   const setJump = (next: boolean): void => {
     if (next === jump) return;
     jump = next;
@@ -67,6 +76,7 @@ export function createScrollFollower(host: ScrollHost, showJump: (show: boolean)
     lastTop = host.scrollTop;
   };
   const contentChanged = (): void => {
+    if (resting) return setJump(false);
     if (following) toBottom();
     setJump(!following && !isAtBottom(host));
   };
@@ -99,6 +109,10 @@ export function createScrollFollower(host: ScrollHost, showJump: (show: boolean)
     page.addEventListener("pointercancel", released, { passive: true });
   }
   host.addEventListener("scroll", () => {
+    if (resting) {
+      lastTop = host.scrollTop;
+      return setJump(false);
+    }
     const top = host.scrollTop;
     const moved = Math.abs(top - lastTop) >= 1;
     lastTop = top;
@@ -112,13 +126,26 @@ export function createScrollFollower(host: ScrollHost, showJump: (show: boolean)
     contentChanged,
     followNow() {
       following = true;
-      toBottom();
+      // A welcome's start is its top.
+      if (resting) host.scrollTop = 0; else toBottom();
+      lastTop = host.scrollTop;
       setJump(false);
     },
     recheck() {
+      if (resting) return setJump(false);
       lastTop = host.scrollTop;
       following = isAtBottom(host);
       setJump(!following);
+    },
+    rest(atTop) {
+      if (atTop === resting) return;
+      resting = atTop;
+      following = true;
+      if (atTop) {
+        host.scrollTop = 0;
+        lastTop = host.scrollTop;
+      } else if (following) toBottom();
+      setJump(false);
     },
     following: () => following
   };

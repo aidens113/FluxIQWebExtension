@@ -793,49 +793,30 @@ their text and attributes changing, a fixed box per shape so nothing shifts,
 and a 220 ms fade-in when the detail changes. It has no entry animation, so a
 page loaded mid-work gets it back at full strength.
 
-**Where it sits** (`content/activity-overlay/placement/`): in a corner where it
-covers no part of the page that stays over the content. `choosePlacement`
-samples the pill's box at each corner, one point about every 36 pixels, and
-`pageProbe` says what is under each point by hit test (`elementFromPoint`,
-stepping into open shadow roots): a `fixed` or `sticky` box or a dialog makes
-the corner busy -- a cookie banner, a chat widget, a sticky header, a cart bar
--- while a fixed box covering 60% or more of the viewport is a modal's backdrop
-and hides nothing the person needs. Ordinary links and buttons, and content a
-person reads (an image, a video, a canvas, an SVG drawing, an embedded frame,
-or an element with its own text), only break ties: among clear corners the
-one over the least content and controls wins. Corners are tried bottom-left, top-left, bottom-right, top-right (the
-side panel covers the right of the Lab's emulated viewport without narrowing
-it, t191 round 1), and a corner the overlay holds is kept while it stays
-clear. When every corner is busy, each corner is also tried **docked**: moved
-in from its top or bottom edge (`offset`) to one margin past the fixed band
-that makes it busy -- above a fixed Add to cart bar, below a sticky header --
-never more than 40% of the viewport's height from its edge and past at most
-three bands. It then stays a pill with its words, at the corner, docked
-corner or side midpoint, full width or narrower (288 or 224 px), that covers
-the fewest fixed points; then one that covers no content and no control; then
-the full pill; then the place it holds; so on a product page with a sticky
-header and a fixed cart bar it sits in the free band above the bar, not on the
-product image the left midpoint would cover (D5 of the `run-musp4h2f-72e8ed99`
-UI review). It never becomes
-a text-less dot, because a status the person cannot read is no status (a feed
-with a sticky header and fixed bottom bars made the dot the common case, t195
-`run-murdouox-c5294247`, U3). A headline too long for the card is measured in its
-own font (an `OffscreenCanvas`) against its line's width and cut after the
-last whole word that fits, then an ellipsis, closing a quote the cut left
-open ("into “Search…”"); it is measured again when the card changes width
-(`fit-line.ts`, `text-measure.ts`). The detail wraps instead of being cut
-(since t378, `fit-lines.ts`): it is measured as the browser will wrap it
-across the card's two lines; when it still does not fit, the whole sentences
-that do are kept, and only when not even one does is it cut where a word
-ends ("A step didn't work in the test: the…" lost its sentence). The style's
-own two-line clamp is the backstop. The browser's own ellipsis cut inside
-words ("Search Bri…", "trying another w…", U-4 of the
-`run-muw60j7c-bb7c9a62` UI review) and is only the backstop where nothing can
-be measured. `PlacementKeeper`
-re-checks on resize, scroll and page DOM changes (its own UI's mutations are
-skipped), at most once per 800 ms; a check only reads, and the host moves --
-one write -- only when the answer changes. A page whose banner lives in a
-closed shadow root, or draws a bar with a canvas, cannot be seen this way.
+**Where it sits** (`content/activity-overlay/placement/`): the chooser samples
+corners and offsets inside the top or bottom 40% of the viewport, including
+positions just beyond fixed bands. The coarse grid uses at most 36px gaps. A candidate that looks completely clear
+is confirmed with vertical gaps of at most 12px, catching thin readable lines
+without refining already occupied candidates or docking scans. Each check
+memoizes point results across both passes. It ranks the share covered by fixed or
+sticky elements first, then controls and readable content, then full width,
+distance from the edge and corner order. It never uses a side midpoint or a
+textless dot. A held place stays unless another clearly improves coverage.
+`PlacementKeeper` checks after resize and page changes, at most every 800 ms,
+and moves only when a better place persists for two seconds. Scrolling resets
+that timer; checks resume after 600 ms of quiet. The last corner, width and
+offset are remembered in extension-local storage across documents. The host
+waits at most 150 ms for this read before appearing, avoiding a corner flash.
+
+The headline is measured in its own font and cut at a whole word (`fit/line.ts`,
+`text-measure.ts`). Details use two lines (`fit/lines.ts`); whole sentences
+are preferred, then whole words. Measurement reserves 2% of the line width
+(or at least 2 px) before the CSS clamp. Headline echoes are removed before
+rendering. Sending the same view again neither rewrites its text nor restarts
+its fade. If page code removes a working overlay, the host is reattached at
+most five times in ten seconds. The background relay retains the last target
+tabs through an empty or failed lookup while work continues, so navigation
+can receive the current display without waiting for another status change.
 
 The overlay never takes input: every element is `pointer-events: none`,
 `inert` and `aria-hidden`, so hit-testing and the automation's own clicks
@@ -1281,7 +1262,9 @@ how a command's target becomes an element is in
 An in-page action goes to its frame's content script as one `executeAction`
 message, built once in `runActionInFrame`
 ([`runtime/action-runner.ts`](../../apps/extension/src/runtime/action-runner.ts))
-and sent by `sendAction`. When the command also names its child frame by path,
+by the domain's `executeActionMessage`
+([`domain/src/client/execute-action-message.ts`](../../domain/src/client/execute-action-message.ts),
+which the offline snapshot page also uses) and sent by `sendAction`. When the command also names its child frame by path,
 `runActionInFrame` first chooses the frame now at that path
 ([`runtime/frame-address.ts`](../../apps/extension/src/runtime/frame-address.ts)),
 and the message goes to that frame. The message is sent once, with one exception, a
@@ -2670,6 +2653,78 @@ runs, or the chat loses its owner. The draft is kept.
 
 Text and autocomplete fields keep per-character synthetic keyboard/input events. Native number, date, time, datetime-local, month and week fields admit the exact requested string through a detached same-type native control before committing one replacement input/change sequence; incomplete prefixes otherwise sanitize to empty. Invalid format, readonly/disabled controls or cancelled keyboard/beforeinput events do not partially clear the field. Production type action still reads the actual value after application handlers and applies existing sensitive-value redaction and submit consequence rules. The original resolved control must remain connected: a detached old value cannot pass readback or authorize a following Enter, and replacements are not silently selected. This is synthetic DOM input, not trusted browser keyboard input; readback follows a bounded 50ms timer observation of queued page handlers and does not certify arbitrary later asynchronous application changes. A requested Enter rechecks actionability after that observation; a field newly covered or disabled is refused without claiming that no typing was dispatched.
 
+## Trace page capture
+
+When Core asks for a command to be traced (a trace request in the command's
+`metadata`, noted by `background/trace-capture/traced-commands.ts` before the
+command runs), the background captures the page once the command's result is
+about to go out. `TracePageCapturer` (`background/trace-capture/page-capturer.ts`)
+sends the tab's top frame `TRACE_PAGE_CAPTURE_MESSAGE`
+(`shared/trace-page-capture.ts`), and the content script answers with
+`captureTracePage` (`content/trace-capture/capture-page.ts`): a DOM
+serialization with live form state, open shadow roots as declarative
+templates, styles inlined, scripts and inline handlers stripped and sensitive
+values withheld, plus the same-origin resources it refers to as their
+original bytes, keyed by the address the browser requests for each. The
+background hashes each part, uploads the digests not yet stored for the
+trace's scope to Core's trace store over HTTP (never the socket), and sets
+only the references on the result's `metadata.trace`
+(`withTraceMetadata`): each artifact's digest, media type, size, role
+(`primary` or `resource`) and source address, and a count of parts it could
+not carry. A capture or upload that fails never fails the command; it is
+counted unavailable. None of it reaches a run, a recording or a model.
+
+### Offline reads over a captured page (tier 2)
+
+Core's trace matcher may ask a reevaluator to answer a changed command from
+what the trace recorded (Core's `docs/architecture/automation-studio/client-gateway.md`,
+"Gateway traces and offline trials"). The web domain's reevaluator is
+`createWebOfflineReadReevaluator(page)`
+([`domain/src/runtime/offline-reads/`](../../domain/src/runtime/offline-reads/reevaluator.ts)),
+which returns Core's `ClientGatewayTraceReevaluator`:
+
+- **Eligibility** (`read-eligibility.ts`): only an action `safe` in the
+  domain's `WEB_AUTOMATION_ACTION_SAFETY` table, and only when every
+  differing field lies under `parameters` or `target`. Anything else, an act
+  included, is `declined` and stays the matcher's gap.
+- **The snapshot** (`recorded-snapshot.ts`): the page captured with the
+  replaced read's own result, read from the references on that recorded
+  result's `metadata.trace`, among the artifacts the request lists. No
+  readable references, not exactly one primary, a primary with no address,
+  or primary bytes the store does not hold is a `snapshot_unavailable` gap.
+  A recorded command that cannot be read back as the same action is an
+  `incomplete_capture` gap.
+- **The control** (D37, `control-reproduced.ts`, `dynamic-content.ts`): the
+  recorded command is replayed over the same snapshot beside the changed
+  read. The changed read is answered only when the control reproduces the
+  recorded result (status, failure code, values or records read, extraction
+  summary counts; never timings, addresses or ids) and the changed read asked
+  the page for no more than the control did (held navigations, scrolls past
+  the end), unless the recorded read proves its list ended there
+  (`recorded-list-ended.ts`). A sandbox breach, an unresolved target, a wait
+  that ran out or a list that never appeared is a `dynamic_content` gap.
+  The answer is built by `gatewayActionResultFromBrowserResult`
+  (`domain/src/client/browser-result-mapping.ts`), the same builder a live
+  answer uses.
+
+The browser half is the `WebSnapshotPage` port
+([`domain/src/runtime/offline-reads/snapshot-page.ts`](../../domain/src/runtime/offline-reads/snapshot-page.ts)):
+`evaluate(snapshot, action)` answers the content code's own result with the
+sandbox's observations (`scriptsRan`, `requestsLeaked`, `navigationsHeld`,
+`requestsRefused`, `scrollsPastEnd`), or why it could not run. Its Playwright
+implementation is `openWebSnapshotPage`
+([`packages/test-runner/src/offline-snapshot-page/`](../../packages/test-runner/src/offline-snapshot-page/index.ts)),
+Chrome by default or Edge by `channel: "msedge"`: each evaluation opens a fresh
+offline browser context, serves the primary at its own address and each
+resource at the address it was carried from with `script-src 'none'`, holds a
+navigation the snapshot cannot answer with `204 No Content`, answers any other
+request with nothing, runs the extension's content code in an isolated world,
+and counts what it saw. `loadExtensionContentCode` reads the extension's
+production bundles from `apps/extension/dist/<target>/` and refuses one older
+than the extension's source. The headed spec is
+`apps/extension/e2e/content/tests/offline-reads/`. Where production hosts the
+sandbox is the trace plan's P6 decision; today only the test runner does.
+
 ## Recording-capture policy
 
 FluxIQ Core owns the policy that decides which recording-capture switches a
@@ -2738,3 +2793,17 @@ loop can retain the first N rows in page order without inventing a sort when
 the loop also declares `repeat most: N`. Explicit sort still determines order
 when supplied. The domain reports rule errors at the written extraction key,
 and contract tests apply Core's suggested corrections to real resolved plans.
+
+### Build chat wording and endings
+
+Project cards name task parts and pieces, with part tests and whole-Flow tests;
+the framework's routing piece is hidden. The build ending event owns the reason,
+observed test record and remaining site changes. The following chat answer says
+what was kept and what the person can do next. Notes and endings render their
+body as paragraphs. Identical refused cards within the same work and reason
+fold together, while actions actually repeated remain distinct. The Stop label
+stays stable; the composer remains available after a failed or partial build.
+Missing model readiness is refreshed when the composer receives focus or input;
+an absent snapshot list means unknown readiness rather than no configured key.
+The Core person-facing text guard also checks extension project-card and overlay
+rendering so internal terminology and generated control names fail narrow tests.

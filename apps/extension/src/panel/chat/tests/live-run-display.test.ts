@@ -165,3 +165,38 @@ test("U-A2: a merge step shows no card, whether or not Core announced it, and no
     });
   }
 });
+
+// Round 5's reviewer reported no way to write after a failed build. The
+// composer stays: present, enabled, and sending, after a failed or a partial
+// ending, in the chat that started the build and in one that did not.
+test("after a failed or partial build ending the composer is on screen and takes the next message", async () => {
+  const partialAnswer = "I collected 3 of the 5 rows you asked for before the build stopped. Tell me how to carry on.";
+  const ended = (text: string) => targetCore([{ conversationId: "conv-latest", subjectKind: "project", subjectId: "project-1", turns: [
+    { turnId: "t1", author: "person", text: ASKED, createdAt: second(0) },
+    { turnId: "t3", author: "automation", text, createdAt: second(4) }
+  ] }]);
+  const partialBuild = () => failedBuild("conv-latest").map((event, index, all) => index === all.length - 1
+    ? { ...(event as Record<string, unknown>), phase: "done", label: "Build finished in part", detail: { kind: "step", title: "Build finished in part", status: "succeeded", text: partialAnswer } }
+    : event);
+  for (const [core, history] of [
+    [ended(ENDING), failedBuild("conv-latest")],
+    [targetCore([]), failedBuild(undefined)],
+    [ended(partialAnswer), partialBuild()]
+  ] as const) {
+    await mounted(core, [...history], async (root) => {
+      const dock = root.byClass("chat-dock")[0]!;
+      const box = root.descendants().find((element) => element.id === "conversationInput")!;
+      const send = root.descendants().find((element) => element.id === "conversationSendButton")!;
+      assert.equal(dock.hidden, false, "the dock with the composer is shown");
+      assert.equal(root.byClass("chat-fallback")[0]!.hidden, true);
+      assert.equal(box.disabled, false, "the box takes typing");
+      assert.equal(root.byClass("chat-stop-control")[0]!.hidden, true, "nothing to stop once the build ended");
+      box.value = "Try again with the next page too";
+      box.dispatch("input");
+      assert.equal(send.disabled, false, "and the message can be sent");
+      send.dispatch("click");
+      for (let turn = 0; turn < 3; turn += 1) await settle();
+      assert.equal(core.sent.filter((message) => message.type === RUNTIME_MESSAGES.panelConversationSend).length, 1, "it went");
+    });
+  }
+});

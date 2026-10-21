@@ -16,12 +16,16 @@
 // as its `sessionView` argument (`./declared-session-view.ts`), which Core uses
 // only where the trace recorded none and reports as `supplied`; `none` hands it
 // nothing, so a trace with no recorded view is refused.
+//
+// `reevaluator` (tier 2, P5) is handed to Core's runner as its own
+// `reevaluator`: a changed command that keeps the recorded action type may be
+// answered from the trace's recorded page snapshot; without one, every changed
+// command is the matcher's gap (tier 1).
 
 import { runAutomationStudioOfflineCandidateTrial, type AutomationStudioFlowCandidate, type AutomationStudioOfflineCandidateTrialOutcome } from "fluxiq/automation-studio";
-import { isClientGatewayTraceLive } from "fluxiq/client-gateway";
+import { isClientGatewayTraceLive, type ClientGatewayTraceReevaluator } from "fluxiq/client-gateway";
 import path from "node:path";
 import { readStoreTraceManifests } from "../store-trace-manifests.js";
-import type { CoreTrialSeams } from "./core-trial-seams.js";
 import { DECLARED_EXTENSION_SESSION_VIEW } from "./declared-session-view.js";
 import { notJudgedJudge } from "./not-judged-judge.js";
 import { offlineTrialPorts, openOfflineTrialHost } from "./offline-trial/index.js";
@@ -37,9 +41,10 @@ export type OfflineExperimentTrialInput = Readonly<{
   sourceTraceId: string;
   /** The trial request's candidate: the candidate id, the revision and digest it is run under, and the whole candidate. */
   candidate: Readonly<{ candidateId: string; revision: number; digest: string; candidate: AutomationStudioFlowCandidate }>;
-  seams: CoreTrialSeams;
   /** `declared`: the extension's declared view is supplied to the runner (`./declared-session-view.ts`); `none`: no view is supplied. */
   sessionView: OfflineExperimentSessionView;
+  /** Tier 2: the reevaluator Core's matcher may ask about a changed command (`../tier2/`); absent for tier 1. */
+  reevaluator?: ClientGatewayTraceReevaluator | undefined;
 }>;
 
 /** Which session view the experiment supplies to Core's runner. */
@@ -61,13 +66,13 @@ export type OfflineExperimentTrialRun = Readonly<{
 export async function runOfflineExperimentTrial(input: OfflineExperimentTrialInput): Promise<OfflineExperimentTrialRun> {
   const automationDataDir = path.join(input.rootDir, ".fluxiq", "artifacts", "automation-studio");
   const before = new Set((await readStoreTraceManifests({ automationDataDir, projectId: input.projectId })).map((trace) => trace.manifest.traceId));
-  const host = openOfflineTrialHost({ rootDir: input.rootDir, seams: input.seams });
+  const host = openOfflineTrialHost({ rootDir: input.rootDir });
   const judge = notJudgedJudge();
   let outcome: AutomationStudioOfflineCandidateTrialOutcome;
   let wallMs: number;
   try {
     const ports = await offlineTrialPorts({
-      service: host.service, seams: input.seams, projectId: input.projectId, flowId: input.flowId,
+      service: host.service, projectId: input.projectId, flowId: input.flowId,
       sourceInstructionIds: input.sourceInstructionIds, startLocation: input.startLocation, judge: judge.judge,
     });
     const started = performance.now();
@@ -78,6 +83,7 @@ export async function runOfflineExperimentTrial(input: OfflineExperimentTrialInp
       gateway: host.gateway,
       phase: "test",
       ...(input.sessionView === "declared" ? { sessionView: structuredClone(DECLARED_EXTENSION_SESSION_VIEW) } : {}),
+      ...(input.reevaluator === undefined ? {} : { reevaluator: input.reevaluator }),
     });
     wallMs = Math.round(performance.now() - started);
   } finally {

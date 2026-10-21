@@ -11,6 +11,7 @@ import type { ClientGatewayCommandReconciliation, ClientGatewayHostLeaseLedger }
 import type { ClientGatewayTraceResultMetadata } from "fluxiq/client-gateway";
 import {
   createWebAutomationRecordingEvent,
+  gatewayActionResultFromBrowserResult,
   webAutomationActionResultPayload,
   webAutomationActionVisualTargetFromElement,
   WEB_AUTOMATION_DOMAIN_ID
@@ -31,7 +32,7 @@ import type {
 } from "../../shared/protocol";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import { allTabFrames, sendToTab } from "../tabs";
-import { currentAutomationTabId, ExtensionRuntimeCommandRouter, gatewayActionResultFromBrowserResult } from "../../runtime";
+import { currentAutomationTabId, ExtensionRuntimeCommandRouter } from "../../runtime";
 import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
 import type { ActivePage } from "./active-page";
 import type { ActiveRecording } from "./active-recording";

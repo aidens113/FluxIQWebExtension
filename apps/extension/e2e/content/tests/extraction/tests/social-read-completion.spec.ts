@@ -7,8 +7,7 @@ import { acceptAutomationStudioFlowBootstrapResult, AUTOMATION_STUDIO_DECLARED_C
 import type { AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, createWebAutomationOutputNodeImplementationBundle, webAutomationOutputNodeDefinitions, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "@fluxiq-web-extension/domain";
-import { outputTargetFromPayload, webAutomationActionFromGatewayCommand } from "@fluxiq-web-extension/domain/client";
-import { gatewayActionResultFromBrowserResult } from "../../../../../src/runtime/index.js";
+import { gatewayActionResultFromBrowserResult, outputTargetFromPayload, webAutomationActionFromGatewayCommand } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../../../../../src/shared/protocol.js";
 
 function wirePayload(reply: Awaited<ReturnType<ContentHarness["runAction"]>>): JsonObject {

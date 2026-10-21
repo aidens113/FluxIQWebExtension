@@ -1,9 +1,9 @@
 # Traces And Offline Trials (Extension Side)
 
 Status: Active
-Status detail: Boundary audit move plan complete; trace plan P0-P3 merged, P4 running (t746); breadth round 5 next after t743; t747 and t748 follow-ups.
+Status detail: Boundary move plan, trace P0-P5 and UI t753 merged; reset/judge recovery before P6 and breadth round 6.
 Created: 2026-10-19
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 Owner: Senior supervisor agent
 Scope: Execution hub for the traces/offline-trials plan and the extension/Core boundary audit's move plan, plus this repository's own part of the trace plan (in-band artifacts, page snapshots, the offline queue fix, the domain's offline read/target resolver). Core owns the trace contract, store, offline-trial runner and build-loop integration.
 Paired document: `docs/working/trace-offline-trials-plan.md` in FluxIQ Core (plan of record)
@@ -13,6 +13,22 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 
 ## Current State
 
+**Recovery active (2026-10-20): Codex is continuing the three preserved task worktrees.** Operating detail (in-flight
+units t751, t752, t753 and how to resume them, the exact gate and merge steps, how to sync lanes and launch round 6,
+and the ordered next steps) is in [reports/handoff-2026-10-20.md](./trace-offline-trials-plan/reports/handoff-2026-10-20.md).
+Read it after this section.
+
+**Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
+Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
+and supervisor-inspected full-panel screenshots; the supervisor also independently passed the 82 overlay unit cases.
+t752 is checkpointed locally; the supervisor's corrected changed-owner gate passed 32 files / 362 tests after
+structured-negative fixture migrations. P5 compatibility review found unsupported automatic text disclosure must
+be an explicit offline gap; the correction passes 22 unit cases, browser proof remains. t751's migrated real-service
+fixtures pass11 tests; independent retained-witness checks pass36 tests, including absent diffs and resource collisions.
+Exploration must additionally require an actually observed original at every project tool door; this final closure
+is in progress. P6 remains gated on t751. t753 and its paired documentation are pushed in both repositories.
+Detailed findings and observed checks: [supervisor integration review](./trace-offline-trials-plan/reports/codex-integration-review.md).
+
 **User's instruction (2026-10-19):** "implement plan & audit changes with subagents. Write everything down regarding
 progress. Get it done."
 
@@ -20,14 +36,12 @@ progress. Get it done."
 lane G (phases 1, 3), t727 lane H (0, 5), t728 lane S (2, 4). Ledger in
 [extension-core-boundary-audit.md](./extension-core-boundary-audit.md).
 
-**Trace plan: P0-P4 complete, P5 next.** P0 baseline (live trials are 49.8% of build time) and P1 contracts and the
-run environment (t729, t734); P2 capture, on for every Lab live run, about +11.5% overhead (t736); P3 intake parity,
-3,333 of 3,333 saved-Flow points and 4,274 of 6,941 live points matched, 0 intake defects (t742); t745 keyed every
-content address in a protected project and t747 closed the storage follow-ups (sweep race, re-seal job, trace-storage
-layout); P4 offline trials tier 1 (t746): the production trial runner against a recorded trace through Core's real
-intake, strict matching, virtual time, explicit gaps; round 4's social trials reproduce their live judged outcome
-exactly. **Next: t749 (P5 offline reads tier 2)**, which also owns P4's corrected-candidate gate item and replaces the
-experiment's deep loads of Core internals with a public seam plus an audit rule. Then P6 build-loop integration, P7.
+**Trace plan: P0-P5 complete, P6 next.** P0/P1 contracts and baseline (live trials are 49.8% of build time); P2
+capture on every Lab live run (+11.5%); P3 intake parity (0 intake defects); P4 offline trials tier 1 (t746: a
+computation-only change runs against the recorded trace through Core's real intake); P5 tier 2 (t749: a changed read
+runs the extension's own content code over the recorded snapshot; offline equals live on job-board 84/84 cells, photo
+566/566, social 906/906). Builds do not use offline trials yet: **P6** (offline first in test and repair, live only for
+action changes, gaps and the final judged run) starts when t751 merges, since both change the trial gates. Then P7.
 
 **Breadth reruns: rounds 1-5 passed 0 of the four repaired tasks; all framework defects.** Round 5 (0 of 4, $0.499):
 job, office and photo failed on the site-reset bookkeeping (a lasting step reaching a trial unchecked, a toggle the
@@ -49,6 +63,10 @@ baselines, plan order as run order in branching Flows); storage `project/` and `
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
 
+**Package exports:** t754 is dispatched in its own paired worktrees at `fxwork/t754/` while reset/judge gates finish.
+Its bounded brief is `trace-offline-trials-plan/reports/codex-t754-brief.md` in that task; source changes stay independent
+of the reset and judge lanes. P6 still waits for the reset merge.
+
 **Blocked:** nothing needs the user.
 
 ## Worker Briefs
@@ -65,6 +83,9 @@ Briefs for work in flight or next; finished briefs are archived in
 - Tests first. Narrow checks only: tests beside each change, touched packages' typechecks, both structure audits, and
   Core's prompt contract tests when model-facing text changes. No full suites.
 - No paid or live Lab runs. Browser tests only on the ten realistic scenarios, headed, provider-free.
+- Core tests run through the grouped runner, `pnpm test <paths>` from `packages/fluxiq` (the parallel group, then the
+  real-SQL group with few workers), never a plain `vitest run` over folders: a plain run starves real-SQL tests into
+  15 s timeouts under load. Quote both groups' "Test Files" lines.
 - Model guidance never mirrors a realistic task, site, product or answer.
 - No commits, merges or pushes. Do not edit `docs/working/README.md` or any plan's Current State or ledger; the
   supervisor owns them and the Core paired documents.
@@ -164,28 +185,39 @@ Briefs for work in flight or next; finished briefs are archived in
   looked at and described in the report (Chrome; Firefox popup alignment where the contract is shared).
 - Report: `docs/working/trace-offline-trials-plan/reports/t753-chat-and-overlay-polish.md` in the downstream tree.
 
-### Brief: t749-offline-reads-tier2 (lane T lead, trace plan P5)
-- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P5 (tier 2): a changed read or target is evaluated
-  against the captured page snapshot loaded in a sandboxed browser with scripts and network off, running the same
-  extension extraction and target code; anything dynamic is an evidence gap. Chrome and Edge first.
-- Also owned here:
-  - P4's deferred gate item: an offline trial of a corrected candidate for the breadth round's social failure
-    reproduces the judged result (round 4's correction changes `extractList.where` inside the extension's read, so it
-    needs tier 2). Use the round-4 social traces t746 used; no paid run.
-  - Boundary: t746's experiment loads three unexported Core modules by path (`offline-trial-experiment/rebuild/
-    core-authoring.ts`: brief scope, scoped submission, whole-candidate assembly) and the domain's `where` reading.
-    Replace them with a public Core seam (or move the rebuild into Core's offline-trial runner), delete the deep
-    loads, and add a downstream structure-audit rule (mirrored from Core first if the rule is generic) that refuses any
-    import or load of a Core build path that is not a package export.
-- Gate: on the breadth round's photo, job and social traces a changed read evaluated offline matches what the live
-  read returned; the social corrected-candidate item above; a dynamic or missing snapshot is an explicit gap, never a
-  pass; an offline pass still never satisfies the whole-run gate; no trace content reaches model guidance.
-- Not: t748's files (check `git -C C:/Users/osrs_/FluxStuff/fxwork/t748/<repo> status --short` before editing; it
-  owns domain plan-resolution target packets, Core site reset, candidate-trial feedback, the LLM request size check)
-  and t747's (Core `storage/project/**`). If you need one, stop and report.
-- Validation: tests first; tests beside each change; touched typechecks; both audits; headed provider-free browser
-  checks only on the ten realistic scenarios.
-- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p5.md` in the downstream tree.
+### Brief: package-exports-cleanup (worker, both repositories' scripts)
+- Why: t749 added the structure-audit rules `package-exports` and `module-reach` (a load of a build path that is not
+  a package export fails the audit). The findings that already existed were baselined so the rules could land: Core 3
+  root scripts load `fluxiq`'s `dist` by path; downstream 34 root scripts load the test-runner's `dist` by path, plus
+  one domain test. A baselined violation is still a violation; remove them all.
+- Task: give each loaded entry point a package export (`exports` in the owning package.json, built by its normal
+  build) and switch every script and the test to import it by package name and subpath; or move a script beside the
+  package that owns the code. No copying of code. Then run `pnpm structure:baseline` in each repository and confirm the
+  `package-exports` entries are gone from `.structure-baseline.json` and nothing else was added.
+- Owns: Core root `scripts/**` that the baseline names, `packages/fluxiq/package.json` exports; downstream root
+  `scripts/**` that the baseline names, `packages/test-runner/package.json` exports, the one domain test. Nothing else.
+- Validation: each switched script still runs its own smallest real command (for Lab scripts, `--help` or a dry
+  path; never a live or paid run); `node --test` for any tests beside the scripts; both audits passed with zero
+  `package-exports` baseline entries; Core `pnpm docs:check`; downstream `node scripts/check/core-mirror.mjs`.
+- Report: `docs/working/trace-offline-trials-plan/reports/package-exports-cleanup.md` in the downstream tree.
+
+### Brief: P6-offline-trials-in-builds (lane T lead, trace plan P6)
+- Plan of record: Core `docs/working/trace-offline-trials-plan.md` P6 (test and repair phases only). User direction
+  (2026-10-20): test and iterate on Flows without acting on the site, going live only for the final judged run, when
+  required, or on errors.
+- Task: during a build's test and repair phases, a candidate's trial runs offline first against the build's latest
+  live trace of that subflow (t746's runner; tier 2 reads once t749 merges): a demonstrated failure goes back to the
+  builder as repair feedback marked recorded; an evidence gap (changed actions or order, a dynamic page, a missing
+  snapshot) becomes a focused live run from that node (the existing run-from-node tool), not a whole live trial; the
+  final judged whole run stays live, preceded by the reset; live-success accounting counts live episodes only, and an
+  offline pass never completes a build or satisfies the whole-run gate. Production passes the live session's view to
+  the matcher (open since P4). The chat and step log say which results were offline, in plain words.
+- Order: tier 1 first (computation-only changes), then tier 2 when t749 is merged.
+- Not: exploration or the initial build (no offline trial there, plan test); model guidance never sees trace content.
+- Validation: tests first; the source tests no earlier phase covered (T09, T17-T19, T21; confirm against the source plan) plus the plan's added
+  tests; tests beside each change; touched typechecks; both audits; a headed provider-free build on two realistic
+  scenarios whose repair iteration runs offline and whose final judged run runs live, with the step log showing both.
+- Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p6.md` in the downstream tree.
 
 ## Work Ledger
 
@@ -487,6 +519,124 @@ Briefs for work in flight or next; finished briefs are archived in
 - Outcome: Accepted
 - Follow-up: none.
 
+### 2026-10-20 - t749 merged: trace plan P5 offline reads and targets tier 2
+- Agent: supervisor (lane T lead and workers P5a-P5e, P5s, W6-W8)
+- Changed: Core and downstream merged and pushed. When a trial's read differs from the recorded one, the trace matcher
+  hands it to a reevaluation port; the domain (`runtime/offline-reads/`) runs the extension's own content code over
+  the recorded page snapshot in a headed sandbox page (scripts and network off; hosted by the test-runner for now)
+  and answers, or returns an explicit gap (`snapshot_unavailable`, `dynamic_content`; origin `snapshot_evaluation`).
+  Public seams `automationStudioProjectSingleSubflowRebuild`, `automationStudioServiceWholeTrialPorts` and
+  `automationStudioGatewayTraceServiceStore` (the build uses them too) replace t746's deep loads, which are deleted.
+  New structure-audit rules `package-exports` and `module-reach` refuse loads of non-exported build paths; their
+  existing findings were baselined (Core 3, downstream 35; brief package-exports-cleanup removes them).
+- Validation: supervisor's gate on t749 after merging dev: Core `vitest run` (plain) over client-gateway, gateway-trace,
+  offline-trial, trial-ports, project-build, candidate-trial, project-agents, model offline-trial, environment,
+  runtime/tests -> `Test Files 3 failed | 317 passed`, `Tests 5 failed | 2010 passed`: five real-SQL tests timed out
+  at 15.1-16.9 s under load; alone `Test Files 3 passed (3)`, `Tests 11 passed (11)` twice, and on Core `dev` too;
+  grouped runner (`pnpm test` with the same folders) -> parallel group `Test Files 223 passed (223)`,
+  `Tests 1549 passed (1549)`; real-SQL group `Test Files 2 failed | 95 passed (97)`: `runtime-patches.test.ts` timed
+  out again (15.6 s) under three leads' load, and `project-build-reset.test.ts` "a reset brief's requests through
+  DeepSeek's own pre-send checks" failed in 3.6 s (not a timeout); that file alone -> `Tests 10 passed (10)` on t749
+  and on Core `dev` d78c8d4a, so it is an intermittent, order- or load-dependent failure, not t749's; fluxiq `tsc` 0; Core audit passed (1155 baselined); audit rule tests -> pass 31 fail 0; `docs:check`
+  current; Core build 0; core-build gate current; core mirror matches (72 files); domain and extension `check` 0;
+  domain runtime + client -> pass 1692 fail 0; extension content+background -> pass 2089 fail 0; test-runner build 0,
+  offline-trial-experiment + offline-snapshot-page + trace-inspection + trace-parity -> pass 126 fail 0; downstream
+  audit passed (651 baselined); headed content harness `e2e/content/tests/offline-reads` -> `5 passed (2.9m)`. Only
+  `package-exports` entries were added to either baseline (diff checked). Lead: changed read offline equals live on
+  job-board 84/84 cells (Chrome and Edge), photo 566/566, social 906/906; P4's corrected-candidate item met (social
+  revision 16 on trace f53b350b, 19/19 operations, 1 reevaluated, oracle fails like the live no); photo partial (round
+  4 has no photo changed-read pair whose list appeared; 9/9 recorded reads reproduced from their snapshots).
+- Cause found on the way: Core's plain `vitest run <path>` runs real-SQL files at full concurrency (only `pnpm test`
+  groups them), so narrow gates under load starve them into timeouts; gates and leads now use the grouped runner
+  (shared lane rule above), the running leads were told.
+- Open: production hosting of the snapshot page and the live session's view (P6); about 6 GB of P5 run output with
+  page data in the worktree's ignored `test-runs/` (removed with the worktree); the intermittent
+  `project-build-reset.test.ts` failure and the `runtime-patches.test.ts` timeout under concurrent load (handoff
+  file, open items).
+- Outcome: Accepted
+- Follow-up: package-exports-cleanup; P6 after t751.
+
+### 2026-10-21 — t753 integrated: readable endings, usable chat and stable overlay
+- Validation: `pnpm.cmd task finish t753 "Readable chat endings and stable overlay"` observed the structure gate
+  `passed:true`; paired Core `pnpm.cmd task finish t753 "Readable chat endings and steady activity" --skip-checks`
+  ran its mandatory prompt contracts: `Test Files 3 passed (3)`, `Tests 64 passed (64)`. Supervisor
+  `pnpm.cmd docs:check` printed `Deterministic framework reference is current.` Independent owner gates and
+  post-merge checks are recorded below and in the linked reports, with their actual limits.
+- Merged downstream `daabd593`, Core `d1c39c0a`, preserving task merge boundaries. Downstream finished first through
+  its structure gate; Core finished with manual narrow gates instead of a full sweep, and its mandatory contract
+  gate independently passed 3 files / 64 tests. No hooks were bypassed.
+- Post-dev integration: Core owning groups 185 files / 1633 tests plus real-SQL 11 files / 111 tests; Core package
+  typecheck, web 79 tests/typecheck, domain 432 tests/source/test typechecks/build, extension 1131 tests/check,
+  both audits and stamped paired Core build passed. Supervisor docs:check passed after reference regeneration.
+  Stale domain/dist caused one intermediate extension type failure; owning domain rebuild resolved it.
+- Supervisor independently verified Core UI 277 tests and final extension overlay 82 tests; observed final headed
+  Chromium 12/12 and Firefox 2/2 logs and inspected preserved screenshots. Rendering source did not change at dev
+  integration. This is scripted transport/content-harness proof, not authenticated gateway or live model execution.
+- Reports: [recovery](./trace-offline-trials-plan/reports/codex-recover-t753.md),
+  [post-merge validation](./trace-offline-trials-plan/reports/codex-t753-integration.md).
+  External screenshots: `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-21/codex-t753-ui-review/`.
+- Reset/judge tasks continue in their own paired trees. No paid run, full sweep or user-panel management.
+
 ## Open Questions
 
 None requiring user input.
+
+### 2026-10-20 — Codex recovery dispatched
+- Agent: supervisor
+- Changed: recovery ownership recorded; preserved t751/t752/t753 worktrees and user `.clinerules/fluxiq.md` edit.
+- Validation: initial main `git status --short` confirmed only the user edit; paired tasks contain reported partial work. Both main `pnpm.cmd structure:baseline` runs exited 0 (downstream 651 entries, Core 1155; no baseline growth).
+- Outcome: Partial; each task requires fresh diff review and narrow checks before acceptance.
+- Follow-up: workers recover one existing task each; supervisor reviews, integrates and verifies both repositories.
+
+## Recovery briefs (2026-10-20)
+
+### Brief: codex-recover-t751
+- Repository: paired fxwork/t751/!FluxIQWebExtension and fxwork/t751/!FluxIQ only.
+- Task: complete existing t751 brief and R1-R6 design, auditing partial edits against every worker report first.
+- Required reads: hub Current State, t751 original brief, handoff, lane report and subordinate reports; both AGENTS.md and Core code-structure.
+- Owns: all files assigned by original t751 brief and wave split, plus new tests needed for those subjects and own recovery report.
+- Must not touch: other task trees, main checkouts, shared plan/index/ledger, user edits; no commits/merges/pushes; no paid runs or panel management.
+- Definition of done: complete waves 2/3, remove replaced paths, narrow grouped tests/types/audits and headed provider-free site-reset specs pass; report exact gaps and commands.
+- Coordinate: no edits to t752/t753 owned files; flag overlaps for supervisor integration. Do not spawn more workers (three slots occupied).
+- Report to: docs/working/trace-offline-trials-plan/reports/codex-recover-t751.md in task tree.
+
+### Brief: codex-recover-t752
+- Repository: paired fxwork/t752/!FluxIQWebExtension and fxwork/t752/!FluxIQ only.
+- Task: complete existing t752 brief; audit partial work against subordinate reports, finish judge/read changes and browser acceptance.
+- Required reads: hub Current State, original t752 brief, handoff, lane/subordinate reports; both AGENTS.md and Core code-structure.
+- Owns: original t752 assigned files, their tests and authored architecture docs, own recovery report.
+- Must not touch: other task trees, main checkouts, shared plan/index/ledger, user edits; no commits/merges/pushes; no paid runs or panel management.
+- Definition of done: original acceptance met; grouped Core tests, affected types, audits, prompt contracts, headed provider-free social shape verified.
+- Coordinate: flag shared files for supervisor; do not spawn more workers. Rebuild only own paired Core.
+- Report to: docs/working/trace-offline-trials-plan/reports/codex-recover-t752.md in task tree.
+
+### Brief: codex-recover-t753
+- Repository: paired fxwork/t753/!FluxIQWebExtension and fxwork/t753/!FluxIQ only.
+- Task: audit all seven finished worker claims; complete original t753 acceptance and repair defects found.
+- Required reads: hub Current State, original t753 brief, handoff, lane/subordinate reports; both AGENTS.md and Core code-structure.
+- Owns: original t753 assigned files, their tests and architecture docs, own recovery report; narrow Core apps/web program-route readiness projection and owning test (preserve unknown versus absent keys).
+- Must not touch: other task trees, main checkouts, shared plan/index/ledger, user edits; no commits/merges/pushes; no paid runs or panel management.
+- Definition of done: grouped tests/types/audits and text guard pass; headed screenshots on two realistic scenarios inspected, limitations explicit.
+- Coordinate: flag shared files for supervisor; do not spawn more workers. Rebuild only own paired Core.
+- Report to: docs/working/trace-offline-trials-plan/reports/codex-recover-t753.md in task tree.
+### Recovery review notes (2026-10-20, supervisor)
+- Both main `dev...origin/dev` comparisons initially returned `0 0`; user `.clinerules/fluxiq.md` edit remains untouched.
+- Supervisor `git diff --check` in all six task worktrees returned exit 0 before recovery edits progressed; this is whitespace validation only.
+- Initial changed-file overlap: t751/t752 Core candidate/contracts.ts and candidate/index.ts. New trial-door edits will require serial integration review.
+- Review requests sent to t751: new unidentified project actions must not use legacy admission; source-derived witness stamps must reject model injection.
+- Review requests sent to t752: earlier advice is context, never exemption from the task; preserve valid ordering/format/missing-action refusals, absence versus empty defects, and advice older than three trials.
+- t753 recovery scope includes its discovered Core apps/web readiness projection bug; retain unknown versus explicitly absent model keys.
+- No source unit accepted, merged or pushed yet. Narrow task checks are running in isolated worktrees; no daily full sweep or paid run started.
+
+### 2026-10-21 — Recovery source checkpoints and independent verification
+- t753 Core `e4f0e0a2`, downstream `c03a2c65`; task branches now include current dev. Generated reference conflicts
+  were regenerated through `docs:reference` (4124 declarations), never hand-edited. Integration review found a
+  candidate-less ending could erase earlier whole-run history; bounded regression/fix is Core `df25f02d`.
+- t752 Core `534c41fb`, downstream `5f0b26ef`; still awaiting current-dev integration and final headed acceptance.
+  Supervisor observed grouped changed-owner gate: 32 files / 362 tests passed, empty real-SQL selection exited 0.
+- t751 review additionally found a project trial without a diff spot could inherit legacy settlement, and the real
+  brief-ports wrapper dropped the shared admission. Both need their focused regressions and final integration gates.
+  Supervisor's migrated two-builder real-SQL test passes, restoring the build's effects before dependent entry and
+  preserving the pre-existing cart line. Remaining reset fixtures are not accepted yet.
+- No paid execution, full suite, panel management, task merge-back or implementation push during this checkpoint.
+  User `.clinerules/fluxiq.md` remains untouched.

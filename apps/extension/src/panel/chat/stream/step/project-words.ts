@@ -80,17 +80,17 @@ export function projectWords(card: ActivityProjectCard, names: ProjectNames, age
         return [subflow.purpose ? `${subflow.name}: ${subflow.purpose}` : subflow.name, ...extra].join(" · ");
       });
       return {
-        title: `Planned ${counted(card.subflows.length, "subflow")}`,
+        title: `Planned ${counted(card.subflows.length, "piece")}`,
         text: undefined,
         card: {
           icon: "branch",
           name: "Plan",
-          target: `${counted(card.parts.length, "part")}, ${counted(card.subflows.length, "subflow")}`,
+          target: `${counted(card.parts.length, "part")}, ${counted(card.subflows.length, "piece")}`,
           outcome: total === undefined ? (card.reserveUsd === undefined ? null : `${dollars(card.reserveUsd)} kept back`) : `Budget ${dollars(total)}${kept}`,
           state: "done",
           rows: [
             ...(card.parts.length === 0 ? [] : [{ heading: "Parts", items: card.parts.map((part) => part.words) }]),
-            { heading: "Subflows", items: subflows }
+            { heading: "Pieces", items: subflows }
           ]
         }
       };
@@ -111,7 +111,7 @@ export function projectWords(card: ActivityProjectCard, names: ProjectNames, age
       const head = card.outcome === "done" ? words.done : card.outcome === "partial" ? words.partly : words.not;
       // A brief that never started spent nothing and tried nothing: it says so, not "Spent $0.00 · 0 calls".
       const started = card.calls > 0 || card.trials > 0 || card.spentUsd > 0;
-      const spent = started ? [`Spent ${dollars(card.spentUsd)}`, counted(card.calls, "call"), counted(card.trials, "trial")].join(" · ") : NOT_STARTED;
+      const spent = started ? [`Spent ${dollars(card.spentUsd)}`, counted(card.calls, "call"), counted(card.trials, "test")].join(" · ") : NOT_STARTED;
       return {
         title: brief?.brief === "reset" || subflow === null ? head : `${head} ${subflow}`,
         // The builder's reason is written for the supervisor: said in a person's words, never its codes or ids (`return-reason.ts`).
@@ -124,9 +124,9 @@ export function projectWords(card: ActivityProjectCard, names: ProjectNames, age
       const subflow = whole ? null : (card.briefId === undefined ? undefined : names.briefs.get(card.briefId)?.subflowName) ?? agent?.subflowName ?? null;
       const outcome = card.verdict === "passed" ? "Passed" : card.verdict === "failed" ? "Didn't pass" : "Not confirmed";
       return {
-        title: whole ? "Tested the whole Flow" : subflow === null ? "Tested a subflow" : `Tested ${subflow}`,
+        title: whole ? "Tested the whole Flow" : subflow === null ? "Tested one part" : `Tested ${subflow}`,
         text: undefined,
-        card: { icon: "test", name: whole ? "Whole-Flow run" : "Subflow trial", target: subflow, outcome, state: card.verdict === "passed" ? "done" : card.verdict === "failed" ? "failed" : "unconfirmed", rows: [] }
+        card: { icon: "test", name: whole ? "Whole-Flow run" : "Part test", target: subflow, outcome, state: card.verdict === "passed" ? "done" : card.verdict === "failed" ? "failed" : "unconfirmed", rows: [] }
       };
     }
   }

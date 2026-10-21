@@ -58,6 +58,7 @@ import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
+import { webNodeActVerb } from "./act-verb";
 import { webTargetSpot } from "../control-spot";
 import { resolveWebPlanNode, webPlanFirstTargetHandle, webPlanStepMustDeclare, type WebPlanNodeResolutionInput } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
@@ -337,10 +338,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       check: run.request.permission,
       declared,
       control: { ...control, ...spot },
-      verb: node.definition.label.toLowerCase(),
-      // Not the model's word, and the reason a read is never refused: a node
-      // that only looks at the page cannot have left anything behind, so what
-      // it declared is recorded and disregarded (`../permission.ts`).
+      verb: webNodeActVerb(node, written),
+      // Not the model's word, and the reason a read is never refused: a node that only looks at the page
+      // cannot have left anything behind, so what it declared is recorded and disregarded (`../permission.ts`).
       effect: node.effect
     });
     if (permission.kind === "invalid") {

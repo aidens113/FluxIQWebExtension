@@ -74,6 +74,7 @@ import { webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withNodeOutputs, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
+import { webNodeActVerb } from "./act-verb";
 import { resolveWebPlanNode } from "../plan-resolution";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
@@ -300,7 +301,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     check: run.request.permission,
     declared: value.consequences,
     control: { name: undefined, kind: "step" },
-    verb: node.definition.label.toLowerCase(),
+    verb: webNodeActVerb(node, parameters),
     // The node's own, so a replayed read is not gated on what the model wrote
     // about it -- the same rule the live run applies (`./run.ts`).
     effect: node.effect
