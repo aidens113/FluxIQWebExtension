@@ -60,10 +60,10 @@ judged the whole run unverified, so acceptance is held. No unchanged retry.
 **Now (2026-10-20):** the four repaired tasks (office checkout, job save, photo newest likes, social group posts)
 were rerun in rounds 1-5 and passed none; every debug found the task and fixture sound and the build doing the task.
 Three of round 5's failures are the site-reset bookkeeping (the class behind most of rounds 2-4), one is judge
-consistency and read speed. Structural units t751 (reset by observed state), t753 (judge consistency, read speed) and
-t752 (chat and overlay polish) run in parallel; ledgers in [trace-offline-trials-plan.md](./trace-offline-trials-plan.md).
+consistency and read speed. Structural units t751 (reset by observed state), t752 (judge consistency, read speed) and
+t753 (chat and overlay polish) run in parallel; ledgers in [trace-offline-trials-plan.md](./trace-offline-trials-plan.md).
 
-**Next, in order:** t751 and t753 merge with headed provider-free reproductions of every round 2-5 shape passing;
+**Next, in order:** t751 and t752 merge with headed provider-free reproductions of every round 2-5 shape passing;
 sync the lane trees; round 6 on fresh workspaces, supervised at $0.25 each via both settings; debug every failure;
 then the owed reruns (job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
 
@@ -614,10 +614,10 @@ The 2026-10-18 entries are archived in
   jumps position, covers headers and repeats its failure text.
 - Conclusion: three failures are the reset bookkeeping (the same class as rounds 2-4, each round's fixes exposing the
   next hole), one is judge consistency and read speed (judge errors also recur). Structural units: t751 reset by
-  observed state, t753 judge consistency and read speed, t752 chat and overlay polish. No paid run until t751's and
-  t753's headed provider-free reproductions pass.
+  observed state, t752 judge consistency and read speed, t753 chat and overlay polish. No paid run until t751's and
+  t752's headed provider-free reproductions pass.
 - Outcome: Failed (0 of 4)
-- Follow-up: t751, t752, t753; then round 6.
+- Follow-up: t751, t753, t752; then round 6.
 
 ## Open Questions
 

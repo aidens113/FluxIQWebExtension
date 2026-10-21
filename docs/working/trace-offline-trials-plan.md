@@ -33,8 +33,8 @@ experiment's deep loads of Core internals with a public seam plus an audit rule.
 job, office and photo failed on the site-reset bookkeeping (a lasting step reaching a trial unchecked, a toggle the
 site reverted itself deadlocking settle and undo, a reset taking its starting state after the build's own act), social
 on judge consistency (an exact answer judged no) and read speed. **Running:** t751 reset by observed state
-(lead-xhigh), t753 judge consistency and read speed (lead-xhigh), t752 chat and overlay polish (lead). Round 6 only
-after t751's and t753's headed provider-free reproductions pass. t750 (merged) single-sourced the undo rules.
+(lead-xhigh), t752 judge consistency and read speed (lead-xhigh), t753 chat and overlay polish (lead). Round 6 only
+after t751's and t752's headed provider-free reproductions pass; trace P6 (offline trials inside builds) starts when t751 merges, since it shares the trial gates. t750 (merged) single-sourced the undo rules.
 
 **Also merged 2026-10-19/20:** t724 L1 reset settlement; t730 browser specs on the ten realistic scenarios only;
 t731-t733, t735, t737; t739 photo-social fixture and build-cache fingerprint; t740 the real-SQL test group (removed
@@ -103,12 +103,12 @@ Briefs for work in flight or next; finished briefs are archived in
   realistic scenarios, each failing on current `dev` first: a lasting step never pressed in exploration; a toggle the
   site reverts itself; a dialog act with no address that must not touch pre-existing state; a press that navigates away;
   a rows-in-page-order limit with a lasting press; and the social round-5 shape if it is a reset or rule-contract cause.
-- Not: UI wording owned by t752 (check its status before editing shared files); trace plan files owned by t749.
+- Not: UI wording owned by t753 (check its status before editing shared files); trace plan files owned by t749.
 - Validation: tests first; tests beside each change; Core prompt contract tests when model-facing text changes (no
   realistic task mirrored); touched typechecks; both audits.
 - Report: `docs/working/trace-offline-trials-plan/reports/t751-reset-by-observed-state.md` in the downstream tree.
 
-### Brief: t753-judge-consistency-and-read-speed (lead-xhigh, Core judging and the web read)
+### Brief: t752-judge-consistency-and-read-speed (lead-xhigh, Core judging and the web read)
 - Why: round 5's social run (`run-mvhibis1-d570b37d`, debug note in `C:/Users/osrs_/FluxStuff/fxwork/t566/
   !FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/`) returned exactly the oracle's rows at its
   second whole-run test and was judged no: the judge objected to what the previous judge had advised and made a false
@@ -129,14 +129,14 @@ Briefs for work in flight or next; finished briefs are archived in
     column when rows differ.
   - Repair seeding: among tests with the same verdict, `closestTrial` takes the latest and counts only the answer set
     (`project-agents/contracts/builder-return.ts`).
-- Not: reset files (t751) or chat/overlay wording (t752). `builder-return.ts` and supervisor files may be shared with
+- Not: reset files (t751) or chat/overlay wording (t753). `builder-return.ts` and supervisor files may be shared with
   t751: check `git -C C:/Users/osrs_/FluxStuff/fxwork/t751/<repo> status --short` and keep shared files serial.
 - Acceptance: a headed provider-free spec on social-network-feed reproducing the shape (a correct answer judged with
   a contradicting no; a long "See more" list) fails on current `dev` and passes after; prompt contract tests pass.
 - Validation: tests first; tests beside each change; touched typechecks; both audits.
-- Report: `docs/working/trace-offline-trials-plan/reports/t753-judge-consistency-and-read-speed.md` downstream.
+- Report: `docs/working/trace-offline-trials-plan/reports/t752-judge-consistency-and-read-speed.md` downstream.
 
-### Brief: t752-chat-and-overlay-polish (lead, extension UI and Core activity wording)
+### Brief: t753-chat-and-overlay-polish (lead, extension UI and Core activity wording)
 - Why: round 5's UI reviews (screenshots under each run's `.ui-review.local/`, findings in the four round-5 debug notes
   named in t751's brief) show the person internal or wrong text and an unstable overlay. The user judges a run by
   watching it; a ChatGPT-quality chat and a stable, visible overlay are part of passing.
@@ -162,7 +162,7 @@ Briefs for work in flight or next; finished briefs are archived in
 - Validation: tests beside each change; touched typechecks; both audits; Core prompt contract tests if model-facing
   text changes; headed provider-free screenshots on two realistic scenarios showing the chat, overlay and an ending,
   looked at and described in the report (Chrome; Firefox popup alignment where the contract is shared).
-- Report: `docs/working/trace-offline-trials-plan/reports/t752-chat-and-overlay-polish.md` in the downstream tree.
+- Report: `docs/working/trace-offline-trials-plan/reports/t753-chat-and-overlay-polish.md` in the downstream tree.
 
 ### Brief: t749-offline-reads-tier2 (lane T lead, trace plan P5)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P5 (tier 2): a changed read or target is evaluated
