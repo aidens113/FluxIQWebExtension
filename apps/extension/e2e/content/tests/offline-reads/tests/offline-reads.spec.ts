@@ -190,8 +190,19 @@ test(`${GROWING_FEED} (chrome): a read past a feed captured before it grew is a 
 
 test("social-network-feed (chrome): unsupported automatic text disclosure is an explicit offline gap", async ({ openHarness, headless }) => {
   test.setTimeout(480_000);
-  const harness = await settledListPage(openHarness, "social-network-feed");
+  // The shared fidelity opener deliberately expands every post. This case
+  // must capture the actual collapsed state before any text read opens it.
+  const harness = await openHarness("social-network-feed");
+  for (const [operation, payload] of [["consent", { choice: "all" }], ["notifications", { choice: "dismissed" }], ["chat", { state: "closed" }]] as const) {
+    const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+      method: "POST", headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify(payload)
+    });
+    expect(response.ok).toBe(true);
+  }
+  await harness.page.reload();
   const message = '[data-ad-comet-preview="message"]';
+  await expect(harness.page.locator(message).first()).toBeVisible();
+  await expect.poll(async () => (await harness.messages()).some((entry) => entry.type === "fluxiq.contentReady")).toBe(true);
   const position = await harness.page.locator('[role="article"]:has(a[href*="/posts/"])').evaluateAll((rows, selector) => {
     const row = rows.find((item) => item.querySelector(`${selector} [role="button"]`));
     return row?.getAttribute("aria-posinset") ?? null;
