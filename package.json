@@ -68,6 +68,8 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "@fluxiq-web-extension/test-runner": "workspace:*",
+    "fluxiq": "link:../!FluxIQ/packages/fluxiq"
   }
 }

@@ -4,7 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./demo-llm-adaptation-readiness": "./dist/demo-llm-adaptation-readiness.js",
+    "./demo-llm-attestation": "./dist/demo-llm-attestation.js",
+    "./demo-llm-exploration-request": "./dist/demo-llm-exploration-request.js",
+    "./demo-operation-status": "./dist/demo-operation-status.js",
+    "./demo-workspace": "./dist/demo-workspace.js",
+    "./demo-workspace/launcher": "./dist/demo-workspace/launcher/index.js",
+    "./panel-golden-path": "./dist/panel-golden-path/index.js",
+    "./realistic-scenarios": "./src/realistic-scenarios/index.ts",
+    "./target-config": "./dist/target-config.js",
+    "./ui-e2e": "./dist/ui-e2e/index.js",
+    "./windows-acl": "./dist/windows-acl.js"
   },
   "scripts": {
     "domain:dist": "node scripts/domain-dist.mjs",

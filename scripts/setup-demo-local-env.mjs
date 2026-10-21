@@ -1,11 +1,15 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { access, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { hardenWindowsPrivatePath } from "../packages/test-runner/dist/windows-acl.js";
+import { hardenWindowsPrivatePath } from "@fluxiq-web-extension/test-runner/windows-acl";
+
+if (process.argv.includes("--help")) {
+  await Promise.all([import("@fluxiq-web-extension/test-runner/windows-acl"), import("fluxiq")]);
+  process.stdout.write("Usage: node scripts/setup-demo-local-env.mjs [command arguments]\n--help  Show help without building, opening a browser or changing workspace data.\n");
+  process.exit(0);
+}
 
 const repositoryRoot = path.resolve(process.env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
-const coreRoot = path.resolve(repositoryRoot, "..", "!FluxIQ");
 const target = path.join(repositoryRoot, ".env.local");
 const force = process.argv.includes("--force");
 if (!force) {
@@ -24,8 +28,7 @@ const pin = String(randomInt(100000, 1000000));
 const demoWorkspaceRoot = path.join(repositoryRoot, "test-runs", "web-extension-demo");
 const demoFluxiqRoot = path.join(demoWorkspaceRoot, "fluxiq-root");
 
-const fluxiqEntrypoint = path.join(coreRoot, "packages", "fluxiq", "dist", "index.js");
-const { FluxIQ } = await import(pathToFileURL(fluxiqEntrypoint).href);
+const { FluxIQ } = await import("fluxiq");
 const fluxiq = FluxIQ.create({ rootDir: demoFluxiqRoot, loadEnv: false });
 await fluxiq.setup();
 await fluxiq.programs.identityAccess.upsertUser({

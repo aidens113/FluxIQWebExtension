@@ -6,7 +6,7 @@
 // imported from source because the runner may not be built yet: that file
 // imports nothing and uses only erasable TypeScript, which Node strips.
 
-import { unrealisticScenarioRefusal } from "../../../packages/test-runner/src/realistic-scenarios/index.ts";
+import { unrealisticScenarioRefusal } from "@fluxiq-web-extension/test-runner/realistic-scenarios";
 
 /** The subcommands that name one scenario, right after the command. */
 const ONE_SCENARIO = new Set(["run", "interactive", "replay"]);
