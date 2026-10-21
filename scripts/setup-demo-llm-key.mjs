@@ -2,6 +2,12 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { withoutProviderSecrets } from "./provider-secret-environment.mjs";
 
+if (process.argv.includes("--help")) {
+  await Promise.all([import("@fluxiq-web-extension/test-runner/target-config"), import("@fluxiq-web-extension/test-runner/demo-workspace"), import("@fluxiq-web-extension/test-runner/demo-llm-attestation")]);
+  process.stdout.write("Usage: node scripts/setup-demo-llm-key.mjs [command arguments]\n--help  Show help without building, opening a browser or changing workspace data.\n");
+  process.exit(0);
+}
+
 const repositoryRoot = path.resolve(process.env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const builds = [
@@ -18,9 +24,9 @@ let secretLiteral = process.env.DEEPSEEK_API_KEY ?? "";
 try {
   for (const args of builds) await runBuild(args);
   const [{ loadTestEnvironment }, { resolveDemoWorkspaceConfiguration, setupDemoWorkspaceDeepSeekKey }, { certifyDemoLlmSetupArtifacts }] = await Promise.all([
-    import("../packages/test-runner/dist/target-config.js"),
-    import("../packages/test-runner/dist/demo-workspace.js"),
-    import("../packages/test-runner/dist/demo-llm-attestation.js"),
+    import("@fluxiq-web-extension/test-runner/target-config"),
+    import("@fluxiq-web-extension/test-runner/demo-workspace"),
+    import("@fluxiq-web-extension/test-runner/demo-llm-attestation"),
   ]);
   const environment = await loadTestEnvironment(repositoryRoot, process.env);
   secretLiteral = environment.DEEPSEEK_API_KEY ?? secretLiteral;

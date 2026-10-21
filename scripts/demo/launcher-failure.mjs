@@ -13,7 +13,7 @@ export function demoCredentialLiterals(environment) {
 /** `{ detail }` describing `error` safely, or `{}` when the describer cannot load. */
 export async function demoLauncherFailureDetail(error, secretLiterals) {
   try {
-    const { describeDemoLauncherFailure } = await import("../../packages/test-runner/dist/demo-workspace/launcher/index.js");
+    const { describeDemoLauncherFailure } = await import("@fluxiq-web-extension/test-runner/demo-workspace/launcher");
     return { detail: describeDemoLauncherFailure(error, secretLiterals) };
   } catch {
     return {};

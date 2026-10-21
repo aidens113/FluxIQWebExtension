@@ -328,7 +328,9 @@ test("a builder on its prepared entry opens, through Core's registry, with the l
 // `llm/harness-options/evidence-build-scope.ts`); this sets it through a second
 // copy of that module, as the panel's bundled one.
 test("a builder on its prepared entry has arrived when Core's frame is set by another copy of Core, as the web panel's", async () => {
-  const panel = await import(new URL("./runtime/llm/harness-options/evidence-build-scope.js?copy=panel", import.meta.resolve("fluxiq/automation-studio")).href) as { runWithAutomationStudioEvidenceBuildScope: typeof runWithAutomationStudioEvidenceBuildScope };
+  const panelUrl = new URL(import.meta.resolve("fluxiq/automation-studio/evidence-build-scope"));
+  panelUrl.searchParams.set("copy", "panel");
+  const panel = await import(panelUrl.href) as { runWithAutomationStudioEvidenceBuildScope: typeof runWithAutomationStudioEvidenceBuildScope };
   assert.notEqual(panel.runWithAutomationStudioEvidenceBuildScope, runWithAutomationStudioEvidenceBuildScope);
   const framed = <T>(opening: "fresh" | undefined, fn: () => T) => panel.runWithAutomationStudioEvidenceBuildScope(opening ? { ...PROJECT, buildId: BUILD_ID, opening } : { ...PROJECT, buildId: BUILD_ID }, fn);
   const stubbed = openTab();
