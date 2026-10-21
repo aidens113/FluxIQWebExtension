@@ -41,7 +41,7 @@ every sweep timeout); t744 sweep-1020b fixes; the root `test` script runs every 
 
 **Daily sweeps:** both 2026-10-20 sweeps are done; the next runs on 2026-10-21.
 
-**Open follow-ups:** t750 (undo admission single source); t748's notes (C5 wording only, an unnamed control seals
+**Open follow-ups:** t748's notes (C5 wording only, an unnamed control seals
 baselines, plan order as run order in branching Flows); storage `project/` and `tests/` at their 25-file limit and
 `content-store.ts` near its size limit.
 
@@ -73,20 +73,6 @@ Briefs for work in flight or next; finished briefs are archived in
 - Dispatch workers (`worker-low`, `worker`, `worker-high`) partitioned by file, in the foreground when you need the
   result, and verify every worker claim yourself.
 - Final message: the return contract (at most 12 lines: Outcome, Changed, Validation, Not verified, Report, Notes).
-
-### Brief: t750-undo-admission-single-source (worker-high, Core site reset)
-- Why: t748's `site-reset/undo-reach.ts` copies `site-reset/undo-admission.ts`'s admission paths, and a test pins the
-  copied lines so the two cannot drift silently. A copied rule is still two sources of one rule; make it one.
-- Task: extract the admission paths both files need into one focused module that both import (one export per file,
-  barrel, tests beside it), switch both callers in the same unit, delete the copy and the pin test that guarded it.
-  Behaviour must not change: every existing site-reset, reset-settlement and reset-answers test passes unchanged.
-- Owns: Core `packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/site-reset/{undo-reach,undo-admission}.ts`,
-  the new module (in `site-reset/` only if its file budget allows, otherwise a sibling directory, as t743 did with
-  `reset-settlement/`), and their tests. Nothing else.
-- Validation: from `packages/fluxiq`, `pnpm exec vitest run src/programs/automation-studio/runtime/flow-bootstrap
-  src/programs/automation-studio/runtime/service/project-build src/programs/automation-studio/runtime/project-agents`;
-  `pnpm exec tsc --noEmit -p .`; Core `node scripts/structure-audit.mjs`. Quote observed output.
-- Report: `docs/working/trace-offline-trials-plan/reports/t750-undo-admission.md` in the downstream tree.
 
 ### Brief: t749-offline-reads-tier2 (lane T lead, trace plan P5)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P5 (tier 2): a changed read or target is evaluated
@@ -393,6 +379,23 @@ Briefs for work in flight or next; finished briefs are archived in
   no behaviour change, runs beside round 5); two cross-repository contracts documented (`readsWords`, `precedingSteps`).
 - Outcome: Accepted
 - Follow-up: sync the lane trees and run round 5; t750.
+
+### 2026-10-20 - t750 merged: one source for undo admission paths and act subjects
+- Agent: supervisor (worker-high t750)
+- Changed: Core: t748's `site-reset/undo-reach.ts` copied `undo-admission.ts`'s admission paths under a pin test, and
+  `reset-settlement/act-groups.ts` held a third copy of "what the act was about"; the paths now live in
+  `site-reset/undo-paths.ts` and the act subject in `reset-settlement/act-subjects.ts`, every caller imports them, the
+  copies and the pin test are deleted (site-reset still depends on reset-settlement, never the reverse). Behaviour
+  unchanged.
+- Validation: worker: reset-settlement, site-reset, reset-answers before 27 files / 338 tests, after the first pass 28
+  / 346, after the third copy 29 / 347 (one moved, new tests added), all passing; `browser-export.test.ts` 1898 / 75 /
+  133 ms alone and 424 ms in its folder against its earlier 15180 ms under load. Supervisor's gate after merging dev:
+  Core `vitest run` over flow-bootstrap, service/project-build, project-agents, service/candidate-trial -> `Test
+  Files 339 passed | 1 skipped (340)`, `Tests 3496 passed | 2 skipped (3498)`; fluxiq `tsc` 0; Core audit passed (439
+  warnings: `reset-settlement/` at 16 files, advisory); `docs:check` current; Core build 0; downstream audit passed.
+- Open: `site-reset/tests/` is at its 25-file limit (the audit refuses the next file there).
+- Outcome: Accepted
+- Follow-up: none.
 
 ## Open Questions
 
