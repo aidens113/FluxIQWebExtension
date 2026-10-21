@@ -131,6 +131,32 @@
 // press. Under `view_history` a resolution says which view it came from
 // (`shownIn`), where a capture is on record.
 //
+// **A candidate's step stands where the step before it left the page (t748
+// U1).** A site can open an item as a dialog over its list and push the item's
+// address, while a load of that address gives the item's own page, and one
+// Flow handle can name a control of each. The store keeps one page per
+// address, so once exploration looked at the own page the handle named the own
+// page's control, and a Flow that opened the dialog and pressed it took an
+// identity with no dialog into the dialog (rerun round 4, photo builder,
+// `web.target.ambiguous`). So each Flow also keeps its dialog views and where
+// each press of exploration's led (`step-views/`). Core sends a candidate's
+// node the plan's steps before it (`precedingSteps`), which
+// `resolve-plan-node.ts` reads into how each moves the page and hands to
+// `resolve` (`after`); a candidate's handle that the dialog those steps left
+// open shows, in a dialog, names that control where the pages name another or
+// none -- with that view as `shownIn` and, through `acted` below, as
+// exploration's press there found it. Nothing is kept between resolutions: the
+// steps alone say where a step stands, never the order Core asked in (t748
+// U1b). Everything else resolves as before: a step after a navigation, and one
+// Core sent no steps, names the own page's control, as that page showed it.
+//
+// t743 d5 kept the two documents as two views of the page and the acted identity
+// per address instead. The first act at the own page's address was then the
+// press that undid the dialog's act, made from the state the build had left, and
+// a Flow saving the own page's control saved the words that undo found
+// ("Unlike"): the acted identity below stays the handle's first act's, lent only
+// at the address that act named.
+//
 // **A candidate names only what evidence printed (t378, lane B C4).** A capture
 // holds every element, and the page view prints only those with words or a
 // control; the rest keep their handles in the numbering gaps. Lane B's
@@ -200,6 +226,7 @@ import { webLlmFrameUrlPath } from "./frame-url-path";
 import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
 import { webLlmNotAFieldTargets, type WebLlmNotAFieldKind } from "./typing-targets";
+import { createWebLlmStepViews, type WebLlmPlanStepMove, type WebLlmStepViews } from "./step-views";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
@@ -262,7 +289,8 @@ export type WebLlmTargetPackets = {
   acted(scope: WebLlmTargetScope, handle: string, before: WebLlmSnapshotBinding, after?: WebLlmSnapshotBinding): void;
   /** Something is about to be done to the page this Flow's build stands on, or Core is running the draft again: the newest capture no longer says how the page stands (header, t496). */
   acting(scope: WebLlmTargetScope): void;
-  resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach): WebLlmTargetResolution;
+  /** `after`: under `view_history`, how each of a candidate's steps before this one moves the page, so the step stands where they leave it (header, t748 U1b). */
+  resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach, after?: readonly WebLlmPlanStepMove[]): WebLlmTargetResolution;
   /** A bare handle for an act on the page at `page`: that page's, `stale` when only another page holds it (header, t486). */
   resolveOn(scope: WebLlmTargetScope, handle: string, page: string): WebLlmTargetResolution;
 };
@@ -280,13 +308,14 @@ type PageTargets = Map<string, PageTarget>;
  * a press of exploration's changed the page for (header). `acted`: each handle exploration acted
  * on, as the view the first act was made from showed it, with what that act made true (header). `partial`: the pages
  * whose newest view was a look the browser cut short (header). `selfChanging`: what its pages were seen changing by
- * themselves (header, t496).
+ * themselves (header, t496). `steps`: its dialog views and where its presses led (header, t748 U1).
  */
 type FlowPages = {
   pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>;
   /** Per page, the document (`navigation.timeOrigin`) its newest whole view showed, where it said (header, t741 C2). */
   documents: Map<string, number>; history: WebLlmViewHistory<PageTarget>;
   printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>; selfChanging: WebLlmSelfChangingNames;
+  steps: WebLlmStepViews<PageTarget>;
 };
 /** A control as the first act on it found it, and what that act made true when it added anything (`act-effect.ts`). */
 type ActedTarget = PageTarget & { effect: JsonObject | undefined };
@@ -306,7 +335,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       pressed: new Set<string>(),
       acted: new Map<string, ActedTarget>(),
       partial: new Set<string>(),
-      selfChanging: createWebLlmSelfChangingNames()
+      selfChanging: createWebLlmSelfChangingNames(),
+      steps: createWebLlmStepViews(acrossView, (target: PageTarget) => target.element.context?.dialog !== undefined)
     };
     flows.delete(key);
     flows.set(key, flow);
@@ -321,7 +351,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const targets = targetsOf(binding);
       flow.selfChanging.captured(binding);
-      flow.history.record(binding.evidence.location, targets);
+      flow.steps.captured(binding.evidence.location, dialogsOf(binding), flow.history.record(binding.evidence.location, targets), targets, false);
       printedBy(flow, binding);
       markRenumbered(flow, binding, targets);
       keep(flow, binding.evidence.location, acrossViews(flow.pages.get(binding.evidence.location), targets));
@@ -332,7 +362,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const location = binding.evidence.location;
       const seen = targetsOf(binding);
       flow.selfChanging.captured(binding);
-      flow.history.record(location, seen);
+      flow.steps.captured(location, dialogsOf(binding), flow.history.record(location, seen), seen, binding.evidence.truncated === true);
       printedBy(flow, binding);
       // A look that described every control says which have gone, as a shown
       // packet does; one the browser's capture cut short (`captureTruncated`)
@@ -366,8 +396,11 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
     acted(scope, written, before, after) {
       const handle = canonicalWebLlmTargetHandle(written);
       const flow = flows.get(scopeKey(scope));
+      if (flow === undefined || handle === undefined) return;
+      // Where every press led (header, t748 U1); nowhere known when nothing was captured after it.
+      flow.steps.pressedInto(handle, after?.evidence.location ?? "", after === undefined ? "" : dialogsOf(after));
       // The first act's view only (header); a look the capture cut short before the control says nothing of it.
-      if (flow === undefined || handle === undefined || flow.acted.has(handle)) return;
+      if (flow.acted.has(handle)) return;
       const target = targetsOf(before).get(handle);
       if (target === undefined || target.shared) return;
       flow.acted.set(handle, { ...target, effect: webPlanActEffect(before, after, flow.selfChanging.of(before.evidence.location)) });
@@ -379,13 +412,14 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
     acting(scope) {
       flows.get(scopeKey(scope))?.selfChanging.acting();
     },
-    resolve(scope, written, location, reach) {
+    resolve(scope, written, location, reach, after) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
       const current = resolveCurrent(flow, handle, location);
       if (reach !== "view_history") return pressedBefore(flow, handle, current);
-      const reached = resolveFromHistory(flow, handle, location, current);
+      const standing = after === undefined ? current : inStandingView(flow, handle, location, after, current);
+      const reached = resolveFromHistory(flow, handle, location, standing);
       // A candidate names only what evidence printed, and saves a control acted on as the act found it (header).
       return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : actedAs(flow, handle, pressedBefore(flow, handle, reached));
     },
@@ -404,7 +438,7 @@ function resolveFromHistory(flow: FlowPages, handle: string, location: string | 
   // on the page named, when one was -- left it.
   const found = flow.history.find(handle, location);
   if (current.ok || found === undefined) {
-    if (current.ok && found !== undefined) current.shownIn = found.shownIn;
+    if (current.ok && found !== undefined) current.shownIn ??= found.shownIn;
     return current;
   }
   // A reload that renumbered the handle shows its control under another
@@ -414,6 +448,24 @@ function resolveFromHistory(flow: FlowPages, handle: string, location: string | 
   const earlier = resolved(found.target);
   earlier.shownIn = found.shownIn;
   return earlier;
+}
+
+/**
+ * `current`, or the control in a dialog that the dialog view the candidate's
+ * steps before it (`after`) left open shows under `handle`, where the pages
+ * name another or none (header, t748 U1, U1b).
+ */
+function inStandingView(flow: FlowPages, handle: string, location: string | undefined, after: readonly WebLlmPlanStepMove[], current: WebLlmTargetResolution): WebLlmTargetResolution {
+  const standing = flow.steps.standing(handle, location, after);
+  if (standing === undefined || standing.target.shared || (current.ok && addressOf(current) === addressOf(standing.target))) return current;
+  const resolution = resolved(standing.target);
+  resolution.shownIn = standing.shownIn;
+  return resolution;
+}
+
+/** The dialogs a capture's controls sat in, as one string; empty where none did. */
+function dialogsOf(binding: WebLlmSnapshotBinding): string {
+  return [...new Set(binding.dialogNames?.values() ?? [])].sort().join("\u001f");
 }
 
 /**

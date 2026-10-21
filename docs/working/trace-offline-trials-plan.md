@@ -29,11 +29,12 @@ intake, strict matching, virtual time, explicit gaps; round 4's social trials re
 exactly. **Next: t749 (P5 offline reads tier 2)**, which also owns P4's corrected-candidate gate item and replaces the
 experiment's deep loads of Core internals with a public seam plus an audit rule. Then P6 build-loop integration, P7.
 
-**Breadth reruns: rounds 2-4 passed 0 of 12; every cause was a product defect, each fixed** (t738, t741, t743). t743
-(merged) made round 4's three shared weaknesses structural: build-scoped site memory, actionable answers with
-`gate_unsatisfiable`, repair before ending, plus each site's causes. **Next:** sync the four lane trees (t563, t719,
-t566, t567) and run round 5 on fresh workspaces, supervised at $0.25 each via both `FLUXIQ_LLM_RUN_COST_CEILING_USD`
-and `--llm-max-cost-usd`. **t748** fixes t743's open items and two earlier follow-ups in parallel (none was seen live).
+**Breadth reruns: rounds 1-5 passed 0 of the four repaired tasks; all framework defects.** Round 5 (0 of 4, $0.499):
+job, office and photo failed on the site-reset bookkeeping (a lasting step reaching a trial unchecked, a toggle the
+site reverted itself deadlocking settle and undo, a reset taking its starting state after the build's own act), social
+on judge consistency (an exact answer judged no) and read speed. **Running:** t751 reset by observed state
+(lead-xhigh), t752 judge consistency and read speed (lead-xhigh), t753 chat and overlay polish (lead). Round 6 only
+after t751's and t752's headed provider-free reproductions pass; trace P6 (offline trials inside builds) starts when t751 merges, since it shares the trial gates. t750 (merged) single-sourced the undo rules.
 
 **Also merged 2026-10-19/20:** t724 L1 reset settlement; t730 browser specs on the ten realistic scenarios only;
 t731-t733, t735, t737; t739 photo-social fixture and build-cache fingerprint; t740 the real-SQL test group (removed
@@ -41,9 +42,9 @@ every sweep timeout); t744 sweep-1020b fixes; the root `test` script runs every 
 
 **Daily sweeps:** both 2026-10-20 sweeps are done; the next runs on 2026-10-21.
 
-**Open follow-ups:** t748 (running): the never-sent node catalog in the size check, the control name lost on a
-reloading press, and t743's open items. t747 (merged) closed the storage three; storage `project/` and its `tests/` are
-at their 25-file limit and `content-store.ts` near its size limit, so the next storage change restructures first.
+**Open follow-ups:** t748's notes (C5 wording only, an unnamed control seals
+baselines, plan order as run order in branching Flows); storage `project/` and `tests/` at their 25-file limit and
+`content-store.ts` near its size limit.
 
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
@@ -74,51 +75,94 @@ Briefs for work in flight or next; finished briefs are archived in
   result, and verify every worker claim yourself.
 - Final message: the return contract (at most 12 lines: Outcome, Changed, Validation, Not verified, Report, Notes).
 
-### Brief: t748-build-loop-followups (lead-xhigh, Core and downstream build loop)
-- Why: t743's open items and two earlier follow-ups are weaknesses a live build can meet; none was seen in round 4's
-  runs, so round 5 runs on t743 while these are fixed (their debugs may add to this list).
-- Task, partitioned by file (serial where two share one):
-  1. Domain: a dialog view and a standalone page at one address share one view in the target-packet store, so a Flow
-     that opens the dialog and presses a handle last shown on the standalone page can fail `web.target.ambiguous`.
-     Choose the view a step stands on from the step before it, or key handles per document. t743's reverted attempt
-     (`reports/t743-d5-view-alias.md`; patch `C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/53d1357c-b7da-4f48-9665-ff78992a8998/scratchpad/t743-d5-view-alias.patch`) broke a passing spec: find why
-     first.
-  2. Core site reset: an `undo` reason no call can meet is detected in general (an act whose differing list has no
-     admissible undo becomes `gate_unsatisfiable` with its condition named), not left to the repeat guard.
-  3. Core trial feedback: a read step is labelled with the words it read, not the words captured before a change;
-     a press that reloads the page keeps the control's name.
-  4. Core LLM request size: the pre-provider size check counts only what is sent (the node catalog is counted though
-     never sent; t744 worked around it in a test).
-  5. Assess and fix where real: office debug C5/C6 (baselines on unrelated lists; "press again with this ref"); a
-     looped trial act's pass named in `trialRan`; `refused-repeat.ts` carrying the last refusal code; t738's open
-     points (the ending filter that drops part-level test claims; the reset-witness rule for unscoped presses and a
-     lone `create_new`; the job spec's wrong-job undo check).
-- Not: t746's files (Core `runtime/environment/**`, `runtime/gateway-trace/**`, `client-gateway/**`, executor
-  contracts/graph-run/region-execution, `runtime/index.ts`, `service/offline-trial/**`, `model/offline-trial/**`) or
-  t747's (`storage/project/**`). If a fix needs one, stop and report.
-- Validation: each fix fails first; tests beside each change; Core prompt contract tests when model-facing text
-  changes (no realistic task mirrored); touched typechecks; both audits; headed provider-free reproductions on the ten
-  realistic scenarios where a fix changes browser behaviour, plus the `e2e/site-reset` specs.
-- Report: `docs/working/trace-offline-trials-plan/reports/t748-build-loop-followups.md` in the downstream tree.
+### Brief: t751-reset-by-observed-state (lead-xhigh, Core site reset; domain and extension where a fix needs them)
+- Why: rerun rounds 1-5 passed 0 of the lasting-act tasks. Every round's debugs found the tasks and fixtures sound and
+  the builds doing the task (round 5: job's save trial judged yes 4 times; office explored every fact; photo reached a
+  judged whole run); what failed was the reset bookkeeping (witnesses, adoption, settled/unsettleable, already-back)
+  checked at different doors. Each round's fixes exposed the next hole (t743's narrower adoption exposed round 5's job
+  and office). A recurring class gets a structural fix, not another patch.
+- Rule to satisfy (user, 2026-10-12): before every trial and the judged whole run the site returns to the state the
+  build started from, undoing exactly the build's own lasting acts and never touching what existed before.
+- Required design:
+  - R1 Baseline: each control or list a build act can touch is read before the build's first lasting act there, never
+    from evidence after a build act. An act with no target identity ends honestly with its condition named.
+  - R2 Settlement by observed state: an act is settled when fresh reads of its witness show the baseline, whatever put
+    it back (the build's undo or the site itself). A refusal like "already back" never leaves an act on the to-undo list.
+  - R3 One admission point at every door a lasting act can land through (exploration, subflow trial, candidate trial,
+    entry or phase preparation, whole run): a lasting step needs a readable witness first; a trial holding an
+    unwitnessed lasting step is refused unrun, before baselines seal, naming the condition and a call that meets it.
+  - R4 Setup reruns (`phase-start.ts` explore) never repeat the build's lasting acts while they are on the site.
+  - R5 Contract: every refusal a builder can meet names a call the domain can carry out; a test fails the build when a
+    rule cannot be met (domain-declared capabilities, e.g. rows in page order). Fix the listing-order rule under it.
+  - R6 The new model replaces the rule pile; delete what it replaces (no dead paths), callers switched in the same unit.
+- Evidence (read the debug notes, lane trees `C:/Users/osrs_/FluxStuff/fxwork/{t563,t719,t566,t567}/!FluxIQWebExtension/
+  docs/working/language-driven-flow-loop-plan/debugs/`): round 5 `run-mvhibk0z-1950493f` (job), `run-mvhibit5-e1d3a4f3`
+  (office), `run-mvhibis0-b536958b` (photo), `run-mvhibis1-d570b37d` (social); rounds 2-4 `run-mvgf*`, `run-mvgo*`,
+  `run-mvgv*`, `run-mvgw*` (on dev).
+- Acceptance before any paid run: the 12 `e2e/site-reset` specs pass, plus new headed provider-free specs on the
+  realistic scenarios, each failing on current `dev` first: a lasting step never pressed in exploration; a toggle the
+  site reverts itself; a dialog act with no address that must not touch pre-existing state; a press that navigates away;
+  a rows-in-page-order limit with a lasting press; and the social round-5 shape if it is a reset or rule-contract cause.
+- Not: UI wording owned by t753 (check its status before editing shared files); trace plan files owned by t749.
+- Validation: tests first; tests beside each change; Core prompt contract tests when model-facing text changes (no
+  realistic task mirrored); touched typechecks; both audits.
+- Report: `docs/working/trace-offline-trials-plan/reports/t751-reset-by-observed-state.md` in the downstream tree.
 
-### Brief: t747-storage-followups (lead, Core project storage)
-- Why: t745's notes 3-5 name three pre-existing gaps in Core's project storage; known integrity and security gaps are
-  fixed, not deferred.
-- Task: (a) `sweepUnreferencedObjects`, and any other path that removes a content file before its row, removes the row
-  first through t745's pending-removal pattern (`object_pending_removals`, drained at every content store open), so a
-  writer racing a sweep never loses a file; (b) a re-seal job: when a host rotates or retires its content protection
-  key, every sealed item (content-store objects, trace chunks, sealed manifests, reusable contexts, the wrapped address
-  key) is re-sealed under the new key, resumable after a crash, and the old key is released only after it finishes; the
-  host-facing protection API states that order; (c) a structural decision for storage `gateway-trace/` (25-file hard
-  limit, a subdirectory breaks the path-depth limit) applied now with callers switched in the same unit and the
-  `storage/project` barrel exports unchanged.
-- Owns: Core `packages/fluxiq/src/programs/automation-studio/storage/project/**` and tests, the content protection type
-  and host binding if (b) needs them, `docs/architecture/automation-studio/persistence.md`, the regenerated framework
-  reference. Not: `runtime/gateway-trace/**`, `client-gateway/**` (t746) or any file t743 changes. A migration takes the
-  next free number after 0035.
-- Validation: each fix fails first; storage/project tests and t745's consumer list; fluxiq `tsc`; Core audit;
-  `pnpm docs:check`; real-SQL marker on tests that open SQLite.
-- Report: `docs/working/trace-offline-trials-plan/reports/t747-storage-followups.md` in the downstream tree.
+### Brief: t752-judge-consistency-and-read-speed (lead-xhigh, Core judging and the web read)
+- Why: round 5's social run (`run-mvhibis1-d570b37d`, debug note in `C:/Users/osrs_/FluxStuff/fxwork/t566/
+  !FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/`) returned exactly the oracle's rows at its
+  second whole-run test and was judged no: the judge objected to what the previous judge had advised and made a false
+  claim about a condition. Judge errors that lose a correct answer have recurred (rerun round 1, t725, t741, now), so
+  this is a structural fix, not new wording.
+- Fix, each with a test that fails first:
+  - Judge consistency: every judge sees the earlier judges' advice for this build and whether it was followed; a no
+    that contradicts followed advice, or claims a condition is wrong, is checked by Core against the stored rows and
+    conditions before it counts (extend t659's "claims weighed by what Core measured"); an unsupported no is not a no.
+    For a set the request defines by the person's relation to it, guidance uses a sign each row shows (generic wording
+    only, never this task's site, groups or answer).
+  - Judge evidence: a loop-source read's rows are working rows, not the answer (`summary-with-also-in-result.ts`,
+    `summary-reads.ts`), so the judge is never told the answer must exclude them.
+  - Read speed: `extract_list` expands per-row "See more" itself on the rows its conditions keep (extension
+    `list-reader.ts`, `field-reader.ts`, `text-disclosure.ts`, the domain extractList contract, `next-sentence.ts`);
+    if that cannot land cleanly, a submit check that a loop's read and the later read use the same conditions.
+  - Structure detection samples more than the first five rows, so a per-row control (a membership button) becomes a
+    column when rows differ.
+  - Repair seeding: among tests with the same verdict, `closestTrial` takes the latest and counts only the answer set
+    (`project-agents/contracts/builder-return.ts`).
+- Not: reset files (t751) or chat/overlay wording (t753). `builder-return.ts` and supervisor files may be shared with
+  t751: check `git -C C:/Users/osrs_/FluxStuff/fxwork/t751/<repo> status --short` and keep shared files serial.
+- Acceptance: a headed provider-free spec on social-network-feed reproducing the shape (a correct answer judged with
+  a contradicting no; a long "See more" list) fails on current `dev` and passes after; prompt contract tests pass.
+- Validation: tests first; tests beside each change; touched typechecks; both audits.
+- Report: `docs/working/trace-offline-trials-plan/reports/t752-judge-consistency-and-read-speed.md` downstream.
+
+### Brief: t753-chat-and-overlay-polish (lead, extension UI and Core activity wording)
+- Why: round 5's UI reviews (screenshots under each run's `.ui-review.local/`, findings in the four round-5 debug notes
+  named in t751's brief) show the person internal or wrong text and an unstable overlay. The user judges a run by
+  watching it; a ChatGPT-quality chat and a stable, visible overlay are part of passing.
+- Fix (each with a test that fails first):
+  - Names: a CSS class shown as a control's name ("css-..."); internal terms in chat and overlay ("Submit subflow",
+    "Test subflow", the plan's "Main" router); post pages labelled with the site's name instead of the page.
+  - Truth: an untick worded as "Ticking"/"set checked" (domain `node-run/run.ts`, Core `activity/wording/action.ts`); a
+    reset's undo shown as an ordinary user act ("Click · Like Done"); a setup rerun labelled "Testing your Flow"; a
+    false "needs a model key" notice at start.
+  - Endings: one verdict repeated, contradictory sentences ("no change it knows of" beside "left changes that can't
+    be checked"), a dense paragraph without the supervisor's reason, "used Unlike" for a leftover act, and no composer
+    after a failed build. One plain ending: what happened, why, what is left on the site, what the person can do next.
+  - Overlay: stuttered text ("Build failed | Build failed ... could not finish ... could not finish"); jumps between
+    screen positions and covers the site's header or logo; flicker. One stable position that never covers page
+    content the person needs, text changes only when the state changes.
+  - Repeated identical cards in the chat.
+- Mechanical guard: a test over Core's activity wording and the extension's chat and overlay text that fails on
+  internal terms (subflow, router, candidate, brief, harness, node keys) and on CSS-class-like or generated names, so
+  the class of defect cannot return silently.
+- Owns: extension side panel / popup chat and the on-page overlay, Core `runtime/activity/**` wording, the supervisor's
+  ending text, domain node-run wording. Coordinate: t751 owns reset data and may touch `project-agents/supervisor/**`;
+  check `git -C C:/Users/osrs_/FluxStuff/fxwork/t751/<repo> status --short` and keep the two serial on any shared file.
+- Validation: tests beside each change; touched typechecks; both audits; Core prompt contract tests if model-facing
+  text changes; headed provider-free screenshots on two realistic scenarios showing the chat, overlay and an ending,
+  looked at and described in the report (Chrome; Firefox popup alignment where the contract is shared).
+- Report: `docs/working/trace-offline-trials-plan/reports/t753-chat-and-overlay-polish.md` in the downstream tree.
 
 ### Brief: t749-offline-reads-tier2 (lane T lead, trace plan P5)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P5 (tier 2): a changed read or target is evaluated
@@ -387,6 +431,61 @@ Briefs for work in flight or next; finished briefs are archived in
   with no paid run. The experiment deep-loads three unexported Core modules (digest-guarded); t749 replaces them with
   a public seam and adds an audit rule refusing such loads.
 - Follow-up: t749 (P5); P6 passes the live session's view (production does not yet).
+
+### 2026-10-20 - Core dev fix: graph options pin the environment's region timer
+- Agent: supervisor
+- Changed: Core `runtime/service/runtime-session/tests/graph-options.test.ts`: since t746 the run environment supplies
+  the region timeout timer (`startTimer`) as well as clock, waits and randomness; the test treated it as an unrelated
+  option and failed on Core `dev` (t746's gate covered executor, trial runners and environment, not this caller). It
+  now asserts an offline environment's timer is taken and a live run has none. Pushed (Core 939bdd4b).
+- Validation: t748's gate found it: Core `vitest run` -> `1 failed | 937 passed`; reproduced on Core `dev` 1c8efbda ->
+  `Tests 1 failed | 2 passed (3)`; after the fix, graph-options + environment -> `Test Files 7 passed (7)`, `Tests 35
+  passed (35)`; in t748 after merging dev, runtime-session + environment -> `Test Files 24 passed (24)`, `Tests 158
+  passed (158)`.
+- Outcome: Accepted
+- Follow-up: none; a narrow gate misses tests in unchanged directories by design, the daily sweep covers them.
+
+### 2026-10-20 - t748 merged: t743's open items and two earlier follow-ups
+- Agent: supervisor (t748 lead and workers u1, u1b, u2, u3, u4, u5, u7)
+- Changed: Core and downstream merged and pushed. Item 1: Core tells the domain each node's preceding steps
+  (`precedingSteps`), and the domain picks the view a step stands on from them (`plan-resolution/step-views/`), so a
+  dialog view and a standalone page at one address no longer fail `web.target.ambiguous`. Item 2: an act whose
+  differing list no undo could put back is `gate_unsatisfiable` with `no_admissible_undo`. Item 3: a read step is named
+  by the value it read and a press keeps its control's name (the cause was Core's text screen dropping "address", not
+  the reload; a separate screen for a control's own words). Item 4: the request-size window counts only what is sent.
+  Item 5: a stall names the refusal it followed and the person's ending keeps a failure that says why; a looped act's
+  pass is named in trial feedback; office C5 (the refusal names which list to name) and C6 (`retryRefused`); an
+  unidentified creation needs a witness. New headed spec `photo-dialog-step.spec.ts` (fails on the old resolver).
+- Validation: supervisor's gate on t748 after merging dev: Core `vitest run` over flow-bootstrap, llm, project-agents,
+  service, executor, runtime/tests -> `Test Files 1 failed | 937 passed | 1 skipped (939)`, `Tests 1 failed | 8339
+  passed` (the graph-options pin above, a `dev` defect from t746, fixed on `dev` and merged; then runtime-session +
+  environment -> 24 files, 158 tests passed); fluxiq `tsc` 0; Core audit passed; `docs:check` current; Core build 0
+  (rebuilt after the merge, gate current); domain and extension `check` 0; domain runtime, client, actions,
+  element-fingerprint, output-nodes -> pass 2031 fail 0; extension content+background -> pass 2089 fail 0; downstream
+  audit passed; headed `e2e/site-reset` -> `12 passed (5.2m)`.
+- Open (lead): C5 has no generic rule (watch the office purchase in round 5); a press whose control names nothing still
+  seals the baselines; plan order is used as run order, so in a branching Flow a press after a handler resolves as
+  before; `undo-reach.ts` copies `undo-admission.ts`'s admission paths under a pin test (brief t750, a refactor with
+  no behaviour change, runs beside round 5); two cross-repository contracts documented (`readsWords`, `precedingSteps`).
+- Outcome: Accepted
+- Follow-up: sync the lane trees and run round 5; t750.
+
+### 2026-10-20 - t750 merged: one source for undo admission paths and act subjects
+- Agent: supervisor (worker-high t750)
+- Changed: Core: t748's `site-reset/undo-reach.ts` copied `undo-admission.ts`'s admission paths under a pin test, and
+  `reset-settlement/act-groups.ts` held a third copy of "what the act was about"; the paths now live in
+  `site-reset/undo-paths.ts` and the act subject in `reset-settlement/act-subjects.ts`, every caller imports them, the
+  copies and the pin test are deleted (site-reset still depends on reset-settlement, never the reverse). Behaviour
+  unchanged.
+- Validation: worker: reset-settlement, site-reset, reset-answers before 27 files / 338 tests, after the first pass 28
+  / 346, after the third copy 29 / 347 (one moved, new tests added), all passing; `browser-export.test.ts` 1898 / 75 /
+  133 ms alone and 424 ms in its folder against its earlier 15180 ms under load. Supervisor's gate after merging dev:
+  Core `vitest run` over flow-bootstrap, service/project-build, project-agents, service/candidate-trial -> `Test
+  Files 339 passed | 1 skipped (340)`, `Tests 3496 passed | 2 skipped (3498)`; fluxiq `tsc` 0; Core audit passed (439
+  warnings: `reset-settlement/` at 16 files, advisory); `docs:check` current; Core build 0; downstream audit passed.
+- Open: `site-reset/tests/` is at its 25-file limit (the audit refuses the next file there).
+- Outcome: Accepted
+- Follow-up: none.
 
 ## Open Questions
 

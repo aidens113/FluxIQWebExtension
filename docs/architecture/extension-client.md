@@ -1348,7 +1348,11 @@ by its recorded words: its fingerprint lookup (`content/action-runtime/read-look
 uses only stable signals inside the recorded landmark, the stable-name rescue
 is skipped, and Level 2 adds the recorded tag's elements to the candidate pool
 (capped at 60 candidates and 2,000 elements scanned). An unmarked target takes
-exactly the path it took before.
+exactly the path it took before. **Cross-repository contract (t748):** Core's
+trial feedback reads the mark too. A marked step is named to the model and the
+judge by the words it read in that trial (its `value` output), or by nothing,
+never by the saved words (Core `service/candidate-trial/step-control.ts`).
+Renaming `readsWords` here silently names read steps by their old words again.
 
 **A press the page answers only with a notice fails (t743).** The click's
 settled look (`content/action-runtime/ignored-press/settled-look.ts`) leaves

@@ -165,6 +165,9 @@ test("installed gateway project build settles a trial confirm on no list by Core
     for (const tested of tests) {
       expect(tested.trialRunId).toMatch(/^trial\./u);
       expect(feedbackSteps(tested).find(step => step.label === CONFIRM_STEP)?.status).toBe("succeeded");
+      // The confirm press reloads the page and still names its control (t748). Its words were dropped by Core's
+      // model-facing screen, which refuses the word "address" in a control's own words, not by the reload.
+      expect(feedbackSteps(tested).find(step => step.label === CONFIRM_STEP)?.control).toBe(CONFIRM);
       // The confirm took effect: the page the trial left shows the chosen address as checkout's own line, the chooser closed.
       const after = String(record(tested.pageAfterTrial).page ?? "").split("\n");
       expect(radioLabel).toMatch(/^".+"$/u);
@@ -184,6 +187,8 @@ test("installed gateway project build settles a trial confirm on no list by Core
     expect(started[1]!.map(act => act.call ?? null)).toEqual(["buy", null, null]);
     expect(started[1]![1]!.did).toMatch(/^trial step \d+ "start the checkout"/u);
     expect(confirmLeft?.did).toMatch(/^trial step \d+ /u);
+    // The act's words name the control the confirm pressed (t748).
+    expect(confirmLeft?.did).toContain(`on ${JSON.stringify(CONFIRM)}`);
     expect(confirmLeft?.did).toContain(LEFT_UNCHANGED);
     for (const act of started[1]!) expect(act.did).toContain(LEFT_UNCHANGED);
   } finally {

@@ -49,6 +49,7 @@ import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../st
 import { isJsonRecord } from "../untrusted-json";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } from "./target-packets";
+import type { WebLlmPlanStepMove } from "./step-views";
 import type { WebLlmTargetView } from "./view-history";
 
 /** Why a `nextPage` names no one list, or no way to its next page. Each is a plan resolver issue code. */
@@ -98,9 +99,11 @@ export function resolveWebNextPageSlot(
   targets: WebLlmTargetPackets,
   extractions: WebLlmExtractionHandles,
   /** Which views the control's handle may resolve from (`target-packets.ts`); the current pages when absent. */
-  reach?: WebLlmTargetReach
+  reach?: WebLlmTargetReach,
+  /** How a candidate's steps before this one move the page (`target-packets.ts` `resolve`, t748 U1b). */
+  after?: readonly WebLlmPlanStepMove[]
 ): WebNextPageSlotResolution {
-  if (listAlone(value)) return resolveWebNextPageSlot({ list: value }, scope, targets, extractions, reach);
+  if (listAlone(value)) return resolveWebNextPageSlot({ list: value }, scope, targets, extractions, reach, after);
   if (!isJsonRecord(value)) return typeof value === "string" && webPlanHandleKind(value) !== undefined ? refused("web.handle.malformed", []) : { status: "literal" };
   if (!Object.hasOwn(value, "list") && !Object.hasOwn(value, "control")) return literalRequest(value);
 
@@ -121,7 +124,7 @@ export function resolveWebNextPageSlot(
   let controlView: (WebLlmTargetView & { handle: string }) | undefined;
   if (control !== undefined) {
     const handle = canonicalWebLlmTargetHandle(control.handle) ?? control.handle;
-    const pressed = targets.resolve(scope, handle, control.location, reach);
+    const pressed = targets.resolve(scope, handle, control.location, reach, after);
     if (!pressed.ok) return refused(TARGET_ISSUES[pressed.code], ["control"]);
     // The control moves this list only if it is on the list's document.
     if ((pressed.frameId ?? 0) !== (binding.frameId ?? 0)) return refused("web.handle.frame_mismatch", ["control"]);
