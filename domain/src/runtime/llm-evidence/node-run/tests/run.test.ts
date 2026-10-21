@@ -573,7 +573,9 @@ test("an incomplete-text list refusal reaches the builder with executable disclo
   assert.equal((failed.evidence as JsonObject).code, "output_not_observed");
   const detail = (failed.evidence as JsonObject).detail as JsonObject;
   assert.equal(detail?.reason, "incomplete_text");
-  assert.match(String(detail?.next), /Load every row first.*nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click/u);
+  // t752 C2: the read presses each kept row's own control itself, so the next names narrowing, not a second shape.
+  assert.match(String(detail?.next), /presses each kept row's own control itself.*leave that field out.*narrow the conditions/iu);
+  assert.doesNotMatch(String(detail?.next), /row-context|For Each|registered row-bound click|discloseText: true/u);
   // t738: no row loop after each page move, which nests a repeat inside a repeat.
   assert.doesNotMatch(String(detail?.next), /after each Next page/u);
   assert.doesNotMatch(JSON.stringify(failed.evidence), /field description|unexpanded text disclosure/u);

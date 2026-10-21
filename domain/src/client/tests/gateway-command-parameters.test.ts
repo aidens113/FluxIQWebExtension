@@ -94,6 +94,8 @@ assert.deepEqual(mapped("web.dom.extract_list", {
   extractList: { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 }
 }).extractList, { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 });
 assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" } } }).extractList, { item: "li", fields: { title: "h3" } });
+// `discloseText` reaches the page: the read presses each kept row's own text-disclosure control itself.
+assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, discloseText: true } }).extractList?.discloseText, true);
 // The domain's own page bound, the same one the page-side reader applies.
 assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { next: "a.next", maxPages: 5_000 } } }).extractList?.paginate, { next: "a.next", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }, ["extractList"], "no fields extracts nothing");

@@ -37,7 +37,7 @@ test("partial feed text refuses without expansion; an explicit row-bound registe
   const item = `[role="article"][aria-posinset="${key}"]`;
   const text = '[data-ad-comet-preview="message"]';
   const selected = page.locator(`${item} ${text}`);
-  const read = { item, fields: { description: { kind: "text" as const, selector: text } } };
+  const read = { item, discloseText: false, fields: { description: { kind: "text" as const, selector: text } } };
   const beforeLength = (await selected.innerText()).length;
   const detected = await harness.runAction({ commandId: "detect-collapsed", actionType: "web.dom.capture_snapshot", detectStructure: {} });
   expect(detected.status).toBe("succeeded");
@@ -46,7 +46,7 @@ test("partial feed text refuses without expansion; an explicit row-bound registe
   const refused = await harness.runAction({ commandId: "read-partial", actionType: "web.dom.extract_list", extractList: read });
   expect(refused.status).toBe("failed");
   expect(refused.failure?.code).toBe("web.validation.output_not_observed");
-  expect(refused.failure?.actual).toMatch(/incomplete_text.*registered row-bound click/u);
+  expect(refused.failure?.actual).toMatch(/incomplete_text/u);
   expect(refused.extracted).toBeUndefined();
   await expect(selected.getByRole("button", { name: "See more", exact: true })).toBeVisible();
   expect((await selected.innerText()).length).toBe(beforeLength);
@@ -158,13 +158,13 @@ test("normally authored optional For Each expands helper rows before a full feed
   // The real failed content read must reach the builder through the actual
   // domain composition seam, not merely retain feedback in a direct reply.
   const refused = await runtime.executeTool({ ...base, callId: "read-collapsed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: async () => ({ permitted: true }),
-    value: { node: "web.output.dom-extract_list", parameters: { extractList: { handle: packet.extraction, fields: { identity: columnKeys.identity!, description: columnKeys.description! }, where } }, consequences: [] } });
+    value: { node: "web.output.dom-extract_list", parameters: { extractList: { handle: packet.extraction, fields: { identity: columnKeys.identity!, description: columnKeys.description! }, discloseText: false, where } }, consequences: [] } });
   expect(refused.effectApplied).toBe(false);
   const refusedEvidence = refused.evidence as JsonObject;
   expect(refusedEvidence.code).toBe("output_not_observed");
   const detail = refusedEvidence.detail as JsonObject;
   expect(detail.reason).toBe("incomplete_text");
-  expect(detail.next).toMatch(/nonempty.*row-context.*without.*For Each.*optional.*registered row-bound click.*Next page/u);
+  expect(detail.next).toMatch(/already presses each kept row.*discloseText: false/u);
   expect(JSON.stringify(detail)).not.toMatch(/field description|unexpanded text/u);
   await expect(partial.getByRole("button", { name: "See more", exact: true })).toBeVisible();
   const edge = (from: string, port: string, to: string, input = "in") => ({ id: `${from}.${port}.${to}.${input}`, sourceNodeId: from, sourcePortId: port, targetNodeId: to, targetPortId: input });

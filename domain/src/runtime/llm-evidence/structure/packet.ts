@@ -362,7 +362,9 @@ function boundList(
       where: undefined,
       // Likewise which duplicates to drop and what order to return.
       dedupe: undefined,
-      sort: undefined
+      sort: undefined,
+      // Whether the read opens each kept row's own collapsed text is the plan's to say too (t752).
+      discloseText: undefined
     }),
     itemCount: proposal.itemCount,
     oneRecord: oneRecord ? true : undefined

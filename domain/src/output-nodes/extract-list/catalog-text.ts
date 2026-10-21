@@ -242,12 +242,25 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * processing shapes only the saved answer. Lane D's build, told to narrow
  * later, confirmed all eight friend requests where four were asked
  * (`run-mv0fuual-f9e6f089`). Paging's returned room paid for the clause.
+ *
+ * **Opening kept rows' collapsed text is the last clause (t752, 2026-10-20),
+ * 96 characters, the rest of paging's room.** A read whose kept rows were cut
+ * behind a "Read more" was refused `incomplete_text`, and the repair a build had
+ * to write was a second Flow shape around the read, which failed three rounds
+ * running; with no conditions on its first read it pressed every row of a long
+ * list a step at a time and ran out of time. The read presses each kept row's
+ * own control itself now (`actions/extraction/request.ts`): unit C made it the
+ * opt-in `discloseText?: true`, and unit C2 the default, since such a row was
+ * always refused, so the clause says the read does it and how to stop it, and
+ * never asks for the default. Its example is a review list, a kind of site no
+ * realistic scenario is. At 697 of 700 there are 3 characters left.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
   "where is optional: omit it, keep every item, narrow later; but rows a later step acts on (a repeat over) are narrowed here, by where. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
-  `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
+  `Opens each kept row's own "Read more" (e.g. a long review) itself; discloseText: false stops it.`
 ].join(" ");
 
 /**
@@ -313,6 +326,12 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * is not a wider answer but a different one: with `maxItems`, "the first five
  * shown" would become "the cheapest five". `false` and `[]` declare the keys,
  * show where they go and change nothing; the grammar shows what they say.
+ *
+ * `discloseText` is the exception that proves the rule (t752 C2): a key the
+ * example omits is refused beside `extractList`, and its value that changes
+ * nothing is `true`, the default -- each kept row's collapsed text is opened.
+ * Declared `false`, as unit C first had it, every read copied from the example
+ * would have stopped opening it.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   handle: "extraction.1",
@@ -320,5 +339,6 @@ export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   where: [{ field: "promoted", is: "absent" }],
   dedupe: false,
   sort: [],
-  minItems: 1
+  minItems: 1,
+  discloseText: true
 };
