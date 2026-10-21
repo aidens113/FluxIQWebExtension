@@ -6,17 +6,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { webLlmRejectionNext } from "../next-sentence";
 
-// social `run-mvgf7ij5-a9747575`: "Repeat this ordering after each Next page
-// move" prescribed a row loop inside a page loop, which Core's script grammar
-// refuses, and the build spent its briefs writing that nesting.
-test("incomplete text loads every row first, then one row-context read, the per-row disclosure over it, then the full read, with no loop inside a page loop", () => {
+// Social reruns 3 to 5: the two-read shape this sentence used to prescribe (a
+// row-context read, a per-row disclosure repeated over it, then the full read)
+// failed three rounds running in three different ways, and in round 5 its
+// unconditioned context read walked thirty rows a step each until the build
+// ran out of time. The read presses each kept row's own disclosure itself now,
+// by default since t752's unit C2, so a refusal means that press could not open
+// the text: the sentence says so and narrows the read, in place of the shape,
+// and never asks for a parameter that is already the default.
+test("incomplete text says the read already presses kept rows itself, so the fix is leaving the field out or narrowing the conditions, never a two-read shape", () => {
   const next = webLlmRejectionNext("incomplete_text", ["private column"], ["private control"], "private row") ?? "";
-  assert.match(next, /cannot hold another repeat/u);
-  assert.match(next, /Load every row first.*Scroll step with mode untilStable.*Next page in its own repeat-while span.*Then read only nonempty stable row-context columns.*without.*incomplete text field.*repeat over that read.*registered row-bound click.*After that repeat.*read the same listing again with the text field/u);
-  assert.match(next, /not inside it/u);
-  assert.match(next, /give both reads the same conditions, so every row the final read keeps was disclosed by the repeat/u);
-  assert.doesNotMatch(next, /every row is disclosed/u, "the repeat discloses only the rows its read kept");
-  assert.doesNotMatch(next, /only after|only once/iu, "no only-after instruction ties the read to the loop");
+  assert.match(next, /presses each kept row's own control itself/u);
+  assert.match(next, /did not open its text, or is a link or form button/u);
+  assert.match(next, /leave that field out of this read, or narrow the conditions so that row is not kept/iu);
+  assert.match(next, /No separate click step or repeat/u);
+  assert.doesNotMatch(next, /discloseText: true|Send the same read again/u, "the default is never asked for");
+  assert.doesNotMatch(next, /row-context|For Each|repeat over that read|registered row-bound click|read the same listing again/u, "no two-read shape");
   assert.doesNotMatch(next, /after each Next page/iu);
   assert.doesNotMatch(next, /private column|private control|private row/u);
 });
@@ -25,9 +30,8 @@ test("incomplete text loads every row first, then one row-context read, the per-
 // key rides in `instead` as the domain's own code, so a repeat names it again.
 test("incomplete text with a known field key names it, and only an identifier key", () => {
   const next = webLlmRejectionNext("incomplete_text", ["web.text.incomplete_field.summary"], undefined) ?? "";
-  assert.match(next, /without the field `summary`/u);
-  assert.match(next, /After that repeat.*read the same listing again with the field `summary`/u);
-  assert.doesNotMatch(next, /only after/iu);
+  assert.match(next, /the field `summary`/u);
+  assert.match(next, /leave that field out/iu);
   const odd = webLlmRejectionNext("incomplete_text", ["web.text.incomplete_field.not a key`"], undefined) ?? "";
   assert.doesNotMatch(odd, /not a key/u);
   assert.equal(odd, webLlmRejectionNext("incomplete_text", undefined, undefined));

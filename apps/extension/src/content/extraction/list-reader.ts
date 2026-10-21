@@ -69,6 +69,19 @@
 // never be followed by a read with the same conditions (`run-mvgw3ve5-294881b5`).
 // Reading an item into its record, and that check, are `item-record/`.
 //
+// **The read presses each such row's own disclosure itself, unless
+// `discloseText: false`** (`text-disclosure/read-disclosing.ts`): where the check
+// refuses a row, the control it names is pressed and the row read and judged
+// again, so a kept row comes back whole and a rejection that judged partial text
+// is judged again; a row rejected on other fields is never pressed, and a row
+// still cut after its press is refused as before. `disclosedRows` counts the rows
+// pressed, present once any was. Until t752 (2026-10-20) the only repair was a
+// second Flow shape around the read, which pressed every row a step at a time
+// when its first read had no conditions; t752 made pressing an opt-in, and its
+// unit C2 the default, since such a row was always refused, so no read that
+// passed before reads differently, and the refused read and its retries (about
+// 48 s each in one round-5 build) are gone.
+//
 // **Unless the conditions left nothing at all, in which case the read answers
 // with the rows it rejected and says so** (`conditions.unfiltered`). That is a
 // deliberate preference for too much over nothing, and it was bought with a
@@ -144,6 +157,7 @@ import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continue
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
 import { listContinuesPast, type ListContinues } from "./read-coverage";
 import { rejectedSamplesFor } from "./rejected-samples";
+import { readDisclosing } from "./text-disclosure";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
 import {
   advancePage,
@@ -269,6 +283,8 @@ export type ListExtractionOutcome = {
   earlierPageRepeats?: number | undefined;
   /** How the list a read of one page read goes on past it, from the reader's own detection (`read-coverage/`); absent for a read that paged or a list that ended. */
   listContinues?: ListContinues | undefined;
+  /** Rows whose own text-disclosure control this document's read pressed, present only once one was (`text-disclosure/`). */
+  disclosedRows?: number | undefined;
 };
 
 /**
@@ -304,6 +320,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const readBound = order?.sorts ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems;
   const contentAware = paginate?.mode === "scroll";
   const resume = options.resume;
+  const disclose = request.discloseText !== false;
+  let disclosedRows = 0;
 
   const records: ExtractedListRecord[] = resume ? resume.records.map((record) => ({ ...record })) : [];
   // Every dedupe identity a kept row already has, the carried rows' included,
@@ -444,7 +462,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
       ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } }),
       ...(repeats === undefined ? {} : { earlierPageRepeats: repeats }),
-      ...(listContinues === undefined ? {} : { listContinues })
+      ...(listContinues === undefined ? {} : { listContinues }),
+      ...(disclosedRows > 0 ? { disclosedRows } : {})
     };
   };
 
@@ -563,20 +582,29 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
           truncated = true;
           break;
         }
-        const itemRead = readRecord(element, fields, rejects ? "visible" : "complete");
-        const key = keyOf(itemRead);
-        if (seen === key) continue;
+        // The row read and judged; unless `discloseText: false`, again after each press
+        // of a control the disclosure check refused it over (see the header).
+        const judge = () => {
+          const itemRead = readRecord(element, fields, rejects ? "visible" : "complete");
+          const key = keyOf(itemRead);
+          if (seen === key) return undefined;
+          const observations: WebAutomationExtractionRejectionObservation[] = [];
+          const rejectedBy = rejects?.(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined, keptValuesEach) ?? [];
+          if (rejects) assertDisclosed(element, fields, rejectedBy.length > 0 ? rejectedBy.map((index) => request.where?.[index]?.field) : undefined);
+          return { itemRead, key, observations, rejectedBy };
+        };
+        const judged = disclose ? await readDisclosing(element, judge, progress.deadline, conditionNotes(seenEach, keptValuesEach)) : { value: judge(), pressed: 0 };
+        if (judged.value === undefined) continue;
+        const { itemRead, key, observations, rejectedBy } = judged.value;
+        if (judged.pressed > 0 && seen === undefined) disclosedRows += 1;
         if (shownOnEarlierPages) shownThisPage.push(contentKey(itemRead.record, fields));
         // An item a condition rejects is not a record: it is remembered as read
         // so a growing list still knows it has been looked at. It is kept aside
         // only so a read the conditions emptied has something to answer with,
         // and a read that kept anything never returns it.
         if (rejects) {
-          const observations: WebAutomationExtractionRejectionObservation[] = [];
-          const rejectedBy = rejects(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined, keptValuesEach);
           if (seen === undefined) applied += 1;
           if (rejectedBy.length > 0) {
-            assertDisclosed(element, fields, rejectedBy.map((index) => request.where?.[index]?.field));
             if (seen === undefined) {
               filtered += 1;
               // Each index is a position in `where`, which is what `rejectedEach`
@@ -591,7 +619,6 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
             read.set(element, key);
             continue;
           }
-          assertDisclosed(element, fields);
           if (seen === undefined) kept += 1;
         }
         const content = earlierPages ? contentKey(itemRead.record, fields) : "";
@@ -688,6 +715,16 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // A read of one page says whether its list visibly goes on past what it read (`read-coverage/`).
   if (paginate === undefined) listContinues = listContinuesPast(Array.from(document.querySelectorAll(item)), stillGrowing);
   return outcome({ timedOut });
+}
+
+/** What a judged row writes into the conditions' `seen` and kept values, and how to put it back before the row is judged again. */
+function conditionNotes(seen: (string | null)[], kept: string[][]): () => void {
+  const seenBefore = [...seen];
+  const keptBefore = kept.map((values) => [...values]);
+  return () => {
+    seen.splice(0, seen.length, ...seenBefore);
+    for (const [index, values] of keptBefore.entries()) kept[index] = [...values];
+  };
 }
 
 /** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */

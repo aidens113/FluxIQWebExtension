@@ -103,6 +103,20 @@
 // that met different kinds in different templates is split (`template-kind/`)
 // -- and **a value an element states only in an attribute is a column too**
 // (`stated-name/`), both since 2026-10-17.
+//
+// **A control only some rows carry is a column, wherever in the run those rows
+// sit** (t752). A request can define its set by the person's relation to each
+// row -- the rows they belong to, the items they hold -- and the page says so
+// with a control only the other rows carry: a join, borrow or follow button.
+// Until 2026-10-20 such a control was proposed only by luck. Sources were
+// discovered on the run's first dozen items alone, discovery stopped once those
+// had offered sixty-four, and the eight places held for partial columns went to
+// the widest-covering ones. On a feed mixing templates the first rows offer far
+// more than sixty-four partial columns, so a control first carried by a later
+// row was never a candidate, and one carried by few rows lost its place to
+// commoner marks. Now every rendered item offers its sources, once per shape
+// past the first dozen (`item-shape/`), and partial controls have places of
+// their own (`field-budget/`), so a control's presence is readable per row.
 
 import {
   webAutomationExtractionFieldKey,
@@ -117,7 +131,9 @@ import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
 import { offersOwnLink } from "./item-link";
 import { pruneEquivalentFieldPaths } from "./path-equivalence";
-import { keepLineGroups, positionalLine } from "./line-group";
+import { keptSources } from "./field-budget";
+import { itemShape } from "./item-shape";
+import { positionalLine } from "./line-group";
 import { recordControlType } from "./record-control";
 import { statedAttributes } from "./stated-name";
 import { separateKinds } from "./template-kind";
@@ -159,39 +175,25 @@ export type FieldSource = {
   lines?: true | undefined;
   /** For a line named by its position among its siblings: the selector of the container offered whole beside it. */
   lineOf?: string | undefined;
+  /** Whether the source reads, by its words, a control a person presses -- a button -- which only some rows may carry (see the header). */
+  pressable?: true | undefined;
 };
 
 /** The form controls whose live value a record can read. */
 const VALUE_TAGS = new Set(["input", "textarea", "select"]);
 
-/** How many sources are discovered before coverage is measured. Bounds the walk on a large item. */
+/** How many sources one item offers before coverage is measured. Bounds the walk on a large item. */
 const MAX_CANDIDATE_FIELDS = 64;
-
-/**
- * Propose the same bounded set discovery can collect. A separate smaller
- * proposal limit discarded late ordinary data from already discovered sources.
- * Mixed-template splitting can add sources; coverage and partial/group rules
- * still arbitrate those within this bound. The model packet has its own byte
- * budget and reports truncation (`structure/packet.ts`).
- */
-const MAX_PROPOSED_FIELDS = MAX_CANDIDATE_FIELDS;
-
-/**
- * How many of those places are held for columns that only *some* items have.
- *
- * Coverage decides the rest, and coverage alone is exactly the wrong judge
- * here: a column every item carries is the fullest column and says nothing
- * about *which* items a read wants, so a bound that keeps the widest-covering
- * fields cuts the marks first. A mark is by construction a partial column --
- * four sponsored cards among twenty -- so a few places are held for partial
- * columns before coverage spends the rest.
- */
-const RESERVED_PARTIAL_FIELDS = 8;
 
 /** How many of a run's items a text column's shape is read from (`value-shape.ts`). */
 const MAX_SHAPE_SAMPLES = 24;
 
-/** How many items of a run are walked for sources. Every item still counts toward each source's coverage. */
+/**
+ * How many of a run's items a source's own name is checked against
+ * (`ownName`), and whose labels vote on the label a source is shown under
+ * (`mostGiven`). Every item is still walked for sources (see the header) and
+ * counts toward each source's coverage.
+ */
 const MAX_SCANNED_ITEMS = 12;
 
 /** How many of an item's own attributes become fields, so a container dense with data attributes cannot crowd out its values. */
@@ -230,19 +232,13 @@ const MAX_STEP_CLASSES = 3;
  * them. Empty when the item exposes nothing a record could read.
  */
 export function inferFields(item: Element, run: readonly Element[]): WebAutomationExtractionProposalField[] {
-  // Coverage decides which sources survive the bound, not the order the page
-  // happens to offer them in: an item's first descendants are its chrome --
-  // a Sponsored label, an image -- and its value is further down. `sort` is
-  // stable, so equal coverage keeps document order, and the survivors are put
-  // back into document order so a record's columns read as the page reads.
-  // Before coverage spends the bound, a few places go to the columns only some
-  // items have, which are the ones a read narrowing the run has to name.
+  // Coverage, after a few places for partial controls and marks, decides which
+  // sources survive the bound, not the order the page offers them in: an item's
+  // first descendants are its chrome and its value is further down. The kept
+  // ones return to document order (`field-budget/`).
   const sources = separateKinds(fieldSources(item, run), run, (owner, element) => pathWithinItem(owner, element)?.label);
   const measured = sources.map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
-  const byCoverage = [...measured].sort((left, right) => right.coverage - left.coverage);
-  const reserved = new Set(byCoverage.filter((entry) => entry.coverage > 0 && entry.coverage < 1).slice(0, Math.min(RESERVED_PARTIAL_FIELDS, MAX_PROPOSED_FIELDS)));
-  const kept = keepLineGroups(measured, [...reserved, ...byCoverage.filter((entry) => !reserved.has(entry)).slice(0, MAX_PROPOSED_FIELDS - reserved.size)])
-    .sort((left, right) => left.position - right.position);
+  const kept = keptSources(measured);
   const taken = new Set<string>();
   return kept.map(({ source, coverage }) => {
     const label = describedLabel(source, run);
@@ -311,21 +307,27 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
   const columns = columnSources(item);
   if (columns.length > 0) return columns;
   const collected = new Map<string, { source: FieldSource; position: number; labels: Map<string, number> }>();
-  // The items a field's own name is checked against: one that names two
-  // elements in any of them is not taken as the element's name (`ownName`).
+  // `peers` check a field's own name (`ownName`), are walked first and vote on
+  // labels; every other item is then walked once per shape for sources they
+  // lack (see the header), each bounded by `elementSources`.
   const peers = [item, ...run.slice(0, MAX_SCANNED_ITEMS).filter((candidate) => candidate !== item)];
-  for (const candidate of peers) {
-    if (collected.size >= MAX_CANDIDATE_FIELDS) break;
+  const walkedShapes = new Set<string>();
+  for (const candidate of [...peers, ...run.filter((other) => !peers.includes(other))]) {
+    const voting = peers.includes(candidate);
+    if (!voting) {
+      const shape = itemShape(candidate);
+      if (walkedShapes.has(shape)) continue;
+      walkedShapes.add(shape);
+    }
     let position = 0;
     for (const source of [...itemAttributeSources(candidate), ...elementSources(candidate, peers)]) {
       position += 1;
       const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true ? "lines" : ""].join("\u0000");
       const seen = collected.get(identity);
       if (seen) {
-        seen.labels.set(source.label, (seen.labels.get(source.label) ?? 0) + 1);
+        if (voting) seen.labels.set(source.label, (seen.labels.get(source.label) ?? 0) + 1);
         continue;
       }
-      if (collected.size >= MAX_CANDIDATE_FIELDS) break;
       collected.set(identity, { source, position, labels: new Map([[source.label, 1]]) });
     }
   }
@@ -435,7 +437,7 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
       if (control !== undefined) sources.push({ kind: "value", label: pathLabel ? `${label} (${control} control)` : label, selector, sensitive, pathLabel });
       else if (sensitive) sources.push({ kind: "value", label, selector, sensitive, pathLabel });
     } else if (testIdFor(element) !== undefined) {
-      sources.push({ kind: "text", label, selector, sensitive, pathLabel });
+      sources.push({ kind: "text", label, selector, sensitive, pathLabel, ...pressableMark(element) });
     } else {
       // An icon badge has no words, so it is never a text leaf, and a text
       // leaf is never a badge: the two branches cannot both apply.
@@ -444,7 +446,7 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
       else if ((isTextLeaf(element) || composesValue(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) {
         const line = positionalLine(item, element, selector, (container) => selectorWithinItem(item, container, peers), containers);
         if (line?.group !== undefined) sources.push({ kind: "text", ...line.group, sensitive: false, lines: true });
-        sources.push({ kind: "text", label, selector, sensitive, pathLabel, ...(line === undefined ? {} : { lineOf: line.lineOf }) });
+        sources.push({ kind: "text", label, selector, sensitive, pathLabel, ...(line === undefined ? {} : { lineOf: line.lineOf }), ...pressableMark(element) });
       }
     }
     // What an element that is a column states only in an attribute (`stated-name/`).
@@ -453,6 +455,12 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
     }
   }
   return sources;
+}
+
+/** `{ pressable: true }` for a button -- a `<button>` or an element whose role is one -- and nothing otherwise (see the header). */
+function pressableMark(element: Element): { pressable?: true } {
+  const roles = (element.getAttribute("role") ?? "").split(/\s+/u);
+  return element.tagName.toLowerCase() === "button" || roles.includes("button") ? { pressable: true } : {};
 }
 
 /**

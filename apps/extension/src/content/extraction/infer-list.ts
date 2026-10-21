@@ -65,13 +65,22 @@ export function isRecordItemTag(tagName: string): boolean {
 /**
  * The extraction `picked` proposes, or `undefined` when it belongs to no
  * repeating run that can be named and read.
+ *
+ * `runs`, when given, holds each run's proposal under the run's first item for
+ * the one moment the caller judges the page at: a structure detection walks
+ * outward from many starting elements, and many of them reach the same run,
+ * whose fields are read from every one of its items (`infer-fields.ts`). The
+ * caller owns it and drops it before the page can change.
  */
-export function inferListFromElement(picked: Element): WebAutomationExtractionProposal | undefined {
+export function inferListFromElement(
+  picked: Element,
+  runs?: Map<Element, WebAutomationExtractionProposal | undefined>
+): WebAutomationExtractionProposal | undefined {
   const keyValue = enclosingKeyValueRecord(picked);
   let nearest: WebAutomationExtractionProposal | undefined;
   for (let level: Element | null = picked; level && level !== document.documentElement; level = level.parentElement) {
     if (keyValue && isPairOf(level, keyValue.list)) continue;
-    const proposal = proposalForLevel(level);
+    const proposal = proposalForLevel(level, runs);
     if (proposal && proposal.itemCount >= MIN_ITEMS_PER_RUN) return proposal;
     // A pair, or the label/value list's own record: the nearest is kept, and
     // the walk goes on for a run it sits inside. At the list's own level a pair
@@ -103,11 +112,22 @@ function namedExactly(element: Element): { container: string; item: ItemSelector
   return item ? { container: containerSelector, item } : undefined;
 }
 
-function proposalForLevel(level: Element): WebAutomationExtractionProposal | undefined {
+/** The level's run as a proposal, from `runs` when that run was already judged; see `inferListFromElement`. */
+function proposalForLevel(level: Element, runs?: Map<Element, WebAutomationExtractionProposal | undefined>): WebAutomationExtractionProposal | undefined {
   if (!isRecordItemTag(level.tagName)) return undefined;
   const container = level.parentElement;
   if (!container || container === document.documentElement) return undefined;
   const run = sameTemplateSiblings(level, container);
+  const first = run[0];
+  if (!first) return undefined;
+  if (runs?.has(first)) return runs.get(first);
+  const proposal = runProposal(run, container);
+  runs?.set(first, proposal);
+  return proposal;
+}
+
+/** The run as a proposal, or `undefined` when it cannot be named and read. */
+function runProposal(run: readonly Element[], container: Element): WebAutomationExtractionProposal | undefined {
   const pair = run.length < MIN_ITEMS_PER_RUN;
   if (pair && !isRecordPair(run)) return undefined;
 

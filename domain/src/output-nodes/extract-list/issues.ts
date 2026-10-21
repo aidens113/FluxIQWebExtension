@@ -66,6 +66,7 @@ export type WebAutomationExtractListIssueCode =
   | "web.extract_list.invalid_max_items"
   | "web.extract_list.invalid_min_items"
   | "web.extract_list.min_items_exceed_max"
+  | "web.extract_list.invalid_disclose_text"
   | "web.extract_list.unreadable";
 
 type IssueSet = Set<WebAutomationExtractListIssueCode>;
@@ -100,6 +101,8 @@ export function webAutomationExtractListIssues(value: unknown): WebAutomationExt
   if (value.dedupe !== undefined && !readable({ ...conditionFields(value.fields), dedupe: value.dedupe })) issues.add("web.extract_list.invalid_dedupe");
   if (value.sort !== undefined && !readable({ ...conditionFields(value.fields), sort: value.sort })) issues.add("web.extract_list.invalid_sort");
   addItemBoundIssues(value, issues);
+  // Only a boolean says whether each kept row's own text disclosure is pressed.
+  if (value.discloseText !== undefined && !readable({ discloseText: value.discloseText })) issues.add("web.extract_list.invalid_disclose_text");
   if (issues.size === 0 && webAutomationExtractListRequestWhole(value) === undefined) issues.add("web.extract_list.unreadable");
   return [...issues];
 }

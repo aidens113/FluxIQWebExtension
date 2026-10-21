@@ -209,6 +209,16 @@ test("the handle keeps every detected column, and the read never carries the det
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }
   });
+
+  // The read opens each kept row's own collapsed text itself by default (t752 C2): the value written is carried, so `false` stops it.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: true } }), {
+    status: "resolved",
+    parameters: { extractList: { item: CARD, fields: { name: CARD_FIELDS.name }, discloseText: true } }
+  });
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, discloseText: false } }), {
+    status: "resolved",
+    parameters: { extractList: { item: CARD, fields: { name: CARD_FIELDS.name }, discloseText: false } }
+  });
 });
 
 test("paginate, maxPages and maxScrolls on a handle are refused at that key, naming Next page and a repeat instead", async () => {
@@ -376,6 +386,7 @@ test("what cannot name one detected list or column is refused with where the han
     // whole request, so the resolver's own check of it names the member.
     [{ handle: extraction, minItems: 9, maxItems: 8 }, "extractList.minItems"],
     [{ handle: extraction, minItems: -1 }, "extractList.minItems"],
+    [{ handle: extraction, fields: { name: "product-name" }, discloseText: "yes" }, "extractList.discloseText"],
     [{ item: { handle: extraction, extra: true }, fields: RENAMED }, "extractList.item"],
     [{ item: 7, fields: { name: { handle: extraction, key: "product-name" } } }, "extractList.item"]
   ];

@@ -8,6 +8,9 @@
 // boundary. Anything else throws, so a test cannot pass on a selector this
 // fake only pretended to read.
 //
+// Elements can be redrawn (`replaceChildren`, `setAttribute`), which is what a
+// test that presses a disclosure control stands in for.
+//
 // `fakeShadowDom()` installs the globals the readers ask (`Node` and the form
 // control classes they test `instanceof` against) and returns the builders.
 
@@ -37,6 +40,12 @@ class FakeParentNode {
       child.parentNode = this as unknown as FakeParent;
       this.childNodes.push(child);
     }
+  }
+  /** Replaces every child, detaching the old ones, as a page that redraws an element's content does. */
+  replaceChildren(...nodes: Array<FakeChild | string>): void {
+    for (const child of this.childNodes) child.parentNode = null;
+    this.childNodes.length = 0;
+    this.append(...nodes);
   }
   querySelectorAll(selector: string): FakeElement[] {
     if (selector.startsWith(":scope > ")) {
@@ -101,6 +110,9 @@ class FakeElement extends FakeParentNode {
   }
   hasAttribute(name: string): boolean {
     return this.attrs.has(name);
+  }
+  setAttribute(name: string, value: string): void {
+    this.attrs.set(name, value);
   }
   closest(): null {
     return null;

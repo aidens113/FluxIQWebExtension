@@ -473,3 +473,69 @@ test("an anchor item with no href offers no address of its own", () => {
   const fields = inferFields(run[0]!, run);
   assert.equal(fields.some((field) => field.spec.kind === "link"), false, JSON.stringify(fields.map((field) => [field.label, field.spec])));
 });
+
+// A per-row control only some rows carry: a library's shelf of
+// books where only the books on loan carry a "Return" button. Which rows carry
+// it is how a person tells the books they hold from the rest, so it has to be a
+// column whose presence a read can test per row, wherever in the run those rows
+// sit and however many other partial columns the run has
+// (`infer-fields.ts`, "A control only some rows carry").
+
+type Book = { title: string; onLoan: boolean; notes?: readonly number[] };
+
+function book({ title, onLoan, notes = [] }: Book, index: number): Element {
+  return dom.el("li", { class: "book" },
+    dom.el("h3", { class: "title" }, title),
+    dom.el("span", { class: "author" }, `Author ${index}`),
+    dom.el("span", { class: "shelf" }, `Shelf ${index % 7}`),
+    // Optional facts a catalogue prints on some books and not others.
+    ...notes.map((note) => dom.el("span", { class: `note-${note}` }, `Note ${note}`)),
+    dom.el("div", { class: "actions" },
+      dom.el("a", { class: "details", href: `/books/${index}/` }, "Details"),
+      ...(onLoan ? [dom.el("div", { class: "return", role: "button", tabindex: "0" }, "Return")] : [])));
+}
+
+/** The proposed fields that resolve in exactly the rows at `positions`. */
+function presentExactlyAt(fields: ReturnType<typeof inferFields>, run: readonly Element[], positions: readonly number[]) {
+  return fields.filter((field) => {
+    if (field.spec.selector === undefined) return false;
+    const reader = { kind: "text" as const, selector: field.spec.selector, required: false };
+    return run.every((item, index) => (readField(item, field.key, reader) !== null) === positions.includes(index));
+  });
+}
+
+test("a control only rows past the first dozen carry is a column, present exactly in those rows", () => {
+  const loans = [13, 15];
+  const run = Array.from({ length: 16 }, (_, index) => book({ title: `Book ${index}`, onLoan: loans.includes(index) }, index));
+  const fields = inferFields(run[0]!, run);
+  const control = presentExactlyAt(fields, run, loans);
+  assert.equal(control.length, 1, JSON.stringify(fields.map((field) => [field.label, field.spec.selector, field.coverage])));
+  assert.equal(control[0]!.spec.required, false);
+  assert.equal(control[0]!.coverage, 0.13);
+  // Presence is readable per row: the rows that carry it read its words, the rest null.
+  const reader = { kind: "text" as const, selector: control[0]!.spec.selector!, required: false };
+  assert.deepEqual(run.map((item) => readField(item, control[0]!.key, reader)), run.map((_, index) => loans.includes(index) ? "Return" : null));
+});
+
+test("a control few rows carry survives a run whose earlier rows already offer more partial columns than the proposal holds", () => {
+  // Every early book prints a different handful of optional notes, half the
+  // books each, more than sixty-four partial columns before the first loan.
+  const loans = [9, 14];
+  const run = Array.from({ length: 16 }, (_, index) => book({
+    title: `Book ${index}`,
+    onLoan: loans.includes(index),
+    notes: Array.from({ length: 40 }, (_, note) => note + (index % 2) * 40)
+  }, index));
+  const fields = inferFields(run[0]!, run);
+  assert.ok(fields.length <= 64, `bounded: ${fields.length}`);
+  const control = presentExactlyAt(fields, run, loans);
+  assert.equal(control.length, 1, JSON.stringify(fields.map((field) => [field.label, field.coverage])));
+});
+
+test("a run whose every row carries the control proposes it as a required column, as before", () => {
+  const run = Array.from({ length: 4 }, (_, index) => book({ title: `Book ${index}`, onLoan: true }, index));
+  const fields = inferFields(run[0]!, run);
+  const control = presentExactlyAt(fields, run, [0, 1, 2, 3]).filter((field) => field.spec.selector?.includes("return"));
+  assert.equal(control.length, 1);
+  assert.equal(control[0]!.spec.required, true);
+});

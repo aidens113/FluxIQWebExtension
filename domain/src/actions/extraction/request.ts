@@ -380,6 +380,30 @@ export type WebAutomationExtractListRequest = {
    * the sorted answer rather than the first rows read.
    */
   sort?: WebAutomationExtractListSortKey[] | undefined;
+  /**
+   * Absent or `true` (the default since t752 C2): before reading a row's text,
+   * press that row's own text-disclosure control -- a "Read more" or "See more"
+   * button inside a text field the read takes -- on every row the read keeps, and on a rejected row only where a
+   * condition that rejected it judged collapsed text, which is then judged again
+   * on the whole text. A row rejected on other fields is never pressed, nor is
+   * anything but a recognised disclosure control inside the row: never a link to
+   * another page or a form's submit button. A kept row still cut after its press
+   * is refused `incomplete_text`. The read's summary says how many rows it
+   * pressed (`disclosedRows`), once it pressed any. `false`: nothing is pressed,
+   * and a kept collapsed row refuses the read, as every read did before t752.
+   *
+   * **Why (t752, 2026-10-20).** A read whose kept rows carried collapsed text was
+   * refused, and the only repair was a second shape of Flow around it -- a
+   * context read, a press repeated over its rows, then the full read. It failed
+   * three rounds running in three different ways, and in the last its context
+   * read had no conditions, so it pressed every row of a long list one model step
+   * at a time and the build ran out of time. The one read presses the rows it
+   * keeps itself now, in the same call (`apps/extension/src/content/extraction/text-disclosure/`).
+   * Unit C made it an opt-in; unit C2 the default, because such a kept row always
+   * failed, so no read that passed before reads differently, and the refused read
+   * and its retries (about 48 s each, 4.8 minutes of one round-5 build) are gone.
+   */
+  discloseText?: boolean | undefined;
 };
 
 /** The one value `answer` takes. */

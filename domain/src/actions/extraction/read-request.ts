@@ -30,7 +30,7 @@
 //
 // So the parts a read can do without are **dropped and named** instead:
 // `itemElement`, `paginate`, `minItems`, one condition of `where`, `dedupe`,
-// one key of `sort`, and `answer`. Each
+// one key of `sort`, `answer`, and `discloseText`. Each
 // drop can only widen the answer -- a read of the page shown, a default
 // minimum, an unnarrowed row set -- and widening is visible to the loop's own
 // judgement while emptiness is not (`content/extraction/filtered-answer.ts`
@@ -116,7 +116,7 @@ export function webAutomationExtractListRequestWhole(value: unknown): WebAutomat
  * was written under. A condition carries its index in the `where` the author
  * wrote, so a caller can name the clause rather than the clause count.
  */
-export type WebAutomationExtractListDroppedPart = "itemElement" | "paginate" | "minItems" | `where.${number}` | "dedupe" | `sort.${number}` | "answer";
+export type WebAutomationExtractListDroppedPart = "itemElement" | "paginate" | "minItems" | `where.${number}` | "dedupe" | `sort.${number}` | "answer" | "discloseText";
 
 /**
  * A condition whose column was resolved rather than named: what was written,
@@ -198,6 +198,12 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
   // which can only add the rows it rejected -- wider, never narrower.
   const answer = request.answer === WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT ? WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT : undefined;
   if (request.answer !== undefined && answer === undefined) dropped.push("answer");
+  // Whether the page presses each kept row's own text disclosure (`./request.ts`).
+  // The boolean written is carried, `false` being the one that changes the read
+  // (pressing is the default since t752 C2); a value that is no boolean is
+  // dropped and named, and the read then presses, as by default.
+  const discloseText = optionalValue(request.discloseText, booleanValue);
+  if (discloseText === REFUSED) dropped.push("discloseText");
   return {
     request: {
       item,
@@ -209,7 +215,8 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
       ...(conditions.length > 0 ? { where: conditions } : {}),
       ...(dedupe?.dedupe !== undefined ? { dedupe: dedupe.dedupe } : {}),
       ...(sort !== undefined && sort.sort.length > 0 ? { sort: sort.sort } : {}),
-      ...(answer !== undefined ? { answer } : {})
+      ...(answer !== undefined ? { answer } : {}),
+      ...(typeof discloseText === "boolean" ? { discloseText } : {})
     },
     dropped,
     assumed

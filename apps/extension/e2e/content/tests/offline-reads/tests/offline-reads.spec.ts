@@ -187,3 +187,65 @@ test(`${GROWING_FEED} (chrome): a read past a feed captured before it grew is a 
     await close();
   }
 });
+
+test("social-network-feed (chrome): unsupported automatic text disclosure is an explicit offline gap", async ({ openHarness, headless }) => {
+  test.setTimeout(480_000);
+  // The shared fidelity opener deliberately expands every post. This case
+  // must capture the actual collapsed state before any text read opens it.
+  const harness = await openHarness("social-network-feed");
+  for (const [operation, payload] of [["consent", { choice: "all" }], ["notifications", { choice: "dismissed" }], ["chat", { state: "closed" }]] as const) {
+    const response = await fetch(`${harness.lab.origin}/api/${harness.scenarioId}/${operation}`, {
+      method: "POST", headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify(payload)
+    });
+    expect(response.ok).toBe(true);
+  }
+  await harness.page.reload();
+  const message = '[data-ad-comet-preview="message"]';
+  await expect(harness.page.locator(message).first()).toBeVisible();
+  await expect.poll(async () => (await harness.messages()).some((entry) => entry.type === "fluxiq.contentReady")).toBe(true);
+  const position = await harness.page.locator('[role="article"]:has(a[href*="/posts/"])').evaluateAll((rows, selector) => {
+    const row = rows.find((item) => item.querySelector(`${selector} [role="button"]`));
+    return row?.getAttribute("aria-posinset") ?? null;
+  }, message);
+  expect(position, "a realistic collapsed post is available").not.toBeNull();
+  const item = `[role="article"][aria-posinset="${position}"]`;
+  const commandA = listRead.command("offline-disclosure-a", item, { position: { kind: "attribute", attribute: "aria-posinset" } });
+  const commandB = listRead.command("offline-disclosure-b", item, {
+    position: { kind: "attribute", attribute: "aria-posinset" }, description: { kind: "text", selector: message }
+  });
+  const liveA = await listRead.live(harness, commandA);
+  expect(liveA.status).toBe("succeeded");
+  expect(listRead.rows(liveA)).toHaveLength(1);
+  const capture = await captureSnapshot(harness);
+  expect(await harness.page.locator(`${item} ${message} [role="button"]`).count()).toBeGreaterThan(0);
+  const liveB = await listRead.live(harness, commandB);
+  expect(liveB.status, "the live page can disclose the requested text").toBe("succeeded");
+  expect(listRead.rows(liveB)).toHaveLength(1);
+  await harness.close(); // Offline evaluation has no live tab to fall back to.
+
+  const snapshotPage = openWebSnapshotPage({ content: await harnessContentCode(), channel: "chrome", headless });
+  const evaluations: Awaited<ReturnType<typeof snapshotPage.evaluate>>[] = [];
+  const reevaluator = createWebOfflineReadReevaluator({ evaluate: async (snapshot, action) => {
+    const evaluated = await snapshotPage.evaluate(snapshot, action);
+    evaluations.push(evaluated);
+    return evaluated;
+  } });
+  try {
+    const request = reevaluationRequest({ commandB, commandA, liveA, capture });
+    const answer = await reevaluator.reevaluate(request);
+    expect(evaluations).toHaveLength(2);
+    const [control, changed] = evaluations;
+    expect(control?.status).toBe("evaluated");
+    expect(changed?.status).toBe("evaluated");
+    if (control?.status !== "evaluated" || changed?.status !== "evaluated") throw new Error("both isolated reads must run");
+    expect(control.result.status).toBe("succeeded");
+    expect(control.result.extracted).toEqual(liveA.extracted);
+    expect(changed.result.failure?.actual).toMatch(/^incomplete_text:/u);
+    expect(changed.observations.scriptsRan).toBe(0);
+    expect(changed.observations.requestsLeaked).toBe(0);
+    expect(answer).toEqual({ status: "gap", reason: "dynamic_content", fields: request.fields });
+    console.info("OFFLINE_DISCLOSURE", JSON.stringify({ evaluations: evaluations.length, status: answer.status, failure: changed.result.failure?.code }));
+  } finally {
+    await snapshotPage.close();
+  }
+});

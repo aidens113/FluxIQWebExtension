@@ -29,7 +29,7 @@ test("only the closed incomplete_text prefix on an unobserved output gives discl
   const refused = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } });
   assert.equal(refused.code, "output_not_observed");
   assert.equal(refused.detail?.reason, "incomplete_text");
-  assert.match(refused.detail?.next ?? "", /registered row-bound click/u);
+  assert.match(refused.detail?.next ?? "", /narrow the conditions so that row is not kept/u);
   assert.equal(repeatedRejectionDetail(refused.detail, 2)?.next, refused.detail?.next);
   const account = failedRead(summary({ listPresence: "appeared", itemsSeen: 1 }));
   const withAccount = webActionFailureRefusal({ status: account.status, payload: account.payload, failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } });
@@ -54,8 +54,8 @@ test("an incomplete text refusal names the field only when it is a key of the fi
   const named = webActionFailureRefusal({ status: "failed", failure }, sent);
   assert.equal(named.detail?.reason, "incomplete_text");
   assert.deepEqual(named.detail?.missing, ["summary"]);
-  assert.match(named.detail?.next ?? "", /without the field `summary`/u);
-  assert.match(named.detail?.next ?? "", /with the field `summary`/u);
+  assert.match(named.detail?.next ?? "", /the field `summary`/u);
+  assert.match(named.detail?.next ?? "", /leave that field out/iu);
   assert.equal(repeatedRejectionDetail(named.detail, 2)?.next, named.detail?.next, "a repeat names the field again");
   const unsent = webActionFailureRefusal({ status: "failed", failure: { ...failure, actual: "incomplete_text: field secretColumn contains unexpanded text" } }, sent);
   assert.equal(unsent.detail?.reason, "incomplete_text");

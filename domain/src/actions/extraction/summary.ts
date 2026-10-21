@@ -110,6 +110,15 @@ export type WebAutomationExtractionSummary = {
    * so a page build that predates it still sends a summary that arrives whole.
    */
   listContinues?: WebAutomationExtractionListContinues | undefined;
+  /**
+   * Rows whose own text-disclosure control the read pressed before reading
+   * them (every read unless `discloseText: false`, `./request.ts`): kept rows
+   * that came back whole, and rejected rows a condition judged again on their
+   * whole text. Sent only once the read pressed a row, so absent from a read
+   * that pressed none and from a page build that predates it; `0` is read as
+   * a count all the same.
+   */
+  disclosedRows?: number | undefined;
 };
 
 /**
@@ -375,6 +384,9 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // Whether the list goes on past a read of one page: two closed words, held to the rule every word here is.
   const listContinues = summary.listContinues === undefined ? undefined : webAutomationExtractionListContinuesValue(summary.listContinues);
   if (summary.listContinues !== undefined && listContinues === undefined) return undefined;
+  // The rows the read pressed open, held to the rule every count is.
+  const disclosedRows = countValue(summary.disclosedRows);
+  if (summary.disclosedRows !== undefined && disclosedRows === undefined) return undefined;
   // No cross-check against `recordCount`, unlike `kept > applied` below: a
   // continued read carries its predecessor's records, so `recordCount` above
   // `itemsSeen` is a legitimate read, and dropping the account would lose the
@@ -396,7 +408,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(paginationStop !== undefined ? { paginationStop } : {}),
     ...(order !== undefined ? { order } : {}),
     ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {}),
-    ...(listContinues !== undefined ? { listContinues } : {})
+    ...(listContinues !== undefined ? { listContinues } : {}),
+    ...(disclosedRows !== undefined ? { disclosedRows } : {})
   };
 }
 
