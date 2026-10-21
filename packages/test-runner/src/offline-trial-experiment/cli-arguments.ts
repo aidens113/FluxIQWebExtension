@@ -40,14 +40,27 @@ export type ExperimentArguments = Readonly<{
    * uses only where the trace recorded none and reports as `supplied`.
    */
   sessionView: "declared" | "none";
+  /**
+   * trial: tier 2 (P5). The domain's offline reevaluator over a headed snapshot
+   * page running the extension's production content code is handed to Core's
+   * runner, so a changed read may be answered from the trace's recorded page
+   * snapshot instead of ending the match.
+   */
+  tier2: boolean;
+  /** trial with --tier2: the installed browser the snapshot page runs in. */
+  channel: "chrome" | "msedge";
 }>;
 
 export const EXPERIMENT_USAGE = [
   "usage: offline-trial-experiment/cli.js survey --store <.fluxiq dir> --project <id> --steps <lab steps dir> [--scenario <id>] [--task <id>] [--brief <id>] [--from-revision <n>] [--out <file>]",
   "       offline-trial-experiment/cli.js trial  --store <.fluxiq dir> --project <id> --steps <lab steps dir> --trace <source trace id>",
   "                                              (--revision <n> | --process <process.json> [--from-revision <n>] [--step-label <label>])",
-  "                                              [--brief <id>] [--request-out <file under test-runs/>] [--work <new dir under test-runs/>] [--session-view declared|none] [--out <file>]",
+  "                                              [--brief <id>] [--request-out <file under test-runs/>] [--work <new dir under test-runs/>] [--session-view declared|none]",
+  "                                              [--tier2 [--channel chrome|msedge]] [--out <file>]",
 ].join("\n");
+
+/** Arguments that take no value: present or absent. */
+const FLAGS: ReadonlySet<string> = new Set(["tier2"]);
 
 const DEFAULTS = { scenario: "social-network-feed", task: "social-network-feed-recent-group-posts", brief: "brief-1", fromRevision: 10, stepLabel: "posts" };
 
@@ -57,12 +70,16 @@ export function parseExperimentArguments(argv: readonly string[]): ExperimentArg
   const options = new Map<string, string>();
   for (let index = 0; index < rest.length; index += 1) {
     const name = rest[index]!;
+    if (FLAGS.has(name.slice(2)) && name.startsWith("--")) {
+      options.set(name.slice(2), "true");
+      continue;
+    }
     const value = rest[index + 1];
     if (!name.startsWith("--") || value === undefined || value.startsWith("--")) return { error: `${name} needs a value` };
     options.set(name.slice(2), value);
     index += 1;
   }
-  const known = new Set(["store", "project", "steps", "scenario", "task", "brief", "from-revision", "out", "trace", "revision", "process", "step-label", "request-out", "work", "session-view"]);
+  const known = new Set(["store", "project", "steps", "scenario", "task", "brief", "from-revision", "out", "trace", "revision", "process", "step-label", "request-out", "work", "session-view", "tier2", "channel"]);
   const unknown = [...options.keys()].find((name) => !known.has(name));
   if (unknown !== undefined) return { error: `--${unknown} is not an argument` };
   for (const required of ["store", "project", "steps"]) if (!options.has(required)) return { error: `--${required} is required` };
@@ -83,8 +100,12 @@ export function parseExperimentArguments(argv: readonly string[]): ExperimentArg
     const work = options.get("work");
     const refused = work === undefined ? null : freshStoreCopyRefusal(work);
     if (refused !== null) return { error: refused };
-  } else if (options.has("work") || options.has("session-view")) {
-    return { error: "--work and --session-view are trial arguments: survey reads --store and runs nothing" };
+    const channel = options.get("channel");
+    if (channel !== undefined && channel !== "chrome" && channel !== "msedge") return { error: "--channel is chrome or msedge" };
+    if (channel !== undefined && !options.has("tier2")) return { error: "--channel chooses tier 2's browser: it needs --tier2" };
+    if (options.has("tier2") && work === undefined) return { error: "--tier2 runs the trial: it needs --work" };
+  } else if (options.has("work") || options.has("session-view") || options.has("tier2") || options.has("channel")) {
+    return { error: "--work, --session-view, --tier2 and --channel are trial arguments: survey reads --store and runs nothing" };
   }
   return Object.freeze({
     command,
@@ -94,5 +115,6 @@ export function parseExperimentArguments(argv: readonly string[]): ExperimentArg
     out: options.get("out") ?? null, trace: options.get("trace") ?? null, revision,
     process: options.get("process") ?? null, stepLabel: options.get("step-label") ?? DEFAULTS.stepLabel,
     requestOut: options.get("request-out") ?? null, work: options.get("work") ?? null, sessionView: options.get("session-view") === "declared" ? "declared" : "none",
+    tier2: options.has("tier2"), channel: options.get("channel") === "msedge" ? "msedge" : "chrome",
   });
 }

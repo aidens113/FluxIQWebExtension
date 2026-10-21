@@ -1,9 +1,10 @@
 // The runner's answer reduced to what may be written down: ids, codes, counts,
 // field names, the U5 result (whose gap details name causes, paths and
 // sequences, never values), the session view Core used with the
-// normalizations it declared, and the matched / recorded operation counts. The trial's feedback is reduced separately
-// (`./trial-observation.ts`); the matcher's free-text delivery notes are
-// counted, not copied.
+// normalizations it declared, the matched / recorded operation counts, and the
+// operations a reevaluator answered (tier 2), by ordinal and field path. The
+// trial's feedback is reduced separately (`./trial-observation.ts`); the
+// matcher's free-text delivery notes are counted, not copied.
 
 import type { AutomationStudioOfflineCandidateTrialOutcome } from "fluxiq/automation-studio";
 
@@ -16,12 +17,14 @@ export type OfflineTrialReport =
     sessionView: string;
     normalizations: readonly Readonly<{ field: string; reason: string }>[];
     supported: Readonly<{ matchedOperations: number; recordedOperations: number }>;
+    /** The operations a reevaluator answered in the recorded one's place (tier 2): ordinal, action type, differing field paths. */
+    reevaluated: readonly Readonly<{ ordinal: number; actionType: string; fields: readonly string[] }>[];
     matcher: Readonly<{
       traceId: string;
       sourceEpisodeId: string | null;
       refusal: unknown;
       recordedOperations: number;
-      matched: readonly Readonly<{ ordinal: number; actionType: string; recordedSequence: number }>[];
+      matched: readonly Readonly<{ ordinal: number; actionType: string; recordedSequence: number; answeredFrom: string }>[];
       gaps: readonly Readonly<{ ordinal: number; actionType: string; reason: string; cause: string; fields: readonly string[]; recordedSequence: number | null }>[];
       deliveredSequences: number;
       refusedDeliveries: number;
@@ -40,12 +43,13 @@ export function offlineTrialReport(outcome: AutomationStudioOfflineCandidateTria
     sessionView: outcome.sessionView,
     normalizations: outcome.normalizations.map((normalization) => Object.freeze({ field: normalization.field, reason: normalization.reason })),
     supported: Object.freeze({ ...outcome.supported }),
+    reevaluated: outcome.reevaluated.map((operation) => Object.freeze({ ordinal: operation.ordinal, actionType: operation.actionType, fields: Object.freeze([...operation.fields]) })),
     matcher: Object.freeze({
       traceId: matcher.traceId,
       sourceEpisodeId: matcher.sourceEpisodeId,
       refusal: matcher.refusal ? structuredClone(matcher.refusal) : null,
       recordedOperations: matcher.recordedOperations,
-      matched: matcher.matchedOperations.map((operation) => Object.freeze({ ordinal: operation.ordinal, actionType: operation.actionType, recordedSequence: operation.recordedSequence })),
+      matched: matcher.matchedOperations.map((operation) => Object.freeze({ ordinal: operation.ordinal, actionType: operation.actionType, recordedSequence: operation.recordedSequence, answeredFrom: operation.answeredFrom })),
       gaps: matcher.gaps.map((gap) => Object.freeze({ ordinal: gap.ordinal, actionType: gap.actionType, reason: gap.reason, cause: gap.cause, fields: [...gap.fields], recordedSequence: gap.recordedSequence })),
       deliveredSequences: matcher.deliveredSequences.length,
       refusedDeliveries: matcher.refusedDeliveries.length,

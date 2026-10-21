@@ -3,8 +3,9 @@
 // rebuilt through Core's own authoring path with the build's recorded step
 // resolutions and checked by Core's digests, each trial's stored rows judged by
 // the task's own oracle, and a hand tier-1 correction prepared for the offline
-// trial runner. Provider-free throughout; `cli.ts` is its command line and is
-// not re-exported.
+// trial runner; tier 2 (P5): the domain's offline reevaluator over a snapshot
+// page, and the changed-read gate tool. Provider-free throughout; `cli.ts` is
+// its command line and is not re-exported.
 export type * from "./types.js";
 export * from "./json-record.js";
 export * from "./lab-subflow-steps.js";
@@ -18,3 +19,5 @@ export * from "./experiment-session.js";
 export * from "./survey-experiment.js";
 export * from "./offline-trial-request.js";
 export * from "./cli-arguments.js";
+export * from "./tier2/index.js";
+export * from "./reads/index.js";

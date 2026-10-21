@@ -788,6 +788,34 @@ The flow id is also named by the build's `snapshots/flow-lane.json`. A build
 whose run failed after the Flow was applied still saved it; its id is then in
 the workspace's project, which `lab replay` checks before it starts anything.
 
+### Offline trials over recorded traces
+
+The offline-trial experiment (`packages/test-runner/src/offline-trial-experiment/`,
+run as `node packages/test-runner/dist/offline-trial-experiment/cli.js`) runs
+candidates against a live run's recorded gateway traces through Core's exported
+offline runner. It is provider-free: it never calls a model or starts a Lab run.
+`--store` points at a copied workspace's `.fluxiq` directory under `test-runs/`
+(opening it applies Core's migrations); `trial --work` and `reads` copy it
+afresh into a new `--work` directory below `test-runs/` and open only the copy,
+so runs cannot affect each other or the source. `survey` maps traces to candidates and verifies rebuilt digests; `trial`
+prepares and, with `--work`, runs one offline trial. Two subcommands reach a
+browser, headed (Chrome, or Edge by `--channel msedge`), over recorded page
+snapshots with the network off, and need the extension built first
+(`pnpm --filter @fluxiq-web-extension/extension build`):
+
+- `trial --tier2` hands the runner the web domain's offline reevaluator
+  ([extension client](extension-client.md#offline-reads-over-a-captured-page-tier-2)),
+  so a changed read is answered from the trace's snapshot where the domain's
+  rule allows; the report lists the operations so answered and every ask with
+  its outcome.
+- `reads` is the changed-read gate tool: each changed-read pair in the traces
+  is asked of the reevaluator with Core's own request and compared with the
+  later read's live result, and with `--fidelity all` (the default) every
+  recorded read is also run over its own snapshot and compared with what it
+  returned live. A gap is reported with its reason, never as a match.
+
+An offline pass is evidence only; the judged whole run stays live.
+
 ### Reusable self-recording demo workspace
 
 Two explicit smoke scripts exercise the complete author-and-run loop, and two
