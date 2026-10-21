@@ -19,10 +19,9 @@
 // the headline above already says what kind of work this is -- and it reads
 // "Clicking “Get coupons”".
 
-import { longestWordCut } from "../../shared/activity";
+import { longestWordCut } from "../../../shared/activity";
+import { fitMargin } from "./margin";
 
-/** Pixels kept free at the end of a line, so a measure that rounds differently from the page still fits. */
-const SLACK_PX = 2;
 /** A control's name as Core quotes it. */
 const NAME = /“[^”]+”/gu;
 /** The ellipsis a cut ends in (`longestWordCut`); the last one in a cut line is the cut's own. */
@@ -36,8 +35,10 @@ type Span = { start: number; end: number };
 export function fitLine(text: string, room: number, measure: (text: string) => number | undefined): string {
   if (!(room > 0)) return text;
   const whole = measure(text);
-  if (whole === undefined || whole <= room - SLACK_PX) return text;
-  const fits = (candidate: string): boolean => (measure(candidate) ?? Number.POSITIVE_INFINITY) <= room - SLACK_PX;
+  // Kept free at the end, so a page that draws the line a little wider than measured still fits it.
+  const width = room - fitMargin(room);
+  if (whole === undefined || whole <= width) return text;
+  const fits = (candidate: string): boolean => (measure(candidate) ?? Number.POSITIVE_INFINITY) <= width;
   const names = namesIn(text);
   const cut = cutKeepingNames(text, names, fits);
   if (names.length === 0 || (cut !== null && keepsEvery(cut, names))) return cut ?? text;

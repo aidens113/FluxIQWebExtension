@@ -270,7 +270,7 @@ test("a submission of steps Core refused is never drawn as done", () => {
   assert.deepEqual([accepted.state, accepted.outcome], ["done", "Done"]);
   // Core's own refusal, when it gave one, stands: a repeat refused says why it was not sent again.
   const repeat = words({ ...row(5, "Result: llm_evidence_loop.repeat_refused · Reason: failed"), label: "Using “Submit subflow” — not done" });
-  assert.equal(repeat.outcome, "Not done: it was already tried exactly this way and did not work");
+  assert.equal(repeat.outcome, "Not done: the same Flow was already sent exactly like this and was not accepted");
   for (const said of [unresolved, scope, again]) assert.doesNotMatch(said.label, /Done(?!:)|flow_bootstrap|subflow\.|candidate\./u);
 });
 

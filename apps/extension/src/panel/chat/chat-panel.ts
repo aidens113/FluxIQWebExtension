@@ -56,7 +56,8 @@
 // sends nothing) and "Extract data from this page" (`onExtract`: the shell
 // shows the extraction sheet), and, when `onboarding/` reads that no model key
 // is enabled, a line saying so with Open FluxIQ. The keys are read each time
-// the empty latest chat comes on screen; a failed read says nothing.
+// the empty latest chat comes on screen, and while they read missing, again on
+// each poll and when the person turns to the composer; a failed read says nothing.
 //
 // `fallback` (a background without the conversation relays, or a FluxIQ that
 // refuses this browser's token) swaps the stream and composer for "Talk to
@@ -160,6 +161,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   const keyOpener = openFluxIQ({ label: "Open FluxIQ", look: "small", canOpen: () => owner.current() && actionsAllowed() });
   let readiness: ModelReadiness = "unknown";
   let readinessAsk: object | null = null;
+  // The read of the keys on its way, if any, so typing never queues one per key press.
+  let readinessReading: object | null = null;
   let empty = createEmptyState(() => undefined);
   let readNotice = createReadNotice(() => undefined);
   const column = createElement("div", { className: "chat-column" }, [empty.element, thread.element, readNotice.element]);
@@ -177,6 +180,14 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     follower.followNow();
     return destination.send(text);
   });
+  // A "missing" read is a claim about the moment it was made: the Lab adds its
+  // key just before it types the request, and a person may add one in FluxIQ
+  // and come back. Turning to the composer is when the line matters, so the
+  // keys are read again then, not only on the next poll (round 5: a build
+  // began under "FluxIQ needs a model key" and then ran with one).
+  const recheckReadiness = (): void => { if (readiness === "missing" && readinessAsk !== null && readinessReading === null) askReadiness(); };
+  composer.element.addEventListener("focusin", recheckReadiness);
+  composer.element.addEventListener("input", recheckReadiness);
   const main = createElement("div", { className: "chat-main" }, [scroller, jump]);
   const stop = createStopControl((message) => owner.request(message), () => connected && actionsAllowed());
   // Take over and Hand back sit beside Stop, for runs only (`hold-control.ts`).
@@ -278,7 +289,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     shownTarget = { kind: "latest" }; answerIn = null; questionKey = "";
     followed = null; knownThreads.clear(); flowNames.clear();
     clock = createTurnClock(); historyTaken = false; seen = undefined; turnOpeners = [];
-    readiness = "unknown"; readinessAsk = null;
+    readiness = "unknown"; readinessAsk = null; readinessReading = null;
     composer.setOwner(draftOwners.capture(owner, shownTarget.projectId, latestStatus?.projectId ?? undefined)); composer.setPlaceholder("Message FluxIQ"); context.update(shownTarget); refreshControls(true);
     renderAll();
     if (!initial) for (const listener of [...targetListeners]) listener(shownTarget);
@@ -373,8 +384,11 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     // screen, and again on each poll while they read "missing" (`startReads`).
     if (!(connected && shownTarget.kind === "latest" && state.mode === "empty" && actionsAllowed())) readinessAsk = null;
     else if (readinessAsk === null) askReadiness();
-    empty.update(emptyStateModel(state.mode, shownTarget, readiness), anything);
+    const emptyModel = emptyStateModel(state.mode, shownTarget, readiness);
+    empty.update(emptyModel, anything);
     turnOpeners = turnOpeners.filter((opener) => opener.element.isConnected);
+    // An empty chat's welcome is read from its top; a conversation follows its newest at the bottom.
+    follower.rest(state.mode === "empty" && emptyModel !== null && !anything);
     follower.contentChanged();
 
     const hasTurns = state.turns.length > 0;
@@ -446,7 +460,9 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
 
   function askReadiness(): void {
     const ask = readinessAsk = {}, captured = owner;
+    readinessReading = ask;
     void readModelReadiness(captured.request).then((next) => {
+      if (readinessReading === ask) readinessReading = null;
       if (ask !== readinessAsk || captured !== owner || !captured.current() || next === readiness) return;
       readiness = next;
       renderAll();

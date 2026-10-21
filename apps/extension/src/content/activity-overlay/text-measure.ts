@@ -5,7 +5,7 @@
 // measured on an `OffscreenCanvas` in the line's font, which reads nothing
 // of the page and adds no node to it. Where either cannot be had -- a page
 // not laid out yet, a browser with no `OffscreenCanvas`, a test's fake DOM --
-// it answers 0 or undefined, and the line is drawn whole (`fit-line.ts`).
+// it answers 0 or undefined, and the line is drawn whole (`fit/line.ts`).
 
 /** What the pill measures its lines with; a test passes its own. */
 export type OverlayTextMeasure = {

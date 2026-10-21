@@ -107,7 +107,11 @@ async function modelReadiness(deps: AutomationRelayDeps): Promise<PanelRelayResp
   const snapshot = await deps.call("snapshot", {}, "secret-keys");
   if (!snapshot.ok) return snapshot;
   const listed = field(snapshot.payload, "keys");
-  const keys = (Array.isArray(listed) ? listed : []).map((key) => {
+  // No list says nothing about the keys: passed on as an empty one, it read as
+  // "no key" and the chat said FluxIQ needed one (round 5). The panel reads a
+  // reply with no list as unknown and says nothing.
+  if (!Array.isArray(listed)) return { ok: true, payload: {} };
+  const keys = listed.map((key) => {
     const kind = text(field(key, "kind"));
     const provider = text(field(key, "provider"));
     return { ...(kind ? { kind } : {}), ...(provider ? { provider } : {}), enabled: field(key, "enabled") === true };

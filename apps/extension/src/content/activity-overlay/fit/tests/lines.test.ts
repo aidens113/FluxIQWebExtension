@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fitLines } from "../fit-lines";
+import { fitLines } from "../lines";
 
 /** Seven pixels a character, as the status pill's own test measures. */
 const measure = (text: string): number => text.length * 7;
@@ -32,4 +32,36 @@ test("one sentence too long for every line is cut where a word ends, within the 
   assert.ok(text.startsWith(fitted.slice(0, -1)), fitted);
   assert.ok(fitted.length <= 2 * 46 + 1, fitted);
   assert.match(fitted.slice(0, -1), /\S$/u);
+});
+
+// Round 5 of the breadth reruns: a detail ended "address is t…", cut inside a
+// word. The canvas measure and the page's own layout can disagree by a few
+// pixels over a line (page zoom, font hinting); a sentence fitted with no room
+// to spare then overflows its last line, and the style's clamp, the backstop,
+// cuts it wherever the width runs out. The margin kept free grows with the
+// line, so a sentence fitted here still fits when the page draws it a little
+// wider than it measured.
+test("a sentence fitted to the lines still fits when the page draws it up to 2% wider than measured", () => {
+  const room = 328;
+  const wider = (text: string): number => measure(text) * 1.02;
+  const wraps = (text: string, width: number): number => {
+    let lines = 1;
+    let line = "";
+    for (const word of text.split(" ")) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (wider(candidate) <= width || line === "") line = candidate;
+      else {
+        lines += 1;
+        line = word;
+      }
+    }
+    return lines;
+  };
+  // Two lines of exactly 46 characters each: as measured, each fills its line to the last pixel.
+  const line = "street street street street street house house";
+  assert.equal(line.length, 46);
+  for (const text of [`${line} ${line}`, `${line} ${line} and more after it`, line]) {
+    const fitted = fitLines(text, room, measure, 2);
+    assert.ok(wraps(fitted, room) <= 2, `"${fitted}" takes ${wraps(fitted, room)} lines as the page draws it`);
+  }
 });

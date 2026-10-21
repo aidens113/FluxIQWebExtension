@@ -13,3 +13,4 @@ export { replayWebOutputNode, webNodeRecordCount, webNodeReplayCall, webNodeRepl
 export { webLlmCallWords, type WebLlmCallWords } from "./call-words";
 export { webNodeNamedControlShown } from "./named-control-shown";
 export { webListReadCode } from "./list-read";
+export { webNodeActVerb } from "./act-verb";

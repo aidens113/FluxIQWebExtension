@@ -7,14 +7,24 @@
 // wraps onto a second line rather than being cut mid-sentence ("A step didn't
 // work in the test: the…", lane D run-mv0fuual-f9e6f089 finding 9), and only a
 // sentence too long for both is shortened, to its whole sentences or else
-// where a word ends (`fit-lines.ts`); the headline is one line, cut where a
-// word ends (`fit-line.ts`: the browser's own ellipsis cut "Search Bri…", U-4
+// where a word ends (`fit/lines.ts`); the headline is one line, cut where a
+// word ends (`fit/line.ts`: the browser's own ellipsis cut "Search Bri…", U-4
 // of the run-muw60j7c-bb7c9a62 UI review). Both are measured again whenever
 // the pill changes width. A detail that
 // changes fades in softly, which is the only motion besides the pulsing mark. The pill itself has no entry
 // animation: a page that loads while FluxIQ works (a navigation, U7 of the
 // t174 live lane's UI review) gets the overlay back at full strength the
-// moment the background re-sends the status, so it reads as never having left.
+// moment the background re-sends the status, so it reads as never having left,
+// and in the place the last page had it (`placement/placement-memory.ts`):
+// the pill waits, unseen, the few milliseconds that place takes to read, so it
+// never shows in one corner and jumps to another. A page script that rebuilds
+// the document's top level and drops the host with it (round 5 of the breadth
+// reruns: the pill vanished across some page loads) gets it put back while a
+// status is up.
+//
+// A status re-sent unchanged -- to every new page, and whenever the overlay
+// preference is set -- changes nothing: no text is written, no animation
+// restarts, and a finished status's fade keeps its time.
 //
 // It is a display for the person watching and nothing else (decision D5):
 //
@@ -32,17 +42,18 @@
 //   (`../picker-host.ts`), which the recorder, the snapshot, the evidence
 //   pass and the interference checks all skip.
 // - **It covers as little as it can, and always says what FluxIQ is doing.**
-//   It sits in a corner where no fixed part of the page is -- no cookie
-//   banner, chat widget, sticky bar or dialog -- and when every corner has one
-//   it takes the least-busy place on the viewport's edge or docked just past
-//   a fixed bar, clear of text and images where it can be, narrower if that
-//   covers less, its lines kept and ending in an ellipsis when they do not
-//   fit (`placement/`). It is never a text-less dot: the person reads the
-//   status on the page whenever FluxIQ works, side panel open or not (U3 of
-//   lane D's run-murdouox-c5294247 UI review). Sitting over a control changes
-//   nothing an action or the page view sees (the first and third points
-//   above; `tests/cover-detection.test.ts`). It moves as the page changes, at
-//   most once per check interval, and stays put while its place is the best.
+//   It sits in a corner, or moved in from the top or bottom edge, where it
+//   covers the least: first no cookie banner, chat widget, sticky bar or
+//   dialog, then none of the page's own header, logo, controls, text or
+//   images where it can, narrower if that covers less, never in the middle of
+//   an edge, its lines kept and ending in an ellipsis when they do not fit
+//   (`placement/`). It is never a text-less dot: the person reads the status
+//   on the page whenever FluxIQ works, side panel open or not (U3 of lane D's
+//   run-murdouox-c5294247 UI review). Sitting over a control changes nothing
+//   an action or the page view sees (the first and third points above;
+//   `tests/cover-detection.test.ts`). It stays put: it moves only when a
+//   clearly better place has stayed better for a while, never while the page
+//   scrolls.
 //
 // **Legibility** (the supervisor's review #8): a 14-pixel headline and a
 // 13-pixel detail, near-white on a near-black card of its own, so it reads the
@@ -57,12 +68,11 @@
 
 import { ACTIVITY_DONE_VISIBLE_MS } from "../../shared/activity";
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../picker-host";
-import { fitLine } from "./fit-line";
-import { fitLines } from "./fit-lines";
+import { fitLine, fitLines } from "./fit";
 import { inertElement } from "./inert-element";
 import type { ActivityOverlayView } from "./overlay-view";
 import { PhaseMark } from "./phase-mark";
-import { anchorStyle, PlacementKeeper, type OverlayPlacement } from "./placement";
+import { anchorStyle, browserPlacementMemory, PlacementKeeper, type OverlayPlacement, type PlacementMemory } from "./placement";
 import { browserTextMeasure, type OverlayTextMeasure } from "./text-measure";
 
 type Mode = ActivityOverlayView["mode"];
@@ -94,6 +104,11 @@ const DETAIL_LINES = 2;
 const MARK_SIZE = 14;
 const MARK_GAP = 10;
 const EDGE_MARGIN = 16;
+/** The longest the pill waits, unseen, for the last page's place before it shows where it can. */
+const RECALL_WAIT_MS = 150;
+/** How many times within `REATTACH_WINDOW_MS` a host the page removed is put back; a page that keeps removing it wins until the next status. */
+const REATTACH_LIMIT = 5;
+const REATTACH_WINDOW_MS = 10_000;
 
 /**
  * Each mode's fixed box, full and narrow, so nothing the text does can move or
@@ -130,13 +145,20 @@ export class StatusPill {
   private drawnShape: string | undefined;
   private fadeTimer: ReturnType<typeof setTimeout> | undefined;
   private fading: Animation | undefined;
+  /** Watches the document's top level for the page removing the host. */
+  private attachment: MutationObserver | undefined;
+  private reattachedAt: number[] = [];
   private readonly keeper = new PlacementKeeper({
     sizes: () => ({ box: SHAPE_SIZE[this.mode()].pill, narrow: SHAPE_SIZE[this.mode()].narrow, margin: EDGE_MARGIN }),
-    place: (placement) => this.place(placement)
+    place: (placement) => this.place(placement),
+    remember: (placement) => this.memory.keep(placement)
   });
 
-  /** `measure` is the page's own unless a test passes another. */
-  constructor(private readonly measure: OverlayTextMeasure = browserTextMeasure) {}
+  /** `measure` and `memory` are the page's own and the extension's unless a test passes others. */
+  constructor(
+    private readonly measure: OverlayTextMeasure = browserTextMeasure,
+    private readonly memory: PlacementMemory = browserPlacementMemory
+  ) {}
 
   /** The host while the overlay is in the page, for tests and for nothing else. */
   host(): HTMLElement | undefined {
@@ -145,6 +167,8 @@ export class StatusPill {
 
   /** Shows `view`, or takes the overlay out of the page when it is null. */
   update(view: ActivityOverlayView | null): void {
+    // The same status again: nothing to draw, and a fade under way keeps its time.
+    if (view && this.shown && this.nodes?.host.isConnected && sameView(view, this.shown)) return;
     this.cancelFade();
     if (!view) {
       this.remove();
@@ -153,12 +177,8 @@ export class StatusPill {
     const before = this.shown;
     this.shown = view;
     const nodes = this.ensureNodes();
-    if (before && before.mode !== view.mode) {
-      this.keeper.recheck();
-      // A side midpoint is centred by the box's height, which the mode sets,
-      // and the keeper only moves the host when the place itself changed.
-      this.place(this.keeper.placement());
-    }
+    // A new mode is a new size: the place is checked again, and kept unless another is clearly better.
+    if (before && before.mode !== view.mode) this.keeper.recheck();
     this.drawShape(nodes);
     nodes.mark.show(view.mark, view.accent);
     setText(nodes.step, view.step);
@@ -178,19 +198,57 @@ export class StatusPill {
     for (const stale of document.querySelectorAll(`[${ACTIVITY_OVERLAY_HOST_ATTRIBUTE}]`)) stale.remove();
     this.keeper.stop();
     this.drawnShape = undefined;
-    this.nodes = buildNodes();
-    document.documentElement.append(this.nodes.host);
-    // Placed before the first paint: the check runs in this same task.
-    this.keeper.start();
-    return this.nodes;
+    const nodes = buildNodes();
+    this.nodes = nodes;
+    document.documentElement.append(nodes.host);
+    this.keepAttached(nodes);
+    const recalled = this.memory.recall();
+    if (!isPromise(recalled)) {
+      // Placed before the first paint: the check runs in this same task.
+      this.keeper.start(recalled);
+      return nodes;
+    }
+    // Unseen until the last page's place is known, so it never shows in one place and jumps to another.
+    nodes.host.style.setProperty("visibility", "hidden", "important");
+    let revealed = false;
+    const reveal = (placement: OverlayPlacement | undefined): void => {
+      if (revealed) return;
+      revealed = true;
+      clearTimeout(timer);
+      if (this.nodes !== nodes || !nodes.host.isConnected) return;
+      this.keeper.start(placement);
+      nodes.host.style.setProperty("visibility", "visible", "important");
+    };
+    const timer = setTimeout(() => reveal(undefined), RECALL_WAIT_MS);
+    recalled.then(reveal, (error: unknown) => {
+      // best-effort: a last place that cannot be read only means this page places the pill afresh.
+      console.debug("FluxIQ overlay: the last place could not be read", error);
+      reveal(undefined);
+    });
+    return nodes;
+  }
+
+  /** Puts the host back when the page removes it while a status is up, a bounded number of times. */
+  private keepAttached(nodes: Nodes): void {
+    this.attachment?.disconnect();
+    this.attachment = undefined;
+    if (typeof MutationObserver !== "function") return;
+    this.attachment = new MutationObserver(() => {
+      if (this.nodes !== nodes || !this.shown || nodes.host.isConnected) return;
+      const now = Date.now();
+      this.reattachedAt = this.reattachedAt.filter((at) => now - at < REATTACH_WINDOW_MS);
+      if (this.reattachedAt.length >= REATTACH_LIMIT) return;
+      this.reattachedAt.push(now);
+      document.documentElement.append(nodes.host);
+    });
+    this.attachment.observe(document.documentElement, { childList: true });
   }
 
   /** The keeper moved the overlay: pin the host there and redraw its box. */
   private place(placement: OverlayPlacement): void {
     const nodes = this.nodes;
     if (!nodes) return;
-    const size = SHAPE_SIZE[this.mode()][placement.shape];
-    for (const [property, value] of Object.entries(anchorStyle(placement.anchor, EDGE_MARGIN, size.height, placement.offset))) nodes.host.style.setProperty(property, value, "important");
+    for (const [property, value] of Object.entries(anchorStyle(placement.anchor, EDGE_MARGIN, placement.offset))) nodes.host.style.setProperty(property, value, "important");
     if (!this.shown) return;
     this.drawShape(nodes);
     // A narrower or wider card fits its lines again.
@@ -267,6 +325,8 @@ export class StatusPill {
   }
 
   private remove(): void {
+    this.attachment?.disconnect();
+    this.attachment = undefined;
     this.keeper.stop();
     this.nodes?.host.remove();
     this.nodes = undefined;
@@ -350,6 +410,20 @@ function buildNodes(): Nodes {
   surface.append(top, detail);
   root.append(surface);
   return { host, surface, top, mark, headline, step, detail };
+}
+
+function sameView(left: ActivityOverlayView, right: ActivityOverlayView): boolean {
+  return left.mode === right.mode
+    && left.mark === right.mark
+    && left.accent === right.accent
+    && left.headline === right.headline
+    && left.detail === right.detail
+    && left.step === right.step
+    && left.fades === right.fades;
+}
+
+function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as { then?: unknown } | undefined)?.then === "function";
 }
 
 function withSpacing(width: number | undefined, text: string): number | undefined {

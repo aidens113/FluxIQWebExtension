@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fitLine } from "../fit-line";
+import { fitLine } from "../line";
 
 /** Seven pixels a character, as the status pill's own test measures. */
 const measure = (text: string): number => text.length * 7;
@@ -34,4 +34,13 @@ test("when not even the subject keeps its name whole, the plain word cut is the 
   const fitted = fitLine(line, 120, measure);
   assert.ok(measure(fitted) <= 118, fitted);
   assert.ok(fitted.endsWith("…") || fitted.endsWith("…”"), fitted);
+});
+
+test("a line fitted here still fits when the page draws it up to 2% wider than measured", () => {
+  const room = 328;
+  for (let length = 30; length <= 90; length += 1) {
+    const text = "Typing the delivery address into the form on the account page for the order".slice(0, length).trim();
+    const fitted = fitLine(text, room, measure);
+    assert.ok(measure(fitted) * 1.02 <= room, `"${fitted}" is ${measure(fitted) * 1.02} pixels as the page draws it, in ${room}`);
+  }
 });

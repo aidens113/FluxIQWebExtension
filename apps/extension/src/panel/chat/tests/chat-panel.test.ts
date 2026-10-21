@@ -392,3 +392,55 @@ test("an automation's empty chat neither offers the starts nor reads the model k
     assert.equal(core.sent.filter((message) => message.type === RUNTIME_MESSAGES.panelModelReadiness).length, before);
   });
 });
+
+// Round 5: a build began under "FluxIQ needs a model key" and then ran with
+// one. The chat read the keys when it opened, before the key was added (the
+// Lab adds its key just before it types the request), and asked again only on
+// the next 4 s poll. A person turning to the composer is the moment the line
+// matters, so the keys are read again then.
+test("a key added after the chat read it missing lifts the line as soon as the person turns to the composer", async () => {
+  await withFakeDocument(async () => {
+    const core = targetCore([]);
+    let enabled = false;
+    let asked = 0;
+    const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> => {
+      if (message.type !== RUNTIME_MESSAGES.panelModelReadiness) return core.request<T>(message);
+      asked += 1;
+      return { ok: true, value: { ok: true, payload: { keys: [{ kind: "llm", provider: "DeepSeek", enabled }] } } } as unknown as PanelResult<T>;
+    };
+    const chat = createChatPanel(request, () => ({ element: document.createElement("a") as HTMLElement, observe: () => undefined }));
+    chat.render(CONNECTED);
+    await settle();
+    await settle();
+    const root = fake(chat.element);
+    const key = root.byClass("chat-key-line")[0]!;
+    assert.equal(key.hidden, false, "no key yet: the line shows");
+    const first = asked;
+    enabled = true;
+    root.byClass("composer")[0]!.dispatch("focusin");
+    await settle();
+    await settle();
+    assert.equal(asked, first + 1, "read again when the person turns to the composer");
+    assert.equal(key.hidden, true, "the key is there now: the line is gone before anything is sent");
+    root.byClass("composer")[0]!.dispatch("input");
+    await settle();
+    assert.equal(asked, first + 1, "a key that reads enabled is not asked about again");
+  });
+});
+
+test("the welcome starts at its top: an empty chat taller than the view is not pinned to the bottom", async () => {
+  await withFakeDocument(async () => {
+    const core = targetCore([]);
+    const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> => core.request<T>(message);
+    const chat = createChatPanel(request, () => ({ element: document.createElement("a") as HTMLElement, observe: () => undefined }));
+    const scroller = fake(chat.element).byClass("chat-scroll")[0]!;
+    scroller.scrollHeight = 900;
+    scroller.clientHeight = 400;
+    chat.render(CONNECTED);
+    await settle();
+    await settle();
+    assert.equal(fake(chat.element).byClass("chat-empty")[0]!.hidden, false, "the welcome is on screen");
+    assert.equal(scroller.scrollTop, 0, "the welcome's title is in view, not scrolled off the top");
+    assert.equal(fake(chat.element).byClass("chat-jump")[0]!.hidden, true, "no Jump to latest over a welcome");
+  });
+});

@@ -67,7 +67,7 @@ test("a multi-agent build: the plan, each brief as its builder's header, interle
   const messages = stepMessages(multiAgentBuild(), 100);
   assert.deepEqual(messages.map((message) => [message.kind, message.title, message.lane ?? null]), [
     ["decision", "Planning the work", "Supervisor"],
-    ["project", "Planned 2 subflows", null],
+    ["project", "Planned 2 pieces", null],
     ["project", "Building Search: Find the kettle", null],
     ["decision", TYPE, null],
     ["project", "Building Cart: Add it to the cart", null],
@@ -89,19 +89,19 @@ test("a multi-agent build: the plan, each brief as its builder's header, interle
 
   // The plan card: its parts, each subflow with its purpose, allowance and starting cases, and the budget.
   const plan = messages[1]!.project!;
-  assert.deepEqual([plan.card.icon, plan.card.name, plan.card.target, plan.card.outcome], ["branch", "Plan", "2 parts, 2 subflows", "Budget $0.18, $0.07 kept back"]);
+  assert.deepEqual([plan.card.icon, plan.card.name, plan.card.target, plan.card.outcome], ["branch", "Plan", "2 parts, 2 pieces", "Budget $0.18, $0.07 kept back"]);
   assert.deepEqual(plan.card.rows, [
     { heading: "Parts", items: ["Find the cheapest kettle", "Put it in the cart"] },
-    { heading: "Subflows", items: ["Search: Find the kettle · $0.06 · 1 starting case", "Cart: Add it to the cart · $0.05"] }
+    { heading: "Pieces", items: ["Search: Find the kettle · $0.06 · 1 starting case", "Cart: Add it to the cart · $0.05"] }
   ]);
 
   // Each brief's card shows how its builder came back; the return and the receipts are cards of their own.
   const card = (index: number) => messages[index]!.project!.card;
   assert.deepEqual([card(2).icon, card(2).name, card(2).target, card(2).outcome, card(2).state], ["draft", "Build", "Search", "Allowance $0.06", "done"]);
   assert.equal(card(4).state, "unconfirmed", "the cart builder came back with part of it");
-  assert.deepEqual([card(6).icon, card(6).name, card(6).target, card(6).outcome, card(6).state], ["join", "Return", "Search", "Spent $0.04 · 12 calls · 3 trials", "done"]);
+  assert.deepEqual([card(6).icon, card(6).name, card(6).target, card(6).outcome, card(6).state], ["join", "Return", "Search", "Spent $0.04 · 12 calls · 3 tests", "done"]);
   assert.equal(messages[6]!.text, "The search finds the kettle.");
-  assert.deepEqual([card(9).icon, card(9).name, card(9).target, card(9).outcome, card(9).state], ["test", "Subflow trial", "Search", "Passed", "done"]);
+  assert.deepEqual([card(9).icon, card(9).name, card(9).target, card(9).outcome, card(9).state], ["test", "Part test", "Search", "Passed", "done"]);
   assert.deepEqual([card(11).name, card(11).target, card(11).outcome, card(11).state], ["Whole-Flow run", null, "Not confirmed", "unconfirmed"]);
 
   // The validator's run step is a card, ended by its next row; the check is its own message.
