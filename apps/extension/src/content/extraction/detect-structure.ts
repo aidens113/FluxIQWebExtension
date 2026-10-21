@@ -70,6 +70,14 @@
 // page-wide search ranks every rich run above every thin one. A thin run is
 // still answered when it is all there is.
 //
+// **A list mixing templates holds data too** (t752). The data a run holds was
+// counted from the fields every item has, and a feed of posts, shared posts,
+// suggestions and advertisements has none: at its start state its five rows
+// happened to share some, but once more rows were drawn it held "no data", and
+// a card carousel nested inside one row -- six cards of five values -- was
+// answered instead of the feed. A field now counts when more than half the run's
+// items have it.
+//
 // **A target that is a record on its own is answered as one, beside the list
 // and never instead of it** (`single-record/lone-record.ts`). Some answers are
 // one record with nothing of its template around it -- the product card a shop
@@ -198,13 +206,14 @@ function detectAround(selector: string): Attempt {
 
 /** The run the target belongs to or the nearest rich run past it, a refusal for a target that names no one run, or `undefined` when the page holds no readable run. */
 function runAround(first: Element, elements: readonly Element[]): WebAutomationStructureDetection | undefined {
-  const proposal = inferListFromElement(first);
+  const inferences = freshInferences();
+  const proposal = inferListFromElement(first, inferences.runs);
   if (proposal) {
     if (elements.length > 1 && !allInsideItems(elements, queryAll(proposal.item))) return refused("ambiguous_target");
     const answer = detected(proposal);
     if (!answer.ok || !isThin(proposal)) return answer;
   }
-  return nearestRichRun(first) ?? (proposal ? detected(proposal) : undefined);
+  return nearestRichRun(first, inferences) ?? (proposal ? detected(proposal) : undefined);
 }
 
 /** The run's answer with the target's own record beside it. */
@@ -218,8 +227,7 @@ function withRecord(run: Detected, record: WebAutomationExtractionProposal): Det
  * shared between regions, since a region's runs are its inner region's runs
  * and more.
  */
-function nearestRichRun(target: Element): Detected | undefined {
-  const inferred = new Map<Element, WebAutomationExtractionProposal | undefined>();
+function nearestRichRun(target: Element, inferred: Inferences): Detected | undefined {
   for (let region = target.parentElement; region && region !== document.documentElement; region = region.parentElement) {
     const best = bestRunUnder(region, inferred).best;
     if (best && !isThin(best.proposal)) return best;
@@ -239,7 +247,7 @@ function allInsideItems(elements: readonly Element[], items: readonly Element[])
 }
 
 function detectLargest(): WebAutomationStructureDetection {
-  const { best, sensitiveSeen } = bestRunUnder(document.body, new Map());
+  const { best, sensitiveSeen } = bestRunUnder(document.body, freshInferences());
   return best ?? refused(sensitiveSeen ? "sensitive_region" : "no_repeating_run");
 }
 
@@ -250,7 +258,7 @@ function detectLargest(): WebAutomationStructureDetection {
  */
 function bestRunUnder(
   root: Element | null,
-  inferred: Map<Element, WebAutomationExtractionProposal | undefined>
+  inferred: Inferences
 ): { best: Detected | undefined; sensitiveSeen: boolean } {
   let best: Detected | undefined;
   let sensitiveSeen = false;
@@ -260,8 +268,8 @@ function bestRunUnder(
       sensitiveSeen = true;
       continue;
     }
-    if (!inferred.has(first)) inferred.set(first, inferListFromElement(first));
-    const proposal = inferred.get(first);
+    if (!inferred.starts.has(first)) inferred.starts.set(first, inferListFromElement(first, inferred.runs));
+    const proposal = inferred.starts.get(first);
     // The walk outward can land two starting items on one run; it is judged once.
     // A run whose items sit outside the region is not the region's.
     if (!proposal || tried.has(proposal.item) || !withinRegion(proposal, root)) continue;
@@ -277,6 +285,22 @@ function bestRunUnder(
   return { best, sensitiveSeen };
 }
 
+/**
+ * What one detection has already inferred: each starting item's answer, and
+ * each run's proposal under the run's first item. Many starting items walk
+ * outward to the same run, and a run's fields are read from every one of its
+ * items (`infer-fields.ts`), so each run is judged once per detection. Made
+ * fresh for every attempt, since the page may change between attempts.
+ */
+type Inferences = {
+  starts: Map<Element, WebAutomationExtractionProposal | undefined>;
+  runs: Map<Element, WebAutomationExtractionProposal | undefined>;
+};
+
+function freshInferences(): Inferences {
+  return { starts: new Map(), runs: new Map() };
+}
+
 /** Whether the run's items all sit inside `root`. The inference walks outward, so a run it lands on may enclose the region instead. */
 function withinRegion(proposal: WebAutomationExtractionProposal, root: Element | null): boolean {
   if (!root) return false;
@@ -284,9 +308,21 @@ function withinRegion(proposal: WebAutomationExtractionProposal, root: Element |
   return items.length > 0 && items.every((item) => root.contains(item));
 }
 
-/** How many values of their own the run's items hold between them, counting a field only where every item has it. */
+/**
+ * The share of a run's items a field must be in to count toward the data the
+ * run holds: more than half of them (coverage is rounded to hundredths, so
+ * 0.51 is the least share above a half). Every item was the rule until t752,
+ * and a feed mixing templates -- posts, shared posts, suggestions,
+ * advertisements -- has no value every row holds, so once more of it was drawn
+ * it held "no data" and a small run nested inside one row outranked it; see
+ * the header. Exactly half is not enough: in a pair it is one item, and a
+ * pair's one-sided fields then outranked a whole table's rows.
+ */
+const DATA_FIELD_COVERAGE = 0.51;
+
+/** How many values of their own the run's items hold between them, counting a field only where more than half the items have it. */
 function dataHeld(proposal: WebAutomationExtractionProposal): number {
-  return proposal.itemCount * contentFieldCount(proposal.fields, 1);
+  return proposal.itemCount * contentFieldCount(proposal.fields, DATA_FIELD_COVERAGE);
 }
 
 /** A run whose items hold at most one value of their own: a record's controls or decorations; see the header. */
@@ -306,7 +342,7 @@ function isFormNotData(proposal: WebAutomationExtractionProposal): boolean {
 
 /**
  * A rich run before a thin one; then the run holding more data -- its items
- * times the values of their own every item holds; then more items; then more
+ * times the values of their own more than half its items hold; then more items; then more
  * readable fields; then the surer inference.
  *
  * Data before length because length alone picked the wrong list on the

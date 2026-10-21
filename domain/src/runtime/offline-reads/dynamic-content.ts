@@ -20,7 +20,7 @@
 
 import type { ClientGatewayTraceRecordedPayload } from "fluxiq/client-gateway";
 import { webAutomationExtractionSummaryValue } from "../../actions/extraction";
-import type { WebAutomationActionResult } from "../../actions/types";
+import type { WebAutomationActionCommand, WebAutomationActionResult } from "../../actions/types";
 import { gatewayActionResultFromBrowserResult } from "../../client";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../failure";
 import { webOfflineReadControlReproduced } from "./control-reproduced";
@@ -31,15 +31,26 @@ const UNRESOLVED_TARGET: ReadonlySet<string> = new Set([WEB_AUTOMATION_FAILURE_C
 
 type Run = Readonly<{ result: WebAutomationActionResult; observations: WebSnapshotSandboxObservations }>;
 
-export function webOfflineReadDynamicContent(read: Readonly<{ changed: Run; control: Run; recordedResult: ClientGatewayTraceRecordedPayload }>): boolean {
+export function webOfflineReadDynamicContent(read: Readonly<{ changed: Run; control: Run; changedAction: WebAutomationActionCommand; controlAction: WebAutomationActionCommand; recordedResult: ClientGatewayTraceRecordedPayload }>): boolean {
   const { changed, control, recordedResult } = read;
   if (breached(changed.observations) || breached(control.observations)) return true;
+  // Automatic disclosure is the default: an inert page that cannot open a
+  // required field lacks evidence, even where the recorded control reproduces.
+  // Explicit opt-out and ordinary output validation failures remain honest results.
+  if (unsupportedDisclosure(changed, read.changedAction) || unsupportedDisclosure(control, read.controlAction)) return true;
   if (!webOfflineReadControlReproduced(gatewayActionResultFromBrowserResult(control.result), recordedResult)) return true;
   if (changed.result.status === "timed_out") return true;
   if (changed.result.failure !== undefined && UNRESOLVED_TARGET.has(changed.result.failure.code)) return true;
   if (webAutomationExtractionSummaryValue(changed.result.extraction)?.listPresence === "never_appeared") return true;
   const askedMore = changed.observations.navigationsHeld > control.observations.navigationsHeld || changed.observations.scrollsPastEnd > control.observations.scrollsPastEnd;
   return askedMore && !webOfflineReadRecordedListEnded(recordedResult);
+}
+
+function unsupportedDisclosure(run: Run, action: WebAutomationActionCommand): boolean {
+  return action.actionType === "web.dom.extract_list" && action.extractList?.discloseText !== false
+    && run.result.status === "failed"
+    && run.result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED
+    && /^incomplete_text:/u.test(run.result.failure.actual ?? "");
 }
 
 function breached(observations: WebSnapshotSandboxObservations): boolean {

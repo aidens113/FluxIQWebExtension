@@ -32,6 +32,8 @@ const PARAMETER_ID = /^[a-z][A-Za-z0-9]{0,39}$/u;
 /** Keys the request grammar and the handle reference name, which say nothing the model was shown. */
 const GRAMMAR_KEYS: ReadonlySet<string> = new Set([
   "handle", "location", "item", "itemElement", "fields", "columns", "paginate", "minItems", "maxItems",
+  // Whether a list read opens each kept row's own collapsed text (t752).
+  "discloseText",
   "key", "field", "column", "header", "attribute", "required", "kind", "selector",
   // An expected state's locator conditions, refused when a model wrote one (`written-literals.ts`, t432).
   "conditions",

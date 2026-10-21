@@ -57,7 +57,7 @@ export function createWebOfflineReadReevaluator(page: WebSnapshotPage): ClientGa
       if (control.status === "unavailable") return gap(control.reason);
       const changed = await page.evaluate(snapshot, action);
       if (changed.status === "unavailable") return gap(changed.reason);
-      if (webOfflineReadDynamicContent({ changed, control, recordedResult: request.recordedResult })) return gap("dynamic_content");
+      if (webOfflineReadDynamicContent({ changed, control, changedAction: action, controlAction: recordedAction, recordedResult: request.recordedResult })) return gap("dynamic_content");
       return { status: "answered", result: webOfflineReadAnsweredResult(changed.result, request.recordedResult) };
     }
   };

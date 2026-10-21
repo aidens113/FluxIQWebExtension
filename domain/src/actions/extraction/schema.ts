@@ -141,7 +141,10 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       // Set by the domain on a Flow's dispatch and replay, never by an author
       // (`./request.ts`); declared so the dispatched request is one this schema
       // describes.
-      answer: { type: "string", label: "Answer", enum: [WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT] }
+      answer: { type: "string", label: "Answer", enum: [WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT] },
+      // Press each kept row's own "Read more" before reading its text, the
+      // default; `false` stops it (`./request.ts`).
+      discloseText: { type: "boolean", label: "Open each kept row's collapsed text" }
     }
   };
 }
