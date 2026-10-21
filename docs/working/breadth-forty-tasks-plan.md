@@ -61,7 +61,7 @@ judged the whole run unverified, so acceptance is held. No unchanged retry.
 were rerun in rounds 2-4 and went 0 of 12 ($0.317 in round 4); every cause was a product defect, each fixed (t738,
 t741, t743, ledgers in [trace-offline-trials-plan.md](./trace-offline-trials-plan.md)). t743 made round 4's three
 shared weaknesses structural (build-scoped site memory, actionable answers with `gate_unsatisfiable`, repair before
-ending). Round 5 is held until t748 (t743's open items, several of which a round-5 run can meet) merges.
+ending). Round 5 launched on 2026-10-20 after t748 merged (t743's open items).
 
 **Next, in order:** t748 merges; sync the four lane trees to `dev` (both repositories, installed, Core and extension
 rebuilt; the Lab refuses stale trees); round 5 on fresh workspaces, supervised at $0.25 each via both settings; debug
@@ -568,6 +568,23 @@ The 2026-10-18 entries are archived in
   (`launch-rerun5.sh`, instance `rr5-slot-N`, fresh workspaces `...-20261020-r6`, social `-r8`).
 - Outcome: Partial (held)
 - Follow-up: t748, then sync and round 5.
+
+### 2026-10-20 - Rerun round 5 launched after t743 and t748
+- Agent: supervisor
+- Changed: nothing in the repositories; lane trees t563, t719, t566, t567 fast-forwarded to dev (downstream e04711f0,
+  Core 3caf1ff0), installed and rebuilt.
+- Why: every change agreed for this round is merged: t743 (build-scoped site memory, actionable answers with
+  `gate_unsatisfiable`, repair before ending, each site's round-4 cause) and t748 (dialog view from preceding steps,
+  `no_admissible_undo`, reads named by what they read, office C5/C6, the size window). Still in flight and not live
+  fixes: t749 (trace P5, offline reads) and t750 (a behaviour-neutral refactor).
+- Validation: `sync-lanes.sh` -> each tree `behind=0`, `core_behind=0`, `install=0/0 corebuild=0 extbuild=0`,
+  `core-build ... is current with its source`; no Lab process running before launch; the four launches' live guard ->
+  `"state":"admitted"` for rr5-slot-1 to 4.
+- Launch: as before ($0.25 via both settings, headed, `--model-reset-only`, `--replays 1`), fresh workspaces
+  `claude-office-checkout-t563-20261020-r6`, `claude-job-save-t719-20261020-r6`,
+  `claude-social-groups-t566-20261020-r8`, `claude-photo-likes-t567-20261020-r6`.
+- Outcome: Partial (running)
+- Follow-up: verdicts, spend, a debug of every failure with a UI review from screenshots.
 
 ## Open Questions
 
