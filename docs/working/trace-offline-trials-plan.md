@@ -41,9 +41,9 @@ every sweep timeout); t744 sweep-1020b fixes; the root `test` script runs every 
 
 **Daily sweeps:** both 2026-10-20 sweeps are done; the next runs on 2026-10-21.
 
-**Open follow-ups:** all assigned. t747 (running, lead): the content sweep's file-before-row removal, a re-seal job
-for a host's key rotation, storage `gateway-trace/` at its 25-file limit. t748: the never-sent node catalog in the size
-check, the control name lost on a reloading press, and t743's open items. t737 closed the earlier five.
+**Open follow-ups:** t748 (running): the never-sent node catalog in the size check, the control name lost on a
+reloading press, and t743's open items. t747 (merged) closed the storage three; storage `project/` and its `tests/` are
+at their 25-file limit and `content-store.ts` near its size limit, so the next storage change restructures first.
 
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
@@ -320,6 +320,30 @@ Briefs for work in flight or next; finished briefs are archived in
   smaller debug points; Core reads the domain refusal word `incomplete_text` (documented cross-repository contract).
 - Outcome: Accepted
 - Follow-up: sync the lane trees and run rerun round 5; t748.
+
+### 2026-10-20 - t747 merged: storage sweep race, re-seal job, gateway-trace layout
+- Agent: supervisor (t747 lead and workers a, b, c)
+- Changed: Core: (a) every path that removed a content file before its row removes the row first through the
+  pending-removal record, now keyed by file path (migration 0036 rebuilds `object_pending_removals`, every column and
+  row kept, since SQLite cannot change a primary key in place), so a writer racing a sweep or removal never loses its
+  file; (b) a re-seal job (`content-reseal/`) re-seals every sealed item under the host's new current key, resumable
+  and rerunnable; the host makes the new key current, runs the job until it reports complete, and only then drops the
+  old key; providers declare the optional `sealedKeyId` or the job refuses them (`persistence.md`); (c) storage
+  `gateway-trace/` (25 files, at its limit) split into `gateway-trace-schema/`, `gateway-trace-chunk-codec/`,
+  `gateway-trace-chunk-rows/` (6 files left), callers switched, barrel exports unchanged. The supervisor resolved the
+  merge conflict in the generated framework reference by regenerating it from the merged source (t743's core-move
+  and t747's re-seal exports both present).
+- Validation: supervisor's gate on t747 after merging dev: Core `vitest run` over storage, runtime gateway-trace,
+  client-gateway trace and trace-tap, reusable-context service, caches, object-documents-trace, service/projects ->
+  `Test Files 124 passed | 2 skipped (126)`, `Tests 785 passed | 4 skipped (789)`; fluxiq `tsc` 0; Core audit passed
+  (435 warnings, 1152 baselined); `pnpm docs:check` -> framework reference current; Core build 0; core-build gate
+  current; downstream audit passed; extension trace-capture and core-api -> pass 50 fail 0. New SQLite tests carry the
+  real-SQL marker. Lead: worker-run fail-first, (a) 6 of 9 tests failed on the old code, (b) 7 of 9 against a stub.
+- Open: storage `project/` root and its `tests/` are at 25 files each and `content-store.ts` is 596 lines with 28
+  methods (advisory thresholds passed, limits not); the audit refuses the next file there, so the next storage change
+  restructures first. Two-process races and real process kills simulated (two connections, thrown hooks).
+- Outcome: Accepted
+- Follow-up: none beyond the open note.
 
 ## Open Questions
 
