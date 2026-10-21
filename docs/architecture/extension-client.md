@@ -1262,7 +1262,9 @@ how a command's target becomes an element is in
 An in-page action goes to its frame's content script as one `executeAction`
 message, built once in `runActionInFrame`
 ([`runtime/action-runner.ts`](../../apps/extension/src/runtime/action-runner.ts))
-and sent by `sendAction`. When the command also names its child frame by path,
+by the domain's `executeActionMessage`
+([`domain/src/client/execute-action-message.ts`](../../domain/src/client/execute-action-message.ts),
+which the offline snapshot page also uses) and sent by `sendAction`. When the command also names its child frame by path,
 `runActionInFrame` first chooses the frame now at that path
 ([`runtime/frame-address.ts`](../../apps/extension/src/runtime/frame-address.ts)),
 and the message goes to that frame. The message is sent once, with one exception, a
@@ -2650,6 +2652,78 @@ runs, or the chat loses its owner. The draft is kept.
 ### Native structured field typing
 
 Text and autocomplete fields keep per-character synthetic keyboard/input events. Native number, date, time, datetime-local, month and week fields admit the exact requested string through a detached same-type native control before committing one replacement input/change sequence; incomplete prefixes otherwise sanitize to empty. Invalid format, readonly/disabled controls or cancelled keyboard/beforeinput events do not partially clear the field. Production type action still reads the actual value after application handlers and applies existing sensitive-value redaction and submit consequence rules. The original resolved control must remain connected: a detached old value cannot pass readback or authorize a following Enter, and replacements are not silently selected. This is synthetic DOM input, not trusted browser keyboard input; readback follows a bounded 50ms timer observation of queued page handlers and does not certify arbitrary later asynchronous application changes. A requested Enter rechecks actionability after that observation; a field newly covered or disabled is refused without claiming that no typing was dispatched.
+
+## Trace page capture
+
+When Core asks for a command to be traced (a trace request in the command's
+`metadata`, noted by `background/trace-capture/traced-commands.ts` before the
+command runs), the background captures the page once the command's result is
+about to go out. `TracePageCapturer` (`background/trace-capture/page-capturer.ts`)
+sends the tab's top frame `TRACE_PAGE_CAPTURE_MESSAGE`
+(`shared/trace-page-capture.ts`), and the content script answers with
+`captureTracePage` (`content/trace-capture/capture-page.ts`): a DOM
+serialization with live form state, open shadow roots as declarative
+templates, styles inlined, scripts and inline handlers stripped and sensitive
+values withheld, plus the same-origin resources it refers to as their
+original bytes, keyed by the address the browser requests for each. The
+background hashes each part, uploads the digests not yet stored for the
+trace's scope to Core's trace store over HTTP (never the socket), and sets
+only the references on the result's `metadata.trace`
+(`withTraceMetadata`): each artifact's digest, media type, size, role
+(`primary` or `resource`) and source address, and a count of parts it could
+not carry. A capture or upload that fails never fails the command; it is
+counted unavailable. None of it reaches a run, a recording or a model.
+
+### Offline reads over a captured page (tier 2)
+
+Core's trace matcher may ask a reevaluator to answer a changed command from
+what the trace recorded (Core's `docs/architecture/automation-studio/client-gateway.md`,
+"Gateway traces and offline trials"). The web domain's reevaluator is
+`createWebOfflineReadReevaluator(page)`
+([`domain/src/runtime/offline-reads/`](../../domain/src/runtime/offline-reads/reevaluator.ts)),
+which returns Core's `ClientGatewayTraceReevaluator`:
+
+- **Eligibility** (`read-eligibility.ts`): only an action `safe` in the
+  domain's `WEB_AUTOMATION_ACTION_SAFETY` table, and only when every
+  differing field lies under `parameters` or `target`. Anything else, an act
+  included, is `declined` and stays the matcher's gap.
+- **The snapshot** (`recorded-snapshot.ts`): the page captured with the
+  replaced read's own result, read from the references on that recorded
+  result's `metadata.trace`, among the artifacts the request lists. No
+  readable references, not exactly one primary, a primary with no address,
+  or primary bytes the store does not hold is a `snapshot_unavailable` gap.
+  A recorded command that cannot be read back as the same action is an
+  `incomplete_capture` gap.
+- **The control** (D37, `control-reproduced.ts`, `dynamic-content.ts`): the
+  recorded command is replayed over the same snapshot beside the changed
+  read. The changed read is answered only when the control reproduces the
+  recorded result (status, failure code, values or records read, extraction
+  summary counts; never timings, addresses or ids) and the changed read asked
+  the page for no more than the control did (held navigations, scrolls past
+  the end), unless the recorded read proves its list ended there
+  (`recorded-list-ended.ts`). A sandbox breach, an unresolved target, a wait
+  that ran out or a list that never appeared is a `dynamic_content` gap.
+  The answer is built by `gatewayActionResultFromBrowserResult`
+  (`domain/src/client/browser-result-mapping.ts`), the same builder a live
+  answer uses.
+
+The browser half is the `WebSnapshotPage` port
+([`domain/src/runtime/offline-reads/snapshot-page.ts`](../../domain/src/runtime/offline-reads/snapshot-page.ts)):
+`evaluate(snapshot, action)` answers the content code's own result with the
+sandbox's observations (`scriptsRan`, `requestsLeaked`, `navigationsHeld`,
+`requestsRefused`, `scrollsPastEnd`), or why it could not run. Its Playwright
+implementation is `openWebSnapshotPage`
+([`packages/test-runner/src/offline-snapshot-page/`](../../packages/test-runner/src/offline-snapshot-page/index.ts)),
+Chrome by default or Edge by `channel: "msedge"`: each evaluation opens a fresh
+offline browser context, serves the primary at its own address and each
+resource at the address it was carried from with `script-src 'none'`, holds a
+navigation the snapshot cannot answer with `204 No Content`, answers any other
+request with nothing, runs the extension's content code in an isolated world,
+and counts what it saw. `loadExtensionContentCode` reads the extension's
+production bundles from `apps/extension/dist/<target>/` and refuses one older
+than the extension's source. The headed spec is
+`apps/extension/e2e/content/tests/offline-reads/`. Where production hosts the
+sandbox is the trace plan's P6 decision; today only the test runner does.
 
 ## Recording-capture policy
 

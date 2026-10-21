@@ -16,7 +16,8 @@
 //   answers a literal step;
 // - a read written as a recorded read except in its `where` clause is answered
 //   with the recorded resolution and the clause read by the domain's own
-//   condition reader over the recorded read's columns, but only when that
+//   condition reader (`keptWebExtractionConditions`, exported by the domain;
+//   a test may stand one in) over the recorded read's columns, but only when that
 //   reader, run on the recorded read's own clause, gives back exactly what the
 //   build resolved (`verifiedWhere`);
 // - a read written as a recorded read except in its Core-side record
@@ -35,8 +36,8 @@
 // Core's digests of what comes out are compared with the recorded ones by the
 // caller: a seam that answered differently from the build cannot pass that.
 
+import { keptWebExtractionConditions, type WebExtractionConditionColumns } from "@fluxiq-web-extension/domain/node";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import type { CoreAuthoring } from "./core-authoring.js";
 import { differingPaths } from "./differing-paths.js";
 import type { RecordedResolution, UnresolvedStep } from "../types.js";
 
@@ -44,6 +45,11 @@ import type { RecordedResolution, UnresolvedStep } from "../types.js";
 export type ResolutionRequest = { nodeDefinitionId: string; parameters: JsonObject; writtenByModel?: boolean };
 
 export type ResolutionAnswer = { status: "resolved"; parameters: JsonObject } | { status: "unchanged" } | { status: "refused"; issueCodes: string[] };
+
+/** The domain's reading of a read's `where` clause, narrowed to what this reads of it. */
+export type ExtractionConditionsReader = (where: unknown, columns: WebExtractionConditionColumns, path: Array<string | number>) =>
+  | { ok: true; where: readonly unknown[] }
+  | { ok: false; issue?: unknown; path?: unknown };
 
 export type RecordedResolutionBinding = Readonly<{
   binding: { runsNodes: unknown; resolvePlanNodeParameters(input: ResolutionRequest): Promise<ResolutionAnswer> };
@@ -58,13 +64,15 @@ const seamPath = (path: string): boolean => path === WHERE_PATH || path === PROC
 export function recordedResolutionBinding(input: {
   resolutions: readonly RecordedResolution[];
   runsNodes: unknown;
-  conditions: CoreAuthoring["extractionConditions"];
+  /** The condition reader; the domain's own unless a test stands one in. */
+  conditions?: ExtractionConditionsReader;
   canonical: (value: unknown) => string;
 }): RecordedResolutionBinding {
   const { canonical } = input;
+  const conditions: ExtractionConditionsReader = input.conditions ?? keptWebExtractionConditions;
   const missed: UnresolvedStep[] = [];
   const exact = new Map(input.resolutions.map((entry) => [canonical({ node: entry.nodeDefinitionId, written: entry.written }), entry]));
-  const verified = new Set(input.resolutions.filter((entry) => verifiedWhere(entry, input.conditions, canonical)));
+  const verified = new Set(input.resolutions.filter((entry) => verifiedWhere(entry, conditions, canonical)));
   const passesProcess = new Set(input.resolutions.filter((entry) => verifiedProcess(entry, canonical)));
   const answer = (entry: RecordedResolution, resolved: JsonObject, written: JsonObject): ResolutionAnswer =>
     canonical(resolved) === canonical(written) ? { status: "unchanged" } : { status: "resolved", parameters: structuredClone(resolved) };
@@ -88,7 +96,7 @@ export function recordedResolutionBinding(input: {
         const resolved = structuredClone(read.resolved);
         if (differs.includes(WHERE_PATH)) {
           if (!verified.has(read)) return refuse(request, "the recorded read differs only in its where clause, but the domain's condition reader does not give back the recorded read's own clause, so it cannot stand in for the build here");
-          const where = readWhere(request.parameters, read, input.conditions);
+          const where = readWhere(request.parameters, read, conditions);
           if (!where.ok) return refuse(request, `the domain's condition reader refused the where clause (${where.issue})`);
           const list = resolved.extractList as JsonObject;
           if (where.where.length > 0) list.where = where.where as JsonValue;
@@ -123,7 +131,7 @@ function verifiedProcess(entry: RecordedResolution, canonical: (value: unknown) 
 }
 
 /** Whether the domain's reader, given the recorded read's own clause, gives back exactly the clause the build resolved (header). */
-function verifiedWhere(entry: RecordedResolution, conditions: CoreAuthoring["extractionConditions"], canonical: (value: unknown) => string): boolean {
+function verifiedWhere(entry: RecordedResolution, conditions: ExtractionConditionsReader, canonical: (value: unknown) => string): boolean {
   const list = entry.resolved.extractList;
   if (!isObject(list) || !isObject(entry.written.extractList)) return false;
   const read = readWhere(entry.written, entry, conditions);
@@ -137,15 +145,15 @@ function verifiedWhere(entry: RecordedResolution, conditions: CoreAuthoring["ext
  * those keys were written from (each written field value, a detected column's
  * name, standing for the column the build resolved it to).
  */
-function readWhere(written: JsonObject, recorded: RecordedResolution, conditions: CoreAuthoring["extractionConditions"]): ReturnType<CoreAuthoring["extractionConditions"]> {
+function readWhere(written: JsonObject, recorded: RecordedResolution, conditions: ExtractionConditionsReader): ReturnType<ExtractionConditionsReader> {
   const writtenList = isObject(written.extractList) ? written.extractList : {};
   const resolvedList = isObject(recorded.resolved.extractList) ? recorded.resolved.extractList : {};
   const kept = isObject(resolvedList.fields) ? resolvedList.fields : {};
-  const detected: Record<string, unknown> = {};
+  const detected: WebExtractionConditionColumns["detected"] = {};
   const writtenFields = isObject(writtenList.fields) ? writtenList.fields : {};
-  for (const [key, name] of Object.entries(writtenFields)) if (typeof name === "string" && kept[key] !== undefined) detected[name] = kept[key];
+  for (const [key, name] of Object.entries(writtenFields)) if (typeof name === "string" && kept[key] !== undefined) detected[name] = kept[key] as WebExtractionConditionColumns["detected"][string];
   if (writtenList.where === undefined) return { ok: true, where: [] };
-  return conditions(writtenList.where, { detected, kept: kept as Record<string, unknown> }, ["where"]);
+  return conditions(writtenList.where, { detected, kept: kept as WebExtractionConditionColumns["kept"] }, ["where"]);
 }
 
 /** Whether any value names a build handle: a `{handle}` reference, or a target or extraction handle written bare. */

@@ -74,8 +74,14 @@ export {
   type WebRepairableParameter,
   type WebRepairableParameterRole
 } from "./repairable-parameters";
+// The handle issues a plan node's resolution reports, and the reader of an
+// extraction step's `where` clause, which a reader of a recorded build calls to
+// read a clause exactly as the build read it.
 export {
+  keptWebExtractionConditions,
   WEB_PLAN_HANDLE_ISSUE_CODES,
+  type WebExtractionConditionColumns,
+  type WebExtractionConditions,
   type WebPlanHandleIssueCode,
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
