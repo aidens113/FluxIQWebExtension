@@ -170,6 +170,9 @@ test("installed gateway project build reads a value its own earlier step changed
     expect(tests).toHaveLength(1);
     expect(trialCode(tested)).toBe("yes");
     expect(readFeedback?.status).toBe("succeeded");
+    // The read is named by the words it read in this trial, never the words captured before the change (t748).
+    expect(readFeedback?.control).toBe(chosenWords);
+    expect(readFeedback?.control).not.toBe(originalWords);
     // Every read the gateway sent the extension carried the mark, and the trial's read returned the new line, not the old one.
     expect(dispatchedReads.length).toBeGreaterThanOrEqual(1);
     for (const entry of dispatchedReads) expect(entry.readsWords).toBe(true);
