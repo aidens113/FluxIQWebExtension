@@ -58,14 +58,14 @@ its successful retry; a generic hint fixed that, proven through the installed ga
 judged the whole run unverified, so acceptance is held. No unchanged retry.
 
 **Now (2026-10-20):** the four repaired tasks (office checkout, job save, photo newest likes, social group posts)
-were rerun in rounds 2-4 and went 0 of 12 ($0.317 in round 4); every cause was a product defect, each fixed (t738,
-t741, t743, ledgers in [trace-offline-trials-plan.md](./trace-offline-trials-plan.md)). t743 made round 4's three
-shared weaknesses structural (build-scoped site memory, actionable answers with `gate_unsatisfiable`, repair before
-ending). Round 5 launched on 2026-10-20 after t748 merged (t743's open items).
+were rerun in rounds 1-5 and passed none; every debug found the task and fixture sound and the build doing the task.
+Three of round 5's failures are the site-reset bookkeeping (the class behind most of rounds 2-4), one is judge
+consistency and read speed. Structural units t751 (reset by observed state), t753 (judge consistency, read speed) and
+t752 (chat and overlay polish) run in parallel; ledgers in [trace-offline-trials-plan.md](./trace-offline-trials-plan.md).
 
-**Next, in order:** t748 merges; sync the four lane trees to `dev` (both repositories, installed, Core and extension
-rebuilt; the Lab refuses stale trees); round 5 on fresh workspaces, supervised at $0.25 each via both settings; debug
-every failure; then the owed reruns (job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
+**Next, in order:** t751 and t753 merge with headed provider-free reproductions of every round 2-5 shape passing;
+sync the lane trees; round 6 on fresh workspaces, supervised at $0.25 each via both settings; debug every failure;
+then the owed reruns (job halvard-labs-office-jobs, social hide-suggested-posts). No unchanged retries.
 
 **Elsewhere:** the hosted-production plan (Core `docs/working/hosted-production-plan.md`, paired here) opens with
 the user's later directions still to fold in: the website repository https://github.com/aidens113/FluxIQWebsite,
@@ -585,6 +585,39 @@ The 2026-10-18 entries are archived in
   `claude-social-groups-t566-20261020-r8`, `claude-photo-likes-t567-20261020-r6`.
 - Outcome: Partial (running)
 - Follow-up: verdicts, spend, a debug of every failure with a UI review from screenshots.
+
+### 2026-10-20 - Rerun round 5: 0 of 4; the failures are framework defects in two subsystems
+- Agent: supervisor (debuggers debug-rr5-job, -office, -photo, -social)
+- Changed: nothing in the repositories; four debug notes copied to dev
+  (`language-driven-flow-loop-plan/debugs/run-mvhib*.md`).
+- Validation: spend-ledger records: job run-mvhibk0z-1950493f failed $0.078887292 (117 steps); office
+  run-mvhibit5-e1d3a4f3 failed $0.143394936 (214 steps); photo run-mvhibis0-b536958b failed $0.116124336 (168 steps);
+  social run-mvhibis1-d570b37d failed $0.160457652. Round total $0.498864216, every build under $0.25, no balance
+  error. Every debug found the task and fixture sound.
+- Job (furthest yet: the save subflow's trial saved exactly the oracle's three rows, judged yes 4 times): the
+  witness check runs only for exploration presses (`create-baselines.ts`/`reset-witness.ts` via
+  `action-permissions.ts`); a save written into the Flow without an exploration press reached its trial unchecked, its
+  saves sealed the baselines and every later trial was refused (`gate_unsatisfiable`); the setup rerun
+  (`phase-start.ts`) repeated the save on a site still holding it, which toggled the saves off.
+- Office (every fact explored live, one subflow judged yes): the checkout reverted a checkbox itself; the tracker
+  (`control-tracker.ts` `standing`) still counted it as the build's change while `undo-admission.ts` `alreadyBack`
+  refused the press back, a deadlock; Buy Now presses that navigate away had nothing to settle against.
+- Photo (reached a judged whole run, correctly judged no): t741's listing-order rule cannot be met in the web domain
+  (the domain moves `extractList.sort`/`maxItems` into run-end processing, which the rule refuses), so the brief
+  cycled to the repeat guard; and a like recorded without an address let the reset take a control's starting state
+  from after the build's own act and re-like a post the build should not have touched (inferred from code).
+- Social (no lasting acts; the second whole-run test returned exactly the oracle's three rows): the judge said no,
+  contradicting the previous judge's followed advice and misreading a condition; an unconditioned "See more" loop made
+  each test about 7.5 minutes; repair seeded from the worse test; the 25-minute limit ended it.
+- UI (all four): internal names and a CSS class shown to the person, an untick worded as a tick, a reset's undo shown
+  as a user act, contradictory and repeated endings without a composer, a false model-key notice, and an overlay that
+  jumps position, covers headers and repeats its failure text.
+- Conclusion: three failures are the reset bookkeeping (the same class as rounds 2-4, each round's fixes exposing the
+  next hole), one is judge consistency and read speed (judge errors also recur). Structural units: t751 reset by
+  observed state, t753 judge consistency and read speed, t752 chat and overlay polish. No paid run until t751's and
+  t753's headed provider-free reproductions pass.
+- Outcome: Failed (0 of 4)
+- Follow-up: t751, t752, t753; then round 6.
 
 ## Open Questions
 

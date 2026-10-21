@@ -29,11 +29,12 @@ intake, strict matching, virtual time, explicit gaps; round 4's social trials re
 exactly. **Next: t749 (P5 offline reads tier 2)**, which also owns P4's corrected-candidate gate item and replaces the
 experiment's deep loads of Core internals with a public seam plus an audit rule. Then P6 build-loop integration, P7.
 
-**Breadth reruns: rounds 2-4 passed 0 of 12; every cause was a product defect, each fixed** (t738, t741, t743, t748).
-t743 made round 4's three shared weaknesses structural; t748 closed its open items. **Next: round 5**: sync the four
-lane trees (t563, t719, t566, t567) and run the four tasks on fresh workspaces, supervised at $0.25 each via both
-`FLUXIQ_LLM_RUN_COST_CEILING_USD` and `--llm-max-cost-usd`, each debugged with a UI review from screenshots. t750 (a
-behaviour-neutral refactor) runs beside it.
+**Breadth reruns: rounds 1-5 passed 0 of the four repaired tasks; all framework defects.** Round 5 (0 of 4, $0.499):
+job, office and photo failed on the site-reset bookkeeping (a lasting step reaching a trial unchecked, a toggle the
+site reverted itself deadlocking settle and undo, a reset taking its starting state after the build's own act), social
+on judge consistency (an exact answer judged no) and read speed. **Running:** t751 reset by observed state
+(lead-xhigh), t753 judge consistency and read speed (lead-xhigh), t752 chat and overlay polish (lead). Round 6 only
+after t751's and t753's headed provider-free reproductions pass. t750 (merged) single-sourced the undo rules.
 
 **Also merged 2026-10-19/20:** t724 L1 reset settlement; t730 browser specs on the ten realistic scenarios only;
 t731-t733, t735, t737; t739 photo-social fixture and build-cache fingerprint; t740 the real-SQL test group (removed
@@ -73,6 +74,95 @@ Briefs for work in flight or next; finished briefs are archived in
 - Dispatch workers (`worker-low`, `worker`, `worker-high`) partitioned by file, in the foreground when you need the
   result, and verify every worker claim yourself.
 - Final message: the return contract (at most 12 lines: Outcome, Changed, Validation, Not verified, Report, Notes).
+
+### Brief: t751-reset-by-observed-state (lead-xhigh, Core site reset; domain and extension where a fix needs them)
+- Why: rerun rounds 1-5 passed 0 of the lasting-act tasks. Every round's debugs found the tasks and fixtures sound and
+  the builds doing the task (round 5: job's save trial judged yes 4 times; office explored every fact; photo reached a
+  judged whole run); what failed was the reset bookkeeping (witnesses, adoption, settled/unsettleable, already-back)
+  checked at different doors. Each round's fixes exposed the next hole (t743's narrower adoption exposed round 5's job
+  and office). A recurring class gets a structural fix, not another patch.
+- Rule to satisfy (user, 2026-10-12): before every trial and the judged whole run the site returns to the state the
+  build started from, undoing exactly the build's own lasting acts and never touching what existed before.
+- Required design:
+  - R1 Baseline: each control or list a build act can touch is read before the build's first lasting act there, never
+    from evidence after a build act. An act with no target identity ends honestly with its condition named.
+  - R2 Settlement by observed state: an act is settled when fresh reads of its witness show the baseline, whatever put
+    it back (the build's undo or the site itself). A refusal like "already back" never leaves an act on the to-undo list.
+  - R3 One admission point at every door a lasting act can land through (exploration, subflow trial, candidate trial,
+    entry or phase preparation, whole run): a lasting step needs a readable witness first; a trial holding an
+    unwitnessed lasting step is refused unrun, before baselines seal, naming the condition and a call that meets it.
+  - R4 Setup reruns (`phase-start.ts` explore) never repeat the build's lasting acts while they are on the site.
+  - R5 Contract: every refusal a builder can meet names a call the domain can carry out; a test fails the build when a
+    rule cannot be met (domain-declared capabilities, e.g. rows in page order). Fix the listing-order rule under it.
+  - R6 The new model replaces the rule pile; delete what it replaces (no dead paths), callers switched in the same unit.
+- Evidence (read the debug notes, lane trees `C:/Users/osrs_/FluxStuff/fxwork/{t563,t719,t566,t567}/!FluxIQWebExtension/
+  docs/working/language-driven-flow-loop-plan/debugs/`): round 5 `run-mvhibk0z-1950493f` (job), `run-mvhibit5-e1d3a4f3`
+  (office), `run-mvhibis0-b536958b` (photo), `run-mvhibis1-d570b37d` (social); rounds 2-4 `run-mvgf*`, `run-mvgo*`,
+  `run-mvgv*`, `run-mvgw*` (on dev).
+- Acceptance before any paid run: the 12 `e2e/site-reset` specs pass, plus new headed provider-free specs on the
+  realistic scenarios, each failing on current `dev` first: a lasting step never pressed in exploration; a toggle the
+  site reverts itself; a dialog act with no address that must not touch pre-existing state; a press that navigates away;
+  a rows-in-page-order limit with a lasting press; and the social round-5 shape if it is a reset or rule-contract cause.
+- Not: UI wording owned by t752 (check its status before editing shared files); trace plan files owned by t749.
+- Validation: tests first; tests beside each change; Core prompt contract tests when model-facing text changes (no
+  realistic task mirrored); touched typechecks; both audits.
+- Report: `docs/working/trace-offline-trials-plan/reports/t751-reset-by-observed-state.md` in the downstream tree.
+
+### Brief: t753-judge-consistency-and-read-speed (lead-xhigh, Core judging and the web read)
+- Why: round 5's social run (`run-mvhibis1-d570b37d`, debug note in `C:/Users/osrs_/FluxStuff/fxwork/t566/
+  !FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/`) returned exactly the oracle's rows at its
+  second whole-run test and was judged no: the judge objected to what the previous judge had advised and made a false
+  claim about a condition. Judge errors that lose a correct answer have recurred (rerun round 1, t725, t741, now), so
+  this is a structural fix, not new wording.
+- Fix, each with a test that fails first:
+  - Judge consistency: every judge sees the earlier judges' advice for this build and whether it was followed; a no
+    that contradicts followed advice, or claims a condition is wrong, is checked by Core against the stored rows and
+    conditions before it counts (extend t659's "claims weighed by what Core measured"); an unsupported no is not a no.
+    For a set the request defines by the person's relation to it, guidance uses a sign each row shows (generic wording
+    only, never this task's site, groups or answer).
+  - Judge evidence: a loop-source read's rows are working rows, not the answer (`summary-with-also-in-result.ts`,
+    `summary-reads.ts`), so the judge is never told the answer must exclude them.
+  - Read speed: `extract_list` expands per-row "See more" itself on the rows its conditions keep (extension
+    `list-reader.ts`, `field-reader.ts`, `text-disclosure.ts`, the domain extractList contract, `next-sentence.ts`);
+    if that cannot land cleanly, a submit check that a loop's read and the later read use the same conditions.
+  - Structure detection samples more than the first five rows, so a per-row control (a membership button) becomes a
+    column when rows differ.
+  - Repair seeding: among tests with the same verdict, `closestTrial` takes the latest and counts only the answer set
+    (`project-agents/contracts/builder-return.ts`).
+- Not: reset files (t751) or chat/overlay wording (t752). `builder-return.ts` and supervisor files may be shared with
+  t751: check `git -C C:/Users/osrs_/FluxStuff/fxwork/t751/<repo> status --short` and keep shared files serial.
+- Acceptance: a headed provider-free spec on social-network-feed reproducing the shape (a correct answer judged with
+  a contradicting no; a long "See more" list) fails on current `dev` and passes after; prompt contract tests pass.
+- Validation: tests first; tests beside each change; touched typechecks; both audits.
+- Report: `docs/working/trace-offline-trials-plan/reports/t753-judge-consistency-and-read-speed.md` downstream.
+
+### Brief: t752-chat-and-overlay-polish (lead, extension UI and Core activity wording)
+- Why: round 5's UI reviews (screenshots under each run's `.ui-review.local/`, findings in the four round-5 debug notes
+  named in t751's brief) show the person internal or wrong text and an unstable overlay. The user judges a run by
+  watching it; a ChatGPT-quality chat and a stable, visible overlay are part of passing.
+- Fix (each with a test that fails first):
+  - Names: a CSS class shown as a control's name ("css-..."); internal terms in chat and overlay ("Submit subflow",
+    "Test subflow", the plan's "Main" router); post pages labelled with the site's name instead of the page.
+  - Truth: an untick worded as "Ticking"/"set checked" (domain `node-run/run.ts`, Core `activity/wording/action.ts`); a
+    reset's undo shown as an ordinary user act ("Click · Like Done"); a setup rerun labelled "Testing your Flow"; a
+    false "needs a model key" notice at start.
+  - Endings: one verdict repeated, contradictory sentences ("no change it knows of" beside "left changes that can't
+    be checked"), a dense paragraph without the supervisor's reason, "used Unlike" for a leftover act, and no composer
+    after a failed build. One plain ending: what happened, why, what is left on the site, what the person can do next.
+  - Overlay: stuttered text ("Build failed | Build failed ... could not finish ... could not finish"); jumps between
+    screen positions and covers the site's header or logo; flicker. One stable position that never covers page
+    content the person needs, text changes only when the state changes.
+  - Repeated identical cards in the chat.
+- Mechanical guard: a test over Core's activity wording and the extension's chat and overlay text that fails on
+  internal terms (subflow, router, candidate, brief, harness, node keys) and on CSS-class-like or generated names, so
+  the class of defect cannot return silently.
+- Owns: extension side panel / popup chat and the on-page overlay, Core `runtime/activity/**` wording, the supervisor's
+  ending text, domain node-run wording. Coordinate: t751 owns reset data and may touch `project-agents/supervisor/**`;
+  check `git -C C:/Users/osrs_/FluxStuff/fxwork/t751/<repo> status --short` and keep the two serial on any shared file.
+- Validation: tests beside each change; touched typechecks; both audits; Core prompt contract tests if model-facing
+  text changes; headed provider-free screenshots on two realistic scenarios showing the chat, overlay and an ending,
+  looked at and described in the report (Chrome; Firefox popup alignment where the contract is shared).
+- Report: `docs/working/trace-offline-trials-plan/reports/t752-chat-and-overlay-polish.md` in the downstream tree.
 
 ### Brief: t749-offline-reads-tier2 (lane T lead, trace plan P5)
 - Plan of record: Core `docs/working/trace-offline-trials-plan.md` P5 (tier 2): a changed read or target is evaluated
