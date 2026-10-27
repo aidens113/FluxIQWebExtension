@@ -163,8 +163,9 @@ run's included.
 A target that is present but not shown can trigger a scroll before each in-page
 retry (`content/action-runtime/reveal/`). For a target with no box, the scroll
 aims at the end of its nearest rendered ancestor; for a boxed target outside
-the viewport, it aims at the target. Moving the page uses waits of 400, 800 and
-1600 ms within the existing attempt count and command deadline. Inert targets
+the viewport, it aims at the target. Moving the page uses waits of 400, 1000 and
+2400 ms within the existing attempt count and command deadline, long enough for a
+page that answers the scroll with a short rate limit and retries by itself (t759). Inert targets
 and closed dialogs, popovers, menus or fixed layers are left to their opening
 controls. The result records the scroll count and confirms a reveal only when
 the action succeeds; a target disappearing after scrolling is not a reveal.

@@ -89,11 +89,23 @@ export const RECOVERY_DISABLED_BACKOFF_MS: readonly number[] = Object.freeze([1_
  * long an attempt waits and never how many attempts there are: the first
  * attempt and three retries. Live, a team grid that loads eight cards per
  * scroll behind a 450 ms skeleton, and refuses two requests closer than 900 ms,
- * unhid its "Show more people" after two more loads; 400, 800 and 1600 ms --
- * 2.8 s, inside `RECOVERY_BUDGET_MS` -- leave each load room to land and the
- * next scroll room to be allowed.
+ * unhid its "Show more people" after two more loads.
+ *
+ * **Long enough to wait out the page's own retry.** A scroll that wakes a
+ * loader inside the server's window is refused with a `429`, and the page says
+ * so ("Trying again in 2 seconds") and asks again on its own: a person waits it
+ * out and then sees the control. The runtime's scroll is that scroll as often
+ * as not -- the grid's script also asks for the next batch the moment one lands
+ * with its end still in view -- so on company-website's team page the button
+ * appeared 3.0 to 3.1 s after the first scroll in half the runs (t759). The
+ * 2.8 s ladder this replaced (400, 800, 1600 ms) gave up 30 to 50 ms short of
+ * it, or after it, by chance, with two seconds of `RECOVERY_BUDGET_MS` unspent.
+ * 400, 1000 and 2400 ms -- 3.8 s, the target ladder's length, since what is
+ * waited for is a target the page has not drawn yet -- reach one load, a short
+ * `Retry-After` and the retried load's render, and keep the last attempt about
+ * a second inside the budget for the verb itself.
  */
-export const RECOVERY_REVEAL_BACKOFF_MS: readonly number[] = Object.freeze([400, 800, 1_600]);
+export const RECOVERY_REVEAL_BACKOFF_MS: readonly number[] = Object.freeze([400, 1_000, 2_400]);
 
 /** The whole defence's wall-clock budget, measured from the command's start. */
 export const RECOVERY_BUDGET_MS = 5_000;
