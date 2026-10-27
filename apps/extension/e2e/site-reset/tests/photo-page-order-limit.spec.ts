@@ -1,7 +1,7 @@
 import type { JsonObject } from "fluxiq/core";
 import { STUDIO, gridFor } from "../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
 import { expect, test } from "../../fixtures/extension-context";
-import { bindScriptedProvider, keepDiagnostic, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { bindScriptedProvider, keepDiagnostic, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer, type ScriptedVerification } from "../index";
 import { PHOTO_ROOT, bindDetectingRuntime, gridCellHandle, gridColumns, issuesIn, likedPosts, openPhotoProfile, postActionHandle } from "../photo-build";
 
 const TASK = "Like the studio's three most recent posts.";
@@ -138,7 +138,21 @@ test("installed gateway project build submits a where-filtered read of three wal
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 24, builder });
+    // The judge's yes accounts for what the read's condition left out as Core requires of any yes (t515, t574, t599): each
+    // condition Core names (`condition N`) is named in a sentence quoting the request's own words for why a pinned tile is
+    // not asked for, "three most recent posts", and so is any row it shows by id (`[row XXXXXX]`; not the example id in
+    // its instructions). Core decides the verdict from that reply; nothing here passes the trial for it.
+    const verify = (shown: string): ScriptedVerification => {
+      const conditions = [...new Set([...shown.matchAll(/condition ([0-9]+) \(/gu)].map((match) => match[1]!))];
+      const rows = [...new Set([...shown.matchAll(/(?<!as in )\[row ([A-Z2-9]{6})\]/gu)].map((match) => match[1]!))];
+      const reasons = [
+        ...conditions.map((number) => `The read's condition ${number} leaves the pinned tiles out: they are older posts, not among the "three most recent posts".`),
+        ...(rows.length ? [`Rows ${rows.join(", ")} are left out: they are pinned tiles, older posts that are not among the "three most recent posts".`] : [])
+      ];
+      const words = ["The trial liked the three newest posts and no pinned one.", ...reasons].join(" ");
+      return { summary: words, diagnosis: { answersRequest: "yes", observed: words } };
+    };
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 24, builder, verify });
     const { ending, failure } = await build.run();
     const submission = answers["submit"] ?? {};
     const trial = answers["trial"];
