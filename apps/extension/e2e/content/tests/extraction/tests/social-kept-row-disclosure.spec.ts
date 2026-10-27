@@ -109,11 +109,15 @@ test("a read whose condition rejects collapsed long posts returns the kept short
     expect(await stillCollapsed()).toEqual(collapsedBefore);
   }
 
-  // 2. The condition keeps a collapsed long post too: still refused, naming
-  // the field, and the page is left as it was.
+  // 2. The condition keeps a collapsed long post too: a read that does not
+  // disclose (`discloseText: false`) still refuses it, naming the field, and
+  // leaves the page as it was. Since t752's unit C2 (5f0b26ef, 2026-10-20) a
+  // read discloses by default and presses the kept post's own See more itself
+  // (`social-read-discloses-kept.spec.ts`), so the refusal is asserted for the
+  // read that opts out.
   const long = collapsed[0]!;
   const withLong = read([...kept, long.position!], "field");
-  const refused = await harness.runAction({ commandId: "read-with-long", actionType: "web.dom.extract_list", extractList: withLong });
+  const refused = await harness.runAction({ commandId: "read-with-long", actionType: "web.dom.extract_list", extractList: { ...withLong, discloseText: false } });
   expect(refused.status).toBe("failed");
   expect(refused.failure?.code).toBe("web.validation.output_not_observed");
   expect(refused.failure?.actual).toMatch(/incomplete_text: field description contains unexpanded text/u);
@@ -129,7 +133,7 @@ test("a read whose condition rejects collapsed long posts returns the kept short
   expect(pressed.status, JSON.stringify(pressed.failure)).toBe("succeeded");
   await expect(longBody.getByRole("button", { name: "See more", exact: true })).toHaveCount(0);
   expect(await stillCollapsed()).toEqual(collapsedBefore.filter((position) => position !== long.position));
-  const complete = await harness.runAction({ commandId: "read-with-long-expanded", actionType: "web.dom.extract_list", extractList: withLong });
+  const complete = await harness.runAction({ commandId: "read-with-long-expanded", actionType: "web.dom.extract_list", extractList: { ...withLong, discloseText: false } });
   expect(complete.status, JSON.stringify(complete.failure)).toBe("succeeded");
   expect(complete.validation.status).toBe("passed");
   const records = complete.extracted as Array<{ position: string; post: string; description: string }>;
