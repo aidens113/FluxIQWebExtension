@@ -276,7 +276,7 @@ function revisionsOf(adaptation: Record<string, unknown> | undefined): Adaptatio
  * way `readFlowNodes` reads them. A payload with no Flow throws: a missing
  * document is never hashed as an empty one.
  */
-async function readFlowState(control: RepairApplicationControl, scope: { projectId: string; flowId: string }, bounds: FluxIQHttpOptions): Promise<RepairFlowState> {
+export async function readFlowState(control: RepairApplicationControl, scope: { projectId: string; flowId: string }, bounds: FluxIQHttpOptions): Promise<RepairFlowState> {
   const listed = asRecord(await control.automationStudioCall("list-flow-subflows", { projectId: scope.projectId, flowId: scope.flowId, limit: 100, offset: 0 }, bounds));
   const paged = asRecord(listed?.page)?.subflows;
   const subflows: unknown[] = Array.isArray(listed?.subflows) ? listed.subflows : Array.isArray(paged) ? paged : [];
