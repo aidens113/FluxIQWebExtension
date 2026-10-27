@@ -648,6 +648,31 @@ The 2026-10-18 entries are archived in
 - Outcome: Partial; fixes in flight, no paid run until t751 finishes.
 - Follow-up: integrate t755-t757 as each passes; round 6 after t751; then the owed reruns.
 
+### 2026-10-27 - t756 and t757 merged; t759 opened
+- Agent: supervisor; workers t756-covered-target, t757-judge-requested-output, t759 (Sonnet, escalated once to Opus)
+- Changed: t756 (downstream `3f70a082`): a press landing inside the target's own control counts (photo grid counts
+  layer). t757 (downstream `dc0b2d52`, Core `20c54222`): optional task-spec `answer: { kind: "records", columns }`;
+  a yes over no records for such a part becomes unsure (`core.result.requested_output_missing`); the judge summary
+  lists returned values. t757 is inert until wired.
+- Decisions (supervisor): a changed `answer` counts as a part change in amendments; a one-page "no results" read stays
+  unsure (strict; never accepts a wrong empty answer); the runtime check gets the declaration persisted with the
+  promoted Flow, not a port to the build record.
+- Owed after t751 (t751's files): `project-agents/supervisor/tools.ts` part schema `answer`;
+  `project-agents/supervisor/guidance.ts` one generic sentence (prompt-contract tests); `service/project-build/
+  task-checklist.ts` `checked()` copies `answer`; persist the declaration with the promoted Flow for `run-outcome.ts`.
+  Screens 2-3 of `august-over-1300` (a "loader asked to wait" list fact) moved into t755.
+- Validation: t756 `pnpm test:content -- e2e/content/tests/actionability/tests/grid-cell-overlay.spec.ts --headed
+  --workers=1` -> "3 passed (1.4m)" (supervisor rerun); unit "# pass 6 / # fail 0"; extension tsc exit 0; finish audit
+  passed. t757 Core `pnpm test` over result-verification and project-agents/contracts -> "Test Files 149 passed (149)",
+  "Tests 1258 passed (1258)" and "1 passed (1)"/"3 passed (3)" (supervisor rerun); Core finish contracts "Tests 68
+  passed (68)"; Core `pnpm structure:check` "passed (443 warning(s), 1152 baselined)".
+- Pre-existing failures on dev, to fix forward: Core `recovery/refuted-result/tests/brief-checked.test.ts`; Core
+  `project-build-facade.test.ts` and `project-build-time-limit.test.ts` (fixed on the t751 branch, `fb81dc05`);
+  downstream `wake-press-cover.spec.ts:71` and `company-website-team-more.spec.ts:57` (t759: the first is a regression
+  from `296b710c`, fixed; the second still fails 2 of 2 headed runs, escalated).
+- Outcome: Accepted (t756, t757); t759 Partial.
+- Follow-up: t757 wiring after t751; t759 escalation; brief-checked.
+
 ## Open Questions
 
 None requiring user input.
