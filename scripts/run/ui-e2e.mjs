@@ -7,6 +7,12 @@
 import path from "node:path";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 
+if (process.argv.includes("--help")) {
+  await Promise.all([import("@fluxiq-web-extension/test-runner/target-config"), import("@fluxiq-web-extension/test-runner/ui-e2e")]);
+  process.stdout.write("Usage: node scripts/run/ui-e2e.mjs [command arguments]\n--help  Show help without building, opening a browser or changing workspace data.\n");
+  process.exit(0);
+}
+
 const repositoryRoot = path.resolve(process.env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
 const names = ["FLUXIQ_WEB_EXTENSION_ROOT", "FLUXIQ_TEST_RUNS_DIR", "FLUXIQ_CORE_ROOT", "FLUXIQ_DEMO_EXTENSION_DIR", "FLUXIQ_DEMO_HEADLESS"];
 
@@ -16,8 +22,8 @@ for (const key of Object.keys(process.env)) if (!(key in scrubbed)) delete proce
 const began = Date.now();
 try {
   const [{ loadAllowlistedTestEnvironment }, suite] = await Promise.all([
-    import("../../packages/test-runner/dist/target-config.js"),
-    import("../../packages/test-runner/dist/ui-e2e/index.js"),
+    import("@fluxiq-web-extension/test-runner/target-config"),
+    import("@fluxiq-web-extension/test-runner/ui-e2e"),
   ]);
   const args = suite.parseUiE2eArguments(process.argv.slice(2));
   // Before a workspace is prepared or anything starts: browser test runs open only the ten realistic scenarios.

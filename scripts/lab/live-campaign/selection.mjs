@@ -1,4 +1,4 @@
-import { isRealisticScenario, unrealisticScenarioRefusal } from "../../../packages/test-runner/src/realistic-scenarios/index.ts";
+import { isRealisticScenario, unrealisticScenarioRefusal } from "@fluxiq-web-extension/test-runner/realistic-scenarios";
 
 /**
  * The tasks a campaign runs, in catalog order for --kind and --all and in the

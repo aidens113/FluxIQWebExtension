@@ -560,7 +560,7 @@ Their briefs are written here before dispatch, against the code as it then stand
 
 ## Open Questions
 
-- User: approve the MVP cut (R1-R4b before the freeze, R5a in hardening, R4c/R5b after the RC) or move the whole
+- User: approve the MVP cut (R1-R4b and R5a before the 11-10 deadline, R4c/R5b after the RC) or move the whole
   effort after the RC so lanes A-D and adaptation keep the remaining weeks.
 - User: the paid R4a proof (one creation on a realistic scenario with an interruption variant) and the paid R4b proof
   (one run on a drift variant that is fixed in the run and carries on), each when its unit is ready.

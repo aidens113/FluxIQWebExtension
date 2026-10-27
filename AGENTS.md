@@ -157,13 +157,15 @@ needs verifying, so reads are the cost: route discovery through a worker or
 `Explore` and read the conclusion. Briefs follow the protocol format, at most
 40 lines; the worker's final message follows the protocol's return contract.
 
-Every agent runs Opus 5.5. The supervisor works at high or extra-high effort
-depending on the task. Lane leads are dispatched as `lead` (high) or
-`lead-xhigh` (the live loop, core architecture); workers as `worker-low`
-(mechanical edits, running a named command), `worker` (medium, the default)
-or `worker-high` (root-cause debugging, cross-module design), chosen per
-brief. A lead dispatches a worker in the foreground when it needs the result
-to continue, because a background worker's completion does not wake it.
+Model routing follows the global MeritClaude rules: each piece of work goes
+to the cheapest tier that will reliably finish it. `Explore` with
+`model: "haiku"` for search; `worker-light` (Haiku) for running a named
+command or a fully specified edit; `worker` (Sonnet, the default) for bounded
+implementation from a clear brief; `worker-heavy` (Opus) for root-cause
+debugging, cross-module design, and the live build loop or Core architecture;
+`supervisor` (Opus) to own a whole lane with its own team. A supervisor
+dispatches a worker in the foreground when it needs the result to continue,
+because a background worker's completion does not wake it.
 
 ## Repository Boundaries
 
@@ -289,6 +291,11 @@ worker: workers are ephemeral, several may serve one brief, and a re-dispatched
 worker is still the same unit of work. Agent identity travels in commit
 trailers instead. Full design and the measurements behind it are in
 [the agent git workflow plan](docs/working/agent-git-workflow-plan.md).
+
+MeritClaude's automatic git management applies here only as this file allows:
+branches go through `pnpm task`, never MeritClaude's `branch.mjs`, and nothing
+here runs `branch.mjs promote` or otherwise moves `main` (see Committing And
+Pushing).
 
 The senior supervisor agent picks the tier when it writes the brief:
 

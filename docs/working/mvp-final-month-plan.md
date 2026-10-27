@@ -48,7 +48,7 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 **Continuation recovered October 11 (Los Angeles).** Follow
 [live-testing handoff and execution](./live-testing-handoff-audit-2026-10-11.md), which owns current briefs and validation.
 The older October 9 handoff and ledger are retained in the archive linked below. Deadline November 10;
-feature freeze October 29. No user panel has been started or managed by this continuation.
+there is no feature freeze (user, 2026-10-27). No user panel has been started or managed by this continuation.
 
 **Qualified: lanes A, B, C and D** (2026-10-13; B and D in round 12, C in round 16; details and run ids in the live-testing audit's Current State). Lane A: Same identified product pair for two consecutive candidate creations,
 `run-mv4jihmm-af72a1e1` ($0.03038) and `run-mv4jvo7k-612f0bbb` ($0.04783), both exact oracles 4/4.
@@ -137,7 +137,7 @@ or profile reset is needed to resume. Preserve the existing user edit to `.cline
 **Re-baselined 2026-10-07.** P0 is done. The P1/P2 slice was not built: Codex built the
 production-integrity chain instead (parked, see Current State). Targets now: t338 and a
 live lane A baseline October 7-8; the candidate slice October 8-12; A-D rounds from
-October 12. Freeze October 29 and the November 10 deadline are unchanged. If no lane has
+October 12. The November 10 deadline is unchanged (no feature freeze). If no lane has
 passed twice by October 18, bring a scope proposal rather than relaxing the gates.
 
 Implementation instructions, file seams, requirements/evidence contracts, negative

@@ -1,7 +1,7 @@
 # Traces And Offline Trials (Extension Side)
 
-Status: Active
-Status detail: Boundary move plan, trace P0-P5, UI t753 and judge/read t752 merged; reset integration before P6 and breadth round 6.
+Status: Paused
+Status detail: User stopped all work; t753/t752 pushed, t754 downstream-only local merge, t751 final corrections preserved.
 Created: 2026-10-19
 Last updated: 2026-10-21
 Owner: Senior supervisor agent
@@ -13,10 +13,15 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 
 ## Current State
 
-**Recovery active (2026-10-20): Codex is continuing the three preserved task worktrees.** Operating detail (in-flight
-units t751, t752, t753 and how to resume them, the exact gate and merge steps, how to sync lanes and launch round 6,
-and the ordered next steps) is in [reports/handoff-2026-10-20.md](./trace-offline-trials-plan/reports/handoff-2026-10-20.md).
-Read it after this section.
+**RESUMED (user, 2026-10-27): "get this MVP done"; there is no feature freeze.** Follow the resume sequence in
+[the Codex handoff](./trace-offline-trials-plan/reports/handoff-2026-10-21-codex.md) (step 1 done).
+The original [Claude handoff](./trace-offline-trials-plan/reports/handoff-2026-10-20.md) remains historical context.
+
+**Publication boundary:** t753, t752 and t754 are merged and published in both repositories (t754 Core finish
+2026-10-27). t751 retains five uncommitted Core files plus preserved reports in its paired worktrees. Final
+corrections pass their focused gates, but no complete current-code reset build/browser acceptance exists. Next:
+handoff steps 2-6 for t751 (review and checkpoint the dirty files, integrate current dev, final gates, headed
+site-reset specs, finish), then P6. Live rounds have not started.
 
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
@@ -65,10 +70,9 @@ baselines, plan order as run order in branching Flows); storage `project/` and `
 **Environment:** OneDrive.Sync.Service leaked to 14.4 GB on 2026-10-19 and was restarted with the user's approval; a
 monitor alerts above 4 GB or under 4 GB free commit.
 
-**Package exports:** t754 is checkpointed in paired worktrees at `fxwork/t754/` (Core `cda43b5b`, downstream `bbb66ac3`).
-The supervisor independently verified public imports and8 guard cases; all31 actual help commands and owning gates
-passed. Baselines remove exactly3Core+35downstream keys with all other content identical. Current-dev integration
-remains before mergeback. P6 still waits for the reset merge.
+**Package exports:** t754's final integrated owning gates all passed, including 31 real help commands and exact
+3 Core + 35 downstream baseline removals. Finished in both repositories (downstream `54d27653`, Core finish
+2026-10-27) and published together. P6 still waits for the reset merge.
 
 **Blocked:** nothing needs the user.
 
@@ -301,3 +305,17 @@ Earlier settled evidence: [17 archived ledger entries](./trace-offline-trials-pl
 - Validation: strict UTF-8 round-trip comparison passed; text preserved apart from two relative report link targets. The owning check flagged the now-stale index; `node scripts/structure-audit.mjs --update --rule working-docs` regenerated it, native0 with unchanged651baseline; `--rule docs-links` passed0warnings/0baseline.
 - Outcome: Accepted (documentation); no source, test, generated reference or package input changed.
 - Follow-up: reset combined gate correction, final build/browser acceptance, then P6.
+
+### 2026-10-21 - User requested stop and handoff
+- Agent: supervisor
+- Changed: paused both paired plans; preserved exact pushed/local/uncommitted boundaries in reports/handoff-2026-10-21-codex.md and the task reports.
+- Validation: process inspection found zero task-owned node/browser processes; all three agents stopped/interrupted. Final facade gate had already passed11tests before stop; no new test/build/integration followed the request.
+- Outcome: Paused by user. t753/t752 pushed; t754 downstream local merge only, Core finish pending; t751 five dirty Core files preserved. No post-stop implementation push.
+- Follow-up: wait for explicit user resume; never publish the pending downstream t754 half alone.
+
+### 2026-10-27 - Resumed; t754 finished in Core and published with downstream
+- Agent: supervisor
+- Changed: user resumed the MVP work and removed the feature freeze from every plan (both repositories). Core `pnpm task finish t754 "Replace private build path loads with package exports" --skip-checks` merged the paired task after detaching its clean worktree.
+- Validation: the finish's mandatory contracts: "Test Files 3 passed (3)", "Tests 68 passed (68)". `pnpm structure:check` after the merge: Core "passed (443 warning(s), 1152 baselined)", downstream "passed (222 warning(s), 616 baselined)" (the earlier downstream `package-exports` failure on arrival.test.ts is gone). `pnpm install --frozen-lockfile` in both main checkouts: "Done". Four switched downstream launchers (`lab/live-campaign/selection.mjs`, `lab/scenario-guard/lab-scenario-refusal.mjs`, `record-demo-workspace.mjs`, `run-demo-workspace-flow.mjs`) `--help` exit 0; Core `flow-compiler.mjs --help` printed usage.
+- Outcome: Accepted; both dev branches published together.
+- Follow-up: handoff steps 2-6 for t751, then P6.

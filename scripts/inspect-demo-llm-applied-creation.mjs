@@ -1,6 +1,12 @@
 import path from "node:path";
 import { withoutProviderSecrets } from "./provider-secret-environment.mjs";
 
+if (process.argv.includes("--help")) {
+  await Promise.all([import("@fluxiq-web-extension/test-runner/target-config"), import("@fluxiq-web-extension/test-runner/demo-workspace")]);
+  process.stdout.write("Usage: node scripts/inspect-demo-llm-applied-creation.mjs [command arguments]\n--help  Show help without building, opening a browser or changing workspace data.\n");
+  process.exit(0);
+}
+
 const repositoryRoot = path.resolve(process.env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
 const names = [
   "FLUXIQ_WEB_EXTENSION_ROOT", "FLUXIQ_TEST_RUNS_DIR", "FLUXIQ_DEMO_RUN_DIR", "FLUXIQ_CORE_ROOT",
@@ -11,8 +17,8 @@ const names = [
 
 try {
   const [{ loadAllowlistedTestEnvironment }, { resolveDemoWorkspaceConfiguration, runDemoLlmAppliedCreationProbe }] = await Promise.all([
-    import("../packages/test-runner/dist/target-config.js"),
-    import("../packages/test-runner/dist/demo-workspace.js"),
+    import("@fluxiq-web-extension/test-runner/target-config"),
+    import("@fluxiq-web-extension/test-runner/demo-workspace"),
   ]);
   const environment = await loadAllowlistedTestEnvironment(repositoryRoot, withoutProviderSecrets(process.env), names);
   const config = resolveDemoWorkspaceConfiguration(repositoryRoot, environment);

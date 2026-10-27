@@ -750,4 +750,4 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
   it as item 23 behaviour? Owner: supervisor. Recommendation: do not count it; use the site's other drift
   (bigbox `list-layout`, social `app-install`).
 - **G4.** Must the acceptance script prove repair on a Flow saved in an earlier session, as "run it" from chat
-  would? If so, G4 becomes a Phase 3 deliverable before the 2026-10-29 freeze. Owner: supervisor.
+  would? If so, G4 becomes a Phase 3 deliverable before the 2026-11-10 deadline. Owner: supervisor.
