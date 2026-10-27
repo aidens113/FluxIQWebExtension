@@ -10,6 +10,15 @@
 // automatic loads, so the button is never shown to a runtime that only waits.
 // A person told to press it scrolls down to it; the retries now do the same
 // (`src/content/action-runtime/reveal/`).
+//
+// The grid's batch endpoint refuses two requests closer than 900 ms with a 429
+// and `Retry-After: 2`, and the page waits that out and asks again on its own.
+// A retry's scroll lands inside that window about half the time (the grid also
+// asks for the next batch the moment one lands with its end in view), and then
+// the button is unhidden 3.0 to 3.1 s after the first scroll. The reveal ladder
+// waits that out as a person told "Trying again in 2 seconds" would (t759,
+// `recovery/budget.ts`), so the press lands on either path and this spec
+// asserts the same outcome for both.
 
 import type { Page } from "@playwright/test";
 import type { BrowserActionResult } from "../../../../../src/shared/protocol.js";
@@ -59,13 +68,20 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
     await openTeamAtTop(harness);
     expect(await page.evaluate(() => window.scrollY), "the press starts from the top").toBe(0);
 
+    // The page's first press of the button only shows a spinner, and a press the page answers
+    // with nothing but its own notice fails as `web.action.page_reported_failure` for Core to
+    // press again (t743, d2302b5f); before that it was reported done. So the press that lands on
+    // the revealed button is that failure. The account still says the runtime scrolled toward the
+    // button until it could be pressed.
     const first = await harness.runAction({ commandId: "more-1", actionType: "web.dom.click", selector: MORE });
-    expect(first.status, `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`).toBe("succeeded");
-    expect(actualOf(first), "the account says the target was revealed by scrolling").toMatch(/scrolling \d+ times? toward where the target would be, which revealed it/u);
+    const firstSaid = `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`;
+    expect(first.failure?.code, firstSaid).toBe("web.action.page_reported_failure");
+    expect(firstSaid, "the account says the target was scrolled toward until it could be pressed").toMatch(/scrolling \d+ times? toward where the target would be/u);
+    expect(firstSaid, "the press landed on the revealed button").toMatch(/the control can still be pressed/u);
     expect(await people(page), "scrolling toward the button loaded the grid's batches").toBeGreaterThan(8);
     await expect(page.locator(MORE)).toBeVisible();
 
-    // The page's first press only shows a spinner; the second loads the next batch.
+    // The second press, Core's retry of the first, loads the next batch.
     const before = await people(page);
     const second = await harness.runAction({ commandId: "more-2", actionType: "web.dom.click", selector: MORE });
     expect(second.status, `${second.message} | ${actualOf(second)}`).toBe("succeeded");
