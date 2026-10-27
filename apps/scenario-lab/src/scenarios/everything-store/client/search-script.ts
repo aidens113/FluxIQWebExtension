@@ -13,7 +13,8 @@ import { STORE_TIMINGS } from "./timings.js";
  * - "Add to cart" on a card adds one and fires the event the header badge
  *   miscounts.
  * - Under `deal-wheel`, the spin-to-win promotion opens over an inert page
- *   `dealWheel` after load. Its way out is a line of text that reads like an
+ *   as the results page renders, before any control on it can be pressed, and
+ *   again on every results page until answered. Its way out is a line of text that reads like an
  *   insult and is not a button.
  */
 export function searchScript(css: StoreClasses, ids: StoreIds, options: { dealWheel: boolean }): string {
@@ -116,5 +117,5 @@ function openWheel() {
     spin.textContent = 'Continue shopping';
   });
 }
-if (SEARCH.dealWheel) setTimeout(openWheel, SEARCH.timings.dealWheel);
+if (SEARCH.dealWheel) openWheel();
 `;

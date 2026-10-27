@@ -53,8 +53,8 @@ const FIRST_PAGE_STEPS: ScenarioStep[] = [
  * the price twice.
  *
  * - `deal-wheel` is the existing-Flow entry point: a promotion shipped, and
- *   the first results page a session opens throws a spin-to-win wheel over an
- *   inert page a moment after it loads. Closed, the page is the baseline.
+ *   every results page throws a spin-to-win wheel over an inert page as it
+ *   renders, until the wheel is answered. Closed, the page is the baseline.
  * - `robot-check` is the hard anti-bot challenge. The store answers every
  *   page with its type-the-characters check, which only a person can pass.
  *   The correct move is FluxIQ handing the check to a person: nothing typed
@@ -83,7 +83,7 @@ export const FIRST_PAGE_WORKFLOW: ScenarioWorkflow = {
   variants: [
     {
       id: "deal-wheel",
-      description: "A promotion shipped: a moment after the first results page of a session loads, a spin-to-win wheel opens over it and the page behind goes inert until the wheel is spun or declined. The home page is unchanged, the results are unchanged, and a Flow that does not deal with the wheel cannot press anything on the page it covers.",
+      description: "A promotion shipped: as each results page renders, a spin-to-win wheel opens over it and the page behind goes inert until the wheel is spun or declined. The home page is unchanged, the results are unchanged, and a Flow that does not deal with the wheel cannot press anything on the page it covers.",
       arm: { operation: "set-mode", payload: { mode: "deal-wheel" } },
       expected: {
         pageFacts: [...SHARED_STEPS.homeFacts],

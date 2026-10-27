@@ -20,7 +20,7 @@ import { startLabPerson, type LabPerson } from "../person-simulation/index.js";
 import type { PersistentRunAllocation } from "../allocation.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { RunnerFailure } from "../failure.js";
-import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, resetScenarioLab, resolveCreatedFlowSecrets, type FlowRunRoute, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
+import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, readFlowState, resetScenarioLab, resolveCreatedFlowSecrets, type FlowRunRoute, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
 import { runProviderFreeReplayFlow } from "./run-flow.js";
 import { armScenarioVariant } from "../lab-control/index.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
@@ -107,6 +107,8 @@ export type SavedFlowReplayResult = Readonly<{
   flowId: string;
   /** The saved Flow's content hash before and after: the replay ran what was saved, and changed nothing. */
   flowContentHash: Readonly<{ before: string | null; after: string | null }>;
+  /** The executable graph's hash (nodes and edges of the parent and every Subflow graph) before and after: a repair or learned handler moves it without moving `flowContentHash`. */
+  flowGraphHash: Readonly<{ before: string | null; after: string | null }>;
   task: Readonly<{ taskId: string; scenarioId: string; workflowId: string | null; variantId: string | null; judgeBy: string; stepId: string | null }> | null;
   address: Readonly<{ scenarioOrigin: string | null; scenarioPortRetained: boolean | null; savedNavigationOrigins: readonly string[]; servedAtSavedAddress: boolean | null }>;
   model: ReplayModelAccounting;
@@ -132,7 +134,7 @@ export type SavedFlowReplayResult = Readonly<{
 }>;
 
 type ReplayState = {
-  projectId: string | null; hashBefore: string | null; hashAfter: string | null;
+  projectId: string | null; hashBefore: string | null; hashAfter: string | null; graphBefore: string | null; graphAfter: string | null;
   task: SavedFlowReplayResult["task"]; scenarioOrigin: string | null; scenarioPortRetained: boolean | null;
   origins: string[]; servedAtSavedAddress: boolean | null; keys: ReturnType<typeof replayKeyPreservation> | null;
   run: PersistedFlowRunOutcome | null; usage: ReturnType<typeof liveLlmObservedUsage> | null; coreProviderCallCount: number | null;
@@ -148,8 +150,11 @@ const elapsedSince = (startedAt: number): number => Date.now() - startedAt;
  * that could not complete is a failed verdict with its reasons, never a throw;
  * only a replay refused before it started throws.
  */
+/** The hash of the Flow's executable graph (the parent's and every Subflow graph's nodes and edges): the repair lane's `stepsHash`. */
+const readFlowGraphHash = async (control: Parameters<typeof readFlowState>[0], scope: { projectId: string; flowId: string }): Promise<string> => (await readFlowState(control, scope, {})).stepsHash;
+
 const replayDependencies = {
-  resolveLabPaths, loadScenarioManifest, loadCreatedFlowRequest, resolveScenarioWorkflow, startTopology, selectReplayProject, readFlowNodes, replayKeyIdentities, openReplayBrowser, resetScenarioLab, armScenarioVariant, runProviderFreeReplayFlow, removeRunOwnedTopologyState, startLabPerson,
+  readFlowGraphHash, resolveLabPaths, loadScenarioManifest, loadCreatedFlowRequest, resolveScenarioWorkflow, startTopology, selectReplayProject, readFlowNodes, replayKeyIdentities, openReplayBrowser, resetScenarioLab, armScenarioVariant, runProviderFreeReplayFlow, removeRunOwnedTopologyState, startLabPerson,
   readExtensionSessionToken, inspectReplayTraces
 };
 
@@ -164,7 +169,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
   }
   const reasons: string[] = [];
   const state: ReplayState = {
-    projectId: null, hashBefore: null, hashAfter: null, task: null, scenarioOrigin: null, scenarioPortRetained: null, origins: [], servedAtSavedAddress: null, keys: null, run: null, usage: null, coreProviderCallCount: null, extraction: null, playbackGoalHeld: null, error: null,
+    projectId: null, hashBefore: null, hashAfter: null, graphBefore: null, graphAfter: null, task: null, scenarioOrigin: null, scenarioPortRetained: null, origins: [], servedAtSavedAddress: null, keys: null, run: null, usage: null, coreProviderCallCount: null, extraction: null, playbackGoalHeld: null, error: null,
     timings: { totalMs: null, topologyMs: null, browserMs: null, runMs: null, teardownMs: null, traceInspectionMs: null }, traces: null,
   };
   const tracing = options.tracing !== false;
@@ -208,6 +213,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     state.scenarioOrigin = scenarioOrigin;
     state.scenarioPortRetained = (topology.allocation as Partial<PersistentRunAllocation>).scenarioPortRetained ?? null;
     state.hashBefore = (await control.getExactFlow(projectId, options.flowId)).contentHash;
+    state.graphBefore = await dependencies.readFlowGraphHash(control, { projectId, flowId: options.flowId });
     keysBefore = await dependencies.replayKeyIdentities(control);
 
     const nodes = await dependencies.readFlowNodes(control, { projectId, flowId: options.flowId });
@@ -269,6 +275,8 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions, seams: Pa
     if (run.harnessActivations !== 0) reasons.push(`Core's recovery harness activated ${run.harnessActivations} time(s)`);
     state.hashAfter = (await control.getExactFlow(projectId, options.flowId)).contentHash;
     if (state.hashAfter !== state.hashBefore) reasons.push("the saved Flow's content changed during the replay");
+    state.graphAfter = await dependencies.readFlowGraphHash(control, { projectId, flowId: options.flowId });
+    if (state.graphAfter !== state.graphBefore) reasons.push("the saved Flow's executable graph (nodes, edges or Subflows) changed during the replay, so a repair or learned handler altered what the Flow runs");
     browser.guard.assertNoViolations();
   } catch (error) {
     state.error = replayErrorOf(error);
@@ -319,6 +327,7 @@ function resultOf(input: { replayId: string; resultPath: string; options: SavedF
     replayId: input.replayId, verdict: reasons.length === 0 ? "passed" : "failed", reasons,
     workspace: input.options.target.workspace, projectId: state.projectId, flowId: input.options.flowId,
     flowContentHash: { before: state.hashBefore, after: state.hashAfter },
+    flowGraphHash: { before: state.graphBefore, after: state.graphAfter },
     task: state.task,
     address: { scenarioOrigin: state.scenarioOrigin, scenarioPortRetained: state.scenarioPortRetained, savedNavigationOrigins: state.origins, servedAtSavedAddress: state.servedAtSavedAddress },
     model: {
