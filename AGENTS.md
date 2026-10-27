@@ -293,9 +293,8 @@ trailers instead. Full design and the measurements behind it are in
 [the agent git workflow plan](docs/working/agent-git-workflow-plan.md).
 
 MeritClaude's automatic git management applies here only as this file allows:
-branches go through `pnpm task`, never MeritClaude's `branch.mjs`, and nothing
-here runs `branch.mjs promote` or otherwise moves `main` (see Committing And
-Pushing).
+branches go through `pnpm task`, never MeritClaude's `branch.mjs`, and `main`
+moves only as Committing And Pushing says.
 
 The senior supervisor agent picks the tier when it writes the brief:
 
@@ -384,9 +383,18 @@ in the same work unit so the two sides do not drift, and say so.
 Otherwise: commit locally and explain what is holding the push. Always state
 what was pushed and what was not.
 
+**Promote `dev` to `main` without being asked** (user, 2026-10-27: "automatically
+manage pushing to main"). The senior supervisor agent fast-forwards `main` to a
+`dev` commit and pushes it once a full sweep on that commit (`pnpm check`,
+`pnpm test`, `pnpm build`, and Core's whole vitest run) passed and nothing known
+to be broken is on it. Paired work promotes both repositories in the same unit.
+Promotion is a fast-forward only (`git push origin <dev-commit>:main`); if `main`
+has diverged from `dev`, stop and ask. Never promote through MeritClaude's
+`branch.mjs promote`, which also publishes packages.
+
 These actions still require explicit user approval every time:
 
-- pushing to `main`, or opening a pull request into it;
+- opening a pull request into `main`;
 - force-pushing anything;
 - rewriting history, including `filter-repo`, `rebase -i`, and amends to
   already-pushed commits;

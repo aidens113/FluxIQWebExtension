@@ -13,6 +13,18 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
+**Latest (2026-10-27, resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
+16 audited provider-free only ([coverage map](./breadth-forty-tasks-plan/reports/diag-coverage-2026-10-27.md); the
+round-5 run ids there supersede the table below). Round 6 (office-checkout-review, save-quillmark-remote,
+recent-group-posts, newest-likes) launches after t751 finishes. Fixes in flight, each in its own task worktree:
+t755 load-more list end (photo `priya-tags`), t756 covered target on later grid screens (photo `august-over-1300`),
+t757 judge requested-output obligation (auction `buy-it-now-quote`'s zero-record yes). Reruns owed on current dev:
+cheap-accessory-auctions, carbon-price-check (plus a conditional-send probe), halvard-labs-office-jobs; after t751:
+test-ride-question, kiln-notes, hide-suggested-posts, the held everything-store reset r6 (t752 covers its split
+verdict by code path). Diagnoses: [auction and classifieds](./breadth-forty-tasks-plan/reports/diag-auction-classifieds-2026-10-27.md),
+[photo and store](./breadth-forty-tasks-plan/reports/diag-photo-store-2026-10-27.md). Still unproven for the MVP
+besides breadth: the adaptation gate, recording plus instructions, P6, Firefox install (not installed here).
+
 **What the user asked (2026-10-17 onward):** forty new tasks on the ten realistic sites (four each), run live,
 debugged and fixed, fast; an installed-extension proof; only about one task per site run fully end to end, plus
 reruns of repaired failures; every task possible and unambiguous; every scraping task with real data to verify
@@ -622,6 +634,19 @@ The 2026-10-18 entries are archived in
   t752's headed provider-free reproductions pass.
 - Outcome: Failed (0 of 4)
 - Follow-up: t751, t753, t752; then round 6.
+
+### 2026-10-27 - Diagnoses of the failures outside round 6; three fix tasks opened
+- Agent: supervisor; workers diag-auction-classifieds, diag-photo-store, diag-coverage (read-only, Sonnet)
+- Changed: three diagnosis reports under `breadth-forty-tasks-plan/reports/`; tasks t755, t756, t757 opened with
+  `pnpm task start <slug> --worktree [--core]` and dispatched to `worker-heavy`.
+- Decision (supervisor): t757's requested-output obligation comes from the build's typed plan declaration, never from
+  the request's words; a record-requiring plan's zero-record yes becomes unsure with a grounded defect; honest empty
+  only when the source list was read to its end; action-only unaffected.
+- Validation: read-only diagnoses; supervisor confirmed `git log dev` holds the Lab spend fix `91ea5e27` ("count
+  canonical paid result checks once") and that t751's Core diff touches no `result-verification/` or `read-account/`
+  file (`git diff --name-only dev...HEAD` grouped by area).
+- Outcome: Partial; fixes in flight, no paid run until t751 finishes.
+- Follow-up: integrate t755-t757 as each passes; round 6 after t751; then the owed reruns.
 
 ## Open Questions
 
