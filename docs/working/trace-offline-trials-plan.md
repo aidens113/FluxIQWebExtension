@@ -13,17 +13,15 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 
 ## Current State
 
-**PAUSED at the user's request (2026-10-21).** All recovery agents are stopped, with zero task-owned node/browser
-processes found. Do not resume tests, builds, implementation, integration or paid runs until the user asks.
-The authoritative stopping points, dirty files, exact checks and resume sequence are in
-[the Codex handoff](./trace-offline-trials-plan/reports/handoff-2026-10-21-codex.md).
+**RESUMED (user, 2026-10-27): "get this MVP done"; there is no feature freeze.** Follow the resume sequence in
+[the Codex handoff](./trace-offline-trials-plan/reports/handoff-2026-10-21-codex.md) (step 1 done).
 The original [Claude handoff](./trace-offline-trials-plan/reports/handoff-2026-10-20.md) remains historical context.
 
-**Publication boundary:** t753 and t752 are pushed in both repositories (latest pushed downstream `83e07232`,
-Core `f396c9d0`). t754 is fully verified, but only its downstream local merge `54d27653` completed; Core finish
-has not begun. Do not push downstream dev alone. The paired Core task remains clean at `efa96a4b`.
-t751 retains five uncommitted Core files plus preserved reports. Final corrections pass their focused gates,
-but no complete current-code reset build/browser acceptance exists. P6 and live rounds have not started.
+**Publication boundary:** t753, t752 and t754 are merged and published in both repositories (t754 Core finish
+2026-10-27). t751 retains five uncommitted Core files plus preserved reports in its paired worktrees. Final
+corrections pass their focused gates, but no complete current-code reset build/browser acceptance exists. Next:
+handoff steps 2-6 for t751 (review and checkpoint the dirty files, integrate current dev, final gates, headed
+site-reset specs, finish), then P6. Live rounds have not started.
 
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
@@ -73,9 +71,8 @@ baselines, plan order as run order in branching Flows); storage `project/` and `
 monitor alerts above 4 GB or under 4 GB free commit.
 
 **Package exports:** t754's final integrated owning gates all passed, including 31 real help commands and exact
-3 Core + 35 downstream baseline removals. Downstream task finish merged locally and removed its worktree;
-Core `fxwork/t754/!FluxIQ` remains on its task branch, not finished. This paired boundary is intentionally preserved
-at the user's stop request. P6 still waits for the reset merge.
+3 Core + 35 downstream baseline removals. Finished in both repositories (downstream `54d27653`, Core finish
+2026-10-27) and published together. P6 still waits for the reset merge.
 
 **Blocked:** nothing needs the user.
 
@@ -315,3 +312,10 @@ Earlier settled evidence: [17 archived ledger entries](./trace-offline-trials-pl
 - Validation: process inspection found zero task-owned node/browser processes; all three agents stopped/interrupted. Final facade gate had already passed11tests before stop; no new test/build/integration followed the request.
 - Outcome: Paused by user. t753/t752 pushed; t754 downstream local merge only, Core finish pending; t751 five dirty Core files preserved. No post-stop implementation push.
 - Follow-up: wait for explicit user resume; never publish the pending downstream t754 half alone.
+
+### 2026-10-27 - Resumed; t754 finished in Core and published with downstream
+- Agent: supervisor
+- Changed: user resumed the MVP work and removed the feature freeze from every plan (both repositories). Core `pnpm task finish t754 "Replace private build path loads with package exports" --skip-checks` merged the paired task after detaching its clean worktree.
+- Validation: the finish's mandatory contracts: "Test Files 3 passed (3)", "Tests 68 passed (68)". `pnpm structure:check` after the merge: Core "passed (443 warning(s), 1152 baselined)", downstream "passed (222 warning(s), 616 baselined)" (the earlier downstream `package-exports` failure on arrival.test.ts is gone). `pnpm install --frozen-lockfile` in both main checkouts: "Done". Four switched downstream launchers (`lab/live-campaign/selection.mjs`, `lab/scenario-guard/lab-scenario-refusal.mjs`, `record-demo-workspace.mjs`, `run-demo-workspace-flow.mjs`) `--help` exit 0; Core `flow-compiler.mjs --help` printed usage.
+- Outcome: Accepted; both dev branches published together.
+- Follow-up: handoff steps 2-6 for t751, then P6.

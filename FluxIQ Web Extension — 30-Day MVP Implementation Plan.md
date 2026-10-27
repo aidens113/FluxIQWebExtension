@@ -1042,27 +1042,12 @@ without using Advanced Editor.
 
 ## Week 4 Objective
 
-Stop expanding the framework and convert the existing implementation into a trustworthy MVP product.
-
-Feature development should be frozen except for MVP-blocking issues.
+Convert the existing implementation into a trustworthy MVP product. There is no feature freeze
+(user, 2026-10-27): feature work that serves the browser MVP continues until the deadline.
 
 ---
 
-## Phase 4.1 — Feature Freeze
-
-### Allowed Work
-
-Only:
-
-- Reliability
-- Bug fixes
-- UX improvements
-- Performance
-- Onboarding
-- Security/privacy
-- Diagnostics
-- Release requirements
-- Benchmark failures
+## Phase 4.1 — MVP Scope
 
 ### Explicitly Deferred
 

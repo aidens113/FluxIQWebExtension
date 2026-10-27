@@ -96,14 +96,14 @@ This document links to them and does not restate them.
   - One supervised live run per release candidate.
   - The ten realistic scenarios only.
 
-**Schedule.** Today is 2026-10-18; the freeze is 2026-10-29 and the deadline 2026-11-10. This matches Core's release cut.
-- **Before the freeze:**
+**Schedule.** Today is 2026-10-18; the deadline is 2026-11-10, with no feature freeze (user, 2026-10-27). This matches Core's release cut.
+- **Until 11-10:**
   - D0, the sign-in spike;
-  - the site and deploy skeletons, in the H1 worktree;
+  - the site and deploy skeletons, then H1 itself, in the H1 worktree;
   - drafts of the terms, privacy policy and listing;
   - the VM and the getfluxiq.com DNS, which need the user's accounts (U9);
   - nothing that touches the extension's connection or panel files on `dev`, because the MVP live lanes own them.
-- **Freeze to 11-10:** H1 continues in the worktree. The MVP ships as planned.
+  The MVP ships as planned.
 - **After 11-10:** H1 merges, the gate runs around 11-28, and the Chrome Web Store submission goes in around 12-01 with sign-in.
 - **Plainly:** a store release with working hosted sign-in does not fit by 11-10.
 
@@ -476,7 +476,7 @@ Downstream steps, keyed to Core's H0, H1 and H2, with rough agent-days. They are
 
 About 36 downstream agent-days. D2 and D3 touch disjoint files, as do D5, D6 and D7. D4 follows D2.
 
-**Before the freeze:** D0; D5, D6 and D7 skeletons and drafts in the worktree; the VM and DNS (U9). **Freeze to 11-10:** D2 to D7 in the worktree. **After 11-10:** merge, D8 and the gate (around 11-28), then submission (around 12-01).
+**Until 11-10:** D0; D5, D6 and D7 skeletons and drafts, then D2 to D7, in the worktree; the VM and DNS (U9). **After 11-10:** merge, D8 and the gate (around 11-28), then submission (around 12-01).
 
 **H2:** settings move into layer 2; export, retention and the Google sign-in button on the site; Edge and AMO listings.
 
@@ -519,4 +519,4 @@ Owner: the user, for all of them. A recommendation follows each. Core's N1 to N4
 - **U6. Email, logs and error vendors?** Recommendation: Postmark or Resend for verify and reset mail (required at launch); Grafana Cloud's free tier; Sentry with scrubbing.
 - **U7. Staging extension channel?** Recommendation: a staging-preset build loaded unpacked by testers, with no store listing.
 - **U8. Publisher identity for the stores?** Recommendation: the individual developer account now, with a business address service if the EU trader declaration applies. Transfer to the company once it exists.
-- **U9. Who sets up the VM and getfluxiq.com DNS, and when?** Recommendation: the user creates the VM account and adds the DNS records this week, so closed staging can run from the H1 worktree during the freeze. The agents then do the rest from `deploy/`.
+- **U9. Who sets up the VM and getfluxiq.com DNS, and when?** Recommendation: the user creates the VM account and adds the DNS records this week, so closed staging can run from the H1 worktree before the MVP deadline. The agents then do the rest from `deploy/`.
