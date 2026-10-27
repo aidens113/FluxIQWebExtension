@@ -23,6 +23,11 @@ corrections pass their focused gates, but no complete current-code reset build/b
 handoff steps 2-6 for t751 (review and checkpoint the dirty files, integrate current dev, final gates, headed
 site-reset specs, finish), then P6. Live rounds have not started.
 
+**In flight (2026-10-27):** steps 2-3 done (Core checkpoint `fb81dc05`, `dev` merged into both t751 trees; downstream
+merge `55e6cb64`). Steps 4-5 dispatched to `worker-heavy` (report `reports/t751-final-acceptance.md` in the t751
+downstream tree). In parallel, three read-only `worker` diagnoses of the breadth failures not in round 6 (reports
+`breadth-forty-tasks-plan/reports/diag-{auction-classifieds,photo-store,coverage}-2026-10-27.md`).
+
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
 and supervisor-inspected full-panel screenshots; the supervisor also independently passed the 82 overlay unit cases.
