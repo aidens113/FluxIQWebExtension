@@ -107,8 +107,39 @@ async function safeTransport(operation: () => Promise<unknown>, stage: "pre-appr
     return await operation();
   } catch (error) {
     if (error instanceof RunnerFailure && error.category !== "extension.worker") throw error;
-    throw new RunnerFailure("gateway.connection", `Extension pairing status transport failed during ${stage}`);
+    const cause = sanitizedCause(error);
+    throw new RunnerFailure("gateway.connection", `Extension pairing status transport failed during ${stage}: ${cause.text}`, { details: { stage, cause: cause.fields } });
   }
+}
+
+const CAUSE_MESSAGE_MAX = 160;
+const CAUSE_TOKEN_MAX = 40;
+
+/**
+ * Why a worker transport failed, bounded and scrubbed: the error's name and
+ * code (short identifiers only) and a message with credentials in URLs,
+ * `key=value` secrets, bearer tokens and long opaque strings removed, trimmed
+ * to a fixed length. File paths stay: they are what names a MAX_PATH failure.
+ */
+function sanitizedCause(error: unknown): { text: string; fields: { name: string; code: string | null; message: string } } {
+  const record = typeof error === "object" && error !== null ? error as { name?: unknown; code?: unknown; message?: unknown } : {};
+  const name = shortIdentifier(record.name) ?? (error === null || typeof error !== "object" ? typeof error : "Error");
+  const code = shortIdentifier(record.code);
+  const raw = typeof record.message === "string" ? record.message : typeof error === "string" ? error : "";
+  const message = raw
+    .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s/@]*@/giu, (match) => `${match.slice(0, match.indexOf("://") + 3)}[redacted]@`)
+    .replace(/\b(?:bearer|basic)\s+\S+/giu, "[redacted]")
+    .replace(/\b([\w.-]*(?:token|secret|password|passwd|authorization|apikey|api-key|cookie|key)[\w.-]*)\s*[=:]\s*\S+/giu, "$1=[redacted]")
+    .replace(/[A-Za-z0-9_\-+/=]{32,}/gu, "[redacted]")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, CAUSE_MESSAGE_MAX);
+  const fields = { name, code, message };
+  return { text: [name, code, message].filter((part) => part !== null && part !== "").join(" "), fields };
+}
+
+function shortIdentifier(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && value.length <= CAUSE_TOKEN_MAX && /^[A-Za-z0-9_.:-]+$/u.test(value) ? value : null;
 }
 
 function connectedStatus(status: PairingStatus | undefined): status is ConnectedStatus {

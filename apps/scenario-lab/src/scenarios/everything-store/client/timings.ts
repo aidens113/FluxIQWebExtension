@@ -11,7 +11,6 @@
  * - `productHydrate`: the buy box does nothing when clicked until the page's
  *   script has attached to it.
  * - `addToCart`: the add button's spinner.
- * - `dealWheel`: the spin-to-win promotion, on the first results page.
  * - `softCheckButton`, `softCheckAuto`: the browser check's button unlocks,
  *   or the check passes on its own if the shopper just waits.
  * - `saveRetry`: a failed Save for later offers "Try again" this long after
@@ -26,7 +25,6 @@ export const STORE_TIMINGS = {
   lazyResults: 600,
   productHydrate: 1200,
   addToCart: 400,
-  dealWheel: 1500,
   softCheckButton: 1500,
   softCheckAuto: 8000,
   saveRetry: 4000,
