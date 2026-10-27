@@ -22,19 +22,22 @@
  * control; `declared_feed`, a list the page declares longer than it shows (a
  * feed role, an unknown set size, or a declared row count larger than the rows
  * shown) that was still growing when the read's reveal ran out;
- * `still_growing`, an undeclared list still growing then. A declared feed that
- * stopped growing is a feed that showed its end, and sends nothing.
+ * `still_growing`, an undeclared list still growing then; `loader_asked_to_wait`,
+ * a list that grew no further because the page answered the read's reveal with
+ * a notice to wait before it loads more (a rate limit) -- paused by the site,
+ * not ended (t755). A declared feed that stopped growing with no such notice is
+ * a feed that showed its end, and sends nothing.
  *
  * Absent from a read that paged, and from one whose list showed no way on or
  * showed one disabled -- a list that ended.
  */
 export type WebAutomationExtractionListContinues = {
   kind: "next_page" | "load_more" | "infinite_scroll";
-  evidence: "next_control" | "following_page_number" | "load_more_control" | "declared_feed" | "still_growing";
+  evidence: "next_control" | "following_page_number" | "load_more_control" | "declared_feed" | "still_growing" | "loader_asked_to_wait";
 };
 
 const KINDS: ReadonlySet<string> = new Set(["next_page", "load_more", "infinite_scroll"]);
-const EVIDENCE: ReadonlySet<string> = new Set(["next_control", "following_page_number", "load_more_control", "declared_feed", "still_growing"]);
+const EVIDENCE: ReadonlySet<string> = new Set(["next_control", "following_page_number", "load_more_control", "declared_feed", "still_growing", "loader_asked_to_wait"]);
 
 /** The fact copied word by word, or `undefined` for one that is not well formed. */
 export function webAutomationExtractionListContinuesValue(value: unknown): WebAutomationExtractionListContinues | undefined {

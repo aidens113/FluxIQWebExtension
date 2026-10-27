@@ -88,3 +88,28 @@ test("an ordinary list with no way on, and a read that saw no item, say nothing"
   assert.equal(on(el("body", {}, [el("main", {}, [list, el("footer", {}, "About these recipes")])]), () => listContinuesPast(asElements(cards))), undefined);
   assert.equal(listContinuesPast([]), undefined);
 });
+
+// A list goes on, ends, or is paused by the site (t755, from t756's trace of a
+// profile grid). A loader that refuses a reveal made too soon puts a notice
+// where the next part would come; nothing grows, and the read took the list for
+// ended. It is said to go on as it is scrolled, with its own evidence word,
+// never `still_growing`: nothing grew.
+test("a list its loader answered with a notice to wait is paused, not ended, and is never called still growing", () => {
+  const { list, cards } = recipes();
+  const body = el("body", {}, [el("main", {}, [list, el("div", {}, [el("p", {}, "Please wait a few moments before you try again."), el("p", {}, "Try again in 3s")])])]);
+  assert.deepEqual(on(body, () => listContinuesPast(asElements(cards))), { kind: "infinite_scroll", evidence: "loader_asked_to_wait" });
+  const growing = recipes();
+  const stillGrowing = el("body", {}, [el("main", {}, [growing.list, el("p", {}, "Too many requests. Try again in 2 minutes.")])]);
+  assert.deepEqual(on(stillGrowing, () => listContinuesPast(asElements(growing.cards), true)), { kind: "infinite_scroll", evidence: "still_growing" });
+});
+
+test("a list followed by anything but a wait -- an end note, a failure, a hidden notice -- says nothing", () => {
+  for (const after of [
+    el("p", {}, "You're all caught up."),
+    el("p", {}, "Something went wrong. Try again."),
+    el("p", { hidden: "" }, "Please wait a few moments before you try again.")
+  ]) {
+    const { list, cards } = recipes();
+    assert.equal(on(el("body", {}, [el("main", {}, [list, after])]), () => listContinuesPast(asElements(cards))), undefined, after.textContent);
+  }
+});
