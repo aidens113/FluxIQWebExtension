@@ -30,6 +30,16 @@
 // reaches the target is it refused as `covered`, and the refusal still names
 // what lies over its centre, the point the recovery reads the covering layer at.
 //
+// **Then the control the target is part of.** When no point reaches the target,
+// a point whose hit lies inside the link or button the target sits in, and in
+// no other control nested there, is a press on that same control, and is where
+// the action goes (`pressed-control/same-control-hit.ts`, t756). A photo grid's
+// cell draws its like and comment counts as a transparent `inset: 0` layer over
+// the picture inside the cell's link: live (`run-mvdi88yz-e444d594`) every press
+// on the picture was refused as covered by that layer, while a person's click
+// there opens the post. A layer outside the target's control -- a dialog, a
+// scrim, another card -- is still a cover.
+//
 // The scroll happens here rather than in the caller so that the hit test is
 // taken against exactly the geometry the action will use. A caller that scrolls
 // separately and then hit-tests is one layout change away from clicking a point
@@ -43,6 +53,7 @@
 import { deepElementFromPoint } from "../selector";
 import { composedClosest, composedContains } from "../shadow-dom";
 import { coveringLayerSentence, probePoints } from "./interference";
+import { sameControlHit } from "./pressed-control";
 import { scrollElementIntoView } from "./scroll-element-into-view";
 
 export type ActionabilityRejectionCode = "disabled" | "hidden" | "covered";
@@ -80,6 +91,12 @@ export function checkActionability(element: Element): ActionabilityReport {
     const underCentre = hit ? elementLabel(hit) : "nothing painted";
     const detail = `${landedOn(element, elsewhere.hit, elsewhere.point)}; its centre ${describePoint(centre)} landed on ${underCentre}`;
     return { actionable: true, point: elsewhere.point, detail };
+  }
+
+  const through = pointReachingSameControl(element, area, centre, hit);
+  if (through) {
+    const detail = `the point ${describePoint(through.point)} landed on ${elementLabel(through.hit)}, part of ${elementLabel(through.control)}, the control the target is in, so a press there reaches the same control`;
+    return { actionable: true, point: through.point, detail };
   }
 
   if (!hit) return reject("covered", `nothing is painted at ${describePoint(centre)}`, centre);
@@ -121,6 +138,28 @@ function pointReachingTarget(element: Element, area: Area, centre: Point): { poi
     if (atCentre) continue;
     const hit = hitAt(element, point);
     if (hit && composedContains(element, hit)) return { point, hit };
+  }
+  return undefined;
+}
+
+/**
+ * Where a press reaches the control the target is part of when no point
+ * reaches the target itself (`pressed-control/same-control-hit.ts`): the
+ * centre when its hit qualifies, else the first probed point whose hit does.
+ * Asked only after every point on the target missed, so a target that can be
+ * hit directly is always pressed on itself.
+ */
+function pointReachingSameControl(element: Element, area: Area, centre: Point, centreHit: Element | undefined): { point: Point; hit: Element; control: Element } | undefined {
+  const atCentre = centreHit ? sameControlHit(element, centreHit) : undefined;
+  if (centreHit && atCentre) return { point: centre, hit: centreHit, control: atCentre };
+  const width = area.right - area.left;
+  const height = area.bottom - area.top;
+  for (const offset of probePoints(width, height)) {
+    const point = { x: area.left + offset.x, y: area.top + offset.y };
+    if (Math.abs(point.x - centre.x) < 1 && Math.abs(point.y - centre.y) < 1) continue;
+    const hit = hitAt(element, point);
+    const control = hit ? sameControlHit(element, hit) : undefined;
+    if (hit && control) return { point, hit, control };
   }
   return undefined;
 }
