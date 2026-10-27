@@ -20,7 +20,7 @@ reasonable reading fail.
 | --- | --- |
 | `everything-store-plus-earbuds-under-50` | reworded (format) |
 | `everything-store-first-page-plus-earbuds` | reworded (order, format) |
-| `everything-store-first-page-plus-earbuds-deal-wheel` | reworded with its base row (shared `FIRST_PAGE`) |
+| `everything-store-first-page-plus-earbuds-deal-wheel` | reworded with its base row (shared `FIRST_PAGE`), plus its own deal-wheel clause (t758) |
 | `everything-store-kettle-to-cart` | reworded (order, format) |
 | `everything-store-buy-kettle` | ok |
 | `everything-store-restore-saved-cloths` | reworded (site term, quantity, format) |
@@ -51,7 +51,10 @@ and rank 31 print "4.0", which a reader could write as "4".
   the listing shows, written like $19.99, rating is the number shown beside its stars, written like 4.0, and url is the
   address the product name links to."
 
-**first-page-plus-earbuds and its deal-wheel row** (they share one instruction and change together). The oracle is the
+**first-page-plus-earbuds and its deal-wheel row** (they share the base instruction and change together; since t758,
+2026-10-27, the deal-wheel row adds one clause: "If the store pops up a spin-to-win offer ("Spin to win up to 20% off!"),
+turn it down with its "No thanks, I would rather pay full price" line rather than spinning the wheel." Its oracle already
+checked the wheel was turned down; the instruction now asks for it. The base task and both oracles are unchanged.) The oracle is the
 16 organic Plus results of page 1 in page order. The instruction never stated an order, and the oracle compares by
 position.
 - Old: "Search the store for wireless earbuds, narrow the results to Brightaisle Plus items, and collect every search

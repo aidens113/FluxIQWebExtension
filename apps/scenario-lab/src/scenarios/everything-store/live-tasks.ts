@@ -6,6 +6,9 @@ const LISTING_VALUES = "where name is the product name as listed, price is the p
 /** How a cart read is written down, for every cart task. */
 const CART_TABLE = "as a table with columns item, quantity and price, where item is the product name the cart shows, quantity is a plain number and price is the price of one, written like $12.97, in the order the cart shows them";
 
+/** The deal-wheel twin's one extra condition: its oracle checks the wheel is closed, so the shopper is told to turn the offer down. */
+const DEAL_WHEEL_CLAUSE = ' If the store pops up a spin-to-win offer ("Spin to win up to 20% off!"), turn it down with its "No thanks, I would rather pay full price" line rather than spinning the wheel.';
+
 const FIRST_PAGE = `Search the store for wireless earbuds, narrow the results to Brightaisle Plus items, and collect every search result on the first page, leaving out sponsored placements, in the order the page shows them, into a table with columns name, price, rating and url, ${LISTING_VALUES}.`;
 
 /**
@@ -57,7 +60,7 @@ export const EVERYTHING_STORE_LIVE_TASKS: readonly LiveInstructionTask[] = [
     variantId: "deal-wheel",
     variantArmedAfterBuild: true,
     kind: "navigate-and-extract",
-    instruction: FIRST_PAGE,
+    instruction: `${FIRST_PAGE}${DEAL_WHEEL_CLAUSE}`,
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-first-page",
   },

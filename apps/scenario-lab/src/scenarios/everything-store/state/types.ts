@@ -9,8 +9,8 @@
  * - `redesigned-header` -- the header was redesigned between a recording and a
  *   run: the search button lost the test id the recording names and moved
  *   left, and a "Search with your camera" button now stands where it stood.
- * - `deal-wheel` -- a promotion shipped: the first results page a session
- *   opens throws a spin-to-win wheel over an inert page.
+ * - `deal-wheel` -- a promotion shipped: every results page throws a
+ *   spin-to-win wheel over an inert page as it renders, until it is answered.
  * - `robot-check` -- the store has decided this session looks automated and
  *   answers every page with its type-the-characters challenge, which only a
  *   person can pass.
