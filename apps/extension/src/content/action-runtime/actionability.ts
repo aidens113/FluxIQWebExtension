@@ -40,6 +40,10 @@
 // there opens the post. A layer outside the target's control -- a dialog, a
 // scrim, another card -- is still a cover.
 //
+// **Not past a layer.** None of that applies when the hit over the centre is a
+// dialog or a fixed layer with its own way out (`interference/overlays.ts`):
+// that is a cover to close, not a box that draws nothing (t759).
+//
 // The scroll happens here rather than in the caller so that the hit test is
 // taken against exactly the geometry the action will use. A caller that scrolls
 // separately and then hit-tests is one layout change away from clicking a point
@@ -52,7 +56,7 @@
 
 import { deepElementFromPoint } from "../selector";
 import { composedClosest, composedContains } from "../shadow-dom";
-import { coveringLayerSentence, probePoints } from "./interference";
+import { coveringLayerSentence, overlaysAt, probePoints } from "./interference";
 import { sameControlHit } from "./pressed-control";
 import { scrollElementIntoView } from "./scroll-element-into-view";
 
@@ -86,14 +90,21 @@ export function checkActionability(element: Element): ActionabilityReport {
   const hit = hitAt(element, centre);
   if (hit && composedContains(element, hit)) return { actionable: true, point: centre, detail: landedOn(element, hit, centre) };
 
-  const elsewhere = pointReachingTarget(element, area, centre);
+  // A dialog, or a fixed layer with its own way out, over the target's centre is
+  // a cover however much of the target sticks out beside it: bigbox's support
+  // card leaves a two-pixel strip of the pinned Add to cart, and a press on
+  // that strip is not what a person does. It is refused as covered, for the
+  // recovery to close, rather than pressed past (t759; t476).
+  const layer = hit ? coveringLayerSentence(element, centre) : undefined;
+  const layered = layer !== undefined && layerWithWayOut(element, centre);
+  const elsewhere = layered ? undefined : pointReachingTarget(element, area, centre);
   if (elsewhere) {
     const underCentre = hit ? elementLabel(hit) : "nothing painted";
     const detail = `${landedOn(element, elsewhere.hit, elsewhere.point)}; its centre ${describePoint(centre)} landed on ${underCentre}`;
     return { actionable: true, point: elsewhere.point, detail };
   }
 
-  const through = pointReachingSameControl(element, area, centre, hit);
+  const through = layered ? undefined : pointReachingSameControl(element, area, centre, hit);
   if (through) {
     const detail = `the point ${describePoint(through.point)} landed on ${elementLabel(through.hit)}, part of ${elementLabel(through.control)}, the control the target is in, so a press there reaches the same control`;
     return { actionable: true, point: through.point, detail };
@@ -102,9 +113,17 @@ export function checkActionability(element: Element): ActionabilityReport {
   if (!hit) return reject("covered", `nothing is painted at ${describePoint(centre)}`, centre);
   // What covers the target, said so the reader can deal with it: the layer the
   // hit landed in and the controls on it (`interference/covering-layer.ts`).
-  const layer = coveringLayerSentence(element, centre);
   const covered = `the point ${describePoint(centre)} landed on ${elementLabel(hit)}, which covers the target`;
   return reject("covered", layer ? `${covered}; ${layer}` : covered, centre);
+}
+
+/** Whether what covers the centre is a dialog or a fixed layer with its own way out (`interference/overlays.ts`). */
+function layerWithWayOut(element: Element, centre: Point): boolean {
+  try {
+    return overlaysAt(centre, element).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
