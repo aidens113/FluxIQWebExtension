@@ -27,10 +27,20 @@
 // (`declared_feed`, else `still_growing`). The code knows no end-of-list
 // wording, and none is added: growth is the one signal a page of any language
 // gives.
+//
+// **A list whose loader asked to wait has not ended** (t755, `./loader-wait.ts`).
+// A list is going on, ended, or paused by the site. A loader that refuses a
+// reveal made too soon puts a notice where the next part would come, nothing
+// grows, and the list looked ended; it is said to go on as it is scrolled, with
+// `loader_asked_to_wait` as the evidence, never `still_growing`, since nothing
+// grew. The wording read is the closed wait and busy phrases the click's
+// rate-limit watch already reads, not an end-of-list wording: an end still
+// sends nothing, and a list that ended is said by Next page's `ended` answer.
 
 import type { BrowserActionResult } from "../../types";
 import { detectPagination, nextControlOnPage } from "../detect-pagination";
 import { isDeclaredFeed } from "../feed-signal";
+import { loaderAskedToWait } from "./loader-wait";
 
 /** The fact, as the domain's summary carries it (`domain/src/actions/extraction/list-continues.ts`). */
 export type ListContinues = NonNullable<NonNullable<BrowserActionResult["extraction"]>["listContinues"]>;
@@ -47,7 +57,10 @@ export function listContinuesPast(run: readonly Element[], stillGrowing = false)
   const next = nextControlOnPage(null, run);
   if (next !== undefined) return isEnabled(next.control) ? { kind: "next_page", evidence: next.by === "number" ? "following_page_number" : "next_control" } : undefined;
   const pagination = detectPagination(run, container);
-  if (pagination === undefined) return stillGrowing ? { kind: "infinite_scroll", evidence: isDeclaredFeed(run, container) ? "declared_feed" : "still_growing" } : undefined;
+  if (pagination === undefined) {
+    if (stillGrowing) return { kind: "infinite_scroll", evidence: isDeclaredFeed(run, container) ? "declared_feed" : "still_growing" };
+    return loaderAskedToWait(run) ? { kind: "infinite_scroll", evidence: "loader_asked_to_wait" } : undefined;
+  }
   if (pagination.mode !== "loadMore") return undefined;
   const control = document.querySelector(pagination.control);
   return control !== null && isEnabled(control) ? { kind: "load_more", evidence: "load_more_control" } : undefined;

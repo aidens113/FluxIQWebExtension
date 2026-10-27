@@ -14,7 +14,11 @@
 // 2. the shape that test id has when the page numbers its rows, as a prefix
 //    match: `row-1`, `row-2` and `row-12` give `[data-testid^="row-"]`;
 // 3. the container and the item's tag and classes, `<container> > li.card`;
-// 4. the role the items carry, `<container> > [role="row"]`.
+// 4. the same at any depth under the container, `<container> li.card`, which
+//    is the only one that answers a run holding nested items of its own
+//    template -- a comment thread's open replies (`nested-run/`, t755) --
+//    and is never chosen over 3 for a run of siblings, which 3 already names;
+// 5. the role the items carry, `<container> > [role="row"]`.
 //
 // Building the candidates is a pure function of what the page reads off the
 // run, so it is decided and tested without a page; only the acceptance test
@@ -68,6 +72,7 @@ export function itemSelectorCandidates(parts: ItemSelectorParts): ItemSelectorCa
   const shape = sharedTestIdPrefix(parts.testIds);
   if (shape) candidates.push({ selector: attributeSelector(shape.attribute, shape.value, "^"), confidence: 0.9 });
   candidates.push({ selector: `${parts.container} > ${tag}${classSuffix(parts.classes)}`, confidence: 0.75 });
+  candidates.push({ selector: `${parts.container} ${tag}${classSuffix(parts.classes)}`, confidence: 0.7 });
   const role = parts.role?.trim();
   if (role) candidates.push({ selector: `${parts.container} > [role="${quoted(role)}"]`, confidence: 0.6 });
   return candidates;

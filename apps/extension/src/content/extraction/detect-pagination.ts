@@ -46,9 +46,19 @@
 //
 // A control's label is its `aria-label` or its text, read through the one
 // sensitive-text reader and used only to recognize the control. No label
-// reaches the proposal (decision D3): what travels is the selector.
+// reaches the proposal (decision D3): what travels is the selector. A control
+// that has neither -- a `div role=button` drawn as a circled plus whose only
+// name is its `<svg aria-label="Load more comments">` -- is recognized as Load
+// more by its accessible name, drawings included (`../identity/accessible-name.ts`),
+// as a person's assistive technology names it; a drawn Next is not (`drawnKind`
+// says why). Until 2026-10-27 such a control was
+// no control here: photo-social's comment thread was detected with no way on,
+// its reads carried no fact that it went on, and a Next page on it found no
+// Next, scrolled, and answered ended with Load more on screen (live run
+// `run-mvebbeom-a60886e1`, priya-tags).
 
 import type { WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
+import { accessibleNameFor } from "../identity";
 import { selectorFor } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import { generalizedItemSelector } from "./item-selector";
@@ -142,8 +152,25 @@ function lastPageNext(level: Element, run: readonly Element[]): Element | undefi
 }
 
 function kindOf(control: Element): PaginationControlKind | undefined {
-  const label = control.getAttribute("aria-label") ?? textOutsideSensitiveControls(control);
-  return paginationKindForLabel(label, control.getAttribute("rel") ?? undefined);
+  const rel = control.getAttribute("rel") ?? undefined;
+  const said = control.getAttribute("aria-label") ?? textOutsideSensitiveControls(control);
+  if (said.trim()) return paginationKindForLabel(said, rel);
+  return drawnKind(control, rel);
+}
+
+/**
+ * What a wordless control offers, read from its accessible name -- the name of
+ * the labelled icon it is drawn as (header) -- and only when that name says
+ * Load more. A drawn Next is not taken: an icon named "Next" is as often a
+ * carousel's slide arrow as a pager's, and the very post whose thread taught
+ * this rule draws one beside it (photo-social's giveaway carousel), which a
+ * Next page on the thread then followed as its pager. A load-more name says
+ * which list it grows.
+ */
+function drawnKind(control: Element, rel: string | undefined): PaginationControlKind | undefined {
+  const byRel = paginationKindForLabel("", rel);
+  if (byRel) return byRel;
+  return paginationKindForLabel(accessibleNameFor(control) ?? "", undefined) === "loadMore" ? "loadMore" : undefined;
 }
 
 /**
