@@ -24,11 +24,9 @@
 // It reads attributes, a bounded text and the form owner, and nothing else, so
 // it holds in a Node test whose fake elements answer only those.
 
+import { PRESSABLE_HOST } from "../../pressed-control";
 import { isConsentDeclineLabel, isDismissalLabel, isRateLimitAcknowledgeLabel } from "../vocabulary";
 import { isActingWording } from "./acting-wording";
-
-/** What a press on an element reaches: the nearest control around it, itself included. */
-const PRESSABLE_HOST = 'button, a[href], input, select, textarea, summary, [role="button"], [role="link"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="checkbox"], [role="radio"], [role="switch"]';
 
 /** Roles whose press changes a state the control itself holds. */
 const STATEFUL_ROLE = /^(?:checkbox|radio|switch|option|menuitemcheckbox|menuitemradio)$/iu;

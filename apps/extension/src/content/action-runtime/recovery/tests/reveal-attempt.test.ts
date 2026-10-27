@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import { runWithRecovery } from "../attempt";
-import { RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_REVEAL_BACKOFF_MS } from "../budget";
+import { RECOVERY_BUDGET_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_REVEAL_BACKOFF_MS } from "../budget";
 import { recordRecovery } from "../record";
 import type { BrowserActionCommand, BrowserActionResult } from "../../../types";
 
@@ -83,20 +83,20 @@ test("a target not shown until its list is scrolled: each retry scrolls first, w
   assert.deepEqual(account, {
     attempts: 4,
     absorbed: ["obstructed_target", "obstructed_target", "obstructed_target"],
-    waitedMs: 400 + 800 + 1_600,
+    waitedMs: 400 + 1_000 + 2_400,
     dismissed: 0,
     outcome: "recovered",
     reveal: { scrolls: 3, shown: true }
   });
   assert.deepEqual(site.log, [
     "attempt", "clear", "scroll", "pause 400",
-    "attempt", "clear", "scroll", "pause 800",
-    "attempt", "clear", "scroll", "pause 1600",
+    "attempt", "clear", "scroll", "pause 1000",
+    "attempt", "clear", "scroll", "pause 2400",
     "attempt"
   ], "layers are cleared, then the page is scrolled, then the loop waits for it to answer");
   const reported = recordRecovery(result, account);
   assert.equal(reported.validation.status === "none" ? "" : reported.validation.actual,
-    "clicked; the execution recovered on attempt 4 after absorbing obstructed_target, obstructed_target, obstructed_target, scrolling 3 times toward where the target would be, which revealed it, waiting 2800 ms");
+    "clicked; the execution recovered on attempt 4 after absorbing obstructed_target, obstructed_target, obstructed_target, scrolling 3 times toward where the target would be, which revealed it, waiting 3800 ms");
 });
 
 test("a target scrolling does not reveal: the attempts are the same four, and the account says scrolling did not reveal it", async () => {
@@ -108,7 +108,7 @@ test("a target scrolling does not reveal: the attempts are the same four, and th
   assert.deepEqual(account.reveal, { scrolls: 3, shown: false });
   assert.equal(site.log.filter((step) => step === "scroll").length, 3, "no scroll after the last attempt, which has no retry to answer it");
   const reported = recordRecovery(result, account);
-  assert.match(reported.failure?.actual ?? "", /^hidden: the element's display is none; the execution did not recover within its 4 attempts after absorbing obstructed_target, obstructed_target, obstructed_target, obstructed_target, scrolling 3 times toward where the target would be, without a confirmed reveal, waiting 2800 ms$/u);
+  assert.match(reported.failure?.actual ?? "", /^hidden: the element's display is none; the execution did not recover within its 4 attempts after absorbing obstructed_target, obstructed_target, obstructed_target, obstructed_target, scrolling 3 times toward where the target would be, without a confirmed reveal, waiting 3800 ms$/u);
 });
 
 test("a target removed after scrolling is never reported as revealed", async () => {
@@ -144,4 +144,26 @@ test("the reveal ladder never runs past the command's own timeout", async () => 
   const { account } = await runWithRecovery(timed, 0, site.attempt, pause, () => clock, site.intervene, () => false, site.reveal(true));
   assert.equal(account.waitedMs, 1_000, "400, then the 600 left of the 1000 ms the node allowed");
   assert.equal(account.outcome, "exhausted");
+});
+
+test("a loader whose wake-up the server refused with a short Retry-After is waited out: the target the page shows 3 s after the first scroll is reached", async () => {
+  // Measured on company-website's team page (t759): the runtime's scroll lands inside the batch endpoint's
+  // 900 ms window, the page says "Trying again in 2 seconds", asks again and unhides "Show more people"
+  // 3.0 to 3.1 s after the first scroll. The 2.8 s ladder this replaced pressed for the last time before it.
+  let clock = 0;
+  const shownAtMs = 3_100;
+  const log: string[] = [];
+  const attempt = async (): Promise<BrowserActionResult> => {
+    log.push(`attempt at ${clock}`);
+    return clock >= shownAtMs ? succeeded() : notShown();
+  };
+  const pause = async (ms: number): Promise<void> => {
+    clock += ms;
+  };
+  const { result, account } = await runWithRecovery(CLICK, 0, attempt, pause, () => clock, () => 0, () => false, () => true);
+  assert.equal(result.status, "succeeded", log.join(", "));
+  assert.equal(account.attempts, 4, "still the first attempt and three retries");
+  assert.deepEqual(account.reveal, { scrolls: 3, shown: true });
+  const ladder = RECOVERY_REVEAL_BACKOFF_MS.reduce((sum, ms) => sum + ms, 0);
+  assert.ok(RECOVERY_BUDGET_MS - ladder >= 1_000, `the ladder (${ladder} ms) leaves the last attempt room inside the ${RECOVERY_BUDGET_MS} ms budget`);
 });

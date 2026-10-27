@@ -136,10 +136,12 @@ export function isConsentLayerText(text: string): boolean {
  * The phrases a rate-limit notice states its refusal in. A closed list, each on
  * word boundaries: going too fast or too quickly, too many attempts, slow down,
  * temporarily blocked, rate limited, and a wait of seconds or minutes before
- * trying again. "Try again" alone is not one -- a failed payment says it too --
- * so the wait has to be named with it.
+ * trying again, counted ("wait 30 seconds before") or not ("wait a few moments
+ * before", what a list's loader answers a request made too soon with, t755).
+ * "Try again" alone is not one -- a failed payment says it too -- so the wait
+ * has to be named with it.
  */
-const RATE_LIMIT_LAYER_PHRASE = /\b(?:(?:going|moving|posting|clicking|doing (?:this|that)) too (?:fast|quickly)|too many (?:requests|attempts|tries|actions)|slow down|temporarily (?:blocked|restricted|limited)|rate[- ]limit(?:ed)?|try again in \d+ ?(?:s|secs?|seconds?|mins?|minutes?)|wait \d+ ?(?:s|secs?|seconds?|mins?|minutes?) before)\b/iu;
+const RATE_LIMIT_LAYER_PHRASE = /\b(?:(?:going|moving|posting|clicking|doing (?:this|that)) too (?:fast|quickly)|too many (?:requests|attempts|tries|actions)|slow down|temporarily (?:blocked|restricted|limited)|rate[- ]limit(?:ed)?|try again in \d+ ?(?:s|secs?|seconds?|mins?|minutes?)|wait \d+ ?(?:s|secs?|seconds?|mins?|minutes?) before|wait a (?:few )?(?:moments?|seconds?|minutes?|while) before)\b/iu;
 
 /**
  * The phrases a page writes beside a press it could not carry out for now

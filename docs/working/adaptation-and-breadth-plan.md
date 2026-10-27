@@ -11,6 +11,12 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 ## Current State
 
+**Resumed 2026-10-27 (no feature freeze).** Only crossborder has a counted pass; this plan was last advanced on 2026-10-13
+and its 2026-10-23 scope date passed without a proposal. t758 (`supervisor` lane, paired worktrees `fxwork/t758/`) audits
+the prerequisites against current dev, runs the provider-free unarmed controls and armed preflights on the three gate
+scenarios, fixes what it finds, and writes the launch plan with a scope recommendation for 2026-11-05. Paid gate runs
+follow t751's finish; the supervisor launches them. Report: `adaptation-and-breadth-plan/reports/t758.md` in that tree.
+
 **Crossborder P4 resolved; first counted pass on `6a46e66b` / `73550acb`.** Supervisor independently inspected/reran complete immutable graph-history reconstruction, bound to the actual project-owned repair and its succeeded judged source run. All 25 operations are present; both repair pre-states match preceding history; the full reconstructed final graph matches durable state and recorded rollback matches the base. Same-domain before/after hashes differ. Supervisor separately excluded metadata/layout/stamps and confirmed exactly one node's executable parameters changed in the same graph. This satisfies P4 as reconstructed durable-history evidence, not an originally captured hash pair. P7 UI reviewed directly; all four independent goal facts held, including zero orders. Previously verified creation/repair/resumption and in-run/later zero-call reuse complete P1–P7 for `run-mv79nr9o-89a70c81` plus `replay-mv79t4ms-c8a3b890`. Earlier P4-held statements below are historical. Store fix diagnosis continues; no second paid crossborder launch is authorized yet because a source change resets the qualification streak.
 
 **Latest instruction-led qualification, October 13.** Frozen source: downstream `6a46e66b`, Core `73550acb`. Crossborder `run-mv79nr9o-89a70c81` passes judged creation, four-attempt target failure, validated repair, same-node resumption and independent goal; one applied adaptation advances revision 1 to 2. In-run reuse and later `replay-mv79t4ms-c8a3b890` pass. Supervisor independently verified the later receipt's unchanged Flow hash, disabled providers and all five zero counters. Cost: 20 calls / $0.018806934 accounted estimate. **Not yet supervisor-counted:** the repair lane's two aggregate reads both follow Core's in-run apply, so their hashes are equal; the helper's `counted: true` does not by itself satisfy P4's explicit before/after hash requirement. Same-domain earlier evidence is being sought without relaxing the gate. Full debug is retained; no second paid launch authorized.
@@ -100,8 +106,9 @@ Replays, dry runs, the recovery matrix and the G5 probe make no model calls.
 5. After two counted passes per site on one frozen pair, record the gate in the MVP plan. If it is not green by
    2026-10-23, bring a scope proposal rather than relaxing P1-P7.
 
-Open user decision: should a lasting press on rows the build's read did not select be refused? (Lane D's over-acts
-were hidden by the Lab reset; t504 fixed their cause.)
+Decided by the supervisor on 2026-10-27 (not a user decision): no refusal of a lasting press on rows the build's read did
+not select. Basis: the user's standing rule that only permission gates restrict what the model may do; t504 fixed lane D's
+over-act cause; t751's reset by observed state undoes the build's own acts. The user can overrule.
 
 Rules are AGENTS.md's testing rules and the audit's launch settings:
 

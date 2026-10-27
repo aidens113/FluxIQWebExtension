@@ -87,3 +87,19 @@ test("a run whose items share no class is named by its tag alone, and only where
     stood.restore();
   }
 });
+
+// A thread is one list (t755): a run that holds nested items of its own
+// template -- a comment's open replies -- is named only at any depth under the
+// container; a run of siblings is still named by the child candidate before it.
+test("a run of siblings keeps the child candidate; a run holding its nested items is named at any depth", () => {
+  const replies = [el("li", { class: "comment" }, [el("div", { class: "body" }, "reply")])];
+  const threaded = [el("li", { class: "comment" }, [el("div", { class: "body" }, "one"), el("ul", {}, replies)]), el("li", { class: "comment" }, [el("div", { class: "body" }, "two")])];
+  const stood = page(el("body", {}, [el("main", {}, [el("ul", {}, threaded)])]));
+  try {
+    assert.equal(generalizedItemSelector(asElements(threaded), "main > ul")?.selector, "main > ul > li.comment");
+    const thread = [threaded[0]!, replies[0]!, threaded[1]!];
+    assert.deepEqual(generalizedItemSelector(asElements(thread), "main > ul"), { selector: "main > ul li.comment", confidence: 0.7 });
+  } finally {
+    stood.restore();
+  }
+});

@@ -264,7 +264,8 @@ const RATE_LIMIT_NOTICES = [
   "Slow down! Please wait 30 seconds before posting again.",
   "Too many attempts. Try again in 2 minutes.",
   "You're doing that too quickly.",
-  "Rate limited: retry later."
+  "Rate limited: retry later.",
+  "Please wait a few moments before you try again. Try again"
 ];
 
 const NOT_RATE_LIMIT_NOTICES = [
@@ -272,7 +273,8 @@ const NOT_RATE_LIMIT_NOTICES = [
   "Your payment could not be processed. Try again.",
   "Delete this post? This cannot be undone. OK Cancel",
   "Your privacy choices ValueRidge and our 38 partners use cookies",
-  "Saved. You can try again later if the list looks out of date."
+  "Saved. You can try again later if the list looks out of date.",
+  "Wait for the confirmation email before you sign in."
 ];
 
 test("the scenarios' going-too-fast notice, and every phrase of the closed list, reads as a rate-limit layer", () => {

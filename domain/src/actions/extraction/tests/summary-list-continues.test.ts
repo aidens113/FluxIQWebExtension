@@ -19,7 +19,9 @@ test("every kind of continuing list is copied as sent", () => {
     { kind: "next_page", evidence: "following_page_number" },
     { kind: "load_more", evidence: "load_more_control" },
     { kind: "infinite_scroll", evidence: "declared_feed" },
-    { kind: "infinite_scroll", evidence: "still_growing" }
+    { kind: "infinite_scroll", evidence: "still_growing" },
+    // Paused by the site, not ended: its loader answered the read's reveal with a notice to wait (t755).
+    { kind: "infinite_scroll", evidence: "loader_asked_to_wait" }
   ];
   for (const listContinues of facts) {
     assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, listContinues }), { ...SUMMARY, listContinues }, JSON.stringify(listContinues));
