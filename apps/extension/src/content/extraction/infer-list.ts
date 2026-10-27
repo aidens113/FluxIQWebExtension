@@ -35,6 +35,12 @@
 // field. A level that fails either is not the record -- the walk goes on
 // outward rather than proposing a list nothing can read.
 //
+// **A thread is one list** (`nested-run/`, t755). Items the page draws
+// from the run's own template inside an item -- a comment's replies -- follow
+// that item in the run, so a read of a comment thread reads its open replies
+// in the order the page shows them, under an item selector that reaches them
+// (`item-selector.ts`, the descendant candidate).
+//
 // Confidence is the item selector's strength multiplied by the average coverage
 // of the fields: a run named by a test id every item shares, whose fields are in
 // every item, is 1, and everything read structurally or unevenly is less.
@@ -48,6 +54,7 @@ import { selectorFor } from "../selector";
 import { detectPagination } from "./detect-pagination";
 import { inferFields } from "./infer-fields";
 import { generalizedItemSelector, type ItemSelectorCandidate } from "./item-selector";
+import { withNestedItems } from "./nested-run";
 import { isRecordPair } from "./record-pair";
 import { keyValueRecord } from "./single-record";
 
@@ -151,10 +158,15 @@ function runProposal(run: readonly Element[], container: Element): WebAutomation
   };
 }
 
-/** The element's siblings rendered from the same template, itself included, in document order. */
+/**
+ * The element's siblings rendered from the same template, itself included, each
+ * followed by the same-template items nested in it -- a comment's replies --
+ * in document order (`./nested-run/`).
+ */
 function sameTemplateSiblings(element: Element, container: Element): Element[] {
   const signature = itemTemplateSignature(element);
-  return Array.from(container.children).filter((child) => isRecordItemTag(child.tagName) && itemTemplateSignature(child) === signature);
+  const sameTemplate = (child: Element): boolean => isRecordItemTag(child.tagName) && itemTemplateSignature(child) === signature;
+  return withNestedItems(Array.from(container.children).filter(sameTemplate), sameTemplate, itemTemplateSignature);
 }
 
 /** The template an item is rendered from, as every grouping of siblings in this directory spells it. */

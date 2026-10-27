@@ -204,6 +204,7 @@ const ASKS_NOTHING: Readonly<Record<string, string>> = {
   "crossborder-marketplace-collect-official-coupon-only": "collects a private coupon without checkout or purchase",
   "everything-store-plus-earbuds-under-50": "a read",
   "everything-store-first-page-plus-earbuds": "a read",
+  "everything-store-first-page-plus-earbuds-deal-wheel": "a read, after turning down a promotion",
   "everything-store-kettle-to-cart": "fills the cart and buys nothing",
   "crossborder-marketplace-spain-hubs": "a read",
   "crossborder-marketplace-hub-to-cart": "fills the cart and buys nothing",

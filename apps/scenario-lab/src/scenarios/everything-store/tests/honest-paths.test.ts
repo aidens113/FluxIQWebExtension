@@ -48,7 +48,7 @@ describe("an honest shopper passes every oracle", { concurrency: true }, () => {
       await kit.settleIn(page);
       await kit.search(page, "wireless earbuds");
       const wheel = page.getByRole("dialog", { name: "Spin to win up to 20% off!" });
-      await wheel.waitFor({ timeout: STORE_TIMINGS.dealWheel + 5000 });
+      await wheel.waitFor({ timeout: 5000 });
       assert.deepEqual(await kit.factFailures(page, expected.finalState?.filter(({ id }) => id === "wheel-closed") ?? []), ["wheel-closed: expected false, found true"], "a run that leaves the wheel up fails the variant's oracle");
       await page.getByText("No thanks, I would rather pay full price", { exact: true }).click();
       await wheel.waitFor({ state: "detached" });

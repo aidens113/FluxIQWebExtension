@@ -26,6 +26,7 @@ function harness(record: { topologyOptions: unknown[]; inspected: unknown[]; tok
       return { control, projectId: "unit-project", authorizationPassword: "unit-password", scenarioOrigin: "http://127.0.0.1:4100", allocation: { controllerToken: "unit-token", storageDir: "unit-storage", scenarioPortRetained: true }, close: async () => undefined };
     },
     selectReplayProject: async () => "actual-project",
+    readFlowGraphHash: async () => "graph",
     readFlowNodes: async () => [{ id: "read", outputActionId: "web.dom.extract", definitionId: "web.output.dom-extract", parameterValues: {} }],
     replayKeyIdentities: async () => [],
     openReplayBrowser: async () => browser,

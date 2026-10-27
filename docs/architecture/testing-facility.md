@@ -741,8 +741,10 @@ later. An accepted usable Flow and its exact task oracles are prerequisites;
 an unfinished build is never replay evidence.
 
 It then requires Core's own record of the run to show zero provider calls, zero
-interventions and zero harness activations, the saved Flow's content hash to be
-unchanged, and the task's judgement to hold: for a dataset task, every expected
+interventions and zero harness activations, the saved Flow's content hash and its executable-graph hash (`flowGraphHash`: the
+nodes and edges of the parent and every Subflow graph, the repair lane's
+`stepsHash`, which a repair or learned handler moves without moving the
+document hash) to be unchanged, and the task's judgement to hold: for a dataset task, every expected
 record matched. The result is written to `<runs>/replays/<replay-id>.json` and
 printed: the workspace, project and Flow ids, the content hash before and after,
 the saved navigation origins against the origin served, the model block above,

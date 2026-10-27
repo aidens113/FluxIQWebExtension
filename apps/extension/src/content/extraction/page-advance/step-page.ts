@@ -9,7 +9,9 @@
 // - `next`, which an absent mode also means: follow the Next control
 //   (`./follow-next.ts`). With no way at all -- a next-page step whose list
 //   carried no pagination -- the pager's Next is found from the list, and
-//   where the page shows none the list is scrolled for more (`./found-way.ts`). A page
+//   where the page shows none its load-more control found around it is
+//   pressed, or where it shows neither the list is scrolled for more
+//   (`./found-way.ts`). A page
 //   that shows items and no way forward is watched for one briefly before the
 //   list counts as ended. After a click the list must become a different list
 //   -- its first item detached or replaced, or its length changed -- within ten
@@ -49,7 +51,8 @@ import type { PageStep, PaginationProgress } from "./types";
 
 /**
  * Moves the list on by one page the way `way` says, or, when `way` is absent,
- * by the pager's Next found from the list or a scroll where it shows none. `bound` is the read's: pages for
+ * by the pager's Next found from the list, its load-more control where it shows
+ * no Next, or a scroll where it shows neither. `bound` is the read's: pages for
  * every way but `scroll`, scrolls for `scroll`; a next-page step has none.
  */
 export async function stepPage(way: WebAutomationNextPageWay | undefined, progress: PaginationProgress, bound: number | undefined): Promise<PageStep> {

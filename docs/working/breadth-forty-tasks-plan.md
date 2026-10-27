@@ -13,6 +13,18 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
+**Latest (2026-10-27, resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
+16 audited provider-free only ([coverage map](./breadth-forty-tasks-plan/reports/diag-coverage-2026-10-27.md); the
+round-5 run ids there supersede the table below). Round 6 (office-checkout-review, save-quillmark-remote,
+recent-group-posts, newest-likes) launches after t751 finishes. Fixes in flight, each in its own task worktree:
+t755 load-more list end (photo `priya-tags`), t756 covered target on later grid screens (photo `august-over-1300`),
+t757 judge requested-output obligation (auction `buy-it-now-quote`'s zero-record yes). Reruns owed on current dev:
+cheap-accessory-auctions, carbon-price-check (plus a conditional-send probe), halvard-labs-office-jobs; after t751:
+test-ride-question, kiln-notes, hide-suggested-posts, the held everything-store reset r6 (t752 covers its split
+verdict by code path). Diagnoses: [auction and classifieds](./breadth-forty-tasks-plan/reports/diag-auction-classifieds-2026-10-27.md),
+[photo and store](./breadth-forty-tasks-plan/reports/diag-photo-store-2026-10-27.md). Still unproven for the MVP
+besides breadth: the adaptation gate, recording plus instructions, P6, Firefox install (not installed here).
+
 **What the user asked (2026-10-17 onward):** forty new tasks on the ten realistic sites (four each), run live,
 debugged and fixed, fast; an installed-extension proof; only about one task per site run fully end to end, plus
 reruns of repaired failures; every task possible and unambiguous; every scraping task with real data to verify
@@ -622,6 +634,44 @@ The 2026-10-18 entries are archived in
   t752's headed provider-free reproductions pass.
 - Outcome: Failed (0 of 4)
 - Follow-up: t751, t753, t752; then round 6.
+
+### 2026-10-27 - Diagnoses of the failures outside round 6; three fix tasks opened
+- Agent: supervisor; workers diag-auction-classifieds, diag-photo-store, diag-coverage (read-only, Sonnet)
+- Changed: three diagnosis reports under `breadth-forty-tasks-plan/reports/`; tasks t755, t756, t757 opened with
+  `pnpm task start <slug> --worktree [--core]` and dispatched to `worker-heavy`.
+- Decision (supervisor): t757's requested-output obligation comes from the build's typed plan declaration, never from
+  the request's words; a record-requiring plan's zero-record yes becomes unsure with a grounded defect; honest empty
+  only when the source list was read to its end; action-only unaffected.
+- Validation: read-only diagnoses; supervisor confirmed `git log dev` holds the Lab spend fix `91ea5e27` ("count
+  canonical paid result checks once") and that t751's Core diff touches no `result-verification/` or `read-account/`
+  file (`git diff --name-only dev...HEAD` grouped by area).
+- Outcome: Partial; fixes in flight, no paid run until t751 finishes.
+- Follow-up: integrate t755-t757 as each passes; round 6 after t751; then the owed reruns.
+
+### 2026-10-27 - t756 and t757 merged; t759 opened
+- Agent: supervisor; workers t756-covered-target, t757-judge-requested-output, t759 (Sonnet, escalated once to Opus)
+- Changed: t756 (downstream `3f70a082`): a press landing inside the target's own control counts (photo grid counts
+  layer). t757 (downstream `dc0b2d52`, Core `20c54222`): optional task-spec `answer: { kind: "records", columns }`;
+  a yes over no records for such a part becomes unsure (`core.result.requested_output_missing`); the judge summary
+  lists returned values. t757 is inert until wired.
+- Decisions (supervisor): a changed `answer` counts as a part change in amendments; a one-page "no results" read stays
+  unsure (strict; never accepts a wrong empty answer); the runtime check gets the declaration persisted with the
+  promoted Flow, not a port to the build record.
+- Owed after t751 (t751's files): `project-agents/supervisor/tools.ts` part schema `answer`;
+  `project-agents/supervisor/guidance.ts` one generic sentence (prompt-contract tests); `service/project-build/
+  task-checklist.ts` `checked()` copies `answer`; persist the declaration with the promoted Flow for `run-outcome.ts`.
+  Screens 2-3 of `august-over-1300` (a "loader asked to wait" list fact) moved into t755.
+- Validation: t756 `pnpm test:content -- e2e/content/tests/actionability/tests/grid-cell-overlay.spec.ts --headed
+  --workers=1` -> "3 passed (1.4m)" (supervisor rerun); unit "# pass 6 / # fail 0"; extension tsc exit 0; finish audit
+  passed. t757 Core `pnpm test` over result-verification and project-agents/contracts -> "Test Files 149 passed (149)",
+  "Tests 1258 passed (1258)" and "1 passed (1)"/"3 passed (3)" (supervisor rerun); Core finish contracts "Tests 68
+  passed (68)"; Core `pnpm structure:check` "passed (443 warning(s), 1152 baselined)".
+- Pre-existing failures on dev, to fix forward: Core `recovery/refuted-result/tests/brief-checked.test.ts`; Core
+  `project-build-facade.test.ts` and `project-build-time-limit.test.ts` (fixed on the t751 branch, `fb81dc05`);
+  downstream `wake-press-cover.spec.ts:71` and `company-website-team-more.spec.ts:57` (t759: the first is a regression
+  from `296b710c`, fixed; the second still fails 2 of 2 headed runs, escalated).
+- Outcome: Accepted (t756, t757); t759 Partial.
+- Follow-up: t757 wiring after t751; t759 escalation; brief-checked.
 
 ## Open Questions
 

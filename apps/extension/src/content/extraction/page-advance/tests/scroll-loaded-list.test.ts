@@ -63,6 +63,13 @@ class El {
     return top.tagName === "BODY";
   }
 
+  /** The top of its tree, as the press watch asks before a load-more press (`../load-more.ts`). */
+  getRootNode(): El {
+    let top: El = this;
+    while (top.parentElement) top = top.parentElement;
+    return top;
+  }
+
   getAttribute(name: string): string | null {
     return this.attributes.get(name) ?? null;
   }
