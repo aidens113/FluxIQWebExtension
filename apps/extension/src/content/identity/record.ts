@@ -122,6 +122,8 @@ import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
+import { isActionLink } from "./action-link";
+import { holdsOnlyControls } from "./control-bar";
 import { controlRow, soleAncestors } from "./control-row";
 import { heldAsJoinedLines } from "./joined-row-value";
 import { normalizedText } from "./normalized-text";
@@ -281,7 +283,8 @@ function readRowTitle(row: Element): { element: Element; words: string } | undef
       const words = recordText(child);
       if (words) return { element: child, words };
     }
-    if (link === undefined && tagOf(child) === "a" && child.hasAttribute("href")) {
+    // A link that acts on the page -- a `#` Share, a link that is a button -- names nothing (`./action-link.ts`, t778).
+    if (link === undefined && tagOf(child) === "a" && child.hasAttribute("href") && !isActionLink(child)) {
       const words = recordText(child);
       if (words) link = { element: child, words };
     }
@@ -621,15 +624,39 @@ function sameTagSibling(record: Element): Element | undefined {
  * sits in a part beside the element's that is shaped like it
  * (`inSiblingOfOwnShape`): a line with no title of its own is not about its
  * neighbour.
+ *
+ * A part that holds nothing but controls is a bar of actions, and a link in it
+ * is one of them: the job board's "Apply on company site" beside the heart that
+ * saves the job. Such a part titles nothing, and nor does a link in it read
+ * again from a part above, so the walk goes on to the part that says something
+ * -- the pane head's heading (`./control-bar.ts`, t778).
  */
 function nearestTitle(element: Element): string | undefined {
   let current = element.parentElement;
+  let bar: Element | undefined;
   for (let depth = 0; current && depth < MAX_RECORD_DEPTH; depth += 1) {
     const title = rowTitleElement(current);
-    if (title) return inSiblingOfOwnShape(element, title.element) ? undefined : title.words;
+    const heading = title !== undefined && isHeading(title.element);
+    if (title && !heading && bar === undefined && holdsOnlyControls(current)) bar = current;
+    else if (title && (heading || bar === undefined || !within(title.element, bar))) {
+      return inSiblingOfOwnShape(element, title.element) ? undefined : title.words;
+    }
     current = current.parentElement;
   }
   return undefined;
+}
+
+/** Whether the element is a heading, by its tag or its role. */
+function isHeading(element: Element): boolean {
+  return HEADING_TAGS.has(tagOf(element)) || element.getAttribute("role")?.trim().toLowerCase() === "heading";
+}
+
+/** Whether `element` is `part` or sits inside it. */
+function within(element: Element, part: Element): boolean {
+  for (let current: Element | null = element; current; current = current.parentElement) {
+    if (current === part) return true;
+  }
+  return false;
 }
 
 /**
