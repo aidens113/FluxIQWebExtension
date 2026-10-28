@@ -17,16 +17,17 @@ Related: [extension-core-boundary-audit.md](./extension-core-boundary-audit.md) 
 [the Codex handoff](./trace-offline-trials-plan/reports/handoff-2026-10-21-codex.md) (step 1 done).
 The original [Claude handoff](./trace-offline-trials-plan/reports/handoff-2026-10-20.md) remains historical context.
 
-**Publication boundary:** t753, t752 and t754 are merged and published in both repositories (t754 Core finish
-2026-10-27). t751 retains five uncommitted Core files plus preserved reports in its paired worktrees. Final
-corrections pass their focused gates, but no complete current-code reset build/browser acceptance exists. Next:
-handoff steps 2-6 for t751 (review and checkpoint the dirty files, integrate current dev, final gates, headed
-site-reset specs, finish), then P6. Live rounds have not started.
+**t751 finished (2026-10-27): reset by observed state is merged and published** (downstream `dd708cac`, Core
+`1617ac70`): 17/17 headed provider-free site-reset specs on the integrated code, Core owners 486 files / 4757 tests
+plus real-SQL 10/60, contracts 68/68. Also merged today: t754-t763 except t761's Core-only twin (all in the
+ledger below and in `breadth-forty-tasks-plan.md`), t762 (downstream `68c23ecc`, Core `3bb38395`).
 
-**In flight (2026-10-27):** steps 2-3 done (Core checkpoint `fb81dc05`, `dev` merged into both t751 trees; downstream
-merge `55e6cb64`). Steps 4-5 dispatched to `worker-heavy` (report `reports/t751-final-acceptance.md` in the t751
-downstream tree). In parallel, three read-only `worker` diagnoses of the breadth failures not in round 6 (reports
-`breadth-forty-tasks-plan/reports/diag-{auction-classifieds,photo-store,coverage}-2026-10-27.md`).
+**Now (2026-10-27 evening):** the first full sweep runs on pinned heads (downstream `dd708cac`, Core `1617ac70`) in
+detached worktrees `fxwork/sweep-20261027/`, logs `lab-runs/2026-10-27/sweep/`; a pass makes those heads the first
+`main` promotion. In flight before the launch window: t764 (t757's requested-output wiring) and t765 (a session-check
+wall is an interruption, never an end; it can appear on photo-social's grid). **Launch window** once both merge and
+the sweep finishes: freeze `dev`, sync the four lane trees (handoff-2026-10-20 step 1), round 6 in slots 1-4, then
+adaptation rounds 1 and 2 on the same frozen pair (`adaptation-and-breadth-plan.md`). P6 starts after the window.
 
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
