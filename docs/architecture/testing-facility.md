@@ -818,6 +818,40 @@ snapshots with the network off, and need the extension built first
 
 An offline pass is evidence only; the judged whole run stays live.
 
+**Offline trials inside builds (P6).** A build's own test calls run offline
+first (Core: `docs/architecture/automation-studio/client-gateway.md`, "Offline trials in builds (P6)").
+Two headed, provider-free specs prove it end to end,
+`apps/extension/e2e/site-reset/tests/offline-first-job.spec.ts` (job-board)
+and `offline-first-photo.spec.ts` (photo-social). Each drives a two-subflow
+project build with a scripted provider and a scripted judge that answers by
+what is under test, so it also answers the offline judge calls. The repaired
+subflow's revision 1 is a live `no`; revision 2 is checked against revision 1's
+recording and its `no` is kept, with no reset and only `capture_snapshot`
+commands to the site; revision 3 passes offline, is then reset and run live,
+and the judge says yes. The supervisor's whole test (`core.test_candidate`)
+then runs live. Everything is asserted from Core's step log: the four
+`tool-core.test_subflow` folders and one `tool-core.test_candidate`, the
+decided offline outcomes `kept_no` then `passed`, `checkedAgainst:
+"recorded_run"` on the kept answer, and the order `offline:passed` before
+`reset`. The specs set `FLUXIQ_CLIENT_GATEWAY_TRACE=1` (tracing, which
+installs the offline-trial host) and `FLUXIQ_LLM_STEP_LOG_DIR` (the step log
+under the test's output path), and clear `FLUXIQ_OFFLINE_TRIALS`, restoring
+all three afterwards (`offline-trial-environment.ts`). Run from
+`apps/extension`:
+
+```powershell
+pnpm test:e2e e2e/site-reset/tests/offline-first-job.spec.ts --workers=1
+pnpm test:e2e e2e/site-reset/tests/offline-first-photo.spec.ts --workers=1
+```
+
+The Lab's build-time report (`packages/test-runner/src/build-time/`) reads the
+same step log: an `offline_trial` step is the `offline` category (precedence
+reset, offline, trial, model, exploration), and each run and the totals carry
+`liveTrialCount` (test windows with no kept offline answer) and
+`offlineTrialCount` (offline checks that ran, not `not_tried` or refused),
+beside the unchanged `trialCount`, so an off/on comparison
+(`FLUXIQ_OFFLINE_TRIALS=0`) can be measured.
+
 ### Reusable self-recording demo workspace
 
 Two explicit smoke scripts exercise the complete author-and-run loop, and two

@@ -3,7 +3,12 @@ import { IntervalSet } from "./interval-set.js";
 import type { BuildCategory, Interval, RunBuildTime, StepClass, StepTiming } from "./types.js";
 
 /** Reset first: a reset step Core writes inside a trial's window is reset time, taken out of the trial once. */
-const PRECEDENCE: readonly Exclude<BuildCategory, "other">[] = ["reset", "trial", "model", "exploration"];
+const PRECEDENCE: readonly Exclude<BuildCategory, "other">[] = ["reset", "offline", "trial", "model", "exploration"];
+
+/** Offline outcomes that answered the test call without a live run. */
+const KEPT = new Set(["kept_no", "kept_failed"]);
+/** Offline outcomes of a check that did not run. */
+const RAN_NOTHING = /^(not_tried|refused:.*)$/u;
 
 type Classified = { step: StepTiming; category: StepClass; rule: string };
 
@@ -54,14 +59,14 @@ function trialWindows(classified: readonly Classified[]): Interval[] {
   return windows;
 }
 
-const zero = (): Record<BuildCategory, number> => ({ trial: 0, reset: 0, model: 0, exploration: 0, other: 0 });
+const zero = (): Record<BuildCategory, number> => ({ trial: 0, offline: 0, reset: 0, model: 0, exploration: 0, other: 0 });
 
 /**
  * Divides one run's build wall time. Build wall time runs from the first
  * non-playback step's start to the last one's end, less the playback windows
  * inside that span (the Lab's replay of the applied Flow; a repair build after
  * it still counts). Each category is an interval union clipped to that time;
- * the exclusive shares apply reset > trial > model > exploration, and `other`
+ * the exclusive shares apply reset > offline > trial > model > exploration, and `other`
  * is what is left: bookkeeping steps, unknown steps and idle gaps. So the reset
  * steps Core writes inside a trial come out of that trial's time, and two
  * overlapping reset steps count once (each category is an interval union).
@@ -80,7 +85,7 @@ export function measureBuildTime(steps: readonly StepTiming[]): RunBuildTime {
   }
   const result: RunBuildTime = {
     wallMs: 0, buildStart: null, buildEnd: null, playbackMs: 0, exclusive: zero(), union: zero(), idleMs: 0,
-    modelInTrialMs: 0, resetInTrialMs: 0, trialCount: 0, longestTrialMs: 0, stepCount: ordered.length, unknown, ruleCounts
+    modelInTrialMs: 0, resetInTrialMs: 0, trialCount: 0, liveTrialCount: 0, offlineTrialCount: 0, longestTrialMs: 0, stepCount: ordered.length, unknown, ruleCounts
   };
   if (build.length === 0) return result;
   const buildStart = Math.min(...build.map(item => item.step.start));
@@ -91,6 +96,7 @@ export function measureBuildTime(steps: readonly StepTiming[]): RunBuildTime {
   const trials = trialWindows(build);
   const unions: Record<BuildCategory, IntervalSet> = {
     trial: IntervalSet.of(trials).intersect(wall),
+    offline: ofCategory("offline"),
     reset: ofCategory("reset"),
     model: ofCategory("model"),
     exploration: ofCategory("exploration"),
@@ -108,6 +114,10 @@ export function measureBuildTime(steps: readonly StepTiming[]): RunBuildTime {
   result.modelInTrialMs = unions.model.intersect(unions.trial).totalMs;
   result.resetInTrialMs = unions.reset.intersect(unions.trial).totalMs;
   result.trialCount = trials.length;
+  const offlineSteps = build.filter(item => item.rule === "offline-trial").map(item => item.step);
+  result.offlineTrialCount = offlineSteps.filter(step => !RAN_NOTHING.test(step.outcome ?? "")).length;
+  const kept = offlineSteps.filter(step => step.outcome !== null && KEPT.has(step.outcome));
+  result.liveTrialCount = trials.filter(trial => !kept.some(step => step.start >= trial.start && step.start <= trial.end)).length;
   result.longestTrialMs = trials.reduce((longest, trial) => Math.max(longest, trial.end - trial.start), 0);
   result.buildStart = buildStart;
   result.buildEnd = buildEnd;
