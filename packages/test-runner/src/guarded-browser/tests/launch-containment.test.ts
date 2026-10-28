@@ -19,6 +19,7 @@ const SANCTIONED: Record<string, string> = {
   "guarded-browser/launch-guarded-context.ts": "installs the guard before it returns the context",
   "run-scenario/browser-session/launch-browser.ts": "launch-extension-session.ts installs and proves the guard before returning control",
   "interactive-session.ts": "installs the guard before opening any page",
+  "offline-snapshot-page/open-web-snapshot-page.ts": "launches no page of its own: open-snapshot-sandbox.ts opens only an offline context whose route answers every request from the recorded snapshot, so no request reaches a network (added with fc8370c3, never listed)",
   "bench/compatibility.ts": "launches headless only to read the browser version; it opens no page",
   "extension-chat-check/firefox/launch-firefox.ts": "installs the guard before it installs the add-on or returns the context; Firefox has no containment switches",
 };

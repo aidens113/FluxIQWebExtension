@@ -91,8 +91,9 @@ test("a change in the section that stays is an answer, read once it has held sti
   page.show(BUSY);
   setTimeout(() => page.show(POSTED), 120);
   const started = Date.now();
-  assert.equal(await look.settle(5_000), false);
-  assert.ok(Date.now() - started < 1_500, "a press that opened something waits for it to hold still, not for the whole window");
+  // The window is long and the bound far inside it, so a loaded machine (the 2026-10-27 sweep took 2.5 s here against 0.9 s alone) cannot fail it while a read at the window's end still does.
+  assert.equal(await look.settle(10_000), false);
+  assert.ok(Date.now() - started < 5_000, "a press that opened something waits for it to hold still, not for the whole window");
 });
 
 test("a busy state that holds still for a while before it reverts is still waited out", async () => {
