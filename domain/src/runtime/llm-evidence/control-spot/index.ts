@@ -8,5 +8,7 @@ export { webResetCollections } from "./collection";
 export { webControlPlace } from "./place";
 export { webControlState } from "./state";
 export { webControlStates } from "./states";
+// Every shown value of a read by its own place (t772 value witness).
+export { webValueStates } from "./values";
 export { isWebStatefulControl } from "./stateful";
 export { webControlRole } from "./role";

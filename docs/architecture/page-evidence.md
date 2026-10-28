@@ -135,21 +135,41 @@ carrying `aria-pressed`, `aria-checked` or `aria-selected`.
 - A read's **`controls`** (`webControlStates`) counts, at each place, how many
   visible controls show each state. A read with more than 2,000 places (Core's
   bound) reports none.
+- A read's **`values`** (t772 value witness, `webValueStates` in
+  `control-spot/values.ts`) maps each shown value's place to an opaque token of
+  what it shows: the place digests the trusted resource, location, frame and
+  the element's selector (the parts a list's `scope` uses), the value its
+  page-view words, field value and chosen option. Stateful controls (read by
+  `controls`), hidden elements, anything in or under a dialog or layer,
+  elements with no words and no value, and places two elements share are left
+  out; a page with more than 2,000 places reports `{}`. It is what Core sees a
+  value set back by: a choice confirmed by a button that reloads its page
+  shows its effect not on the pressed control but on a value elsewhere on the
+  page.
 
 Where they travel:
 
-- The **start-state answer** carries `controls` and `collections`
-  (`start-state/observe.ts`).
+- The **start-state answer** carries `controls`, `collections` and `values`
+  (`start-state/observe.ts`; `values` absent when empty).
 - A **permission declaration**'s `control` carries the acted control's `place`
   and `state` just before the action (`permission.ts`, from `webTargetSpot` in
   `control-spot/target.ts`), beside `item`, `dialog`, `subject`, `page`,
   `scope` and `resource`.
 - A **step diff**'s `spot` carries the same tokens, and for a step whose
-  control has a place and that stayed on its document the diff adds
+  control has a place and that stayed on its page the diff adds
   `controls: { page, before, after }`: the page's scope token and that place's
   counts on the page before and after the step (`state-diff/places/diff.ts`).
   Core reads from it a toggle a trial pressed, and from later reads the press
-  that turns it back.
+  that turns it back. For a step that stayed on its page and replaced a shown
+  value the diff adds `values: { page, location, replaced: [{ place, from, to,
+  newValue? }] }` (`state-diff/places/value-replacements.ts`, at most 256): a
+  place is replaced when its value changed and the old value is gone from the
+  page (one still shown elsewhere only moved), and `newValue` marks a new value
+  the page did not show before. A step **stayed on its page** when it stayed
+  on its document, or when the page reloaded to the same address on the same
+  trusted source (a settings form's Save, a chooser's confirming press); a
+  list's `items` and `collections` still need one document. Core judges a
+  value act by these (`flow-bootstrap/reset-settlement/value-tracker.ts`).
 
 ## One Contract, In The Domain
 
