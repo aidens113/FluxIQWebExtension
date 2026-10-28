@@ -2,6 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { judgeLog, retiredCodesIn } from "../change-proof";
 import { actsUnder, bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, rowControl, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type NamedAct, type ScriptedAnswer } from "../index";
 
 const TASK = "Save one job to my saved jobs.";
@@ -35,7 +36,7 @@ const feedbackSteps = (tested: JsonObject | undefined) => list(record(tested?.fe
  * naming the ref, resubmits the same Flow text, and tests; if the gate lists
  * the explored save as still to undo, it puts it back on its own My jobs row
  * under `undoes` (as the person's reset would) and tests again. Once a trial
- * has run it asks the gate once more, to see what that trial left.
+ * has run it asks once more (t775: the trial runs with the explored save in place, so no undo is scripted).
  */
 test("installed gateway project build refuses a trial of a lasting step never pressed while exploring, then runs it once explored", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
@@ -43,7 +44,7 @@ test("installed gateway project build refuses a trial of a lasting step never pr
   const { page } = installed;
   const myJobs = new URL("/scenarios/job-board/myjobs", installed.origin).href;
   const viewJob = new URL(viewJobHref(TARGET), installed.origin).href;
-  const build = projectBuild(installed, "Installed reset job unexplored", TASK);
+  const build = projectBuild(installed, "Installed reset job unexplored", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   /** Each scripted call's own answer, by call id. */
   const answers: Record<string, JsonObject> = {};
@@ -51,6 +52,7 @@ test("installed gateway project build refuses a trial of a lasting step never pr
   const clicks: Record<string, { before: number; after?: number }> = {};
   /** The calls the builder made, in order. */
   const sent: string[] = [];
+  const judge = judgeLog();
   const tests: Array<{ call: string; answer: JsonObject }> = [];
   let destinationReference = "", heartHandle = "", exploredAct = "";
   /** My jobs as the build found it, and as it reads just after the first test. */
@@ -150,7 +152,7 @@ test("installed gateway project build refuses a trial of a lasting step never pr
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const coded = (callId: string) => answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : undefined);
     const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, afterTest, exploredAct, candidate, resubmitted, clicks, answers, tests, reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
@@ -193,18 +195,16 @@ test("installed gateway project build refuses a trial of a lasting step never pr
     const exploredNamed = named.filter(act => act.call === "save.explored");
     if (exploredNamed.length) expect(new Set(exploredNamed.map(act => act.act))).toEqual(new Set(["act-1"]));
 
-    // 3. Once the explored save is settled the trial runs and answers yes; its save step succeeded.
+    // 3. t775: the explored save is not put back first. The trial runs at once with it in place, answers yes, and its save step
+    // succeeded; the judge's request names the explored save under `leftFromEarlier`, and no retired reset code shows anywhere.
     const ran = tests.find(entry => trialCode(entry.answer) === "yes");
-    expect(ran?.call).toMatch(/^trial\.(?:explored|clean)$/u);
+    expect(ran?.call).toBe("trial.explored");
     expect(ran?.answer.trialRunId).toMatch(/^trial\./u);
     expect(feedbackSteps(ran?.answer).some(step => step.label === SAVE_LABEL && step.status === "succeeded")).toBe(true);
-    // It did not start with the explored save still open.
-    expect(actsUnder(ran?.answer, "actsToUndo").some(act => act.call === "save.explored")).toBe(false);
-    // Its own save is left on the site, with a settle naming My jobs.
-    const after = tests.find(entry => entry.call === "trial.after")?.answer;
-    const trialActs = [...actsUnder(ran?.answer, "leftOnSite"), ...actsUnder(after, "actsToUndo")].filter(act => act.call === undefined && /^trial step \d+ /u.test(act.did));
-    expect(trialActs.length).toBeGreaterThanOrEqual(1);
-    expect(trialActs.some(act => (act.settle ?? "").includes(myJobs))).toBe(true);
+    expect(sent.some(callId => callId.startsWith("undo"))).toBe(false);
+    const left = judge.siteChanges()[0]?.leftFromEarlier;
+    expect(Array.isArray(left) ? left.length : 0).toBeGreaterThanOrEqual(1);
+    expect(retiredCodesIn(answers, tests, observed.outcomes, provider.receipts, failure)).toEqual([]);
   } finally {
     await build.stop();
     await installed.close();

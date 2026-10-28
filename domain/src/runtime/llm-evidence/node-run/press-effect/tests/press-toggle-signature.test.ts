@@ -26,7 +26,7 @@ test("Save Senior Engineer becoming Unsave Senior Engineer gains unsave and lose
 test("an aria-pressed false to true press gives the attribute signature, idempotent with web.dom.check", () => {
   assert.deepEqual(webPressToggleSignature(CLICK, bound([like(false)]), bound([like(true)]), "t7"), {
     signature: { via: "attribute", attribute: "aria-pressed", to: true },
-    idempotentWith: "web.dom.check"
+    idempotentWith: "web.output.dom-check"
   });
 });
 
@@ -42,4 +42,22 @@ test("no change, a gone target, another page, a navigation or no handle says not
   assert.equal(webPressToggleSignature(CLICK, before, bound([save("Unsave Senior Engineer")], { location: "https://shop.test/cart" }), "t7"), undefined);
   assert.equal(webPressToggleSignature(NAVIGATE, before, bound([save("Unsave Senior Engineer")]), "t7"), undefined);
   assert.equal(webPressToggleSignature(CLICK, before, bound([save("Unsave Senior Engineer")]), undefined), undefined);
+});
+
+test("a span whose class gains a token gives the class signature; transient-only changes give none", () => {
+  const heart = (classes: string): FixtureElement => ({ tag: "span", target: "t7", attributes: [["class", classes]] });
+  assert.deepEqual(webPressToggleSignature(CLICK, bound([heart("heart")]), bound([heart("heart heartOn")]), "t7"), {
+    signature: { via: "class", gains: ["heartOn"], loses: [] }
+  });
+  assert.equal(webPressToggleSignature(CLICK, bound([heart("heart")]), bound([heart("heart hover loading")]), "t7"), undefined);
+});
+
+test("a wrapper above the pressed element within the control supplies the class change", () => {
+  const packet = (wrap: string): FixtureElement[] => [
+    { tag: "div", target: "t1", attributes: [["class", wrap]] },
+    { tag: "span", target: "t7", parent: "t1", attributes: [["class", "icon"]] }
+  ];
+  assert.deepEqual(webPressToggleSignature(CLICK, bound(packet("w")), bound(packet("w saved")), "t7")?.signature, { via: "class", gains: ["saved"], loses: [] });
+  const row = (cls: string): FixtureElement[] => [{ tag: "li", target: "t1", attributes: [["class", cls]] }, { tag: "span", target: "t7", parent: "t1", attributes: [["class", "icon"]] }];
+  assert.equal(webPressToggleSignature(CLICK, bound(row("r")), bound(row("r selected")), "t7"), undefined);
 });

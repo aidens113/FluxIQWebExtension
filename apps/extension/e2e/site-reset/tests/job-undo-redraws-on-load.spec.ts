@@ -2,6 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { judgeLog, retiredCodesIn } from "../change-proof";
 import { actsUnder, bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Save three jobs to my saved jobs.";
@@ -39,10 +40,11 @@ test("installed gateway project build keeps the other acts undoable after an und
   const { page } = installed;
   const myJobs = new URL("/scenarios/job-board/myjobs", installed.origin).href;
   const viewJobs = TARGETS.map(posting => new URL(viewJobHref(posting), installed.origin).href);
-  const build = projectBuild(installed, "Installed reset job redraw", TASK);
+  const build = projectBuild(installed, "Installed reset job redraw", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   const answers: Record<string, JsonObject> = {};
   const tests: JsonObject[] = [];
+  const judge = judgeLog();
   const clicks: Record<string, { before: number; after?: number }> = {};
   let destinationReference = "", heartHandle = "";
   /** Core numbers acts from 1 in the order the build made them and never reuses a number. */
@@ -91,7 +93,7 @@ test("installed gateway project build keeps the other acts undoable after an und
       return { revision: submitted.revision, digest: submitted.digest };
     };
     queue.push(turn => send("submit", turn.call("submit", "core.submit_subflow", { flow: flow() })));
-    // The first gate after two undos landed on a list that redraws only on load.
+    // The first trial after two undos landed on a list that redraws only on load (t775: it runs, with the third act in place).
     queue.push(turn => send("trial.mid", turn.call("trial.mid", "core.test_subflow", candidate())));
     open("list.reload", myJobs);
     undoRow("undo.third", 2, () => acts[2]!);
@@ -116,7 +118,7 @@ test("installed gateway project build keeps the other acts undoable after an und
       tests.push(answers["trial.mid"] ?? {}, answers["trial.final"] ?? {});
       return turn.complete({ subflowKey: "main", ...(answers["submit"] ? candidate() : {}) });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 30, maxCallsPerRun: 40, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     // `pressedAgain`: the runtime pressed the control a second time because the first changed nothing it could see.
     const summary = Object.fromEntries(Object.entries(answers).map(([id, answer]) => [id, { ok: answer.ok ?? null, code: answer.code ?? answer.verdict ?? null, failed: answer.failed ?? null, toUndo: toStillOpen(answer), unsettleable: unsettleable(answer), ...(typeof answer.pressedAgain === "string" ? { pressedAgain: true } : {}) }]));
@@ -135,19 +137,23 @@ test("installed gateway project build keeps the other acts undoable after an und
     expect(clicks["undo.first"]?.after).toBe(clicks["undo.first"]!.before + 1);
     // The second undo, aimed at another act on the same unreloaded list, is admitted too.
     expect(answers["undo.second"]?.ok).toBe(true);
-    // The gate after them, on the list as the board now draws it: the two undone acts settled; the third stays to undo, named by Core
-    // as a call the build can make, never as an act no call can settle.
+    // The trial after them, on the list as the board now draws it: the two undone acts settled, so the third is the one act left in
+    // place. t775: the trial is no longer refused for it. It runs, the judge's `siteChange` lists that one act under `leftFromEarlier`,
+    // and the answer never lists an act no call can settle.
     const mid = tests[0];
     expect(unsettleable(mid)).toEqual([]);
     expect(mid?.failed).not.toBe("acts_unsettleable");
-    expect(trialCode(mid)).toBe("candidate.trial_reset_required");
-    expect(toStillOpen(mid)).toEqual([acts[2]]);
+    expect(trialCode(mid)).toBe("yes");
+    expect(retiredCodesIn(answers, observed.outcomes, provider.receipts)).toEqual([]);
+    const left = judge.siteChanges()[0]?.leftFromEarlier;
+    expect(Array.isArray(left) ? left.length : -1).toBe(1);
     // The reset completes once the last is undone: the undo is admitted, and the trial is admitted on the restored site.
     expect(answers["undo.third"]?.ok).toBe(true);
     const final = tests[1];
     expect(unsettleable(final)).toEqual([]);
     expect(actsUnder(final, "actsToUndo")).toEqual([]);
     expect(trialCode(final)).toBe("yes");
+    expect(judge.siteChanges()[1]?.leftFromEarlier ?? []).toEqual([]);
     expect(ending).toBe("proposed");
   } finally {
     await build.stop();

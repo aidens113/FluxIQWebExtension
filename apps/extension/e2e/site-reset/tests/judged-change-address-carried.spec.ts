@@ -22,7 +22,7 @@ test("installed gateway project build judges an office checkout whose address is
   const { page } = installed;
   const cart = new URL("/scenarios/everything-store/cart", installed.origin).href;
   const detail = new URL(STORE_PATHS.product(SAGE), installed.origin).href;
-  const build = projectBuild(installed, "Installed change office address", TASK);
+  const build = projectBuild(installed, "Installed change office address", TASK, detail);
   const judge = judgeLog();
   const pages: Record<string, string> = {};
   const tests: JsonObject[] = [];

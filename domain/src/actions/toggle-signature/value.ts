@@ -17,6 +17,11 @@ export function webToggleSignatureValue(value: unknown): WebToggleSignature | un
     const loses = record.loses as string[];
     return gains.length + loses.length > 0 ? { via: "name", gains: [...gains], loses: [...loses] } : undefined;
   }
+  if (record.via === "class" && keys === "gains,loses,via" && words(record.gains) && words(record.loses)) {
+    const gains = record.gains as string[];
+    const loses = record.loses as string[];
+    return gains.length + loses.length > 0 ? { via: "class", gains: [...gains], loses: [...loses] } : undefined;
+  }
   return undefined;
 }
 

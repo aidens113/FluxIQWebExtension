@@ -1,6 +1,7 @@
 import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { retiredCodesIn } from "../change-proof";
 import { actsUnder, bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Start a checkout for one product without the free trial.";
@@ -172,7 +173,7 @@ test("installed gateway project build settles a toggle the site put back itself 
     expect(tests).toHaveLength(1);
     expect(actsUnder(tests[0], "actsToUndo").filter(act => act.act === untickAct || act.call === "untick")).toEqual([]);
     expect(actsUnder(tests[0], "actsToUndo")).toEqual([]);
-    expect(["candidate.trial_reset_required", "candidate.trial_reset_unproved"]).not.toContain(trialCode(tests[0]));
+    expect(retiredCodesIn(tests, observed.outcomes, provider.receipts, failure)).toEqual([]);
     expect(trialCode(tests[0])).toBe("yes");
     expect(tests[0]?.trialRunId).toMatch(/^trial\./u);
     expect(feedbackSteps(tests[0]).some(step => step.control === "Buy Now" && step.status === "succeeded")).toBe(true);

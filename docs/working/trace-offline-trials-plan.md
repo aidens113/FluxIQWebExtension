@@ -22,12 +22,13 @@ The original [Claude handoff](./trace-offline-trials-plan/reports/handoff-2026-1
 plus real-SQL 10/60, contracts 68/68. Also merged today: t754-t763 except t761's Core-only twin (all in the
 ledger below and in `breadth-forty-tasks-plan.md`), t762 (downstream `68c23ecc`, Core `3bb38395`).
 
-**Now (2026-10-27 evening):** the first full sweep runs on pinned heads (downstream `dd708cac`, Core `1617ac70`) in
-detached worktrees `fxwork/sweep-20261027/`, logs `lab-runs/2026-10-27/sweep/`; a pass makes those heads the first
-`main` promotion. In flight before the launch window: t764 (t757's requested-output wiring) and t765 (a session-check
-wall is an interruption, never an end; it can appear on photo-social's grid). **Launch window** once both merge and
-the sweep finishes: freeze `dev`, sync the four lane trees (handoff-2026-10-20 step 1), round 6 in slots 1-4, then
-adaptation rounds 1 and 2 on the same frozen pair (`adaptation-and-breadth-plan.md`). P6 starts after the window.
+**Now (2026-10-28):** t775 (minimal-reset judging) phase D is merged: trials and the judged run are judged on the
+change Core read before and after them, and the trial-refusing reset gates are gone. P6 tier 1 is merged. Both
+2026-10-28 sweeps were used (Core green; downstream green after t780); the next sweep's pass promotes both `main`
+branches. In flight: t781 (defect B, a dialog capture dropping a toggled control's handle; photo-dialog-step is
+`test.fail` until it merges). **Launch window** after t781: sync the four lane trees, round 6 in slots 1-4
+(`launch-r6.sh`, new workspace names), then adaptation rounds 1 and 2 on the same frozen pair
+(`adaptation-and-breadth-plan.md`), then the recording-plus-instructions passes.
 
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
@@ -231,6 +232,23 @@ Briefs for work in flight or next; finished briefs are archived in
   tests; tests beside each change; touched typechecks; both audits; a headed provider-free build on two realistic
   scenarios whose repair iteration runs offline and whose final judged run runs live, with the step log showing both.
 - Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p6.md` in the downstream tree.
+
+### Brief: t781-photo-dialog-kept-handle (worker-heavy, domain plan-resolution)
+- Defect B from t775 (`reports/t775/H4-photo-final.md`): `step-views/views.ts` `captured` keeps only the newest
+  capture's dialog controls, and a toggled control gets a new handle per state, so after a trial captured the post
+  liked the builder's Like handle fell out of the dialog view and its resubmitted step failed `web.target.ambiguous`.
+- Task: an earlier capture's control still resolves into the dialog when the newer capture shows a control at its
+  place under another handle; a control truly gone is not kept. Unit tests beside the code; then the supervisor
+  removes photo-dialog-step's `test.fail` and runs it headed on the integrated code.
+- Report: `docs/working/trace-offline-trials-plan/reports/t781.md` in the t781 tree.
+
+### Brief: t782-settle-wording-and-dead-reset-paths (worker, Core site-reset and supervisor; after t775)
+- A: an undo's answer must not say "fresh complete reads show everything ... as the build found it" while a list it
+  could change was not read again (`site-reset/ledger.ts` `settledNow` vs `kept`'s `act.unread`, `words.ts`
+  `settledAs`); the undo answer and the next trial's `startedWith` say the same, truthful thing.
+- B: remove `resetToEnd`, `resetCameBackLast` and their dispatch answers, unreachable since t775 retired
+  `completion_reset_first` (`project-agents/supervisor/{state,dispatch-tool,completion,guidance}.ts`).
+- A and B touch no common file; tests beside each; Core typecheck and grouped tests of the touched directories.
 
 ## Work Ledger
 

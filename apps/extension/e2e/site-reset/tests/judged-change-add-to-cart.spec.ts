@@ -21,7 +21,7 @@ test("installed gateway project build judges an add-to-cart trial twice by the c
   const { page } = installed;
   const cart = new URL("/scenarios/everything-store/cart", installed.origin).href;
   const detail = new URL(STORE_PATHS.product(SAGE), installed.origin).href;
-  const build = projectBuild(installed, "Installed change add to cart", TASK);
+  const build = projectBuild(installed, "Installed change add to cart", TASK, detail);
   const judge = judgeLog();
   const tests: JsonObject[] = [];
   const pages: Record<string, string> = {};
@@ -69,7 +69,7 @@ test("installed gateway project build judges an add-to-cart trial twice by the c
     const { ending, failure } = await build.run();
     const siteChanges = judge.siteChanges();
     const retired = retiredCodesIn(tests, observed.outcomes, provider.receipts, failure);
-    await keepDiagnostic(testInfo, "change-add-to-cart.json", { ending, failure, tests, retired, siteChanges, outcomes: observed.outcomes, receipts: provider.receipts, pages });
+    await keepDiagnostic(testInfo, "change-add-to-cart.json", { ending, failure, tests, retired, siteChanges, judgeRequests: judge.requests, outcomes: observed.outcomes, receipts: provider.receipts, pages });
 
     expect(ending).toBe("proposed");
     // No retired reset code anywhere in the step log.

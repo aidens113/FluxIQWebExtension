@@ -614,11 +614,11 @@ key, a scroll a coordinate, and a check a known state.
   page packets before and after the press (`domain/src/actions/toggle-signature/`,
   `node-run/press-effect/toggle-signature.ts`). A control that flipped
   `aria-pressed`, `aria-checked`, `aria-selected` or a native `checked` gives
-  `{ via: "attribute", attribute, to }` with `idempotentWith: "web.dom.check"`,
+  `{ via: "attribute", attribute, to }` with `idempotentWith: "web.output.dom-check"` (the node id of the `web.dom.check` action),
   which Core uses to refuse a plain press of it. A control that shows its state
   only in its name gives `{ via: "name", gains, loses }`: the words the
   accessible name gained and lost, compared as lowercase words so a row's own
-  title cancels out. A navigation, a move to another location, a vanished target
+  title cancels out. A control that shows its state by neither (a heart whose only sign is a class) gives `{ via: "class", gains, loses }`: the class tokens its element, or the nearest wrapper within the same control (never a row, list, form or page), gained and lost, leaving out tokens containing focus, hover, active, busy, loading, pending, animating or disabled; a live target shows it when one of those levels has every gain and none of the loses. A navigation, a move to another location, a vanished target
   or a press with no change gives no `toggle`. Core stores the signature on the
   explored act and writes it as the click node's `ensureState` on a step that
   repeats the act. The click node (`content/actions/click.ts`,

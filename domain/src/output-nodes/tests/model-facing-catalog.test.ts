@@ -50,9 +50,11 @@ test("an element node shows only `target`, described as the handle the page view
     assert.match(String(target?.description), /handle the page view printed/u, id);
     assert.deepEqual(target?.example, { handle: "t5" }, id);
   }
-  // The definition still declares them, so a saved Flow that holds them validates and runs.
+  // The definition still declares them, so a saved Flow that holds them validates and runs; and the press declares
+  // the `ensureState` Core gives a toggle step (t775), which no model is shown either.
   const click = definitions.find((definition) => definition.id === "web.output.dom-click")!;
-  assert.deepEqual(click.parameters.filter((parameter) => parameter.shownToModel === false).map((parameter) => parameter.id), ["selector", "element", "visualTarget"]);
+  assert.deepEqual(click.parameters.filter((parameter) => parameter.shownToModel === false).map((parameter) => parameter.id), ["selector", "element", "visualTarget", "ensureState"]);
+  assert.equal(catalog.find((entry) => entry.id === "web.output.dom-click")!.parameters.some((parameter) => parameter.id === "ensureState"), false);
 });
 
 test("waiting for an element names it by handle, and waiting for text stays", () => {

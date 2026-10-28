@@ -31,8 +31,8 @@ for (const variant of ["newest", "pinned"] as const) {
     const first = variant === "pinned" ? PINNED : NEWEST[0]!;
     const firstPage = new URL(`${PHOTO_ROOT}p/${first.code}/`, installed.origin).href;
     const task = variant === "pinned" ? "Like the studio's three newest posts and leave the pinned posts as they are." : "Like the studio's three most recent posts.";
-    const build = projectBuild(installed, `Installed change like loop ${variant}`, task);
-    const judge = judgeLog();
+    const build = projectBuild(installed, `Installed change like loop ${variant}`, task, profile);
+    const judge = variant === "newest" ? judgeLog({ quote: "three most recent posts", why: "the pinned tiles, which are older posts" }) : judgeLog();
     const answers: Record<string, JsonObject> = {};
     const pages: Record<string, string> = {};
     let columns: { link?: string; pin?: string } = {}, handle = "", likeHandle = "";
@@ -111,7 +111,7 @@ for (const variant of ["newest", "pinned"] as const) {
       const { ending, failure } = await build.run();
       const siteChanges = judge.siteChanges();
       const retired = retiredCodesIn(answers, observed.outcomes, provider.receipts, failure);
-      await keepDiagnostic(testInfo, `change-like-loop-${variant}.json`, { ending, failure, answers, retired, siteChanges, likedAtStart, likedAtEnd, outcomes: observed.outcomes, receipts: provider.receipts, pages });
+      await keepDiagnostic(testInfo, `change-like-loop-${variant}.json`, { ending, failure, answers, retired, siteChanges, judgeRequests: judge.requests, likedAtStart, likedAtEnd, outcomes: observed.outcomes, receipts: provider.receipts, pages });
 
       // No retired reset code anywhere in the step log, and the judge request carries the site's change.
       expect(retired).toEqual([]);
@@ -125,7 +125,10 @@ for (const variant of ["newest", "pinned"] as const) {
       // The pass on the already-liked post is skipped and shown with its row; the others changed the site.
       const skipped = actsWithOutcome(siteChange, "already_in_state");
       expect(skipped.length).toBeGreaterThanOrEqual(1);
-      expect(skipped.every((act) => typeof act.row === "string")).toBe(true);
+      // Each skipped act names its step and pass. A row name is asserted only where the row has text: the pinned tiles carry a badge,
+      // while the newest rows hold only a link and Core never names a row by an address (activity/loop/row.ts, t378).
+      expect(skipped.every((act) => typeof act.step === "number")).toBe(true);
+      if (variant === "pinned") expect(skipped.every((act) => typeof act.row === "string")).toBe(true);
       expect(actsWithOutcome(siteChange, "changed").length).toBeGreaterThanOrEqual(1);
       // The newest variant's state was put there by the same explored step: proof carried, not a fresh yes.
       if (variant === "newest") expect(proofsOf(siteChange)).toContain("carried");

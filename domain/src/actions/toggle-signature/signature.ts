@@ -8,8 +8,11 @@ export type WebToggleAttribute = "aria-pressed" | "aria-checked" | "aria-selecte
 /**
  * Either the stated state the press flipped (`to` is the state it left the
  * control in), or the words its accessible name gained and lost -- lowercased,
- * so a row's own words (a job title) cancel out.
+ * so a row's own words (a job title) cancel out. A control that shows its
+ * state by neither is told by the class tokens its element, or a wrapper
+ * within the control, gained and lost.
  */
 export type WebToggleSignature =
   | { via: "attribute"; attribute: WebToggleAttribute; to: boolean }
-  | { via: "name"; gains: string[]; loses: string[] };
+  | { via: "name"; gains: string[]; loses: string[] }
+  | { via: "class"; gains: string[]; loses: string[] };

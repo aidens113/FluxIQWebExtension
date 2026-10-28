@@ -1,6 +1,7 @@
 import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { retiredCodesIn } from "../change-proof";
 import { bindInstrumentedRuntime, bindScriptedProvider, digest, openStoreDetail, pageHandle, projectBuild, rowControl, startInstalledBuild, type BuilderTurn } from "../index";
 
 const TASK = "Create one new store line.";
@@ -20,8 +21,8 @@ for (const retryTransfer of [false, true]) test(retryTransfer
   const build = projectBuild(installed, "Installed reset diagnostic", task);
   const targetDescriptors: JsonObject[] = [];
   let baseline: string | undefined, restored: string | undefined;
-  let missingClicksBefore = 0, missingClicksAfter = 0;
-  let missingCreateCode: unknown;
+  let inPlace: JsonObject[] = [];
+  let probeCode: unknown;
   let destinationReference = "";
   let originalItem = "", failedSaveAct = "", retryAct = "";
   let wrongClicksBefore = 0, wrongClicksAfter = 0, wrongHashBefore: string | undefined, wrongHashAfter: string | undefined;
@@ -59,14 +60,12 @@ for (const retryTransfer of [false, true]) test(retryTransfer
         };
       });
       if (builderStep === 1) {
+        // t775: an unnamed Add is no longer refused at exploration, so the build looks at the detail page instead
+        // of pressing it; pressing it would put a third line in the cart before the original authority is read.
         addHandle = handle("Add to Cart");
-        missingClicksBefore = observed.clicks();
-        return node("add.missing", "web.output.dom-click", { target: { handle: addHandle } }, ["create_new"]);
+        return node("detail.observe", "web.output.dom-capture_snapshot", {});
       }
       if (builderStep === 2) {
-        missingCreateCode = last("core.run_node")?.code;
-        missingClicksAfter = observed.clicks();
-        provider.receipts.push({ call: "add.missing", code: missingCreateCode });
         return node("original", "web.output.browser-navigate", { url: cart });
       }
       if (builderStep === 3) {
@@ -106,10 +105,15 @@ for (const retryTransfer of [false, true]) test(retryTransfer
       const tested = last("core.test_subflow");
       if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
       const candidate = { revision: submitted.revision, digest: submitted.digest };
-      if (step === 7) return call("trial.dirty", "core.test_subflow", candidate);
+      // t775: no trial is refused for acts in place any more, so the undo flow (which this spec exists to prove) no
+      // longer waits on a refused trial. A claim on an act the ledger does not list is refused with what is in place.
+      if (step === 7) return node("undo.list", "web.output.browser-navigate", { url: cart }, [], { undoes: "act-9999" });
       if (step === 8) {
-        provider.receipts.push({ call: "trial.dirty", code: tested?.code });
-        const acts = tested?.actsToUndo as JsonObject[] | undefined;
+        const listed = last("core.run_node");
+        probeCode = listed?.code;
+        provider.receipts.push({ call: "undo.list", code: probeCode });
+        inPlace = Array.isArray(listed?.actsToUndo) ? listed.actsToUndo.map(record) : [];
+        const acts = inPlace;
         const act = acts?.find(value => value.call === "add")?.act;
         if (typeof act !== "string") throw new Error("diagnostic.reset_act_missing");
         if (retryTransfer) {
@@ -147,8 +151,7 @@ for (const retryTransfer of [false, true]) test(retryTransfer
         const siblings = matched ? elements.filter(element => element !== matched && digest(record(element.context).record) === row && (element.accessibleName === "Delete" || element.visibleText === "Delete") && Object.hasOwn(record(element.attributes), "tabindex")) : [];
         targetDescriptors.push({ handleHash: digest(inverseHandle), matchCount: matches.length, ...(matched ? features(matched) : {}), sameRowAlternatives: siblings.map(features) });
         if (!matched) throw new Error("diagnostic.descriptor_match_unproved");
-        const acts = tested?.actsToUndo as JsonObject[] | undefined;
-        const act = acts?.find(value => value.call === "add")?.act;
+        const act = inPlace.find(value => value.call === "add")?.act;
         if (typeof act !== "string") throw new Error("diagnostic.reset_act_missing");
         return node("undo", "web.output.dom-click", { target: { handle: inverseHandle } }, ["delete"], { undoes: act });
       }
@@ -200,12 +203,11 @@ for (const retryTransfer of [false, true]) test(retryTransfer
     const provider = bindScriptedProvider(installed, { task, permitted, instructionSourceId: build.instructionSourceId, maxIterations: retryTransfer ? 30 : 20, maxCallsPerRun: retryTransfer ? 40 : 30, builder });
     const { ending, failure } = await build.run();
     const receipts = provider.receipts;
-    const diagnostic = { ending, failure, supervisorStep: provider.supervisorSteps(), builderStep: provider.builderSteps(), baseline, restored, receipts, reads, declarations, outcomes: observed.outcomes, targetDescriptors, rowSelectionFailure, missingCreate: { code: missingCreateCode, clickDispatchesBefore: missingClicksBefore, clickDispatchesAfter: missingClicksAfter }, retryTransfer: retryTransfer ? { failedSaveAct, retryAct, wrongInverseCode, correctInverseCode, otherEffectActs, wrongClicksBefore, wrongClicksAfter, wrongHashBefore, wrongHashAfter, correctClicksBefore, correctClicksAfter, stages: transferStages } : null, gatewayErrors: installed.gatewayErrors };
+    const diagnostic = { ending, failure, supervisorStep: provider.supervisorSteps(), builderStep: provider.builderSteps(), baseline, restored, receipts, reads, declarations, outcomes: observed.outcomes, targetDescriptors, rowSelectionFailure, undoList: { code: probeCode, inPlace }, retryTransfer: retryTransfer ? { failedSaveAct, retryAct, wrongInverseCode, correctInverseCode, otherEffectActs, wrongClicksBefore, wrongClicksAfter, wrongHashBefore, wrongHashAfter, correctClicksBefore, correctClicksAfter, stages: transferStages } : null, gatewayErrors: installed.gatewayErrors };
     await testInfo.attach("reset-structural.json", { body: Buffer.from(JSON.stringify(diagnostic)), contentType: "application/json" });
     console.log(JSON.stringify({ resetDiagnostic: diagnostic }));
     expect(ending).toBe("proposed");
-    expect(missingCreateCode).toBe("candidate.create_baseline_required");
-    expect(missingClicksAfter).toBe(missingClicksBefore);
+    expect(inPlace.map(entry => entry.call)).toContain("add");
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
     expect(baseline).toMatch(/^[a-f0-9]{20}$/u);
     expect(restored).toMatch(/^[a-f0-9]{20}$/u);
@@ -223,9 +225,6 @@ for (const retryTransfer of [false, true]) test(retryTransfer
     const inverse = declarations.find(declaration => declaration.call === "undo");
     expect(add?.subject).toMatch(/^s:[a-f0-9]{32}$/u);
     expect(add?.permitted).toBe(true);
-    const refused = declarations.find(declaration => declaration.call === "add.missing");
-    expect(refused?.permitted).toBe(false);
-    expect(refused?.subject).toBe(add?.subject);
     expect(inverse?.permitted).toBe(true);
     expect(inverse?.subject).toBe(add?.subject);
     expect(inverse?.scope).toBe(postAdd.scopes[0]);
@@ -233,7 +232,7 @@ for (const retryTransfer of [false, true]) test(retryTransfer
     expect(postAdd.subjects).toContain(add?.subject);
     expect(targetDescriptors).toHaveLength(1);
     expect(targetDescriptors[0]).toMatchObject({ matchCount: 1, tag: "span", rolePresent: false, tabindexPresent: false, ownHandlerBool: false, cursorPointer: true, subjectPresent: true });
-    expect(receipts.find(receipt => receipt.call === "trial.dirty")?.code).toBe("candidate.trial_reset_required");
+    expect(retiredCodesIn(receipts, observed.outcomes)).toEqual([]);
     expect(receipts.find(receipt => receipt.call === "undo")?.code).toBe("ok");
     if (retryTransfer) {
       const failed = declarations.find(declaration => declaration.call === "save.failed");

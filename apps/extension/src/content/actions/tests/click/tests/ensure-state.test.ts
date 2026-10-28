@@ -37,3 +37,13 @@ test("a name-only toggle that already has the gained words and none of the lost 
   assert.equal(absent.result.skipped, undefined);
   assert.deepEqual(absent.events, FIRST_PRESS);
 });
+
+test("a target whose class already shows the gained token is not pressed; one without it is pressed", async (t) => {
+  const action = { ...CLICK, ensureState: { via: "class", gains: ["heartOn"], loses: [] } } as BrowserActionCommand;
+  const shown = await press(t, { class: "heart heartOn" }, "", action);
+  assert.equal(shown.result.skipped, "already_in_state");
+  assert.deepEqual(shown.events, []);
+  const absent = await press(t, { class: "heart" }, "", action);
+  assert.equal(absent.result.skipped, undefined);
+  assert.deepEqual(absent.events, FIRST_PRESS);
+});

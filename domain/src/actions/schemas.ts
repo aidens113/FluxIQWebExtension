@@ -261,7 +261,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
           type: "object",
           label: "Ensure state",
           properties: {
-            via: { type: "string", enum: ["attribute", "name"] },
+            via: { type: "string", enum: ["attribute", "name", "class"] },
             attribute: { type: "string", enum: ["aria-pressed", "aria-checked", "aria-selected", "checked"] },
             to: { type: "boolean" },
             gains: { type: "array", items: { type: "string" } },

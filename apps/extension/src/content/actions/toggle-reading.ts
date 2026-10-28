@@ -3,7 +3,7 @@
 // checkbox or radio's checked -- and its accessible name, in the shape the
 // domain's signature derive and match read.
 
-import type { WebToggleAttribute, WebToggleReading } from "@fluxiq-web-extension/domain/client";
+import { webToggleClassTokens, webToggleControlAncestor, type WebToggleAttribute, type WebToggleReading } from "@fluxiq-web-extension/domain/client";
 import type { DomElementDescriptor } from "../../shared/protocol";
 
 export function toggleReadingOf(element: Element, described: DomElementDescriptor): WebToggleReading {
@@ -15,5 +15,18 @@ export function toggleReadingOf(element: Element, described: DomElementDescripto
   }
   const input = element as Partial<HTMLInputElement>;
   if (element.tagName?.toLowerCase() === "input" && (input.type === "checkbox" || input.type === "radio") && typeof input.checked === "boolean") states.checked = input.checked;
-  return { states, name: described.accessibleName ?? described.name ?? described.text ?? "" };
+  return { states, name: described.accessibleName ?? described.name ?? described.text ?? "", classes: classLevels(element) };
+}
+
+/** The element's class tokens, then those of each wrapper above it that is still part of the same control. */
+function classLevels(element: Element): string[][] {
+  const levels = [webToggleClassTokens(element.getAttribute?.("class"))];
+  let up: Element | null = element;
+  for (let level = 1; up?.parentElement; level += 1) {
+    const parent: Element = up.parentElement;
+    if (!webToggleControlAncestor(level, parent.tagName?.toLowerCase(), parent.getAttribute?.("role") ?? undefined)) break;
+    levels.push(webToggleClassTokens(parent.getAttribute?.("class")));
+    up = parent;
+  }
+  return levels;
 }
