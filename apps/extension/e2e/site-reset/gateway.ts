@@ -4,8 +4,11 @@ import type { Socket } from "node:net";
 import type { FluxIQ } from "fluxiq";
 import type { ClientGatewayClientMessage } from "fluxiq/client-gateway";
 
-/** A websocket transport for the real Core gateway; every envelope is delegated unchanged. */
-export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (message: ClientGatewayClientMessage) => void) {
+/**
+ * A websocket transport for the real Core gateway; every envelope is delegated unchanged. `observe` is told each client
+ * message as it arrives; `commanded` (optional) the action type of each `server.execute_action` Core sends a client.
+ */
+export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (message: ClientGatewayClientMessage) => void, commanded?: (actionType: string) => void) {
   const gateway = fluxiq.programs.clientGateway;
   const sockets = new Set<Socket>();
   const errors: string[] = [];
@@ -17,6 +20,14 @@ export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (mes
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     sockets.add(socket);
     const session = gateway.connect({ socket: { send: raw => {
+      if (commanded) {
+        try {
+          const sent = JSON.parse(String(raw)) as { type?: unknown; payload?: { actionType?: unknown } };
+          if (sent.type === "server.execute_action") commanded(String(sent.payload?.actionType ?? ""));
+        } catch {
+          // best-effort: a frame that is not JSON is no command.
+        }
+      }
       const body = Buffer.from(raw);
       const head = body.length < 126 ? Buffer.from([0x81, body.length]) : body.length < 65536
         ? Buffer.from([0x81, 126, body.length >> 8, body.length & 255]) : Buffer.alloc(10);

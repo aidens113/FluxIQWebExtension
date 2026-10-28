@@ -46,6 +46,7 @@ export async function readStepTimings(stepsDirectory: string): Promise<{ steps: 
       kind,
       toolId: text(meta.toolId),
       callId: text(meta.callId),
+      outcome: text(meta.outcome),
       phase: text(meta.phase),
       part: text(meta.part),
       provider: text(meta.provider),
