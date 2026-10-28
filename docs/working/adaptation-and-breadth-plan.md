@@ -11,11 +11,20 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 ## Current State
 
-**Resumed 2026-10-27 (no feature freeze).** Only crossborder has a counted pass; this plan was last advanced on 2026-10-13
-and its 2026-10-23 scope date passed without a proposal. t758 (`supervisor` lane, paired worktrees `fxwork/t758/`) audits
-the prerequisites against current dev, runs the provider-free unarmed controls and armed preflights on the three gate
-scenarios, fixes what it finds, and writes the launch plan with a scope recommendation for 2026-11-05. Paid gate runs
-follow t751's finish; the supervisor launches them. Report: `adaptation-and-breadth-plan/reports/t758.md` in that tree.
+**Launch-ready (2026-10-27, t758 merged: downstream `8551b3f4`, Core `127f7fa9`; no feature freeze).** Prerequisites
+t513/t514/t516/t517 are on dev; t518 (recorded-Flow only, unmerged) is kept for the recording-plus-instructions work, not
+needed by any gate site. Store's 2026-10-13 refusal cannot recur on dev (t599, t636). Provider-free: dry runs for all three
+sites `ready` with 0 calls; recovery-matrix rows 2-11 pass; crossborder's saved Flow meets basket-redesign (fails at Add to
+cart after 1+3 attempts), social's matcher scores the regrouped controls below its floor, store's wheel now opens as results
+render. t758 also fixed the replay receipt (`flowGraphHash` over every graph), the pairing error cause, the store wheel
+fixture plus the deal-wheel task's own clause (oracle unchanged), and Core exclusion wording.
+
+**Launch plan:** [t758 report](./adaptation-and-breadth-plan/reports/t758.md) has the exact commands (supersedes Phase 2's):
+`--authoring-mode project`, `--model-reset-only`, `--llm-max-calls 250`, both $0.25 settings,
+`FLUXIQ_TEST_TARGET=persistent-isolated` in the process env, fresh instances `gate-cb`/`gate-es`/`gate-sn`. Two counted
+passes per site must share one frozen source pair, so the supervisor runs a launch window after t751: no code merges to
+`dev` until both gate rounds (and breadth round 6) have run. Confidence: crossborder, social, store. If store has no
+counted pass after two attempts by 2026-11-02, bring the user the scope choice in the report rather than relaxing P1-P7.
 
 **Crossborder P4 resolved; first counted pass on `6a46e66b` / `73550acb`.** Supervisor independently inspected/reran complete immutable graph-history reconstruction, bound to the actual project-owned repair and its succeeded judged source run. All 25 operations are present; both repair pre-states match preceding history; the full reconstructed final graph matches durable state and recorded rollback matches the base. Same-domain before/after hashes differ. Supervisor separately excluded metadata/layout/stamps and confirmed exactly one node's executable parameters changed in the same graph. This satisfies P4 as reconstructed durable-history evidence, not an originally captured hash pair. P7 UI reviewed directly; all four independent goal facts held, including zero orders. Previously verified creation/repair/resumption and in-run/later zero-call reuse complete P1–P7 for `run-mv79nr9o-89a70c81` plus `replay-mv79t4ms-c8a3b890`. Earlier P4-held statements below are historical. Store fix diagnosis continues; no second paid crossborder launch is authorized yet because a source change resets the qualification streak.
 
