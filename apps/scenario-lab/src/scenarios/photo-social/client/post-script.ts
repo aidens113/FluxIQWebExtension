@@ -29,7 +29,25 @@ function codeOf(scope) {
 }
 function postScope(control) { return control.closest('article') || document; }
 
-function setIconLabel(control, label) { const svg = control.querySelector('svg'); if (svg) svg.setAttribute('aria-label', label); }
+/** The name flips with the toggle, and the glyph with it: a liked heart is filled red, a saved bookmark solid. */
+function setIconLabel(control, label) {
+  const svg = control.querySelector('svg');
+  if (!svg) return;
+  svg.setAttribute('aria-label', label);
+  const on = label === 'Unlike' || label === 'Remove';
+  const path = svg.querySelector('path');
+  if (!path) return;
+  const colour = on ? (label === 'Unlike' ? '#ff3040' : 'currentColor') : 'none';
+  path.setAttribute('fill', colour);
+  path.setAttribute('stroke', on && label === 'Unlike' ? '#ff3040' : 'currentColor');
+}
+/** The like count moves by one with the like, where the post shows one. */
+function moveLikeCount(scope, delta) {
+  const span = scope.querySelector('a[href$="/liked_by/"] > span');
+  if (!span) return;
+  const n = Number(span.textContent.replace(/,/g, ''));
+  if (Number.isFinite(n)) span.textContent = (n + delta).toLocaleString('en-US');
+}
 
 function openPopover(actions, code) {
   const old = actions.querySelector('.' + H.popover);
@@ -105,6 +123,7 @@ document.addEventListener('click', async (event) => {
     const liked = label === 'Like';
     await act('like', { code: codeOf(scope), liked });
     setIconLabel(control, liked ? 'Unlike' : 'Like');
+    moveLikeCount(scope, liked ? 1 : -1);
   } else if (inActions && label === 'Save') {
     const code = codeOf(scope);
     await act('save', { code, saved: true });

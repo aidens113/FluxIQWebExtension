@@ -24,15 +24,21 @@ export const GLYPHS = {
   chevronUp: "M5 15l7-7 7 7",
 } as const;
 
+/** The colour a glyph is drawn in while its toggle is on; others take the current colour. */
+const TOGGLED_FILL: Partial<Record<keyof typeof GLYPHS, string>> = { heart: "#ff3040" };
+
 export type GlyphName = keyof typeof GLYPHS;
 
 /**
- * One icon. `label` becomes the svg's `aria-label`, which is the only name the
+ * One icon. `on` draws a toggled icon the way a real photo site does: a liked
+ * heart filled red, a saved bookmark filled solid.
+ * `label` becomes the svg's `aria-label`, which is the only name the
  * div-buttons around most icons ever get; without one the icon is hidden and
  * the control around it is nameless.
  */
-export function glyph(name: GlyphName, className: string, label?: string): string {
+export function glyph(name: GlyphName, className: string, label?: string, on = false): string {
   const a11y = label === undefined ? `aria-hidden="true"` : `aria-label="${label}" role="img"`;
-  const fill = name === "badge" ? "currentColor" : "none";
-  return `<svg class="${className}" ${a11y} viewBox="0 0 24 24" width="24" height="24"><path d="${GLYPHS[name]}" fill="${fill}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  const fill = name === "badge" ? "currentColor" : on ? TOGGLED_FILL[name] ?? "currentColor" : "none";
+  const stroke = on ? TOGGLED_FILL[name] ?? "currentColor" : "currentColor";
+  return `<svg class="${className}" ${a11y} viewBox="0 0 24 24" width="24" height="24"><path d="${GLYPHS[name]}" fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
