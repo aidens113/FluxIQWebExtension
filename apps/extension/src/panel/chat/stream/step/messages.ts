@@ -188,7 +188,7 @@ function settlesStep(event: ClientGatewayActivity): boolean {
 }
 
 /** Skips Core decides after it announced the step, which settle that step's card. */
-const SKIPPED_AFTER_ANNOUNCING: ReadonlySet<string> = new Set(["optional_absent", "state_routed"]);
+const SKIPPED_AFTER_ANNOUNCING: ReadonlySet<string> = new Set(["optional_absent", "state_routed", "already_in_state"]);
 
 /**
  * Core's words for `event` when it is the row that says the run step it
