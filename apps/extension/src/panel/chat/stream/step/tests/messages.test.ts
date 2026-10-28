@@ -632,7 +632,7 @@ test("identical successful cards in a row are one card that counts them; another
   const five = stepMessages([...attempt(), ...attempt(), ...attempt(), ...attempt(), ...attempt()], 100);
   assert.deepEqual(outcomes(five), ["Done (5 times)"]);
   assert.equal(five.at(-1)!.latest, true);
-  assert.deepEqual(outcomes(stepMessages([...attempt("succeeded", 10), ...attempt("succeeded", 10)], 100)), ["Done (2 times): 10 rows"]);
+  assert.deepEqual(outcomes(stepMessages([...attempt("succeeded", 10), ...attempt("succeeded", 10)], 100)), ["Done (2 times): each time, 10 rows"], "a folded card says its result is each read's, not their total");
   // Another count is another result: both are shown.
   assert.deepEqual(outcomes(stepMessages([...attempt("succeeded", 10), ...attempt("succeeded", 13)], 100)), ["Done: 10 rows", "Done: 13 rows"]);
   // Done, failed, done reads in that order; it is not "Done (2 times)" then a failure.
