@@ -57,7 +57,16 @@ export type ScriptedProviderOptions = {
   builder: (turn: BuilderTurn) => ScriptedAnswer | Promise<ScriptedAnswer>;
   /** Scripts every supervisor turn; absent, the default one-part plan, one build brief, and completion on its answer. */
   supervisor?: (turn: SupervisorTurn) => ScriptedAnswer | Promise<ScriptedAnswer>;
+  /**
+   * Answers each trial's verification, given what the judge was shown as text; absent, a bare yes, as every spec before
+   * photo-page-order-limit takes. A reply Core reads for the rows it names puts its words in `summary` or the
+   * diagnosis's `expected`/`observed` (Core `result-verification/verdict/reply-text.ts`).
+   */
+  verify?: (shown: string) => ScriptedVerification;
 };
+
+/** A scripted verification reply: its summary and its diagnosis (`answersRequest` and any words). */
+export type ScriptedVerification = { summary: string; diagnosis: JsonObject };
 
 /** What the scripted supervisor saw each of its calls answer, and how many turns each role took. */
 export type ScriptedProvider = {
@@ -78,7 +87,10 @@ export function bindScriptedProvider(build: Pick<InstalledBuild, "service">, opt
   build.service.bindLlmExecutionProvider(() => ({ provider: {
     metadata: { provider: "scripted", model: "provider-free" },
     runTask: async request => {
-      if (request.taskKind === "loop_verification") return { response: { kind: "diagnosis", summary: "Diagnostic trial completed.", diagnosis: { answersRequest: "yes" } }, usage };
+      if (request.taskKind === "loop_verification") {
+        const reply = options.verify?.(JSON.stringify(request));
+        return { response: { kind: "diagnosis", summary: reply?.summary ?? "Diagnostic trial completed.", diagnosis: reply?.diagnosis ?? { answersRequest: "yes" } }, usage };
+      }
       const loop = request.context.evidenceLoop;
       const tools = (loop?.tools ?? []).map(tool => tool.toolId);
       const evidence = (loop?.evidence ?? []) as ScriptedEntry[];

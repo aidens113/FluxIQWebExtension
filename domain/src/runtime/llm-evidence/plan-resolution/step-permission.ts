@@ -42,6 +42,15 @@
 // written.** `needs_permission` says a person must answer; no rewrite of the
 // plan can. `refused` says the model wrote something this domain will not
 // accept, which it can correct and be asked again.
+//
+// **A step says where its control sits, as an exploration press does (t751 G).**
+// The declaration carries the eight opaque spot tokens of the step's target
+// handle (`../control-spot/` `webTargetSpot`: item, dialog, subject, page,
+// scope, resource, place, state), taken on the view the handle was shown in
+// (`target-packets.ts`), so Core admits a lasting step of a submitted Flow by
+// the witness rule it holds a press to. A row-bound step declares its handle's
+// own row as shown: the row the model saw, not whichever row a run binds. A
+// step with no target handle declares none.
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
@@ -49,6 +58,7 @@ import { webAutomationActionDeclarationRequired } from "../../../actions/consequ
 import { webAutomationActionEffect } from "../../../actions/effect";
 import { WEB_AUTOMATION_ACTION_SAFETY } from "../../../actions/safety";
 import type { WebAutomationActionType } from "../../../actions/types";
+import type { webTargetSpot } from "../control-spot";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
 import { webActionPermission } from "../permission";
 import { isJsonRecord } from "../untrusted-json";
@@ -126,13 +136,20 @@ export async function webPlanStepPermission(input: {
   declared: readonly AutomationStudioActionConsequence[] | undefined;
   check: AutomationStudioActionPermissionCheck | undefined;
   parameters: JsonObject;
+  /** Where the step's target control sits on the view its handle was shown in (header); absent for a step with no handle. */
+  spot?: ReturnType<typeof webTargetSpot> | undefined;
 }): Promise<WebPlanStepPermission> {
   if (input.declared === undefined) return webPlanStepMustDeclare(input.nodeDefinitionId, input.parameters) ? { kind: "undeclared" } : { kind: "clear" };
   const identity = isJsonRecord(input.parameters.element) ? input.parameters.element : undefined;
+  const spot = input.spot;
   const permission = await webActionPermission({
     check: input.check,
     declared: [...input.declared],
-    control: { name: controlName(identity), kind: controlKind(identity) },
+    control: {
+      name: controlName(identity), kind: controlKind(identity),
+      item: spot?.item, dialog: spot?.dialog, subject: spot?.subject, page: spot?.page,
+      scope: spot?.scope, resource: spot?.resource, place: spot?.place, state: spot?.state
+    },
     verb: verbFor(input.nodeDefinitionId),
     // The node's, not the model's. A step that reads the page -- an assertion,
     // a wait, an extraction -- leaves nothing behind each time the Flow runs it,

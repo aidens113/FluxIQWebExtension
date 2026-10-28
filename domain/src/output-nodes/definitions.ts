@@ -14,6 +14,7 @@ import {
 import {
   WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION,
   WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH,
+  WEB_AUTOMATION_EXTRACT_LIST_ROWS_ORDER,
   WEB_AUTOMATION_EXTRACT_LIST_TAGS,
   webAutomationExtractListParameters
 } from "./extract-list";
@@ -318,6 +319,8 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       // declared element target has no fingerprint to resolve.
       ...(requiredParameters.has("selector") ? { elementTarget: true } : {}),
       ...(recordsPath ? { recordsPath } : {}),
+      // Its rows go on in page order, and where its author writes its process keys (`./extract-list/rows-order.ts`, t751).
+      ...(definition.actionType === "web.dom.extract_list" ? structuredClone(WEB_AUTOMATION_EXTRACT_LIST_ROWS_ORDER) : {}),
       ...(stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {})
     }
   };

@@ -35,17 +35,30 @@
 // - it is read off the node's own `consequences` field, which is where the
 //   draft a build accrues writes it and where the Flow script's reserved step
 //   word lands it, and off the step's parameters as a fallback.
+//
+// And where the step's control sits (t751 G): a step's declaration carries the
+// same opaque spot tokens an exploration press declares (`../../control-spot/`
+// `webTargetSpot`), taken on the view its target handle was shown in, so Core
+// can admit each lasting step of a submitted Flow by the witness rule it holds a
+// press to. Those rows use a generic notebook: a complete list of notes, each
+// row holding a Star toggle about its note.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AutomationStudioActionPermissionGate,
   resolveAutomationStudioFlowBootstrapPlanParameters,
+  type AutomationStudioActionDeclaration,
+  type AutomationStudioActionPermissionCheck,
   type AutomationStudioInstructedConsequence
 } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
+import { webResetResource, webTargetSpot } from "../../control-spot";
+import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSnapshotBinding } from "../../sanitize";
+import { createWebLlmExtractionHandles } from "../../structure";
+import { createWebLlmTargetPackets, resolveWebPlanNode } from "..";
 
 const TYPE_NODE = webAutomationOutputNodeId("web.dom.type");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
@@ -356,4 +369,114 @@ test("the node's own field wins over anything left on the parameters, and the pa
   assert.equal(gate.request, undefined);
   const node = resolved.ok ? resolved.plan.subflows[0]?.nodes[1] : undefined;
   assert.equal(node?.parameters && "consequences" in node.parameters, false);
+});
+
+const SCOPE = { projectId: "project.one", flowId: "flow.one" };
+const SPOT_KEYS = ["item", "dialog", "subject", "page", "scope", "resource", "place", "state"] as const;
+
+/** A notebook page: a heading, then a complete list whose every row holds a Star toggle about its note; `starred` names the row already starred. */
+function notebook(starred?: number): WebLlmSnapshotBinding {
+  const notes = ["Barley stew", "Pea soup"];
+  const elements: JsonObject[] = [
+    { tagName: "h1", selector: "h1", visibleText: "My notes", context: { subject: "My notes" } },
+    { tagName: "div", role: "list", selector: "#notes" }
+  ];
+  notes.forEach((note, index) => {
+    const row = elements.length;
+    elements.push({ tagName: "div", role: "listitem", selector: `#note-${index}`, parent: 1, context: { record: { text: `${note} 2 days ago` } }, attributes: { "aria-setsize": String(notes.length), "aria-posinset": String(index + 1) } });
+    elements.push({ tagName: "div", role: "button", selector: `#star-${index}`, parent: row, accessibleName: "Star", attributes: { "aria-pressed": String(index === starred) }, context: { record: { text: `${note} 2 days ago` }, subject: note } });
+  });
+  const binding = sanitizeWebLlmSnapshotWithBindings({ url: "https://notebook.test/notes", title: "Notebook", interactiveElements: elements });
+  binding.resetResource = webResetResource("session", "tab:1:frame:0")!;
+  return binding;
+}
+
+function handleOf(binding: WebLlmSnapshotBinding, selector: string): string {
+  const handle = [...binding.selectors].find(([, written]) => written === selector)?.[0];
+  assert.ok(handle, `no element at ${selector}`);
+  return handle;
+}
+
+/** A permission check that permits everything and keeps each declaration's control. */
+function recordingCheck(): { check: AutomationStudioActionPermissionCheck; controls: AutomationStudioActionDeclaration["control"][] } {
+  const controls: AutomationStudioActionDeclaration["control"][] = [];
+  const check: AutomationStudioActionPermissionCheck = async (declaration) => {
+    controls.push(declaration.control);
+    return { permitted: true, missing: [], requestId: null };
+  };
+  return { controls, check };
+}
+
+function spotOf(control: object | undefined): Record<string, unknown> {
+  const fields = (control ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(SPOT_KEYS.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]]));
+}
+
+async function pressDeclaration(targets: ReturnType<typeof createWebLlmTargetPackets>, parameters: JsonObject, gatedByCaller?: true) {
+  const { check, controls } = recordingCheck();
+  const input = { ...SCOPE, nodeDefinitionId: CLICK_NODE, parameters, permission: check, declaredConsequences: [] };
+  const outcome = await resolveWebPlanNode(gatedByCaller ? { ...input, gatedByCaller } : input, { targets, extractions: createWebLlmExtractionHandles() });
+  return { outcome, controls };
+}
+
+test("a step pressing a row's stateful control declares the spot webTargetSpot gives for that handle on its view", async () => {
+  const binding = notebook();
+  const handle = handleOf(binding, "#star-1");
+  const expected = webTargetSpot(binding, handle);
+  for (const key of ["item", "subject", "page", "scope", "resource", "place", "state"] as const) assert.ok(expected[key], `the fixture gives the control a ${key}`);
+  const targets = createWebLlmTargetPackets();
+  targets.remember(SCOPE, binding);
+  const { outcome, controls } = await pressDeclaration(targets, { target: { handle } });
+  assert.equal(outcome.resolution.status, "resolved");
+  assert.equal(controls.length, 1);
+  assert.deepEqual(spotOf(controls[0]), expected);
+  // Opaque: none of the row's words reach Core, and the spot never reaches the Flow's node.
+  assert.doesNotMatch(JSON.stringify(spotOf(controls[0])), /Pea|Barley|notes/u);
+  assert.doesNotMatch(JSON.stringify(outcome.resolution), /"spot"|"place"|"state"/u);
+});
+
+test("every handle the store keeps carries exactly the spot webTargetSpot gives it on its capture", () => {
+  const binding = notebook(0);
+  const targets = createWebLlmTargetPackets();
+  targets.remember(SCOPE, binding);
+  for (const handle of binding.selectors.keys()) {
+    const resolution = targets.resolve(SCOPE, handle, binding.evidence.location);
+    assert.ok(resolution.ok, handle);
+    assert.deepEqual(resolution.spot ?? {}, webTargetSpot(binding, handle), handle);
+  }
+});
+
+test("a step on a control exploration pressed declares the spot of the view the press was made from", () => {
+  const before = notebook();
+  const after = notebook(1);
+  const handle = handleOf(before, "#star-1");
+  assert.notEqual(webTargetSpot(before, handle).state, webTargetSpot(after, handle).state, "the press changed the control's state");
+  const targets = createWebLlmTargetPackets();
+  targets.remember(SCOPE, before);
+  targets.acted(SCOPE, handle, before, after);
+  targets.remember(SCOPE, after);
+  const candidate = targets.resolve(SCOPE, handle, undefined, "view_history");
+  assert.ok(candidate.ok);
+  assert.deepEqual(candidate.spot, webTargetSpot(before, handle));
+  // Exploration acts on the page as it now is, so its own resolution keeps the newest view's.
+  const current = targets.resolve(SCOPE, handle, undefined);
+  assert.ok(current.ok);
+  assert.deepEqual(current.spot, webTargetSpot(after, handle));
+});
+
+test("a step with no target handle declares no spot", async () => {
+  const targets = createWebLlmTargetPackets();
+  targets.remember(SCOPE, notebook());
+  const { controls } = await pressDeclaration(targets, { selector: "#star-0" });
+  assert.equal(controls.length, 1);
+  assert.deepEqual(spotOf(controls[0]), {});
+});
+
+test("exploration's own declaration is unchanged: a call its caller gated is never declared again here", async () => {
+  const binding = notebook();
+  const targets = createWebLlmTargetPackets();
+  targets.remember(SCOPE, binding);
+  const { outcome, controls } = await pressDeclaration(targets, { target: { handle: handleOf(binding, "#star-1") } }, true);
+  assert.equal(outcome.resolution.status, "resolved");
+  assert.deepEqual(controls, []);
 });

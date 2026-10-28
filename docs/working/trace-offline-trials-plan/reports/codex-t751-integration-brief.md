@@ -1,0 +1,13 @@
+# Brief: t751 integrated verification
+
+- Repository: only paired t751 worktrees. Required reads: hub Current State; codex-recover-t751.md; codex-t751-supervisor-fixtures.md.
+- Task: verify final merged reset source, then build once and prove headed provider-free behavior.
+- Current: source checkpoint Core b5a9efcd, downstream9bb8ad87; downstream current dev merged414740f9. Root resolving Core generated refs and combined ending assertions, with independent two-service-file gate69661. DO NOT start until root says Core merge complete.
+- Before build: root will integrate t752 once accepted to avoid stamping soon-obsolete code. Wait explicit root source freeze notice. No changes while a gate reads the tree; record failures first, no speculative cleanup.
+- Owns: new report codex-t751-integration.md, external logs/artifacts lab-runs/2026-10-21/codex-t751-review. Source fixes only after root assigns the exact observed failure/files. Never plans/ledger/index/baselines or commits/merges/pushes.
+- Core gates: grouped parallel then real-SQL over changed reset admission/settlement/answers/site-reset, candidate/subflow gates and witness stamps, authoring/plan/listing-order/action-permissions/adaptation owners, changed llm harness-options owners, project-build, supervisor and dispatch trial-port. Include mandatory prompt schema/system/preflight contracts. Avoid whole package tests; preserve previous passed narrow gates where inputs unchanged.
+- Core typecheck: pnpm.cmd exec tsc --noEmit -p . from packages/fluxiq; audits both roots; Core docs:check. Tests/type gate before a stamped3library Core build; source/test/generated-reference inputs frozen, logs outside packages.
+- Downstream after owning domain dist build: domain andextension checks; affected domain plan resolution, listing-order/target/permission tests; extension ownership only if code changed. Confirm core-build current.
+- Browser: all12 existing site-reset specs +5 new realistic specs, headed/provider-free, one worker; actual browser native gateway/build as existing harness. No paid calls/panel management/full suites. Preserve failure traces/screenshots externally before task cleanup. Distinguish job/site-revert/page-order fail-first coverage from dialog/navigation preservation.
+- Capture exact test counts/native exits and browser/build target, no secrets/page data in reports. Report source and test limitations honestly. UNIT READY only when all gates green or named blocker requires root integration.
+- Return: Outcome, Changed, Validation, Not verified, Report, Notes (at most12lines).
