@@ -56,6 +56,8 @@ export type CreatedFlowCandidateTrialRun = Readonly<{
    * succeed (Core's own verdict for such a run), otherwise `rejected`. `null` only where nothing decides it.
    */
   verdict: AutomationStudioCandidateTrialOutcomeVerdict | "rejected" | null;
+  /** The closed code Core recorded with that verdict on the trial's session (t773); `null` where it recorded none. */
+  verdictCode?: string | null;
   /** Why a trial was rejected, as a closed code: the run's failure code, or `not_promoted`; `null` where none applies. */
   reason: string | null;
 }>;
@@ -143,15 +145,19 @@ export async function createdFlowCandidateDraftOutcome(control: CandidateControl
 
 /**
  * A draft the chat kept. The thread names the candidate (`candidate-draft`
- * turn) and says the verdict in Core's own words
- * (`automationStudioConversationCandidateDraftSaid`), which are matched here
- * against those same words for each verdict; the trials come from Core's
- * trial sessions, and the last of them is the one that decided.
+ * turn); the trials come from Core's trial sessions, and the last of them is
+ * the one that decided. Its verdict is read from data first (t773): the
+ * verdict and code Core wrote on that trial's session. Only where a session
+ * carries none -- a session older than that field -- are Core's closing words
+ * (`automationStudioConversationCandidateDraftSaid`) matched, each verdict's
+ * own sentence; since t753 a project draft says one fixed sentence naming no
+ * verdict, which is recognised as `draft` and is not a verdict. A draft with
+ * that sentence and no trial session at all was never test-run: `not_tested`.
  */
 export async function createdFlowChatCandidateDraftOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string, said: string | null, authoringMode: CreatedFlowTrialAuthoringMode = "candidate"): Promise<CreatedFlowCandidateOutcome> {
-  const read = chatDraftVerdict(said);
   const trials = await readCandidateTrials(control, subject, candidateId);
   const last = trials?.at(-1);
+  const read = chatDraftVerdict(said, trials);
   return Object.freeze({
     authoringMode, outcome: "draft", draft: null, candidateId,
     revision: last?.revision ?? null, digest: last?.digest ?? null,
@@ -201,17 +207,28 @@ export function createdFlowCandidateDraftFailure(outcome: CreatedFlowCandidateOu
   });
 }
 
+/** A chat draft's verdict: the last trial session's own record, else Core's closing words, else `unknown`. */
+export function chatDraftVerdict(said: string | null, trials: readonly CreatedFlowCandidateTrialRun[] | null): { verdict: CreatedFlowCandidateOutcome["verdict"]; codes: string[]; source: "session" | "sentence" | "draft" | "none" } {
+  const recorded = trials?.at(-1);
+  if (recorded?.verdict && recorded.verdict !== "rejected") return { verdict: recorded.verdict, codes: recorded.verdictCode ? [recorded.verdictCode] : [], source: "session" };
+  const sentence = chatDraftSentence(said);
+  if (sentence.verdict !== "unknown") return { ...sentence, source: "sentence" };
+  // The fixed sentence of a draft whose ending was told elsewhere (t753) names no verdict; with no trial session behind it nothing was run.
+  if (sentence.draft) return { verdict: trials?.length === 0 ? "not_tested" : "unknown", codes: [], source: "draft" };
+  return { verdict: "unknown", codes: [], source: "none" };
+}
+
 /** Core's verdict words for a chat draft, matched exactly against what Core says for each verdict. */
-function chatDraftVerdict(said: string | null): { verdict: CreatedFlowCandidateOutcome["verdict"]; codes: string[] } {
-  if (!said) return { verdict: "unknown", codes: [] };
+function chatDraftSentence(said: string | null): { verdict: CreatedFlowCandidateOutcome["verdict"]; codes: string[]; draft: boolean } {
+  if (!said) return { verdict: "unknown", codes: [], draft: false };
   const template: AutomationStudioCandidateAuthoringResult = { status: "draft", projectId: "", flowId: "", candidateId: "", revision: 0, digest: "", sourceInstructionIds: [], baseDependencyDigest: "", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "", estimatedInputTokens: 0 } };
   const words = said.trim();
   for (const verdict of VERDICTS) {
     for (const codes of verdict === "yes" ? [["FLOW_BOOTSTRAP_STALE"], []] : [[]]) {
-      if (automationStudioConversationCandidateDraftSaid({ ...template, trial: { verdict, codes } }).trim() === words) return { verdict, codes };
+      if (automationStudioConversationCandidateDraftSaid({ ...template, trial: { verdict, codes } }).trim() === words) return { verdict, codes, draft: false };
     }
   }
-  return { verdict: "unknown", codes: [] };
+  return { verdict: "unknown", codes: [], draft: automationStudioConversationCandidateDraftSaid(template, true).trim() === words };
 }
 
 /**
@@ -235,7 +252,9 @@ async function readCandidateTrials(control: CandidateControl, subject: { project
     const trial = field(session, "candidateTrial"), runId = identifier(field(session, "runId"));
     if (runId === null || field(session, "flowId") !== subject.flowId || field(trial, "candidateId") !== candidateId) return [];
     const queuedAt = field(session, "queuedAt");
-    return [{ queuedAt: typeof queuedAt === "number" ? queuedAt : 0, trial: Object.freeze({ runId, revision: whole(field(trial, "revision")), digest: identifier(field(trial, "digest")), start: code(field(trial, "start")), execution: code(field(trial, "execution")), code: code(field(trial, "code")), verdict: null, reason: null }) }];
+    const judged = field(trial, "verdict");
+    const verdict = VERDICTS.find((known) => known === judged) ?? null;
+    return [{ queuedAt: typeof queuedAt === "number" ? queuedAt : 0, trial: Object.freeze({ runId, revision: whole(field(trial, "revision")), digest: identifier(field(trial, "digest")), start: code(field(trial, "start")), execution: code(field(trial, "execution")), code: code(field(trial, "code")), verdict, verdictCode: verdict ? code(field(trial, "verdictCode")) : null, reason: null }) }];
   });
   return Object.freeze(trials.sort((a, b) => a.queuedAt - b.queuedAt).map((entry) => entry.trial));
 }
