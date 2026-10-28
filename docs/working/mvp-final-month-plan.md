@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Historical A-D creation qualified; instruction-led foundations and focused reliability fixes integrated; structural acceptance, current adaptation/breadth and release qualification remain open.
 Created: 2026-10-05
-Last updated: 2026-10-18
+Last updated: 2026-10-27
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -12,6 +12,21 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**2026-10-27 (resumed; no feature freeze; deadline 2026-11-10).** Where each MVP item stands:
+- **Breadth:** 12 of 40 accepted; rerun round 6 went 0 of 4 on reset bookkeeping and one judging defect (all diagnosed,
+  [breadth plan](./breadth-forty-tasks-plan.md)); its rerun waits on t775 (minimal-reset judging, the user's 2026-10-27 direction).
+- **Adaptation gate:** launch-ready (t758), held for the same reason ([adaptation plan](./adaptation-and-breadth-plan.md)).
+- **Recording plus mandatory instructions:** t770 built the missing chat attach step (composer "Attach a recording",
+  Core links the recording to the unchanged instruction), demonstrations with deliberate detours on crossborder,
+  everything-store and job-board, and a Lab `--demonstration` lane that checks no detour reached the Flow; provider-free
+  headed proofs passed 3/3 (`run-mvrpgr02-674e3520` 10/10, `run-mvrpncpp-a783402f` 5/5, `run-mvrprqob-3d1edf5b` 7/7).
+  Decision (supervisor, 2026-10-27; the user can overrule): before the paid round the model is given each recorded
+  step's action kind, the control's visible label and whether it was later undone, never typed values or page content,
+  so a pass shows the recording was used as evidence rather than only that the wiring works. Acceptance: three sites x two
+  creation passes, exact oracle, zero-call replay, no detour act in the Flow, plus one provider-free conflicting-instruction probe.
+  Audit and plan: [recording-instructions-audit-2026-10-27](./mvp-final-month-plan/reports/recording-instructions-audit-2026-10-27.md).
+- **P6 (offline trials in builds):** t769 in progress. **Installed proof:** Chrome and Edge done; Firefox not installed (user's call).
 
 **Latest (2026-10-18): read [breadth-forty-tasks-plan.md](./breadth-forty-tasks-plan.md) first.** It holds the current state of live qualification (40 new tasks, all 108 tasks audited as possible and unambiguous, one full pass per site, 6 of 40 passing), the install-package proof (MVP item 1: Chrome and Edge install and pair; the create-and-zero-call rerun waits on R1, t719), and what is merged, held or unpushed. Hosted sign-in for the Chrome release is planned in [hosted-production-plan.md](./hosted-production-plan.md). The paragraphs below are dated 2026-10-13 and older.
 

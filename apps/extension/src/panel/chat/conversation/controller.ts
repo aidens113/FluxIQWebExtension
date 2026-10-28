@@ -105,7 +105,7 @@ export type ConversationController = {
   /** The person's "Retry": reads at once, and quiet retries start over if it fails again. Never rejects. */
   retry(): Promise<void>;
   /** Sends `text` as the person's turn. Answers true once it went, so the composer can empty. */
-  send(text: string): Promise<boolean>;
+  send(text: string, recordingId?: string): Promise<boolean>;
   /** Answers a question FluxIQ asked. */
   answer(askId: string, kind: string, value?: string): Promise<void>;
 };
@@ -353,7 +353,7 @@ export function createConversationController(request: PanelStore["request"], onC
       onChange();
       return reading;
     },
-    async send(text) {
+    async send(text, recordingId) {
       const body = text.trim();
       if (body === "" || sending || !readable()) return false;
       if (target.projectId !== undefined && scopeState !== "ready") return false;
@@ -364,7 +364,7 @@ export function createConversationController(request: PanelStore["request"], onC
       outgoing = mine;
       onChange();
       const asked = generation;
-      const result = await safeRequest<{ payload?: { conversation?: unknown } }>(threadSendRequest(target, shown, body));
+      const result = await safeRequest<{ payload?: { conversation?: unknown } }>(threadSendRequest(target, shown, body, recordingId));
       if (asked !== generation) {
         // The person moved to another thread meanwhile; the message went to the one it was written in.
         sending = false;

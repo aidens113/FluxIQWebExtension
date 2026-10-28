@@ -16,5 +16,6 @@ export * from "./project-navigation/index.js";
 export { runExtensionChatCheck, type ChatCheckOptions, type ChatCheckResult } from "./run-chat-check.js";
 export { sendChatMessage } from "./send-chat-message.js";
 export { extensionViewPanelDriver, pagePanelDriver, type ChatPanelDriver } from "./panel-driver.js";
+export { extensionViewPanelControls, type PanelControls } from "./panel-controls.js";
 export { threadReader, type ThreadReader, type ThreadTurn } from "./thread-reader.js";
 export type { ChatBrowser, ChatBrowserSession, ChatCheckContext, ChatPanelMode } from "./types.js";

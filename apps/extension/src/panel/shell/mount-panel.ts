@@ -80,8 +80,8 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   const runFollow = createRunFollow();
 
   const recording = createRecordingControls(context);
-  const review = createRecordingReview(context);
   const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction() });
+  const review = createRecordingReview(context, { onAttach: () => chat.attachLatestRecording() });
   const automations = createAutomationsTab(context, {
     choose: (row) => {
       const source = activatedRow;

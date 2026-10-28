@@ -14,6 +14,9 @@
 //     changed chats since, which is kept.
 //   - The unsent draft is kept (`draftStorage`), so a closed popup keeps it.
 //   - Not connected, the box is disabled and says "Connect to FluxIQ first".
+//   - A described recording can ride with a message (`attachment`): a button
+//     beside Send picks it, a chip names it, and it leaves the chip only once
+//     a send went; a failed send keeps it.
 //   - `fill` puts an example prompt in the box for the person to edit or
 //     send; it never sends by itself.
 //
@@ -25,6 +28,7 @@ import { composerKeyAction } from "./composer-keys";
 import type { ConversationState } from "./controller";
 import { draftStorage } from "./draft-storage";
 import type { ChatOwner } from "../owner-context";
+import type { RecordingAttachment } from "../attachment";
 
 /** The mounted composer. */
 export type Composer = {
@@ -45,8 +49,8 @@ const OFFLINE_PLACEHOLDER = "Connect to FluxIQ first";
 const MAX_LINES = 8;
 const SVG = "http://www.w3.org/2000/svg";
 
-/** Creates the composer; `send` answers true once the words went. */
-export function createComposer(send: (text: string) => Promise<boolean>): Composer {
+/** Creates the composer; `send` answers true once the words went, and gets the attached recording's id, if any. */
+export function createComposer(send: (text: string, recordingId?: string) => Promise<boolean>, attachment?: RecordingAttachment): Composer {
   const draft = draftStorage();
   const box = createElement("textarea", {
     id: "conversationInput",
@@ -63,7 +67,12 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
   let adopt = createElement("button", { className: "button", text: "Use draft here", attrs: { type: "button" } });
   let clear = createElement("button", { className: "button", text: "Clear draft", attrs: { type: "button" } });
   const parkedControls = createElement("div", { className: "composer-draft-review", hidden: true }, [parkedNotice, adopt, clear]);
-  const element = createElement("div", { className: "composer" }, [createElement("div", { className: "composer-field" }, [box, sendButton]), parkedControls]);
+  const fieldParts = attachment ? [box, attachment.button, sendButton] : [box, sendButton];
+  const element = createElement("div", { className: "composer" }, [
+    ...(attachment ? [attachment.chip, attachment.menu] : []),
+    createElement("div", { className: "composer-field" }, fieldParts),
+    parkedControls
+  ]);
   let enabled = false;
   let sending = false;
   let composing = false;
@@ -100,12 +109,15 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     sendButton.dataset.sending = sending ? "true" : "false";
     parkedControls.hidden = !parked;
     box.readOnly = parked;
+    attachment?.refresh();
+    attachment?.setDisabled(!enabled || sending || operation !== undefined || parked || !current());
     adopt.disabled = clear.disabled = !enabled || !current();
   }
 
   function submit(): void {
     if (!enabled || sending || operation !== undefined || parked || !current() || box.value.trim() === "") return;
     const words = box.value;
+    const recording = attachment?.current();
     const submittedOwner = owner;
     const submitted = {}; operation = submitted;
     // Out of the box at once: the thread shows them as the person's turn.
@@ -118,6 +130,8 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     syncButton();
     const settle = (sent: boolean): void => {
       if (operation === submitted) { operation = undefined; syncButton(); }
+      // Sent: the recording went with the words. Not sent: it stays on the chip.
+      if (sent && recording !== undefined && attachment?.current()?.id === recording.id) attachment.clear();
       // Not sent: the words come back to send again, unless the box has moved
       // on since -- newer words, an example filled in, or another chat's owner.
       if (sent || submittedOwner !== owner || !current() || sentRevision !== editRevision || box.value !== "") return;
@@ -128,7 +142,7 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
       syncButton();
     };
     let result: Promise<boolean>;
-    try { result = send(words); } catch { result = Promise.resolve(false); }
+    try { result = recording === undefined ? send(words) : send(words, recording.id); } catch { result = Promise.resolve(false); }
     void result.then(settle).catch(/* best-effort: a rejected send is a failed one; the controller owns send feedback */ () => settle(false));
   }
 
