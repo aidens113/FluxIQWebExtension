@@ -33,6 +33,10 @@ export type InstalledBuild = {
   gatewayErrors: string[];
   /** The newest raw snapshot an action result carried, for descriptor checks only. */
   latestRawSnapshot: () => JsonObject | undefined;
+  /** How many action results the extension has sent the gateway so far: each is one command the site was acted on or read with. */
+  actionResults: () => number;
+  /** The action type of every command Core has sent the extension so far, in order: what reached the site. */
+  siteCommands: () => string[];
   /** Points the installed extension at the gateway, approves its pairing, and waits for a ready session. */
   pair: () => Promise<void>;
   close: () => Promise<void>;
@@ -46,11 +50,14 @@ export async function startInstalledBuild(session: ExtensionSession): Promise<In
   await initial.close();
   const fluxiq = registerWebAutomationDomain(make());
   let latestRawSnapshot: JsonObject | undefined;
+  let actionResults = 0;
+  const siteCommands: string[] = [];
   const gateway = await startResetDiagnosticGateway(fluxiq, message => {
     if (message.type !== "client.action_result") return;
+    actionResults++;
     const snapshot = record(record(message.payload).payload).snapshot;
     if (snapshot !== null && typeof snapshot === "object" && !Array.isArray(snapshot)) latestRawSnapshot = snapshot;
-  });
+  }, actionType => { siteCommands.push(actionType); });
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("hex") });
   const service = fluxiq.programs.automationStudio;
   const nodes = new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES });
@@ -80,5 +87,5 @@ export async function startInstalledBuild(session: ExtensionSession): Promise<In
     if (path.dirname(owned) !== path.resolve(os.tmpdir()) || !path.basename(owned).startsWith(ROOT_PREFIX)) throw new Error("diagnostic.cleanup_scope");
     await rm(owned, { recursive: true, force: true });
   };
-  return { fluxiq, service, page, origin: lab.origin, rootDir: root, gatewayErrors: gateway.errors, latestRawSnapshot: () => latestRawSnapshot, pair, close };
+  return { fluxiq, service, page, origin: lab.origin, rootDir: root, gatewayErrors: gateway.errors, latestRawSnapshot: () => latestRawSnapshot, actionResults: () => actionResults, siteCommands: () => [...siteCommands], pair, close };
 }
