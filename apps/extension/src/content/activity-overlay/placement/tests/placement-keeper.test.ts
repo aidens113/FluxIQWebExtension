@@ -76,7 +76,7 @@ test("a better place must stay better for a sustained time before the pill moves
   });
 });
 
-test("scrolling never moves the pill; text left under it once the page is still for a sustained time does", () => {
+test("scrolling never moves the pill, and neither does text left under it: only the page's fixed layers do", () => {
   withFakeClock((clock) => {
     const page = fakePage();
     const { instance, placed } = keeper(page);
@@ -90,9 +90,8 @@ test("scrolling never moves the pill; text left under it once the page is still 
     assert.deepEqual(placed, [{ shape: "pill", anchor: "bottom-left" }], "six seconds of scrolling text under it: no move");
     page.content = [BOTTOM_TEXT];
     clock.advance(1_000);
-    assert.equal(placed.length, 1, "a second after the scroll stopped: still no move");
-    clock.advance(3_000);
-    assert.deepEqual(placed.at(-1), { shape: "pill", anchor: "top-left" }, "the text stayed under it: it moves to the clear corner");
+    clock.advance(10_000);
+    assert.equal(placed.length, 1, "the text stayed under it: no move");
     instance.stop();
   });
 });
@@ -126,6 +125,31 @@ test("a document with no layout yet keeps the pill where it starts, and the firs
     // One check interval: the keeper checks at most once per interval.
     clock.advance(800);
     assert.deepEqual(placed.at(-1), { shape: "pill", anchor: "top-left" }, "no settling wait: the first place was never measured");
+    instance.stop();
+  });
+});
+
+// t774: a banner that appears mid-run moves the pill once, to a free corner, and it then stays there.
+test("a banner appearing mid-run moves the pill once, and it is stable after", () => {
+  withFakeClock((clock) => {
+    const page = fakePage();
+    const { instance, placed } = keeper(page);
+    instance.start();
+    assert.deepEqual(placed, [{ shape: "pill", anchor: "bottom-left" }], "a plain page: the bottom");
+    clock.advance(5_000);
+    page.fixed = [BOTTOM_BANNER];
+    for (let at = 0; at < 20_000; at += 100) {
+      instance.pageChanged();
+      clock.advance(100);
+    }
+    assert.equal(placed.length, 2, "one move");
+    assert.notDeepEqual(placed[1], placed[0]);
+    page.content = [BOTTOM_TEXT];
+    for (let at = 0; at < 10_000; at += 100) {
+      instance.pageChanged();
+      clock.advance(100);
+    }
+    assert.equal(placed.length, 2, "stable after");
     instance.stop();
   });
 });
