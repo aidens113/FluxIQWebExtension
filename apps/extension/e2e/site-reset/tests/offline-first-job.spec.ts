@@ -213,7 +213,8 @@ test("installed gateway project build checks a computation-only repair offline a
         expected: "Every saved job's title is listed.",
         observed: `Only one of the two saved jobs' titles was listed: "${missing[label]}" is missing; the read's condition left it out.`,
         changed: "Remove the read's condition on the title, so every saved job's row is kept.",
-        defects: [{ kind: "asked_missing", row: missing[label]!, requestWords: LIST }]
+        // The left-out row named with its own cell that makes it asked for (t771): it is a saved job, and its title is that title.
+        defects: [{ kind: "asked_missing", row: missing[label]!, column: "title", value: missing[label]!, requestWords: LIST }]
       }
     }, shownBy);
     const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 60, builder, supervisor, verify });

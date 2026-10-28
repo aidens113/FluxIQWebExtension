@@ -184,3 +184,28 @@ return). UNIT READY (downstream, t769 tree): `apps/extension/e2e/site-reset/{gat
 offline-first-build,offline-trial-environment,step-log}.ts`, `apps/extension/e2e/site-reset/tests/offline-first-{job,
 photo}.spec.ts`, `packages/test-runner/src/build-time/**`, `docs/architecture/testing-facility.md`,
 `docs/working/trace-offline-trials-plan/reports/{lane-t-p6.md,t769/**}`. The halves form one unit; merge Core first.
+
+### 2026-10-28 - After the lead merged dev (t771, t773, t774, t776): headed specs failed; cause and fix
+- Reproduced: `pnpm test:e2e e2e/site-reset/tests/offline-first-job.spec.ts --workers=1` -> `1 failed` at
+  `offline-first-build.ts:113`, offline outcomes `["inconclusive", "passed"]`, not `["kept_no", "passed"]`. The LIVE
+  test-1 also settled `unsure` (titles-1 judged 4 times), so this was not offline-only.
+- Cause: the specs' scripted judge replies were stale under t771's grounding rules
+  (`result-verification/located-defects/located-defects.ts`). (1) A row a read left out must be named with the column
+  and the row's own value in it that make it asked for (`askedCellNotFound`); the job no named only the row. (2) A row is
+  named by its whole label, Core's id, or the label first; a code found inside another label no longer counts. The
+  photo nos named posts by a code inside their link label, so posts-2's `kept_not_asked` (and live test-2 after the
+  offline check) settled `candidate.trial_unconfirmed`. P6's offline judging was not at fault: the live trial of the
+  same reply was refused the same way.
+- Fix (spec replies only; assertions unchanged): job `asked_missing` gains `column: "title", value: <that row's
+  title>`; photo names each row by its link as the judge was shown it (`linkShown`), and `asked_missing` gains
+  `column: "link", value: <post code>` (the link cell holds the code). Each kept no is still a real no the recording shows.
+- Checks: headed `pnpm test:e2e e2e/site-reset/tests/<spec> --workers=1 --headed`: offline-first-job `1 passed
+  (59.9s)`, offline-first-photo `1 passed (1.3m)`, repair-first `1 passed (1.5m)`. Both offline specs: test-1 live no,
+  test-2 `checkedAgainst: "recorded_run"` no, test-3 `offlineCheck: "passed"` then live yes; judge calls 2/2/4/2.
+  Extension `tsc --noEmit -p tsconfig.test.json` -> 0; downstream audit -> `passed (228 warning(s), 616 baselined).`
+  Core trial-path grouped run (flow-bootstrap/{candidate,subflow-candidate,offline-first,verification},
+  service/{offline-first,offline-trial,candidate-trial,subflow-trial,project-build}, project-agents, llm/step-log,
+  gateway-trace/wiring, model/offline-trial, client-gateway/trace-matcher): parallel `Test Files 228 passed | 1 skipped
+  (229)`, `Tests 1546 passed | 2 skipped (1548)`; real-sql `Test Files 12 passed (12)`, `Tests 65 passed (65)`;
+  `all groups passed`.
+- UNIT READY (downstream): `apps/extension/e2e/site-reset/tests/offline-first-{job,photo}.spec.ts`, this report.

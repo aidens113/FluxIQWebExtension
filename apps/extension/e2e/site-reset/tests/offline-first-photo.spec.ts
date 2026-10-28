@@ -15,6 +15,8 @@ const RECENT = "three most recent posts";
 const GRID = gridFor(STUDIO);
 const UNPINNED = GRID.filter(post => !post.pinned).map(post => post.code);
 const NEWEST = UNPINNED.slice(0, 3);
+/** A post's link as the judge was shown it (a row's whole label), found by the post's code; the code itself where it was not shown. */
+const linkShown = (shown: string, code: string): string => shown.match(new RegExp(`https?://[^" ]*/p/${code}/`, "u"))?.[0] ?? code;
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
 
 /**
@@ -209,16 +211,18 @@ test("installed gateway project build checks a computation-only repair of a grid
           ...(rows.length ? [`Rows ${rows.join(", ")} are left out: they are pinned tiles, older posts that are not among the "${RECENT}".`] : [])
         ].join(" ");
       },
-      no: (label) => label === "posts-1" ? {
+      // Each row a no names by its whole label as the judge was shown it, the post's link (t771: never a code found inside another label).
+      no: (label, shown) => label === "posts-1" ? {
         expected: `The links of the ${RECENT}.`,
         observed: `Only the pinned tiles were kept; the three newest posts ${NEWEST.join(", ")} were left out by the read's condition.`,
         changed: "Keep the posts that are not pinned instead.",
-        defects: NEWEST.map(code => ({ kind: "asked_missing", row: code, requestWords: RECENT }))
+        // Each left-out row named with its own cell (t771): its link, which holds the post's code.
+        defects: NEWEST.map(code => ({ kind: "asked_missing", row: linkShown(shown, code), column: "link", value: code, requestWords: RECENT }))
       } : label === "posts-2" ? {
         expected: `The links of the ${RECENT}.`,
         observed: `Every unpinned post was kept, so post ${UNPINNED[3]!} and older ones are kept though only the three most recent are asked for.`,
         changed: "Keep at most three rows.",
-        defects: [{ kind: "kept_not_asked", row: UNPINNED[3]!, requestWords: RECENT }]
+        defects: [{ kind: "kept_not_asked", row: linkShown(shown, UNPINNED[3]!), requestWords: RECENT }]
       } : undefined
     }, shownBy);
     const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 16, maxCallsPerRun: 60, builder, supervisor, verify });
