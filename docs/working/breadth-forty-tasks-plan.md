@@ -676,3 +676,11 @@ The 2026-10-18 entries are archived in
 ## Open Questions
 
 None requiring user input.
+
+### 2026-10-27 - Rerun round 6 launched on the frozen pair
+- Agent: supervisor
+- Changed: launch window opened after t751, t755-t768 merged; dev frozen for code at downstream `55fe5c0e` / Core `4ae8444f`; lanes t563, t719, t566, t567 fast-forwarded to it in both repositories and rebuilt (every install/build exit 0, `core-build` current, `rev-list --left-right --count dev...HEAD` -> `0 0` in all eight trees).
+- Launch (handoff-2026-10-20 shape; both $0.25 settings; headed; created from the extension chat; one attempt each): slot 1 t563 everything-store `everything-store-office-checkout-review` ws `claude-office-checkout-t563-20261027-r7`; slot 2 t719 job-board `job-board-save-quillmark-remote` ws `claude-job-save-t719-20261027-r7`; slot 3 t566 social-network-feed `social-network-feed-recent-group-posts` ws `claude-social-groups-t566-20261027-r9`; slot 4 t567 photo-social `photo-social-newest-likes` ws `claude-photo-likes-t567-20261027-r7`. Logs `lab-runs/2026-10-27/round6-slot<N>.log`.
+- Validation: all four live-guard lines `"state":"admitted"` (instances `rr6-slot-1`..`4`); preludes finished (about 189 s each).
+- Outcome: in flight.
+- Follow-up: debug every failure fully before any rerun; then the adaptation gate rounds 1 and 2 in slots 3, 1 and 4 (t758 launch plan) on the same frozen pair; P6 (t769) and the recording-plus-instructions audit run on branches meanwhile.
