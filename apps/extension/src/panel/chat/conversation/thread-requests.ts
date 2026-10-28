@@ -22,6 +22,10 @@
 //               parking port writes the ask. A message there says which Flow
 //               or run is on screen.
 //
+// A message may also carry a recording the person attached (`recordingId`):
+// it joins `onScreen`, beside any Flow or run, and Core links it to the Flow the
+// chat creates.
+//
 // The background relay passes these fields to Core unchanged, apart from the
 // project thread's subject id (`background/panel/conversation-relay.ts`).
 
@@ -54,7 +58,7 @@ export function threadListRequest(target: ChatTarget): PanelMessage {
 }
 
 /** The request that sends `text` to `target`: into `shown` when there is one, or into a thread opened for it. */
-export function threadSendRequest(target: ChatTarget, shown: ShownThread | undefined, text: string): PanelMessage {
+export function threadSendRequest(target: ChatTarget, shown: ShownThread | undefined, text: string, recordingId?: string): PanelMessage {
   const request: PanelMessage = { type: RUNTIME_MESSAGES.panelConversationSend, text, conversationId: shown?.conversationId, projectId: shown?.projectId };
   if (target.projectId !== undefined) {
     request.projectId = target.projectId;
@@ -74,5 +78,6 @@ export function threadSendRequest(target: ChatTarget, shown: ShownThread | undef
       request.subjectId = target.subjectId;
     }
   }
+  if (recordingId !== undefined) request.onScreen = { ...(request.onScreen as Record<string, string> | undefined), recordingId };
   return request;
 }

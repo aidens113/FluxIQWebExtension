@@ -3,6 +3,7 @@ import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./tar
 import { LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue } from "./live-llm/index.js";
 import { parseRecoveryMatrixCommand, type RecoveryMatrixCommand } from "./recovery-matrix/command.js";
 import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
+import { demonstrationOptions } from "./flow-lane/creation/recorded-evidence/demonstration/index.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
 export type TargetMode = FluxIQTargetMode;
@@ -17,7 +18,7 @@ export type LabCommand =
   // `modelResetOnly` (`--model-reset-only`) exists only with it too: a candidate build whose trials start from the model's own reset, with no Lab fixture reset between them (t472).
   // `replays` exists only with `llm.task` `create-flow`: present, the run approves and applies the repair its Flow's playback produced and replays the applied Flow that many times.
   // Bare `--flow` asked for the recording-built Flow lane, which t519 retired; it is refused while the command is parsed.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; directApiBuild?: true; modelResetOnly?: true; replays?: number; livePanel?: false }
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; directApiBuild?: true; modelResetOnly?: true; demonstrationId?: string; demonstrationProbe?: true; replays?: number; livePanel?: false }
   // A live matrix ran the retired recording-built Flow lane, and `--live-llm` with it is refused while the command is parsed.
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; livePanel?: false }
   | { command: "bench"; resumeBenchId: string }
@@ -50,22 +51,24 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}), ...livePanel };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--direct-api-build", "--model-reset-only", "--replays", "--no-live-panel", ...llmOptionNames]);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--direct-api-build", "--model-reset-only", "--demonstration", "--demonstration-probe", "--replays", "--no-live-panel", ...llmOptionNames]);
     const { livePanel, rest: withoutLivePanel } = livePanelOption(args);
     const { present: directApiBuild, rest: withoutDirectApi } = flagOption(withoutLivePanel, "--direct-api-build");
     const { present: modelResetOnly, rest: withoutDirect } = flagOption(withoutDirectApi, "--model-reset-only");
-    const { flowLane, rest: withoutFlow } = flowLaneOption(withoutDirect);
+    const { present: demonstrationProbe, rest: withoutProbe } = flagOption(withoutDirect, "--demonstration-probe");
+    const { flowLane, rest: withoutFlow } = flowLaneOption(withoutProbe);
     if (flowLane) refuseRecordingOnlyFlow();
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
     const llm = llmOptions(rest);
     const target = targetOptions(rest);
     const variant = optionalVariant(rest);
-    const creation = creationOptions(rest, llm, { dryRun, directApiBuild, modelResetOnly, livePanel: livePanel.livePanel !== false });
+    const demonstration = demonstrationOptions(rest, { probe: demonstrationProbe, dryRun, directApiBuild, instructionTaskId: option(rest, "--instruction-task"), live: llm !== undefined });
+    const creation = creationOptions(rest, llm, { dryRun, directApiBuild, modelResetOnly, livePanel: livePanel.livePanel !== false, demonstration: demonstration.demonstrationId !== undefined });
     const replays = replaysOption(rest, llm);
     // A created Flow is built for the task's variant and run on it; no other run arms one.
     if (variant.variantId && !creation) throw new Error("--variant requires --live-llm --llm-task create-flow: a variant is armed only before a created Flow's run");
-    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(llm ? { llm } : {}), ...creation, ...replays, ...livePanel };
+    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(llm ? { llm } : {}), ...creation, ...demonstration, ...replays, ...livePanel };
   }
   if (command === "matrix") {
     rejectUnknownOptions(argv.slice(1), ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", "--no-live-panel", ...llmOptionNames]);
@@ -267,9 +270,11 @@ function livePanelOption(args: string[]): { livePanel: { livePanel?: false }; re
  * belong to `--llm-task create-flow` alone, which builds its Flow from an
  * instruction task rather than from the run's recording.
  */
-function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { dryRun: boolean; directApiBuild: boolean; modelResetOnly: boolean; livePanel: boolean }): { instructionTaskId?: string; dryRun?: true; directApiBuild?: true; modelResetOnly?: true } | undefined {
+function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { dryRun: boolean; directApiBuild: boolean; modelResetOnly: boolean; livePanel: boolean; demonstration: boolean }): { instructionTaskId?: string; dryRun?: true; directApiBuild?: true; modelResetOnly?: true } | undefined {
   const taskId = option(args, "--instruction-task");
-  if (llm?.task !== "create-flow") {
+  // A demonstration dry run builds nothing, so it needs no model and no live profile: it records, attaches and judges, then stops before Send.
+  const demonstrationDryRun = llm === undefined && flags.demonstration && flags.dryRun;
+  if (llm?.task !== "create-flow" && !demonstrationDryRun) {
     if (taskId !== undefined || flags.dryRun || flags.directApiBuild || flags.modelResetOnly) throw new Error("--instruction-task, --dry-run, --direct-api-build and --model-reset-only require --live-llm --llm-task create-flow");
     return undefined;
   }
@@ -290,7 +295,7 @@ function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, f
  *   than from the Lab's fixture reset. For runs meant to prove that reset;
  *   without it every candidate build, live or not, keeps the fixture reset.
  */
-function flagOption(args: string[], flag: "--direct-api-build" | "--model-reset-only" | "--no-tracing"): { present: boolean; rest: string[] } {
+function flagOption(args: string[], flag: "--direct-api-build" | "--model-reset-only" | "--demonstration-probe" | "--no-tracing"): { present: boolean; rest: string[] } {
   const count = args.filter(value => value === flag).length;
   if (count > 1) throw new Error(`${flag} may only be specified once`);
   return { present: count === 1, rest: args.filter(value => value !== flag) };

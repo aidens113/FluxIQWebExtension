@@ -8,7 +8,7 @@ import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { inspectCoreWebBuild } from "./core-web-build/index.js";
 import { classifyRunnerFailure } from "./failure.js";
-import { assertCreatedFlowVerificationReady, assertLabModelResetOnlyApplies, createdFlowTrialsCandidates, describeCreatedFlowRequest, labCandidateTrialFixtureReset, labCandidateTrialReadiness, loadCreatedFlowRequest } from "./flow-lane/index.js";
+import { assertCreatedFlowVerificationReady, assertLabModelResetOnlyApplies, createdFlowTrialsCandidates, describeCreatedFlowRequest, labCandidateTrialFixtureReset, labCandidateTrialReadiness, loadCreatedFlowRequest, loadScenarioDemonstrations, selectDemonstration } from "./flow-lane/index.js";
 import { inspectRun } from "./inspect.js";
 import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
@@ -113,7 +113,9 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // Before the run, so an unexecutable profile or an absent credential is a
       // refusal an operator can read, rather than a sanitized facility failure
       // reported from inside a run that had already started a browser.
-      const live = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, targetMode: target.mode }) : undefined;
+      // A demonstration dry run calls no model, whatever profile was typed beside it, so it never reads a key.
+      const demonstrationDryRun = command.demonstrationId !== undefined && command.dryRun === true;
+      const live = command.llm && !demonstrationDryRun ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, targetMode: target.mode }) : undefined;
       // After the live refusals, so a missing key is reported before a missing catalog: the task, its workflow and variant, and what judges it.
       // A build typed into the extension's chat carries no permit and runs on Core's own default model; refused here, before anything starts, rather than inside the run.
       if (live?.createsFlow && !command.directApiBuild) live.assertChatBuildable();
@@ -124,8 +126,10 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       assertLabModelResetOnlyApplies({ modelResetOnly: command.modelResetOnly === true, authoringMode: live?.coreAuthoringMode });
       const candidateTrial = createdFlowTrialsCandidates(live?.coreAuthoringMode) ? labCandidateTrialReadiness({ startsCore: target.mode !== "existing", fixtureResetBetweenTrials: labCandidateTrialFixtureReset({ modelResetOnly: command.modelResetOnly === true }) }) : undefined;
       if (live?.createsFlow) assertCreatedFlowVerificationReady(live.coreAuthoringMode, candidateTrial);
-      const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
-      if (command.dryRun) {
+      const creation = live?.createsFlow || command.demonstrationId !== undefined ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
+      // The recorded-evidence lane: the demonstration must be the one written for this very task (`flow-lane/creation/recorded-evidence/`).
+      const demonstration = command.demonstrationId === undefined ? undefined : selectDemonstration(await loadScenarioDemonstrations(labPaths.scenarioLabDist), { id: command.demonstrationId, scenarioId: command.scenarioId, taskId: creation!.task.id, probe: command.demonstrationProbe === true });
+      if (command.dryRun && !demonstration) {
         // Everything a live build would check before it starts, and nothing after: no topology, no browser, no provider call.
         // A target that owns its Core also reports the Core web build it would serve -- its key, and whether that build is
         // already published -- read without building, locking or creating anything; an existing target serves no build.
@@ -134,7 +138,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
         return 0;
       }
       const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), ...(command.modelResetOnly ? { modelResetOnly: true } : {}), environment: resolvedEnvironment, target });
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), ...(command.modelResetOnly ? { modelResetOnly: true } : {}), ...(demonstration ? { demonstration: { demonstration, dryRun: command.dryRun === true } } : {}), environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
