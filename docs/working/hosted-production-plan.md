@@ -685,6 +685,13 @@ gaining an enterprise contact page.
 - Outcome: Accepted (D0 passed); the Not verified items above remain open
 - Follow-up: contract freeze; D2 starts with the D0 listener rules; D8 owns the CDP loader and the `scenario-lab.ts:92` decision
 
+### 2026-10-28 — H1 contracts frozen (t784)
+- Agent: supervisor; contract-freeze worker (worker-heavy, brief t784-K), report `hosted-production-plan/reports/t784-contracts.md` (17 decisions, gaps the lanes will meet)
+- Changed (Core `packages/contracts`, 0.2.0 -> 0.3.0): `/platform` (discovery, connect, provisioning operations and errors, the connected-client credential with `approvingSessionId` as a digest, `secrets.locked`, the Origin grammar) and `/iam` (policy grammar, FRN, action catalog entry, `PanelProduct`), re-exported from the root; gateway 0.2 additions (`server.revoked`, `server.going_away`, `runContext`), all optional so 0.1 messages still type-check.
+- Decisions (worker, accepted by the supervisor): Core field names say "client", not "browser" (`connectedClientId`, `runtime`), because Core's structure audit refuses browser identifiers; the plan's IAM strings are unchanged. The stamped gateway version stays "0.1" (offline trials refuse traces of another version) and discovery publishes `["0.1","0.2"]`; lane D raises the stamp with a decision on old traces. Every provisioning action name contains `Account` so `platform:*Account*` covers it. The credential record gains `clientInstallId` so a reconnect replaces its record.
+- Validation: supervisor-run `pnpm --filter @fluxiq/contracts test` -> "Test Files 35 passed (35)", "Tests 487 passed (487)"; `pnpm --filter @fluxiq/contracts build` -> `dist/iam.js`, `dist/platform.js` emitted; Core `pnpm check` -> exit 0; `pnpm structure:check` -> passed (448 warnings, 1152 baselined); `pnpm docs:check` -> current; downstream `tsc --noEmit` in domain and apps/extension against the t784 Core -> clean.
+- Outcome: Accepted. Next: lanes A, B1, B2 and C, each as its own task.
+
 ## Open Questions
 
 Owner: the user, for all of them. A recommendation follows each; the plan proceeds on it. Core's
