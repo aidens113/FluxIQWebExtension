@@ -85,8 +85,8 @@ test("a promoted project build is read from the proposal's candidateTrial audit,
     authoringMode: "project", outcome: "promoted", draft: null, candidateId: "project.candidate",
     revision: 2, digest: "d2", verdict: "yes", trialRunId: "trial.whole.2", codes: [], judgeCalls: 2, trialCount: 2,
     trials: [
-      { runId: "trial.whole.1", revision: 1, digest: "d1", start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
-      { runId: "trial.whole.2", revision: 2, digest: "d2", start: "reset", execution: "succeeded", code: null, verdict: "yes", reason: null },
+      { runId: "trial.whole.1", revision: 1, digest: "d1", start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", verdictCode: null, reason: "web.action.timeout" },
+      { runId: "trial.whole.2", revision: 2, digest: "d2", start: "reset", execution: "succeeded", code: null, verdict: "yes", verdictCode: null, reason: null },
     ],
     promotedAdaptationId: "adaptation.project",
   });

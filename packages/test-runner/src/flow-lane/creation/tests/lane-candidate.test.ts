@@ -110,10 +110,10 @@ test("round 6: a promoted candidate the chat applied, with its trial audit and n
   assert.deepEqual(outcome.build.candidateOutcome, {
     authoringMode: "candidate", outcome: "promoted", draft: null, candidateId: "candidate.round6", revision: 4, digest: DIGEST, verdict: "yes", trialRunId: "trial.4", codes: [], judgeCalls: 2, trialCount: 4,
     trials: [
-      { runId: "trial.1", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
-      { runId: "trial.2", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
-      { runId: "trial.3", revision: 3, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
-      { runId: "trial.4", revision: 4, digest: DIGEST, start: "reset", execution: "succeeded", code: null, verdict: "yes", reason: null },
+      { runId: "trial.1", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", verdictCode: null, reason: "web.action.timeout" },
+      { runId: "trial.2", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", verdictCode: null, reason: "web.action.timeout" },
+      { runId: "trial.3", revision: 3, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", verdictCode: null, reason: "web.action.timeout" },
+      { runId: "trial.4", revision: 4, digest: DIGEST, start: "reset", execution: "succeeded", code: null, verdict: "yes", verdictCode: null, reason: null },
     ],
     promotedAdaptationId: ADAPTATION_ID,
   });
