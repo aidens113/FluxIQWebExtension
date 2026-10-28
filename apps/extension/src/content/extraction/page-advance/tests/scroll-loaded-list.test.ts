@@ -165,6 +165,14 @@ type FeedOptions = {
   hiddenLoadMore?: boolean;
   /** Scrolling exposes the button without loading a batch itself. */
   revealMoreOnScroll?: boolean;
+  /**
+   * The loader refuses the first `refusals` requests it is not told to force,
+   * writing `words` under the list (a limiter's notice, t762), and then either
+   * offers a Try again control after `retryAfterMs` whose press loads the batch,
+   * or goes by itself after `clearsAfterMs` and loads the batch. Neither: the
+   * notice stays for good.
+   */
+  pause?: { words: string; refusals: number; retryAfterMs?: number; clearsAfterMs?: number };
 };
 
 type FeedPage = { body: El; feed: El; scrolls(): number; posts(): number; restore(): void };
@@ -190,8 +198,33 @@ function feedPage(options: FeedOptions): FeedPage {
   let scrolls = 0;
   let more: El | undefined;
   const view = { scrollX: 0, scrollY: 0, innerHeight: VIEWPORT_PX };
-  const load = (): void => {
+  let refused = 0;
+  let notice: El | undefined;
+  const refuse = (pause: NonNullable<FeedOptions["pause"]>): void => {
+    refused += 1;
+    notice = new El("div", {}, pause.words);
+    const siblings = main.children;
+    notice.parentElement = main;
+    siblings.splice(siblings.indexOf(feed) + 1, 0, notice);
+    const shown = notice;
+    const goAway = (): void => {
+      shown.remove();
+      notice = undefined;
+      load(true);
+    };
+    if (pause.retryAfterMs !== undefined) {
+      setTimeout(() => {
+        const retry = new El("button", {}, "Try again");
+        retry.onClick = goAway;
+        shown.append(retry);
+      }, pause.retryAfterMs);
+    }
+    if (pause.clearsAfterMs !== undefined) setTimeout(goAway, pause.clearsAfterMs);
+  };
+  const load = (force = false): void => {
     if (loading || left === 0) return;
+    if (options.pause && !force && notice === undefined && refused < options.pause.refusals) return refuse(options.pause);
+    if (notice !== undefined && !force) return;
     loading = true;
     left -= 1;
     if (options.busy) feed.setAttribute("aria-busy", "true");
@@ -217,7 +250,7 @@ function feedPage(options: FeedOptions): FeedPage {
     const control = new El("button", { "data-more": "" }, "Load more");
     more = control;
     if (options.hiddenLoadMore) control.setAttribute("hidden", "");
-    control.onClick = load;
+    control.onClick = () => load();
     main.append(control);
   }
   (globalThis as Record<string, unknown>).HTMLElement = El;
@@ -373,4 +406,55 @@ test("a pager's Next found from a list that carried no way is followed, and a di
       shown.restore();
     }
   }
+});
+
+// A list is going on, ended, or paused by the site (t755, t762). A loader that
+// answers a scroll or a press with a notice to wait has paused the list: the
+// step waits as the notice asks, or presses the retry it offers, and asks again.
+// The words are a limiter's, not a site's; the notice, its seconds and its Try
+// again are what the options set.
+const WAIT_WORDS = "Please wait a few moments before you try again.";
+
+test("a scroll met by the loader's notice presses the Try again it offers and moves, never ending the list", async () => {
+  await onFeed({ batchMs: 100, batches: 3, pause: { words: WAIT_WORDS, refusals: 1, retryAfterMs: 2_500 } }, async (feed) => {
+    assert.deepEqual(await movePage({ item: POST, pagination: { mode: "scroll" } }, { timeoutMs: 30_000 }), { outcome: "moved", by: "scroll" });
+    assert.equal(feed.posts(), 10, "the retry loaded the batch");
+  });
+});
+
+test("a scroll met by a notice that goes by itself waits it out and moves", async () => {
+  await onFeed({ batchMs: 100, batches: 3, pause: { words: WAIT_WORDS, refusals: 1, clearsAfterMs: 3_000 } }, async (feed) => {
+    assert.deepEqual(await movePage({ item: POST }, { timeoutMs: 30_000 }), { outcome: "moved", by: "scroll" });
+    assert.equal(feed.posts(), 10);
+  });
+});
+
+test("a scroll met by a notice that stays fails rate_limited with the notice's words, not ended", async () => {
+  await onFeed({ batchMs: 100, batches: 3, pause: { words: "Too many requests. Try again in 1s.", refusals: 99 } }, async (feed) => {
+    const answer = await movePage({ item: POST, pagination: { mode: "scroll" } }, { timeoutMs: 60_000 });
+    assert.equal(answer.outcome, "failed");
+    if (answer.outcome !== "failed") return;
+    assert.equal(answer.stop, "rate_limited");
+    assert.match(answer.reason, /Too many requests\. Try again in 1s\./u);
+    assert.equal(feed.posts(), 5);
+  });
+});
+
+test("a Load more press met by the loader's notice presses the Try again it offers and moves", async () => {
+  await onFeed({ batchMs: 100, batches: 3, loadMore: true, pause: { words: WAIT_WORDS, refusals: 1, retryAfterMs: 2_500 } }, async (feed) => {
+    // The press is the page's request for a batch: a scroll tripped the limiter first.
+    assert.deepEqual(await movePage({ item: POST, pagination: { mode: "loadMore", control: "button[data-more]" } }, { timeoutMs: 30_000 }), { outcome: "moved", by: "loadMore" });
+    assert.equal(feed.posts(), 10);
+  });
+});
+
+test("a Load more press met by a notice that stays fails rate_limited, not list_unchanged and not ended", async () => {
+  await onFeed({ batchMs: 100, batches: 3, loadMore: true, pause: { words: "Too many requests. Try again in 1s.", refusals: 99 } }, async (feed) => {
+    const answer = await movePage({ item: POST, pagination: { mode: "loadMore", control: "button[data-more]" } }, { timeoutMs: 60_000 });
+    assert.equal(answer.outcome, "failed");
+    if (answer.outcome !== "failed") return;
+    assert.equal(answer.stop, "rate_limited");
+    assert.match(answer.reason, /Too many requests/u);
+    assert.equal(feed.posts(), 5);
+  });
 });

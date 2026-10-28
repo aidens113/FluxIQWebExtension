@@ -26,7 +26,7 @@
 
 import { implicitRole } from "../../identity";
 import { isDeclaredFeed } from "../feed-signal";
-import { listContinuesPast } from "./list-continues";
+import { wayOnPast } from "./way-on-past";
 
 /** How a list goes on past what the capture shows of it (`DomElementDescriptor.listWayOn`). */
 export type ListWayOn = "none" | "next_page" | "load_more" | "feed";
@@ -39,7 +39,7 @@ export function listWayOn(container: Element): ListWayOn | undefined {
   if (family === undefined) return undefined;
   const items = ownItems(container, family);
   if (items.length === 0) return undefined;
-  const way = listContinuesPast(items, false);
+  const way = wayOnPast(items, false);
   if (way?.kind === "next_page") return "next_page";
   if (way?.kind === "load_more") return "load_more";
   return isDeclaredFeed(items, items[0]!.parentElement) ? "feed" : "none";

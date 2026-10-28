@@ -36,11 +36,18 @@
 // grew. The wording read is the closed wait and busy phrases the click's
 // rate-limit watch already reads, not an end-of-list wording: an end still
 // sends nothing, and a list that ended is said by Next page's `ended` answer.
+//
+// **Replies the page leaves closed are coverage too** (t762). A thread's items
+// can each carry a control that opens more of the thread ("View 3 replies", "Show
+// more replies") and the read, which reads what is on the page, reads none of what
+// those controls hold. Where the list shows no other way on, an item carrying
+// one says `unopened_replies` (`./unopened-replies.ts`), so the builder opens
+// them before it reads. A way on the list does have is said first; this one is
+// said only for a list with none, and never for a snapshot's list (`./list-way-on.ts`).
 
 import type { BrowserActionResult } from "../../types";
-import { detectPagination, nextControlOnPage } from "../detect-pagination";
-import { isDeclaredFeed } from "../feed-signal";
-import { loaderAskedToWait } from "./loader-wait";
+import { hasUnopenedReplies } from "./unopened-replies";
+import { wayOnPast } from "./way-on-past";
 
 /** The fact, as the domain's summary carries it (`domain/src/actions/extraction/list-continues.ts`). */
 export type ListContinues = NonNullable<NonNullable<BrowserActionResult["extraction"]>["listContinues"]>;
@@ -51,22 +58,5 @@ export type ListContinues = NonNullable<NonNullable<BrowserActionResult["extract
  * ran out of reveals while the list still grew (`list-wait.ts`, `"growing"`).
  */
 export function listContinuesPast(run: readonly Element[], stillGrowing = false): ListContinues | undefined {
-  const container = run[0]?.parentElement ?? null;
-  if (container === null) return undefined;
-  // The control a Next read would follow from this page, a disabled one included: a disabled one is the list ending.
-  const next = nextControlOnPage(null, run);
-  if (next !== undefined) return isEnabled(next.control) ? { kind: "next_page", evidence: next.by === "number" ? "following_page_number" : "next_control" } : undefined;
-  const pagination = detectPagination(run, container);
-  if (pagination === undefined) {
-    if (stillGrowing) return { kind: "infinite_scroll", evidence: isDeclaredFeed(run, container) ? "declared_feed" : "still_growing" };
-    return loaderAskedToWait(run) ? { kind: "infinite_scroll", evidence: "loader_asked_to_wait" } : undefined;
-  }
-  if (pagination.mode !== "loadMore") return undefined;
-  const control = document.querySelector(pagination.control);
-  return control !== null && isEnabled(control) ? { kind: "load_more", evidence: "load_more_control" } : undefined;
-}
-
-/** Whether a control is offered rather than drawn disabled, as a pager draws its last page's Next. */
-function isEnabled(control: Element): boolean {
-  return control.getAttribute("aria-disabled") !== "true" && control.getAttribute("disabled") === null;
+  return wayOnPast(run, stillGrowing) ?? (hasUnopenedReplies(run) ? { kind: "load_more", evidence: "unopened_replies" } : undefined);
 }

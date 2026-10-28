@@ -20,46 +20,9 @@
 // phrases the click's rate-limit watch uses (`../../action-runtime/interference/`).
 // No word of it leaves the page: what the read sends is the closed evidence word.
 
-import { isRateLimitLayerText, isTransientRefusalText } from "../../action-runtime/interference";
-import { textOutsideSensitiveControls } from "../../sensitive-text";
-
-/** How many ancestors above the list's container are looked past. */
-const LEVELS = 3;
-/** How many following elements are read at each place. */
-const FOLLOWING = 3;
-/** How much of one element's words is matched: a notice is a sentence or two, not a page. */
-const TEXT_MAX = 400;
+import { loaderNoticeOf } from "./loader-notice";
 
 /** Whether the page shows, where the list `run` would grow, a notice asking to wait before it loads more; see the header. */
 export function loaderAskedToWait(run: readonly Element[]): boolean {
-  const container = run[0]?.parentElement ?? null;
-  if (container === null) return false;
-  const own = run.filter((item) => item.parentElement === container);
-  const last = own[own.length - 1];
-  if (last !== undefined && followedByWait(last)) return true;
-  let level: Element | null = container;
-  for (let depth = 0; level !== null && depth <= LEVELS && level !== level.ownerDocument?.body; depth += 1, level = level.parentElement) {
-    if (followedByWait(level)) return true;
-  }
-  return false;
-}
-
-function followedByWait(element: Element): boolean {
-  let next = element.nextElementSibling;
-  for (let read = 0; next !== null && read < FOLLOWING; read += 1, next = next.nextElementSibling) {
-    if (saysWait(next)) return true;
-  }
-  return false;
-}
-
-function saysWait(element: Element): boolean {
-  if (!isShown(element)) return false;
-  const text = textOutsideSensitiveControls(element).replace(/\s+/gu, " ").trim().slice(0, TEXT_MAX);
-  return text !== "" && (isRateLimitLayerText(text) || isTransientRefusalText(text));
-}
-
-/** Drawn: not hidden, and with a box. A stand-in that cannot say where it is counts as drawn. */
-function isShown(element: Element): boolean {
-  if (element.getAttribute("hidden") !== null || element.getAttribute("aria-hidden") === "true") return false;
-  return typeof element.getClientRects !== "function" || element.getClientRects().length > 0;
+  return loaderNoticeOf(run) !== undefined;
 }
