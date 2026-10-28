@@ -144,7 +144,10 @@ async function fixture(root: string) {
         const right = text === "right" && currentRows().every(row => rowValues.get(row.name) === row.desired);
         assert.ok(sent.includes(right ? "right" : "wrong"), "judge must receive the actual observed message");
         return reply({ kind: "diagnosis", summary: right ? "The message is right." : "The message is wrong.",
-          diagnosis: right ? { answersRequest: "yes" } : { answersRequest: "no", changed: "Set the editor message to right." } });
+          diagnosis: right ? { answersRequest: "yes" } : { answersRequest: "no", changed: "Set the editor message to right.",
+            // A current no names the defect it rests on (Core t752); this Flow stores no rows, so it names the step whose act
+            // was wrong, which Core finds in its record of the steps the run took (Core t766).
+            defects: [{ kind: "act_wrong", step: "type", row: "the editor message", requestWords: "set the global summary to right" }] } });
       }
       assert.equal(task, "evidence_tool_decision", "fixture accepts only actual judge and repair tasks");
       phase = "repair";
