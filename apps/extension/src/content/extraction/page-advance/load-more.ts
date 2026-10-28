@@ -3,6 +3,17 @@
 // offered a Retry beside the control has it pressed, at most twice
 // (`../load-retry.ts`).
 //
+// **A list whose loader asked to wait has not ended** (t762). A press answered
+// with the loader's notice ("Please wait a few moments before you try again",
+// "Try again in 4s") brings no item; the step then waits as the notice asks, or
+// presses the retry control it offers once it shows, and presses again, within
+// the node's retries (`./loader-pause/`). A list still paused after them fails
+// `rate_limited` with the notice's words, not `list_unchanged` and not ended.
+//
+// **A control under an open layer is not pressed** (t762): the page's own way out
+// is pressed first and the control is covered, `control_not_clickable`, where
+// the layer stays (`./covered-press/`). The same holds for Next and numbered pages.
+//
 // A disabled or `aria-disabled="true"` control is the list ending. An absent
 // or unrendered control is first watched briefly, then the list is scrolled
 // within its ordinary bound: some lists expose the button after initial
@@ -39,6 +50,9 @@ import { isDisabled } from "../pager-reading";
 import { PAGER_POLL_MS } from "./follow-next";
 import { clickable, LIST_CHANGE_POLL_MS, LIST_CHANGE_TIMEOUT_MS, pastDeadline } from "./list-change";
 import { loadMoreControlOnPage } from "./appending-control";
+import { clearCover } from "./covered-press";
+import { waitOutLoaderPause } from "./loader-pause";
+import { loaderNoticeOf } from "../read-coverage";
 import { PaginationFault } from "./pagination-fault";
 import { scrollForMore } from "./scroll-for-more";
 import type { PageStep, PaginationProgress } from "./types";
@@ -73,10 +87,23 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   if (isDisabled(found)) return { outcome: "ended", stop: "control_disabled" };
   if (bound !== undefined && progress.pagesRead >= bound) return { outcome: "truncated", stop: "page_limit" };
   const control = clickable(found, way.control);
+  await clearCover(control, progress.deadline);
   if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
   await progress.beforeFollow?.("loadMore");
   await pressHeard(control, progress);
-  const outcome = await waitForMoreItems(control, progress);
+  let outcome = await waitForMoreItems(control, progress);
+  // A loader that answered the press with a notice to wait has paused the list; it has not ended (header).
+  for (let pauses = 0; outcome === "unchanged" && control.isConnected; pauses += 1) {
+    const paused = await waitOutLoaderPause(progress, pauses);
+    if (paused === "timed_out") return { outcome: "timed_out", stop: "deadline" };
+    if (paused === "clear") break;
+    if (progress.hasUnreadItem()) {
+      outcome = "changed";
+      break;
+    }
+    if (paused !== "retried") await pressHeard(control, progress);
+    outcome = await waitForMoreItems(control, progress);
+  }
   if (outcome === "unchanged") {
     throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(way.control)} for page ${progress.pagesRead + 1}.`);
   }
@@ -141,8 +168,10 @@ async function waitForMoreItems(control: HTMLElement, progress: PaginationProgre
     const outcome = await waitUntil(() => {
       if (progress.hasUnreadItem() || !control.isConnected) return true;
       offered.retry = retried < LOAD_RETRIES ? offeredLoadRetry(control) : undefined;
-      return offered.retry !== undefined;
+      // The loader's notice to wait is the page's answer: no new item is coming for now (`./loader-pause/`).
+      return offered.retry !== undefined || loaderNoticeOf(progress.shown) !== undefined;
     }, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
+    if (outcome === "changed" && !offered.retry && control.isConnected && !progress.hasUnreadItem()) return "unchanged";
     if (outcome !== "changed" || !offered.retry) return outcome;
     retried += 1;
     offered.retry.click();

@@ -40,6 +40,7 @@ import { nextControlOnPage, type NextControlChoice } from "../detect-pagination"
 import { waitUntil } from "../list-wait";
 import { isDisabled, leadsToThisPage, linkAddress, readPager, type PagerReading } from "../pager-reading";
 import { afterListChange, clickable, pastDeadline } from "./list-change";
+import { clearCover } from "./covered-press";
 import { awaitPageLoadTurn } from "./load-pace";
 import { appliedControls } from "./applied-controls";
 import { droppedQueryState } from "./dropped-state";
@@ -87,6 +88,7 @@ export async function followNext(way: Extract<WebAutomationNextPageWay, { next: 
   if (unaddressed && pager !== undefined && pager.following === undefined && !pager.later) return { outcome: "ended", stop: "no_following_page" };
   const following = unaddressed ? pager?.following : keepingFollowing(named, pager);
   const control = following ?? named;
+  await clearCover(control, progress.deadline);
   progress.laterPageShown = pager?.later === true;
   if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
   await awaitPageLoadTurn(progress.deadline);

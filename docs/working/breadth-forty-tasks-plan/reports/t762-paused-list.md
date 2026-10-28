@@ -1,0 +1,57 @@
+# t762 paused list, covered pager, unopened replies
+
+Worker report. Paired trees `fxwork/t762/!FluxIQWebExtension` and `fxwork/t762/!FluxIQ`, branch `task/t762-paused-list-next-page`. No commits, no model calls, no Lab or live runs. Browser runs: content harness, headed Chromium, provider-free, photo-social and everything-store only.
+
+## Outcome
+
+Done for all three units.
+
+## 2026-10-27 - Unit 1: paused, not ended
+
+- `page-advance/loader-pause/` (new: `wait-out-pause.ts`, `stated-wait.ts`, barrel, `tests/stated-wait.test.ts`). `waitOutLoaderPause(progress, waits)` finds the loader's notice, waits as it states (`Try again in 4s`, `wait 30 seconds`, held to 30 s, plus 0.5 s), else a growing pace (1.5 s doubled, to 12 s), ends early when the notice goes, and presses the list's Try again (`offeredListRetry`) once it shows. After the first sighting plus 3 waits (`PAUSE_WAITS`) a list still paused throws `PaginationFault("rate_limited")` carrying the notice's words (bounded 200 chars). Existing fault word, so no domain or Core answer word was needed; `stoppedMove` already maps it to `failed rate_limited`.
+- `read-coverage/loader-notice.ts` (new, `loaderNoticeOf`): the finding half of t755's `loader-wait.ts`, now returning the notice element. `loaderAskedToWait` is a one-line caller of it.
+- `scroll-for-more.ts`: after a scroll that brought nothing, a notice up means wait and scroll again, not `scrolled_to_end`.
+- `load-more.ts`: a press answered by a notice waits it out, presses again (or the retry), within the same 3 waits; `waitForMoreItems` returns early when the notice shows instead of waiting out 10 s each time. Still paused: `rate_limited`, not `list_unchanged`.
+- Tests that failed first (wait short-circuited, marker `T762-TEMP`, restored, count 0): `scroll-loaded-list.test.ts` 4 of the 5 new rows failed (`ended`/`list_unchanged`), e.g. `expected 'failed' actual 'ended'`, `expected 'rate_limited' actual 'list_unchanged'`. The 5th (Try again after 2.5 s) already passed on unchanged source: the list's own retry press catches it. Kept as a guard.
+- Headed `list-states/tests/photo-social-grid-paused-next-page.spec.ts`: scroll right after load trips the grid's limit, then `web.dom.next_page {item}` must move. Failing first: `Received "{outcome:ended, stop:scrolled_to_end}"`. With the fix: passes (13.9 s).
+- UNIT READY: apps/extension/src/content/extraction/page-advance/loader-pause/index.ts, apps/extension/src/content/extraction/page-advance/loader-pause/wait-out-pause.ts, apps/extension/src/content/extraction/page-advance/loader-pause/stated-wait.ts, apps/extension/src/content/extraction/page-advance/loader-pause/tests/stated-wait.test.ts, apps/extension/src/content/extraction/page-advance/scroll-for-more.ts, apps/extension/src/content/extraction/page-advance/load-more.ts, apps/extension/src/content/extraction/page-advance/tests/scroll-loaded-list.test.ts, apps/extension/src/content/extraction/read-coverage/loader-notice.ts, apps/extension/src/content/extraction/read-coverage/loader-wait.ts, apps/extension/src/content/extraction/read-coverage/index.ts, apps/extension/src/content/extraction/read-coverage/tests/loader-notice.test.ts, apps/extension/e2e/content/tests/list-states/tests/photo-social-grid-paused-next-page.spec.ts
+
+## 2026-10-27 - Unit 2: inert controls
+
+- `page-advance/covered-press/` (new: `layer-over-control.ts`, `clear-cover.ts`, barrel, `tests/layer-over-control.test.ts`). A control is covered by a painted modal layer that does not hold it (`overlaysAt`, aria-modal, `dialog:modal`, the dialog at the control's centre), or by an `[inert]` ancestor (composed). `clearCover` presses the existing defence's way out (`clearInterference(control)`, allow-list only), gives the layer 1.5 s to go, and otherwise throws `control_not_clickable` with `coveringLayerSentence`'s generic words. No new answer word. The layer read does not swallow errors (structure audit rule `failure-as-empty`): a page it cannot read fails the move.
+- Called before the press in `follow-next.ts` (after the following-page swap), `numbered-page.ts` and `load-more.ts`.
+- Headed `list-states/tests/everything-store-covered-next-page.spec.ts`: (a) deal-wheel mode, wheel open, Next page: the site records the wheel `dismissed` and the address is page 2; (b) a dialog with no control (injected into the store's results page): `failed / control_not_clickable`, address still page 1. Failing first (clearCover short-circuited): row a `Expected "dismissed" Received "pending"`, row b failed too. Both pass with the fix.
+- UNIT READY: apps/extension/src/content/extraction/page-advance/covered-press/index.ts, apps/extension/src/content/extraction/page-advance/covered-press/layer-over-control.ts, apps/extension/src/content/extraction/page-advance/covered-press/clear-cover.ts, apps/extension/src/content/extraction/page-advance/covered-press/tests/layer-over-control.test.ts, apps/extension/src/content/extraction/page-advance/follow-next.ts, apps/extension/src/content/extraction/page-advance/numbered-page.ts, apps/extension/src/content/extraction/page-advance/load-more.ts, apps/extension/e2e/content/tests/list-states/tests/everything-store-covered-next-page.spec.ts
+
+## 2026-10-27 - Unit 3: unopened replies
+
+- Extension `read-coverage/unopened-replies.ts` (new, `hasUnopenedReplies`): an item holds a pressable control whose whole label is an opening verb, optional count, and "replies"/"responses" ("View replies (3)", "Show all 5 replies", "Replies (3)"), not `aria-expanded=true`. A bare "Reply" and "Hide replies" do not match. `way-on-past.ts` (new) holds t755's body of `listContinuesPast`; `list-continues.ts` is now `wayOnPast(...) ?? unopened_replies`, so a real way on is said first, and `list-way-on.ts` (snapshot) calls `wayOnPast` so a list with closed replies is still `none` there. The fact is `{kind: "load_more", evidence: "unopened_replies"}`.
+- Domain `list-continues.ts`: new evidence word `unopened_replies`; test in `summary-list-continues.test.ts`.
+- Core: `extraction-summary.ts` admits the word; `read-account/list-continues.ts` has its own sentence ("its items carry controls that open more of the list (replies) which were not opened, so what those controls hold was not read") and fix ("open them before step N reads: press each item's control that opens its replies ... and read the list again"). It does not say to page the list on. Generic words only. Tests in `read-account/tests/list-continues.test.ts` and `summaries/tests/extraction-summary-list-continues.test.ts`.
+- Failing first: extension `list-continues.test.ts` row 13 failed with the check short-circuited (`# pass 25 # fail 1`); the headed spec `list-states/tests/photo-social-unopened-replies.spec.ts` failed `Expected {unopened_replies, load_more} Received undefined`. With the fix: Load more on screen says `load_more_control`; thread whole with closed toggles says `unopened_replies`; all toggles opened says nothing. Passes (44 s).
+- UNIT READY: apps/extension/src/content/extraction/read-coverage/unopened-replies.ts, apps/extension/src/content/extraction/read-coverage/way-on-past.ts, apps/extension/src/content/extraction/read-coverage/list-continues.ts, apps/extension/src/content/extraction/read-coverage/list-way-on.ts, apps/extension/src/content/extraction/read-coverage/index.ts, apps/extension/src/content/extraction/read-coverage/tests/list-continues.test.ts, apps/extension/e2e/content/tests/list-states/tests/photo-social-unopened-replies.spec.ts, domain/src/actions/extraction/list-continues.ts, domain/src/actions/extraction/tests/summary-list-continues.test.ts; Core: packages/fluxiq/src/programs/automation-studio/runtime/service/summaries/extraction-summary.ts, packages/fluxiq/src/programs/automation-studio/runtime/service/summaries/tests/extraction-summary-list-continues.test.ts, packages/fluxiq/src/programs/automation-studio/runtime/result-verification/read-account/list-continues.ts, packages/fluxiq/src/programs/automation-studio/runtime/result-verification/read-account/tests/list-continues.test.ts
+
+## Commands run and observed results
+
+Extension (`apps/extension`):
+- `EXTENSION_TEST_BUILD_LABEL=t762 node scripts/test-extension.mjs src/content/extraction src/content/action-runtime/interference src/content/action-runtime/ignored-press` -> `# tests 569 # pass 569 # fail 0`.
+- `npx tsc -p tsconfig.json --noEmit` and `npx tsc -p tsconfig.test.json --noEmit` -> exit 0 each.
+- `pnpm --filter @fluxiq-web-extension/extension test:content -- list-states dialog-dismissal --headed --workers=2` -> `19 passed (1.6m)`.
+- `... test:content -- everything-store-next-page social-read-completion crossborder-next-page-person --headed --workers=2` -> `6 passed (4.5m)` (pagers still followed with no layer over them).
+Domain: `npx tsc -p tsconfig.json --noEmit` -> exit 0; `DOMAIN_TEST_BUILD_LABEL=t762 node scripts/test-domain.mjs src/actions/extraction/tests` -> `# tests 83 # pass 83 # fail 0`.
+Core (`packages/fluxiq`): `pnpm test` on read-account/tests (whole dir), `extraction-summary-list-continues`, `located-defects`, `repair-directive`, `paging-feedback` and the three contract tests (system-prompt, extraction-vocabulary, issue-feedback) -> `Test Files 25 passed (25) Tests 236 passed (236)`; `npx tsc -p tsconfig.json --noEmit` -> exit 0. Core libraries rebuilt (`fluxiq:build` 70 s) because the extension's core-build guard refused a stale Core.
+Structure: downstream `pnpm structure:check` first failed `failure-as-empty` on a try/catch in `layer-over-control.ts`; fixed; now `structure-audit: passed (223 warning(s), 616 baselined)`. Core `pnpm structure:check` -> `structure-audit: passed (443 warning(s), 1152 baselined)`.
+
+## Not verified
+
+- No live or paid run; whether a builder now authors the wait, the retry, or opens replies before reading is unproven. The Core sentence is verified by tests only.
+- Firefox not exercised. Full suites not run.
+- Load-more under a modal and numbered pages share the same `clearCover` call but only Next (pager) has a headed row; Load more is covered by the unit row for the layer reading and by the shared funnel.
+- The covered rule treats any painted `aria-modal` layer that does not hold the control as covering, also a modal that does not visually overlap it, as a person would be blocked by a modal page either way.
+
+## Open questions or contradictions found
+
+- **A session wall is read as the list ending.** On photo-social's grid, after the paused step presses Try again the third screen is the "Your session needs a quick check ... Continue as" wall. A Next page there still answers `ended: scrolled_to_end` (observed while building the spec; the spec avoids it by tripping the limit on the first screen). The wall is not a robot check (`PageMovePersonCheck`) and not a wait notice. Needs a decision; not changed.
+- The read's `loader_asked_to_wait` fact and the step's wait share one closed phrase list (`interference/vocabulary.ts`); a page that words its pause outside it still reads as ended.
+- `stated-wait.ts` duplicates the count regex of `action-runtime/rate-limit-notice.ts` (`NAMED_WAIT`, not exported, outside the owned paths). One place should own it.
+- The fake `El` page of `scroll-loaded-list.test.ts` and `fake-shadow-dom` read one selector at a time, so `hasUnopenedReplies` asks each pressable selector separately and treats an item that cannot be queried as holding none.
