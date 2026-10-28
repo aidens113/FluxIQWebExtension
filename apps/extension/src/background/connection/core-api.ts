@@ -280,6 +280,7 @@ function normalizeRecordingSummary(value: unknown): CoreRecordingSummary | undef
   return compactObject({
     id,
     title: stringValue(object.title) ?? stringValue(object.name) ?? id,
+    description: stringValue(object.description),
     status: stringValue(object.status),
     projectId: stringValue(object.projectId),
     taskId: stringValue(object.taskId),

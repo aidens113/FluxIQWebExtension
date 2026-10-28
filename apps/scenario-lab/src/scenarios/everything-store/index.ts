@@ -9,3 +9,4 @@ export { everythingStoreScenario } from "./scenario.js";
 export { createStoreState, mutateStoreState, robotCode, robotCheckActive, STORE_THROTTLE, storeModes } from "./state/index.js";
 export type { StoreMode, StoreState } from "./state/index.js";
 export { storeClasses, storeIds } from "./style/index.js";
+export { EVERYTHING_STORE_DEMONSTRATIONS } from "./demonstrations.js";

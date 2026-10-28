@@ -676,3 +676,27 @@ The 2026-10-18 entries are archived in
 ## Open Questions
 
 None requiring user input.
+
+### 2026-10-27 - Rerun round 6 launched on the frozen pair
+- Agent: supervisor
+- Changed: launch window opened after t751, t755-t768 merged; dev frozen for code at downstream `55fe5c0e` / Core `4ae8444f`; lanes t563, t719, t566, t567 fast-forwarded to it in both repositories and rebuilt (every install/build exit 0, `core-build` current, `rev-list --left-right --count dev...HEAD` -> `0 0` in all eight trees).
+- Launch (handoff-2026-10-20 shape; both $0.25 settings; headed; created from the extension chat; one attempt each): slot 1 t563 everything-store `everything-store-office-checkout-review` ws `claude-office-checkout-t563-20261027-r7`; slot 2 t719 job-board `job-board-save-quillmark-remote` ws `claude-job-save-t719-20261027-r7`; slot 3 t566 social-network-feed `social-network-feed-recent-group-posts` ws `claude-social-groups-t566-20261027-r9`; slot 4 t567 photo-social `photo-social-newest-likes` ws `claude-photo-likes-t567-20261027-r7`. Logs `lab-runs/2026-10-27/round6-slot<N>.log`.
+- Validation: all four live-guard lines `"state":"admitted"` (instances `rr6-slot-1`..`4`); preludes finished (about 189 s each).
+- Outcome: in flight.
+- Follow-up: debug every failure fully before any rerun; then the adaptation gate rounds 1 and 2 in slots 3, 1 and 4 (t758 launch plan) on the same frozen pair; P6 (t769) and the recording-plus-instructions audit run on branches meanwhile.
+
+### 2026-10-27 - Rerun round 6: 0 of 4; every build's own test came back unknown
+- Agent: supervisor; debuggers debug-r6-slot1..4 (worker-heavy, notes in each lane's `debugs/<runId>.md`)
+- Result: all four ended "kept its assembled project candidate as a draft and built no Flow: the candidate's test run was judged unknown": slot 1 office-checkout `run-mvrj7qg8-6916b3f7` $0.128237796; slot 2 job save `run-mvrj7qg9-b6dc94f6` $0.133601496; slot 3 recent-group-posts `run-mvrj7qg8-c20c132e` $0.171099486; slot 4 newest-likes `run-mvrj7qgf-a44a1427` $0.147879456 (round total $0.580818234, every build under its $0.25 purse, no balance error).
+- Finding (supervisor, from slot 3's steps 0070-0096): the judges gave substantive row defects (posts from groups not joined kept, a joined group's post dropped), yet subflow tests answered `subflow.trial_unsure` and the candidate test unknown. t766 had reported that a build test's record holds no stored rows, so kept/wrong rows can never be grounded during a build; the supervisor had deferred it, wrongly. Slot 3 is a read task, so act grounding alone does not explain the shared ending.
+- Decision: t771 (worker-heavy) makes a build test's record carry its stored rows and step record so a judge's no during a build is grounded and leads to repair; a missing-row claim is refused when the answer holds the row. Adaptation gate runs held until the debugs and t771 land (they build the same way).
+- Outcome: Failed (0 of 4).
+- Follow-up: the four debug notes, t771, then rerun round 6 on a new frozen pair, and the gate rounds.
+
+### 2026-10-27 - Round 6 debugs: the shared "unknown" is a Lab misreading; four real causes; fixes split by file
+- Agent: supervisor; debug notes on dev under `language-driven-flow-loop-plan/debugs/` (run-mvrj7qg8-6916b3f7, run-mvrj7qg9-b6dc94f6, run-mvrj7qg8-c20c132e, run-mvrj7qgf-a44a1427)
+- Shared: since t753 (Core `e4f0e0a2`) a project draft's ending names no verdict and the Lab's `chatDraftVerdict` matches sentences, so every project draft reads `unknown` (true verdicts: slot 1 no, slot 2 not_tested, slot 3 no, slot 4 not_tested).
+- Causes: slot 1 store - an address choice confirmed by a page-reloading button is a lasting act Core cannot check, accept an undo for, or give up on; slot 2 job - `undo-reach.ts` judged undos impossible from a list read in place before the site redrew it (both subflow trials had been judged yes twice); slot 3 social - Core accepted a judge's no about a left-out row without checking the request asks for it, kept a true yes unsure beside refused nos, and spread ungrounded advice to later judges and the repair (the correct rows were produced three times); slot 4 photo - t751's per-pass stamp files the original under the recorded item's place, so a restored like never settles while admission says "already back" (livelock).
+- Decisions (supervisor): a lone yes beside nos Core fully refused gets one confirming judge call and stands on a second yes; the earlier t771 premise (build tests hold no rows) is replaced by slot 3's findings.
+- Fix split: t772 (supervisor lane) site reset, the three reset shapes plus brief wording; t771 judging, slot 3's A-C plus the lone-yes rule; t773 a structured trial verdict the Lab reads; t774 truthful chat, ending and overlay. P6 (t769) and recording (t770) continue on branches.
+- Outcome: diagnosis complete; rerun round 6 and the gate after these merge on a new frozen pair.

@@ -515,6 +515,8 @@ do, but money, delete and send/publish are asked first; never type a secret;
 recordings, that written instructions outrank them
 (`AUTOMATION_STUDIO_SUPPLEMENTARY_RECORDINGS_INSTRUCTION`).
 
+A recording the person attaches in the extension chat reaches a build this way (t770): the relay's `onScreen.recordingId` makes Core's `flow.createHere` check it (finished, described, in this project) and link it to the Flow's saved instruction, so every provider request of the build carries it as `supplementaryRecordings` beside the person's own message, which stays the task.
+
 The web system instructions
 (`runtime/llm-evidence/system-instructions/instructions.ts`, version `web-12`)
 keep only what is web-only. Their Lists line says every page of a list is a

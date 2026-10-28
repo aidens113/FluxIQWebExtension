@@ -68,6 +68,9 @@ import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata 
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, keepsRunState, launchExtensionSession, sessionObservers, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
 import { prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
+import { assertRecordedEvidenceFacts, runRecordedEvidence, type RecordedEvidence } from "./run-scenario/recorded-evidence/index.js";
+import type { DemonstrationDryRunSummary } from "./flow-lane/index.js";
+import type { ScenarioDemonstration } from "@fluxiq-web-extension/test-contracts";
 import type { RunPerturbation } from "./perturbations/index.js";
 
 /**
@@ -83,7 +86,9 @@ const BLANK_TAB_URL = "about:blank";
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean;
   /** How a `creation` run starts its build: `chat`, the default and the only way it can pass, types the task's instruction into the extension's chat window; `direct-api` (`--direct-api-build`, test-only) has the Lab call Core's build endpoint itself, and is never counted as a pass. */
   buildEntry?: "chat" | "direct-api";
-  modelResetOnly?: boolean; perturbation?: RunPerturbation };
+  modelResetOnly?: boolean; perturbation?: RunPerturbation;
+  /** The recorded-evidence lane (t770-D1): the person first records this scripted demonstration in the extension and attaches it to the chat message. With `dryRun` the run stops once it is attached and its own extract judged -- no model, no message sent. */
+  demonstration?: Readonly<{ demonstration: ScenarioDemonstration; dryRun: boolean }> };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it â€” the
@@ -95,7 +100,9 @@ export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot:
  * `permissionStop` is present when the created-Flow build stopped to ask at the task's declared permission point: its `verdict` is
  * `stopped_for_permission`, with the consequence and control it stopped at, and the run's own `verdict` is then `failed`, never `passed`.
  */
-export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation; permissionStop?: FlowLaneStoppedForPermission };
+export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation; permissionStop?: FlowLaneStoppedForPermission;
+  /** A demonstration dry run's summary: the recording it made and the verdict on its own extract. */
+  demonstrationDryRun?: DemonstrationDryRunSummary };
 /** Owned by `run-scenario/open-scenario-start.ts` and re-exported unchanged, so every caller and test that imported it from here still does. */
 export { openScenarioStart };
 
@@ -132,7 +139,11 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const environment = options.environment ?? process.env;
   // A live provider run is planned and credentialed before this is reached (`beginLiveLlmRun`), so that an unexecutable profile or an absent key refuses at the command line rather than inside a run.
   const live = options.live; const creation = options.creation; const flowLane = creation !== undefined; const buildEntry = options.buildEntry ?? "chat";
-  if (live) live.assertLane({ creation: creation !== undefined }); else if (creation) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
+  // A demonstration dry run records, attaches and judges, then stops before Send: it builds nothing, so it needs no live run (and calls no model).
+  const demonstrationDryRun = options.demonstration?.dryRun === true;
+  if (options.demonstration && (!creation || buildEntry !== "chat")) throw new RunnerFailure("fixture.invalid", "A demonstration is recorded for a chat build of its task: it needs an instruction task and the extension's chat, never --direct-api-build");
+  let demonstrationSummary: DemonstrationDryRunSummary | undefined;
+  if (live) live.assertLane({ creation: creation !== undefined }); else if (creation && !demonstrationDryRun) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
   // What this run's scenario declares about provider calls, read from the same
   // resolved expectations the lane is judged by, so a variant's declaration
   // replaces the workflow's exactly as every other field of `expected` does.
@@ -357,6 +368,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const paired = topology.control ? await pairRunExtension(extensionPage, topology, startTrace) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin); uiReview.phase("start");
     const stepCapture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
+    // A picture of the whole window -- page and panel -- at a moment of the recorded demonstration; best-effort, a picture never decides the run.
+    const demonstrationPicture = (moment: string) => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "checkpoint", `The recorded demonstration: ${moment}`), details: { demonstration: moment } }).then(() => undefined, () => undefined);
     if (target.mode === "existing") {
       if (!paired || !existingControl || !existingPreflight) throw new RunnerFailure("gateway.pairing", "Existing FluxIQ extension pairing did not produce an executable session");
       await existingControl.selectExistingContext(target.projectId);
@@ -393,6 +406,18 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       panelVerification = await verifyAuthenticatedFluxIQPanel({ context, origin: topology.fluxiqOrigin, sessionCookieValue: topology.control.sessionCookieValue(), projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, runId: cloneState.execution.runId });
       if (panelVerification.status !== "verified") throw new RunnerFailure("runtime.behavior", "Isolated FluxIQ panel could not verify the exact cloned Flow run");
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "Cloned Flow and browser state succeeded in isolation"), details: { runtimeRunId: cloneState.execution.runId, actionCount: cloneState.execution.actions.length, eventCount: cloneState.execution.events.length, recordingCount: outcome.recordingCount, sourceHashUnchanged: true, panelVerification: panelVerification.status } });
+    } else if (creation && demonstrationDryRun) {
+      // The recorded-evidence dry run: record the demonstration through the panel, put the site back, attach the recording to the composer, judge the
+      // demonstration's own extract, and stop before Send. No model is called and no message is sent.
+      if (!paired || !topology.control || !topology.projectId) throw new RunnerFailure("environment.missing", "The demonstration dry run needs a paired extension and an authenticated isolated Core with an independent project");
+      const dry = options.demonstration!;
+      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Record the demonstration, attach it to the chat message, and stop before sending"), details: { demonstrationId: dry.demonstration.id, taskId: creation.task.id, dryRun: true } });
+      const evidence = await runRecordedEvidence({ demonstration: dry.demonstration, judgeExtract: true, scenario, workflow, creation, context: context!, page, extensionControl, livePanel, topology, isScenarioUrl, startFacts: pageFacts.atLoad, picture: demonstrationPicture });
+      await evidence.attach();
+      await demonstrationPicture("attached");
+      demonstrationSummary = Object.freeze({ demonstrationId: dry.demonstration.id, taskId: creation.task.id, recordingId: evidence.recorded.recordingId, recordingEntryCount: evidence.recorded.finalized.entryCount, chipShown: true as const, providerCallCount: 0 as const, extract: evidence.extract! });
+      await bundle.writeStructured("snapshots/demonstration-dry-run.json", demonstrationSummary);
+      if (!evidence.extract!.passed) throw new RunnerFailure("runtime.behavior", `The demonstration's own extract does not match the task's expected dataset (${evidence.extract!.keptCount} of ${evidence.extract!.expectedCount} records, ${evidence.extract!.mismatches.length} differing)`, { details: { fact: "demonstration.extract" } });
     } else if (creation) {
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
@@ -400,7 +425,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       if (creationIdentity) creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, outcome: "building" });
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id), buildEntry } }); if (buildEntry !== "chat") uiReview.phase("build"); // A chat build is under way once its instruction is sent: a moment before that shows the chat before anything was asked (t193 U-B1).
       // The build starts the way a person starts it: the instruction typed into the chat beside the page (`run-scenario/chat-build/`), and FluxIQ's questions answered there.
-      const chat = buildEntry === "chat" ? createdFlowChatEntry({ extensionControl, livePanel, core: control, scope: { projectId: createdProjectId, domainId: LAB_PROJECT_DOMAIN_ID }, authorizeChat: live.chatBuildAuthorizer(control, activeTopology), picture: moment => { if (moment === "sent") uiReview.phase("build"); return capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "checkpoint", `The extension's chat: instruction ${moment}`), details: { chat: moment } }).then(() => undefined, /* best-effort: a picture never decides the run */ () => undefined); } }) : undefined;
+      const recordedEvidence: RecordedEvidence | undefined = options.demonstration ? await runRecordedEvidence({ demonstration: options.demonstration.demonstration, judgeExtract: false, scenario, workflow, creation, context: context!, page, extensionControl, livePanel, topology: activeTopology, isScenarioUrl, startFacts: pageFacts.atLoad, picture: demonstrationPicture }) : undefined;
+      const chat = buildEntry === "chat" ? createdFlowChatEntry({ extensionControl, livePanel, core: control, scope: { projectId: createdProjectId, domainId: LAB_PROJECT_DOMAIN_ID }, authorizeChat: live.chatBuildAuthorizer(control, activeTopology), ...(recordedEvidence ? { beforeSend: () => recordedEvidence.attach() } : {}), picture: moment => { if (moment === "sent") uiReview.phase("build"); return capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "checkpoint", `The extension's chat: instruction ${moment}`), details: { chat: moment } }).then(() => undefined, /* best-effort: a picture never decides the run */ () => undefined); } }) : undefined;
       labPerson = await startLabPerson({ control, projectId: createdProjectId, context: context!, scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: workflow.workflowId, variantId: workflow.variant?.id, task: creation.task.personCheck, permissions: { point: creation.task.permissionPoint }, ...(chat ? { answerInChat: chat.answerInChat } : {}), write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }), publishPermission: permissionAnswer => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab answered FluxIQ's permission question as the person"), details: { permissionAnswer } }) });
       const lane = await recordFailedJudgement<CreatedFlowLaneEvidence, Awaited<ReturnType<typeof runCreatedFlowLane>>>(seen => runCreatedFlowLane({ // A judgement that fails after the run still gets its repair-lane record (t512).
         control, projectId: createdProjectId, authorizationPin: activeTopology.authorizationPin!, request: creation, workflow: workflow, facilityRunId: runId,
@@ -436,7 +462,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       }), (judged, laneFailure) => proveRepair(control, activeTopology, createdProjectId, judged, "instruction", laneFailure));
       // A consequential task run without permission for its act stops to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): correct, but no Flow was built, so the run is `stopped_for_permission` and not a pass (`assertFlowLaneBuiltFlow` below).
       if ("permissionStop" in lane) { permissionStop = { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control }; await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } }); }
-      else { await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
+      else { if (recordedEvidence) await assertRecordedEvidenceFacts(control, { projectId: createdProjectId, flowId: lane.flowId, domainId: LAB_PROJECT_DOMAIN_ID, recorded: recordedEvidence.recorded, detours: options.demonstration!.demonstration.detours }); await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
     } else {
       if (paired && topology.authorizationPin) {
         await proveCoreActionRoundTrip({ page, control: topology.control!, sessionId: paired.sessionId, authorizationPin: topology.authorizationPin, publish: (trigger, summary, details) => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, trigger, summary), details }), record: (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); } });
@@ -515,7 +541,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
 
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
-    assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });
+    // A demonstration dry run built no Flow on purpose, so it is judged on its own summary, not on a Flow lane's observation.
+    if (!demonstrationDryRun) assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });
     consoleErrors!.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     // Whatever the Flow did: a Flow the Lab built by calling Core itself was never asked for in the chat, which is what the product is measured on.
@@ -687,7 +714,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const metrics = { steps: workflow.recordingScript.length };
     // A Flow-lane run the lane never published for is a Flow run that created
     // no Flow, not a recording-lane run: see `selectLaneObservation`.
-    const observation = selectLaneObservation({
+    const observation = demonstrationDryRun ? undefined : selectLaneObservation({
       evaluated: target.mode === "isolated" || target.mode === "persistent-isolated",
       flowLane,
       published: flowObservation, stoppedLane,
@@ -731,7 +758,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     }
     await writeSidecars(finalized.path);
     await labRun?.close({ verdict, bundlePath: finalized.path }); // Best-effort, after `finalize` like the sidecars: links the bundle's `steps` to the run's, copies its key files, rebuilds `lab-runs/index.md`.
-    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}), ...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {}) };
+    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}), ...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {}), ...(demonstrationSummary ? { demonstrationDryRun: demonstrationSummary } : {}) };
   } finally {
     await labRun?.close({ verdict: "failed" }); // A run whose publication threw still leaves the index; after a close above, nothing.
     if (topology && !topologyStateRemoved && !keepsRunState(environment)) await removeRunOwnedTopologyState(topology).catch(() => undefined);

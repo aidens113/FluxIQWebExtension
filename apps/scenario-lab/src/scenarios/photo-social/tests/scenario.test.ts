@@ -214,3 +214,15 @@ test("the catalog carries the three jobs, the upsell twin, the breadth tasks and
   ]);
   assert.equal(resolveScenarioWorkflow(manifest, { variantId: "consent-redesign" }).expected.finalState?.[0]?.value, "essential");
 });
+
+test("a liked or saved post is drawn liked or saved when the page loads, and its count includes the like", () => {
+  const code = STUDIO_POSTS[0]!.code;
+  const likes = STUDIO_POSTS[0]!.likes;
+  const html = (state: PhotoState) => markupOf(route(state, `p/${code}/`)!.body as string);
+  const plain = html({ ...fresh(), liked: [], saved: [] });
+  assert.match(plain, /aria-label="Like"[^>]*><path[^>]* fill="none"/u);
+  const marked = html({ ...fresh(), liked: [code], saved: [code] });
+  assert.match(marked, /aria-label="Unlike"[^>]*><path[^>]* fill="#ff3040" stroke="#ff3040"/u);
+  assert.match(marked, /aria-label="Remove"[^>]*><path[^>]* fill="currentColor"/u);
+  if (likes !== null) assert.ok(marked.includes(`<span>${(likes + 1).toLocaleString("en-US")}</span> likes`));
+});

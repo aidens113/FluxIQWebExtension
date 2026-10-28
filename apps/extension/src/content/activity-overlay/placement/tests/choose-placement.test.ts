@@ -143,9 +143,9 @@ test("only a left edge fixed from top to bottom sends the pill to the right", ()
   assert.deepEqual(place(page([leftRail])), { shape: "pill", anchor: "bottom-right" });
 });
 
-test("a corner held over controls gives way to a clear one: what the pill covers ranks ahead of where it was", () => {
+test("a corner held over controls is kept (only fixed layers move the pill), but a fresh choice avoids them", () => {
   const links: Rect = { left: 0, top: 600, width: 400, height: 120 };
-  assert.deepEqual(place(page([], [links]), { shape: "pill", anchor: "bottom-left" }), { shape: "pill", anchor: "top-left" });
+  assert.deepEqual(place(page([], [links]), { shape: "pill", anchor: "bottom-left" }), { shape: "pill", anchor: "bottom-left" });
   assert.deepEqual(place(page([], [links])), { shape: "pill", anchor: "top-left" }, "a fresh choice avoids the controls");
 });
 
@@ -186,17 +186,22 @@ test("every place busy: the pill goes where the least of it is fixed, and keeps 
   assertInEdgeBand(placement);
 });
 
-test("a held place is kept unless another covers clearly less: a point or two of text is no reason to move", () => {
-  const nearlyAsBusy = page([], [], [{ left: 0, top: 560, width: 1280, height: 160 }, { left: 0, top: 0, width: 220, height: 160 }]);
-  const held = place(nearlyAsBusy);
-  assert.deepEqual(place(nearlyAsBusy, held), held, "the place held now is the best: kept");
+test("a held place is kept however the text and controls under it change: only the page's fixed layers move the pill", () => {
   const heldBottom: OverlayPlacement = { shape: "pill", anchor: "bottom-left" };
-  // Text over the whole page but a sliver at the top-left: every place covers
-  // text, the top-left corner a little less of it.
-  const slightlyLess = page([], [], [{ left: 0, top: 100, width: 1280, height: 620 }, { left: 60, top: 0, width: 1220, height: 100 }]);
-  assert.deepEqual(place(slightlyLess, heldBottom), heldBottom, "a place a little less busy does not take the pill");
   const clearElsewhere = page([], [], [{ left: 0, top: 600, width: 1280, height: 120 }]);
-  assert.notDeepEqual(place(clearElsewhere, heldBottom), heldBottom, "a place that covers nothing does");
+  assert.deepEqual(place(clearElsewhere, heldBottom), heldBottom, "a clear place elsewhere does not take the pill");
+  const withText = page([], [], [{ left: 0, top: 100, width: 1280, height: 620 }]);
+  assert.deepEqual(place(withText, heldBottom), heldBottom);
+});
+
+// t774: plain page -> bottom; a fixed layer at the bottom -> a free corner; and never over the banner or dialog itself.
+test("the pill is at the bottom on a plain page and in a free corner, clear of the banner, when a fixed layer holds the bottom", () => {
+  assert.deepEqual(place(page([])), { shape: "pill", anchor: "bottom-left" });
+  const moved = place(page([COOKIE_BANNER]));
+  assert.notDeepEqual(moved, { shape: "pill", anchor: "bottom-left" });
+  assert.equal(overlaps(boxOf(moved), COOKIE_BANNER), false, "not over the banner");
+  const dialog: Rect = { left: 300, top: 150, width: 680, height: 420 };
+  assert.equal(overlaps(boxOf(place(page([COOKIE_BANNER, dialog]))), dialog), false, "not over a dialog");
 });
 
 test("a narrow or docked pill comes back to the full pill in its corner once the corner clears", () => {
@@ -246,4 +251,16 @@ test("a held place that a fixed part of the page comes over is left", () => {
   const held: OverlayPlacement = { shape: "pill", anchor: "bottom-left" };
   const popup: Rect = { left: 0, top: 600, width: 500, height: 120 };
   assert.notDeepEqual(place(page([popup]), held), held);
+});
+
+// t774, round 6 (`run-mvrj7qgf-a44a1427`, `16-mid-build-scenario.png`): the pill jumped between y 16, 100, 184 and 620 and
+// at y 16 it sat over the site's logo. A top place is no refuge from a busy bottom when it covers the site's own header,
+// logo or navigation: the pill stays at the bottom, docked past the fixed part, and covers the banner's edge instead.
+test("a busy bottom never sends the pill over the site's header and logo at the top", () => {
+  const logoAndNav: Rect = { left: 0, top: 0, width: 700, height: 90 };
+  // A dialog backdrop too deep to dock past: the bottom is wholly fixed, the top holds the logo.
+  const deepBand: Rect = { left: 0, top: 380, width: 1280, height: 340 };
+  const placed = place(page([deepBand], [logoAndNav]));
+  assert.ok(placed.anchor.startsWith("bottom"), `bottom, not ${placed.anchor}`);
+  assert.equal(overlaps(boxOf(placed), logoAndNav), false);
 });

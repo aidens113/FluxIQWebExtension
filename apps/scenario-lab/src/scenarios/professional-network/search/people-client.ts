@@ -96,7 +96,7 @@ results.addEventListener('click', (event) => {
   const label = button.textContent.trim();
   if (label === 'Connect') GL.openConnect({ memberUrn: card.memberUrn, name: card.name, onSent: () => { button.textContent = 'Pending'; } });
   else if (label === 'Pending') GL.openWithdraw({ urn: card.sentUrn, text: 'If you withdraw now, you won’t be able to resend to ' + card.name + ' for up to 3 weeks.', onDone: () => { button.textContent = 'Connect'; } });
-  else if (label === 'Follow' || label === 'Following') button.textContent = label === 'Follow' ? 'Following' : 'Follow';
+  else if (label === 'Follow' || label === 'Following') GL.mutate('follow-member', { memberUrn: card.memberUrn, following: label === 'Follow' }).then(() => { button.textContent = label === 'Follow' ? 'Following' : 'Follow'; });
   else if (label === 'Accept') GL.mutate('accept-invitation', { urn: card.receivedUrn }).then(() => { button.textContent = 'Message'; GL.toast(card.name + ' is now a connection.'); });
   else if (label === 'Message') location.assign(GL.root + 'messaging/');
 });

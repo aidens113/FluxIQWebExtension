@@ -13,7 +13,7 @@ type RunState = Omit<ProfessionalNetworkState, "store">;
 function fresh(mode: NetworkMode): RunState {
   return {
     mode, consent: "unset", appPromptDismissed: false, chatBubbleSeen: false, upsellDismissed: false,
-    withdrawn: [], accepted: [], ignored: [], sentByRun: [], messages: [], searchHits: [], challenges: 0, activity: [],
+    withdrawn: [], accepted: [], ignored: [], following: [], sentByRun: [], messages: [], searchHits: [], challenges: 0, activity: [],
   };
 }
 
@@ -64,6 +64,14 @@ export function mutateNetworkState(state: ProfessionalNetworkState, operation: s
         ignored: accepted ? run.ignored : [...run.ignored, urn],
         activity: log(run, `${accepted ? "accepted" : "ignored"} ${urn}`),
       });
+    }
+    case "follow-member": {
+      const { memberUrn, following } = payload;
+      if (typeof memberUrn !== "string" || typeof following !== "boolean") return state;
+      const member = MEMBERS.find((candidate) => candidate.urn === memberUrn);
+      if (!member || member.hidden || member.action !== "Follow" || member.degree === "F") return state;
+      const others = run.following.filter((urn) => urn !== memberUrn);
+      return withStore({ ...run, following: following ? [...others, memberUrn] : others, activity: log(run, `${following ? "followed" : "unfollowed"} ${memberUrn}`) });
     }
     case "send-invitation":
       return sendInvitation(state, run, payload);
