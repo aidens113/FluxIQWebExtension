@@ -26,7 +26,8 @@ import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
-import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
+import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSnapshotBinding } from "../../sanitize";
+import { createWebLlmStableTargetHandles } from "../../stable-handles";
 import { createWebLlmExtractionHandles } from "../../structure";
 import { createWebLlmTargetPackets, resolveWebPlanNodeParameters, type WebLlmTargetPackets } from "..";
 
@@ -280,4 +281,77 @@ test("an inherited navigation Core never asks about still moves the page for the
 test("a handler Core refused before the press is still a step: what it does to the page is unknown, so the press resolves as before", async () => {
   const targets = explored();
   assert.equal((await lastStep(targets, [go(COOK), press("t2"), HANDLER, press("t4")], { unasked: [2] })).selector, PAGE_SAVE);
+});
+
+// A newer capture of the dialog keeps a handle it shows in another state at the same place (`../step-views/`, t781).
+// t775's headed photo-dialog-step on photo-social: exploration's capture of the post's dialog showed its Like as `t593`;
+// a trial captured the dialog with the post liked -- the Unlike under a new handle, no `t593` -- and that capture
+// replaced the dialog view. After the undo, the post's own page printed `t593` again, the builder resubmitted the like
+// step naming it, and the step took the own page's control into the dialog: `web.target.ambiguous`. These rows number
+// every capture as the node run does (`../../stable-handles.ts`), so the handles are the ones a live build is shown.
+
+const POST = "https://photos.test/p/kiln-1/";
+const POST_DIALOG = "Post by kiln.theory";
+const ACTIONS = "body > div:nth-of-type(2) > article > section";
+const DIALOG_LIKE = `${ACTIONS} > div:nth-of-type(1)`;
+const PAGE_LIKE = "main > article > section > div:nth-of-type(1)";
+
+/**
+ * The post's dialog over the cook's list -- its Like (or Unlike), Comment and Save (or Remove), then Close -- without
+ * the actions when `closed`. A trial that liked and saved the post shows both toggles in their other state, so the
+ * numbering has two controls to tell apart at one loose address and gives each a new handle, as it gave the live Unlike.
+ */
+const postDialog = (like: string, save: string, closed = false): JsonObject[] => [
+  ...CARDS,
+  ...(closed ? [] : [CONTROL(like, DIALOG_LIKE, POST_DIALOG), CONTROL("Comment", `${ACTIONS} > div:nth-of-type(2)`, POST_DIALOG), CONTROL(save, `${ACTIONS} > div:nth-of-type(3)`, POST_DIALOG)]),
+  CONTROL("Close", "body > div:nth-of-type(2) > div[role=button]", POST_DIALOG)
+];
+/** The handle `binding` shows the control named `label` under. */
+function handleOf(label: string, binding: WebLlmSnapshotBinding): string {
+  const element = binding.evidence.elements.find((candidate) => candidate.name === label);
+  assert.ok(element, `the capture shows ${label}`);
+  return element.target;
+}
+
+/**
+ * The cook's list, the post's dialog over it from the first card (Like shown), then `later`'s captures, each a
+ * document of its own, as the node run numbers and remembers them; the store, the Like's handle and `later`'s captures.
+ */
+function exploredPost(later: Array<{ url: string; elements: JsonObject[] }>) {
+  const targets = createWebLlmTargetPackets();
+  const numbering = createWebLlmStableTargetHandles();
+  const numbered = (url: string, elements: JsonObject[], timeOrigin: number): WebLlmSnapshotBinding => {
+    const binding = numbering.restamp(SCOPE, capture(url, elements, timeOrigin));
+    targets.remember(SCOPE, binding);
+    return binding;
+  };
+  const list = numbered(COOK, CARDS, 1000);
+  const opened = numbered(POST, postDialog("Like", "Save"), 1000);
+  targets.acted(SCOPE, "t2", list, opened);
+  const captures = later.map((page, index) => numbered(page.url, page.elements, 3000 + index));
+  return { targets, like: handleOf("Like", opened), captures };
+}
+/** The post's own page after the undo: its Like, then Comment. */
+const POST_PAGE = { url: POST, elements: [...CARDS, CONTROL("Like", PAGE_LIKE), CONTROL("Comment", "main > article > section > div:nth-of-type(2)")] };
+
+test("a trial's capture of the dialog with the post liked keeps the Like's handle: the resubmitted step names the dialog's Like", async () => {
+  const { targets, like, captures } = exploredPost([{ url: POST, elements: postDialog("Unlike", "Remove") }, POST_PAGE]);
+  const unlike = handleOf("Unlike", captures[0] as WebLlmSnapshotBinding);
+  assert.notEqual(unlike, like, "the numbering gives the Unlike a handle of its own");
+  const own = targets.resolve(SCOPE, like, POST);
+  assert.equal(own.ok && own.selector, PAGE_LIKE, "the own page prints the Like under the dialog Like's handle again");
+
+  const step = await lastStep(targets, [go(COOK), press("t2"), press(like)]);
+  assert.equal(step.selector, DIALOG_LIKE, "the card's press opened the dialog, which still holds the Like");
+  assert.deepEqual(step.element.context, { dialog: POST_DIALOG });
+  assert.equal(step.element.accessibleName, "Like", "as the capture that showed it found it, not the Unlike");
+  assert.deepEqual(step.views, [{ handle: like, view: 2, location: POST }], "shown in the capture that showed it, the second");
+  assert.equal((await lastStep(targets, [go(COOK), press("t2"), press(unlike)])).selector, DIALOG_LIKE, "and the Unlike's names the same control");
+});
+
+test("a control the newer capture of the dialog shows nothing at the place of is gone from it: the step names the own page's", async () => {
+  const { targets, like } = exploredPost([{ url: POST, elements: postDialog("Like", "Save", true) }, POST_PAGE]);
+  const step = await lastStep(targets, [go(COOK), press("t2"), press(like)]);
+  assert.equal(step.selector, PAGE_LIKE, "the dialog's actions closed, and nothing stands where its Like was");
+  assert.equal(step.element.context, undefined);
 });
