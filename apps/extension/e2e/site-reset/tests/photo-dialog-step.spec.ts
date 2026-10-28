@@ -122,11 +122,8 @@ function observeResolution(input: JsonObject, answer: JsonObject): ObservedResol
  */
 test("installed gateway project build resolves a candidate's press in the dialog the step before it opened, not on the page shown last at that address", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
-  // Known product defect (t775 H4, defect B): the domain's dialog view keeps only its newest capture's controls
-  // (`domain/src/runtime/llm-evidence/plan-resolution/step-views/views.ts`, `captured`). A trial's capture of the dialog
-  // with the post liked gives the toggled control another handle, so the builder's current handle for the Like falls out
-  // of the dialog view and the step resolves on the own page, `web.target.ambiguous`. Remove this line once it is fixed.
-  test.fail(true, "a toggled control's handle drops out of the dialog view after a trial's capture (t775 H4 defect B)");
+  // Guards t775 H4 defect B (fixed by t781): a trial's capture of the dialog with the post liked gives the toggled control
+  // another handle, and the dialog view must still resolve the builder's Like handle there (`step-views/kept-by-place.ts`).
   const installed = await startInstalledBuild(extensionSession);
   const { page, service } = installed;
   const profile = new URL(`${ROOT}${STUDIO}/`, installed.origin).href;

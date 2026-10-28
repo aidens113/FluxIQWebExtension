@@ -1,7 +1,7 @@
 # Hosted Production Plan
 
 Status: Active
-Status detail: Revised 2026-10-28 around the user's 2026-10-18 directions (FluxIQWebsite is the public site, a local website stand-in first, IAM-style permissions, a re-cut schedule); plan only, no code changed; D0 can start now.
+Status detail: Revised 2026-10-28 around the user's 2026-10-18 directions, then the H0 spike results folded in the same day (D0 passed); plan only, no code changed; the contract freeze and H1 are next.
 Created: 2026-10-17
 Last updated: 2026-10-28
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
@@ -68,25 +68,48 @@ This document links to them and does not restate them.
 - **Lab:** `service-local` runs Core under `service` plus the stand-in; accounts come through the
   stand-in's real sign-up path; a two-tenant isolation scenario and an escalation check.
 
+**H0 results that change this document** (Core's `hosted-production-plan/reports/h0.md` and
+`h0-s1.md` to `h0-s6.md` hold the evidence; Core's plan owns the contract changes).
+- **D0 (Core S1) passes.** Flow A completed with the extension observing `/connect/done` in Chrome
+  156, Edge 156 and Playwright's Firefox 1475, with only the `tabs` permission and `<all_urls>`
+  the manifests already have. The worker woke after a forced stop (Chrome and Edge showed 0
+  service-worker targets, then a new boot id; Firefox's event page reloaded with a new boot id),
+  the pending record survived in `storage.session`, the welcome-tab case was accepted, and a wrong
+  state, a wrong origin (`localhost` for `127.0.0.1`) and an expired record were rejected. Listener
+  rules: act on `changeInfo.url` only, claim the pending record once, treat `tabs.remove` on a
+  closed tab as closed (Server Profiles And Sign-In).
+- **Branded Chrome and Edge 156 ignore `--load-extension`.** They load through
+  `--enable-unsafe-extension-debugging` and CDP `Extensions.loadUnpacked`; Firefox through its remote
+  debugging protocol (Lab And E2E Coverage, D8).
+- **Lab loopback:** every check accepts `localhost` and `127.0.0.1` except
+  `demo-workspace/scenario-lab.ts:92`, which requires `127.0.0.1`.
+- **From Core:** the credential's `approvingSessionId` and `runContext.startedFromSessionId` are
+  digests (audit only); a locked key surfaces as `secrets.locked`; Firefox Origins match by prefix
+  (`moz-extension://*`); a connection with no Origin is refused on `service` (Core N7); Caddy has
+  not run, so D1 and the staging smoke are its first real run.
+- **Estimates:** downstream about 39 agent-days (was 38; D8 +1 for the browser loader).
+
 **Schedule** (today 10-28; MVP deadline 11-10; details in Phases).
-- 10-28 to 10-30: D0 (Core S1) and the contract freeze.
+- 10-28: D0 passed (Core S1). 10-29 to 10-30: the contract freeze, with the H0 changes.
 - 10-30 to 11-08: D2 to D8, W1 and W2 in parallel. D2, D3 and D4 merge on 11-10, when the MVP live
   lanes release the extension's connection files; everything else merges when green.
 - 11-11 to 11-12: the hosted gate on staging. About 11-13: Chrome Web Store submission.
 - Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. The supervisor dispatches D0 with Core's H0, and opens the paired H1 task (one ID, nested
-   worktrees).
+1. The supervisor dispatches the contract-freeze worker (Core carries the H0 changes) and opens the
+   paired H1 task (one ID, nested worktrees); D2 starts with the D0 listener rules.
 2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
-**Blocked.** Nothing blocks D0, W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
+**Blocked.** Nothing blocks W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
 
-**Not verified.**
-- Tab-URL observation of `/connect/done` in Edge and the Firefox popup (D0).
-- Service-worker wake on `tabs.onUpdated` during sign-in.
-- Whether the Lab's loopback checks accept two loopback hostnames (`localhost` and `127.0.0.1`).
-- When the Chrome Web Store assigns the item ID (believed: at first draft upload).
+**Not verified** (D0 settled the old first three items).
+- Not exercised by D0: a natural Chrome idle stop over 30 s (forced with CDP `Target.closeTarget`);
+  stock Firefox and Web Store builds (the spike used unpacked and temporary add-ons in temporary
+  profiles); cookie and consent UI; the token exchange.
+- When the Chrome Web Store assigns the item ID: the docs do not say (believed: at first draft
+  upload; the dashboard's public key can pin it as the manifest `key`).
+- Caddy (Core S2; not installed) and Next.js `app/.well-known/` routing (Core; the rewrite stays).
 - Firefox `data_collection_permissions` category names; reviewer expectations for server-driven
   automation; whether the EU trader declaration applies before the service charges money.
 - Whether Turnstile sets a cookie on the sign-up page.
@@ -208,13 +231,18 @@ The old two-address form moves to "Advanced: connection override".
 - `tab-flow.ts`: `chrome.tabs.create` opens the authorize URL; the pending `{state, verifier,
   tabId, profileId, startedAt}` sits in `chrome.storage.session` for 30 minutes (long enough to
   sign up and follow the welcome email); a top-level `tabs.onUpdated` listener accepts only that
-  tab, on that exact origin, at `/connect/done`, with a matching `state`, then closes the tab.
+  tab, on that exact origin, at `/connect/done`, with a matching `state`, then closes the tab. The
+  listener acts on `changeInfo.url` only (the `status: "complete"` event fires again and made the
+  spike record twice), claims the pending record once and clears it before the token exchange, and
+  treats `tabs.remove` on an already closed tab as closed. `storage.session` is the right home for
+  pending: it survived a worker stop on all three browsers.
 - `token-exchange.ts`; `revoke.ts` (sign-out calls the revoke URL).
 - New users: the sign-in page's "Create an account" opens `signUpUrl` (the website) with
   `continue=<authorize URL>`. The welcome email's link opens in a new tab and lands on that
   authorize URL; consent there completes Flow A. `tab-flow.ts` therefore also accepts a
   `/connect/done` with the pending `state` in a tab it did not open, provided the origin and
-  `state` match and the pending record is unexpired (D0 confirms the listener sees it).
+  `state` match and the pending record is unexpired (D0 confirmed the listener sees it on all
+  three browsers).
 - The Firefox popup closing is harmless, because the background owns the flow.
 
 **Flow B.** "Use a code instead" connects without a credential, shows the code, and opens
@@ -223,7 +251,9 @@ The old two-address form moves to "Advanced: connection override".
 **Gateway use.** `connection/gateway-session.ts` sends the active credential;
 `server-command-channel.ts` handles `session_ready` (credential, user, workspace), `revoked`
 (clear the credential, show "signed out" and the reason) and `going_away`;
-`connection/core-api.ts` takes its base URL from the profile.
+`connection/core-api.ts` takes its base URL from the profile. A build or run that Core stops with
+`secrets.locked` shows that message with an "Open FluxIQ" button (the panel re-unlocks the key
+without a sign-out); the extension never holds or relays a key.
 
 **Migration** (`background/servers/migration.ts`, new). `fluxiq.settings` plus `fluxiq.session`
 becomes "This computer" if the addresses are loopback, otherwise "My server", with the old token
@@ -261,7 +291,8 @@ the user marked as allowed to run unattended in this browser.
 
 **Further checks.** Read-only commands are honoured only for FluxIQ-relevant tabs while a session
 is ready. A command whose `runContext.actorUserId` or workspace is not the signed-in identity is
-dropped and logged. This is the browser-side half of Core's browser-owner invariant; server-side,
+dropped and logged. `runContext.startedFromSessionId` is a digest for correlation, never a handle
+(Core S5). This is the browser-side half of Core's browser-owner invariant; server-side,
 IAM (`FluxIQBrowserSession` and the own-data conditions) decides what the credential may reach.
 
 **Defaults** (U2): on loopback, case (b) is allowed automatically; remote servers ask.
@@ -275,17 +306,19 @@ the person simulation clicks Allow.
 
 ## Manifests, Permissions And The Chrome Web Store
 
-**Permissions are unchanged.** Flow A uses `tabs` and `<all_urls>`. If D0 fails, the fallback is
-`identity.launchWebAuthFlow`: a reviewed `permission-review.mjs` entry and signing in twice.
+**Permissions are unchanged.** Flow A uses `tabs` and `<all_urls>`; D0 passed without `identity`.
+The retained fallback, if a store build behaves differently, is `identity.launchWebAuthFlow`: a
+reviewed `permission-review.mjs` entry and signing in twice.
 
 **Manifest edits.** Description (Chrome and Firefox): "Record, run and repair browser automations
 with FluxIQ. Sign in to FluxIQ at getfluxiq.com, or connect to a FluxIQ runtime you host." The e2e
 manifest gets a fixed development `key` (public, not a secret). The Firefox `gecko.id` becomes
-permanent.
+permanent; its `moz-extension://<uuid>` Origin is per install, which Core matches by prefix.
 
 **Chrome Web Store.** The first submission, at the H1 gate, already includes sign-in.
 - Upload the draft early (D7) so the item ID is known before the gate, and put it in
-  `apps/product`'s `extensionClients` (believed assigned at first upload; verify).
+  `apps/product`'s `extensionClients` (believed assigned at first upload; Google's docs do not say, so verify; the dashboard's public key
+  can pin it as the manifest `key`).
 - A single-purpose statement covering getfluxiq.com and self-hosting.
 - Privacy practices: authentication information, website content, web history and user activity
   are sent to the server the user signs in to; limited-use certification.
@@ -432,7 +465,9 @@ for when the real side is built.
   so it cannot reach the listener at all.
 - `deploy/caddy/Caddyfile`: `getfluxiq.com` to the website; `www` redirects; `app.getfluxiq.com`
   with `/client*` to the gateway and the rest to Core; staging hosts behind basic auth until the
-  gate.
+  gate. Start from Core's S2 draft (replace the client's `X-Forwarded-For` with `header_up
+  X-Forwarded-For {remote_host}`, a long `stream_timeout`, no route to the provisioning listener).
+  It is unvalidated because Caddy was not installed, so `caddy validate` in CI is its first check.
 - Ports 80 and 443 only; SSH by key; unattended upgrades.
 
 **DNS and email.** New records for `app`, `staging`, `app.staging` and `status`. At launch the
@@ -523,6 +558,17 @@ the extension chat, live runs supervised in a lab slot, and the waste guards.
   `http://127.0.0.1:<app>`, its provisioning listener on loopback with a run-scoped token file,
   `FLUXIQ_EMAIL_SENDER=file:<run>/mail`; the website stand-in on `http://localhost:<site>`.
   Provider-free by default. TLS is covered by Core's Caddy Playwright run and the staging smoke.
+- **Loading the extension in branded browsers** (H0-S1). Branded Chrome and Edge 156 ignore
+  `--load-extension`. Launch the browser with `--remote-debugging-port` and
+  `--enable-unsafe-extension-debugging`, attach with `chromium.connectOverCDP`, and call
+  browser-level CDP `Extensions.loadUnpacked {path}` (`launchPersistentContext` exposes no
+  browser-level session, so it cannot). Firefox: Playwright's Firefox build (1475) started with
+  `-start-debugger-server`, then `installTemporaryAddon` over the remote debugging protocol. D8
+  checks which launcher each Lab, ui:e2e and extension Playwright path uses.
+- **Loopback hosts.** Every Lab loopback check accepts `localhost` and `127.0.0.1` except
+  `demo-workspace/scenario-lab.ts:92`, which requires `127.0.0.1` for the persistent demo scenario
+  URL (binds and probes are literal `127.0.0.1`). A scenario URL on `localhost` would be refused
+  there, so D8 widens that check or keeps scenario origins on `127.0.0.1`.
 - **Accounts through the real sign-up path.** Playwright fills the stand-in's `/signup/`; the Lab
   reads the welcome link from the mail folder, sets the password on Core, and signs in. This
   replaces `bootstrapIdentity` for this target; no test backdoor. Live runs enter the user's key
@@ -544,10 +590,12 @@ the extension chat, live runs supervised in a lab slot, and the waste guards.
 - **Staging smoke** (`deploy.yml`): headed Chromium under xvfb; a staging test account held as a
   secret; sign in through the tab, connect, run one provider-free playback on everything-store,
   check the panel lists the Flow; one sign-up through the staging website with a mail sink; no
-  model calls.
+  model calls. It waits on `/api/ready`: a cold Core spends 3.5 to 7 s loading modules (Core S3).
 - **Live.** One supervised live Lab run per release candidate against staging, with the operator's
   own test key entered as a user would.
-- **Load.** k6 (`deploy/load/gateway.js`): 1,000 simulated sockets against staging, provider-free.
+- **Load.** k6 (`deploy/load/gateway.js`): 1,000 simulated sockets against staging, provider-free, with the panel's decision rates from Core
+  S6 (12 to 156 decisions a minute per visible tab, 826 in a Studio live run) so the audit buffer
+  is exercised.
 
 ## Phases
 
@@ -557,19 +605,19 @@ green, except where the table names a constraint.
 
 | Step | Owns (may edit) | Dates and the constraint behind them | Validation | Agent-days |
 | --- | --- | --- | --- | --- |
-| D0 sign-in spike (Core S1) | throwaway `fxwork/` worktree | 10-28 to 10-29 | Tab flow completes in Chrome, Edge and the Firefox popup; the service worker wakes; the welcome tab case; a written result | 1 |
-| D1 self-host check | `docs/user/install.md` | 10-30 to 10-31; needs Core's S2 Caddy setup | The current extension pairs over `wss` behind Caddy | 1 |
-| D2 profiles and sign-in | `background/servers/`, `background/sign-in/`, `panel/servers/`, `panel/getting-started/`, `panel/settings/`, `background/{index,connection,storage,saved-state}.ts`, `connection/{gateway-session,core-api,server-command-channel}.ts`, `shared/{constants,protocol}.ts`, `config/servers.*.json`, `scripts/build-extension.mjs`, manifests | Built 10-30 to 11-06 in the worktree; merges 11-10, because the MVP live lanes edit these files until then | Unit tests beside each module; tab-flow spec; sign-in against local `self-hosted` and `service-local` | 7 |
+| D0 sign-in spike (Core S1), done | throwaway `fxwork/` worktree | Done 2026-10-28 | Passed: the tab flow completes in Chrome 156, Edge 156 and Playwright's Firefox 1475; the worker wakes; the welcome tab is accepted (Core `reports/h0-s1.md`) | 1 (spent) |
+| D1 self-host check | `docs/user/install.md` | 10-30 to 10-31; needs Core's Caddyfile draft (S2; Caddy not yet run) | The current extension pairs over `wss` behind real Caddy, the first run of that draft | 1 |
+| D2 profiles and sign-in | `background/servers/`, `background/sign-in/`, `panel/servers/`, `panel/getting-started/`, `panel/settings/`, `background/{index,connection,storage,saved-state}.ts`, `connection/{gateway-session,core-api,server-command-channel}.ts`, `shared/{constants,protocol}.ts`, `config/servers.*.json`, `scripts/build-extension.mjs`, manifests | Built 10-30 to 11-06 in the worktree; merges 11-10, because the MVP live lanes edit these files until then | Unit tests beside each module; tab-flow spec (one accept per navigation, pending claimed once, the welcome tab); sign-in against local `self-hosted` and `service-local` | 7 |
 | D3 owner and consent | `domain/src/runtime/adapter.ts`, `domain/src/io/gateway-output-dispatcher.ts`, the domain singleton audit, `background/consent/`, `background/automation-relay/`, `connection/in-flight/` | Built 10-30 to 11-04; merges 11-10 (the same MVP files) | Domain selection tests; consent tests; the two-tenant scenario | 5 |
 | D4 minimisation | `connection/{active-page,browser-state}.ts`, the offline queue, `domain/src/client/gateway-mapping.ts`, `domain/src/io/gateway-input-hub.ts` | 11-05 to 11-08, after D2's storage model; merges 11-10 | Partial-tab and per-profile queue tests; provider-free runs on two scenarios | 3 |
 | D5 product host module | `apps/product/` (new), `pnpm-workspace.yaml` entry | 10-31 to 11-01, after Core E's `PanelProduct`; merges when green (inert) | Manifest validates against Core's schema; the seeding hook test; contrast test | 1 |
 | W1, W2 website stand-in | `packages/website-stand-in/` | W1 10-30 to 11-02; W2 11-04 to 11-05, after Core B1's listener and welcome link | See Local Website Stand-In | 3 |
 | D6 infrastructure | `deploy/`, `.github/workflows/deploy.yml`, `docs/architecture/hosted-service.md` | 10-30 to 11-06; closed staging needs the VM and DNS (U9) by about 11-03 | Closed staging up with both images; smoke green; one restore drill | 6 |
 | D7 docs, legal, store | `docs/user/*`, `docs/user/terms.md`, `docs/architecture/{extension-client,release-packaging,sensitive-values}.md` | Drafts 10-30 to 11-04; the user's review by about 11-08; the store draft upload once the developer account exists | The user's review; legal review where possible | 3 |
-| D8 test coverage | `packages/test-runner/src/{target-config,coordinator,environment,auth-session}.ts`, `http-control/`, `run-scenario/`, `run-lifecycle/`, `ui-e2e/journeys/`, `apps/extension/e2e/`, `deploy/load/`, `docs/architecture/testing-facility.md` | 11-05 to 11-11, after W2 and D2 | The tests above; one supervised live run | 6 |
+| D8 test coverage | `packages/test-runner/src/{target-config,coordinator,environment,auth-session}.ts`, `demo-workspace/scenario-lab.ts` (loopback check), the browser launcher (branded Chrome and Edge load through CDP), `http-control/`, `run-scenario/`, `run-lifecycle/`, `ui-e2e/journeys/`, `apps/extension/e2e/`, `deploy/load/`, `docs/architecture/testing-facility.md` | 11-05 to 11-11, after W2 and D2 | The tests above; one supervised live run | 7 |
 | W4 port to FluxIQWebsite | FluxIQWebsite only | On the user's go (U11), 11-06 at the earliest; its legal pages must be live before the store submission (about 11-13) | See Local Website Stand-In | 2 |
 
-About 38 downstream agent-days across eleven steps, most in parallel. The calendar is set by the
+About 39 downstream agent-days across eleven steps (D0's 1 spent; D8 grew by 1 for the browser loader), most in parallel. The calendar is set by the
 contract freeze, Core B1 (for W2), the MVP's hold on the connection files until 11-10, the user's
 VM, DNS and legal review, and then Google's review.
 
@@ -584,9 +632,13 @@ gaining an enterprise contact page.
 
 ## Risks
 
-- **Tab observation fails in a browser,** or misses the welcome tab. Fall back to
-  `launchWebAuthFlow` (the `identity` permission, a second sign-in), or to Flow B for the
-  sign-up-from-extension path. D0 decides early.
+- **Tab observation** passed D0 in Chrome 156, Edge 156 and Playwright's Firefox 1475, including
+  the welcome tab. Stock Firefox, Web Store builds and a natural idle stop were not exercised; if
+  one fails, fall back to `launchWebAuthFlow` (the `identity` permission, a second sign-in), or to
+  Flow B for the sign-up-from-extension path.
+- **Test browsers.** Branded Chrome and Edge ignore `--load-extension`; D8 builds the CDP loader.
+- **Locked keys.** After a Core restart, deploy or eviction, builds stop with `secrets.locked`
+  until the user signs in at the panel; the chat must say so plainly (Core S5).
 - **MVP contention.** D2, D3 and D4 touch files the MVP live lanes use; they stay in the worktree
   until 11-10 and merge `dev` in daily.
 - **Website port timing.** The store needs the live privacy notice at `getfluxiq.com/privacy/`
@@ -620,10 +672,23 @@ gaining an enterprise contact page.
 - Outcome: Partial
 - Follow-up: dispatch D0; the user answers U1, U8 and U9
 
+### 2026-10-28 — Revised around the user's 2026-10-18 directions
+- Agent: supervisor; plan revision by a worker-heavy (brief H1), notes `!FluxIQWebExtension/docs/working/hosted-production-plan/reports/revision-2026-10-28-notes.md`
+- Changed: FluxIQWebsite (Next.js 16 static export on Hostinger) is the public site at getfluxiq.com and gains sign-up and its backend; Core moves to app.getfluxiq.com behind a private provisioning listener; `apps/site` shrinks to `apps/product`; a local website stand-in (`packages/website-stand-in/`, W0-W4) comes first; permissions follow AWS IAM (FRNs, generated actions, policies with explicit deny, predefined `FluxIQUserAccess`/`FluxIQOwnerFullAccess`, an inert-for-local parity test); the schedule is re-cut into parallel lanes (hosted gate 11-11/12, store submission about 11-13, each date's constraint named). The "Next revision owed" block is removed.
+- Validation: the worker checked the cited Core facts in code (no `platform/` or provisioning yet; one permission check in `_shared/api.ts`; 289 permission declarations); `node scripts/structure-audit.mjs` after the swap (below).
+- Outcome: plan revised; D0 and Core H0 can start. Open for the user: N2 (two hostnames), N5, N6, U9 (VM, DNS, store developer account), U10 (Google Analytics vs decline-by-default), U11 (go-ahead to edit FluxIQWebsite).
+
+### 2026-10-28 — H0 spikes folded in
+- Agent: supervisor; spike S1 (= D0) by a worker under sub-supervisor t782; this fold drafted by a worker (brief H0-fold). Core's ledger holds the full entry (same date and title)
+- Changed: this document: Current State (H0 results, next, not verified), Server Profiles And Sign-In (listener rules), Gateway use (`secrets.locked`), Consent-Bound Execution, Manifests (D0 passed, Firefox Origin), Chrome Web Store (item ID), Infrastructure (Caddyfile draft), Lab And E2E Coverage (branded-browser loading, loopback hosts, staging smoke, load), Phases (D0 done, D1, D2, D8 +1 day, total 39), Risks; the 10-28 revision entry moved above Open Questions
+- Validation: from Core's `reports/h0.md` and `h0-s1.md`: the sub-supervisor read `out-chrome.txt`, `out-edge.txt` and `out-firefox.txt` (each 3 accepted and 3 rejected results; boot ids change across the forced stop); it did not re-run the browsers. Lab loopback checks read from `h0-s2.md` (`scenario-lab.ts:92` is the one `127.0.0.1`-only check). This fold: not validated by command (plan text only); the supervisor runs `node scripts/structure-audit.mjs` after the swap
+- Outcome: Accepted (D0 passed); the Not verified items above remain open
+- Follow-up: contract freeze; D2 starts with the D0 listener rules; D8 owns the CDP loader and the `scenario-lab.ts:92` decision
+
 ## Open Questions
 
 Owner: the user, for all of them. A recommendation follows each; the plan proceeds on it. Core's
-N1 to N6 come first.
+N1 to N7 come first.
 
 - **U1. Product name on the website and in the store?** Recommendation: "FluxIQ" on the site and
   panel; "FluxIQ - Web Automation" as the store listing title.
@@ -647,9 +712,3 @@ N1 to N6 come first.
 - **U11. Go-ahead to edit FluxIQWebsite and move getfluxiq.com to the VM?** Recommendation: approve
   W4 once the stand-in round trip is green (about 11-06), so the hosted privacy notice and terms
   are live before the store submission; Hostinger stays as the marketing-only rollback.
-
-### 2026-10-28 — Revised around the user's 2026-10-18 directions
-- Agent: supervisor; plan revision by a worker-heavy (brief H1), notes `!FluxIQWebExtension/docs/working/hosted-production-plan/reports/revision-2026-10-28-notes.md`
-- Changed: FluxIQWebsite (Next.js 16 static export on Hostinger) is the public site at getfluxiq.com and gains sign-up and its backend; Core moves to app.getfluxiq.com behind a private provisioning listener; `apps/site` shrinks to `apps/product`; a local website stand-in (`packages/website-stand-in/`, W0-W4) comes first; permissions follow AWS IAM (FRNs, generated actions, policies with explicit deny, predefined `FluxIQUserAccess`/`FluxIQOwnerFullAccess`, an inert-for-local parity test); the schedule is re-cut into parallel lanes (hosted gate 11-11/12, store submission about 11-13, each date's constraint named). The "Next revision owed" block is removed.
-- Validation: the worker checked the cited Core facts in code (no `platform/` or provisioning yet; one permission check in `_shared/api.ts`; 289 permission declarations); `node scripts/structure-audit.mjs` after the swap (below).
-- Outcome: plan revised; D0 and Core H0 can start. Open for the user: N2 (two hostnames), N5, N6, U9 (VM, DNS, store developer account), U10 (Google Analytics vs decline-by-default), U11 (go-ahead to edit FluxIQWebsite).

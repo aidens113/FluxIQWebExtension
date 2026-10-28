@@ -16,7 +16,10 @@
 // - each dialog view: per address and set of dialogs its controls sat in, the
 //   controls inside a dialog from the newest capture of it, keeping what its
 //   captures agree on (the store's merge rule, handed in as `across`), or only
-//   adding where a look was cut short;
+//   adding where a look was cut short; and keeping a handle the newer capture
+//   no longer shows where it shows that control's other state at its place
+//   under another handle (`./kept-by-place.ts`, t781) -- each handle with the
+//   newest capture that showed it;
 // - where each press of exploration's led: the dialog view the page it left
 //   showed, or none;
 // and, asked about a candidate's step, folds the moves of the plan's steps
@@ -33,6 +36,7 @@
 // where the pages name another or none (`../target-packets.ts`).
 
 import type { WebLlmTargetView } from "../view-history";
+import { webLlmKeptByPlace } from "./kept-by-place";
 
 /** Dialog views one Flow keeps; the one captured longest ago goes first. */
 const RETAINED_VIEWS = 8;
@@ -51,10 +55,19 @@ export type WebLlmStepViews<T> = {
   standing(handle: string, location: string | undefined, after: readonly WebLlmPlanStepMove[]): { target: T; shownIn: WebLlmTargetView } | undefined;
 };
 
-type DialogView<T> = { location: string; view: number; targets: Map<string, T> };
+/** A handle's control in a dialog view, and the newest capture that showed it. */
+type Shown<T> = { target: T; view: number };
+type DialogView<T> = { location: string; targets: Map<string, Shown<T>> };
 
-/** One Flow's dialog views, merging a handle's captures with `across`; `inDialog` says whether a target sits in a dialog. */
-export function createWebLlmStepViews<T>(across: (earlier: T | undefined, target: T) => T, inDialog: (target: T) => boolean): WebLlmStepViews<T> {
+/**
+ * One Flow's dialog views, merging a handle's captures with `across`; `inDialog` says whether a target sits in a
+ * dialog, and `placesOf` where it sits, for a handle a newer capture no longer shows (`./kept-by-place.ts`).
+ */
+export function createWebLlmStepViews<T>(
+  across: (earlier: T | undefined, target: T) => T,
+  inDialog: (target: T) => boolean,
+  placesOf: (target: T) => { exact: string; loose: string }
+): WebLlmStepViews<T> {
   const views = new Map<string, DialogView<T>>();
   const led = new Map<string, string>();
   return {
@@ -62,10 +75,16 @@ export function createWebLlmStepViews<T>(across: (earlier: T | undefined, target
       if (dialogs === "") return;
       const key = viewKey(location, dialogs);
       const before = views.get(key)?.targets;
-      const kept = new Map<string, T>(partial && before !== undefined ? before : []);
-      for (const [handle, target] of targets) if (inDialog(target)) kept.set(handle, across(before?.get(handle), target));
+      const shown = new Map<string, T>();
+      for (const [handle, target] of targets) if (inDialog(target)) shown.set(handle, target);
+      const kept = new Map<string, Shown<T>>();
+      if (before !== undefined) {
+        const carried = partial ? before.keys() : webLlmKeptByPlace(new Map([...before].map(([handle, earlier]) => [handle, earlier.target])), shown, placesOf);
+        for (const handle of carried) kept.set(handle, before.get(handle) as Shown<T>);
+      }
+      for (const [handle, target] of shown) kept.set(handle, { target: across(before?.get(handle)?.target, target), view });
       views.delete(key);
-      if (kept.size > 0) views.set(key, { location, view, targets: kept });
+      if (kept.size > 0) views.set(key, { location, targets: kept });
       keepNewest(views, RETAINED_VIEWS);
     },
     pressedInto(handle, location, dialogs) {
@@ -78,8 +97,8 @@ export function createWebLlmStepViews<T>(across: (earlier: T | undefined, target
       for (const move of after) if (move !== "stays") standingIn = move === "moves" ? undefined : led.get(move.press);
       const view = standingIn === undefined ? undefined : views.get(standingIn);
       if (view === undefined || (location !== undefined && location !== view.location)) return undefined;
-      const target = view.targets.get(handle);
-      return target === undefined ? undefined : { target, shownIn: { view: view.view, location: view.location } };
+      const shown = view.targets.get(handle);
+      return shown === undefined ? undefined : { target: shown.target, shownIn: { view: shown.view, location: view.location } };
     }
   };
 }
