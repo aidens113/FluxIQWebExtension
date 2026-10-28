@@ -2,7 +2,8 @@ import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { watchCrossBrief } from "../cross-brief-watch";
-import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { judgeLog, retiredCodesIn } from "../change-proof";
+import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 import type { SupervisorTurn } from "../scripted-provider";
 
 const TASK = "Find a kettle with the store's search and start a checkout for it.";
@@ -13,8 +14,6 @@ const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage 
  * complete list on this page in this harness, so it issued no ref (report t743-e2a-office).
  */
 const QUERY = "gooseneck kettle";
-/** Core's words for an act settled with no change seen (`site-reset/words.ts`, `leftUnchanged`). */
-const LEFT_UNCHANGED = "nothing it could change showed a change";
 /** A page of the store no brief is ever shown: no link, read or location names it. */
 const NEVER_SHOWN = "/scenarios/everything-store/gp/cross-brief/never-shown";
 const NAVIGATE = "web.output.browser-navigate";
@@ -55,9 +54,10 @@ test("installed gateway project build keeps one site memory across briefs: a lat
   const { page } = installed;
   const detail = new URL(STORE_PATHS.product(SAGE), installed.origin).href;
   const neverShown = new URL(NEVER_SHOWN, installed.origin).href;
-  const build = projectBuild(installed, "Installed reset office cross-brief", TASK);
+  const build = projectBuild(installed, "Installed reset office cross-brief", TASK, () => installed.page.url());
   let brief = 1, briefStep = 0;
   let searchReference = "", searchLocation = "", buyHandle = "";
+  const judge = judgeLog();
   const tests: JsonObject[] = [];
   const pages: Record<string, string> = {};
   const dispatches: JsonObject[] = [];
@@ -170,7 +170,7 @@ test("installed gateway project build keeps one site memory across briefs: a lat
         throw error;
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder, supervisor });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder, supervisor, verify: judge.verify });
     const { ending, failure } = await build.run();
 
     const calls = watch.calls;
@@ -182,14 +182,14 @@ test("installed gateway project build keeps one site memory across briefs: a lat
     const searchLook = looksBeforeTrial.find(entry => sameAddress(entry.url, searchLocation));
     /** Reads of the results page taken during the test call, before its trial ran: only Core's own look stood there then. */
     const searchReadsByLook = readsAtTest < 0 ? [] : reads.slice(readsAtTest).filter(read => sameAddress(read.location, searchLocation) && read.sizes.length > 0);
-    const started = tests.map(tested => startedWithActs(tested));
+    const siteChanges = judge.siteChanges();
     const summary = {
       ending, failure, briefs: dispatches.map(answer => record(answer).code ?? (record(answer).ok === true ? "ok" : null)),
       again: again && { ok: again.ok, code: again.code, actions: again.actions },
       madeUp: madeUp && { ok: madeUp.ok, code: madeUp.code, actions: madeUp.actions },
       opening2Places: opening2?.places ?? null,
       looksBeforeTrial: looksBeforeTrial.map(entry => ({ call: entry.call, toSearch: sameAddress(entry.url, searchLocation), actions: entry.actions, ok: entry.ok, code: entry.code })),
-      tests: tests.map(trialCode), started: started.map(acts => acts.map(act => act.call ?? null))
+      tests: tests.map(trialCode), leftFromEarlier: siteChanges.map(siteChange => siteChange?.leftFromEarlier ?? null)
     };
     await keepDiagnostic(testInfo, "reset-office-cross-brief.json", { ...summary, searchReference, searchLocation, brief2From, testFrom, readsAtTest, answers, receipts, refusals, dispatches, tests, calls, reads, declarations: observed.declarations, outcomes: observed.outcomes, builderStep: provider.builderSteps(), supervisorStep: provider.supervisorSteps(), supervisorReceipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
     console.log(JSON.stringify({ resetDiagnostic: summary }));
@@ -219,12 +219,15 @@ test("installed gateway project build keeps one site memory across briefs: a lat
     expect(searchReadsByLook.length).toBeGreaterThanOrEqual(1);
     // Core's own looks only navigate, declaring nothing lasting.
     for (const declaration of observed.declarations.filter(entry => entry.call.startsWith("site-reset."))) expect(declaration.consequences).toEqual([]);
-    // The trial then ran, with the build's acts settled and listed as left.
+    // The trial then ran (t775: no reset first), with the build's two presses told to the judge under `leftFromEarlier`.
     expect(tests).toHaveLength(1);
     expect(trialCode(tests[0])).toBe("yes");
     expect(tests[0]!.trialRunId).toMatch(/^trial\./u);
-    expect(started[0]!.map(act => act.call).sort()).toEqual(["buy", "buy.second"]);
-    for (const act of started[0]!) expect(act.did).toContain(LEFT_UNCHANGED);
+    expect(siteChanges).toHaveLength(1);
+    expect(siteChanges[0]).toBeDefined();
+    const left = siteChanges[0]?.leftFromEarlier;
+    expect(Array.isArray(left) ? left.length : 0).toBe(2);
+    expect(retiredCodesIn(tests, answers, receipts, refusals, dispatches, observed.outcomes, failure)).toEqual([]);
     expect(ending).toBe("proposed");
   } finally {
     await build.stop();

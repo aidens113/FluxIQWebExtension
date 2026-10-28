@@ -2,12 +2,11 @@ import type { TestInfo } from "@playwright/test";
 import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test, type ExtensionSession } from "../../fixtures/extension-context";
-import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ObservedOutcome, type ObservedRead } from "../index";
+import { judgeLog, retiredCodesIn } from "../change-proof";
+import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ObservedOutcome, type ObservedRead } from "../index";
 
 const TASK = "Start a checkout for one product.";
 const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;
-/** Core's words for an act settled with no change seen (`site-reset/words.ts`, `leftUnchanged`). */
-const LEFT_UNCHANGED = "nothing it could change showed a change";
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
 
 type OfficeRun = {
@@ -26,6 +25,10 @@ type OfficeRun = {
   cartReads: ObservedRead[];
   buy: { consequences: unknown; permitted: boolean } | undefined;
   lookDeclarations: Array<{ consequences: unknown }>;
+  /** What the judge was shown of each trial: its `siteChange` (t775). */
+  siteChanges: Array<JsonObject | undefined>;
+  /** Every retired reset code seen anywhere in the step log. */
+  retired: string[];
 };
 
 /**
@@ -46,7 +49,8 @@ async function runOfficeBuild(extensionSession: ExtensionSession, testInfo: Test
   const { page } = installed;
   const cart = new URL("/scenarios/everything-store/cart", installed.origin).href;
   const detail = new URL(STORE_PATHS.product(SAGE), installed.origin).href;
-  const build = projectBuild(installed, "Installed reset office", TASK);
+  const build = projectBuild(installed, "Installed reset office", TASK, () => installed.page.url());
+  const judge = judgeLog();
   let destinationReference = "", buyHandle = "";
   let baseline: string | undefined;
   let clicksBeforeBuy = 0, clicksAfterBuy = 0;
@@ -106,7 +110,7 @@ async function runOfficeBuild(extensionSession: ExtensionSession, testInfo: Test
       if (turn.step === 9) tests.push(record(last("core.test_subflow")));
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const outcomes = observed.outcomes;
     const looks = outcomes.filter(outcome => outcome.call.startsWith("site-reset.look."));
@@ -114,7 +118,7 @@ async function runOfficeBuild(extensionSession: ExtensionSession, testInfo: Test
     const cartReads = reads.filter(read => read.location?.includes("/everything-store/cart") === true);
     const buy = observed.declarations.find(declaration => declaration.call === "buy");
     const lookDeclarations = observed.declarations.filter(declaration => declaration.call.startsWith("site-reset."));
-    const run: OfficeRun = { ending, destinationReference, baseline, clicksBeforeBuy, clicksAfterBuy, clicksEnd: observed.clicks(), tests, revisions, looksBefore, outcomes, cartReads, buy, lookDeclarations };
+    const run: OfficeRun = { ending, destinationReference, baseline, clicksBeforeBuy, clicksAfterBuy, clicksEnd: observed.clicks(), tests, revisions, looksBefore, outcomes, cartReads, buy, lookDeclarations, siteChanges: judge.siteChanges(), retired: retiredCodesIn(tests, outcomes, observed.declarations, provider.receipts, failure) };
     await keepDiagnostic(testInfo, "reset-office.json", { ...run, failure, builderStep: provider.builderSteps(), reads, declarations: observed.declarations, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
     console.log(JSON.stringify({ resetDiagnostic: { ending, failure, tests: tests.map(trialCode), revisions, looksBefore } }));
     return run;
@@ -136,6 +140,10 @@ function expectOfficeCommon(run: OfficeRun, tests: number): void {
   // No undo was asked for or pressed: after the press no builder or Core call clicked anything.
   expect(run.outcomes.some(outcome => outcome.call.startsWith("undo"))).toBe(false);
   expect(run.clicksEnd).toBe(run.clicksAfterBuy);
+  // t775: no retired reset code anywhere in the step log, and every trial's judge request carries the site's change.
+  expect(run.retired).toEqual([]);
+  expect(run.siteChanges).toHaveLength(tests);
+  for (const siteChange of run.siteChanges) expect(siteChange).toBeDefined();
   // Core's own looks only navigate, declaring nothing lasting.
   for (const declaration of run.lookDeclarations) expect(declaration.consequences).toEqual([]);
   // Each test asked a revision of its own and ran as a trial of its own, with its own Buy Now press.
@@ -164,10 +172,9 @@ test("installed gateway project build settles a create the cart never shows on C
   const run = await runOfficeBuild(extensionSession, testInfo, 1);
   expectOfficeCommon(run, 1);
   expect(trialCode(run.tests[0])).toBe("yes");
-  expect(run.looksBefore).toEqual([1]);
-  const started = startedWithActs(run.tests[0]);
-  expect(started.map(act => act.call)).toEqual(["buy"]);
-  expect(started[0]!.did).toContain(LEFT_UNCHANGED);
+  // The trial is admitted with the explored press in place: the judge hears of it under `leftFromEarlier`, not as a refusal.
+  const left = run.siteChanges[0]?.leftFromEarlier;
+  expect(Array.isArray(left) ? left.length : 0).toBe(1);
 });
 
 /**
@@ -184,12 +191,7 @@ test("installed gateway project build settles the trial act repeating a create o
   const run = await runOfficeBuild(extensionSession, testInfo, 2);
   expectOfficeCommon(run, 2);
   expect(run.tests.map(trialCode)).toEqual(["yes", "yes"]);
-  expect(run.looksBefore).toEqual([1, 1]);
-  const first = startedWithActs(run.tests[0]);
-  const second = startedWithActs(run.tests[1]);
-  expect(second).toHaveLength(2);
-  expect(second[0]).toMatchObject({ act: first[0]!.act, call: "buy" });
-  expect(second[1]!.call).toBeUndefined();
-  expect(second[1]!.did).toMatch(/^trial step \d+ /u);
-  for (const act of second) expect(act.did).toContain(LEFT_UNCHANGED);
+  // The first trial started with the explored press in place; the second also with the first trial's own Buy Now.
+  const lefts = run.siteChanges.map(siteChange => (Array.isArray(siteChange?.leftFromEarlier) ? siteChange.leftFromEarlier.length : 0));
+  expect(lefts).toEqual([1, 2]);
 });

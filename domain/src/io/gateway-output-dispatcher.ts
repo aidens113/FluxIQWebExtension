@@ -61,6 +61,13 @@ export async function dispatchWebAutomationOutput(
     // only that literal, and nothing otherwise. `runtime/adapter.ts` returns
     // this payload to Core as it is, so the runtime path carries it too.
     const route = isRecord(result.payload) && result.payload.route === "ended" ? "ended" : undefined;
+    // A press with `ensureState` whose control already showed that state was not
+    // pressed, and the client says `skipped: "already_in_state"` (t775). Core
+    // reads it at the top of the dispatch payload it keeps as the attempt's
+    // `outputs.result` (Core `executor/node-execution/already-in-state.ts`), so
+    // it is lifted there like `route`: only a succeeded result, only that literal.
+    // Left nested, Core never saw it and the skipped pass read as an ordinary press (t775-P).
+    const skipped = succeeded && isRecord(result.payload) && result.payload.skipped === "already_in_state" ? "already_in_state" : undefined;
     // What the extension's interference clearing pressed while this action ran
     // (`actions/cleared-layers.ts`). Core reads it from the top of the dispatch
     // payload, as it reads `route`, so it is lifted there: copied through its
@@ -78,7 +85,7 @@ export async function dispatchWebAutomationOutput(
       outputId: request.outputId,
       metadata: { sessionId },
       status,
-      payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, clearedLayers }),
+      payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, skipped, clearedLayers }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would

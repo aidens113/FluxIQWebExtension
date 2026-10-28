@@ -2,6 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { retiredCodesIn } from "../change-proof";
 import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 import type { SupervisorTurn } from "../scripted-provider";
 
@@ -227,6 +228,8 @@ test("installed gateway project build refuses an ending after one failed brief u
     // The build kept its draft and promoted nothing: the run resolves, with no failure.
     expect(ending).toBe("proposed");
     expect(failure).toEqual({});
+    // t775: none of the retired reset codes (`project.completion_reset_first` included) holds the ending or any step.
+    expect(retiredCodesIn(refusals, tests, dispatches, builderLog, observed.outcomes, failure)).toEqual([]);
     expect(resolved?.status).toBe("draft");
     expect(resolved?.promotionAllowed).toBe(false);
     expect(provider.builderSteps()).toBe(8);

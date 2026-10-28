@@ -18,7 +18,7 @@ const started = (sequence: number, nodeId: string, index: number, title: string)
   step: { index, count: 4, nodeId, label: title },
   detail: { kind: "step", title, status: "started", ref: nodeId, text: "Node: web.click" }
 });
-const skippedRow = (sequence: number, nodeId: string, reason: "optional_absent" | "state_routed" | "already_done", said: string) => run(sequence, {
+const skippedRow = (sequence: number, nodeId: string, reason: "optional_absent" | "state_routed" | "already_done" | "already_in_state", said: string) => run(sequence, {
   phase: "running",
   label: said,
   detail: { kind: "step", title: said, status: "succeeded", ref: nodeId, skipped: { reason, subject: "Close the panel" } }
@@ -48,4 +48,15 @@ test("a skip row for another step, or for an act already done, does not settle t
   assert.equal(other[0], "Done");
   const already = outcomes([started(1, "n2.close", 2, "Close the panel"), skippedRow(2, "n2.close", "already_done", "Already done: Close the panel")]);
   assert.ok(already.every((outcome) => !outcome?.startsWith("Skipped")));
+});
+
+test("a step whose control already showed the asked state says it was not pressed, on its one card, and not as a failure", () => {
+  const events = [
+    started(1, "n2.close", 2, "Close the panel"),
+    skippedRow(2, "n2.close", "already_in_state", "Not pressed: Close the panel already showed the asked state"),
+    started(3, "n3.search", 3, "Search")
+  ];
+  const shown = outcomes(events);
+  assert.equal(shown.length, 2);
+  assert.equal(shown[0], "Not pressed: it already showed the asked state");
 });
