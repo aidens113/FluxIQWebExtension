@@ -199,3 +199,32 @@ export function isRateLimitAcknowledgeLabel(label: string): boolean {
   if (!RATE_LIMIT_ACKNOWLEDGE_LABEL.test(label)) return false;
   return !hasConsequentialWord(label);
 }
+
+/**
+ * The phrases a page words its session check in (t765): "Your session needs a
+ * quick check", "Your session has expired", "Confirm it's you", "Are you still
+ * there?". A closed list, each on word boundaries. A password or a robot
+ * check is not on it: those ask the person (`../challenge-evidence.ts`), and a
+ * layer that also asks for one is never pressed through.
+ */
+const SESSION_WALL_PHRASE = /\b(?:session (?:needs?|check|has (?:expired|timed out)|expired|timed out|is about to expire)|(?:quick|security|session|account) (?:check|verification)|confirm (?:that )?(?:it'?s|it is) you|verify (?:that )?(?:it'?s|it is) you|are you still (?:there|here))\b/iu;
+
+/** Whether a layer's, or a block's, own bounded text says the page is checking the session before it goes on. */
+export function isSessionWallText(text: string): boolean {
+  return SESSION_WALL_PHRASE.test(text);
+}
+
+/**
+ * The control a session check offers to go on with, as the whole label:
+ * Continue, "Continue as <name>", Stay signed in, "I'm still here", Resume.
+ * Anchored at both ends and read only on text `isSessionWallText` accepts, so
+ * "Continue to payment" or "Continue and delete" cannot match; the deny-list
+ * applies too. It types nothing and sends nothing: it is the page's own way on.
+ */
+const SESSION_CONTINUE_LABEL = /^(?:continue(?: as (?!.*(?:and|then|to|now|&))[\p{L}][\p{L}'.-]*(?: [\p{L}][\p{L}'.-]*){0,2})?|keep going|resume|stay (?:signed|logged) in|(?:yes,? )?i'?m still (?:here|there)|yes,? it'?s me)[.!]?$/iu;
+
+export function isSessionContinueLabel(label: string): boolean {
+  if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
+  if (!SESSION_CONTINUE_LABEL.test(label)) return false;
+  return !hasConsequentialWord(label);
+}

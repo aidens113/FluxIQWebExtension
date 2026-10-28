@@ -4,3 +4,5 @@
 export { waitOutLoaderPause } from "./wait-out-pause";
 export type { PauseWait } from "./wait-out-pause";
 export { statedWaitMs } from "./stated-wait";
+export { passSessionWall, SESSION_PASSES } from "./pass-session-wall";
+export type { SessionPass } from "./pass-session-wall";

@@ -25,6 +25,12 @@
 // offers once it shows, and scrolls again (`./loader-pause/`); a list still
 // paused after the node's retries fails `rate_limited` with the notice's words.
 //
+// **A session check is not the end either** (t765). Where the scroll brought
+// nothing and the page shows a session-check wall under the list ("Your session
+// needs a quick check", with a Continue), the step presses its plain way on and
+// scrolls again; a wall that needs the person ends the step as needing them
+// (`./loader-pause/pass-session-wall.ts`).
+//
 // Every scroll is counted on the progress. A read bounds them by its
 // `maxScrolls`; a next-page step, which has no bound, by `MOVE_SCROLLS` of its
 // own, after which a feed that keeps growing its page and never its list has
@@ -33,7 +39,7 @@
 import { awaitArrivalOrRetry, type WaitOutcome } from "../list-wait";
 import { newRetryBudget, type RetryBudget } from "../load-retry";
 import { pastDeadline } from "./list-change";
-import { waitOutLoaderPause } from "./loader-pause";
+import { passSessionWall, waitOutLoaderPause } from "./loader-pause";
 import { watchListLoading, type ListLoading } from "./list-loading";
 import type { PageStep, PaginationProgress } from "./types";
 
@@ -57,6 +63,7 @@ export async function scrollForMore(progress: PaginationProgress, bound: number 
   const loading = watchListLoading(progress.item, progress.shown[0]);
   const loadingUntil = Date.now() + LOADING_WAIT_MS;
   let pauses = 0;
+  let walls = 0;
   for (;;) {
     if (progress.scrolls >= limit) return { outcome: "truncated", stop: "page_limit" };
     if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
@@ -68,6 +75,13 @@ export async function scrollForMore(progress: PaginationProgress, bound: number 
     if (outcome === "unchanged" && (loading.shown() || loading.moved())) outcome = await awaitLoaded(progress, loading, shown, retries, loadingUntil);
     if (outcome === "changed") return { outcome: "advanced", by: "scroll" };
     if (outcome === "timed_out") return { outcome: "timed_out", stop: "deadline" };
+    // A page that stopped to check the session has not ended the list: its plain way on is pressed, a wall only a person answers is handed to them (`./loader-pause/pass-session-wall.ts`, t765).
+    const walled = await passSessionWall(progress, walls);
+    if (walled === "timed_out") return { outcome: "timed_out", stop: "deadline" };
+    if (walled === "passed") {
+      walls += 1;
+      continue;
+    }
     // A loader that answered the scroll with a notice to wait has paused the list; it has not ended (header).
     const paused = await waitOutLoaderPause(progress, pauses);
     if (paused === "timed_out") return { outcome: "timed_out", stop: "deadline" };

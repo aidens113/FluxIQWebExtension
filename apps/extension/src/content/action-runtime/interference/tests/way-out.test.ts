@@ -144,3 +144,30 @@ test("OK on any other dialog is never pressed", () => {
   assert.equal(hasDismissalControl(invitation), false);
   assert.equal(dismissControlIn(deletion), undefined);
 });
+
+// A session check that offers a plain way on is closed by its Continue (t765);
+// one that wants a password or a code has none that may be pressed.
+function sessionCheck(footer: Spec[]): Element {
+  return layer({
+    name: "scrim",
+    children: [{
+      name: "dialog",
+      attributes: { role: "dialog", "aria-modal": "true" },
+      children: [
+        { name: "body", text: "Your session needs a quick check before we go on." },
+        { name: "foot", children: footer }
+      ]
+    }]
+  });
+}
+
+test("a session check's Continue is its way out, and Continue on any other dialog is never pressed", () => {
+  const carryOn: Spec = { name: "carry-on", text: "Continue as Sam", attributes: { role: "button", tabindex: "0" } };
+  assert.equal(nameOf(dismissControlIn(sessionCheck([carryOn]))), "carry-on");
+  const checkout = layer({
+    name: "dialog",
+    attributes: { role: "dialog" },
+    children: [{ name: "body", text: "Review your order." }, { name: "foot", children: [{ name: "go", text: "Continue", attributes: { role: "button" } }] }]
+  });
+  assert.equal(dismissControlIn(checkout), undefined);
+});

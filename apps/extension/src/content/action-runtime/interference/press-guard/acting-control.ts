@@ -25,7 +25,7 @@
 // it holds in a Node test whose fake elements answer only those.
 
 import { PRESSABLE_HOST } from "../../pressed-control";
-import { isConsentDeclineLabel, isDismissalLabel, isRateLimitAcknowledgeLabel } from "../vocabulary";
+import { isConsentDeclineLabel, isDismissalLabel, isRateLimitAcknowledgeLabel, isSessionContinueLabel } from "../vocabulary";
 import { isActingWording } from "./acting-wording";
 
 /** Roles whose press changes a state the control itself holds. */
@@ -95,5 +95,5 @@ function wordingOf(element: Element): string[] {
 
 /** Wording the allow-lists already admit as a way out, whose own deny-list has been read. */
 function isAdmittedWayOut(wording: string): boolean {
-  return isDismissalLabel(wording) || isConsentDeclineLabel(wording) || isRateLimitAcknowledgeLabel(wording);
+  return isDismissalLabel(wording) || isConsentDeclineLabel(wording) || isRateLimitAcknowledgeLabel(wording) || isSessionContinueLabel(wording);
 }

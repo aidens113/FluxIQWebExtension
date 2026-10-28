@@ -51,7 +51,7 @@ import { PAGER_POLL_MS } from "./follow-next";
 import { clickable, LIST_CHANGE_POLL_MS, LIST_CHANGE_TIMEOUT_MS, pastDeadline } from "./list-change";
 import { loadMoreControlOnPage } from "./appending-control";
 import { clearCover } from "./covered-press";
-import { waitOutLoaderPause } from "./loader-pause";
+import { passSessionWall, waitOutLoaderPause } from "./loader-pause";
 import { loaderNoticeOf } from "../read-coverage";
 import { PaginationFault } from "./pagination-fault";
 import { scrollForMore } from "./scroll-for-more";
@@ -93,7 +93,17 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   await pressHeard(control, progress);
   let outcome = await waitForMoreItems(control, progress);
   // A loader that answered the press with a notice to wait has paused the list; it has not ended (header).
-  for (let pauses = 0; outcome === "unchanged" && control.isConnected; pauses += 1) {
+  for (let pauses = 0, walls = 0; outcome === "unchanged" && control.isConnected; pauses += 1) {
+    // A session check under the list is passed by its plain way on, not taken for the end (`./loader-pause/pass-session-wall.ts`, t765).
+    const walled = await passSessionWall(progress, walls);
+    if (walled === "timed_out") return { outcome: "timed_out", stop: "deadline" };
+    if (walled === "passed") {
+      walls += 1;
+      pauses -= 1;
+      if (progress.hasUnreadItem()) outcome = "changed";
+      else outcome = await waitForMoreItems(control, progress);
+      continue;
+    }
     const paused = await waitOutLoaderPause(progress, pauses);
     if (paused === "timed_out") return { outcome: "timed_out", stop: "deadline" };
     if (paused === "clear") break;
