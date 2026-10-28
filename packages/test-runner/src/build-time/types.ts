@@ -2,13 +2,14 @@
 export type Interval = { start: number; end: number };
 
 /**
- * The four measured shares of a build's wall time plus the remainder. Where
- * intervals overlap, the category earlier in the precedence reset > trial >
- * model > exploration owns the time: a reset step Core runs inside a trial is
- * reset time; a judge call inside a trial is trial time; a decide inside a
- * reset brief is reset time.
+ * The measured shares of a build's wall time plus the remainder. Where
+ * intervals overlap, the category earlier in the precedence reset > offline >
+ * trial > model > exploration owns the time: a reset step Core runs inside a
+ * trial is reset time; the offline check a test call runs against a recording
+ * first is offline time (it touches no site); a judge call inside a trial is
+ * trial time; a decide inside a reset brief is reset time.
  */
-export type BuildCategory = "trial" | "reset" | "model" | "exploration" | "other";
+export type BuildCategory = "trial" | "offline" | "reset" | "model" | "exploration" | "other";
 
 /**
  * What one step is to the measurement. Besides a category: `playback` is the
@@ -28,6 +29,8 @@ export type StepTiming = {
   kind: string;
   toolId: string | null;
   callId: string | null;
+  /** An `offline_trial` step's outcome (`kept_no`, `kept_failed`, `passed`, `gap`, `inconclusive`, `not_tried`, `refused:<code>`); null for every other step. */
+  outcome: string | null;
   phase: string | null;
   part: string | null;
   provider: string | null;
@@ -72,7 +75,12 @@ export type BuildTimeTotals = {
   idleMs: number;
   modelInTrialMs: number;
   resetInTrialMs: number;
+  /** Every test window, offline-kept ones included. */
   trialCount: number;
+  /** Test windows without a kept offline answer: the ones that ran on the site. */
+  liveTrialCount: number;
+  /** Offline steps that ran (not `not_tried`, not `refused:*`). */
+  offlineTrialCount: number;
   playbackMs: number;
   incompleteSteps: number;
   unknown: Record<string, number>;
@@ -97,7 +105,12 @@ export type RunBuildTime = {
   modelInTrialMs: number;
   /** Reset time inside trial windows: Core's reset steps there (t737), counted as reset in `exclusive`, not trial. */
   resetInTrialMs: number;
+  /** Every test window (`core.test_*` tool call or dry-run round), offline-kept ones included. */
   trialCount: number;
+  /** Test windows without a kept offline answer (`kept_no`, `kept_failed`): the ones that ran on the site. */
+  liveTrialCount: number;
+  /** Offline steps that ran against a recording (any outcome but `not_tried` and `refused:*`). */
+  offlineTrialCount: number;
   /** The longest trial tool window (or dry-run round), its resets included. */
   longestTrialMs: number;
   /** Steps measured, playback steps included. */

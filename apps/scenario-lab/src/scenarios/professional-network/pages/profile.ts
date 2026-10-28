@@ -24,7 +24,7 @@ export function renderProfilePage(kit: ShellKit, member: Member): string {
   const contactId = kit.ids.next();
   const contactScrim = kit.ids.next();
   const contactClose = kit.ids.next();
-  const hiddenConnect = action.label === "Follow";
+  const hiddenConnect = action.label === "Follow" || action.label === "Following";
   const experience = `<gl-profile-section><template shadowrootmode="open"><style>h2{font:600 20px system-ui;margin:0 0 8px}li{margin:8px 0}</style><h2>Experience</h2><ul>
 <li><strong>${escapeHtml(member.headline.split(/ at | @ | bij /u)[0] ?? member.headline)}</strong><br>${escapeHtml(member.company || "Self-employed")} · Full-time<br><span>Jan 2022 – Present · 3 yrs 9 mos</span><br>${escapeHtml(member.location)}</li>
 <li><strong>Engineer</strong><br>Previous company · Full-time<br><span>2018 – 2021 · 3 yrs</span></li></ul></template></gl-profile-section>`;
@@ -52,7 +52,7 @@ primary.addEventListener('click', () => {
   const label = primary.textContent.trim();
   if (label === 'Connect') connect();
   else if (label === 'Pending') GL.openWithdraw({ urn: card.sentUrn, text: 'If you withdraw now, you won’t be able to resend to ' + card.name + ' for up to 3 weeks.', onDone: () => { primary.textContent = 'Connect'; } });
-  else if (label === 'Follow' || label === 'Following') primary.textContent = label === 'Follow' ? 'Following' : 'Follow';
+  else if (label === 'Follow' || label === 'Following') GL.mutate('follow-member', { memberUrn: card.memberUrn, following: label === 'Follow' }).then(() => { primary.textContent = label === 'Follow' ? 'Following' : 'Follow'; });
   else if (label === 'Accept') GL.mutate('accept-invitation', { urn: card.receivedUrn }).then(() => { primary.textContent = 'Message'; });
   else if (label === 'Message') location.assign(GL.root + 'messaging/');
 });

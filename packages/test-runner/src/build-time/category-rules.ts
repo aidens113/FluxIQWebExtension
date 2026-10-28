@@ -19,7 +19,10 @@ const exploresPage = (step: StepTiming) => step.toolId !== null && (step.toolId.
  * a reset the model labelled (`callId`), a reset brief it dispatched, and,
  * since t737, Core's own `NNNN-reset` steps: the start hook and the site check
  * a trial runs before it acts, written inside the trial tool's window (Core's
- * `llm/step-log/reset-step.ts`). Runs from before t737 have none, so their
+ * `llm/step-log/reset-step.ts`). Since t769 a test call may first
+ * run offline against a recording: Core's `NNNN-offline` step (kind
+ * `offline_trial`) is offline time, carved out of the test window below reset.
+ * Runs from before t737 have none, so their
  * resets inside trials still count as trial.
  */
 export const CATEGORY_RULES: readonly CategoryRule[] = [
@@ -29,6 +32,7 @@ export const CATEGORY_RULES: readonly CategoryRule[] = [
   { id: "dispatch", category: "container", describes: "project.dispatch: wraps a brief's own steps, counts nothing itself", matches: step => step.toolId === "project.dispatch" },
   { id: "reset-labelled", category: "reset", describes: "any step whose callId names a reset (model-chosen label)", matches: resetLabelled },
   { id: "trial-reset", category: "reset", describes: "kind reset: Core's own reset step (a trial's start hook or site check), inside a trial tool's window or before the judged whole run", matches: step => step.kind === "reset" },
+  { id: "offline-trial", category: "offline", describes: "kind offline_trial: a test call's check against the recorded run, written inside the test tool's window (touches no site)", matches: step => step.kind === "offline_trial" },
   { id: "trial-tool", category: "trial", describes: "kind tool, core.test_subflow or core.test_candidate (judged candidate trial)", matches: step => step.kind === "tool" && step.toolId !== null && TRIAL_TOOLS.has(step.toolId) },
   { id: "trial-node", category: "trial", describes: "kind test: a dry-run node of a round-test; consecutive nodes of one round form one trial", matches: step => step.kind === "test" },
   { id: "model", category: "model", describes: "a provider call: kind decide, judge or chat, or any step naming a provider", matches: step => step.provider !== null || MODEL_KINDS.has(step.kind) },

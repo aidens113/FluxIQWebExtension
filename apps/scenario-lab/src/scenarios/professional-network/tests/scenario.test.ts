@@ -176,3 +176,18 @@ test("every page the navigation reaches renders in the shell with the store, and
   assert.doesNotMatch(markupOnly(sent), /month ago|weeks ago/u, "ages live only in shadow roots");
   assert.equal(invitationStoreText(invitationStore({ withdrawn: [], accepted: [], ignored: [], sentByRun: [] })), STORE_AT_START);
 });
+
+test("a Follow is stored: the profile and the card render Following from state, unfollow reverts, and the invitation store is untouched", () => {
+  const aylin = MEMBERS.find((member) => member.name === "Aylin Demir")!;
+  const primary = (state: ProfessionalNetworkState) => />(Follow|Following)<\/button><button/u.exec(markupOnly(String(page(`in/${aylin.slug}/`, state)!.body)))?.[1];
+  const base = createState(4303);
+  assert.equal(primary(base), "Follow");
+  const followed = mutate(base, "follow-member", { memberUrn: aylin.urn, following: true });
+  assert.deepEqual(followed.following, [aylin.urn]);
+  assert.equal(primary(followed), "Following");
+  assert.equal(followed.store.sent.join(), base.store.sent.join());
+  assert.deepEqual(mutate(followed, "follow-member", { memberUrn: aylin.urn, following: false }).following, []);
+  assert.equal(primary(mutate(followed, "follow-member", { memberUrn: aylin.urn, following: false })), "Follow");
+  const connectable = MEMBERS.find((member) => member.action === "Connect" && member.degree !== "F")!;
+  assert.deepEqual(mutate(base, "follow-member", { memberUrn: connectable.urn, following: true }).following, [], "only a member whose own action is Follow can be followed");
+});

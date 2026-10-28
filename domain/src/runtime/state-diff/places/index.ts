@@ -3,3 +3,4 @@
 export { webStateDiffPlaces } from "./diff";
 export { createWebStatePlacesMemo, type WebStatePlacesMemo } from "./memo";
 export { webStateSnapshotPlaces, type WebStateSnapshotPlaces } from "./snapshot";
+export { webStateValueReplacements } from "./value-replacements";

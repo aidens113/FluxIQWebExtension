@@ -818,6 +818,40 @@ snapshots with the network off, and need the extension built first
 
 An offline pass is evidence only; the judged whole run stays live.
 
+**Offline trials inside builds (P6).** A build's own test calls run offline
+first (Core: `docs/architecture/automation-studio/client-gateway.md`, "Offline trials in builds (P6)").
+Two headed, provider-free specs prove it end to end,
+`apps/extension/e2e/site-reset/tests/offline-first-job.spec.ts` (job-board)
+and `offline-first-photo.spec.ts` (photo-social). Each drives a two-subflow
+project build with a scripted provider and a scripted judge that answers by
+what is under test, so it also answers the offline judge calls. The repaired
+subflow's revision 1 is a live `no`; revision 2 is checked against revision 1's
+recording and its `no` is kept, with no reset and only `capture_snapshot`
+commands to the site; revision 3 passes offline, is then reset and run live,
+and the judge says yes. The supervisor's whole test (`core.test_candidate`)
+then runs live. Everything is asserted from Core's step log: the four
+`tool-core.test_subflow` folders and one `tool-core.test_candidate`, the
+decided offline outcomes `kept_no` then `passed`, `checkedAgainst:
+"recorded_run"` on the kept answer, and the order `offline:passed` before
+`reset`. The specs set `FLUXIQ_CLIENT_GATEWAY_TRACE=1` (tracing, which
+installs the offline-trial host) and `FLUXIQ_LLM_STEP_LOG_DIR` (the step log
+under the test's output path), and clear `FLUXIQ_OFFLINE_TRIALS`, restoring
+all three afterwards (`offline-trial-environment.ts`). Run from
+`apps/extension`:
+
+```powershell
+pnpm test:e2e e2e/site-reset/tests/offline-first-job.spec.ts --workers=1
+pnpm test:e2e e2e/site-reset/tests/offline-first-photo.spec.ts --workers=1
+```
+
+The Lab's build-time report (`packages/test-runner/src/build-time/`) reads the
+same step log: an `offline_trial` step is the `offline` category (precedence
+reset, offline, trial, model, exploration), and each run and the totals carry
+`liveTrialCount` (test windows with no kept offline answer) and
+`offlineTrialCount` (offline checks that ran, not `not_tried` or refused),
+beside the unchanged `trialCount`, so an off/on comparison
+(`FLUXIQ_OFFLINE_TRIALS=0`) can be measured.
+
 ### Reusable self-recording demo workspace
 
 Two explicit smoke scripts exercise the complete author-and-run loop, and two
@@ -1905,6 +1939,34 @@ In `snapshots/live-llm.json` they appear as `repair.resultChecks`
 result was checked". Spend totals are unchanged. Before this change, a run
 that needed no repair reported its two result checks as two diagnoses and a
 "repair attempt".
+
+### A build that starts from a recorded demonstration
+
+`pnpm lab run <scenario> --live-llm ... --llm-task create-flow --instruction-task <task> --demonstration <id>`
+is the chat build of [the instruction-created lane](#the-instruction-created-flow-lane-and-its-authored-artifact)
+with one act before the instruction: the person records a scripted demonstration in the real
+extension and attaches it to the message. The demonstration (`ScenarioDemonstration`, catalogued in
+`apps/scenario-lab/src/scenarios/realistic-site-demonstrations.ts`) must be the one written for that
+very task and scenario, and the run is a chat build, so `--direct-api-build` is refused; one that
+`conflictsWithInstruction` runs only with `--demonstration-probe`. From the start page the Lab presses
+Start recording, fills the description, runs the demonstration's steps as trusted input, presses Stop, and
+waits for exactly one new finalized recording carrying that description (a baseline diff of the project's
+recordings); it then resets the site, reopens the start page, presses Attach a recording, presses the item
+named by the description, confirms the chip, and types the task's instruction unchanged
+(`flow-lane/creation/recorded-evidence/`, `run-scenario/recorded-evidence/`). After the build three named
+facts replace the instruction-only lanes' unchanged-recording-set assertion: the recordings changed by exactly
+that recording, finalized and described (`recording.set`, `recording.finalized`, `recording.described`); the
+Flow's one saved generation instruction has `linkedRecordingIds` equal to that recording
+(`instruction.linked`, read through `get-flow-instruction-set`); and `copiedDetourActs` finds no node doing a
+detour's act (`detour.copied`).
+
+`--demonstration <id> --instruction-task <task> --dry-run` needs no `--live-llm` and calls no model. It does
+everything above up to the attached chip, pictures the window into the run's evidence, judges the
+demonstration's own extract against the task's expected dataset (exactly, record by record, for
+crossborder-marketplace and job-board; for everything-store the couponed cards with the stars read, four or more
+and not an accessory, as `everything-store/tests/demonstrations.test.ts` reads them: a recording cannot carry a paged read, so the demonstration reads the first page and the Lab sweeps the five pages after Stop), writes
+`snapshots/demonstration-dry-run.json` and returns the same summary as `demonstrationDryRun`, then stops before
+Send. Run it headed, with the extension and Core built. Core finalizes a long recording at about one entry a second, so the lane waits up to five minutes for it.
 
 ### How the created Flow's playback adapts
 

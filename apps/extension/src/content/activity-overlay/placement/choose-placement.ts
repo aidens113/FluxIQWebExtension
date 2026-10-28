@@ -59,6 +59,9 @@
 //    narrow one is held, or the same corner nearer its edge. A point or two of
 //    text more or less is no reason to move, so places that cover about as
 //    much never trade the pill between them.
+// 4. **Never over the site's own header or logo (t774).** A place at a top
+//    corner is used only at its edge and when it covers no control or content at all; the
+//    bottom, covering a fixed part of the page if it must, is the pill's home.
 
 /** A corner of the viewport the overlay is pinned to. */
 export type OverlayAnchor = "bottom-left" | "top-left" | "bottom-right" | "top-right";
@@ -120,7 +123,7 @@ export function choosePlacement(input: PlacementInput): OverlayPlacement {
   const { current } = input;
   if (!current || !corners.includes(current.anchor) || !withinReach(page, sizeOf(page, current.shape), current.offset ?? 0)) return best.placement;
   const held = candidate(page, corners, current.anchor, current.shape, current.offset ?? 0);
-  return clearlyBetter(best, held) ? best.placement : held.placement;
+  return !allowed(held) || clearlyBetter(best, held) ? best.placement : held.placement;
 }
 
 /** Rules 1 and 2: the best-ranked place among `corners`, at their edge, docked, and, when none of those is clear, slid. */
@@ -133,7 +136,7 @@ function bestPlace(input: PlacementInput, corners: readonly OverlayAnchor[]): Ca
       if (docked !== undefined) tried.push(candidate(input, corners, anchor, shape, docked));
     }
   }
-  if (!tried.some((next) => isClear(next.cost))) {
+  if (!tried.filter(allowed).some((next) => isClear(next.cost))) {
     for (const anchor of corners) {
       for (const shape of SHAPES) {
         const size = sizeOf(input, shape);
@@ -141,7 +144,16 @@ function bestPlace(input: PlacementInput, corners: readonly OverlayAnchor[]): Ca
       }
     }
   }
-  return tried.reduce((best, next) => (before(next.rank, best.rank) ? next : best));
+  return tried.filter(allowed).reduce((best, next) => (before(next.rank, best.rank) ? next : best));
+}
+
+/**
+ * Rule 4: a top place is taken only at its corner, covering no control or content; never over the site's header, logo
+ * or navigation, and never slid or docked down past them, however busy the bottom is (t774: the pill jumped between y 16,
+ * 100, 184 and 620, and sat over the logo at y 16).
+ */
+function allowed(next: Candidate): boolean {
+  return !next.placement.anchor.startsWith("top") || (next.cost.covered === 0 && next.placement.offset === undefined);
 }
 
 function candidate(input: PlacementInput, corners: readonly OverlayAnchor[], anchor: OverlayAnchor, shape: OverlayPlacement["shape"], offset: number): Candidate {
@@ -152,9 +164,8 @@ function candidate(input: PlacementInput, corners: readonly OverlayAnchor[], anc
 
 /** Rule 3: whether `best` is worth leaving the place held for. */
 function clearlyBetter(best: Candidate, held: Candidate): boolean {
+  // Only the page's own fixed layers (banner, widget, dialog) move the pill; text and controls changing under it never do (t774).
   if (best.cost.fixedShare !== held.cost.fixedShare) return best.cost.fixedShare < held.cost.fixedShare;
-  if (best.cost.coveredShare < held.cost.coveredShare) return best.cost.coveredShare * 2 <= held.cost.coveredShare;
-  if (best.cost.coveredShare > held.cost.coveredShare) return false;
   const wider = best.placement.shape === "pill" && held.placement.shape === "narrow";
   const nearerItsEdge = best.placement.anchor === held.placement.anchor && best.placement.shape === held.placement.shape && (best.placement.offset ?? 0) < (held.placement.offset ?? 0);
   return wider || nearerItsEdge;

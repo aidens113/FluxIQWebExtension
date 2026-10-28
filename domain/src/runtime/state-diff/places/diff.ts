@@ -47,7 +47,7 @@
 //
 // - `controls` (L1 reset settlement): `{ page, location, before, after }`,
 //   for a step whose control is a visible stateful one (the spot's `place`)
-//   and that stayed on its document: how many controls at that place showed
+//   and that stayed on its page (below): how many controls at that place showed
 //   each state on the page before and after the step (`webControlStates`), the
 //   page's scope token, the one a start-state read names the page by, and the
 //   page's `location` that token is built from, as a start-state read carries
@@ -57,9 +57,26 @@
 //   A stateful control the page placed in no record, dialog or subject is
 //   still found for the spot by its selector, since a toggle's place needs none
 //   of them.
+// - `values` (t772 value witness): `{ page, location, replaced }`, for a step
+//   that stayed on its page: each shown value it replaced, as `{ place, from,
+//   to }` -- the value's own place and its state before and after, in the
+//   tokens a start-state read reports `values` by
+//   (`../../llm-evidence/control-spot/values.ts`, `./value-replacements.ts`) --
+//   with the page's scope token and location as `controls` carries them. A
+//   choice confirmed by a button that reloads its page shows its effect not on
+//   the pressed control but on the value the page shows, so Core sees that
+//   value set back. Absent where the step replaced none.
+//
+// **Stayed on its page (t772).** For `controls` and `values`, a step stayed on
+// its page when it stayed on its document, or when the page reloaded to the
+// same address on the same trusted source: a settings form whose Save, or a
+// chooser whose confirming press, reloads the page it is on. Their place tokens
+// are built from the source and the address, so the two sides name one place.
+// Lists still need one document (above): what a reload drew again is no list's
+// new item.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webControlSpotToken, webControlStates, webTargetSpot } from "../../llm-evidence";
+import { webControlSpotToken, webControlStates, webTargetSpot, webValueStates } from "../../llm-evidence";
 import { isWebStatefulControl, webResetCollections } from "../../llm-evidence/control-spot";
 import { webStatePlaceKey } from "./key";
 import { webNodeRowValues } from "./node-row-values";
@@ -67,6 +84,7 @@ import { webNodeTargetPlaceKey } from "./node-target";
 import { webPassRowHandle } from "./pass-row";
 import { webNodeScopedToPassRow } from "./scoped-node";
 import type { WebStateSnapshotPlaces } from "./snapshot";
+import { webStateValueReplacements } from "./value-replacements";
 
 /** Core's bound on a page's items (`landed-acts.ts`, `MAX_ITEMS`). */
 const MAX_ITEMS = 2_000;
@@ -86,8 +104,24 @@ export function webStateDiffPlaces(
   const groups = new Set(was.map((collection) => collection.group));
   const collections = was.length && now.length && now.every((collection) => groups.has(collection.group))
     ? { before: was, after: now } : undefined;
-  const controls = typeof spot?.place === "string" && before && after && !documentChanged ? controlsAt(spot.place, before, after) : undefined;
-  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}), ...(collections ? { collections } : {}), ...(controls ? { controls } : {}) };
+  const stayed = before && after && (!documentChanged || reloadedInPlace(before, after)) ? { before, after } : undefined;
+  const controls = typeof spot?.place === "string" && stayed ? controlsAt(spot.place, stayed.before, stayed.after) : undefined;
+  const values = stayed ? valuesAt(stayed.before, stayed.after) : undefined;
+  return { ...(spot ? { spot } : {}), ...(items ? { items } : {}), ...(collections ? { collections } : {}), ...(controls ? { controls } : {}), ...(values ? { values } : {}) };
+}
+
+/** Whether a new document is its page reloaded at the same address on the same trusted source (header, t772). */
+function reloadedInPlace(before: WebStateSnapshotPlaces, after: WebStateSnapshotPlaces): boolean {
+  return !!before.resetResource && before.resetResource === after.resetResource && !!before.evidence && before.evidence.location === after.evidence?.location;
+}
+
+/** The shown values the step replaced, with the page's scope token and the location it is built from (header, t772); none where it replaced none. */
+function valuesAt(before: WebStateSnapshotPlaces, after: WebStateSnapshotPlaces): JsonObject | undefined {
+  if (!before.resetResource || !before.evidence) return undefined;
+  const replaced = webStateValueReplacements(webValueStates(before), webValueStates(after));
+  if (!replaced.length) return undefined;
+  const location = before.evidence.location;
+  return { page: webControlSpotToken("scope", `${before.resetResource}\0${location}`), location, replaced };
 }
 
 /** The counts of each state at `place` on each page, and the page's scope token and the location it is built from, as a start-state read names them (header). */

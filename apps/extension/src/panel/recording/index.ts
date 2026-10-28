@@ -7,6 +7,7 @@ export { plainWords } from "./plain-words";
 export { recordControl, type RecordControl } from "./record-control";
 export { createRecordingControls, type RecordingControls } from "./recording-controls";
 export {
+  ATTACH_NEXT_LABEL,
   createRecordingReview,
   generatedPreview,
   NOTHING_TO_PREVIEW,
@@ -17,6 +18,7 @@ export {
   testOutcome,
   type GeneratedPreview,
   type RecordingReview,
+  type RecordingReviewOptions,
   type ReviewAction,
   type ReviewButton,
   type ReviewEvent,

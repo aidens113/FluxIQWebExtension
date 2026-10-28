@@ -24,7 +24,8 @@ export function cardAction(kit: ShellKit, member: Member): CardAction {
   const runUrn = runInvitationUrn({ memberUrn: member.urn });
   const run = pendingSent.has(runUrn) ? runUrn : "";
   const sentUrn = seeded?.urn ?? run;
-  const label = received ? "Accept" : sentUrn ? "Pending" : member.degree === "F" ? "Message" : member.action;
+  const own = member.action === "Follow" && kit.state.following.includes(member.urn) ? "Following" : member.action;
+  const label = received ? "Accept" : sentUrn ? "Pending" : member.degree === "F" ? "Message" : own;
   return { memberUrn: member.urn, name: member.name, label, receivedUrn: received?.urn ?? "", sentUrn };
 }
 

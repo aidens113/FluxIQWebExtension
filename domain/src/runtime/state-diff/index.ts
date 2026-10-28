@@ -4,4 +4,4 @@
 export { WEB_STATE_DIFF_SCHEMA_VERSION } from "./schema-version";
 export { webAutomationStateDiff } from "./state-diff";
 export { webStateSummaryLines, type WebStateSummaryLines } from "./summary-lines";
-export { createWebStatePlacesMemo, webStateDiffPlaces, webStateSnapshotPlaces, type WebStatePlacesMemo, type WebStateSnapshotPlaces } from "./places";
+export { createWebStatePlacesMemo, webStateDiffPlaces, webStateSnapshotPlaces, webStateValueReplacements, type WebStatePlacesMemo, type WebStateSnapshotPlaces } from "./places";
