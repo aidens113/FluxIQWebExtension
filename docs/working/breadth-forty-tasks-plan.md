@@ -13,7 +13,11 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
-**Latest (2026-10-27, resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
+**Latest (2026-10-28).** Round 6 rerun accepted office-checkout-review and save-quillmark-remote (oracle, zero-call
+replay, UI reviewed): 14 of 40 accepted. recent-group-posts failed on a false judge no about correct rows (t785 fixing);
+newest-likes is in debug. The paragraph below is the 2026-10-27 state.
+
+**2026-10-27 (resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
 16 audited provider-free only ([coverage map](./breadth-forty-tasks-plan/reports/diag-coverage-2026-10-27.md); the
 round-5 run ids there supersede the table below). Round 6 (office-checkout-review, save-quillmark-remote,
 recent-group-posts, newest-likes) launches after t751 finishes. Fixes in flight, each in its own task worktree:
@@ -700,3 +704,11 @@ None requiring user input.
 - Decisions (supervisor): a lone yes beside nos Core fully refused gets one confirming judge call and stands on a second yes; the earlier t771 premise (build tests hold no rows) is replaced by slot 3's findings.
 - Fix split: t772 (supervisor lane) site reset, the three reset shapes plus brief wording; t771 judging, slot 3's A-C plus the lone-yes rule; t773 a structured trial verdict the Lab reads; t774 truthful chat, ending and overlay. P6 (t769) and recording (t770) continue on branches.
 - Outcome: diagnosis complete; rerun round 6 and the gate after these merge on a new frozen pair.
+
+### 2026-10-28 - Round 6 rerun: 2 of 4 accepted (office-checkout-review, save-quillmark-remote)
+- Agent: supervisor; lanes synced to downstream `1bb6b93d` / Core `6f2d1a6c` (t771-t783 merged, incl. t775 minimal-reset judging, t781, t783); launcher `launch-r6b.sh`, logs `lab-runs/2026-10-28/round6b-slot<N>.log`; debugs `language-driven-flow-loop-plan/debugs/`
+- Result: slot 1 everything-store-office-checkout-review `run-mvsknffp-153bc89a` passed, $0.08613807; slot 2 job-board-save-quillmark-remote `run-mvsknvqv-555a5de2` passed, $0.09374511; slot 3 social-network-feed-recent-group-posts `run-mvskodlp-9966d618` failed, $0.087495924; slot 4 photo-social-newest-likes `run-mvskptb1-c9cef4fe` failed, $0.065824932 (round total $0.333204, every build under its $0.25 purse, no balance error).
+- Validation (supervisor): both passes `evaluation.json` -> `"oracleVerdict": "passed"`, `"harnessActivations": 0`; zero-call replays `replay-r6b.sh` -> `replay-mvslm3b2-be41bcf0` and `replay-mvslmd8i-342a2441` `"verdict":"passed","reasons":[]`, `flowContentHash` before = after, `"modelProvidersEnabled":false`, no credential variables; UI reviewed (end panels: one labelled card per step with its item, the optional panel close shown as skipped, "Records saved", "Run finished").
+- Slot 3 (debug `run-mvskodlp-9966d618.md`): the Lab oracle passed (3 of 3 rows, 15 fields); Core's playback result check took two noes claiming suggested groups were joined, which the judge's own page view contradicts, because t771's cell check confirms the row's group, not membership; the held-double-no rule refused since the build's yes came on a recheck. Same mechanism as round 6's A, narrowed. Also: the Flow hard-codes the three group names; the ending said "Couldn't fix your Flow" about exactly right rows; the site page scrolls sideways (rounds 5-6). Fix t785 (sub-supervisor): F1 located-defects, F3 generic advice on unsaid literal values, the UI wording, the fixture layout.
+- Slot 4: debug in progress (`run-mvskptb1-c9cef4fe`: Flow created, oracle and reported verdict null).
+- Outcome: 14 of 40 accepted. Reruns: recent-group-posts after t785; newest-likes after its debug and fix.

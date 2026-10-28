@@ -149,6 +149,9 @@
 // steps alone say where a step stands, never the order Core asked in (t748
 // U1b). Everything else resolves as before: a step after a navigation, and one
 // Core sent no steps, names the own page's control, as that page showed it.
+// A trial's capture of the dialog that shows a toggle in its other state, under
+// another handle, keeps the handle it no longer shows at that control's place
+// (`step-views/kept-by-place.ts`, t781).
 //
 // t743 d5 kept the two documents as two views of the page and the acted identity
 // per address instead. The first act at the own page's address was then the
@@ -235,7 +238,7 @@ import { webLlmFrameUrlPath } from "./frame-url-path";
 import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
 import { webLlmNotAFieldTargets, type WebLlmNotAFieldKind } from "./typing-targets";
-import { createWebLlmStepViews, type WebLlmPlanStepMove, type WebLlmStepViews } from "./step-views";
+import { createWebLlmStepViews, webLlmDialogControlPlaces, type WebLlmPlanStepMove, type WebLlmStepViews } from "./step-views";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
@@ -352,7 +355,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       acted: new Map<string, ActedTarget>(),
       partial: new Set<string>(),
       selfChanging: createWebLlmSelfChangingNames(),
-      steps: createWebLlmStepViews(acrossView, (target: PageTarget) => target.element.context?.dialog !== undefined)
+      steps: createWebLlmStepViews(acrossView, (target: PageTarget) => target.element.context?.dialog !== undefined, webLlmDialogControlPlaces)
     };
     flows.delete(key);
     flows.set(key, flow);
