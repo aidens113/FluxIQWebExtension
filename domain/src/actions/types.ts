@@ -20,6 +20,7 @@ import type { WebAutomationClearedCheckWait } from "./cleared-check-wait";
 import type { WebAutomationClearedLayer } from "./cleared-layers";
 import type { WebAutomationNextPageAnswer, WebAutomationNextPageRequest } from "./next-page";
 import type { WebAutomationTextPresence } from "./text-sighting";
+import type { WebToggleSignature } from "./toggle-signature";
 
 export type WebAutomationActionType =
   | "web.browser.navigate"
@@ -405,6 +406,12 @@ export type WebAutomationActionCommand = {
   /** `web.dom.check`: the state to leave the checkbox, radio or chosen-state option in. */
   checked?: boolean | undefined;
   /**
+   * `web.dom.click`: the toggle signature an earlier press of this control
+   * produced (t775). A target that already shows it is not pressed, and the
+   * result says `skipped: "already_in_state"`.
+   */
+  ensureState?: WebToggleSignature | undefined;
+  /**
    * `web.dom.type`: after the text, send the field's form as Enter does. Typing
    * alone sends nothing, and live runs 36-38 (t193) typed search queries that
    * were never sent; a search is one step with this, not two.
@@ -557,6 +564,8 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   extracted?: JsonValue | undefined;
   /** `web.dom.extract_list`'s account of its own read (C2): counts, a flag, and declared field keys only. */
   extraction?: WebAutomationExtractionSummary | undefined;
+  /** `web.dom.click` with `ensureState`: the target already showed that state, so nothing was pressed. */
+  skipped?: "already_in_state" | undefined;
   /** `web.dom.next_page`'s answer: the list moved, has no next page, or the move failed. */
   nextPage?: WebAutomationNextPageAnswer | undefined;
   /**

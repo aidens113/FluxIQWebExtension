@@ -607,6 +607,27 @@ key, a scroll a coordinate, and a check a known state.
   checkbox or radio input. A sensitive checkbox withholds it, so its toggle
   stays evidence. A radio needs no recorded state: its `change` can only mean
   "now selected", so it maps to `checked: true`.
+- **A press of a toggle can answer `toggle` (t775).** An exploration press of
+  the click node whose target flipped a state answers
+  `toggle: { signature, idempotentWith? }` so Core can write the same step
+  safely for a site already in that state. The signature is derived from the
+  page packets before and after the press (`domain/src/actions/toggle-signature/`,
+  `node-run/press-effect/toggle-signature.ts`). A control that flipped
+  `aria-pressed`, `aria-checked`, `aria-selected` or a native `checked` gives
+  `{ via: "attribute", attribute, to }` with `idempotentWith: "web.dom.check"`,
+  which Core uses to refuse a plain press of it. A control that shows its state
+  only in its name gives `{ via: "name", gains, loses }`: the words the
+  accessible name gained and lost, compared as lowercase words so a row's own
+  title cancels out. A navigation, a move to another location, a vanished target
+  or a press with no change gives no `toggle`. Core stores the signature on the
+  explored act and writes it as the click node's `ensureState` on a step that
+  repeats the act. The click node (`content/actions/click.ts`,
+  `content/actions/toggle-reading.ts`) checks `ensureState` before the
+  actionability gate: if the live target already shows the signature it presses
+  nothing and answers success with `skipped: "already_in_state"`, which the
+  gateway mapping carries in the payload. Otherwise it presses as usual. The
+  older draft statement `toggle: { key, to }` (Core's reversal pairing) is a
+  different thing and is unchanged.
 - A key press on a `<select>` whose only effect is the value change — an arrow,
   Home, End, Page Up/Down, or any single character — is evidence, because the
   recorder already reports that change as its own event.

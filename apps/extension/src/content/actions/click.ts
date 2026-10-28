@@ -120,7 +120,7 @@
 // that presses a blocking dialog's own way out (`action-runtime/interference/`),
 // which needs the same press and cannot import a verb.
 
-import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs, webToggleSignatureShown } from "@fluxiq-web-extension/domain/client";
 import { dispatchClickGesture, extraPressesMade, noteExtraPress, pressAgain } from "../action-runtime";
 import type {
   ActionResultEvidence,
@@ -135,6 +135,7 @@ import type {
   RobotCheckWatch
 } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
+import { toggleReadingOf } from "./toggle-reading";
 import type { ContentActionDependencies } from "./types";
 
 /** A link the click follows: the anchor itself, and the address it names. */
@@ -234,6 +235,11 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     snapshot: deps.captureSnapshot(),
     resolution
   });
+
+  // A target that already shows the state this press is meant to bring is not pressed: a toggle step is safe to run again (t775).
+  if (action.ensureState && webToggleSignatureShown(action.ensureState, toggleReadingOf(element, deps.describeElement(element)))) {
+    return alreadyInState(action, deps, startedAt, evidence());
+  }
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {
@@ -525,4 +531,11 @@ function robotCheckWaitMs(action: BrowserActionCommand, startedAt: number): numb
   const timeoutMs = action.timeoutMs;
   if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return ROBOT_CHECK_WAIT_MS;
   return Math.max(0, Math.min(ROBOT_CHECK_WAIT_MS, timeoutMs - (Date.now() - startedAt) - ROBOT_CHECK_REPLY_MARGIN_MS));
+}
+
+/** The target already showed the requested state: success without a press, saying so in `skipped`. */
+function alreadyInState(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, evidence: ActionResultEvidence): BrowserActionResult {
+  const shown = "the control already shows the requested state";
+  const result = deps.success(action, startedAt, "Control already in the requested state; nothing pressed.", { status: "passed", expected: shown, actual: shown }, evidence);
+  return { ...result, skipped: "already_in_state" };
 }

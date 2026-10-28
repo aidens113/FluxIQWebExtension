@@ -1509,10 +1509,13 @@ creation only when both hold, and refuses at stage `before_provider` otherwise
   with `capabilities.candidateTrial` (`lab.candidate_verification_unavailable`);
 - that Core was started with the candidate start hook (decision D1), so every
   trial starts from the seeded fixture rather than from exploration's or an
-  earlier trial's cart. Since t462 the model must first put the site back
-  itself: Core refuses a trial until the build's own lasting acts are undone
-  through the site's controls. The hook then resets the fixture after that,
-  so a Lab trial starts from the seed either way. Exploration after a trial
+  earlier trial's cart. Until t775 the model had to put the site back itself
+  before every trial. Since t775 (user, 2026-10-27: reset as rarely as possible,
+  judge the change) Core judges a trial by the change against the site's state
+  recorded just before it, and resets only the targeted cases (see Core's
+  `llm-flow-bootstrap.md`); the trial-gate wiring for this is pending. The
+  Lab's acceptance does not depend on that: the hook still resets the fixture
+  where it is wired, so a Lab trial starts from the seed either way. Exploration after a trial
   still continues on what the trial left
   (`capabilities.candidateTrial.startReset`;
   `lab.candidate_start_hook_unset`).
@@ -1542,6 +1545,20 @@ before any provider call with `lab.candidate_start_hook_set`. The dry run's and
 the lane's `candidateTrial.fixtureResetBetweenTrials` says which the run does.
 Provider-free paths, replays, the fixture's initial seed and the lane's reset
 before playback are unchanged.
+
+**Acceptance keeps its own fixture reset (t775).** Core's in-build judged run is
+judged by the change it made, and that is Core's evidence, not the Lab's
+verdict. The Lab's oracles are absolute and unchanged, and they judge the Lab's
+own playback, which runs after the fixture reset before playback
+(`flow-lane/creation/lane.ts`, the chat path included) and the zero-call replay,
+which runs after a reset (`saved-flow-replay/replay-saved-flow.ts`). A live
+round runs without the candidate start hook for a project build, so the product's
+minimal-reset behaviour is what is measured, while the oracle still sees the
+site from the seed. A build no longer resets the site before every trial.
+Optionally a diagnostic can compare the fixture's final state before and after
+Core's judged whole run with Core's delta judgement; it is not required for
+acceptance. The structured verdict the Lab reads maps the new `unknown` reasons
+(`already_in_end_state`, `unproven`) to fields, never to prose.
 
 **Project mode (automation-project-agents-plan, W4).** In `project` mode
 (`--authoring-mode project`, Core's opt-in mode beside `candidate`) a project

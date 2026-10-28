@@ -2,6 +2,7 @@
 // also what the call's draft statement carries (t174/F33).
 
 import type { JsonValue } from "fluxiq/core";
+import type { WebToggleSignature } from "../../../actions/toggle-signature";
 
 /**
  * What a node call says about itself, beside the page it left behind.
@@ -52,6 +53,15 @@ export type WebNodeOutcome = {
    * press ran. Absent where the pressed control's choice was left as it was.
    */
   choice?: string;
+  /**
+   * The output of a press that flipped its own control (t775): the signature of
+   * the flip -- the stated state it went to, or the words its name gained and
+   * lost -- and, for a stated state, the node it is idempotent with. Core keeps
+   * it whole; `web.dom.click` takes the signature back as `ensureState`
+   * (`./press-effect/toggle-signature.ts`). Absent where nothing about the
+   * control was seen to change.
+   */
+  toggle?: { signature: WebToggleSignature; idempotentWith?: "web.dom.check" };
   /**
    * What a press, a type or a choice changed on the page it stayed on, in the
    * view's line terms: `t941 "Space Grey" no longer marked`,

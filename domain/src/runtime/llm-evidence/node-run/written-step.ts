@@ -114,7 +114,7 @@ export function webWrittenStep(input: WebWrittenStepInput): WebLlmEvidenceToolEx
   const { node, value, written, ran } = input;
   const outcome = present<WebNodeOutcome>({
     ok: true, node: node.definitionId, status: "written", pageChanged: undefined, unchangedPress: undefined,
-    pageUnreadable: undefined, actedOn: undefined, choice: undefined, changed: undefined, control: input.control, controlHandle: undefined, read: undefined, addable: undefined, inFlow: true, attempts: undefined
+    pageUnreadable: undefined, actedOn: undefined, choice: undefined, toggle: undefined, changed: undefined, control: input.control, controlHandle: undefined, read: undefined, addable: undefined, inFlow: true, attempts: undefined
   });
   const draft = present<NonNullable<WebLlmEvidenceToolExecution["draft"]>>({
     actionId: node.definitionId,

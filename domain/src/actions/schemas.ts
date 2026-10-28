@@ -249,7 +249,28 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
       properties: { url: { type: "string", label: "URL" }, newTab: { type: "boolean", label: "Open in a new tab" } }
     }
   },
-  { actionType: "web.dom.click", label: "Click", description: "Click a DOM element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.click",
+    label: "Click",
+    description: "Click a DOM element. With ensureState -- the toggle signature an earlier press of this control produced -- a control that already shows that state is not pressed and the step answers skipped: already_in_state.",
+    parameterSchema: {
+      ...selectorSchema,
+      properties: {
+        ...selectorSchema.properties,
+        ensureState: {
+          type: "object",
+          label: "Ensure state",
+          properties: {
+            via: { type: "string", enum: ["attribute", "name"] },
+            attribute: { type: "string", enum: ["aria-pressed", "aria-checked", "aria-selected", "checked"] },
+            to: { type: "boolean" },
+            gains: { type: "array", items: { type: "string" } },
+            loses: { type: "array", items: { type: "string" } }
+          }
+        }
+      }
+    }
+  },
   {
     actionType: "web.dom.type",
     label: "Type Text",

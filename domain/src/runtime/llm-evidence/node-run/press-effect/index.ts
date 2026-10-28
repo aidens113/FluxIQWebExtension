@@ -28,3 +28,4 @@ export { webPressSettled, type WebPressSettled, type WebPressSettleSteps } from 
 export { webPressedControlWords } from "./press-words";
 export { webPageUnchanged } from "./unchanged-page";
 export { webPressToggle } from "./toggle";
+export { webPressToggleSignature, type WebPressToggleOutput } from "./toggle-signature";
