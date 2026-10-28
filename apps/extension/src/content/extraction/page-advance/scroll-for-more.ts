@@ -18,6 +18,13 @@
 // scroller is at its bottom; where it is not (a loader grew the page), it is
 // scrolled again.
 //
+// **A list whose loader asked to wait has not ended either** (t762). Where the
+// scroll brought nothing and the page shows the loader's notice to wait ("Please
+// wait a few moments before you try again", "Try again in 4s") where the next
+// part would come, the step waits as the notice asks or presses the retry it
+// offers once it shows, and scrolls again (`./loader-pause/`); a list still
+// paused after the node's retries fails `rate_limited` with the notice's words.
+//
 // Every scroll is counted on the progress. A read bounds them by its
 // `maxScrolls`; a next-page step, which has no bound, by `MOVE_SCROLLS` of its
 // own, after which a feed that keeps growing its page and never its list has
@@ -26,6 +33,7 @@
 import { awaitArrivalOrRetry, type WaitOutcome } from "../list-wait";
 import { newRetryBudget, type RetryBudget } from "../load-retry";
 import { pastDeadline } from "./list-change";
+import { waitOutLoaderPause } from "./loader-pause";
 import { watchListLoading, type ListLoading } from "./list-loading";
 import type { PageStep, PaginationProgress } from "./types";
 
@@ -48,6 +56,7 @@ export async function scrollForMore(progress: PaginationProgress, bound: number 
   const shown = (): Element[] => Array.from(document.querySelectorAll(progress.item));
   const loading = watchListLoading(progress.item, progress.shown[0]);
   const loadingUntil = Date.now() + LOADING_WAIT_MS;
+  let pauses = 0;
   for (;;) {
     if (progress.scrolls >= limit) return { outcome: "truncated", stop: "page_limit" };
     if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
@@ -59,6 +68,13 @@ export async function scrollForMore(progress: PaginationProgress, bound: number 
     if (outcome === "unchanged" && (loading.shown() || loading.moved())) outcome = await awaitLoaded(progress, loading, shown, retries, loadingUntil);
     if (outcome === "changed") return { outcome: "advanced", by: "scroll" };
     if (outcome === "timed_out") return { outcome: "timed_out", stop: "deadline" };
+    // A loader that answered the scroll with a notice to wait has paused the list; it has not ended (header).
+    const paused = await waitOutLoaderPause(progress, pauses);
+    if (paused === "timed_out") return { outcome: "timed_out", stop: "deadline" };
+    if (paused !== "clear") {
+      pauses += 1;
+      continue;
+    }
     if (atBottom(scroller)) return { outcome: "ended", stop: "scrolled_to_end" };
   }
 }

@@ -113,3 +113,35 @@ test("a list followed by anything but a wait -- an end note, a failure, a hidden
     assert.equal(on(el("body", {}, [el("main", {}, [list, after])]), () => listContinuesPast(asElements(cards))), undefined, after.textContent);
   }
 });
+
+// Replies the page leaves closed (t762): coverage the builder should know before it reads.
+function thread(controls: Array<string | undefined>): { list: PageElement; comments: PageElement[] } {
+  const comments = controls.map((label, index) => el("li", { class: "comment" }, [
+    el("span", {}, `Comment ${index + 1}`),
+    el("div", { role: "button", tabindex: "0" }, "Reply"),
+    ...(label === undefined ? [] : [el("div", { role: "button", tabindex: "0" }, label)])
+  ]));
+  return { list: el("ul", { class: "thread" }, comments), comments };
+}
+
+test("items that carry a closed replies control say the list goes on behind it", () => {
+  for (const label of ["View replies (3)", "View 3 replies", "Show all 12 replies", "Show more replies", "Replies (4)"]) {
+    const { list, comments } = thread([undefined, label]);
+    assert.deepEqual(on(el("body", {}, [el("main", {}, [list])]), () => listContinuesPast(asElements(comments))), { kind: "load_more", evidence: "unopened_replies" }, label);
+  }
+});
+
+test("a bare Reply, an opened replies control and a list with none say nothing", () => {
+  for (const label of [undefined, "Hide replies", "Reply to this comment"]) {
+    const { list, comments } = thread([label, undefined]);
+    assert.equal(on(el("body", {}, [el("main", {}, [list])]), () => listContinuesPast(asElements(comments))), undefined, String(label));
+  }
+  const expanded = el("li", {}, [el("div", { role: "button", "aria-expanded": "true" }, "View replies (2)")]);
+  assert.equal(on(el("body", {}, [el("main", {}, [el("ul", {}, [expanded])])]), () => listContinuesPast(asElements([expanded]))), undefined);
+});
+
+test("a way on the list does have is said before its closed replies", () => {
+  const { list, comments } = thread(["View replies (3)"]);
+  const body = el("body", {}, [el("main", {}, [list, el("button", { class: "more" }, "Load more")])]);
+  assert.deepEqual(on(body, () => listContinuesPast(asElements(comments))), { kind: "load_more", evidence: "load_more_control" });
+});

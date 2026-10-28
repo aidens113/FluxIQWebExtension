@@ -8,6 +8,7 @@
 import type { WebAutomationNextPageWay } from "../../../shared/protocol";
 import { followingPageControl } from "../pager-reading";
 import { afterListChange, clickable, pastDeadline } from "./list-change";
+import { clearCover } from "./covered-press";
 import { awaitPageLoadTurn } from "./load-pace";
 import type { PageStep, PaginationProgress } from "./types";
 
@@ -17,6 +18,7 @@ export async function visitNumberedPage(way: Extract<WebAutomationNextPageWay, {
   if (!following) return { outcome: "ended", stop: "no_following_page" };
   if (bound !== undefined && progress.pagesRead >= bound) return { outcome: "truncated", stop: "page_limit" };
   const control = clickable(following, way.pages);
+  await clearCover(control, progress.deadline);
   progress.laterPageShown = true;
   if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
   await awaitPageLoadTurn(progress.deadline);

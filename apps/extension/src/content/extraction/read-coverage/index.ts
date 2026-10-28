@@ -6,3 +6,5 @@ export { listContinuesPast } from "./list-continues";
 export type { ListContinues } from "./list-continues";
 export { listWayOn } from "./list-way-on";
 export type { ListWayOn } from "./list-way-on";
+export { loaderNoticeOf } from "./loader-notice";
+export { hasUnopenedReplies } from "./unopened-replies";
