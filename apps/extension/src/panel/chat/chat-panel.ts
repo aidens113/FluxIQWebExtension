@@ -67,6 +67,7 @@ import { createElement } from "../dom";
 import type { PanelStore } from "../state";
 import type { ClientGatewayActivity } from "../../shared/activity";
 import type { ExtensionStatus } from "../../shared/protocol";
+import { createRecordingAttachment } from "./attachment";
 import { createComposer, createConversationController, createReadNotice, type ConversationState, type CoreTurn } from "./conversation";
 import { createActivityFeed, listenToRuntime, threadRefreshWanted } from "./feed";
 import { sameThread } from "./same-thread";
@@ -99,6 +100,8 @@ export type ChatPanel = {
   setActive(active: boolean): void;
   /** Puts the caret in the composer. */
   focusComposer(): void;
+  /** Attaches the project's newest finished, described recording to the next message; answers whether there was one. */
+  attachLatestRecording(): Promise<boolean>;
   /** Shows `target`'s thread; what the person sends from then on goes there. */
   open(target: ChatTarget): void;
   /** Updates only the current automation's name, preserving the reading position. */
@@ -174,12 +177,13 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   }, ["↓"]);
   const follower = createScrollFollower(scroller, (show) => (jump.hidden = !show), column);
   jump.addEventListener("click", () => follower.followNow());
-  const composer = createComposer((text) => {
+  const attachment = createRecordingAttachment(request, () => shownTarget.projectId ?? latestStatus?.projectId ?? undefined);
+  const composer = createComposer((text, recordingId) => {
     if (!actionsAllowed()) return Promise.resolve(false);
     const destination = controller;
     follower.followNow();
-    return destination.send(text);
-  });
+    return destination.send(text, recordingId);
+  }, attachment);
   // A "missing" read is a claim about the moment it was made: the Lab adds its
   // key just before it types the request, and a person may add one in FluxIQ
   // and come back. Turning to the composer is when the line matters, so the
@@ -512,6 +516,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     focusComposer() {
       composer.focus();
     },
+    attachLatestRecording: () => attachment.attachLatest(),
     open,
     updateAutomationName(automation) {
       if (shownTarget.kind !== "automation" || shownTarget.flowId !== automation.flowId) return;

@@ -110,6 +110,8 @@ export type RecordingLogPage = {
 export type CoreRecordingSummary = {
   id: string;
   title: string;
+  /** What the person said the recording shows; Core answers it apart from `title`. */
+  description?: string | undefined;
   status?: string | undefined;
   projectId?: string | undefined;
   taskId?: string | undefined;

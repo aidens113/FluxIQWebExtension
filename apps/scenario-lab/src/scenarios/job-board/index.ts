@@ -8,3 +8,4 @@ export { jobBoardScenario } from "./scenario.js";
 export { createJobBoardState, mutateJobBoardState } from "./state.js";
 export { jobBoardModes } from "./types.js";
 export type { ApplicationAnswers, JobBoardMode, JobBoardState, Posting, Salary, SubmittedApplication } from "./types.js";
+export { JOB_BOARD_DEMONSTRATIONS } from "./demonstrations.js";

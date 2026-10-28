@@ -40,17 +40,26 @@ export type ChatEntryInput = {
   authorizeChat: () => Promise<void>;
   /** Puts a moment of the chat on the run's timeline, with the window's picture. Must not throw. */
   picture: (moment: "sent" | "answered" | "ended") => Promise<void>;
+  /** What the person does in the panel after the chat is ready and before the instruction is typed: the recorded-evidence lane attaches its recording here. */
+  beforeSend?: () => Promise<void>;
 };
+
+/** How the run showed its panel; the chat exists only when it is on screen. */
+export type PanelOnScreen = LivePanelOutcome;
+
+/** Refuses a run whose panel is not on screen, naming why: the chat is the only way a created-Flow build starts. */
+export function assertPanelOnScreen(livePanel: PanelOnScreen): void {
+  if (livePanel.mode !== "side-panel" && livePanel.mode !== "popup") {
+    throw new RunnerFailure("environment.missing", `A created-Flow run starts its build from the extension's chat window, and the chat was not on screen (${livePanel.mode}: ${livePanel.reason}). Run it headed without --no-live-panel, or pass --direct-api-build for a test-only run that is never counted as a pass`);
+  }
+}
 
 /**
  * The lane's chat entry and the person's chat answerer, both on the panel the
  * run shows. Refuses when no panel is on screen, naming why it is not.
  */
 export function createdFlowChatEntry(input: ChatEntryInput): { entry: Extract<CreatedFlowLaneEntry, { kind: "chat" }>; answerInChat: PersonChatAnswerer } {
-  if (input.livePanel.mode !== "side-panel" && input.livePanel.mode !== "popup") {
-    const why = input.livePanel.mode === "skipped" ? input.livePanel.reason : input.livePanel.reason;
-    throw new RunnerFailure("environment.missing", `A created-Flow run starts its build from the extension's chat window, and the chat was not on screen (${input.livePanel.mode}: ${why}). Run it headed without --no-live-panel, or pass --direct-api-build for a test-only run that is never counted as a pass`);
-  }
+  assertPanelOnScreen(input.livePanel);
   const panel = extensionViewPanelDriver(input.extensionControl, PANEL_PATH);
   let prepared = false;
   const entry: Extract<CreatedFlowLaneEntry, { kind: "chat" }> = Object.freeze({
@@ -66,6 +75,7 @@ export function createdFlowChatEntry(input: ChatEntryInput): { entry: Extract<Cr
       type: async (text: string) => {
         if (!prepared) throw new RunnerFailure("gateway.connection", "The mounted creation chat has not been prepared");
         await assertCreationProjectReady(input.scope.projectId, () => panel.projectScope());
+        await input.beforeSend?.();
         await panel.send(text);
       },
       shows: () => panel.text(),

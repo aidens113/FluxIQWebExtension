@@ -21,3 +21,4 @@ export * from "./bench-report-validation.js";
 export * from "./clone-package.js";
 export * from "./llm.js";
 export * from "./llm-validation.js";
+export * from "./demonstration/index.js";
