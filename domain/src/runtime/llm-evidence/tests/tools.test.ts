@@ -515,15 +515,19 @@ test("reports a successful press with unchanged parsed evidence as no progress",
   const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   // The press ran and the page looks the same, which is a fact about the page
   // rather than a refusal: the step stands and the Flow keeps it. Since t511 the
-  // page is looked at again for a moment and the control pressed once more, and
-  // a press that still changed nothing answers `no_effect`, never `succeeded`.
+  // page is looked at again for a moment. "Details" is a disclosure, whose own
+  // state a press flips, so since t778 it is never pressed a second time: one
+  // that opened late would be closed again. It is said to be uncertain, read
+  // first, and its command's status stands.
   assert.equal(result.resultCode, "web.action.succeeded");
-  assert.equal((result.evidence as { status?: string }).status, "no_effect");
+  assert.equal((result.evidence as { status?: string }).status, "succeeded");
+  assert.match(String((result.evidence as { effectUncertain?: string }).effectUncertain), /"Details"/u);
+  assert.equal("unchangedPress" in (result.evidence as object), false);
   assert.equal((result.evidence as { pageChanged?: boolean }).pageChanged, false);
   assert.equal(result.draft?.proposes, true);
   assert.deepEqual(actionTypes.slice(0, 3), ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
-  // Pressed twice, and every other command a look; how many looks the bounded wait took depends on the clock.
-  assert.equal(actionTypes.filter((type) => type === "web.dom.click").length, 2);
+  // Pressed once, and every other command a look; how many looks the bounded wait took depends on the clock.
+  assert.equal(actionTypes.filter((type) => type === "web.dom.click").length, 1);
   assert.ok(actionTypes.every((type) => type === "web.dom.click" || type === "web.dom.capture_snapshot"), actionTypes.join(","));
   assert.equal(actionTypes[actionTypes.length - 1], "web.dom.capture_snapshot");
 });

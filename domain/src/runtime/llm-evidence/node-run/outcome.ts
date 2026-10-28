@@ -116,4 +116,14 @@ export type WebNodeRanOutcome = WebNodeOutcome & {
    * (`./press-effect/settled.ts`, t511).
    */
   pressedAgain?: string;
+  /**
+   * Said in place of `noEffect`, and never beside `unchangedPress`, where the
+   * press's call declared a lasting consequence or its control holds a state a
+   * press flips, and the page drew no change through the wait: it was not
+   * pressed a second time, since a site may show such an act only once the
+   * page loads again, and the model is told to read where its effect would show
+   * before pressing again (`./press-effect/uncertain.ts`, t778). The command's
+   * own status stands: the page answered the press.
+   */
+  effectUncertain?: string;
 };

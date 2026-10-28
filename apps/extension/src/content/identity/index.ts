@@ -50,6 +50,12 @@
 // loop pass's values on the tile itself, and `../action-runtime/pass-row/`
 // moves a pass's press to the tile holding its row.
 //
+// `action-link.ts` and `control-bar.ts` keep a part's title the name of what
+// it holds (t778): a link that acts on the page (`#`, a script, a button role)
+// names nothing, and a part that holds nothing but controls -- the job board's
+// "Apply on company site" beside the heart -- titles nothing, so a lone save is
+// about the heading above that bar, as `record.ts` `recordSubject` reads it.
+//
 // `corroboration.ts` is the one test both acting paths put to Core's score
 // before acting on it: something that says which control this is -- the text,
 // the name, the label, the id or the test id -- must agree exactly, because a

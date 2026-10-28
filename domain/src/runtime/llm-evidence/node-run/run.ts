@@ -226,7 +226,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -424,9 +424,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       return settled === undefined ? undefined : run.restamp(settled);
     };
     // A press that changed nothing is looked at again for a moment and pressed once more before it is said to have had
-    // no effect (`./press-effect/settled.ts`, t511). One whose call declared a lasting consequence -- granted, or the gate
-    // above had refused it -- is pressed again only when it certainly did not happen: nothing changed at all and its
-    // control is still there and enabled in a form or dialog still open (`./press-effect/certain-no-effect.ts`, t513).
+    // no effect (`./press-effect/settled.ts`, t511) -- never one whose call declared a lasting consequence, or on a control
+    // whose state a press flips: read through the wait, it is said to be uncertain (`./press-effect/repeat-press.ts`,
+    // t778). A lasting press the page truly ignored is made again by Core's retries on its `certainNoEffect` (t517).
     const lasting = Array.isArray(declared) && declared.some((entry) => typeof entry === "string" && entry !== "");
     const pressAgain = async () => (await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran))).result.status === "succeeded";
     const pressed = await webPressSettled(node, current, await look(), webPlanFirstTargetHandle(written), {
@@ -480,8 +480,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Said, never inferred: a press that left the page looking the same may
       // still have been the right step, and a model that is told so can decide.
       pageChanged: changed,
-      unchangedPress: changed === false && pressed.noEffect === undefined && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
-      noEffect: pressed.noEffect, pressedAgain: pressed.pressedAgain,
+      unchangedPress: changed === false && pressed.noEffect === undefined && pressed.uncertain === undefined && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
+      noEffect: pressed.noEffect, pressedAgain: pressed.pressedAgain, effectUncertain: pressed.uncertain,
       pageUnreadable: after === undefined ? true : undefined,
       // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
       actedOn: webNodeActedOn(node, current, named),

@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../../../../failure";
 import { shownHandle } from "../../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -49,37 +50,57 @@ test("Save that only takes on the second press is answered as the second press's
   assert.deepEqual(page.clicked, ["#save", "#save"]);
 });
 
-// t513: a lasting press is not uncertain when nothing changed at all and its control is still there and enabled in a
-// dialog still open -- it did not happen, so it is made once more, under the grant the call already had.
-test("a lasting press whose first press certainly changed nothing is pressed once more, and the second press's success is said", async () => {
-  const page = stub((state, presses) => (presses === 2 ? { ...state, open: false } : undefined));
+// t778, replacing t513: a lasting press is never made a second time by this domain, whose look sees only what the page
+// draws. A site may commit it and draw it only on its next load (the job board's Unsave, rerun round 6 slot 2), so a
+// press the page answered is said to be uncertain and read again. A press the page truly ignored is made again where a
+// fresh read that sees requests says so: the extension's settled look answers `web.action.no_effect`, marked
+// `certainNoEffect`, and Core's retries make it once more (t517) -- social's Post.
+test("a lasting press the extension found certainly ignored is made once more by the retries, and the second press's success is the answer", async () => {
+  const page = stub((state, presses) => (presses === 2 ? { ...state, open: false } : undefined), {}, (presses) => (presses === 1 ? ignored() : undefined));
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const save = shownHandle((await look(runtime)).evidence, "Save");
-  const pressed = (await press(runtime, save, ["modify_existing"])).evidence as JsonObject;
+  const pressed = (await press(runtime, save, ["create_new"])).evidence as JsonObject;
   assert.equal(pressed.status, "succeeded");
   assert.equal(pressed.pageChanged, true);
-  assert.match(String(pressed.pressedAgain), /^Pressed again: the first press of "Save" \(t\d+\) changed nothing/u);
+  assert.equal(pressed.attempts, 2);
+  assert.equal("pressedAgain" in pressed, false);
+  assert.equal("effectUncertain" in pressed, false);
   assert.deepEqual(page.clicked, ["#save", "#save"]);
 });
 
-test("a lasting press that changed nothing even pressed twice says so", async () => {
+test("a lasting press the page answered but does not show is pressed once, read again, and said to be uncertain -- never no effect", async () => {
   const page = stub(() => undefined);
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const save = shownHandle((await look(runtime)).evidence, "Save");
   const pressed = (await press(runtime, save, ["modify_existing"])).evidence as JsonObject;
-  assert.equal(pressed.status, "no_effect");
-  assert.match(String(pressed.noEffect), /pressed twice/u);
-  assert.deepEqual(page.clicked, ["#save", "#save"]);
+  assert.equal(pressed.status, "succeeded");
+  assert.equal("noEffect" in pressed, false);
+  assert.equal("unchangedPress" in pressed, false);
+  assert.match(String(pressed.effectUncertain), /"Save" \(t\d+\)/u);
+  assert.match(String(pressed.effectUncertain), /not pressed a second time/u);
+  assert.deepEqual(page.clicked, ["#save"]);
 });
 
-test("a lasting press on a control the page shows disabled is not pressed again, and still says it had no effect", async () => {
+test("a lasting press on a control the page shows disabled is not pressed again, and is said to be uncertain", async () => {
   const page = stub(() => undefined, { saveDisabled: true });
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const save = shownHandle((await look(runtime)).evidence, "Save");
   const pressed = (await press(runtime, save, ["modify_existing"])).evidence as JsonObject;
-  assert.equal(pressed.status, "no_effect");
-  assert.doesNotMatch(String(pressed.noEffect), /twice/u);
+  assert.equal("noEffect" in pressed, false);
+  assert.match(String(pressed.effectUncertain), /"Save"/u);
   assert.deepEqual(page.clicked, ["#save"]);
+});
+
+test("a toggle the page has not redrawn is pressed once and read, never flipped back by a second press", async () => {
+  const page = stub(() => undefined);
+  const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
+  const bold = shownHandle((await look(runtime)).evidence, "Bold");
+  const pressed = (await press(runtime, bold)).evidence as JsonObject;
+  assert.equal("noEffect" in pressed, false);
+  assert.equal("pressedAgain" in pressed, false);
+  assert.equal("unchangedPress" in pressed, false);
+  assert.match(String(pressed.effectUncertain), /"Bold"/u);
+  assert.deepEqual(page.clicked, ["#bold"]);
 });
 
 test("a toggle whose only change is aria-pressed is a success, pressed once", async () => {
@@ -106,7 +127,7 @@ async function press(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRu
  * little; `onPress` says what else the press did (`undefined`: nothing), told
  * how many times the page has been pressed.
  */
-function stub(onPress: (state: State, presses: number) => State | undefined, start: Partial<State> = {}) {
+function stub(onPress: (state: State, presses: number) => State | undefined, start: Partial<State> = {}, reply: (presses: number) => JsonObject | undefined = () => undefined) {
   let state: State = { scrollY: 151, open: true, bold: false, saveDisabled: false, ...start };
   const clicked: string[] = [];
   const gateway: WebLlmEvidenceGateway = {
@@ -117,11 +138,19 @@ function stub(onPress: (state: State, presses: number) => State | undefined, sta
         clicked.push(String((command.parameters as { selector: string }).selector));
         const next = onPress(state, clicked.length) ?? state;
         state = { ...next, scrollY: state.scrollY + 19 };
+        const answer = reply(clicked.length);
+        if (answer) return answer as Awaited<ReturnType<WebLlmEvidenceGateway["executeAction"]>>;
       }
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
   return { gateway, clicked };
+}
+
+/** What the extension answers a press whose page settled exactly as it was, with no request (`content/actions/click.ts`, t517). */
+function ignored(): JsonObject {
+  const code = WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT;
+  return { status: "failed", failure: webAutomationFailureRecord(code, { expected: "the page answers the press", actual: "the page settled unchanged" }) as unknown as JsonObject, error: code };
 }
 
 function snapshot(state: State): JsonObject {
