@@ -1,6 +1,7 @@
 import type { JsonObject } from "fluxiq/core";
 import { STUDIO, gridFor } from "../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { canonicalJson, ensureStatesIn, judgeLog, retiredCodesIn } from "../change-proof";
 import { actsUnder, bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, handleBefore, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn } from "../index";
 
 const TASK = "Like one post.";
@@ -39,6 +40,13 @@ const LIKE_ACT = "act-2";
  * 4. The Flow is tested: Core's pre-trial look at the dialog's address reads the standalone
  *    page, the named list is lost, act-2 settles restored (its toggle is back and its undo landed),
  *    and the trial runs, told that the named list could not be read again.
+ * 5. The trial's own Like is listed by the ledger (t775: no trial is refused for it, so it is read
+ *    from the ledger's answer to a claim on an unlisted act), pressed back on the post's own page
+ *    under `undoes`, and a changed revision (a trailing look) is tested on the restored post and
+ *    runs: a repeat of a single-subflow revision whose yes stands is answered with that judged run
+ *    and not run again (Core t679). That trial's judge is told the trial act was put back, as act-2
+ *    was (a settled act whose named list could not be read again is said under `startedWith`, Core
+ *    `site-reset/ledger.ts`), and its like step finds the post showing Like and presses it.
  *
  * The Flow is written where the build last saw the Like: on the post's own page. The dialog view and
  * that page share one address, so the page view kept for that address is the standalone page's, and
@@ -53,7 +61,7 @@ test("installed gateway project build settles a dialog toggle whose named list c
   const { page } = installed;
   const profile = new URL(`${ROOT}${STUDIO}/`, installed.origin).href;
   const likedPage = new URL(`${ROOT}p/${LIKED.code}/`, installed.origin).href;
-  const build = projectBuild(installed, "Installed reset photo dialog", TASK);
+  const build = projectBuild(installed, "Installed reset photo dialog", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   /** The newest evidence entries each builder turn was shown: call, tool, and code or verdict. */
   const seen: Record<string, string[]> = {};
@@ -65,7 +73,9 @@ test("installed gateway project build settles a dialog toggle whose named list c
   let postShowsLikeAfterUnlike = false, postShowsLikeAfterAgain = false;
   let readsBeforeTest = 0;
   let submission: JsonObject = {}, trialUnlike: JsonObject = {};
-  let readsAfterTest = 0, trialAct = "";
+  let readsAfterTest = 0, trialAct = "", postShowsLikeAfterTrialUnlike = false;
+  let actList: JsonObject = {}, likeAnswer: JsonObject = {};
+  const judge = judgeLog();
   const tests: JsonObject[] = [];
   try {
     await page.goto(new URL(ROOT, installed.origin).href);
@@ -76,6 +86,13 @@ test("installed gateway project build settles a dialog toggle whose named list c
     await page.locator(`fl-dock [part="collapse-button"]`).click();
     await installed.pair();
     const observed = bindInstrumentedRuntime(installed);
+    // `look` adds a trailing look: a changed revision that runs as a trial of its own (header, 5).
+    const flow = (look: boolean) => [
+      `flow: Like post`,
+      `step post: open the post's own page`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(likedPage)}`,
+      `step like: like the post`, `  node: web.dom.click`, `  target: ${ownLikeHandle}`, `  consequences: modify_existing`,
+      ...(look ? [`step check: look at the post`, `  node: web.dom.capture_snapshot`] : [])
+    ].join("\n");
     const builder = async (turn: BuilderTurn) => {
       const { last, node, call } = turn;
       pages[`step-${turn.step}`] = turn.shownPage();
@@ -112,6 +129,7 @@ test("installed gateway project build settles a dialog toggle whose named list c
       }
       if (turn.step === 5) {
         clicksAfterLike = observed.clicks();
+        likeAnswer = record(last("core.run_node"));
         return node("own.open", "web.output.browser-navigate", { url: likedPage });
       }
       if (turn.step === 6) {
@@ -133,11 +151,7 @@ test("installed gateway project build settles a dialog toggle whose named list c
         // The plan's part asks for the Like, so the Flow likes the post where the build last saw its control: on the post's own page,
         // whose view now holds the Like's handle (see the header). Reopening the dialog would press the standalone page's identity there.
         ownLikeHandle = postActionHandle(turn.shownPage(), "Like");
-        return call("submit", "core.submit_subflow", { flow: [
-          `flow: Like post`,
-          `step post: open the post's own page`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(likedPage)}`,
-          `step like: like the post`, `  node: web.dom.click`, `  target: ${ownLikeHandle}`, `  consequences: modify_existing`
-        ].join("\n") });
+        return call("submit", "core.submit_subflow", { flow: flow(false) });
       }
       const submitted = last("core.submit_subflow");
       submission = record(submitted);
@@ -152,13 +166,13 @@ test("installed gateway project build settles a dialog toggle whose named list c
         const tested = record(last("core.test_subflow"));
         tests.push(tested);
         if (trialCode(tested) !== "yes") return turn.complete({ subflowKey: "main", ...candidate });
-        // The passing trial left its own Like on the site (photo-toggle.spec.ts): asked again, the gate names it.
-        return call("trial.after", "core.test_subflow", candidate);
+        // The passing trial left its own Like on the site (photo-toggle.spec.ts): the ledger names it in its answer to a claim
+        // on an unlisted act (header, 5).
+        return node("act.list", "web.output.browser-navigate", { url: likedPage }, [], { undoes: "act-9999" });
       }
       if (turn.step === 11) {
-        const after = record(last("core.test_subflow"));
-        tests.push(after);
-        const act = actsUnder(after, "actsToUndo").find(entry => entry.act !== LIKE_ACT && entry.act !== OPEN_ACT && entry.call === undefined)?.act;
+        actList = record(last("core.run_node"));
+        const act = actsUnder(actList, "actsToUndo").find(entry => entry.act !== LIKE_ACT && entry.act !== OPEN_ACT && entry.call === undefined)?.act;
         if (!act) return turn.complete({ subflowKey: "main", ...candidate });
         trialAct = act;
         return node("own.again", "web.output.browser-navigate", { url: likedPage });
@@ -166,12 +180,14 @@ test("installed gateway project build settles a dialog toggle whose named list c
       if (turn.step === 12) return node("unlike.trial", "web.output.dom-click", { target: { handle: postActionHandle(turn.shownPage(), "Unlike") } }, ["modify_existing"], { undoes: trialAct });
       if (turn.step === 13) {
         trialUnlike = record(last("core.run_node"));
-        return call("trial.final", "core.test_subflow", candidate);
+        postShowsLikeAfterTrialUnlike = await page.locator(POST_SHOWS_LIKE).first().isVisible();
+        return call("submit.final", "core.submit_subflow", { flow: flow(true) });
       }
-      if (turn.step === 14) tests.push(record(last("core.test_subflow")));
+      if (turn.step === 14) return call("trial.final", "core.test_subflow", candidate);
+      if (turn.step === 15) tests.push(record(last("core.test_subflow")));
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const { declarations, reads } = observed;
     const clicks = { clicksBeforeLike, clicksAfterLike, clicksBeforeUnlike, clicksAfterUnlike, clicksBeforeAgain, clicksAfterAgain, end: observed.clicks() };
@@ -184,7 +200,7 @@ test("installed gateway project build settles a dialog toggle whose named list c
     const started = startedWithActs(tests[0]);
     const startedLike = started.find(act => act.act === LIKE_ACT);
     const unlikeSettlement = record(unlike.resetSettlement);
-    const diagnostic = { ending, failure, openAct: OPEN_ACT, likeAct: LIKE_ACT, started, builderStep: provider.builderSteps(), destinationReference, destinations, destinationsFrom, cellHandle, likeHandle, ownLikeHandle, dialogLocationIsPostAddress: dialogLocation === likedPage, dialogGroups, groupsReadAgain, preTrialReads, clicks, unlike, again, postShowsLikeAfterUnlike, postShowsLikeAfterAgain, tests, reads, declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, trialAct, trialUnlike, submission, seen, pages };
+    const diagnostic = { ending, failure, openAct: OPEN_ACT, likeAct: LIKE_ACT, started, builderStep: provider.builderSteps(), destinationReference, destinations, destinationsFrom, cellHandle, likeHandle, ownLikeHandle, dialogLocationIsPostAddress: dialogLocation === likedPage, dialogGroups, groupsReadAgain, preTrialReads, clicks, unlike, again, postShowsLikeAfterUnlike, postShowsLikeAfterAgain, tests, reads, declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, trialAct, trialUnlike, actList, postShowsLikeAfterTrialUnlike, ensureStates: judge.requests.map(ensureStatesIn), likeToggle: likeAnswer.toggle ?? null, unlikeToggle: unlike.toggle ?? null, submission, seen, pages };
     await keepDiagnostic(testInfo, "reset-photo-dialog.json", diagnostic);
     console.log(JSON.stringify({ resetDiagnostic: { ending, failure, destinationReference, destinationsFrom, groupsReadAgain: groupsReadAgain.length, unlike: unlike.ok ?? unlike.code, unlikeOpen: unlikeSettlement.open ?? unlikeSettlement.settled ?? null, again: again.code, failed: again.failed, canMeet: again.canMeet, tests: tests.map(trialCode), trialAct, trialUnlike: trialUnlike.ok ?? trialUnlike.code ?? null, startedLike: startedLike?.did ?? null } }));
     // 1. The dialog view issued refs at the post's pushed address; the Like inside the dialog named the first, declared modify_existing, and was dispatched once.
@@ -223,19 +239,50 @@ test("installed gateway project build settles a dialog toggle whose named list c
     expect(preTrialReads.some(read => read.atAddress)).toBe(true);
     expect(preTrialReads.some(read => read.holdsDialogGroup)).toBe(false);
     expect(groupsReadAgain).toEqual([]);
-    expect(["candidate.trial_reset_required", "candidate.trial_reset_unproved"]).not.toContain(trialCode(tests[0]));
+    expect(retiredCodesIn(tests, observed.outcomes, provider.receipts, failure)).toEqual([]);
     expect(actsUnder(tests[0], "actsToUndo")).toEqual([]);
-    const trialSteps = (record(tests[0]!.feedback).steps as JsonObject[] | undefined) ?? [];
+    // The first step of a trial is the entry's arrival at the start location (no label); the Flow's own steps are the labelled ones.
+    const trialSteps = (((record(tests[0]!.feedback).steps as JsonObject[] | undefined) ?? []).filter(step => step.label !== undefined));
     expect(startedLike?.did).toContain("put back as far as fresh complete reads can show");
     expect(startedLike?.did).toContain(`(${destinationReference}) could not be read again`);
     // The trial runs its Flow to the end: the post's own page, then its Like, pressed where the Flow's handle names it.
     expect(trialSteps.map(step => [step.status, step.failureCode ?? null])).toEqual([["succeeded", null], ["succeeded", null]]);
     expect(trialSteps[1]?.control).toBe("Like");
+    // The post shows Like at the trial's start (put back above), so the like step presses it: its ensureState is the explored Like's
+    // own signature, never that of the Unlike pressed back under undoes on the same control (t775 H3: Core ties the step to the
+    // newest press on its control, which the undo then is).
+    const likeSignature = canonicalJson(record(likeAnswer.toggle).signature ?? null);
+    expect(likeSignature).not.toBe("null");
+    expect(judge.requests.map(request => [...new Set(ensureStatesIn(request))])).toEqual(judge.requests.map(() => [likeSignature]));
+    expect(trialSteps[1]?.skipped).toBeUndefined();
     expect(trialCode(tests[0])).toBe("yes");
-    // The trial's own Like, put back on the post's own page like photo-toggle.spec.ts's: the build then ends with its Flow.
+    // 5. The trial's own Like, listed by the ledger with a settle, put back on the post's own page under undoes like
+    // photo-toggle.spec.ts's: admitted, landed, the post shows Like again.
     expect(trialAct).toMatch(/^act-[1-9][0-9]{0,3}$/u);
+    expect(actsUnder(actList, "actsToUndo").find(entry => entry.act === trialAct)?.settle).toContain("press that same control back once, naming this act under undoes");
+    expect(declarations.find(declaration => declaration.call === "unlike.trial")?.permitted).toBe(true);
     expect(trialUnlike.ok).toBe(true);
-    expect(trialCode(tests.at(-1))).toBe("yes");
+    expect(postShowsLikeAfterTrialUnlike).toBe(true);
+    // The changed revision is tested on the restored post: admitted and run (its own run), and the build ends with its Flow.
+    expect(tests).toHaveLength(2);
+    expect(trialCode(tests[1])).toBe("yes");
+    expect(tests[1]!.trialRunId).not.toBe(tests[0]!.trialRunId);
+    // Its judge is told the trial act was put back -- never left as it was -- with the list named for it unread, as act-2 is
+    // (t775 H4: a settled act whose named list could not be read again stays under startedWith, so "not listed" no longer
+    // says "put back").
+    const startedTrialAct = startedWithActs(tests[1]).filter(act => act.act === trialAct);
+    expect(startedTrialAct).toHaveLength(1);
+    expect(startedTrialAct[0]!.did).toContain("put back as far as fresh complete reads can show");
+    expect(startedTrialAct[0]!.did).toContain(`(${destinationReference}) could not be read again`);
+    expect(startedTrialAct[0]!.did).not.toContain("left on the site");
+    const finalSteps = ((record(tests[1]!.feedback).steps as JsonObject[] | undefined) ?? []).filter(step => step.label !== undefined);
+    expect(finalSteps.map(step => [step.status, step.failureCode ?? null])).toEqual([["succeeded", null], ["succeeded", null], ["succeeded", null]]);
+    // The post shows Like at its start, so its like step presses it (never skipped already in state) and leaves an act of its own.
+    expect(finalSteps[1]?.control).toBe("Like");
+    expect(finalSteps[1]?.skipped).toBeUndefined();
+    const leftByFinal = actsUnder(tests[1], "leftOnSite").map(act => act.act);
+    expect(leftByFinal).toHaveLength(1);
+    expect(leftByFinal).not.toContain(trialAct);
     expect(ending).toBe("proposed");
   } finally {
     await build.stop();

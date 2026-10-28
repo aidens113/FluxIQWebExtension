@@ -1,18 +1,15 @@
 import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
-import { actsUnder, bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { judgeLog, retiredCodesIn } from "../change-proof";
+import { actsUnder, bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Start a checkout for one product.";
 const SAGE = TIDEWELL_KETTLES.find((product) => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;
-/** Core's words for an act settled with no change seen (`site-reset/words.ts`, `leftUnchanged`). */
-const LEFT_UNCHANGED = "nothing it could change showed a change";
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
 const feedbackSteps = (tested: JsonObject | undefined) => (record(tested?.feedback).steps as JsonObject[] | undefined) ?? [];
 /** An act a gate could not settle by any call, as it named it. */
 const unsettleableIn = (answer: JsonObject | undefined) => (Array.isArray(answer?.actsUnsettleable) ? answer.actsUnsettleable : []).map(record).map((entry) => ({ act: String(entry.act ?? ""), reason: entry.reason ?? null, failed: entry.failed ?? null }));
-/** A page address a settle names, when it names one. */
-const settleAddress = (settle: string | undefined) => /https?:\/\/[^\s"]+/u.exec(settle ?? "")?.[0]?.replace(/[.,;:]$/u, "");
 
 /**
  * Office rerun round 5 (`run-mvhibit5-e1d3a4f3`, cause 2, structural): a
@@ -39,7 +36,7 @@ const settleAddress = (settle: string | undefined) => /https?:\/\/[^\s"]+/u.exec
  *
  * Expected: the trial act carries the cart as its witness, Core's look reads
  * the cart, the act settles on it with no change seen, and the next trial is
- * admitted; no act is ever unsettleable.
+ * admitted; no act is ever unsettleable (t775: left acts are told to the judge, not settled before a trial).
  */
 test("installed gateway project build witnesses a trial's navigating press by the list its explored twin named and admits the next trial", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
@@ -47,7 +44,7 @@ test("installed gateway project build witnesses a trial's navigating press by th
   const { page } = installed;
   const cart = new URL(STORE_PATHS.cart, installed.origin).href;
   const detail = new URL(STORE_PATHS.product(SAGE), installed.origin).href;
-  const build = projectBuild(installed, "Installed reset office navigating press", TASK);
+  const build = projectBuild(installed, "Installed reset office navigating press", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   /** Each scripted call's own answer, by call id. */
   const answers: Record<string, JsonObject> = {};
@@ -56,6 +53,7 @@ test("installed gateway project build witnesses a trial's navigating press by th
   /** How many tool outcomes had been seen when each test was asked, to count Core's own looks before it. */
   const outcomesAtTest: Record<string, number> = {};
   const sent: string[] = [];
+  const judge = judgeLog();
   const tests: Array<{ call: string; answer: JsonObject }> = [];
   let destinationReference = "", buyHandle = "";
   let baseline: string | undefined;
@@ -64,7 +62,7 @@ test("installed gateway project build witnesses a trial's navigating press by th
     await installed.pair();
     const observed = bindInstrumentedRuntime(installed);
     const { reads } = observed;
-    let pending = "", finished = false, rereads = 0;
+    let pending = "", finished = false;
     let candidate: { revision: number; digest: string } | undefined;
     const send = (callId: string, made: ScriptedAnswer) => {
       pending = callId;
@@ -101,17 +99,6 @@ test("installed gateway project build witnesses a trial's navigating press by th
         candidate = { revision: answer.revision, digest: answer.digest };
         return true;
       };
-      /** A refused test whose acts a fresh read could settle: read the page its first such settle names, then test again. */
-      const reread = (tested: JsonObject, again: string) => {
-        const address = actsUnder(tested, "actsToUndo").map((act) => settleAddress(act.settle)).find((value) => value !== undefined);
-        if (!address || rereads >= 2) return done();
-        rereads++;
-        return send(`reread.${rereads}.${again}`, node(`reread.${rereads}.${again}`, "web.output.browser-navigate", { url: address }));
-      };
-      if (previous.startsWith("reread.")) {
-        const again = previous.split(".").slice(2).join(".");
-        return send(`${again}.${rereads}`, call(`${again}.${rereads}`, "core.test_subflow", candidate!));
-      }
       switch (previous.replace(/\.\d+$/u, "")) {
         case "":
           return send("original", node("original", "web.output.browser-navigate", { url: cart }));
@@ -133,7 +120,7 @@ test("installed gateway project build witnesses a trial's navigating press by th
           return send("trial.first", call("trial.first", "core.test_subflow", candidate!));
         case "trial.first": {
           const tested = answers[previous]!;
-          if (typeof tested.trialRunId !== "string") return actsUnder(tested, "actsToUndo").length ? reread(tested, "trial.first") : done();
+          if (typeof tested.trialRunId !== "string") return done();
           // Somewhere other than the cart, so only Core's own look can read it again.
           return send("elsewhere", node("elsewhere", "web.output.browser-navigate", { url: detail }));
         }
@@ -144,15 +131,13 @@ test("installed gateway project build witnesses a trial's navigating press by th
           if (!submitted("submit.second")) return done();
           return send("trial.second", call("trial.second", "core.test_subflow", candidate!));
         case "trial.second": {
-          const tested = answers[previous]!;
-          if (typeof tested.trialRunId !== "string" && actsUnder(tested, "actsToUndo").length) return reread(tested, "trial.second");
           return done();
         }
         default:
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const outcomes = observed.outcomes;
     const looks = outcomes.map((outcome, index) => ({ outcome, index })).filter((entry) => entry.outcome.call.startsWith("site-reset.look."));
@@ -163,20 +148,19 @@ test("installed gateway project build witnesses a trial's navigating press by th
     const first = ranFirst.find((answer) => typeof answer.trialRunId === "string") ?? ranFirst.at(-1);
     const ranSecond = tests.filter((entry) => entry.call.startsWith("trial.second")).map((entry) => entry.answer);
     const second = ranSecond.find((answer) => typeof answer.trialRunId === "string") ?? ranSecond.at(-1);
-    const trialAct = actsUnder(first, "leftOnSite").find((act) => act.call === undefined)?.act;
+    const siteChanges = judge.siteChanges();
     const unsettleable = tests.flatMap((entry) => unsettleableIn(entry.answer));
     const summary = tests.map((entry) => ({
       call: entry.call,
       code: trialCode(entry.answer) ?? null,
       ran: typeof entry.answer.trialRunId === "string",
       buyNow: feedbackSteps(entry.answer).filter((step) => step.control === "Buy Now").map((step) => step.status),
-      actsToUndo: actsUnder(entry.answer, "actsToUndo").map((act) => [act.act, act.call ?? null, act.settle ? (settleAddress(act.settle)?.includes("/cart") ? "settle_names_cart" : "settle") : "no_settle"]),
-      startedWith: startedWithActs(entry.answer).map((act) => [act.act, act.call ?? null, act.did.includes(LEFT_UNCHANGED)]),
+      actsToUndo: actsUnder(entry.answer, "actsToUndo").map((act) => [act.act, act.call ?? null]),
       unsettleable: unsettleableIn(entry.answer)
     }));
-    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, trialAct, looksBefore, summary, clicks, answers, reads, declarations: observed.declarations, outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
+    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, destinationReference, baseline, siteChanges, looksBefore, summary, clicks, answers, reads, declarations: observed.declarations, outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
     await keepDiagnostic(testInfo, "reset-office-navigating.json", diagnostic);
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map((callId) => [callId, answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : null)])), trialAct: trialAct ?? null, looksBefore, summary, cartReads: cartReads.map((read) => read.hash === baseline) } }));
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map((callId) => [callId, answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : null)])), siteChanges, looksBefore, summary, cartReads: cartReads.map((read) => read.hash === baseline) } }));
 
     // The explored twin: the cart read complete, its ref issued, Buy Now declared create_new naming it, admitted and pressed once.
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
@@ -186,16 +170,17 @@ test("installed gateway project build witnesses a trial's navigating press by th
     // The first trial ran and pressed Buy Now itself: a navigating lasting act it left on the site.
     expect(first?.trialRunId).toMatch(/^trial\./u);
     expect(feedbackSteps(first).some((step) => step.control === "Buy Now" && step.status === "succeeded")).toBe(true);
-    expect(trialAct).toMatch(/^act-[1-9][0-9]{0,3}$/u);
     // No act of the build is ever one no call can settle.
     expect(unsettleable).toEqual([]);
-    // The next trial is admitted: a trial of its own, starting with the trial act settled on Core's own look at the cart.
+    // The next trial is admitted (t775: nothing about the first trial's Buy Now refuses it): a trial of its own, whose judge request
+    // names the explored press and the first trial's Buy Now under `leftFromEarlier`, and no retired reset code shows anywhere.
     expect(second?.trialRunId).toMatch(/^trial\./u);
     expect(second?.trialRunId).not.toBe(first?.trialRunId);
     expect(trialCode(second)).toBe("yes");
-    const started = startedWithActs(second).find((act) => act.act === trialAct);
-    expect(started?.did).toContain(LEFT_UNCHANGED);
-    expect(looksBefore["trial.second"] ?? 0).toBeGreaterThanOrEqual(1);
+    expect(retiredCodesIn(tests, answers, outcomes, observed.declarations, provider.receipts, failure)).toEqual([]);
+    expect(siteChanges.length).toBeGreaterThanOrEqual(2);
+    const leftSecond = siteChanges[1]?.leftFromEarlier;
+    expect(Array.isArray(leftSecond) ? leftSecond.length : 0).toBeGreaterThanOrEqual(2);
     // No undo was ever pressed: after the explored press no call of the builder's or Core's clicked anything but a trial's own Buy Now.
     expect(outcomes.some((outcome) => outcome.call.startsWith("undo"))).toBe(false);
     // The cart: every read of it, the builder's and Core's own, shows it exactly as the build found it.

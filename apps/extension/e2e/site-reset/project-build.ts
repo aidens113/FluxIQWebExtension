@@ -13,7 +13,7 @@ export type ProjectBuild = {
   stop: () => Promise<void>;
 };
 
-export function projectBuild(build: Pick<InstalledBuild, "service">, name: string, task: string): ProjectBuild {
+export function projectBuild(build: Pick<InstalledBuild, "service">, name: string, task: string, startLocation?: string | (() => string)): ProjectBuild {
   const { service } = build;
   let projectId = "", flowId = "", instructionSourceId = "";
   let running: Promise<unknown> | undefined;
@@ -25,7 +25,7 @@ export function projectBuild(build: Pick<InstalledBuild, "service">, name: strin
     instructionSourceId = (await service.saveFlowGenerationInstruction({ projectId, flowId, instruction: task })).instructionId;
     let failure: JsonObject = {};
     const caller = { actorUserId: "diagnostic", actorSessionId: "diagnostic" };
-    const started = service.generateFlowBootstrapAdaptation({ projectId, flowId, evidenceGuided: true, authoringMode: "project", caller }).then(() => "proposed" as const, error => {
+    const started = service.generateFlowBootstrapAdaptation({ projectId, flowId, evidenceGuided: true, authoringMode: "project", caller, ...(startLocation !== undefined ? { startLocation: typeof startLocation === "function" ? startLocation() : startLocation } : {}) }).then(() => "proposed" as const, error => {
       const diagnostic = record(record(error).diagnostic);
       failure = { code: diagnostic.code ?? null, stage: diagnostic.stage ?? null, issueCodes: diagnostic.issueCodes ?? null };
       return "failed" as const;

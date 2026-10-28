@@ -1,12 +1,11 @@
 import type { JsonObject } from "fluxiq/core";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
 import { expect, test } from "../../fixtures/extension-context";
-import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ObservedRead, type ScriptedAnswer } from "../index";
+import { judgeLog, retiredCodesIn } from "../change-proof";
+import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Start a checkout for one product and deliver it to the other saved address.";
 const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;
-/** Core's words for an act settled with no change seen (`site-reset/words.ts`, `leftUnchanged`). */
-const LEFT_UNCHANGED = "nothing it could change showed a change";
 /** The checkout's confirm control, which saves the chosen address and reloads; no list on any page shows its effect. */
 const CONFIRM = "Deliver to this address";
 /** The confirm step's label in the submitted script, which trial feedback and the act's words carry. */
@@ -39,9 +38,10 @@ test("installed gateway project build settles a trial confirm on no list by Core
   const { page } = installed;
   const cart = new URL("/scenarios/everything-store/cart", installed.origin).href;
   const detail = new URL(STORE_PATHS.product(SAGE), installed.origin).href;
-  const build = projectBuild(installed, "Installed reset office r3", TASK);
+  const build = projectBuild(installed, "Installed reset office r3", TASK, () => installed.page.url());
   let destinationReference = "", buyHandle = "", changeHandle = "", radioHandle = "", radioLabel = "", confirmHandle = "";
   const tests: JsonObject[] = [];
+  const judge = judgeLog();
   const revisions: number[] = [];
   const outcomesAtTest: number[] = [];
   const readsAtTest: number[] = [];
@@ -133,20 +133,14 @@ test("installed gateway project build settles a trial confirm on no list by Core
       sent.push({ step: turn.step, callId: decision.callId ?? null, undoes: input.undoes ?? null, resetDestination: input.resetDestination ?? null });
       return answered;
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["create_new", "modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     const outcomes = observed.outcomes;
-    const looks = outcomes.filter(outcome => outcome.call.startsWith("site-reset.look."));
-    const looksBefore = outcomesAtTest.map((start, index) => looks.filter(look => outcomes.indexOf(look) >= start && (index + 1 >= outcomesAtTest.length || outcomes.indexOf(look) < outcomesAtTest[index + 1]!)).length);
+    const siteChanges = judge.siteChanges();
     const lookDeclarations = observed.declarations.filter(declaration => declaration.call.startsWith("site-reset."));
     const started = tests.map(tested => startedWithActs(tested));
-    const confirmLeft = started[1]?.find(act => act.call === undefined && act.did.includes(JSON.stringify(CONFIRM_STEP)));
-    const isCart = (read: ObservedRead) => read.location?.includes("/everything-store/cart") === true;
-    const cartReads = reads.filter(isCart);
-    /** Start-state reads during the second test call, before its trial ran: Core's own look. */
-    const cartReadsBeforeSecond = reads.slice(readsAtTest[1] ?? reads.length).filter(isCart);
-    await keepDiagnostic(testInfo, "reset-office-r3.json", { ending, failure, destinationReference, tests, revisions, looksBefore, readsAtTest, started, sent, answers, refusals, outcomes, reads, declarations: observed.declarations, builderStep: provider.builderSteps(), receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, tests: tests.map(trialCode), revisions, looksBefore, started, undoesSent: sent.filter(entry => entry.undoes !== null).length } }));
+    await keepDiagnostic(testInfo, "reset-office-r3.json", { ending, failure, destinationReference, tests, revisions, siteChanges, readsAtTest, started, sent, answers, refusals, outcomes, reads, declarations: observed.declarations, builderStep: provider.builderSteps(), receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages });
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, tests: tests.map(trialCode), revisions, siteChanges, started, undoesSent: sent.filter(entry => entry.undoes !== null).length } }));
 
     expect(ending).toBe("proposed");
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
@@ -174,23 +168,17 @@ test("installed gateway project build settles a trial confirm on no list by Core
       expect(after.some(line => /^t\d+ "/u.test(line) && line.slice(line.indexOf(" ") + 1) === radioLabel)).toBe(true);
       expect(after.some(line => /^t\d+ radio "[^"]*" (?:un)?checked$/u.test(line))).toBe(false);
     }
-    // Before each trial Core looked itself.
-    expect(looksBefore[0]).toBeGreaterThanOrEqual(1);
-    expect(looksBefore[1]).toBeGreaterThanOrEqual(1);
-    // Core's own look before the second trial read the cart, found exactly as the build found it.
-    expect(cartReadsBeforeSecond.length).toBeGreaterThanOrEqual(1);
-    expect(new Set(cartReads.map(read => read.hash)).size).toBe(1);
-    // The first trial started with only the explored Buy Now left.
+    // t775: no retired reset code anywhere in the step log, and each trial's judge request carries the site's change. The
+    // confirm sits in no list, so it is judged by what the trial left on the page, not by a settle-unchanged look.
+    expect(retiredCodesIn(tests, outcomes, observed.declarations, provider.receipts, failure)).toEqual([]);
+    expect(siteChanges).toHaveLength(2);
+    for (const siteChange of siteChanges) expect(siteChange).toBeDefined();
+    // The first trial started with only the explored Buy Now in place; the second also with the first trial's acts, all
+    // reported to the judge as left from earlier instead of refusing the trial.
     expect(started[0]!.map(act => act.call)).toEqual(["buy"]);
-    // The second started with the explored Buy Now, the first trial's Buy Now and its confirm -- the act on no
-    // list -- each settled unchanged by that look and reported to the judge as left.
-    expect(started[1]!.map(act => act.call ?? null)).toEqual(["buy", null, null]);
-    expect(started[1]![1]!.did).toMatch(/^trial step \d+ "start the checkout"/u);
-    expect(confirmLeft?.did).toMatch(/^trial step \d+ /u);
-    // The act's words name the control the confirm pressed (t748).
-    expect(confirmLeft?.did).toContain(`on ${JSON.stringify(CONFIRM)}`);
-    expect(confirmLeft?.did).toContain(LEFT_UNCHANGED);
-    for (const act of started[1]!) expect(act.did).toContain(LEFT_UNCHANGED);
+    const left = siteChanges.map(siteChange => (Array.isArray(siteChange?.leftFromEarlier) ? siteChange.leftFromEarlier.length : 0));
+    expect(left[0]).toBeGreaterThanOrEqual(1);
+    expect(left[1]).toBeGreaterThan(left[0]!);
   } finally {
     await build.stop();
     await installed.close();

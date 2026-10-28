@@ -362,6 +362,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     textPresence: sighting?.textPresence,
     visibleNear: sighting?.visibleNear,
     nextPage,
+    skipped: result.skipped === "already_in_state" ? result.skipped : undefined,
     route: result.route === "ended" && nextPage?.outcome === "ended" ? "ended" : undefined,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt

@@ -22,6 +22,7 @@
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationExtractListRequestValue, webAutomationExtractReadValue } from "../actions/extraction";
 import { webAutomationNextPageRequestValue } from "../actions/next-page";
+import { webToggleSignatureValue } from "../actions/toggle-signature";
 import { webAutomationStructureDetectionRequestValue } from "../extraction";
 import {
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
@@ -46,7 +47,7 @@ import { webAutomationUrlPath } from "../output-nodes";
 /** The command fields that come from a gateway command's `parameters` rather than from its target or envelope. */
 export type WebAutomationLiftedActionParameters = Pick<
   WebAutomationActionCommand,
-  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "submit" | "assert" | "extract" | "extractList" | "nextPage" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
+  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "ensureState" | "submit" | "assert" | "extract" | "extractList" | "nextPage" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
 >;
 
 /**
@@ -82,6 +83,7 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
     wait: waitRequestValue(parameters.wait),
     modifiers: keyModifiersValue(parameters.modifiers),
     checked: booleanValue(parameters.checked),
+    ensureState: webToggleSignatureValue(parameters.ensureState),
     submit: booleanValue(parameters.submit),
     assert: assertRequestValue(parameters.assert),
     extract: webAutomationExtractReadValue(parameters.extract),

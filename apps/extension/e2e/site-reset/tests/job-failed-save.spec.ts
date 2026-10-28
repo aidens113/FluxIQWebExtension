@@ -2,6 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { retiredCodesIn } from "../change-proof";
 import { actsUnder, bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, rowTitles, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Save one job to my saved jobs.";
@@ -17,8 +18,8 @@ const record = (value: unknown): JsonObject => typeof value === "object" && valu
  * Job shapes D and F (job r1/r2), rerun round 2 (`run-mvgf4pk5-55343613`) and
  * t743 d4: My jobs is a plain list the domain vouches complete by its own
  * continuation detectors, so its read issues a ref. The save sits in no list
- * and its heart states no state, so before the build's first lasting act Core
- * refuses it unrun until it names that ref (`candidate.reset_witness_required`).
+ * and its heart states no state, so the build names that ref on its first lasting act
+ * (t775: an unnamed save is no longer refused at exploration).
  *
  * Named, the save is admitted. The board fails the first save of each page load
  * with only a notice in its own status region; since t743 d4 that press fails
@@ -30,7 +31,7 @@ const record = (value: unknown): JsonObject => typeof value === "object" && valu
  * undo, admitted and landing, and My jobs reads its two rows again. The trial
  * then runs on a clean site and answers yes.
  */
-test("installed gateway project build refuses a save with no witness, retries the page's failed save, and undoes it on its own row", async ({ extensionSession }, testInfo) => {
+test("installed gateway project build retries the page's failed save, and undoes it on its own row", async ({ extensionSession }, testInfo) => {
   test.setTimeout(300_000);
   const installed = await startInstalledBuild(extensionSession);
   const { page } = installed;
@@ -83,32 +84,32 @@ test("installed gateway project build refuses a save with no witness, retries th
         const found = pageHandleWhere(turn.shownPage(), /\bicon\b/u);
         if (!found) throw new Error("diagnostic.heart_missing");
         heartHandle = found;
-        // The build's first lasting press, naming no ref: nothing could ever show it put back.
-        return send("save.unwitnessed", node("save.unwitnessed", "web.output.dom-click", { target: { handle: heartHandle } }, ["modify_existing"]));
+        // The build's first lasting press, naming the ref the earlier complete read of My jobs issued (t775: an unnamed
+        // press is no longer refused at exploration, and pressing it too would save the job twice). The board fails the
+        // first press, the retry lands.
+        return send("save", node("save", "web.output.dom-click", { target: { handle: heartHandle } }, ["modify_existing"], { resetDestination: destinationReference }));
       }
-      // Retried naming the ref the earlier complete read of My jobs issued; the board fails the first press, the retry lands.
-      if (turn.step === 4) return send("save", node("save", "web.output.dom-click", { target: { handle: heartHandle } }, ["modify_existing"], { resetDestination: destinationReference }));
       // Where Core's settle points: My jobs, a look naming the act (no undo of its own).
-      if (turn.step === 5) return send("undo.look", node("undo.look", "web.output.browser-navigate", { url: myJobs }, [], { undoes: SAVE_ACT }));
-      if (turn.step === 6) {
+      if (turn.step === 4) return send("undo.look", node("undo.look", "web.output.browser-navigate", { url: myJobs }, [], { undoes: SAVE_ACT }));
+      if (turn.step === 5) {
         // A row My jobs held before the build: not the act's own, so refused unrun.
         const held = rowControl(turn.shownPage(), "Unsave job", JSON.stringify(HELD.title));
         return send("undo.held", node("undo.held", "web.output.dom-click", { target: { handle: held.handle } }, ["modify_existing"], { undoes: SAVE_ACT }));
       }
-      if (turn.step === 7) {
+      if (turn.step === 6) {
         // The new row the save added: its own Unsave job puts the act back.
         const own = rowControl(turn.shownPage(), "Unsave job", JSON.stringify(TARGET.title));
         return send("undo", node("undo", "web.output.dom-click", { target: { handle: own.handle } }, ["modify_existing"], { undoes: SAVE_ACT }));
       }
-      if (turn.step === 8) return send("undone.look", node("undone.look", "web.output.browser-navigate", { url: myJobs }));
-      if (turn.step === 9) {
+      if (turn.step === 7) return send("undone.look", node("undone.look", "web.output.browser-navigate", { url: myJobs }));
+      if (turn.step === 8) {
         undoneHash = reads.at(-1)?.hash;
         return send("submit", call("submit", "core.submit_subflow", { flow: flow(heartHandle) }));
       }
       const submitted = answers["submit"];
       if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
       const candidate = { revision: submitted.revision, digest: submitted.digest };
-      if (turn.step === 10) return send("trial.clean", call("trial.clean", "core.test_subflow", candidate));
+      if (turn.step === 9) return send("trial.clean", call("trial.clean", "core.test_subflow", candidate));
       tests.push(answers["trial.clean"] ?? {});
       return turn.complete({ subflowKey: "main", ...candidate });
     };
@@ -118,7 +119,7 @@ test("installed gateway project build refuses a save with no witness, retries th
     const diagnostic = { ending, failure, builderStep: provider.builderSteps(), destinationReference, baseline, baselineTitles, undoneHash, clicks, answers, tests, reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
     await keepDiagnostic(testInfo, "reset-job.json", diagnostic);
     const coded = (callId: string) => answers[callId]?.code ?? (answers[callId]?.ok === true ? "ok" : undefined);
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, refused: coded("save.unwitnessed"), saveAttempts: answers["save"]?.attempts, saveClicks: clicks["save"], undoHeld: [coded("undo.held"), answers["undo.held"]?.failed], undo: [coded("undo"), answers["undo"]?.failed], tests: tests.map(trialCode) } }));
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, saveAttempts: answers["save"]?.attempts, saveClicks: clicks["save"], undoHeld: [coded("undo.held"), answers["undo.held"]?.failed], undo: [coded("undo"), answers["undo"]?.failed], tests: tests.map(trialCode) } }));
 
     // My jobs is a plain list: read complete with no aria set attributes, its two saved jobs, and a ref issued.
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
@@ -127,13 +128,8 @@ test("installed gateway project build refuses a save with no witness, retries th
     expect(original?.sizes).toEqual([2]);
     expect(baselineTitles).toEqual(expect.arrayContaining([JSON.stringify(HELD.title)]));
 
-    // The save naming no ref: refused unrun before the seal, no click dispatched, nothing recorded.
-    const refused = answers["save.unwitnessed"];
-    expect(refused?.ok).toBe(false);
-    expect(refused?.code).toBe("candidate.reset_witness_required");
-    expect(refused?.failed).toBe("no_witness");
-    expect(clicks["save.unwitnessed"]?.after).toBe(clicks["save.unwitnessed"]?.before);
-    expect(observed.declarations.find(declaration => declaration.call === "save.unwitnessed")?.permitted).toBe(false);
+    // t775: no exploration call is refused for naming no ref, and no retired reset code shows anywhere in the log.
+    expect(retiredCodesIn(answers, observed.outcomes, provider.receipts)).toEqual([]);
 
     // The save naming the ref: declared modify_existing, admitted once; the board failed the first press with only
     // its own notice, the press was made again, and the retry landed. One call, two clicks, two attempts.
@@ -175,7 +171,7 @@ test("installed gateway project build refuses a save with no witness, retries th
 
     // The trial then runs on a clean site, with nothing to undo or restore, and answers yes.
     expect(trialCode(tests[0])).toBe("yes");
-    expect(startedWithActs(tests[0]).some(act => act.call === "save" || act.call === "save.unwitnessed")).toBe(false);
+    expect(startedWithActs(tests[0]).some(act => act.call === "save")).toBe(false);
     expect(actsUnder(tests[0], "actsToUndo")).toEqual([]);
     expect(actsUnder(tests[0], "actsToRestore")).toEqual([]);
     const steps = (record(tests[0]?.feedback).steps as JsonObject[] | undefined) ?? [];

@@ -1,6 +1,7 @@
 import type { JsonObject } from "fluxiq/core";
 import { STUDIO, gridFor } from "../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
 import { expect, test } from "../../fixtures/extension-context";
+import { judgeLog, retiredCodesIn } from "../change-proof";
 import { actsUnder, bindScriptedProvider, keepDiagnostic, projectBuild, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
 import { PHOTO_ROOT, bindDetectingRuntime, gridCellHandle, gridColumns, likedPosts, openPhotoProfile, postActionHandle, postToggle } from "../photo-build";
 
@@ -14,7 +15,6 @@ const EXPLORED = GRID[4]!;
 const CONTROL_SETTLE = /still shows the state this act set: press that same control back once/u;
 /** Where such a settle says the control is, when it says. */
 const settleLocation = (settle: string | undefined) => /^Its control at (\S+) still shows/u.exec(settle ?? "")?.[1];
-const UNSATISFIABLE_CONDITIONS = ["no_witness", "no_target_identity"];
 const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
 const feedbackSteps = (tested: JsonObject | undefined) => (record(tested?.feedback).steps as JsonObject[] | undefined) ?? [];
 
@@ -73,12 +73,13 @@ test("installed gateway project build never presses a post into a state the buil
   const { page } = installed;
   const profile = new URL(`${PHOTO_ROOT}${STUDIO}/`, installed.origin).href;
   const firstPage = new URL(`${PHOTO_ROOT}p/${FIRST.code}/`, installed.origin).href;
-  const build = projectBuild(installed, "Installed reset photo dialog act", TASK);
+  const build = projectBuild(installed, "Installed reset photo dialog act", TASK, () => installed.page.url());
   const pages: Record<string, string> = {};
   /** Each scripted call's own answer, by call id. */
   const answers: Record<string, JsonObject> = {};
   const sent: string[] = [];
   const tests: JsonObject[] = [];
+  const judge = judgeLog();
   /** Each test's input beyond the candidate: the acts it named under cannotUndo. */
   const testInputs: Array<{ call: string; cannotUndo: string[] }> = [];
   const undoPresses: UndoPress[] = [];
@@ -249,11 +250,10 @@ test("installed gateway project build never presses a post into a state the buil
           return done();
       }
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 40, maxCallsPerRun: 60, builder });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 40, maxCallsPerRun: 60, builder, verify: judge.verify });
     const { ending, failure } = await build.run();
     likedAtEnd = await likedPosts(page);
     const unsettleable = tests.flatMap(unsettleableIn);
-    const honestEnd = unsettleable.some((act) => act.reason === "gate_unsatisfiable" && UNSATISFIABLE_CONDITIONS.includes(String(act.failed)));
     // Placeless acts a passing trial said it started with: waved through under cannotUndo.
     const wavedThrough = tests.flatMap((tested) => startedWithActs(tested)).filter((act) => placeless.has(act.act)).map((act) => act.act);
     const listed = tests.map((tested) => ({
@@ -265,9 +265,9 @@ test("installed gateway project build never presses a post into a state the buil
       unsettleable: unsettleableIn(tested)
     }));
     const liked = { atStart: likedAtStart.length, afterTrial1: likedAfterTrial1?.length ?? null, firstAfterTrial1: likedAfterTrial1?.includes(FIRST.code) ?? null, afterTrial2: likedAfterTrial2?.length ?? null, atEnd: likedAtEnd.length, firstAtEnd: likedAtEnd.includes(FIRST.code) };
-    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, handle, linkKey, cellHandle, exploredCellHandle, likedAfterExploredLike: likedAfterExploredLike.length, likeHandle, ownLikeHandle, liked, undoPresses, placeless: [...placeless], wavedThrough, honestEnd, unsettleable, testInputs, listed, answers, tests, reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
+    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), sent, handle, linkKey, cellHandle, exploredCellHandle, likedAfterExploredLike: likedAfterExploredLike.length, likeHandle, ownLikeHandle, liked, undoPresses, placeless: [...placeless], wavedThrough, unsettleable, siteChanges: judge.siteChanges(), testInputs, listed, answers, tests, reads: observed.reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
     await keepDiagnostic(testInfo, "reset-photo-dialog-act.json", diagnostic);
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map((callId) => [callId, answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : null)])), liked, listed, testInputs, undoPresses, placeless: [...placeless], wavedThrough, honestEnd } }));
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, sent, codes: Object.fromEntries(sent.map((callId) => [callId, answers[callId]?.code ?? answers[callId]?.verdict ?? (answers[callId]?.ok === true ? "ok" : null)])), liked, listed, testInputs, undoPresses, placeless: [...placeless], wavedThrough } }));
 
     // Exploration: the grid detected, the first post's dialog opened from its cell, one stable handle for its Like in the dialog and on its own page.
     expect(handle).toMatch(/^extraction\.[0-9]+$/u);
@@ -276,16 +276,24 @@ test("installed gateway project build never presses a post into a state the buil
     expect(likedAtStart).toEqual([]);
     // Exploration liked the other post in its dialog before revision 1 was submitted.
     expect(likedAfterExploredLike).toEqual([EXPLORED.code]);
-    // Revision 1's trial ran (once the explored like was put back) and liked the first post in the dialog its cell opened.
+    // Revision 1's trial ran (t775: with the explored like left in place) and liked the first post in the dialog its cell opened.
     expect(tests.some((tested) => typeof tested.trialRunId === "string")).toBe(true);
     expect(likedAfterTrial1).toContain(FIRST.code);
     // The reset never presses a post into a state other than the one the build found it in.
     expect(undoPresses.filter((press) => press.likedNotAtStart > 0)).toEqual([]);
     // An act whose place is unknown is never waved through under cannotUndo.
     expect(wavedThrough).toEqual([]);
-    // The build ends with the account as it found it, or honestly, naming the act no call can settle and why.
-    expect(likedAtEnd.length === 0 || honestEnd).toBe(true);
-    if (likedAtEnd.length) expect(unsettleable.map((act) => [act.reason, UNSATISFIABLE_CONDITIONS.includes(String(act.failed))])).toContainEqual(["gate_unsatisfiable", true]);
+    // t775: an act no call can settle never refuses a trial, so none is listed unsettleable; the acts the build left in place
+    // are told to the judge instead. The first trial ran with the explored like in place, and each judge request carries the
+    // site's change with that like (and, for the second, the first trial's like) under `leftFromEarlier`.
+    expect(unsettleable).toEqual([]);
+    expect(retiredCodesIn(tests, answers, observed.outcomes, provider.receipts, failure)).toEqual([]);
+    const siteChanges = judge.siteChanges();
+    expect(siteChanges.length).toBeGreaterThanOrEqual(1);
+    for (const siteChange of siteChanges) expect(siteChange).toBeDefined();
+    const leftCounts = siteChanges.map((siteChange) => (Array.isArray(siteChange?.leftFromEarlier) ? siteChange.leftFromEarlier.length : 0));
+    expect(leftCounts[0]).toBeGreaterThanOrEqual(1);
+    if (leftCounts.length > 1) expect(leftCounts[1]).toBeGreaterThanOrEqual(leftCounts[0]!);
   } finally {
     await build.stop();
     await installed.close();

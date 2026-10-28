@@ -22,12 +22,13 @@ The original [Claude handoff](./trace-offline-trials-plan/reports/handoff-2026-1
 plus real-SQL 10/60, contracts 68/68. Also merged today: t754-t763 except t761's Core-only twin (all in the
 ledger below and in `breadth-forty-tasks-plan.md`), t762 (downstream `68c23ecc`, Core `3bb38395`).
 
-**Now (2026-10-27 evening):** the first full sweep runs on pinned heads (downstream `dd708cac`, Core `1617ac70`) in
-detached worktrees `fxwork/sweep-20261027/`, logs `lab-runs/2026-10-27/sweep/`; a pass makes those heads the first
-`main` promotion. In flight before the launch window: t764 (t757's requested-output wiring) and t765 (a session-check
-wall is an interruption, never an end; it can appear on photo-social's grid). **Launch window** once both merge and
-the sweep finishes: freeze `dev`, sync the four lane trees (handoff-2026-10-20 step 1), round 6 in slots 1-4, then
-adaptation rounds 1 and 2 on the same frozen pair (`adaptation-and-breadth-plan.md`). P6 starts after the window.
+**Now (2026-10-28):** t775 (minimal-reset judging) phase D is merged: trials and the judged run are judged on the
+change Core read before and after them, and the trial-refusing reset gates are gone. P6 tier 1 is merged. Both
+2026-10-28 sweeps were used (Core green; downstream green after t780); the next sweep's pass promotes both `main`
+branches. In flight: t781 (defect B, a dialog capture dropping a toggled control's handle; photo-dialog-step is
+`test.fail` until it merges). **Launch window** after t781: sync the four lane trees, round 6 in slots 1-4
+(`launch-r6.sh`, new workspace names), then adaptation rounds 1 and 2 on the same frozen pair
+(`adaptation-and-breadth-plan.md`), then the recording-plus-instructions passes.
 
 **Recovery checkpoint (2026-10-21):** t753 is verified and merged in both repositories (downstream `daabd593`,
 Core `d1c39c0a`). Post-merge narrow gates passed, with provider-free Chromium (12) and Firefox (2) rendering cases
@@ -232,6 +233,23 @@ Briefs for work in flight or next; finished briefs are archived in
   scenarios whose repair iteration runs offline and whose final judged run runs live, with the step log showing both.
 - Report: `docs/working/trace-offline-trials-plan/reports/lane-t-p6.md` in the downstream tree.
 
+### Brief: t781-photo-dialog-kept-handle (worker-heavy, domain plan-resolution)
+- Defect B from t775 (`reports/t775/H4-photo-final.md`): `step-views/views.ts` `captured` keeps only the newest
+  capture's dialog controls, and a toggled control gets a new handle per state, so after a trial captured the post
+  liked the builder's Like handle fell out of the dialog view and its resubmitted step failed `web.target.ambiguous`.
+- Task: an earlier capture's control still resolves into the dialog when the newer capture shows a control at its
+  place under another handle; a control truly gone is not kept. Unit tests beside the code; then the supervisor
+  removes photo-dialog-step's `test.fail` and runs it headed on the integrated code.
+- Report: `docs/working/trace-offline-trials-plan/reports/t781.md` in the t781 tree.
+
+### Brief: t783-settle-wording-and-dead-reset-paths (worker, Core site-reset and supervisor; after t775)
+- A: an undo's answer must not say "fresh complete reads show everything ... as the build found it" while a list it
+  could change was not read again (`site-reset/ledger.ts` `settledNow` vs `kept`'s `act.unread`, `words.ts`
+  `settledAs`); the undo answer and the next trial's `startedWith` say the same, truthful thing.
+- B: remove `resetToEnd`, `resetCameBackLast` and their dispatch answers, unreachable since t775 retired
+  `completion_reset_first` (`project-agents/supervisor/{state,dispatch-tool,completion,guidance}.ts`).
+- A and B touch no common file; tests beside each; Core typecheck and grouped tests of the touched directories.
+
 ## Work Ledger
 
 Earlier settled evidence: [17 archived ledger entries](./trace-offline-trials-plan/archive/2026-10-21-recovery-ledger.md).
@@ -370,3 +388,10 @@ Earlier settled evidence: [17 archived ledger entries](./trace-offline-trials-pl
 - Changed: t772 reset fixes merged (downstream `b2ff83c3`, Core `ef13735c`); t778 merged (`305fecfe`): each save is filed under its own item and the domain never presses a lasting act or a toggle twice (it reports the effect uncertain instead). t772's job-undo-redraws-on-load spec no longer expected to fail. dev merged into t775's trees by the supervisor (Core `47869912`, reference regenerated); t775 phase D started.
 - Validation: t772 + P6 integrated headed `pnpm test:e2e e2e/site-reset --workers=1 --headed` -> "22 passed (20.2m)"; Core trial/reset dirs "Test Files 221 passed (221)" + real-sql 8/8; finish contracts "Tests 68 passed (68)". t778: job specs (undo-redraws-on-load without test.fail, failed-save, unexplored-step) "3 passed (4.0m)". Sweep on Core `ef13735c` / downstream `305fecfe` (`lab-runs/2026-10-28/sweep/`): core install/build/check/test all exit 0; downstream install/build/check exit 0, test exit 1 with packages/test-runner "# fail 2" (a promoted project build read from the candidateTrial audit; round-6 promoted candidate reaching reset, playback and oracle).
 - Outcome: Core sweep green; main promotion held until the paired downstream is green (t779 fixing the two Lab tests).
+
+### 2026-10-28 - t775 phase D merged: trials judged on the change, reset gates retired
+- Agent: supervisor; t775 lead (supervisor) with workers D1-D6, H-H4, K, P; real-SQL follow-up R (worker-heavy); reports `trace-offline-trials-plan/reports/t775.md`, `reports/t775/*.md`
+- Changed: live trials, subflow trials and the judged whole run read every place a lasting step's change shows just before and after the run, and the judge gets `siteChange`; retired `candidate/project.trial_reset_required`, `trial_reset_unproved`, `trial_start_differs`, `completion_reset_first` and Core's cleanup reset before an ending, exploring's `create_baseline_required`/`reset_witness_required`; kept undo admission and settlement and `trial_step_unwitnessed` (reworded); new targeted refusal `candidate/project.trial_starts_in_end_state`; one explored-toggle record per project build shared across briefs; the click node declares `ensureState` and an already-in-state skip reaches Core; class-only toggles get a class signature; an undo press is not an explored toggle.
+- Decisions (t775 lead, accepted by the supervisor): a "set X" part witnessed only by lists that read the same before and after is `unproven`, not already-in-end-state; `unproven` no longer holds a yes (Core read nothing that says the run failed, and the packet names what was not read).
+- Validation (supervisor, final trees): Core `pnpm test` over flow-bootstrap, project-agents, service, result-verification, llm, activity, src/ui -> parallel "Test Files 963 passed | 1 skipped (964)"; real-sql first "3 failed | 50 passed (53)" (11 tests expecting the retired gates; R rewrote them, no product change), rerun `vitest-groups.mjs --groups=real-sql` same paths -> "Test Files 53 passed (53)", "Tests 349 passed | 1 skipped (350)"; `pnpm docs:check` -> current; `pnpm structure:check` -> passed (448 warnings, 1152 baselined). Downstream `test-domain.mjs actions/ output-nodes/ io/ press-effect/tests node-run/tests plan-resolution` -> "# pass 1030 / # fail 0"; `test-extension.mjs content/actions/tests/click panel/chat/stream/step` -> "# pass 151 / # fail 0"; domain and extension `tsc --noEmit` clean; structure audit passed (231 warnings, 616 baselined). Lead's headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "1 failed / 26 passed (30.2m)", the failure photo-dialog-step on defect B, now `test.fail` until t781.
+- Outcome: Accepted. Open: t781 (defect B) next; t783 (settle wording, unreachable `resetToEnd`/`resetCameBackLast`, brief-ports `retryRefused`/`WANTS_REF`); "Put it back" chat action not built.

@@ -1,0 +1,33 @@
+# t775-H2: headed provider-free site-reset suite, final
+
+## Outcome
+Partial. Final full-suite run: 22 passed, 5 failed (29.5m), headed, `--workers=1`. The four judged-change specs: add-to-cart, address-carried and like-loop (newest and pinned) now pass; save-then-read still fails. office-reloading-confirm-undo now passes. Four photo specs still fail. Both pre-existing items from H (P1 for the photo specs, plus a new finding on save-then-read) look like product-side gaps, not spec-side; not fixed. No source touched, no git, no model calls.
+
+## What changed (apps/extension/e2e/site-reset/tests only)
+1. judged-change-save-then-read.spec.ts: uses `bindDetectingRuntime` (imported from `../photo-build`) instead of `bindInstrumentedRuntime`. All assertions kept. The detect throw is gone (the `detect` answer returns extraction.1, 3 items).
+2. judged-change-like-loop.spec.ts: the already_in_state check now asserts each skipped act has a numeric `step`; `row` is a string only in the `pinned` variant (pinned tiles carry a badge). Everything else kept (liked stays liked, asked posts liked, changed acts, `carried` proof for newest).
+3. office-reloading-confirm-undo.spec.ts: the targeted undo (back.checkout, undo.chooser, undo.choose, undo.confirm, all `undoes: act-4`) now runs before any trial, while the confirm is open; submit, trial.open and trial.settled follow. Removed the old "trial with confirm in place plus leftFromEarlier" block (the trial now opens a fresh checkout so it cannot show that); kept the cart-look non-settlement, the undo-step admissions and consequences, the settled act-4 after undo.confirm, and trial.settled (act-4 not in actsToUndo, nothing unsettleable, yes, ending proposed). No retired code anywhere (retiredCodesIn asserted empty after trial.open).
+Rebuilt Core libs first (build-cache reuse, inputs matched) and the extension bundle (test:e2e builds it).
+
+## Commands and observed results
+- Core: `pnpm --filter @fluxiq/contracts --filter fluxiq ... build` in fxwork/t775/!FluxIQ -> "Done", build-cache reuse.
+- Targeted run of 9 specs: "5 failed, 5 passed (12.2m)". Passed: add-to-cart, address-carried, like-loop newest, like-loop pinned, office-reloading-confirm-undo.
+- Final full run: `pnpm test:e2e e2e/site-reset/tests --workers=1 --reporter=list` -> "5 failed / 22 passed (29.5m)". Failures: save-then-read, photo-dialog-destination, photo-dialog-step, photo-looped-other-item, photo-toggle. `x` also shown for job-undo-redraws-on-load, the known `test.fail` gap (t772 w11), counted passed. Every other spec passed (installed-project x2, job-failed-save, job-unexplored-step, add-to-cart, address-carried, like-loop x2, office-address-confirm, office-buy-now x2, office-cross-brief, office-navigating-press, office-read-after-change, office-reloading-confirm-undo, office-site-reverted-toggle, offline-first-job, offline-first-photo, photo-dialog-act, photo-page-order-limit, repair-first).
+- `npx tsc -p tsconfig.test.json --noEmit` (apps/extension) -> exit 0, no output.
+- `node scripts/structure-audit.mjs` (downstream root) -> "structure-audit: passed (230 warning(s), 616 baselined)."
+
+## Remaining failures (product, not fixed)
+A. judged-change-save-then-read (assertion: skipped act `already_in_state`, expect length >= 1). Observed: trial acts `[{step:3, outcome:"changed"}]` in both trials; the first trial's witness w1 shows saved list 3 rows before, 2 after (the Flow's press UNSAVED the job exploration saved); second trial 2 before, 3 after. Both trials verdict yes. Diagnosis: the explored save press answer carries no `toggle` signature (keys: ok, node, status, pageChanged, changed, controlHandle, read, addable, attempts, describedNodes) because the job-board heart is an unnamed `clickable icon class=...` in the page view (its name never flips Save/Unsave), so Core has nothing to turn into `ensureState` and the press is unconditional. Product/fixture gap: a toggle with an unlabelled icon control gets no idempotence. Spec cannot honestly assert skip until the control is detected as a toggle. Not weakened.
+B. photo-dialog-step, line 201: `dialogLikedAfterTrial` expected 1, received 0 (`dialogUnliked` 0, `likedAnywhereAfterTrial` 1; the trial's 4 steps all succeeded and the like landed, post shows Unlike at... `postShowsLikeAtEnd` false). The like step resolved in the dialog (inDialog true, view_history). The post is not liked at start in this spec, so this is not the P1 toggle-off; the like is liked on the page but not inside a `role=dialog` at read time. Likely the t775 trial ends on a state where the dialog is no longer open (start-location reload / look), so the spec's "in the dialog afterwards" read is stale. Spec-side candidate but I could not prove it (no log of the page at read time); not changed so as not to weaken it.
+C. photo-toggle, line 223: second trial `feedback.steps` is empty (expected three `succeeded`); `tests[1]` is a whole-Flow confirmation echo (`wholeTest`/`complete`, no steps), the same shape seen in photo-dialog-step's second test. So the spec reads steps from the wrong test entry after t775 (second ask returns the cached judged-run result). Spec-side candidate.
+D. photo-looped-other-item, line 148: `leftFromEarlier` length 0, expected > 0. Trials 2 and 3 both return `yes` with empty `feedback.steps`; `act.list` answers `candidate.undo_unknown_act`. Same cached-result shape as C; the judge request for a repeated ask carries no new siteChange entry.
+E. photo-dialog-destination, line 238: `trialAct` is "" (expected `act-N`), same family: the act lookup relies on a refusal that no longer arises under t775.
+B to E need a decision from the owner on whether a repeated test of the same digest should re-run (then product) or return the stored result (then specs must ask with a changed revision, as the judged-change specs do). I did not rewrite them.
+
+## Not verified
+- Root cause of B to E beyond the evidence above (no page capture at read time; the same-digest hypothesis is inferred from `tests[1]` having only `wholeTest`/`complete`).
+- A's fixture claim (icon unnamed) is from the page view text in the diagnostic; the heart's accessible name in the DOM was not inspected.
+
+## Open questions
+- Does Core intend a second `core.test_subflow` on an unchanged revision/digest to return the stored judged run? If yes, photo-toggle, photo-looped-other-item, photo-dialog-destination (and the tail of photo-dialog-step) must resubmit a changed revision for the second trial.
+- Should the job-board heart be exposed with a name (fixture) or should Core detect a toggle from a pressed control's state change without a name?
