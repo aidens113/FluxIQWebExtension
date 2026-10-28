@@ -340,3 +340,11 @@ Earlier settled evidence: [17 archived ledger entries](./trace-offline-trials-pl
 - Validation: sweep on pinned heads downstream `dd708cac` / Core `1617ac70` in detached worktrees `fxwork/sweep-20261027/`, logs `lab-runs/2026-10-27/sweep/`: core install/build/check exit 0; `pnpm test` exit 1 - apps/web "Test Files 392 passed (392)", packages/fluxiq 32 failed tests in 14 files, all judging paths (reauthor-service 9, build-judge 5, judged-build 3, judged-reauthor 3, answerability 2, applied-judged-trial 2, six singles). Downstream install/build/check exit 0; `pnpm test` exit 1 - domain "# fail 5" (actual saved repair), apps/extension "# fail 1" (section-held-still timing), test-runner "# fail 1" (browser launch guard). The 8 flow-bootstrap-commands failures also fail on dev before t764 (supervisor ran both: identical 5 + 3).
 - Outcome: Failed sweep; no main promotion. Paid launch holds until t766 says whether any failure is a production judging regression.
 - Follow-up: t766, t767; re-sweep; promote main on green; then the launch window.
+
+### 2026-10-27 - Act-only negatives cannot be grounded (likely regression from t752); decision
+- Agent: supervisor; worker t767 (downstream sweep failures)
+- Finding: five domain repair tests fail because since t752 (Core `534c41fb`) a judge's no must name a defect Core finds in stored records; act-only Flows store none, so the run ends `core.result.refutation_unsupported` and repair is never requested. In production this would leave every act-only task (checkout, save, like, send) without a groundable no.
+- Decision (supervisor): an act-only negative is grounded against the run's own act record (executed steps, witnessed effects or diffs, final page state); a no naming a step or act Core finds there counts and leads to repair; one naming nothing stays unsure. Assigned to t766 (Core) with fail-first tests, then the five domain tests re-run against its Core.
+- Changed: t767 merged (`a984ee04`): the offline snapshot page joins the browser-launch sanctioned list with its reason; a settle unit test's window widened (test only).
+- Validation: t767 `node --test` launch-containment "3 pass 0 fail"; settled-look "12 pass 0 fail"; extension tsc clean; finish audit passed.
+- Outcome: Partial; paid launch held on t766.
