@@ -18,13 +18,16 @@ const TIMEOUT = { timeout: 120_000 };
 const PRODUCT = "ip/valueridge-essentials-select-a-size-paper-towels/418830127";
 const ARMING: ReadonlyArray<[string, object]> = [["set-mode", { mode: "partner-widgets" }], ["consent", { choice: "accept" }], ["dismiss-promo", {}], ["dismiss-chat-card", {}]];
 
-/** The product page armed into the rendering, with consent, the email offer and the chat card answered, after the page's own timers have run. */
+/** The product page armed into the rendering, with consent, the email offer and the chat card answered, once the page's own timers have run. */
 async function withProduct(run: (harness: Harness) => Promise<void>): Promise<void> {
   const harness = await openHarness(browser);
   try {
     for (const [operation, payload] of ARMING) await harness.arm(operation, payload);
     await harness.open(PRODUCT);
-    await harness.page.evaluate("new Promise((resolve) => setTimeout(resolve, Math.max(0, 1500 - performance.now())))");
+    // The page's own timers count from when its script ran, not from navigation, so under load a fixed wait on page time ends before they fire.
+    // Wait on what they leave behind: the availability check gone and the first reviews shown (the offer and chat card are armed away, so they schedule nothing).
+    await harness.page.getByText("Checking availability").waitFor({ state: "detached", timeout: 30_000 });
+    await harness.page.locator("article").nth(2).waitFor({ timeout: 30_000 });
     await run(harness);
     assert.deepEqual(harness.consoleErrors, []);
     assert.deepEqual(harness.offLoopback, []);
