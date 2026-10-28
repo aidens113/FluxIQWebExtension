@@ -39,7 +39,7 @@ type FakeChatOptions = {
    * after the result when set; `promoted` ends it created, with the
    * `candidateTrial` audit Core records on a promoted candidate's proposal.
    */
-  candidate?: { kind: "draft"; verdict: NonNullable<AutomationStudioCandidateAuthoringResult["trial"]>["verdict"]; draftTurnLate?: number } | { kind: "promoted" };
+  candidate?: { kind: "draft"; verdict: NonNullable<AutomationStudioCandidateAuthoringResult["trial"]>["verdict"]; draftTurnLate?: number; told?: boolean } | { kind: "promoted" };
   /** Core's runtime sessions, as `list-runtime-sessions` returns them. */
   runtimeSessions?: readonly unknown[];
 };
@@ -105,7 +105,7 @@ function fakeChat(options: FakeChatOptions) {
       if (options.ending === "never") return;
       if (options.ending === "created") adaptation = proposal("applied", { appliedMutationCount: 3 });
       if (options.candidate?.kind === "draft") {
-        turn("automation", automationStudioConversationCandidateDraftSaid({ ...DRAFT_TEMPLATE, trial: { verdict: options.candidate.verdict, codes: [] } }), { kind: "panel-capability-result", ref: "flow.createHere" });
+        turn("automation", automationStudioConversationCandidateDraftSaid({ ...DRAFT_TEMPLATE, trial: { verdict: options.candidate.verdict, codes: [] } }, options.candidate.told === true), { kind: "panel-capability-result", ref: "flow.createHere" });
         if (options.candidate.draftTurnLate) lateDraftReads = options.candidate.draftTurnLate;
         else turn("automation", "Saved candidate draft. Verification pending; the Flow's steps are unchanged.", { kind: "candidate-draft", ref: CANDIDATE_ID });
         return;
@@ -289,6 +289,31 @@ test("a candidate the chat kept as a draft is recorded with its id, the verdict 
     assert.equal(outcome?.revision, 2);
     assert.doesNotMatch(JSON.stringify(outcome), /page words/u, "nothing of a trial's Flow document is kept");
   }
+});
+
+// t773 (round 6, all four debug notes): since t753 a project draft says one fixed sentence naming no verdict, so every project draft read
+// `unknown`. The verdict is read from the trial session's own record first; the sentence is only a fallback, and the fixed one is not a verdict.
+test("a told draft's verdict is read from its trial session, never from the chat's words (t773)", async () => {
+  const scope = { ...CANDIDATE_SCOPE, authoringMode: "project" as const };
+  const run = async (verdict: "yes" | "no" | "unsure" | "not_tested", sessions: readonly unknown[]) => {
+    const { control, chat, wait } = fakeChat({ answer: "build", candidate: { kind: "draft", verdict, told: true }, runtimeSessions: sessions });
+    return (await buildCreatedFlowFromChat(control, chat, scope, wait)).build.candidateOutcome;
+  };
+  const judged = (verdict: string, verdictCode?: string) => [trialSession("trial.early", 10, { revision: 1, execution: "succeeded", verdict: "no" }), trialSession("trial.last", 20, { revision: 2, execution: "succeeded", verdict, ...(verdictCode ? { verdictCode } : {}) })];
+  for (const verdict of ["no", "unsure", "yes"] as const) {
+    const outcome = await run(verdict, judged(verdict, `trial.${verdict}`));
+    assert.equal(outcome?.verdict, verdict, `the last trial's recorded ${verdict}`);
+    assert.deepEqual(outcome?.codes, [`trial.${verdict}`]);
+    assert.equal(outcome?.trialRunId, "trial.last");
+  }
+  const none = await run("not_tested", []);
+  assert.equal(none?.verdict, "not_tested", "the fixed draft sentence with no trial session behind it: nothing was run");
+  assert.deepEqual(none?.trials, []);
+  // Neither a record nor a verdict sentence: unknown, and only then.
+  assert.equal((await run("no", [trialSession("trial.old", 10, { revision: 1, execution: "succeeded" })]))?.verdict, "unknown");
+  // An older session without the record still reads from a verdict sentence.
+  const sentence = fakeChat({ answer: "build", candidate: { kind: "draft", verdict: "unsure" }, runtimeSessions: [trialSession("trial.old", 10, { revision: 1, execution: "succeeded" })] });
+  assert.equal((await buildCreatedFlowFromChat(sentence.control, sentence.chat, scope, sentence.wait)).build.candidateOutcome?.verdict, "unsure");
 });
 
 test("a draft turn Core writes just after the result is waited for, not read as a failed build (t348)", async () => {
