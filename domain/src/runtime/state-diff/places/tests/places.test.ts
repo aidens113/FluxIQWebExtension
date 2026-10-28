@@ -219,7 +219,10 @@ test("a step pressing a toggle carries its place and state, and the counts at th
   // Only the location names the page in words; nothing else the diff carries does.
   const { location: _location, ...opaque } = controls;
   assert.doesNotMatch(JSON.stringify({ ...diff, controls: opaque }), /hold|Share|ivanhoe/u);
-  // A step that moved to another document carries no counts, and a control with no state has no place.
-  assert.equal(step(before, after, hold, true).controls, undefined);
+  // A step that moved to another address carries no counts (a reload to the same address does, t772:
+  // `./value-witness.test.ts`), and a control with no state has no place.
+  const moved = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/titles/emma", title: "Library", interactiveElements: [{ tagName: "main", selector: "main" }] });
+  moved.resetResource = webResetResource("session.one", "tab:1:frame:0")!;
+  assert.equal(step(before, moved, hold, true).controls, undefined);
   assert.equal(step(before, after, press("main")).controls, undefined);
 });
