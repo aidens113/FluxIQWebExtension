@@ -33,7 +33,6 @@ test("installed gateway project build keeps the other acts undoable after an und
   // "Apply on company site" link beside the save control, not the posting's heading (`record.ts` `nearestTitle`), so no act
   // owns its row until its undo lands; (2) the domain's press-again rule (t513, `press-effect/settled.ts`) pressed the
   // second undo twice because the list redraws only on load, saving that job again. Remove this line once both are fixed.
-  test.fail(true, "per-act settlement here needs the extension's row subject and the domain's undo re-press fixes (t772 w11)");
   test.setTimeout(420_000);
   const installed = await startInstalledBuild(extensionSession);
   const { page } = installed;
