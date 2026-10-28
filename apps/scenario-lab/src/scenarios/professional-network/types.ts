@@ -98,6 +98,8 @@ export type ProfessionalNetworkState = {
   withdrawn: string[];
   accepted: string[];
   ignored: string[];
+  /** Members whose Follow the viewer pressed, by urn. */
+  following: string[];
   sentByRun: RunInvitation[];
   messages: Array<{ thread: string; text: string }>;
   searchHits: number[];

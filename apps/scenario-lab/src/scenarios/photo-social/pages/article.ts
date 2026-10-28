@@ -23,14 +23,14 @@ export function actionsMarkup(ctx: PageContext, post: Post): string {
   const { cls } = ctx.look;
   const liked = ctx.state.liked.includes(post.code);
   const saved = ctx.state.saved.includes(post.code);
-  return `<section class="${cls.actions}"><div role="button" tabindex="0" class="${cls.iconButton}">${glyph("heart", cls.navIcon, liked ? "Unlike" : "Like")}</div><div role="button" tabindex="0" class="${cls.iconButton}">${glyph("comment", cls.navIcon, "Comment")}</div><div role="button" tabindex="0" class="${cls.iconButton}">${glyph("share", cls.navIcon, "Share Post")}</div><div role="button" tabindex="0" class="${cls.iconButton}" style="margin-left:auto">${glyph("bookmark", cls.navIcon, saved ? "Remove" : "Save")}</div></section>`;
+  return `<section class="${cls.actions}"><div role="button" tabindex="0" class="${cls.iconButton}">${glyph("heart", cls.navIcon, liked ? "Unlike" : "Like", liked)}</div><div role="button" tabindex="0" class="${cls.iconButton}">${glyph("comment", cls.navIcon, "Comment")}</div><div role="button" tabindex="0" class="${cls.iconButton}">${glyph("share", cls.navIcon, "Share Post")}</div><div role="button" tabindex="0" class="${cls.iconButton}" style="margin-left:auto">${glyph("bookmark", cls.navIcon, saved ? "Remove" : "Save", saved)}</div></section>`;
 }
 
 /** "1,249 likes", or, where the author hides the count, who liked it and "others". */
 export function likesMarkup(ctx: PageContext, post: Post): string {
   const { cls } = ctx.look;
   if (post.likes === null) return `<section class="${cls.likes}">Liked by <a href="${ROOT}kiln.theory/">kiln.theory</a> and <a href="${ROOT}p/${post.code}/liked_by/">others</a></section>`;
-  return `<section class="${cls.likes}"><a href="${ROOT}p/${post.code}/liked_by/"><span>${exactCount(post.likes)}</span> likes</a></section>`;
+  return `<section class="${cls.likes}"><a href="${ROOT}p/${post.code}/liked_by/"><span>${exactCount(post.likes + (ctx.state.liked.includes(post.code) ? 1 : 0))}</span> likes</a></section>`;
 }
 
 function followControl(ctx: PageContext, handle: string): string {
