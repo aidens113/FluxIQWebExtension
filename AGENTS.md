@@ -456,6 +456,15 @@ is proven provider-free by the audit above (a browser path reaching its oracle, 
 playback), waiting for the target first; only a lasting act whose effect is
 uncertain is held back, and a build never gives up on a recoverable failure.
 
+**A stale target is found again from the step that found it** (user,
+2026-10-28): targets change easily, so a step whose target came from an earlier
+step (a read list's row, a search result, a looked-up control) remembers that
+source step; after its second failed retry the run re-runs the source step
+internally, finds the same item again by its identity (never its old position
+or handle), and spends the remaining retries on the fresh target. An item
+truly gone is reported as gone. This holds on every path the retries do, and
+never repeats a lasting act whose earlier attempt may have landed.
+
 **Reset as rarely as possible; judge the change, not the absolute state** (user,
 2026-10-27, superseding the 2026-10-12 rule that reset before every trial): a trial
 or judged run is judged against the site's state recorded just before it (from
