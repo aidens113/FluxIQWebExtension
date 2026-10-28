@@ -208,6 +208,14 @@
 // a rerun that put the product page back without `?variant=` still pressed the
 // size chip the variant page showed (U-B3-3, `run-mux6pndp-16feb842`).
 //
+// **Each target keeps where its control sits, as its view showed it (t751 G).**
+// A step of a Flow is put to Core's gate with the same opaque spot tokens an
+// exploration press declares (`../control-spot/` `webTargetSpot`), so Core can
+// admit it by the rule it holds a press to. A resolution carries the tokens
+// (`spot`) of the view the handle resolved from -- the newest view, the one
+// `shownIn` names; a dialog view's for a step standing in that dialog; and, for
+// a handle exploration acted on, the view its saved control is taken from.
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
@@ -220,6 +228,7 @@ import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
 import { webLlmPageText } from "../page-view";
+import { webResetCollections, webTargetSpot } from "../control-spot";
 import { webPlanActEffect } from "./act-effect";
 import { createWebLlmSelfChangingNames, type WebLlmSelfChangingNames } from "./self-changing";
 import { webLlmFrameUrlPath } from "./frame-url-path";
@@ -239,6 +248,9 @@ const PRINTED_PER_FLOW = 16_384;
 const PRESSED_PER_FLOW = 4096;
 /** Handles one Flow remembers the acted-on identity of; the one acted on longest ago goes first. */
 const ACTED_PER_FLOW = 4096;
+
+/** Where a control sits, as the opaque tokens of Core's action declaration (`../control-spot/`). */
+type WebLlmTargetSpot = ReturnType<typeof webTargetSpot>;
 
 export type WebLlmTargetScope = { projectId: string; flowId: string };
 
@@ -266,6 +278,8 @@ export type WebLlmTargetResolution =
       effect?: JsonObject;
       /** The element holds no typed text, and is this (header, t486). */
       notAField?: WebLlmNotAFieldKind;
+      /** Where the control sits on the view it resolved from, as opaque tokens; absent where it sits nowhere a token names (header, t751 G). */
+      spot?: WebLlmTargetSpot;
     }
   /** `not_shown`: under `view_history`, a handle the store holds that no evidence printed (header). */
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" | "not_shown"; renumberedByReload?: true };
@@ -299,6 +313,8 @@ type PageTarget = {
   selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; words: string | undefined; shared: boolean; pressable: boolean;
   /** What the element is, where a type step has nowhere to type into it (header). */
   notAField: WebLlmNotAFieldKind | undefined;
+  /** Where its control sits on this view (header, t751 G). */
+  spot: WebLlmTargetSpot;
 };
 type PageTargets = Map<string, PageTarget>;
 /**
@@ -512,6 +528,8 @@ function actedAs(flow: FlowPages, handle: string, resolution: WebLlmTargetResolu
   if (acted.words === undefined) delete resolution.words;
   else resolution.words = acted.words;
   if (acted.effect !== undefined) resolution.effect = structuredClone(acted.effect);
+  if (Object.keys(acted.spot).length === 0) delete resolution.spot;
+  else resolution.spot = { ...acted.spot };
   return resolution;
 }
 
@@ -543,7 +561,9 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
       shared: known.shared || target.shared,
       pressable: known.pressable || target.pressable,
       // A field on any page is a field (header).
-      notAField: known.notAField === undefined || target.notAField === undefined ? undefined : known.notAField
+      notAField: known.notAField === undefined || target.notAField === undefined ? undefined : known.notAField,
+      // The newest page's, as `shownIn` is the newest view (header).
+      spot: target.spot
     });
   }
   if (seen.size > 1) return { ok: false, code: "ambiguous" };
@@ -585,6 +605,7 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   const uses = new Map<string, number>();
   const pressable = webLlmPressableTargets(binding.evidence.elements);
   const notFields = webLlmNotAFieldTargets(binding.evidence.elements);
+  const spotOf = spotsOf(binding);
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
@@ -597,7 +618,8 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
       words: spacedName(identity, webPlanElementWords(element, identity)),
       shared: false,
       pressable: pressable.has(element.target),
-      notAField: notFields.get(element.target)
+      notAField: notFields.get(element.target),
+      spot: spotOf(element.target)
     };
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
@@ -605,6 +627,24 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   }
   for (const target of targets.values()) target.shared = (uses.get(addressOf(target)) ?? 0) > 1;
   return targets;
+}
+
+/**
+ * Each handle's `webTargetSpot` on `binding`, with the complete collections its
+ * `scope` comes from found once for the capture rather than once per handle:
+ * per handle, a page of two thousand elements took minutes. Without the
+ * addresses `webTargetSpot` finds no collection and gives every other token as
+ * it would; a collection's scope then replaces the location's, as it does there.
+ */
+function spotsOf(binding: WebLlmSnapshotBinding): (handle: string) => WebLlmTargetSpot {
+  const collections = webResetCollections(binding).controls;
+  const { selectors: _addresses, ...unaddressed } = binding;
+  return (handle) => {
+    const spot = webTargetSpot(unaddressed, handle);
+    const scope = collections.get(handle);
+    if (scope !== undefined) spot.scope = scope;
+    return spot;
+  };
 }
 
 /** `words` when they spell the identity's name otherwise than it is written -- by spacing alone -- else nothing. */
@@ -722,6 +762,7 @@ function resolved(target: PageTarget): Extract<WebLlmTargetResolution, { ok: tru
   if (target.words !== undefined) resolution.words = target.words;
   if (!target.pressable) resolution.notAControl = true;
   if (target.notAField !== undefined) resolution.notAField = target.notAField;
+  if (Object.keys(target.spot).length > 0) resolution.spot = { ...target.spot };
   return resolution;
 }
 

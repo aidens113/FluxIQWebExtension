@@ -220,13 +220,17 @@ async function readFromProposal(harness: ContentHarness): Promise<{ packet: Stru
     expect(found.length, `the detection proposes one ${what} column: ${shown.join(" || ")}`).toBe(1);
     return found[0]?.key ?? "";
   };
+  // A price column: a page-written label closes with "(currency amount)"; a
+  // generated class path is shown readably as `price: '<amount>'` (field-sample.ts,
+  // which drops the note), so both spellings name it.
+  const isPrice = (entry: StructurePacket["fields"][number]): boolean => entry.label.endsWith("(currency amount)") || entry.label.startsWith("price: ");
   // The card's own lines of text, on every card, that are not the price.
-  const lines = (entry: StructurePacket["fields"][number]): boolean => entry.kind === "text" && entry.coverage === 1 && !entry.label.endsWith("(currency amount)");
+  const lines = (entry: StructurePacket["fields"][number]): boolean => entry.kind === "text" && entry.coverage === 1 && !isPrice(entry);
   // The place the instruction names, Kelford, is what the location values name.
   const namesKelford = (key: string): boolean => values(key).some((value) => /\bkelford\b/iu.test(value));
   const fields = {
     title: field("title", (entry) => lines(entry) && !namesKelford(entry.key)),
-    price: field("price", (entry) => entry.label.endsWith("(currency amount)") && entry.coverage === 1),
+    price: field("price", (entry) => isPrice(entry) && entry.coverage === 1),
     location: field("location", (entry) => lines(entry) && namesKelford(entry.key)),
     url: field("url", (entry) => entry.kind === "link")
   };

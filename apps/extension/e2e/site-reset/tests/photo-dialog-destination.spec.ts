@@ -33,7 +33,9 @@ const LIKE_ACT = "act-2";
  *    dialog is act-1, possibly lasting).
  * 2. Pressed back on the post's own page under `undoes`: admitted, lands once, the control is back.
  * 3. Pressed again under `undoes`: the control already shows the state the build found, so it is
- *    refused unrun with `candidate.undo_already_back` (`already_back`, `no_call`), nothing clicked.
+ *    refused unrun with `candidate.undo_already_back` (`already_back`, `this_page`), nothing clicked:
+ *    the act is still open on its unread list, and a look on this page, whose fresh read settles it,
+ *    meets it (Core t751 R2, `site-reset/undo-admission.ts`), as step 4's look shows.
  * 4. The Flow is tested: Core's pre-trial look at the dialog's address reads the standalone
  *    page, the named list is lost, act-2 settles restored (its toggle is back and its undo landed),
  *    and the trial runs, told that the named list could not be read again.
@@ -205,12 +207,13 @@ test("installed gateway project build settles a dialog toggle whose named list c
     expect(unlikeSettlement.open).toBe(LIKE_ACT);
     expect(String(unlikeSettlement.settle ?? "")).toContain(`Read ${destinationReference} at ${likedPage} completely again`);
     expect(String(unlikeSettlement.settle ?? "")).not.toContain("press that same control back");
-    // 3. Pressed again under undoes: refused unrun, the control already back, no call can meet it, nothing clicked.
+    // 3. Pressed again under undoes: refused unrun, the control already back, nothing clicked; the act is still open,
+    // so a look on this page meets it (t751 R2), as step 4's look settling it shows.
     const aimed = declarations.find(declaration => declaration.call === "unlike.again");
     expect(again.ok).toBe(false);
     expect(again.code).toBe("candidate.undo_already_back");
     expect(again.failed).toBe("already_back");
-    expect(again.canMeet).toBe("no_call");
+    expect(again.canMeet).toBe("this_page");
     expect(aimed?.permitted).toBe(false);
     expect(aimed?.place).toBe(like?.place);
     expect(clicksAfterAgain).toBe(clicksBeforeAgain);

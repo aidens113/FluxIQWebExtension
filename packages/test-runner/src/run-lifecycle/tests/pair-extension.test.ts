@@ -140,17 +140,23 @@ test("empty, whitespace, non-string, and over-limit references never reach appro
   }
 });
 
-test("immediate connect and polled-status transport text is replaced by a fixed gateway failure", async () => {
+test("immediate connect and polled-status transport failures carry a bounded, sanitized cause", async () => {
+  const leaky = () => Object.assign(new Error(`EBUSY: LevelDB open failed at C:\profile\Local Storage\leveldb LOCK; fetch https://user:hunter2@host.test/x token=abc123secret ${"z".repeat(500)}`), { code: "EBUSY" });
   for (const createFixture of [
-    () => ({ connect: [Promise.reject(new Error("private connect transport text"))] }),
-    () => ({ connect: [{ connectionState: "connecting", queueSize: 0 }], statuses: [Promise.reject(new Error("private status transport text"))] }),
+    () => ({ connect: [Promise.reject(leaky())] }),
+    () => ({ connect: [{ connectionState: "connecting", queueSize: 0 }], statuses: [Promise.reject(leaky())] }),
   ]) {
     const h = harness(createFixture());
     await assert.rejects(h.operation, (error: unknown) => {
       assert.ok(error instanceof RunnerFailure);
       assert.equal(error.category, "gateway.connection");
-      assert.equal(error.message, "Extension pairing status transport failed during pre-approval");
-      assert.equal(JSON.stringify(error).includes("private"), false);
+      assert.match(error.message, /^Extension pairing status transport failed during pre-approval: Error EBUSY EBUSY: LevelDB open failed/u);
+      const cause = (error.details as { cause: { name: string; code: string; message: string } }).cause;
+      assert.equal(cause.name, "Error");
+      assert.equal(cause.code, "EBUSY");
+      assert.ok(cause.message.length <= 160);
+      const text = JSON.stringify(error.details) + error.message;
+      for (const secret of ["hunter2", "abc123secret", "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"]) assert.equal(text.includes(secret), false, secret);
       return true;
     });
     assert.equal(h.timers.size, 0);
@@ -271,13 +277,13 @@ test("a hanging post-approval status is bounded, cleaned, and observed when it r
   await new Promise(resolve => setImmediate(resolve));
 });
 
-test("an immediate post-approval status rejection is fixed and secret-safe", async () => {
+test("an immediate post-approval status rejection names its bounded cause", async () => {
   const h = harness({ statuses: [Promise.reject(new Error("private post-status transport text"))] });
   await assert.rejects(h.operation, (error: unknown) => {
     assert.ok(error instanceof RunnerFailure);
     assert.equal(error.category, "gateway.connection");
-    assert.equal(error.message, "Extension pairing status transport failed during post-approval");
-    assert.equal(JSON.stringify(error).includes("private"), false);
+    assert.equal(error.message, "Extension pairing status transport failed during post-approval: Error private post-status transport text");
+    assert.deepEqual((error.details as { cause: unknown }).cause, { name: "Error", code: null, message: "private post-status transport text" });
     return true;
   });
   assert.equal(h.timers.size, 0);
