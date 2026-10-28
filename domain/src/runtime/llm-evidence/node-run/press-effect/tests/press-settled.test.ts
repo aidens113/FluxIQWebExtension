@@ -113,11 +113,17 @@ test("a look that comes back unreadable during the wait ends it: the page went s
   assert.equal(h.log.includes("press"), false);
 });
 
-// A press whose call declared a lasting consequence (t513, the supervisor's
-// reading of the user's rule of 2026-10-07): the effect of a press is not
-// uncertain when the wait showed nothing changed at all and the control is
-// still there, shown and enabled, in a form or dialog still open -- it did not
-// happen, so it is made once more. Anything short of that keeps it held back.
+// A press whose call declared a lasting consequence is never made again here
+// (t778, replacing t513). The look after a press sees only what the page draws;
+// a site may commit the act and draw it only on its next load, as the job
+// board's My jobs keeps an unsaved row until it loads again. t513 read "nothing
+// changed and the control is still there" as "it did not happen" and pressed an
+// undo a second time, which saved the job again (rerun round 6 slot 2). The
+// press made again after a fresh read that saw no request is the extension's
+// and Core's (`certainNoEffect`, t517); here the press is waited on, read, and
+// said to be uncertain. A control whose own state a press flips -- pressed,
+// checked, open -- is held the same way whatever its call declared: a second
+// press of one that landed unseen turns it back.
 
 /** The harness, with the press marked as one whose call declared a lasting consequence. */
 function lastingHarness(looks: Array<WebLlmSnapshotBinding | undefined>) {
@@ -125,48 +131,70 @@ function lastingHarness(looks: Array<WebLlmSnapshotBinding | undefined>) {
   return { ...h, steps: { ...h.steps, lasting: true } };
 }
 
-test("a lasting press that certainly changed nothing is pressed once more, and says so", async () => {
-  const h = lastingHarness([...Array.from({ length: 6 }, () => bound(OPEN)), bound(CLOSED)]);
+/** A saved-jobs list whose rows keep their Unsave until the page loads again. */
+const SAVED: FixtureElement[] = [
+  { tag: "h1", target: "t10", text: "My jobs" },
+  { tag: "ul", target: "t11" },
+  { tag: "li", target: "t12", text: "Rust Engineer", parent: "t11" },
+  { tag: "span", target: "t13", role: "button", name: "Unsave job", parent: "t12" },
+  { tag: "li", target: "t14", text: "Product Designer", parent: "t11" },
+  { tag: "span", target: "t15", role: "button", name: "Unsave job", parent: "t14" }
+];
+
+test("an undo that landed while the list still draws its row is read again, never pressed a second time", async () => {
+  const h = lastingHarness(Array.from({ length: 40 }, () => bound(SAVED)));
+  const settled = await webPressSettled(CLICK, bound(SAVED), bound(SAVED), "t13", h.steps);
+  assert.equal(h.log.includes("press"), false);
+  assert.ok(h.log.filter((entry) => entry === "look").length >= 2, "the page is read again through the wait");
+  assert.equal(settled.presses, 1);
+  assert.equal(settled.noEffect, undefined);
+  assert.equal(settled.pressedAgain, undefined);
+  assert.match(String(settled.uncertain), /"Unsave job" \(t13\)/u);
+  assert.match(String(settled.uncertain), /not pressed a second time/u);
+  assert.match(String(settled.uncertain), /load/u);
+});
+
+test("a lasting press in an open dialog that changed nothing is not pressed again here either: a fresh read decides", async () => {
+  const h = lastingHarness(Array.from({ length: 40 }, () => bound(OPEN)));
   const settled = await webPressSettled(CLICK, bound(OPEN), bound(OPEN), "t3", h.steps);
-  assert.equal(h.log.filter((entry) => entry === "press").length, 1);
-  assert.equal(settled.presses, 2);
-  assert.match(String(settled.pressedAgain), /^Pressed again: the first press of "Save" \(t3\) changed nothing/u);
+  assert.equal(h.log.includes("press"), false);
+  assert.equal(settled.presses, 1);
+  assert.equal(settled.noEffect, undefined);
+  assert.match(String(settled.uncertain), /"Save" \(t3\)/u);
+});
+
+test("a lasting press whose effect shows during the wait is a plain press, with nothing uncertain said", async () => {
+  const h = lastingHarness([bound(SAVED), bound(CLOSED)]);
+  const settled = await webPressSettled(CLICK, bound(SAVED), bound(SAVED), "t13", h.steps);
+  assert.equal(h.log.includes("press"), false);
+  assert.equal(settled.uncertain, undefined);
   assert.deepEqual(settled.after?.evidence.elements.map((element) => element.target), ["t4"]);
 });
 
-test("a lasting press whose control is disabled, hidden or gone is never pressed again", async () => {
-  const disabled: FixtureElement[] = [OPEN[0]!, OPEN[1]!, { ...OPEN[2]!, attributes: [["disabled", ""]] }];
-  const ariaDisabled: FixtureElement[] = [OPEN[0]!, OPEN[1]!, { ...OPEN[2]!, attributes: [["aria-disabled", "true"]] }];
-  const hidden: FixtureElement[] = [OPEN[0]!, OPEN[1]!, { ...OPEN[2]!, hidden: true }];
-  const gone: FixtureElement[] = [OPEN[0]!, OPEN[1]!];
-  for (const page of [disabled, ariaDisabled, hidden, gone]) {
-    const h = lastingHarness(Array.from({ length: 40 }, () => bound(page)));
-    const settled = await webPressSettled(CLICK, bound(page), bound(page), "t3", h.steps);
-    assert.equal(h.log.includes("press"), false, JSON.stringify(page));
-    assert.equal(settled.presses, 1);
-    assert.equal(settled.pressedAgain, undefined);
+test("a toggle whose state did not move is read, never flipped back by a second press, whatever its call declared", async () => {
+  const pressed = (state: string): FixtureElement[] => [OPEN[0]!, { tag: "button", target: "t5", text: "Bold", parent: "t1", attributes: [["aria-pressed", state]] }];
+  const checkbox: FixtureElement[] = [OPEN[0]!, { tag: "input", target: "t5", inputType: "checkbox", name: "Remote only", checked: false, parent: "t1" }];
+  const disclosure: FixtureElement[] = [OPEN[0]!, { tag: "button", target: "t5", text: "More filters", expanded: false, parent: "t1" }];
+  for (const page of [pressed("false"), pressed("true"), checkbox, disclosure]) {
+    for (const lasting of [false, true]) {
+      const h = harness(Array.from({ length: 40 }, () => bound(page)));
+      const settled = await webPressSettled(CLICK, bound(page), bound(page), "t5", { ...h.steps, lasting });
+      assert.equal(h.log.includes("press"), false, JSON.stringify(page[1]));
+      assert.ok(h.log.includes("look"));
+      assert.equal(settled.presses, 1);
+      assert.equal(settled.noEffect, undefined);
+      assert.match(String(settled.uncertain), /\(t5\)/u);
+    }
   }
 });
 
-test("a lasting press whose dialog is hidden, or whose handle is unknown, is never pressed again", async () => {
-  const closedDialog: FixtureElement[] = [{ ...OPEN[0]!, hidden: true }, OPEN[1]!, OPEN[2]!];
-  const h = lastingHarness(Array.from({ length: 40 }, () => bound(closedDialog)));
-  await webPressSettled(CLICK, bound(closedDialog), bound(closedDialog), "t3", h.steps);
-  assert.equal(h.log.includes("press"), false);
-  const unnamed = lastingHarness(Array.from({ length: 40 }, () => bound(OPEN)));
-  await webPressSettled(CLICK, bound(OPEN), bound(OPEN), undefined, unnamed.steps);
-  assert.equal(unnamed.log.includes("press"), false);
-});
-
-test("a lasting press that changed anything, or whose page could not be read, is never pressed again", async () => {
-  const moved = lastingHarness([bound(CLOSED)]);
-  const changed = await webPressSettled(CLICK, bound(OPEN), bound(OPEN), "t3", moved.steps);
-  assert.equal(moved.log.includes("press"), false);
-  assert.equal(changed.noEffect, undefined);
-  const lost = lastingHarness([undefined]);
-  await webPressSettled(CLICK, bound(OPEN), bound(OPEN), "t3", lost.steps);
-  assert.equal(lost.log.includes("press"), false);
-  const truncated = lastingHarness(Array.from({ length: 40 }, () => bound(OPEN, { truncated: true })));
-  await webPressSettled(CLICK, bound(OPEN, { truncated: true }), bound(OPEN, { truncated: true }), "t3", truncated.steps);
-  assert.equal(truncated.log.includes("press"), false);
+test("a press the page truly ignored -- no state of its own, nothing lasting -- is still made once more after the wait", async () => {
+  const more: FixtureElement[] = [{ tag: "ul", target: "t20" }, { tag: "li", target: "t21", text: "First comment", parent: "t20" }, { tag: "div", target: "t22", role: "button", name: "Load more comments", parent: "t20" }];
+  const loaded: FixtureElement[] = [...more, { tag: "li", target: "t23", text: "Second comment", parent: "t20" }];
+  const h = harness([...Array.from({ length: 6 }, () => bound(more)), bound(loaded)]);
+  const settled = await webPressSettled(CLICK, bound(more), bound(more), "t22", h.steps);
+  assert.equal(h.log.filter((entry) => entry === "press").length, 1);
+  assert.equal(settled.presses, 2);
+  assert.equal(settled.uncertain, undefined);
+  assert.match(String(settled.pressedAgain), /"Load more comments" \(t22\) changed nothing/u);
 });

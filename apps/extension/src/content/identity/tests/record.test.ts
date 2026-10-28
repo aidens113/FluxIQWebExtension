@@ -518,14 +518,18 @@ test("a heading is about its own words, and a basket line's actions about the li
   assert.equal(recordSubject(wraps.remove), WRAPS);
 });
 
-test("a saved list's only Move to cart is about its own item, and a detail page's lone add about the part around it", () => {
+// The buy box holds the seller's link and Add to basket and nothing else, so it is a bar of
+// controls and the link one of them: the add is about the item the page's heading names, the
+// same words as the basket line it makes (`../control-bar.ts`, t778). Until t778 it was about
+// "Sold by Fernhill Goods".
+test("a saved list's only Move to cart is about its own item, and a detail page's lone add about the item its page names", () => {
   const move = el("span", { attributes: { tabindex: "0" }, children: ["Move to cart"] });
   const savedItem = el("div", { attributes: { class: "saved" }, children: [el("a", { attributes: { href: "/p/9" }, children: [WRAPS] }), move] });
   basket([basketLine(KETTLE)], [savedItem]);
   assert.equal(recordSubject(move), WRAPS);
   const add = el("button", { children: ["Add to basket"] });
   el("main", { children: [el("h1", { children: [KETTLE] }), el("div", { attributes: { class: "buy" }, children: [el("a", { attributes: { href: "/seller" }, children: ["Sold by Fernhill Goods"] }), add] })] });
-  assert.equal(recordSubject(add), "Sold by Fernhill Goods");
+  assert.equal(recordSubject(add), KETTLE);
 });
 
 test("a line with no title of its own is about nothing, never about its neighbour", () => {

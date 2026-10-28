@@ -1,11 +1,11 @@
 # Hosted Production Plan
 
 Status: Active
-Status detail: Revised 2026-10-18 with the user's decisions (Chrome release with sign-in to getfluxiq.com, provisioned accounts, bring-your-own-key); plan only, no code changed; D0 can start now.
+Status detail: Revised 2026-10-28 around the user's 2026-10-18 directions (FluxIQWebsite is the public site, a local website stand-in first, IAM-style permissions, a re-cut schedule); plan only, no code changed; D0 can start now.
 Created: 2026-10-17
-Last updated: 2026-10-18
+Last updated: 2026-10-28
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
-Scope: Extension, domain and product side of three deployments (getfluxiq.com, local, self-hosted): server profiles and sign-in in the extension, transport and data minimisation, consent-bound execution, manifests and the Chrome Web Store, domain changes, the getfluxiq.com product site and sign-up backend, hosted infrastructure, user docs, privacy, cookies and legal prerequisites, Lab and e2e coverage. Core contracts live in the paired document.
+Scope: Extension, domain and product side of three deployments (getfluxiq.com, local, self-hosted): server profiles and sign-in in the extension, transport and data minimisation, consent-bound execution, manifests and the Chrome Web Store, domain changes, the FluxIQWebsite additions and their local stand-in, the product host module, hosted infrastructure, user docs, privacy, cookies and legal prerequisites, Lab and e2e coverage. Core contracts live in the paired document.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/hosted-production-plan.md
 Related: [extension client](../architecture/extension-client.md), [release packaging](../architecture/release-packaging.md), [testing facility](../architecture/testing-facility.md), [sensitive values](../architecture/sensitive-values.md), [privacy policy](../user/privacy-policy.md), [MVP final month](./mvp-final-month-plan.md), [working index](./README.md)
 
@@ -13,481 +13,593 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**Next revision owed: the user's later directions (2026-10-18), not yet folded into the sections below.** Whoever
-next works on this plan revises it around these first; each is the user's own instruction.
+**What is true now.** This is a plan; no hosted code exists in either repository (checked
+2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
+a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
+`C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
 
-1. **The website repository exists:** https://github.com/aidens113/FluxIQWebsite is the current public site
-   (getfluxiq.com). Refine this plan around it: read that repository, then say what must be added there (the
-   sign-up and sign-in pages, the backend call that provisions a user into Core through `platform.provisioning`,
-   how it deploys beside or in front of the Core panel) versus what lives in Core. The plan's "new `apps/site`
-   package" idea must be reconciled with that existing repository; prefer the user's repository as the public
-   site unless reading it shows a reason not to, and say which.
-2. **Simulate locally first:** for now the website side is built and exercised in a local test repository that
-   stands in for FluxIQWebsite (sign-up page, backend provisioning call, a Core panel it talks to, the extension
-   signing in), not in the real repository. Write that plan down and keep it for when the real side is
-   implemented.
-3. **Tenancy is an enterprise feature, and permissions are modelled on AWS IAM.** Workspace separation is
-   sold as an enterprise-type feature while Core stays freemium: a company has its own workers (users), and each
-   worker only reaches the data its permissions allow. Design permissions like AWS IAM: principals (users,
-   roles, service identities), resources with stable names, actions per resource type, policies that allow or
-   deny actions on resource patterns with conditions, explicit deny winning, least privilege by default, groups
-   and roles to attach policies to, and an audit of every decision. The single-user local and self-hosted modes
-   keep working with a default policy that grants the one owner everything. Revise identity, tenancy and the
-   own-data rule onto this model; the `user` role becomes one predefined policy.
-4. **The timeline is too long.** The user is confident the work finishes faster than this plan's estimate
-   (about 80 agent-days, hosted gate about 11-28, Chrome submission about 12-01). Re-cut the schedule with parallel
-   lanes and say what genuinely forces each date; do not pad.
+**The user's directions of 2026-10-18 are folded in** (each is the user's own instruction):
+1. **FluxIQWebsite is the public site.** It is a Next.js 16 static export, live on Hostinger at
+   getfluxiq.com, with four pages and no server, accounts or forms. It gains a sign-up page, a
+   sign-in link and a small sign-up backend; Core keeps sign-in, connect and the panel on
+   `app.getfluxiq.com`. The "new `apps/site` package" is dropped: nothing in the website's code
+   argues against it being the public site. What remains of `apps/site` is a small product host
+   module, `apps/product` (manifest, default project, email copy). See The Public Website.
+2. **A local stand-in comes first.** `packages/website-stand-in/` in this repository plays
+   FluxIQWebsite: sign-up page, backend provisioning call, Core under the `service` profile, and
+   the extension signing in. Its backend is written to port verbatim into FluxIQWebsite later
+   (phase W4, on the user's go). See Local Website Stand-In.
+3. **Permissions follow AWS IAM,** owned by Core's plan ("Permissions (IAM Model)"). Here it
+   means: accounts are created with the predefined policy `FluxIQUserAccess`; the extension's
+   credential acts under the session policy `FluxIQBrowserSession`; the Lab proves isolation and
+   escalation refusals; tenancy for a company's workers is an enterprise feature.
+4. **The schedule is re-cut into parallel lanes,** with the constraint behind each date named.
+   Store submission moves from about 12-01 to about 11-13.
 
-**What is true now.** This is a plan, revised 2026-10-18 after the user's answers. No code has changed. The baseline comes from a read-only audit of both repositories on 2026-10-17, and its load-bearing claims were re-checked in the code.
-
-Core's hosted production plan (`docs/working/hosted-production-plan.md` in the Core checkout; see `Paired document`) owns the architecture and every domain-neutral contract:
-- the three profiles and workspace-per-root tenancy;
-- the provisioning API (`platform.provisioning`) and the per-user authorization model;
-- discovery and the connect protocol;
-- the connected-browser credential and client gateway 0.2 (including `runContext`);
-- the panel extension points;
-- the billing ports.
-
+Core's plan owns the architecture and every domain-neutral contract (profiles and tenancy, the
+provisioning API and its private listener, IAM, discovery and connect, the browser credential and
+gateway 0.2 with `runContext`, the panel extension points, the billing and entitlement ports).
 This document links to them and does not restate them.
 
-**User decisions** (2026-10-17 and 2026-10-18):
-- **Self-hosting stays first-class (binding).** The extension connects to getfluxiq.com, to a local panel, or to a self-hosted panel, and keeps its sign-in per browser.
-- **Hosted ships with the Chrome Web Store release.** Users sign in to the web panel and see their Flows as soon as the MVP works well enough.
-- **getfluxiq.com runs on Core as its control panel.** Users sign up on the website, and its backend provisions them into Core with access to their own account's data only.
-- **Each user brings their own provider key.** It is stored securely and never visible to other users or to the operator in logs. There is no platform key, and billing stays a port. Responsibility sits in the user agreement.
-- **No company exists yet.** Note only what needs one.
-- **FluxIQ declines optional cookies by default.** This is being implemented separately.
+**User decisions** (2026-10-17, 10-18, 10-27):
+- **Self-hosting stays first-class (binding).** The extension connects to getfluxiq.com, a local
+  panel or a self-hosted panel, and keeps its sign-in per server.
+- **Hosted ships with the Chrome Web Store release.**
+- **getfluxiq.com runs on Core as its control panel;** the website's backend provisions users.
+- **Each user brings their own provider key;** no platform key; billing stays a port.
+- **No company exists yet;** note only what needs one. **Optional cookies are declined by
+  default** (separate work). **No feature freeze** (user, 2026-10-27).
 
 **Recommended downstream design.**
-- **Server profiles in the extension.**
-  - A list of servers in `chrome.storage.local`. Each keeps its own origin, gateway URL from discovery, credential, client ID, user and workspace names, and offline queue.
-  - The store build presets "FluxIQ" (`https://getfluxiq.com`) and "This computer" (`http://127.0.0.1:3000`). "Add a server" takes a URL.
-  - One server is active at a time.
-- **Sign-in through the website.**
-  - The extension opens getfluxiq.com's `/connect/authorize` in a normal tab. The user signs in, or follows the link to sign up, then approves. The extension reads the code from the server's own `/connect/done` page and exchanges it.
-  - Fallback: a typed code.
-  - Existing loopback pairings migrate.
-  - No new manifest permission.
-- **Transport.**
-  - Jittered backoff, plus `going_away` and `revoked` handling.
-  - A 20-second open timeout for remote servers.
-  - Remote servers receive only FluxIQ-relevant tabs, and only when they change.
-- **Consent-bound execution.** The extension executes actions only for its own signed-in user (it checks `runContext`). A run started outside this browser runs only after the user allows it.
-- **Domain.**
-  - Session selection filters by the run's user.
-  - The host module is made safe to apply per workspace instance.
-- **Product site.** A new package, `apps/site` (`@fluxiq-web-extension/site`), is a Core layer-3 plugin. It provides:
-  - getfluxiq.com's public pages (landing, terms, privacy);
-  - the sign-up page and its backend, which calls Core's `platform.provisioning.createAccount` in-process;
-  - the product manifest and branding;
-  - a default project seeded for each new workspace.
-- **Infrastructure.** `deploy/` in this repository (no secrets): one VM running Compose (Caddy, the product image, restic), staging and production on getfluxiq.com, a GitHub Actions deploy with a manual gate, monitoring and a runbook.
-- **Docs and the store.**
-  - The privacy policy and the Chrome Web Store listing are written for getfluxiq.com from the first submission.
-  - The cookie section states the decline-by-default rule.
-  - Store reviewers get a test account.
-- **Lab.**
-  - A `service-local` target: Core under the `service` profile with the site plugin.
-  - Accounts are created through the real sign-up route, with a file mail sink.
-  - Playwright drives the sign-in tab.
-  - A two-tenant isolation scenario.
-  - ui:e2e sign-in journeys.
-  - A provider-free staging smoke.
-  - One supervised live run per release candidate.
-  - The ten realistic scenarios only.
+- **Hostnames:** `getfluxiq.com` is FluxIQWebsite; `app.getfluxiq.com` is Core (panel, API,
+  `/connect`, discovery, `/client`). Both run on one VM under Compose behind Caddy.
+- **Extension:** a list of servers; the store build presets "FluxIQ"
+  (`https://app.getfluxiq.com`) and "This computer". Sign-in by Flow A in a normal tab; "Create
+  an account" goes to `https://getfluxiq.com/signup/` and returns to consent through Core's
+  welcome link. No new manifest permission.
+- **Transport:** jittered backoff, `going_away` and `revoked`, a 20-second remote open timeout,
+  only FluxIQ-relevant tabs sent to remote servers.
+- **Consent-bound execution:** the extension executes only for its own signed-in user.
+- **Domain:** session selection by the run's actor; per-workspace host safety.
+- **Website:** `/signup/`, `/check-email/`, `/signin/` (forwards to Core), and `POST
+  /api/signup`, which calls Core's private provisioning listener. The website never sees a
+  password. Rewritten privacy notice and terms.
+- **Infrastructure:** `deploy/` here: Caddy, the website image, the product image, restic.
+- **Lab:** `service-local` runs Core under `service` plus the stand-in; accounts come through the
+  stand-in's real sign-up path; a two-tenant isolation scenario and an escalation check.
 
-**Schedule.** Today is 2026-10-18; the deadline is 2026-11-10, with no feature freeze (user, 2026-10-27). This matches Core's release cut.
-- **Until 11-10:**
-  - D0, the sign-in spike;
-  - the site and deploy skeletons, then H1 itself, in the H1 worktree;
-  - drafts of the terms, privacy policy and listing;
-  - the VM and the getfluxiq.com DNS, which need the user's accounts (U9);
-  - nothing that touches the extension's connection or panel files on `dev`, because the MVP live lanes own them.
-  The MVP ships as planned.
-- **After 11-10:** H1 merges, the gate runs around 11-28, and the Chrome Web Store submission goes in around 12-01 with sign-in.
-- **Plainly:** a store release with working hosted sign-in does not fit by 11-10.
+**Schedule** (today 10-28; MVP deadline 11-10; details in Phases).
+- 10-28 to 10-30: D0 (Core S1) and the contract freeze.
+- 10-30 to 11-08: D2 to D8, W1 and W2 in parallel. D2, D3 and D4 merge on 11-10, when the MVP live
+  lanes release the extension's connection files; everything else merges when green.
+- 11-11 to 11-12: the hosted gate on staging. About 11-13: Chrome Web Store submission.
+- Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. The supervisor dispatches D0 with Core's H0, and opens the paired H1 task (one ID, nested worktrees).
-2. The user answers Core's N1 to N4, and U1, U8 and U9 here.
+1. The supervisor dispatches D0 with Core's H0, and opens the paired H1 task (one ID, nested
+   worktrees).
+2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
-**Blocked.** Nothing blocks D0 or building H1. H1 merges wait for the MVP release-candidate tag.
+**Blocked.** Nothing blocks D0, W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
 
 **Not verified.**
-- Tab-URL observation of the completion page in Edge and the Firefox popup (D0).
+- Tab-URL observation of `/connect/done` in Edge and the Firefox popup (D0).
 - Service-worker wake on `tabs.onUpdated` during sign-in.
-- Firefox `data_collection_permissions` category names.
-- What Chrome Web Store reviewers expect for server-driven automation.
-- The store extension IDs, which are assigned at first publication.
-- Whether the EU trader declaration applies before the service charges money.
+- Whether the Lab's loopback checks accept two loopback hostnames (`localhost` and `127.0.0.1`).
+- When the Chrome Web Store assigns the item ID (believed: at first draft upload).
+- Firefox `data_collection_permissions` category names; reviewer expectations for server-driven
+  automation; whether the EU trader declaration applies before the service charges money.
+- Whether Turnstile sets a cookie on the sign-up page.
+- Where getfluxiq.com's mail (MX) is hosted today; moving the apex A records must not touch it.
 
 ## Ownership Split
 
 | Area | Owner |
 | --- | --- |
-| Profiles, tenancy, provisioning API, authorization, identity, discovery, connect protocol, browser credential, gateway 0.2, Origin and limits, panel extension points, billing ports, generic image, self-hosting guide | Core plan (`Paired document`) |
+| Profiles, tenancy, provisioning API and listener, IAM, identity, welcome link, discovery, connect protocol, browser credential, gateway 0.2, Origin and limits, panel extension points, billing and entitlement ports, generic image, self-hosting guide | Core plan (`Paired document`) |
 | Extension server profiles, sign-in client, reconnect, data minimisation, consent-bound execution, manifests, store listing and review | This document |
 | Domain session selection, per-workspace host safety | This document |
-| Product site (`apps/site`): public pages, sign-up backend, product manifest, default project | This document; it uses Core's layers and provisioning |
+| Product host module (`apps/product`): manifest, assets, default project, email copy | This document; it uses Core's platform hooks |
+| Website additions (sign-up, sign-in link, sign-up backend, legal pages) and the local stand-in | This document plans them; FluxIQWebsite owns the real code once W4 is approved |
 | getfluxiq.com infrastructure, deploy pipeline, runbook | This document (`deploy/`) |
-| User docs, privacy policy, cookie notice, terms, legal prerequisites | This document |
+| User docs, privacy notice, cookie notice, terms, legal prerequisites | This document drafts them; the published copies live in FluxIQWebsite |
 | Lab, ui:e2e, extension Playwright, staging smoke, load test | This document; Core Playwright stays in the Core plan |
 
-A change that crosses the boundary gets a full ledger entry in the owning document and a one-line entry in the other.
+A change that crosses the boundary gets a full ledger entry in the owning document and a
+one-line entry in the other.
 
 ## Extension Baseline
 
 Paths are relative to this repository. Everything was read on 2026-10-17.
 
-- **Addresses.**
-  - Hard-coded in `apps/extension/src/shared/constants.ts`: `DEFAULT_GATEWAY_URL = "ws://127.0.0.1:4777/client"` and `DEFAULT_CORE_API_URL = "http://127.0.0.1:3000"`.
-  - Settings has two independent fields (`panel/settings/form-fields.ts`, `save-plan.ts`) that accept `ws`/`wss` and `http`/`https`, with no loopback restriction. There is no discovery.
-- **Pairing.**
-  - `client.hello`, then `server.pairing_required`. The code is shown in `panel/getting-started/start-view.ts`, an operator approves it in the panel, and `server.session_ready` delivers the token.
-  - The token is stored in plain text in `chrome.storage.local` under `fluxiq.session`.
-  - "Forget this pairing" calls `clearSession()`.
-- **Socket.**
-  - The Core client (`packages/client-gateway-websocket/src/transport.ts`) opens with a 10-second timeout, commented "the gateway is local or near".
-  - `GatewaySession` (`background/connection/gateway-session.ts`) wraps it. Backoff is `min(30 s, 1 s × 2^n)` without jitter (`background/connection.ts`), with a 30-second alarm watchdog (`background/reconnect-watchdog.ts`).
-  - Every 20 seconds the heartbeat sends a full `client.state_update` with every tab's URL and title (`ActivePage.sendBrowserState()`).
-  - The token travels only in the hello.
-- **HTTP.** `background/connection/core-api.ts` sends `Authorization: Bearer <token>` with `credentials: "omit"`. Screenshots go by PUT (`connection/state-assets.ts`).
-- **Storage.**
-  - `chrome.storage.local`: `fluxiq.settings`, `fluxiq.session`, `fluxiq.clientId`, `fluxiq.queuedEvents` (up to 1,000 events, which can carry page data), `fluxiq.problemLog`, `fluxiq.ui.connectionDraft`.
-  - `chrome.storage.session`: Disconnect, in-flight records, the lease.
-- **Manifests.**
-  - `manifest.chrome.json` (Chrome and Edge), `manifest.firefox.json` and `manifest.e2e.json`, copied verbatim by `scripts/build-extension.mjs`.
-  - Permissions: alarms, activeTab, downloads, scripting, storage, tabs, webNavigation, plus sidePanel on Chrome. `<all_urls>` hosts, loopback only in e2e.
-  - No `identity`, `externally_connectable` or `key`.
-  - The Firefox `gecko.id` is a placeholder.
-  - The description says "Connects only to the FluxIQ runtime you run and pair".
-  - `scripts/release/permission-review.mjs` gates every permission.
-- **Domain.**
-  - `selectWebAutomationSession` (`domain/src/runtime/adapter.ts:165`) and `targetSessionId` (`domain/src/io/gateway-output-dispatcher.ts:129-139`) take the requested session or the only extension session, and refuse when there are several.
-  - There is no user scoping.
-- **Docs that assume local only.**
-  - `docs/user/privacy-policy.md`: "The extension's developers operate no server that it reports to. They receive none of your data."
-  - `docs/user/store-listing.md`: "Requires the FluxIQ runtime".
-  - `docs/user/install.md` and `quickstart.md` point at `127.0.0.1:3000`.
-  - `docs/architecture/extension-client.md` has a stale wire shape.
-  - `docs/architecture/sensitive-values.md` contradicts the code twice: on extraction sessions, and on where the connection draft is kept.
-- **Lab.**
-  - Ports are on loopback (`packages/test-runner/src/allocation.ts`), with the gateway host hard-coded in `environment.ts`.
-  - `bootstrapIdentity` writes credentials into `.fluxiq`.
-  - Pairing goes through `fluxiq.connect` and `approve-pairing` (`run-scenario/pair-run-extension.ts`, `run-lifecycle/pair-extension.ts`).
-  - `auth-session.ts` requires the cookie name `fluxiq_session=`.
-  - Demo and ui:e2e refuse non-loopback hosts.
+- **Addresses.** Hard-coded in `apps/extension/src/shared/constants.ts`: `DEFAULT_GATEWAY_URL =
+  "ws://127.0.0.1:4777/client"`, `DEFAULT_CORE_API_URL = "http://127.0.0.1:3000"`. Settings has
+  two independent fields (`panel/settings/form-fields.ts`, `save-plan.ts`) accepting `ws`/`wss`
+  and `http`/`https`, with no loopback restriction. No discovery.
+- **Pairing.** `client.hello`, then `server.pairing_required`; the code is shown in
+  `panel/getting-started/start-view.ts`, an operator approves it, `server.session_ready` delivers
+  the token, stored in plain text in `chrome.storage.local` under `fluxiq.session`. "Forget this
+  pairing" calls `clearSession()`.
+- **Socket.** The Core client (`packages/client-gateway-websocket/src/transport.ts`) opens with a
+  10-second timeout. `GatewaySession` (`background/connection/gateway-session.ts`) wraps it.
+  Backoff `min(30 s, 1 s × 2^n)` without jitter (`background/connection.ts`), a 30-second alarm
+  watchdog (`background/reconnect-watchdog.ts`). Every 20 seconds the heartbeat sends a full
+  `client.state_update` with every tab's URL and title (`ActivePage.sendBrowserState()`). The
+  token travels only in the hello.
+- **HTTP.** `background/connection/core-api.ts` sends `Authorization: Bearer <token>` with
+  `credentials: "omit"`. Screenshots go by PUT (`connection/state-assets.ts`).
+- **Storage.** `chrome.storage.local`: `fluxiq.settings`, `fluxiq.session`, `fluxiq.clientId`,
+  `fluxiq.queuedEvents` (up to 1,000 events, which can carry page data), `fluxiq.problemLog`,
+  `fluxiq.ui.connectionDraft`. `chrome.storage.session`: Disconnect, in-flight records, the lease.
+- **Manifests.** `manifest.chrome.json`, `manifest.firefox.json`, `manifest.e2e.json`, copied by
+  `scripts/build-extension.mjs`. Permissions: alarms, activeTab, downloads, scripting, storage,
+  tabs, webNavigation, plus sidePanel on Chrome; `<all_urls>` hosts. No `identity`,
+  `externally_connectable` or `key`. The Firefox `gecko.id` is a placeholder. The description
+  says "Connects only to the FluxIQ runtime you run and pair". `scripts/release/permission-review.mjs`
+  gates every permission.
+- **Domain.** `selectWebAutomationSession` (`domain/src/runtime/adapter.ts:165`) and
+  `targetSessionId` (`domain/src/io/gateway-output-dispatcher.ts:129-139`) take the requested
+  session or the only extension session, and refuse when there are several. No user scoping.
+- **Docs that assume local only.** `docs/user/privacy-policy.md` ("operate no server"),
+  `store-listing.md` ("Requires the FluxIQ runtime"), `install.md` and `quickstart.md`
+  (`127.0.0.1:3000`), `docs/architecture/extension-client.md` (stale wire shape),
+  `sensitive-values.md` (two contradictions with the code).
+- **Lab.** Loopback ports (`packages/test-runner/src/allocation.ts`), gateway host hard-coded in
+  `environment.ts`; `bootstrapIdentity` writes credentials into `.fluxiq`; pairing through
+  `fluxiq.connect` and `approve-pairing`; `auth-session.ts` requires `fluxiq_session=`; demo and
+  ui:e2e refuse non-loopback hosts.
+
+## Website Baseline (FluxIQWebsite)
+
+Read 2026-10-28 from the `dev` tip `08e51d49`; `main` is at the same commit, and the generated
+`deploy` branch holds its build (`528baa64`, 2026-10-10).
+
+- **Stack.** Next.js 16.3.8, React 19.2, App Router, React Compiler, Tailwind CSS 4, Biome 2,
+  pnpm 10, Node 22. `next.config.mjs` sets `output: "export"`: the build is static files in
+  `out/`; route handlers and server features are unavailable by design.
+- **Pages.** `/`, `/extension/`, `/privacy/`, `/terms/`. Copy lives in `src/content/` (one typed
+  file per section, each naming the FluxIQ source it was checked against); sections in
+  `src/components/<section>/`; links only from `src/content/links.ts`, enforced by
+  `scripts/site-check.mjs`.
+- **Hosting.** `.github/workflows/deploy.yml` builds `main` and commits `out/` to the `deploy`
+  branch, which Hostinger's website Git feature serves. getfluxiq.com resolves to Hostinger
+  addresses (145.223.124.228, 88.223.87.187) and returns the repository's headers.
+- **Server option already present.** A dependency-free Node server
+  (`scripts/static-hosting/serve.mjs`, entry `start.mjs`) serves `out/` with the same header
+  policy, and a two-stage `Dockerfile` (non-root, health check, clean SIGTERM) runs it.
+- **One header policy.** `scripts/static-hosting/policy.mjs` generates `.htaccess`, `_headers`,
+  `vercel.json` and the Node server's headers. CSP: `form-action 'self'`, `connect-src 'self'`
+  plus Google Analytics hosts, `frame-ancestors 'none'`.
+- **Analytics.** Google Analytics 4 loads on every visit and sets `_ga` cookies (the owner's
+  decision of 2026-10-09, in `src/components/analytics/`). This conflicts with the 2026-10-18
+  decline-by-default decision, which the separate cookie work owns (U10).
+- **Legal pages** say "The site has no accounts, forms, or sign-ups"; both must be rewritten
+  before sign-up opens. The contact is `license@getfluxiq.com`.
+- **Checks.** `pnpm check` (structure audit, working-docs audit, Biome, TypeScript), `pnpm test`
+  (`node --test "scripts/**/tests/*.test.mjs"`), `pnpm build`, `pnpm test:site` (headings,
+  links allowlist, metadata, retired phrases, a 200 KB script budget).
 
 ## Server Profiles And Sign-In
 
 **Stored model** (`chrome.storage.local`).
-- `fluxiq.servers` is an array of entries, each holding:
-  - `profileId`, `label`, `kind` (builtin or custom);
-  - `origin`, `gatewayUrl`, `gatewayOverride?`;
-  - `instance {name, profile}`;
-  - `clientId`: `extension-<uuid>`, one per server, so servers cannot correlate a browser;
-  - `credential?`, `credentialExpiresAt?`, `connectedBrowserId?`;
-  - `user? {displayName}`, `workspace? {name}`;
-  - `legacy?`, `lastConnectedAt`.
-- `fluxiq.activeServer` names the active entry.
-- Credentials survive browser restarts. Pages and other extensions cannot read extension storage.
+- `fluxiq.servers`: entries of `profileId`, `label`, `kind` (builtin or custom); `origin`,
+  `gatewayUrl`, `gatewayOverride?`; `instance {name, profile}`; `clientId` (`extension-<uuid>`,
+  one per server, so servers cannot correlate a browser); `credential?`,
+  `credentialExpiresAt?`, `connectedBrowserId?`; `user? {displayName}`, `workspace? {name}`;
+  `legacy?`, `lastConnectedAt`.
+- `fluxiq.activeServer` names the active entry. Pages and other extensions cannot read it.
 
-**Built-in presets.** Injected by `scripts/build-extension.mjs` from `apps/extension/config/servers.<channel>.json` (new):
-- `store`: "FluxIQ" (`https://getfluxiq.com`) and "This computer";
-- `staging`: "FluxIQ staging" and "This computer";
+**Built-in presets,** injected by `scripts/build-extension.mjs` from
+`apps/extension/config/servers.<channel>.json` (new):
+- `store`: "FluxIQ" (`https://app.getfluxiq.com`) and "This computer";
+- `staging`: "FluxIQ staging" (`https://app.staging.getfluxiq.com`) and "This computer";
 - `dev` and `e2e`: "This computer".
 
 **Adding a server.**
-1. Normalise the URL to an origin. Require `https` unless the host is loopback.
+1. Normalise the URL to an origin; require `https` unless the host is loopback.
 2. Fetch `/.well-known/fluxiq` and validate it with Core's schema from `@fluxiq/contracts`.
-3. Show the instance name and origin with the warning "This server can run automations in this browser while you use it. Add only servers you trust."
+3. Show the instance name and origin, with "This server can run automations in this browser
+   while you use it. Add only servers you trust."
 4. If `minimumClient` is above this version, show "Update the extension".
-
 The old two-address form moves to "Advanced: connection override".
 
 **Flow A** (Core's protocol), in `apps/extension/src/background/sign-in/` (new).
-- `pkce.ts`: the verifier and the challenge.
-- `tab-flow.ts`:
-  - `chrome.tabs.create` opens the authorize URL.
-  - The pending `{state, verifier, tabId, profileId, startedAt}` sits in `chrome.storage.session` for 10 minutes.
-  - A top-level `tabs.onUpdated` listener accepts only that tab, on that exact origin, at `/connect/done`, with a matching `state`, then closes the tab.
-- `token-exchange.ts`.
-- `revoke.ts`: sign-out calls the revoke URL.
-- New users follow the sign-up link inside the same tab: discovery's `signUpUrl` points at the site plugin's page. After provisioning and verification, they return to consent.
+- `pkce.ts`: verifier and challenge.
+- `tab-flow.ts`: `chrome.tabs.create` opens the authorize URL; the pending `{state, verifier,
+  tabId, profileId, startedAt}` sits in `chrome.storage.session` for 30 minutes (long enough to
+  sign up and follow the welcome email); a top-level `tabs.onUpdated` listener accepts only that
+  tab, on that exact origin, at `/connect/done`, with a matching `state`, then closes the tab.
+- `token-exchange.ts`; `revoke.ts` (sign-out calls the revoke URL).
+- New users: the sign-in page's "Create an account" opens `signUpUrl` (the website) with
+  `continue=<authorize URL>`. The welcome email's link opens in a new tab and lands on that
+  authorize URL; consent there completes Flow A. `tab-flow.ts` therefore also accepts a
+  `/connect/done` with the pending `state` in a tab it did not open, provided the origin and
+  `state` match and the pending record is unexpired (D0 confirms the listener sees it).
 - The Firefox popup closing is harmless, because the background owns the flow.
 
-**Flow B.** "Use a code instead" connects without a credential, shows the code, and opens `<origin>/connect`.
+**Flow B.** "Use a code instead" connects without a credential, shows the code, and opens
+`<origin>/connect`.
 
-**Gateway use.**
-- `connection/gateway-session.ts` sends the active credential.
-- `server-command-channel.ts` handles `session_ready` (new credential, user, workspace), `revoked` (clear the credential, show "signed out" and the reason) and `going_away`.
-- `connection/core-api.ts` takes its base URL from the profile.
+**Gateway use.** `connection/gateway-session.ts` sends the active credential;
+`server-command-channel.ts` handles `session_ready` (credential, user, workspace), `revoked`
+(clear the credential, show "signed out" and the reason) and `going_away`;
+`connection/core-api.ts` takes its base URL from the profile.
 
-**Migration** (`background/servers/migration.ts`, new). `fluxiq.settings` plus `fluxiq.session` becomes "This computer" if the addresses are loopback, otherwise "My server", with the old token marked `legacy`. If the server answers `pairing_required`, the user is asked to sign in.
+**Migration** (`background/servers/migration.ts`, new). `fluxiq.settings` plus `fluxiq.session`
+becomes "This computer" if the addresses are loopback, otherwise "My server", with the old token
+marked `legacy`. If the server answers `pairing_required`, the user is asked to sign in.
 
-**UI** (`apps/extension/src/panel/servers/`, new).
-- The server picker, the add-server dialog, and a signed-in card ("Signed in as … to FluxIQ").
-- `panel/getting-started/` becomes "Choose where FluxIQ runs", then "Sign in".
-- The active origin is always visible.
-- "Open FluxIQ" (`panel/open-fluxiq/`) opens the profile's origin, where the cookie from the sign-in tab already shows the user's Flows.
+**UI** (`apps/extension/src/panel/servers/`, new). Server picker, add-server dialog, a signed-in
+card ("Signed in as … to FluxIQ"). `panel/getting-started/` becomes "Choose where FluxIQ runs",
+then "Sign in". The active origin is always visible. "Open FluxIQ" (`panel/open-fluxiq/`) opens
+the profile's origin, where the sign-in tab's cookie already shows the user's Flows.
 
-**Messages.** `fluxiq.servers.add`, `remove`, `select`, `signIn`, `signOut`, routed in `background/index.ts` with the control-page check. The Lab uses the same messages.
+**Messages.** `fluxiq.servers.add`, `remove`, `select`, `signIn`, `signOut`, routed in
+`background/index.ts` with the control-page check. The Lab uses the same messages.
 
 ## Transport, Reconnect And Data Minimisation
 
-- **Backoff with full jitter** in `scheduleReconnect`: `random(0, min(30 s, 1 s × 2^n))`. After `going_away`, wait at least `retryAfterMs` plus jitter. The watchdog is unchanged.
-- **Open timeout.** 20 seconds for non-loopback servers, through a Core client option (Core lane D).
-- **Tab minimisation for remote servers** (`connection/active-page.ts`, `connection/browser-state.ts`).
-  - Send only FluxIQ-relevant tabs: the tab the chat or run targets, tabs the run opened, and a FluxIQ tab group.
-  - Send them only on change; the heartbeat becomes a ping.
-  - An opt-in setting, "Share all open tabs with this server".
-  - Loopback stays as today (U3).
-  - Domain readers must accept partial tab lists: `createWebAutomationStateUpdate` (`domain/src/client/gateway-mapping.ts`) and `domain/src/io/gateway-input-hub.ts`.
-- **Offline queue per profile.** `fluxiq.queuedEvents` is keyed by profile, flushed only to the server it was recorded for, and cleared on sign-out or removal.
-- **Kept as is.** No token in any URL. The redaction rules. Screenshots by PUT, within Core's 20 MiB limit.
+- **Backoff with full jitter** in `scheduleReconnect`: `random(0, min(30 s, 1 s × 2^n))`. After
+  `going_away`, wait at least `retryAfterMs` plus jitter. The watchdog is unchanged.
+- **Open timeout.** 20 seconds for non-loopback servers, through a Core client option.
+- **Tab minimisation for remote servers** (`connection/active-page.ts`, `connection/browser-state.ts`):
+  send only FluxIQ-relevant tabs (the tab the chat or run targets, tabs the run opened, a FluxIQ
+  tab group), only on change; the heartbeat becomes a ping; an opt-in "Share all open tabs with
+  this server"; loopback unchanged (U3). Domain readers accept partial tab lists:
+  `createWebAutomationStateUpdate` (`domain/src/client/gateway-mapping.ts`) and
+  `domain/src/io/gateway-input-hub.ts`.
+- **Offline queue per profile.** `fluxiq.queuedEvents` keyed by profile, flushed only to its own
+  server, cleared on sign-out or removal.
+- **Kept as is.** No token in any URL; the redaction rules; screenshots by PUT within Core's limit.
 
 ## Consent-Bound Execution
 
-**The rule, in every profile.** The extension executes action commands only in these cases:
-- (a) during a build or run started from this browser's chat;
-- (b) for a run started elsewhere (panel, schedule, API), after the user allows it in the extension, once or always for that Flow in this browser;
-- (c) for Flows the user marked as allowed to run unattended in this browser.
+**The rule, in every profile.** The extension executes action commands only (a) during a build or
+run started from this browser's chat; (b) for a run started elsewhere (panel, schedule, API) after
+the user allows it in the extension, once or always for that Flow in this browser; (c) for Flows
+the user marked as allowed to run unattended in this browser.
 
-**Further checks.**
-- Read-only commands are honoured only for FluxIQ-relevant tabs while a session is ready.
-- A command whose `runContext.actorUserId` or workspace is not the signed-in identity is dropped and logged.
+**Further checks.** Read-only commands are honoured only for FluxIQ-relevant tabs while a session
+is ready. A command whose `runContext.actorUserId` or workspace is not the signed-in identity is
+dropped and logged. This is the browser-side half of Core's browser-owner invariant; server-side,
+IAM (`FluxIQBrowserSession` and the own-data conditions) decides what the credential may reach.
 
 **Defaults** (U2): on loopback, case (b) is allowed automatically; remote servers ask.
 
-**Files.** `apps/extension/src/background/consent/` (new), plus checks in `background/automation-relay/`, `connection/server-command-channel.ts` and `connection/in-flight/`. The prompt goes in the side panel, or the popup on Firefox.
+**Files.** `apps/extension/src/background/consent/` (new), plus checks in
+`background/automation-relay/`, `connection/server-command-channel.ts` and `connection/in-flight/`.
+The prompt is in the side panel, or the popup on Firefox.
 
-**Lab.** Builds start from the chat, which is case (a). API-started playback on `service-local` is case (b): the person simulation clicks Allow.
+**Lab.** Builds start from the chat (case a). API-started playback on `service-local` is case (b):
+the person simulation clicks Allow.
 
 ## Manifests, Permissions And The Chrome Web Store
 
-**Permissions are unchanged.** Flow A uses `tabs` and `<all_urls>`, which the extension already has. If D0 fails, the fallback is `identity.launchWebAuthFlow`. That needs a reviewed entry in `permission-review.mjs` and means signing in twice.
+**Permissions are unchanged.** Flow A uses `tabs` and `<all_urls>`. If D0 fails, the fallback is
+`identity.launchWebAuthFlow`: a reviewed `permission-review.mjs` entry and signing in twice.
 
-**Manifest edits.**
-- Description (Chrome and Firefox): "Record, run and repair browser automations with FluxIQ. Sign in to FluxIQ at getfluxiq.com, or connect to a FluxIQ runtime you host."
-- The e2e manifest gets a fixed development `key`, a public key and not a secret.
-- The Firefox `gecko.id` becomes permanent.
+**Manifest edits.** Description (Chrome and Firefox): "Record, run and repair browser automations
+with FluxIQ. Sign in to FluxIQ at getfluxiq.com, or connect to a FluxIQ runtime you host." The e2e
+manifest gets a fixed development `key` (public, not a secret). The Firefox `gecko.id` becomes
+permanent.
 
-**Chrome Web Store.** The first submission, at the H1 gate (Core N1), already includes sign-in.
+**Chrome Web Store.** The first submission, at the H1 gate, already includes sign-in.
+- Upload the draft early (D7) so the item ID is known before the gate, and put it in
+  `apps/product`'s `extensionClients` (believed assigned at first upload; verify).
 - A single-purpose statement covering getfluxiq.com and self-hosting.
-- Privacy practices: authentication information, website content, web history and user activity are sent to getfluxiq.com when the user signs in there. Limited-use certification.
-- The privacy policy at `https://getfluxiq.com/privacy`.
-- A reviewer test account on production in the submission notes, with an allowed run on a public test page.
-- The publisher name and the trader declaration (see Legal Prerequisites).
-- The `<all_urls>` justification.
+- Privacy practices: authentication information, website content, web history and user activity
+  are sent to the server the user signs in to; limited-use certification.
+- Privacy notice URL `https://getfluxiq.com/privacy/`, live before submission (needs W4's legal
+  part).
+- A reviewer test account on production, created through provisioning, with an allowed run on a
+  public test page, in the submission notes.
+- The publisher name and trader declaration (U8); the `<all_urls>` justification.
 
-**Edge and AMO.** The same, later (Edge has its own ID). AMO's `data_collection_permissions` must reflect transmission to getfluxiq.com, and it needs a source submission.
-
-**No remote code.** Discovery and product data are data only.
+**Edge and AMO** follow (Edge has its own ID). AMO's `data_collection_permissions` must reflect
+transmission to the server, and it needs a source submission. **No remote code:** discovery and
+product data are data only.
 
 ## Domain Package Changes
 
-- **Session selection by user.** `selectWebAutomationSession` (`domain/src/runtime/adapter.ts`) and `targetSessionId` (`domain/src/io/gateway-output-dispatcher.ts`) first keep only sessions whose operator is the run's actor, and prefer the session the build started from. This mirrors Core's browser-owner invariant.
-- **Per-workspace host safety.** Core applies `registerFluxIQHost` per workspace instance. Audit module-level state for anything shared, and make it per instance:
-  - `domain/src/io/gateway-input-hub.ts`;
-  - `domain/src/runtime/service.ts`;
-  - the host-lease key `web.automation:<clientId>` (`domain/src/runtime/host-resources/`);
-  - the LLM evidence binding.
-- **Sensitive values audit.** Core does not redact recorded timeline values. Before the hosted gate, confirm that typed values in recording events are screened in the browser (`domain/src/sensitivity/signature.ts`, `apps/extension/src/content/actions/value-redaction.ts`, `webAutomationSecretSafeValidation`), and fix any gap.
-- **Unchanged.** `domain/src/setup.ts` and `setup-cli.ts` stay local-only. The domain never imports `apps/extension` or `apps/site`.
+- **Session selection by user.** `selectWebAutomationSession` (`domain/src/runtime/adapter.ts`)
+  and `targetSessionId` (`domain/src/io/gateway-output-dispatcher.ts`) first keep only sessions
+  whose operator is the run's actor, and prefer the session the build started from (Core's
+  browser-owner invariant).
+- **Per-workspace host safety.** Core applies `registerFluxIQHost` per workspace instance. Audit
+  module-level state and make it per instance: `domain/src/io/gateway-input-hub.ts`,
+  `domain/src/runtime/service.ts`, the host-lease key `web.automation:<clientId>`
+  (`domain/src/runtime/host-resources/`), the LLM evidence binding.
+- **Domain endpoints get IAM declarations.** Any program endpoint or extension the domain
+  registers declares an action, resource and access level like Core's (Core lane B3 defines the
+  shape); the route matrix covers them.
+- **Sensitive values audit.** Before the gate, confirm typed values in recording events are
+  screened in the browser (`domain/src/sensitivity/signature.ts`,
+  `apps/extension/src/content/actions/value-redaction.ts`, `webAutomationSecretSafeValidation`);
+  fix any gap.
+- **Unchanged.** `domain/src/setup.ts` and `setup-cli.ts` stay local-only. The domain never
+  imports `apps/extension`, `apps/product` or the stand-in.
 
-## Product Site And Panel Content
+## The Public Website
 
-**`apps/site`** (new package `@fluxiq-web-extension/site`). A Core layer-3 plugin, built into the product image with `FLUXIQ_PANEL_PLUGINS=@fluxiq-web-extension/site`.
+**Decision: FluxIQWebsite is the public site; `apps/site` is not built.** The website already
+owns the brand, the copy, the legal pages and a tested deploy, and nothing in its code argues
+against it. Its one gap, no server, is closed by a small sign-up backend on its existing Node
+server. Public pages as a Core plugin would duplicate it.
 
-**`src/panel/`: React, using `fluxiq/ui` and the theme tokens.**
-- Public pages: the landing page (the `public.home` slot at `/`), `/x/site/terms`, `/x/site/privacy` (rendered from `docs/user/`), and the sign-up page `/signup`. The last needs a rewrite to `/x/site/signup`, also used by discovery's `signUpUrl`.
-- Sign-up form fields: email, display name, password, a terms checkbox with its version, an invite code (Core N3), and Turnstile.
-- Signed-in slot content: a "Get the extension" card and an "Add your DeepSeek key" card.
+**Added to FluxIQWebsite** (by W4, from the stand-in):
+- `src/app/signup/page.tsx`: email, display name, a terms checkbox naming the terms version, an
+  invite code while N3 holds, and the human check. No password field. It posts to `/api/signup`
+  (JavaScript) or submits the form (without JavaScript; the backend answers with a 303 to
+  `/check-email/`). It keeps a `continue` parameter from Core's sign-in page.
+- `src/app/check-email/page.tsx`: "Check your email", with a resend button.
+- `src/app/signin/page.tsx`: a stable URL that forwards to `https://app.getfluxiq.com/login`.
+- Header and closing CTAs: "Sign in" and "Get started" in `src/content/navigation.ts`,
+  `links.ts` (app links, the store listing) and the site check's allowlist. `/extension/`'s setup
+  section: install from the store, sign in.
+- `server/signup/` (new, dependency-free ES modules, ported verbatim from the stand-in):
+  `validate.mjs`, `human-check.mjs`, `rate-limit.mjs`, `provisioning-client.mjs`, `handler.mjs`,
+  with `tests/`; mounted on `/api/signup` and `/api/signup/resend` by the Node server
+  (`scripts/static-hosting/serve.mjs` gains a route hook). `pnpm test` widens its glob to
+  `server/**/tests/*.test.mjs`.
+- `policy.mjs`: Turnstile's script and frame hosts in the CSP; `form-action 'self'` stays.
+- `src/content/privacy.ts` and `terms.ts`: the hosted texts (from D7's drafts).
+- `.github/workflows/`: a job that publishes the site image to GHCR on `main`. The `deploy`
+  branch stays, building with `SITE_SIGNUP=off` for Hostinger as the marketing-only fallback.
 
-**`src/server/`.** It exports `registerPanelPlugin(platform)`.
-- **Product manifest:** name (U1), assets in `apps/site/assets/`, brand accent, links, store links, and `extensionClients` (the Chrome store ID, after first publication).
-- **`POST /api/x/site/signup`** (`access: "public"`, rate-limited, human check):
-  1. Validate the input; check the invite code and the terms version.
-  2. Call `platform.provisioning.createAccount({email, displayName, password, role: "user", workspace: "new", termsVersion})`.
-  3. Call `sendVerificationEmail`.
-  4. Answer "check your email".
+**The sign-up backend** (`POST /api/signup`):
+1. Accept only same-origin requests (`Origin` is the site's own; `Sec-Fetch-Site: same-origin` or
+   a top-level form post).
+2. Rate-limit per IP (taken from `X-Forwarded-For` only behind Caddy) and in total.
+3. Validate: email (trimmed, lowercased, at most 254 characters), display name (1 to 80),
+   `termsAccepted` with the current `termsVersion`, the invite code if enabled, and `continue`,
+   which is kept only if it starts with `<app origin>/connect/authorize?`.
+4. Verify the human check (Turnstile `siteverify`), unless `SITE_HUMAN_CHECK=off` (stand-in only).
+5. Call Core's `createAccount` on the private listener: `{requestId, email, displayName,
+   policies: ["FluxIQUserAccess"], workspace: "new", termsVersion, continueUrl, sendWelcome:
+   true}`, with the bearer token from `FLUXIQ_PROVISIONING_TOKEN_FILE`.
+6. Answer 202 "check your email" for both `created` and `exists` (no account enumeration); 400
+   with field errors; 429; 503 "Sign-up is unavailable, try again shortly" if Core is down.
+7. Log only `requestId`, outcome and timing; never the body.
+`/api/signup/resend {email}` calls `sendWelcome` and answers the same way regardless.
 
-  It never logs the password and never returns it.
-- **The `workspace.created` hook** seeds a project named "My automations" through that workspace's Automation Studio service. The extension's chat then has a project at first connect.
-- **Email copy:** verify, reset, new browser connected.
+Configuration (environment, secrets as files): `FLUXIQ_PROVISIONING_URL`,
+`FLUXIQ_PROVISIONING_TOKEN_FILE`, `SITE_APP_ORIGIN`, `SITE_TERMS_VERSION`,
+`SITE_HUMAN_CHECK`, `TURNSTILE_SECRET_FILE`, `SITE_INVITE_CODES_FILE`, `SITE_SIGNUP`.
 
-**Settings later.** Layer 2 (H2) adds the web-automation settings sections: tab sharing, outside-run consent default, unattended runs. Until then they live in the extension's own settings.
+**In Core, not the website:** sign-in, the welcome link (verify, set password, sign in), reset,
+connect and consent, account and browsers, the panel, IAM and provisioning. The website sets no
+cookie of its own in this flow and never holds a session.
 
-**Not in the domain package.** The domain keeps web-automation registration only. The site is product web code, so it gets its own package. The structure audit's domain-imports rule is unchanged.
+**`apps/product`** (new package `@fluxiq-web-extension/product`): the product host module,
+`src/host/platform.ts` exporting `registerFluxIQPlatform(platform)`, built to
+`apps/product/dist/host/platform.mjs` and listed in `FLUXIQ_HOST_MODULE` after the domain's host
+module.
+- **Product manifest:** name (U1); assets copied from FluxIQWebsite's generated icons and
+  `design/brand/fluxiq-mark.svg` into `apps/product/assets/`; brand accent amber `#f5b83d` (subject
+  to Core's contrast check); links to the website, `/terms/`, `/privacy/`, support and status;
+  `auth.signUpUrl: https://getfluxiq.com/signup/`; `extensionStores`; `extensionClients`.
+- **`workspace.created` hook:** seeds a project "My automations", owned by the new user, through
+  that workspace's Automation Studio service, so the chat has a project at first connect.
+- **Email copy:** welcome, already registered, reset, new browser connected.
+
+## Local Website Stand-In
+
+**Why and where.** The user asked for the website side to be built and exercised locally first.
+The stand-in is `packages/website-stand-in/` (`@fluxiq-web-extension/website-stand-in`, private):
+a workspace package, so the Lab can start it and its tests run in this repository's gates. Its
+`server/signup/` uses the same file names, contract and configuration as the FluxIQWebsite target,
+so W4 copies it; its pages are plain HTML that W4 re-skins as Next pages. This plan stays in place
+for when the real side is built.
+
+**Layout.**
+- `server/serve.mjs`: static files from `public/` plus the `/api/signup` and
+  `/api/signup/resend` routes; `server/start.mjs` reads the configuration above.
+- `server/signup/`: the backend modules and `tests/`.
+- `public/index.html`, `public/signup/index.html`, `public/check-email/index.html`,
+  `public/signin/index.html` (forwarding to Core's `/login`).
+- `scripts/up.mjs` (`pnpm site:up`): writes a provisioning token into a run directory, starts Core
+  under `FLUXIQ_PROFILE=service` with `FLUXIQ_PUBLIC_ORIGIN=http://127.0.0.1:<app>`,
+  `FLUXIQ_PROVISIONING_LISTEN=127.0.0.1:<prov>`, the token file,
+  `FLUXIQ_EMAIL_SENDER=file:<run>/mail` and both host modules; starts the stand-in on
+  `http://localhost:<site>`; prints the two URLs and the mail folder. Two hostnames, both
+  loopback, mimic `getfluxiq.com` and `app.getfluxiq.com`.
+
+**Phases** (each a brief for one worker; owned paths are disjoint).
+
+| Phase | Work | Owns | Needs | Validation |
+| --- | --- | --- | --- | --- |
+| W0 | Contract check: the provisioning listener's request and response schemas, `continueUrl` rule, discovery `signUpUrl` | nothing (reads Core's frozen contracts) | Core contract freeze (10-30) | A written note in this document's reports |
+| W1 | Backend modules and pages, against a stub provisioning server | `packages/website-stand-in/`, `pnpm-workspace.yaml` entry | W0 | `node --test` beside each module: validation table, same-origin refusal, rate limit, human check off and on (stubbed), `exists` and `created` give the same answer, 503 on refusal, body never logged |
+| W2 | `pnpm site:up` against real Core | `packages/website-stand-in/scripts/` | Core B1 (listener, welcome link, file mail) | A scripted round trip: sign up, read the welcome link from the mail folder, set the password on Core, `getAccount` shows `active`; a second sign-up with the same email gives the same answer and an "already registered" mail |
+| W3 | The Lab's `service-local` target uses it (part of D8) | see D8 | W2, D2 | Sign-up, welcome, extension Flow A, a provider-free run on a realistic scenario |
+| W4 | Port to FluxIQWebsite: the additions listed in The Public Website, under that repository's own `AGENTS.md` and checks | FluxIQWebsite only | W2 green, the user's go (U11), D7's legal drafts | `pnpm check`, `pnpm test`, `pnpm build`, `pnpm test:site` in FluxIQWebsite; the staging smoke against the real site image |
 
 ## Infrastructure For getfluxiq.com
 
 `deploy/` in this repository holds no secrets (U5).
 
-**Image.** `deploy/product/Dockerfile` builds on Core's image stages at a pinned Core ref.
-- It adds `domain/dist/host/web-panel-host.mjs` and the `apps/site` plugin.
-- It sets `FLUXIQ_HOST_MODULE`, `FLUXIQ_PANEL_PLUGINS` and `FLUXIQ_PROFILE=service`.
-- Tag: `ghcr.io/<owner>/fluxiq-product:<ext-sha>-<core-sha>`.
+**Images.**
+- Product: `deploy/product/Dockerfile` on Core's image stages at a pinned Core ref; adds
+  `domain/dist/host/web-panel-host.mjs` and `apps/product`; sets `FLUXIQ_HOST_MODULE` (both
+  modules), `FLUXIQ_PROFILE=service`. Tag `ghcr.io/<owner>/fluxiq-product:<ext-sha>-<core-sha>`.
+- Website: FluxIQWebsite's own image (`ghcr.io/aidens113/fluxiq-website:<sha>`) after W4; until
+  then, closed staging runs the stand-in's image (`packages/website-stand-in/Dockerfile`).
 
-**Hosts** (Core Q7).
-- A production VM, plus staging on a smaller VM or a separate Compose project.
-- `deploy/compose/{production,staging}.compose.yml` runs caddy, fluxiq and backup.
-- `deploy/caddy/Caddyfile` serves `getfluxiq.com` (with `/client` going to the gateway), redirects `www`, and serves `staging.getfluxiq.com` behind basic auth or Tailscale until the gate.
-- Only ports 80 and 443 are open. SSH by key only. Unattended upgrades.
+**Hosts** (Core Q7). One production VM; staging as a separate Compose project or a smaller VM.
+- `deploy/compose/{production,staging}.compose.yml`: `caddy`, `website`, `fluxiq`, `backup`.
+  Two networks: `edge` (Caddy with `website:3000`, `fluxiq:3000` and `fluxiq:4777`) and
+  `backend` (`website` with `fluxiq:4780`, the provisioning listener). Caddy is not on `backend`,
+  so it cannot reach the listener at all.
+- `deploy/caddy/Caddyfile`: `getfluxiq.com` to the website; `www` redirects; `app.getfluxiq.com`
+  with `/client*` to the gateway and the rest to Core; staging hosts behind basic auth until the
+  gate.
+- Ports 80 and 443 only; SSH by key; unattended upgrades.
 
-**DNS and email.**
-- getfluxiq.com and www (A/AAAA records), staging, and `status.getfluxiq.com`.
-- SPF, DKIM and DMARC for `noreply@getfluxiq.com`, for the transactional sender that verify and reset require (U6).
+**DNS and email.** New records for `app`, `staging`, `app.staging` and `status`. At launch the
+apex and `www` move from Hostinger to the VM: lower their TTL a day ahead, keep the MX and mail
+records untouched, and keep Hostinger's static deploy as the rollback. SPF, DKIM and DMARC for
+`noreply@getfluxiq.com`, which Core uses for welcome and reset mail (U6).
 
-**Secrets.** Mounted read-only from `/etc/fluxiq/secrets/`:
-- the SMTP or API credential;
-- the setup code;
-- the Turnstile secret;
-- the restic password;
-- the Sentry DSN;
-- the provisioning token, only if the HTTP transport is ever used.
+**Secrets,** mounted read-only from `/etc/fluxiq/secrets/`: the provisioning token (shared by
+`website` and `fluxiq`), the SMTP or API credential, the setup code, the Turnstile secret, the
+restic password, the Sentry DSN. No model key on the server. CI holds only the deploy SSH key and
+the GHCR token.
 
-There is no model key on the server; users bring their own. CI holds only the deploy SSH key and the GHCR token.
+**CI/CD.** `.github/workflows/deploy.yml` runs on a `release-*` tag from `main` (`main` and tags
+need the user's approval every time): static checks; build, scan with Trivy and push the product
+image; deploy both images to staging and run the staging smoke; the manual approval gate; back up,
+`migrate`, deploy to production, smoke-test. Rollback: the previous tags, plus the pre-deploy
+backup if needed.
 
-**CI/CD.** `.github/workflows/deploy.yml` runs on a `release-*` tag from `main`; `main` and tags need the user's approval every time.
-1. Run the static checks.
-2. Build the image, scan it with Trivy, and push it.
-3. Deploy to staging and run the staging smoke.
-4. Pass the manual approval gate.
-5. Back up, run `migrate`, deploy to production, and smoke-test it.
+**Observability.** Logs and metrics to Grafana Cloud or Better Stack; errors to Sentry with
+scrubbing (no bodies, page data, keys or passwords). Alerts: uptime of both hosts; the 5xx rate;
+gateway socket drops; sign-up spikes and provisioning errors; IAM deny spikes; disk above 80%; a
+backup older than 26 hours; certificate expiry. A status page.
 
-Rollback: redeploy the previous tag, plus the pre-deploy backup if needed.
+**Backups.** A volume snapshot every 4 hours plus nightly encrypted restic to B2 or R2; 7 daily and
+4 weekly, so deleted data is gone within 30 days; a monthly restore drill into staging.
 
-**Observability.**
-- Logs and metrics go to Grafana Cloud or Better Stack. Errors go to Sentry with scrubbing: no bodies, page data, keys or passwords.
-- Alerts:
-  - uptime;
-  - the 5xx rate;
-  - gateway socket drops;
-  - sign-up spikes;
-  - disk above 80%;
-  - a backup older than 26 hours;
-  - certificate expiry.
-- A status page.
+**Runbook** (`docs/architecture/hosted-service.md`, new): deploy, roll back, restore; revoke every
+browser; close sign-up (`SITE_SIGNUP=off` and rotate the provisioning token); maintenance mode;
+disable an account (`fluxiq accounts disable`); answer a deletion request; breach response
+(notify within 72 hours where GDPR applies); the DNS cutover and its rollback; contacts.
 
-**Backups.** A volume snapshot every 4 hours, plus nightly encrypted restic to B2 or R2. Retention is 7 daily and 4 weekly, so data is gone within 30 days. A monthly restore drill into staging.
-
-**Runbook.** `docs/architecture/hosted-service.md` (new) covers:
-- deploy, roll back, restore;
-- revoke every browser (the kill switch);
-- close sign-up;
-- maintenance mode;
-- disable an account (`fluxiq accounts disable`);
-- answer a deletion request;
-- breach response: notify within 72 hours where GDPR applies;
-- contacts.
-
-**Release coordination.** The server accepts gateway 0.1 and 0.2. `minimumClient` rises only once the new extension is live in the store.
+**Release coordination.** The server accepts gateway 0.1 and 0.2; `minimumClient` rises only once
+the new extension is live in the store.
 
 ## User Docs, Privacy, Cookies And Legal Prerequisites
 
-**User docs.**
-- `docs/user/README.md` and `install.md`: three ways to use FluxIQ: sign up at getfluxiq.com, this computer, or your own server (Core's `docs/operations/self-hosting.md`).
-- `quickstart.md`: sign in from the extension; add your own DeepSeek key in the panel; build from the chat.
-- `permissions.md`: "the servers you added, your sign-in for each, and panel preferences".
+**User docs.** `docs/user/README.md` and `install.md`: three ways to use FluxIQ (sign up at
+getfluxiq.com, this computer, your own server via Core's `docs/operations/self-hosting.md`).
+`quickstart.md`: install, sign in from the extension, add your own DeepSeek key in the panel,
+build from the chat. `permissions.md`: "the servers you added, your sign-in for each, and panel
+preferences".
 
-**Privacy policy** (`docs/user/privacy-policy.md`, published at `getfluxiq.com/privacy`). It covers two cases.
+**Privacy notice.** Drafted here in `docs/user/privacy-policy.md` (D7), published by W4 as
+FluxIQWebsite's `src/content/privacy.ts` at `https://getfluxiq.com/privacy/` (the site calls it a
+"privacy notice"). It covers:
 - **Your own runtime:** today's statements stay true.
-- **getfluxiq.com:**
-  - What is collected: account data, page content, recordings, screenshots, tab information as set in the settings, Flows, runs and datasets.
-  - Purposes; storage location and region.
-  - Processors: hosting, email, Sentry.
-  - Model calls go from the server to the provider the user chose, with the user's own key. For DeepSeek that is processing in China (Core Q8).
-  - Keys: sealed under the user's password, never shown to others, and not readable by the operator at rest.
-  - Retention, and deletion within 30 days, including backups. Export (H2). Rights. Contact (`privacy@getfluxiq.com`).
-- **Cookies.**
-  - The site sets only strictly necessary cookies: `__Host-fluxiq_session` (sign-in, 12 hours, or 30 days with "keep me signed in"), plus Turnstile's own cookie, if any, on sign-up.
-  - FluxIQ declines optional cookies by default (the separate cookie work). No analytics or advertising cookie is set without opt-in.
-  - The policy lists each cookie with its name, purpose and duration.
+- **The website:** what the site itself collects (the analytics position U10 settles), sign-up
+  data passed to the service.
+- **The service at app.getfluxiq.com:** account data, page content, recordings, screenshots, tab
+  information as set in the settings, Flows, runs and datasets; purposes; storage location and
+  region; processors (hosting, email, Sentry, Cloudflare Turnstile); model calls from the server
+  to the provider the user chose with the user's own key (DeepSeek processes in China, Core Q8);
+  keys sealed under the user's password, never shown to others, not readable by the operator at
+  rest; the IAM decision log and its retention; retention and deletion within 30 days including
+  backups; export (H2); rights; contact `privacy@getfluxiq.com`.
+- **Cookies.** `app.getfluxiq.com` sets only `__Host-fluxiq_session` (sign-in; 12 hours, or 30
+  days with "keep me signed in"), strictly necessary, and loads no analytics. The sign-up page
+  may carry Turnstile's own cookie, if any. FluxIQ declines optional cookies by default (the
+  separate cookie work); each cookie is listed with name, purpose and duration.
 
-**Terms of service** (`docs/user/terms.md`, new; at `getfluxiq.com/terms`):
-- acceptable use;
-- the user's responsibility for their own provider key and its charges, and for theft or misuse of it;
-- automation on third-party sites at the user's own risk;
-- no warranty;
-- suspension;
-- the termination and deletion procedure;
-- a version number accepted at sign-up (`termsVersion`).
+**Terms** (drafted in `docs/user/terms.md`; published as FluxIQWebsite's `src/content/terms.ts`
+at `/terms/`): acceptable use; the user's responsibility for their own provider key and its
+charges, theft or misuse; automation on third-party sites at the user's own risk; for organisation
+workspaces, the organisation's responsibility for its workers' permissions; no warranty;
+suspension; termination and deletion; a version number accepted at sign-up (`termsVersion`).
 
-**Legal prerequisites.** None of these blocks building; each has to be settled before launch.
-- **Terms of service.** Someone must be the contracting party. Until a company exists it is the individual operator, and it is transferred later.
-- **Privacy policy.** It must name the controller and give a contact. That can be the individual, with `privacy@getfluxiq.com`. Serving EU users from outside the EU may require an EU representative (GDPR Article 27); check this before opening to the EU.
-- **Store publisher.** The Chrome Web Store, Edge and AMO need a publisher account, which can be the individual's. The EU trader declaration may publish an address and phone number, so use a business address service if declaring as a trader (U8).
-- **Payments, later.** Stripe needs a business or a sole proprietor.
-- **Licence.** `LICENSE.md` names a licensor contact (`license@getfluxiq.com`); the licensor identity is still open in Core.
+**Legal prerequisites.** None blocks building; each must be settled before launch.
+- **Terms:** a contracting party; until a company exists, the individual operator.
+- **Privacy notice:** names the controller and a contact; an EU representative (GDPR Article 27)
+  may be needed before opening to the EU.
+- **Store publisher:** an individual developer account is possible; the EU trader declaration may
+  publish an address and phone number (U8).
+- **Selling enterprise or credits:** needs a business or sole proprietor (Stripe, contracts).
+- **Licence:** `LICENSE.md` names `license@getfluxiq.com`; the licensor identity is open in Core.
 
-**Store listing** (`docs/user/store-listing.md`): single purpose, description, reviewer notes, test account, and screenshots of sign-in.
-
-**Architecture docs.**
-- `docs/architecture/extension-client.md`: profiles, sign-in, minimisation, consent; fix the wire shape.
-- `release-packaging.md`: channels and presets.
-- `sensitive-values.md`: fix the two contradictions.
-- `testing-facility.md`: the hosted targets.
+**Store listing** (`docs/user/store-listing.md`): single purpose, description, reviewer notes, test
+account, screenshots of sign-in. **Architecture docs:** `extension-client.md` (profiles, sign-in,
+minimisation, consent; fix the wire shape), `release-packaging.md` (channels and presets),
+`sensitive-values.md` (fix the two contradictions), `testing-facility.md` (hosted targets).
 
 ## Lab And E2E Coverage
 
-The standing rules apply: the ten realistic scenarios only, headed browsers, builds started from the extension chat, live runs supervised and charged to a lab slot, and the waste guards.
+The standing rules apply: the ten realistic scenarios only, headed browsers, builds started from
+the extension chat, live runs supervised in a lab slot, and the waste guards.
 
-- **`service-local` target** (`packages/test-runner/src/target-config.ts`, `coordinator.ts`, `environment.ts`). Core runs under `FLUXIQ_PROFILE=service` with the `apps/site` plugin, `FLUXIQ_PUBLIC_ORIGIN=http://127.0.0.1:<web>` (loopback only) and `FLUXIQ_EMAIL_SENDER=file:<run>/mail`. Provider-free by default. TLS is covered by Core's Caddy Playwright run and by the staging smoke.
-- **Accounts through the real sign-up path.** `http-control/` gains a sign-up call to `/api/x/site/signup`, which reads the verification link from the mail sink. This replaces `bootstrapIdentity` for this target. There is no test backdoor. Live runs enter the user's key through the panel, as a user would.
-- **Sign-in.** `run-scenario/pair-run-extension.ts` becomes sign-in: `fluxiq.servers.add` and `fluxiq.signIn`, then Playwright drives the opened tab. One spec covers Flow B. `auth-session.ts` accepts `__Host-fluxiq_session`.
-- **Two-tenant isolation.**
-  - Two accounts and two persistent contexts on one server, running two realistic scenarios at once (for example everything-store and job-board), provider-free.
-  - Assert from each workspace's gateway audit that commands reached only their own browser.
-  - Also assert that account A's panel session sees none of account B's Flows.
-- **ui:e2e journeys:**
-  - server picker;
-  - sign in to "This computer";
-  - sign up and sign in on `service-local`;
-  - add a custom server;
-  - revoke from the website;
-  - disabled account (through provisioning);
-  - switch server with queued events.
-- **Extension Playwright** (`apps/extension/e2e/`): the tab flow against a stub, jitter and `going_away`, `revoked`, consent.
-- **Staging smoke** (`deploy.yml`):
-  - headed Chromium under xvfb;
-  - a staging test account held as a secret;
-  - sign in through the tab, connect, and run one provider-free playback on everything-store from a local scenario lab;
-  - check that the panel lists the Flow;
-  - no model calls.
-- **Live.** One supervised live Lab run per release candidate against staging, with the operator's own test key entered as a user would.
+- **`service-local` target** (`packages/test-runner/src/target-config.ts`, `coordinator.ts`,
+  `environment.ts`): Core under `FLUXIQ_PROFILE=service` with both host modules, on
+  `http://127.0.0.1:<app>`, its provisioning listener on loopback with a run-scoped token file,
+  `FLUXIQ_EMAIL_SENDER=file:<run>/mail`; the website stand-in on `http://localhost:<site>`.
+  Provider-free by default. TLS is covered by Core's Caddy Playwright run and the staging smoke.
+- **Accounts through the real sign-up path.** Playwright fills the stand-in's `/signup/`; the Lab
+  reads the welcome link from the mail folder, sets the password on Core, and signs in. This
+  replaces `bootstrapIdentity` for this target; no test backdoor. Live runs enter the user's key
+  through the panel, as a user would.
+- **Sign-in.** `run-scenario/pair-run-extension.ts` becomes sign-in: `fluxiq.servers.add` and
+  `fluxiq.signIn`, then Playwright drives the opened tab. One spec covers sign-up started from the
+  extension (the `continue` path); one covers Flow B. `auth-session.ts` accepts both cookie names.
+- **Two-tenant isolation and IAM.** Two accounts, two persistent contexts, two realistic scenarios
+  at once (for example everything-store and job-board), provider-free. Assert from each
+  workspace's gateway audit that commands reached only their own browser, that account A's panel
+  sees none of B's Flows, and that the IAM decision log shows B's identifiers refused for A. One
+  escalation check: A's session tries to attach a policy and to reach an `ops:` program, and both
+  are denied and logged.
+- **ui:e2e journeys:** server picker; sign in to "This computer"; sign up on the stand-in and sign
+  in on `service-local`; add a custom server; revoke from the panel; disabled account (through
+  provisioning); switch server with queued events.
+- **Extension Playwright** (`apps/extension/e2e/`): the tab flow against a stub (including the
+  welcome tab it did not open), jitter and `going_away`, `revoked`, consent.
+- **Staging smoke** (`deploy.yml`): headed Chromium under xvfb; a staging test account held as a
+  secret; sign in through the tab, connect, run one provider-free playback on everything-store,
+  check the panel lists the Flow; one sign-up through the staging website with a mail sink; no
+  model calls.
+- **Live.** One supervised live Lab run per release candidate against staging, with the operator's
+  own test key entered as a user would.
 - **Load.** k6 (`deploy/load/gateway.js`): 1,000 simulated sockets against staging, provider-free.
 
 ## Phases
 
-Downstream steps, keyed to Core's H0, H1 and H2, with rough agent-days. They are part of the one paired H1 unit of work. The user is alerted before the first Core edit.
+Downstream steps, part of the one paired H1 unit; the user is alerted before the first Core edit.
+Dates assume the contract freeze on 10-30. Merges happen on narrow checks as soon as a step is
+green, except where the table names a constraint.
 
-| Step | Stage | Owns (may edit) | Validation | Effort |
+| Step | Owns (may edit) | Dates and the constraint behind them | Validation | Agent-days |
 | --- | --- | --- | --- | --- |
-| D0 sign-in spike | H0, now | throwaway `fxwork/` worktree | Tab flow completes in Chrome, Edge and the Firefox popup; the service worker wakes; a written result | 1-2 |
-| D1 self-host check | H1 | `docs/user/install.md` | The current extension pairs over `wss` with a lane-A server behind Caddy | 1 |
-| D2 profiles and sign-in | H1 | `background/servers/`, `background/sign-in/`, `panel/servers/`, `panel/getting-started/`, `panel/settings/`, `background/{index,connection,storage,saved-state}.ts`, `connection/{gateway-session,core-api,server-command-channel}.ts`, `shared/{constants,protocol}.ts`, `config/servers.*.json`, `scripts/build-extension.mjs`, manifests | Unit tests beside each module; tab-flow spec; sign-in against local `self-hosted` and `service-local` | 8-10 |
-| D3 owner and consent | H1 | `domain/src/runtime/adapter.ts`, `domain/src/io/gateway-output-dispatcher.ts`, the domain singleton audit, `background/consent/`, `background/automation-relay/`, `connection/in-flight/` | Domain selection tests; consent tests; two-tenant scenario | 5-7 |
-| D4 minimisation | H1, after D2 | `connection/{active-page,browser-state}.ts`, the offline queue, `domain/src/client/gateway-mapping.ts`, `domain/src/io/gateway-input-hub.ts` | Partial-tab and per-profile queue tests; provider-free runs on two scenarios | 3-4 |
-| D5 product site | H1 | `apps/site/` (new), `pnpm-workspace.yaml` entry | Site unit tests (sign-up validation, provisioning call, hook); Core's fixture plugin test against this plugin | 5-6 |
-| D6 infrastructure | H1 | `deploy/`, `.github/workflows/deploy.yml`, `docs/architecture/hosted-service.md` | Closed staging up; smoke green; one restore drill | 6-8 |
-| D7 docs, legal, store | H1 | `docs/user/*`, `docs/user/terms.md`, `docs/architecture/{extension-client,release-packaging,sensitive-values}.md` | Review by the user; legal review where possible | 3-4 |
-| D8 test coverage | H1 gate | `packages/test-runner/src/{target-config,coordinator,environment,auth-session}.ts`, `http-control/`, `run-scenario/`, `run-lifecycle/`, `ui-e2e/journeys/`, `apps/extension/e2e/`, `deploy/load/`, `docs/architecture/testing-facility.md` | The tests above; one supervised live run | 6-8 |
+| D0 sign-in spike (Core S1) | throwaway `fxwork/` worktree | 10-28 to 10-29 | Tab flow completes in Chrome, Edge and the Firefox popup; the service worker wakes; the welcome tab case; a written result | 1 |
+| D1 self-host check | `docs/user/install.md` | 10-30 to 10-31; needs Core's S2 Caddy setup | The current extension pairs over `wss` behind Caddy | 1 |
+| D2 profiles and sign-in | `background/servers/`, `background/sign-in/`, `panel/servers/`, `panel/getting-started/`, `panel/settings/`, `background/{index,connection,storage,saved-state}.ts`, `connection/{gateway-session,core-api,server-command-channel}.ts`, `shared/{constants,protocol}.ts`, `config/servers.*.json`, `scripts/build-extension.mjs`, manifests | Built 10-30 to 11-06 in the worktree; merges 11-10, because the MVP live lanes edit these files until then | Unit tests beside each module; tab-flow spec; sign-in against local `self-hosted` and `service-local` | 7 |
+| D3 owner and consent | `domain/src/runtime/adapter.ts`, `domain/src/io/gateway-output-dispatcher.ts`, the domain singleton audit, `background/consent/`, `background/automation-relay/`, `connection/in-flight/` | Built 10-30 to 11-04; merges 11-10 (the same MVP files) | Domain selection tests; consent tests; the two-tenant scenario | 5 |
+| D4 minimisation | `connection/{active-page,browser-state}.ts`, the offline queue, `domain/src/client/gateway-mapping.ts`, `domain/src/io/gateway-input-hub.ts` | 11-05 to 11-08, after D2's storage model; merges 11-10 | Partial-tab and per-profile queue tests; provider-free runs on two scenarios | 3 |
+| D5 product host module | `apps/product/` (new), `pnpm-workspace.yaml` entry | 10-31 to 11-01, after Core E's `PanelProduct`; merges when green (inert) | Manifest validates against Core's schema; the seeding hook test; contrast test | 1 |
+| W1, W2 website stand-in | `packages/website-stand-in/` | W1 10-30 to 11-02; W2 11-04 to 11-05, after Core B1's listener and welcome link | See Local Website Stand-In | 3 |
+| D6 infrastructure | `deploy/`, `.github/workflows/deploy.yml`, `docs/architecture/hosted-service.md` | 10-30 to 11-06; closed staging needs the VM and DNS (U9) by about 11-03 | Closed staging up with both images; smoke green; one restore drill | 6 |
+| D7 docs, legal, store | `docs/user/*`, `docs/user/terms.md`, `docs/architecture/{extension-client,release-packaging,sensitive-values}.md` | Drafts 10-30 to 11-04; the user's review by about 11-08; the store draft upload once the developer account exists | The user's review; legal review where possible | 3 |
+| D8 test coverage | `packages/test-runner/src/{target-config,coordinator,environment,auth-session}.ts`, `http-control/`, `run-scenario/`, `run-lifecycle/`, `ui-e2e/journeys/`, `apps/extension/e2e/`, `deploy/load/`, `docs/architecture/testing-facility.md` | 11-05 to 11-11, after W2 and D2 | The tests above; one supervised live run | 6 |
+| W4 port to FluxIQWebsite | FluxIQWebsite only | On the user's go (U11), 11-06 at the earliest; its legal pages must be live before the store submission (about 11-13) | See Local Website Stand-In | 2 |
 
-About 36 downstream agent-days. D2 and D3 touch disjoint files, as do D5, D6 and D7. D4 follows D2.
+About 38 downstream agent-days across eleven steps, most in parallel. The calendar is set by the
+contract freeze, Core B1 (for W2), the MVP's hold on the connection files until 11-10, the user's
+VM, DNS and legal review, and then Google's review.
 
-**Until 11-10:** D0; D5, D6 and D7 skeletons and drafts, then D2 to D7, in the worktree; the VM and DNS (U9). **After 11-10:** merge, D8 and the gate (around 11-28), then submission (around 12-01).
+**Gate and launch.** H1 gate 11-11 to 11-12 on staging (Core's checklist plus this document's Lab
+gate). Store submission about 11-13 with the user's approval. getfluxiq.com sign-up opens when the
+store approves; until then production holds only the reviewer account.
 
-**H2:** settings move into layer 2; export, retention and the Google sign-in button on the site; Edge and AMO listings.
+**After launch.** Edge and AMO listings; layer-2 settings sections (tab sharing, outside-run
+consent default, unattended runs) moving from the extension's settings into the panel; export,
+retention and the Google sign-in button; the enterprise IAM console in Core (E1), with the website
+gaining an enterprise contact page.
 
 ## Risks
 
-- **Tab observation fails in a browser.** Fall back to `launchWebAuthFlow`, which adds the `identity` permission and a second sign-in. D0 decides early.
-- **MVP contention.** D2 and D4 touch the files the MVP live lanes use, so they stay in the worktree until 11-10. Merge `dev` in daily.
-- **Store review.** Server-driven automation with `<all_urls>` may be reviewed slowly. Mitigations: clear disclosure, unchanged permissions, a working reviewer account. Submit early in the gate window.
+- **Tab observation fails in a browser,** or misses the welcome tab. Fall back to
+  `launchWebAuthFlow` (the `identity` permission, a second sign-in), or to Flow B for the
+  sign-up-from-extension path. D0 decides early.
+- **MVP contention.** D2, D3 and D4 touch files the MVP live lanes use; they stay in the worktree
+  until 11-10 and merge `dev` in daily.
+- **Website port timing.** The store needs the live privacy notice at `getfluxiq.com/privacy/`
+  before submission, and that lives in the user's repository: U11 is on the critical path.
+- **DNS cutover.** Moving the apex off Hostinger could break mail if MX lives there; the runbook
+  keeps mail records and a Hostinger rollback.
+- **Store review.** Server-driven automation with `<all_urls>` may be reviewed slowly. Clear
+  disclosure, unchanged permissions, a working reviewer account; submit as soon as the gate passes.
+- **Analytics on the website.** GA on every visit conflicts with decline-by-default (U10); it must
+  never run on `app.getfluxiq.com`, which the two-hostname design guarantees.
 - **Consent friction.** Per-profile defaults (U2).
-- **Minimisation and model context.** Measure with provider-free runs and one live run before changing the loopback default.
-- **Unknown store IDs.** Update `extensionClients` after first publication; `moz-extension://*` covers Firefox.
+- **Minimisation and model context.** Measure with provider-free runs and one live run before
+  changing the loopback default.
 - **Queue leaks across servers.** Per-profile keys and tests (D4).
 
 ## Work Ledger
@@ -510,13 +622,34 @@ About 36 downstream agent-days. D2 and D3 touch disjoint files, as do D5, D6 and
 
 ## Open Questions
 
-Owner: the user, for all of them. A recommendation follows each. Core's N1 to N4 come first.
+Owner: the user, for all of them. A recommendation follows each; the plan proceeds on it. Core's
+N1 to N6 come first.
 
-- **U1. Product name on the website and in the store?** Recommendation: "FluxIQ" on getfluxiq.com, and "FluxIQ - Web Automation" as the store listing title.
-- **U2. Runs started outside the browser: ask or allow?** Recommendation: allow automatically on "This computer"; ask on remote servers, with an "Always for this Flow in this browser" option.
-- **U3. Tab sharing with remote servers?** Recommendation: only FluxIQ-relevant tabs by default, with an opt-in to share all. Loopback stays as today until measured.
-- **U5. Where does the infrastructure live?** Recommendation: `deploy/` here, without secrets. A private infrastructure repository only if it grows.
-- **U6. Email, logs and error vendors?** Recommendation: Postmark or Resend for verify and reset mail (required at launch); Grafana Cloud's free tier; Sentry with scrubbing.
-- **U7. Staging extension channel?** Recommendation: a staging-preset build loaded unpacked by testers, with no store listing.
-- **U8. Publisher identity for the stores?** Recommendation: the individual developer account now, with a business address service if the EU trader declaration applies. Transfer to the company once it exists.
-- **U9. Who sets up the VM and getfluxiq.com DNS, and when?** Recommendation: the user creates the VM account and adds the DNS records this week, so closed staging can run from the H1 worktree before the MVP deadline. The agents then do the rest from `deploy/`.
+- **U1. Product name on the website and in the store?** Recommendation: "FluxIQ" on the site and
+  panel; "FluxIQ - Web Automation" as the store listing title.
+- **U2. Runs started outside the browser: ask or allow?** Recommendation: allow automatically on
+  "This computer"; ask on remote servers, with "Always for this Flow in this browser".
+- **U3. Tab sharing with remote servers?** Recommendation: only FluxIQ-relevant tabs by default,
+  with an opt-in to share all; loopback unchanged until measured.
+- **U5. Where does the infrastructure live?** Recommendation: `deploy/` here, without secrets.
+- **U6. Email, logs and error vendors?** Recommendation: Postmark or Resend for welcome and reset
+  mail (required at launch); Grafana Cloud's free tier; Sentry with scrubbing.
+- **U7. Staging extension channel?** Recommendation: a staging-preset build loaded unpacked.
+- **U8. Publisher identity for the stores?** Recommendation: the individual developer account now,
+  with a business address service if the EU trader declaration applies.
+- **U9. VM, DNS and store account: who and when?** Recommendation: the user, this week: the VM,
+  DNS records for `app`, `staging`, `app.staging` and `status`, the email sender's DNS records, and
+  the Chrome Web Store developer registration. Closed staging needs them by about 11-03.
+- **U10. Google Analytics on getfluxiq.com?** It loads on every visit today (your 2026-10-09
+  decision), while optional cookies are to be declined by default (2026-10-18). Recommendation:
+  the separate cookie work makes GA opt-in on the website before sign-up opens; GA never runs on
+  `app.getfluxiq.com` either way.
+- **U11. Go-ahead to edit FluxIQWebsite and move getfluxiq.com to the VM?** Recommendation: approve
+  W4 once the stand-in round trip is green (about 11-06), so the hosted privacy notice and terms
+  are live before the store submission; Hostinger stays as the marketing-only rollback.
+
+### 2026-10-28 — Revised around the user's 2026-10-18 directions
+- Agent: supervisor; plan revision by a worker-heavy (brief H1), notes `!FluxIQWebExtension/docs/working/hosted-production-plan/reports/revision-2026-10-28-notes.md`
+- Changed: FluxIQWebsite (Next.js 16 static export on Hostinger) is the public site at getfluxiq.com and gains sign-up and its backend; Core moves to app.getfluxiq.com behind a private provisioning listener; `apps/site` shrinks to `apps/product`; a local website stand-in (`packages/website-stand-in/`, W0-W4) comes first; permissions follow AWS IAM (FRNs, generated actions, policies with explicit deny, predefined `FluxIQUserAccess`/`FluxIQOwnerFullAccess`, an inert-for-local parity test); the schedule is re-cut into parallel lanes (hosted gate 11-11/12, store submission about 11-13, each date's constraint named). The "Next revision owed" block is removed.
+- Validation: the worker checked the cited Core facts in code (no `platform/` or provisioning yet; one permission check in `_shared/api.ts`; 289 permission declarations); `node scripts/structure-audit.mjs` after the swap (below).
+- Outcome: plan revised; D0 and Core H0 can start. Open for the user: N2 (two hostnames), N5, N6, U9 (VM, DNS, store developer account), U10 (Google Analytics vs decline-by-default), U11 (go-ahead to edit FluxIQWebsite).

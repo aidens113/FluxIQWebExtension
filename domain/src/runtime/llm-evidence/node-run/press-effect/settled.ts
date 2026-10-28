@@ -14,16 +14,20 @@
 // Whether the press may be made twice at all is the caller's decision
 // (`pressAgain` absent where it may not), and such a press is then reported
 // after the wait alone. A press whose call declared a lasting consequence
-// (`lasting`) is made again only when it certainly did not happen: the page
-// unchanged through the wait and the control still there, shown and enabled,
-// in a form or dialog still open (`./certain-no-effect.ts`, t513). Anything
-// short of that leaves its effect uncertain, and it is held back as before.
+// (`lasting`), or one on a control whose own state a press flips, is never made
+// again here (`./repeat-press.ts`, t778): the page this domain reads may not
+// draw an act it committed until it loads again, so the wait's looks are the
+// read, and the press is said to be uncertain (`./uncertain.ts`) -- never "no
+// effect", and never pressed blindly a second time. Until t778 a lasting press
+// was made again when its control was still there and enabled (t513), and an
+// Unsave was pressed twice, saving the job again.
 
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import type { WebRunnableNode } from "../catalog";
-import { webPressCertainlyIgnored } from "./certain-no-effect";
 import { webPressNoEffect } from "./no-effect";
 import { webPressedControlWords } from "./press-words";
+import { webPressMayRepeat } from "./repeat-press";
+import { webPressUncertain } from "./uncertain";
 
 /** How long a press's effect is waited for, after each press, past the first look, and how often the page is looked at meanwhile. */
 const EFFECT_WAIT = { windowMs: 1_500, stepMs: 250 };
@@ -35,16 +39,17 @@ export type WebPressSettleSteps = {
   pressAgain: (() => Promise<boolean>) | undefined;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
-  /** True where the press's call declared a lasting consequence: it is made again only when it certainly did not happen. */
+  /** True where the press's call declared a lasting consequence: it is never made again here (`./repeat-press.ts`). */
   lasting?: boolean;
 };
 
 /**
  * The page the press finally left; how many times it was pressed; and, of the
- * two sentences, at most one: `noEffect` where nothing changed even so, or
- * `pressedAgain` where only the second press changed the page.
+ * three sentences, at most one: `noEffect` where nothing changed even so,
+ * `pressedAgain` where only the second press changed the page, or `uncertain`
+ * where the press may not be made again here and the page drew nothing of it.
  */
-export type WebPressSettled = { after: WebLlmSnapshotBinding | undefined; presses: number; noEffect?: string; pressedAgain?: string };
+export type WebPressSettled = { after: WebLlmSnapshotBinding | undefined; presses: number; noEffect?: string; pressedAgain?: string; uncertain?: string };
 
 /** Waits on a press that changed nothing, presses it once more where it may, and says what came of it. */
 export async function webPressSettled(
@@ -58,8 +63,10 @@ export async function webPressSettled(
   if (!unchanged(after)) return { after, presses: 1 };
   let page = await waitForEffect(after, unchanged, steps);
   if (!unchanged(page)) return { after: page, presses: 1 };
+  // Read through the wait and still drawn the same: a lasting press or a flipped state is not pressed blindly again.
+  if (!webPressMayRepeat(page, handle, steps.lasting === true)) return { after: page, presses: 1, uncertain: webPressUncertain(before, handle) };
   const again = steps.pressAgain;
-  const pressedAgain = again !== undefined && (steps.lasting !== true || webPressCertainlyIgnored(page, handle)) && await again();
+  const pressedAgain = again !== undefined && await again();
   if (pressedAgain) {
     page = await steps.look();
     if (unchanged(page)) page = await waitForEffect(page, unchanged, steps);

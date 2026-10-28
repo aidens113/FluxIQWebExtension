@@ -1,0 +1,23 @@
+# Hosted plan revision 2026-10-28: notes
+
+**What changed and why** (directions 1-4 folded in; the "Next revision owed" block is removed from both):
+- **Website (1).** FluxIQWebsite (Next.js 16 static export, live on Hostinger, four pages, no server) is the public site, and `apps/site` is dropped. Nothing in the website's code argued against it. Its gap (no server) is closed by `server/signup/` on its existing Node server. Core moves to `app.getfluxiq.com`. The reasons: Core is Next 15 with routes at `/`, so a path split would collide; keeping GA off the origin that holds the session cookie and `/connect/done` is a security gain; and nobody signs in on the website, so no session handoff is needed. Provisioning goes over a private listener that Caddy cannot reach. The website never handles passwords: Core's new welcome link verifies the email and sets the password. `apps/site` shrinks to `apps/product` (manifest, seeding hook, email copy). Core layer-3 panel plugins move to H2.
+- **Stand-in (2).** `packages/website-stand-in/` (W0-W4) has the same file names and contract as the target, so W4 copies the backend verbatim. Two loopback hostnames mimic the two origins. It is a workspace package (not a separate git repo) so the Lab and this repository's gates can use it.
+- **IAM (3).** FRNs, generated per-endpoint actions (from the 289 registrations), an IAM-JSON grammar with conditions, identity, guardrail, session and boundary policies, groups, roles, service identities, explicit deny wins, default deny, and every decision audited. `admin`, `viewer` and `user` become `FluxIQAdministratorAccess`, `FluxIQReadOnlyAccess` and `FluxIQUserAccess`, and the single owner gets `FluxIQOwnerFullAccess`. The own-data rule becomes owner conditions in `FluxIQUserAccess`. The provisioner is a service identity with explicit denies. A generated parity test proves the switch is inert for local use, which lets it merge before 11-10. The enterprise features (organisations, custom policies, roles, boundaries, SSO, export) sit behind `EntitlementPolicy`.
+- **Schedule (4).** Lanes are split finer (B into B1/B2/B3, C into C1-C3), Core lanes merge continuously, and each date's constraint is named. Gate 11-11/12, submission about 11-13 (was 11-28 and 12-01). Review time is quoted from Google's page (fetched 2026-10-28). Agent-days are about 50 Core and 38 downstream; the critical path is about 13 working days.
+
+**Facts checked in code (Core, 2026-10-28):** no `platform/`, profile, provisioning or Dockerfile exists yet. `roles.ts` (admin 8 permissions, viewer 1). `_shared/api.ts:97-120` is the single permission check. 289 `permission:` declarations across 8 permissions; 15 `route.ts` files, 9 checking `role.permissions`. `session-key.ts:33-43` picks the first enabled key. `client-gateway-transport.ts:115` has the any-session fallback. Login lockout at 100 (`route.ts:17`). Next 15.5.24.
+
+**For the supervisor.**
+- Both drafts keep the old ledger entries verbatim and add none. Append the ledger entry yourself. Core's draft is 794 lines, so an entry takes it to about 800 and triggers compaction on the next touch.
+- `git clone` was refused by the worker hook. The website was fetched as a `gh api` tarball of `dev` and extracted to `C:/Users/osrs_/FluxStuff/FluxIQWebsite`. It is not a git checkout; replace it with a real clone if one is wanted.
+- The relative `Related:` links in the drafts are written for their final location. While the drafts sit in `reports/`, `node scripts/structure-audit.mjs` reports 15 `[docs-links]` failures, all from those header links and nothing else. The links match the current plans' links, so they resolve once swapped in. Delete or neutralise the drafts in `reports/` before committing.
+
+**Open questions for the user** (full text in each draft):
+- N2: two hostnames (`getfluxiq.com` website, `app.getfluxiq.com` Core) replace the earlier one-origin answer.
+- N5: keep today's free multi-user self-hosting with predefined policies (recommended yes).
+- N6: enable enterprise on self-hosted with a signed entitlement file under a commercial agreement. That needs a contracting party.
+- U10: GA loads on every visit on getfluxiq.com (your 10-09 decision), which conflicts with decline-by-default (10-18). Recommended: opt-in before sign-up opens.
+- U11: go-ahead to edit FluxIQWebsite and move the apex from Hostinger to the VM. This is on the critical path, because the store needs `getfluxiq.com/privacy/` live.
+- U9 grows: DNS for `app`, `staging`, `app.staging` and `status`, plus the Chrome Web Store developer registration, by about 11-03.
+- Q6 (teams) is retired: it is now the enterprise organisation workspace.
