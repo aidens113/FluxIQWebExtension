@@ -216,6 +216,69 @@ Candidate names in those records are page text, so they are bounded and
 filtered by `identity/reportable-text.ts`: a label, never a container's
 contents.
 
+## Finding a stale target again (t786)
+
+A step whose target came from an earlier step -- a read list's row handed to a
+For Each pass, or a value bound to another step's answer -- can go stale when
+the page re-renders between the two: a count goes up, a relative time moves on,
+handles are renumbered, positional selectors move. After the step's second
+failed retry on a target failure that never acted, FluxIQ Core re-runs the
+source step read-only and asks the web host which of its fresh answers is the
+same item. Core owns the lineage, the trigger, the re-run and the rebinding
+(`fluxiq` `runtime/executor/target-reacquire/`); the web domain owns the
+matching, in `domain/src/runtime/target-reacquire/`. Matching is by identity,
+exact after spacing and case are set aside, never fuzzy and never by position.
+
+- **Rows** (`row-match.ts`). Key columns first (`row-key-columns.ts`): the
+  read's declared `dedupe.by` -- in its request, at its top level, or in its
+  record output's `process` -- compared through Core's
+  `automationStudioRecordRowIdentity`, the identity the read's own dedupe uses;
+  a dedupe over every column is "list each once" and declares nothing. Without
+  one, columns named as an id, URL, link, slug or key, or holding a link
+  (picture columns excluded). With no key columns, every word column must be
+  equal, while a column that says only a number, count, price or time
+  (`volatile-text.ts`: "13 likes", "$12.99", "6 min ago", "Oct 28") may
+  differ. A word column one side lacks is a difference, so the same post text
+  under another author, or a title one word apart, is another item. Exactly
+  one match is `found`; none is `gone`; several are `unmatched`/`ambiguous`; a
+  stale row saying fewer than two identifying values is
+  `unmatched`/`unidentifiable`.
+- **Controls** (`element-match.ts`). The identity signals of
+  `domain/src/element-fingerprint/signals.ts`: a candidate matches when every
+  signal both carry agrees and at least two agree (the save-time minimum).
+  Selector, xpath, list and table position and handle numbers are never
+  compared. Words are skipped when the step reads them as its value
+  (`readsWords`). Several matches stay `ambiguous` unless exactly one sits in a
+  record with the stale control's record words; the record only breaks a tie,
+  so changed card words never turn a match into `gone`.
+- **Going back first** (`return-to-source-place.ts`). The host remembers the
+  `from` location of each attempt's before-action capture (`source-places.ts`,
+  last 64 attempts). If the source's attempt recorded a location that differs
+  from the current page, the host navigates there with `web.browser.navigate`
+  and answers `returned`. It answers `unavailable` when the move fails or the
+  page cannot be read, and `same_place` otherwise. Only a location the run
+  itself recorded is used.
+
+The host runtime (`domain/src/runtime/host-runtime.ts`) binds both
+`reacquireTarget` and `returnToSourcePlace`, which covers playback and build
+trials. A build's own runs outside a graph pass a `reacquire` callback to
+Core's `automationStudioDispatchWithNodeRetries`
+(`llm-evidence/node-run/retries/`):
+
+- A row-bound replay step (`replay-row-reacquire.ts`) re-sends, once, the list
+  read its pass's row came from, which is the replayed read remembered with
+  that very row in `replayed-reads.ts`. It then matches the row and re-scopes
+  the control to the fresh row.
+- An exploration step on a looked-up handle (`looked-up-reacquire.ts`) looks
+  again under the default retries and matches the control among the fresh
+  look's controls in its own frame. It is then dispatched on the fresh
+  identity and selector.
+
+`gone` ends the node without spending a retry, under Core's
+`executor.target.gone` record, never the page's not-found, which a replay would
+read as a step the site remembered. A re-read that fails or answers no rows is
+`unavailable`, never `gone`.
+
 ## Limits
 
 - Scoring cannot rescue every drift, and is not meant to. A control whose

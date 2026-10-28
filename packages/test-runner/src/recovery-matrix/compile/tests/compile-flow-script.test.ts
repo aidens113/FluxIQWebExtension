@@ -6,7 +6,7 @@ import test from "node:test";
 import { FluxIQ } from "fluxiq";
 import { WEB_AUTOMATION_DOMAIN_ID, webAutomationDomain } from "@fluxiq-web-extension/domain/node";
 import { RunnerFailure } from "../../../failure.js";
-import { compileMatrixFlow, MatrixAuthoringGap } from "../compile-flow-script.js";
+import { compileMatrixFlow, MatrixAuthoringGap, type MatrixFlowStep } from "../compile-flow-script.js";
 import * as flows from "../../flows/index.js";
 import { CONFIRM_QUALIFYING } from "../../flows/index.js";
 import { RECOVERY_MATRIX_ROWS } from "../../matrix-rows.js";
@@ -48,6 +48,15 @@ for (const { flow, gap, calls } of used) {
       if (!compiled) return;
       assert.equal(compiled.flowId, flowId);
       assert.ok(compiled.subflows.some(subflow => subflow.role === "primary" && subflow.nodes > 0));
+      // A re-acquire case names its steps by the node keys Core gives them by place (13c): the source must be the
+      // list read and the step a click with a lasting consequence, or the check would judge some other node.
+      for (const spec of RECOVERY_MATRIX_ROWS.flatMap(row => row.cases).filter(matrixCase => matrixCase.flow === flow).flatMap(matrixCase => matrixCase.reacquire ? [matrixCase.reacquire] : [])) {
+        const source: MatrixFlowStep | undefined = compiled.steps.find(step => step.nodeKey === spec.source);
+        const target: MatrixFlowStep | undefined = compiled.steps.find(step => step.nodeKey === spec.step);
+        assert.equal(source?.definitionId, "web.output.dom-extract_list", `${flow}: ${spec.source} is not the list read`);
+        assert.equal(target?.definitionId, "web.output.dom-click", `${flow}: ${spec.step} is not a click`);
+        assert.equal(target?.lasting, true, `${flow}: ${spec.step} has no lasting consequence`);
+      }
       // Read back by a second, independent instance: the Core started afterwards sees what this one saved.
       const reader = FluxIQ.create({ rootDir: root, loadEnv: false, domainId: WEB_AUTOMATION_DOMAIN_ID, modelProvidersEnabled: false, domains: [webAutomationDomain] });
       try {

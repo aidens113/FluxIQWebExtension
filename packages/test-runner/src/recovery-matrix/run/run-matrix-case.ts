@@ -37,7 +37,8 @@ import * as flows from "../flows/index.js";
 import type { RecoveryMatrixCase, RecoveryMatrixRow } from "../matrix-row.js";
 import { requirementRefusal } from "./requirement-refusal.js";
 import { matrixCaseMeasures, type MatrixCaseMeasures } from "../measures.js";
-import { judgeSiteState, matrixAttemptRecords, matrixModelCalls, readSiteState, type MatrixModelCalls } from "../records/index.js";
+import { judgeSiteState, matrixAttemptRecords, matrixModelCalls, matrixTraceAttempts, readSiteState, type MatrixModelCalls, type MatrixRecoveryActivity, type MatrixTraceAttempt } from "../records/index.js";
+import { watchMatrixActivity, type MatrixActivityWatch } from "./activity-watch.js";
 
 export type MatrixCaseOptions = {
   repositoryRoot: string;
@@ -104,6 +105,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
   let perturbation: RunPerturbationSession | undefined;
   let perturbationReport: PerturbationReport | null = null;
   let run: PersistedFlowRunOutcome | undefined;
+  let activityWatch: MatrixActivityWatch | undefined;
   let outcome: { -readonly [Key in keyof MatrixCaseResult]: MatrixCaseResult[Key] } | undefined;
   try {
     const setup = await startTopology({ ...topologyOptions, runId: `${options.matrixRunId}-${matrixCase.caseId}-setup` });
@@ -137,12 +139,17 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
     const nodes = await readFlowNodes(control, { projectId, flowId: compiled.flowId });
     const actionTypes = createdFlowActionTypes(nodes, compiled.flowId);
     const facilityRunId = `${options.matrixRunId}-${matrixCase.caseId}`;
+    // A case judged by a recovery row reads Core's live activity throughout the run: the stream keeps only its last events.
+    if (matrixCase.reacquire) activityWatch = watchMatrixActivity(() => control.automationStudioCall("get-activity", { projectId }));
     // No `llmExecution`: Core runs it with `adaptiveMode: "deterministic"`, and its host was built with no model wiring.
     run = await executeRecordedFlowRun(control, { projectId, flowId: compiled.flowId, facilityRunId, actionTypes, inputs: { scenarioId: scenario.id, facilityRunId } });
     const detail = await settledRunDetail(control, projectId, run.runId);
     const modelCalls = matrixModelCalls(detail);
     const raw = await control.automationStudioCall("get-flow-run-detail", { projectId, runId: run.runId });
     const runDetail = record(record(raw)?.runDetail) ?? {};
+    const collected = activityWatch ? await activityWatch.stop() : undefined;
+    activityWatch = undefined;
+    const reacquireEvidence = matrixCase.reacquire ? await reacquireRecords(control, projectId, run.runId, collected?.activities ?? null) : {};
     const site = judgeSiteState(matrixCase.site, await readSiteState(started.scenarioOrigin, started.allocation.controllerToken, scenario.id));
     const goalHeld = matrixCase.goalFacts ? await goalFactsHeld(browser, started.scenarioOrigin, finalStateFacts(scenario, workflow)) : null;
     perturbationReport = perturbation ? await perturbation.close() : null;
@@ -156,6 +163,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
       goalHeld,
       model: { calls: modelCalls.calls, interventions: modelCalls.interventions, harnessActivations: run.harnessActivations },
       faultFired: perturbationReport ? perturbationReport.fired : null,
+      ...reacquireEvidence,
     };
     const checked = MATRIX_CHECKS[matrixCase.check](evidence, matrixCase);
     browser.guard.assertNoViolations();
@@ -191,6 +199,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
       perturbationReport,
     }));
   } finally {
+    await activityWatch?.stop().catch(/* best-effort: the verdict is already decided */ () => undefined);
     await perturbation?.close().catch(/* best-effort: the verdict is already decided */ () => undefined);
     await browser?.close().catch(/* best-effort: the verdict is already decided */ () => undefined);
     await topology?.close().catch(/* best-effort: the verdict is already decided */ () => undefined);
@@ -252,6 +261,20 @@ async function settledRunDetail(control: NonNullable<RunningTopology["control"]>
     detail = await control.getRunDetail(projectId, runId);
   }
   return detail;
+}
+
+/**
+ * What a re-acquire case is judged by beyond the run detail: the run's own trace
+ * attempts, from its runtime session (the run detail leaves out the `reacquire`
+ * record, `../records/trace-attempts.ts`), and the recovery rows its live
+ * activity said about this run.
+ */
+async function reacquireRecords(control: NonNullable<RunningTopology["control"]>, projectId: string, runId: string, activities: readonly MatrixRecoveryActivity[] | null): Promise<{ trace: MatrixTraceAttempt[]; recoveries: MatrixRecoveryActivity[] | null }> {
+  const answer = record(await control.automationStudioCall("get-runtime-session", { projectId, runId }));
+  return {
+    trace: matrixTraceAttempts(answer?.runtimeSession),
+    recoveries: activities === null ? null : activities.filter(activity => activity.subjectKind === "run" && activity.subjectId === runId),
+  };
 }
 
 /** Core refused the script because its node library offers no Call Subflow (`flow_script.call_unavailable`). */

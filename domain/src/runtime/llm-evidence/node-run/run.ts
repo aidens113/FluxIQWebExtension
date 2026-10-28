@@ -84,7 +84,7 @@ import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type We
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadCode, webListReadConditionAccount } from "./list-read";
-import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal } from "./retries";
+import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookedUpReacquire } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
 
 /** The shapes a handle is written in, as a refusal names them (`./handle-shape/` puts a bare one into the first). */
@@ -382,8 +382,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // A list read also asks for a few of the rows its conditions turned down,
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
     // A lasting act whose answer was lost is checked against the step's own
-    // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3).
-    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran));
+    // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3); a control the page re-rendered is looked for again by its identity (t786).
+    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), webNodeLookedUpReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: webNodeDispatchParameters(node, ran), look: () => readablePage(run, run.request) }));
     assertActive(run.request.signal);
     // One the check showed landed counts as done, whatever its lost answer said.
     if (result.status !== "succeeded" && lastingAct !== "landed") {

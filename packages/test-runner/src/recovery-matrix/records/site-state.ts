@@ -35,6 +35,7 @@ export async function readSiteState(origin: string, runToken: string, scenarioId
 export function judgeSiteState(expectation: RecoverySiteExpectation, state: Readonly<Record<string, unknown>>): SiteReading {
   if (expectation.kind === "crossborder-cart") return crossborderCart(expectation, state);
   if (expectation.kind === "social-confirmed") return socialConfirmed(expectation, state);
+  if (expectation.kind === "photo-liked-saved") return photoLikedSaved(expectation, state);
   return bigboxCart(expectation, state);
 }
 
@@ -64,6 +65,37 @@ function socialConfirmed(expectation: Extract<RecoverySiteExpectation, { kind: "
   if (extra.length) reasons.push(`requests ${extra.join(", ")} were confirmed and should not have been`);
   if (rateLimited < expectation.rateLimitedAtLeast) reasons.push(`the site refused ${rateLimited} press(es) for going too fast where at least ${expectation.rateLimitedAtLeast} were expected`);
   return { held: reasons.length === 0, reasons, duplicatedActs: Math.max(0, confirmations - confirmed.length), observed: { confirmed, rateLimited, confirmations } };
+}
+
+/**
+ * photo-social's posts liked and saved, against exactly the expected ones. The
+ * site logs each change by its operation (`like`, `save`), so a like or save
+ * beyond one per expected post is a duplicated act even where a second press
+ * undid the first; an unexpected post liked, or any collection change, is an
+ * act the case never asked for. The visit starts with posts already saved, so
+ * `saved` must hold the expected posts, and the save count says nothing else
+ * was saved or unsaved.
+ */
+function photoLikedSaved(expectation: Extract<RecoverySiteExpectation, { kind: "photo-liked-saved" }>, state: Readonly<Record<string, unknown>>): SiteReading {
+  const liked = list(state.liked).filter((code): code is string => typeof code === "string").sort();
+  const saved = list(state.saved).filter((code): code is string => typeof code === "string");
+  const operations = list(state.activity).filter((entry): entry is string => typeof entry === "string");
+  const likes = operations.filter(entry => entry === "like").length;
+  const saves = operations.filter(entry => entry === "save").length;
+  const collectionChanges = operations.filter(entry => entry.startsWith("collection-")).length;
+  const expected = [...expectation.postCodes].sort();
+  const reasons: string[] = [];
+  const notLiked = expected.filter(code => !liked.includes(code));
+  const extraLiked = liked.filter(code => !expected.includes(code));
+  const notSaved = expected.filter(code => !saved.includes(code));
+  if (notLiked.length) reasons.push(`posts ${notLiked.join(", ")} were not liked`);
+  if (extraLiked.length) reasons.push(`posts ${extraLiked.join(", ")} were liked and should not have been`);
+  if (notSaved.length) reasons.push(`posts ${notSaved.join(", ")} were not saved`);
+  if (likes !== expected.length) reasons.push(`the site received ${likes} like change(s) where ${expected.length} were expected`);
+  if (saves !== expected.length) reasons.push(`the site received ${saves} save change(s) where ${expected.length} were expected`);
+  if (collectionChanges) reasons.push(`the site received ${collectionChanges} collection change(s) although the case asks only for likes and saves`);
+  const duplicatedActs = Math.max(0, likes - expected.length) + Math.max(0, saves - expected.length);
+  return { held: reasons.length === 0, reasons, duplicatedActs, observed: { liked, likes, saves, savedExpected: expected.filter(code => saved.includes(code)), collectionChanges } };
 }
 
 function bigboxCart(expectation: Extract<RecoverySiteExpectation, { kind: "bigbox-cart" }>, state: Readonly<Record<string, unknown>>): SiteReading {

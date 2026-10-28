@@ -2738,6 +2738,15 @@ fixes, avoidable escalations and learning cost are 0 by construction in a
 provider-free run, and handler-check overhead is `null` until the trace carries
 per-boundary timings.
 
+Case 13c (t786) proves the stale target re-acquire on photo-social: each post's
+like moves the like count the read took, so its row-bound bookmark fails
+target-not-found three times, and the fourth attempt must carry a `found`
+re-acquire from the read and succeed on every pass, with one `reacquire`
+recovery row per find, each post liked and saved once (`row-reacquired`). The run detail
+does not carry the re-acquire record, so this case also reads the runtime
+session's trace (`records/trace-attempts.ts`) and collects Core's in-memory
+activity while the run is in flight (`run/activity-watch.ts`).
+
 **The bundle** is `<runs>/recovery-matrix/<matrix-run-id>/`: `case-<id>.json`
 per case (verdict, reasons, missing records, the compiled Flow's steps and
 requirements, each attempt in closed words, the accounting and its source, the

@@ -9,8 +9,9 @@
 // mechanism the row is about has proven nothing about the mechanism.
 
 import type { RecoveryCheckId, RecoveryExecutorFeature, RecoveryMatrixCase } from "../matrix-row.js";
-import type { MatrixAttemptRecord } from "../records/index.js";
+import type { MatrixAttemptRecord, MatrixTraceAttempt } from "../records/index.js";
 import { firstPrimaryStep, modelGateReasons, stepOfNode, type MatrixCaseEvidence, type MatrixCheckResult } from "./case-evidence.js";
+import { matrixStepArrivals } from "./step-arrivals.js";
 
 type Check = (evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase) => MatrixCheckResult;
 
@@ -28,6 +29,7 @@ export const MATRIX_CHECKS: Readonly<Record<RecoveryCheckId, Check>> = {
   "checkpoint-route": checkpointRoute,
   "worker-restart": workerRestart,
   "retries-absorbed": retriesAbsorbed,
+  "row-reacquired": rowReacquired,
   "deliberate-stop": deliberateStop,
 };
 
@@ -191,6 +193,74 @@ function retriesAbsorbed(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatri
   const retries = evidence.attempts.filter(attempt => attempt.retry).length;
   if (retries === 0) reasons.push("no attempt was a retry: the refusal the row is about was never met");
   return result(reasons, [], { retries });
+}
+
+/**
+ * Row 13c: a step bound to a read's row met that row redrawn. Its first
+ * attempt and two retries failed target-not-found, Core re-ran the read and the
+ * host found the same row again, and the fourth attempt, carrying the `found`
+ * re-acquire from the read, succeeded -- on every pass the case says redraws
+ * its row, each pass within four attempts, with one recovery row in Core's
+ * activity for each re-acquire found, and no model (the floor). No other step
+ * re-acquires anything. Judged from the run's own trace, since the run detail
+ * does not carry the re-acquire record.
+ */
+function rowReacquired(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): MatrixCheckResult {
+  const reasons = floor(evidence, matrixCase);
+  succeeded(evidence, reasons);
+  const spec = matrixCase.reacquire;
+  if (!spec) return result([...reasons, "the case names no step whose row is re-acquired"], [], {});
+  const trace = evidence.trace ?? [];
+  const keyOf = (nodeId: string | null) => stepOfNode(evidence.steps, nodeId)?.nodeKey;
+  const arrivals = matrixStepArrivals(trace, attempt => keyOf(attempt.nodeId) === spec.step);
+  const sourceNodeId = trace.find(attempt => keyOf(attempt.nodeId) === spec.source)?.nodeId ?? null;
+  if (!trace.length) reasons.push("the run's trace carried no attempts");
+  if (sourceNodeId === null) reasons.push(`the read ${spec.source} never ran`);
+  if (arrivals.length !== spec.passes) reasons.push(`step ${spec.step} was reached ${arrivals.length} time(s) where its loop has ${spec.passes} pass(es)`);
+  arrivals.forEach((arrival, index) => {
+    const last = arrival[arrival.length - 1]!;
+    if (last.status !== "succeeded") reasons.push(`pass ${index + 1}: step ${spec.step} ended ${attemptWords(last)}`);
+    if (arrival.length > 4) reasons.push(`pass ${index + 1}: step ${spec.step} was attempted ${arrival.length} times, more than the first attempt and three retries`);
+  });
+  const records = trace.filter(attempt => attempt.reacquire !== null);
+  for (const stray of records.filter(attempt => keyOf(attempt.nodeId) !== spec.step)) reasons.push(`step ${keyOf(stray.nodeId) ?? stray.nodeId ?? "unknown"} carries a re-acquire record although only ${spec.step}'s row was redrawn`);
+  const own = records.filter(attempt => keyOf(attempt.nodeId) === spec.step);
+  for (const missed of own.filter(attempt => attempt.reacquire!.outcome !== "found")) reasons.push(`a re-acquire of ${spec.step} came to ${missed.reacquire!.outcome}${missed.reacquire!.reason ? `/${missed.reacquire!.reason}` : ""}, not found`);
+  const proven = arrivals.filter(arrival => reacquiredAsDesigned(arrival, sourceNodeId));
+  if (own.length && proven.length < spec.reacquiredPasses) reasons.push(`${proven.length} pass(es) of ${spec.step} re-acquired their row after three target-not-found failures and succeeded on the fourth attempt, where ${spec.reacquiredPasses} were expected`);
+  const found = own.filter(attempt => attempt.reacquire!.outcome === "found").length;
+  const rows = (evidence.recoveries ?? []).filter(row => row.kind === "reacquire");
+  if (evidence.recoveries === undefined || evidence.recoveries === null) reasons.push("Core's live activity was not collected, so the re-acquire's recovery row is not shown");
+  else {
+    const foundRows = rows.filter(row => keyOf(row.nodeId) === spec.step && row.outcome === "succeeded").length;
+    if (foundRows !== found) reasons.push(`Core's activity said ${foundRows} re-acquire(s) of ${spec.step} succeeded where its trace holds ${found}`);
+    const otherRows = rows.filter(row => keyOf(row.nodeId) !== spec.step || row.outcome !== "succeeded");
+    if (otherRows.length) reasons.push(`Core's activity holds ${otherRows.length} re-acquire row(s) that are not a found ${spec.step}`);
+  }
+  const observed = {
+    passes: arrivals.map(arrival => arrival.map(attemptWords)),
+    reacquiredPasses: proven.length,
+    // Every record, a stray one on another step too, so a failed case says what each came to.
+    reacquireRecords: records.map(attempt => ({ step: keyOf(attempt.nodeId) ?? null, status: attempt.status, ...attempt.reacquire })),
+    recoveryRows: rows.map(row => ({ outcome: row.outcome, subject: row.subject, step: keyOf(row.nodeId) ?? null })),
+  };
+  return result(reasons, own.length ? [] : ["reacquire"], observed);
+}
+
+/** The pass's fourth attempt carried a `found` row re-acquire from the read and succeeded, after three target-not-found failures. */
+function reacquiredAsDesigned(arrival: readonly MatrixTraceAttempt[], sourceNodeId: string | null): boolean {
+  if (arrival.length !== 4) return false;
+  const fourth = arrival[3]!;
+  const reacquire = fourth.reacquire;
+  if (!reacquire || reacquire.outcome !== "found" || reacquire.kind !== "row" || reacquire.sourceNodeId === null || reacquire.sourceNodeId !== sourceNodeId) return false;
+  if (fourth.status !== "succeeded") return false;
+  return arrival.slice(0, 3).every(attempt => attempt.status === "failed" && attempt.failure?.category === "target_not_found" && attempt.reacquire === null);
+}
+
+/** `failed:target_not_found/web.target.not_found`, with ` reacquire:found` when the attempt carried one. */
+function attemptWords(attempt: MatrixTraceAttempt): string {
+  const failure = attempt.failure ? `:${attempt.failure.category ?? "unknown"}/${attempt.failure.code ?? "no code"}` : "";
+  return `${attempt.status}${failure}${attempt.reacquire ? ` reacquire:${attempt.reacquire.outcome}` : ""}`;
 }
 
 /** Row 13b: a step failed, its authored failed path took the run to an End marked failed, and the run ended there with no model. */

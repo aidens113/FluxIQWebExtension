@@ -99,7 +99,7 @@ import {
 import type { WebNodeRun } from "./context";
 import { webMovesThePage } from "./start-location";
 import { verifyWebOutputNode } from "./verify";
-import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookUntilPresent } from "./retries";
+import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookUntilPresent, webNodeReplayedReads, webNodeReplayRowReacquire } from "./retries";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";
@@ -364,8 +364,11 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // Under Core's default retries, as playback and a trial run the step
   // (`./retries/`, t355); a lasting act is never blindly repeated, and one
   // whose answer was lost is checked against the step's own expected state
-  // first (`./retries/effect-check.ts`, plan B3).
-  const { result, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran));
+  // first (`./retries/effect-check.ts`, plan B3). A pass whose row the page has
+  // since redrawn re-reads the list it came from and is scoped to the same row,
+  // fresh, for its last retries (`./retries/replay-row-reacquire.ts`, t786).
+  const reacquire = webNodeReplayRowReacquire(run, { item: value.item, parameters: ran, metadata: toolMetadata(run.request), readRows: flowRows });
+  const { result, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), reacquire);
   assertActive(run.request.signal);
   // One the check showed landed counts as done, whatever its lost answer said.
   if (result.status !== "succeeded" && lastingAct !== "landed") {
@@ -444,7 +447,11 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   const after = before === undefined ? undefined : await replayPage(run, false);
   const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
   // A read's outputs, on the ports the Flow's own node fills, for the test's later steps to read (D6, t646).
-  return withNodeOutputs(replayed, replayedReadOutputs(node.actionType, resolvedParameters, payload));
+  const outputs = replayedReadOutputs(node.actionType, resolvedParameters, payload);
+  // A list read's rows and command, so a later pass whose row went stale can read it again (`./retries/replayed-reads.ts`, t786).
+  const rows = node.actionType === EXTRACT_LIST_ACTION && Array.isArray(outputs?.records) ? outputs.records.filter((row): row is JsonObject => isJsonRecord(row)) : undefined;
+  if (rows !== undefined) webNodeReplayedReads(run).remember({ command: { actionType: node.actionType, parameters: ran }, parameters: resolvedParameters, rows });
+  return withNodeOutputs(replayed, outputs);
 }
 
 /**

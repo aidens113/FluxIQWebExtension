@@ -48,6 +48,11 @@
 // made again, and without an answer the press is not repeated and the result
 // says `lastingAct: "uncertain"` so the caller can tell the model the step's
 // outcome is uncertain rather than that it failed.
+//
+// **A stale target is found again, once (t786).** A caller that knows where
+// its target came from passes `reacquire` (`./reacquire.ts`); Core asks it
+// after the second failed retry on a target failure that never acted, and the
+// remaining attempts go to what it found. Its outcome is on the answer.
 
 import { AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioLastingActCheck, type AutomationStudioNodeRetryReading } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -58,6 +63,7 @@ import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import type { WebNodeRun } from "../context";
 import { webNodeRetriedAnswer } from "./answer";
+import { webNodeRetryReacquire, type WebNodeReacquire } from "./reacquire";
 import { webNodeRetryWait } from "./wait";
 
 /** What the gateway answers one command with. */
@@ -68,7 +74,13 @@ export type WebNodeDispatchResult = Awaited<ReturnType<WebLlmEvidenceGateway["ex
  * how a lasting act whose effect the failure left unknown was settled: `landed`
  * (it counts as done) or `uncertain` (it was not made again). Absent otherwise.
  */
-export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: number; lastingAct?: "landed" | "uncertain" };
+export type WebNodeRetriedDispatch = {
+  result: WebNodeDispatchResult;
+  attempts: number;
+  lastingAct?: "landed" | "uncertain";
+  /** What finding a stale target again came to, when Core asked (t786). */
+  reacquire?: "found" | "gone" | "unmatched" | "unavailable";
+};
 
 /**
  * Dispatches one node command, and dispatches it again after each fault Core's
@@ -80,13 +92,15 @@ export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: 
  * whether running it changes the page, and the consequences the call declared
  * (`declared`, as the call wrote them: `[]` for none; absent on a read and on a
  * call that declared nothing). `noted`, when given, is told how many attempts there were.
+ * `reacquire`, when given, finds the node's stale target again (header, t786).
  */
 export async function webNodeDispatchWithRetries(
   run: Pick<WebNodeRun, "gateway" | "sessionId" | "request">,
   node: { definitionId: string; effect: "observe" | "mutate"; declared?: JsonValue | undefined },
   command: { actionType: string; parameters: JsonObject; metadata: JsonObject },
   noted?: { attempts?: number },
-  checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>
+  checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>,
+  reacquire?: WebNodeReacquire
 ): Promise<WebNodeRetriedDispatch> {
   // Every attempt's answer, in order, so a refusal that caused the later failures can answer for the node (`./answer.ts`).
   const answers: WebNodeDispatchResult[] = [];
@@ -100,6 +114,7 @@ export async function webNodeDispatchWithRetries(
     },
     read: (result) => webNodeRetryReading(result, command),
     checkEffect,
+    reacquire: reacquire === undefined ? undefined : webNodeRetryReacquire(run, command, reacquire, answers),
     delay: webNodeRetryWait,
     signal: run.request.signal
   });
@@ -107,7 +122,7 @@ export async function webNodeDispatchWithRetries(
   if (noted) noted.attempts = outcome.attempts;
   // A lasting act Core settled keeps the answer it settled on.
   const result = outcome.lastingAct === undefined ? webNodeRetriedAnswer(answers, outcome.result) : outcome.result;
-  return present<WebNodeRetriedDispatch>({ result, attempts: outcome.attempts, lastingAct: outcome.lastingAct });
+  return present<WebNodeRetriedDispatch>({ result, attempts: outcome.attempts, lastingAct: outcome.lastingAct, reacquire: outcome.reacquire });
 }
 
 /**
