@@ -33,7 +33,7 @@
 
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../types";
-import { stepPage, type PaginationProgress, type PaginationStop } from "./page-advance";
+import { PageMovePersonCheck, PaginationFault, RATE_LIMITED_STOP, stepPage, type PaginationProgress, type PaginationStop } from "./page-advance";
 
 export {
   awaitPageLoadTurn,
@@ -69,6 +69,13 @@ export function paginationBound(paginate: WebAutomationExtractListPagination): n
 
 /** Moves the list on by one page in the request's mode, held to the read's bound; see the header. */
 export async function advancePage(paginate: WebAutomationExtractListPagination, progress: PaginationProgress): Promise<PageAdvance> {
-  const step = await stepPage(paginate, progress, paginationBound(paginate));
+  let step;
+  try {
+    step = await stepPage(paginate, progress, paginationBound(paginate));
+  } catch (error) {
+    // A page that stops to ask for a person has paused the list; it has not ended it (t765).
+    if (error instanceof PageMovePersonCheck) throw new PaginationFault(RATE_LIMITED_STOP, "The page stopped the list at a check only a person can answer (a session check, a password or a robot check). The list has not ended.");
+    throw error;
+  }
   return step.outcome === "advanced" ? ADVANCED : step;
 }

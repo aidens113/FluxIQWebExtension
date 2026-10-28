@@ -173,9 +173,16 @@ type FeedOptions = {
    * notice stays for good.
    */
   pause?: { words: string; refusals: number; retryAfterMs?: number; clearsAfterMs?: number };
+  /**
+   * The loader answers the first request with a session check under the list
+   * instead of a batch (t765): `words`, and a Continue whose press loads the
+   * batch. `field` adds a password field, so only a person can answer it;
+   * `noWayOn` leaves it without a Continue.
+   */
+  wall?: { words: string; field?: boolean; noWayOn?: boolean };
 };
 
-type FeedPage = { body: El; feed: El; scrolls(): number; posts(): number; restore(): void };
+type FeedPage = { body: El; feed: El; scrolls(): number; posts(): number; presses(): number; restore(): void };
 let page: FeedPage | undefined;
 
 function post(index: number): El {
@@ -221,8 +228,32 @@ function feedPage(options: FeedOptions): FeedPage {
     }
     if (pause.clearsAfterMs !== undefined) setTimeout(goAway, pause.clearsAfterMs);
   };
+  let walled = false;
+  let standing: El | undefined;
+  let presses = 0;
+  const raiseWall = (wall: NonNullable<FeedOptions["wall"]>): void => {
+    walled = true;
+    const card = new El("div", {}, wall.words);
+    standing = card;
+    if (wall.field) card.append(new El("input", { type: "password" }));
+    if (!wall.noWayOn) {
+      const carryOn = new El("div", { role: "button", tabindex: "0" }, "Continue as Sam");
+      carryOn.onClick = () => {
+        presses += 1;
+        card.remove();
+        standing = undefined;
+        load(true);
+      };
+      card.append(carryOn);
+    }
+    card.append(new El("a", { href: "/accounts/login/" }, "Not Sam? Switch accounts"));
+    card.parentElement = main;
+    main.children.splice(main.children.indexOf(feed) + 1, 0, card);
+  };
   const load = (force = false): void => {
     if (loading || left === 0) return;
+    if (options.wall && !walled) return raiseWall(options.wall);
+    if (standing !== undefined && !force) return;
     if (options.pause && !force && notice === undefined && refused < options.pause.refusals) return refuse(options.pause);
     if (notice !== undefined && !force) return;
     loading = true;
@@ -284,6 +315,7 @@ function feedPage(options: FeedOptions): FeedPage {
     feed,
     scrolls: () => scrolls,
     posts: () => body.querySelectorAll(POST).length,
+    presses: () => presses,
     restore: () => {
       for (const [name, value] of Object.entries(saved)) (globalThis as Record<string, unknown>)[name] = value;
       page = undefined;
@@ -458,3 +490,35 @@ test("a Load more press met by a notice that stays fails rate_limited, not list_
     assert.equal(feed.posts(), 5);
   });
 });
+
+// A session check under the list is an interruption, never the end (t765).
+const SESSION_WORDS = "Your session needs a quick check before we load more.";
+
+test("a scroll met by a session check with a plain Continue presses it and moves, never ending the list", async () => {
+  await onFeed({ batchMs: 100, batches: 3, wall: { words: SESSION_WORDS } }, async (feed) => {
+    assert.deepEqual(await movePage({ item: POST, pagination: { mode: "scroll" } }, { timeoutMs: 30_000 }), { outcome: "moved", by: "scroll" });
+    assert.equal(feed.presses(), 1, "the wall's Continue was pressed once");
+    assert.equal(feed.posts(), 10);
+  });
+});
+
+test("a scroll with no way of its own meets the session check and moves too", async () => {
+  await onFeed({ batchMs: 100, batches: 3, wall: { words: SESSION_WORDS } }, async (feed) => {
+    assert.deepEqual(await movePage({ item: POST }, { timeoutMs: 30_000 }), { outcome: "moved", by: "scroll" });
+    assert.equal(feed.posts(), 10);
+  });
+});
+
+for (const [name, wall] of [
+  ["asks for a password", { words: SESSION_WORDS, field: true }],
+  ["offers no way on", { words: SESSION_WORDS, noWayOn: true }]
+] as const) {
+  test(`a session check that ${name} needs the person: nothing is pressed and the list is not ended`, async () => {
+    await onFeed({ batchMs: 100, batches: 3, wall }, async (feed) => {
+      const answer = await movePage({ item: POST, pagination: { mode: "scroll" } }, { timeoutMs: 30_000 });
+      assert.equal(answer.outcome, "needs_person");
+      assert.equal(feed.presses(), 0);
+      assert.equal(feed.posts(), 5);
+    });
+  });
+}

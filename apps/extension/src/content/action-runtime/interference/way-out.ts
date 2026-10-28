@@ -39,7 +39,7 @@
 import { composedDescendants } from "../../shadow-dom";
 import { actsOnPress } from "./press-guard";
 import { boundedLayerText } from "./layer-text";
-import { isConsentDeclineLabel, isConsentLayerText, isDismissalLabel, isRateLimitAcknowledgeLabel, isRateLimitLayerText } from "./vocabulary";
+import { isConsentDeclineLabel, isConsentLayerText, isDismissalLabel, isRateLimitAcknowledgeLabel, isRateLimitLayerText, isSessionContinueLabel, isSessionWallText } from "./vocabulary";
 
 /** At most this many elements of one overlay are read for a way out. */
 const DISMISS_SCAN_LIMIT = 400;
@@ -79,6 +79,11 @@ function firstDismissal(overlay: Element, pressable: boolean): Element | undefin
     const declining = firstMatching(overlay, pressable, saysConsentDecline);
     if (declining) return declining;
   }
+  if (isSessionWallText(text)) {
+    // A session check that offers a plain way on (t765): its Continue is a way out; a password or a robot check is refused before this (`pressable-way-out.ts`).
+    const continuing = firstMatching(overlay, pressable, saysSessionContinue);
+    if (continuing) return continuing;
+  }
   if (!isRateLimitLayerText(text)) return undefined;
   return firstMatching(overlay, pressable, saysRateLimitAcknowledge);
 }
@@ -103,6 +108,11 @@ function saysConsentDecline(element: Element): boolean {
 /** Whether this element's own name or text acknowledges a rate-limit notice. Leaves only, as for a dismissal. */
 function saysRateLimitAcknowledge(element: Element): boolean {
   return ownLabelSays(element, isRateLimitAcknowledgeLabel);
+}
+
+/** Whether this element's own name or text is the way on a session check offers. Leaves only, as for a dismissal. */
+function saysSessionContinue(element: Element): boolean {
+  return ownLabelSays(element, isSessionContinueLabel);
 }
 
 /** The element's accessible name, or -- for a leaf only -- its text, read by one label rule. */

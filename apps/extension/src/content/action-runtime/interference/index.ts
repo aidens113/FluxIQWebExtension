@@ -38,7 +38,7 @@ export { probePoints } from "./probe-points";
 export { boundedLayerText } from "./layer-text";
 export { layerKind } from "./layer-kind";
 export { dismissControlIn, hasDismissalControl } from "./way-out";
-export { isDismissalLabel, isPageRequirementText, isRateLimitLayerText, isTransientRefusalText, DISMISS_LABEL_MAX } from "./vocabulary";
+export { isDismissalLabel, isPageRequirementText, isRateLimitLayerText, isSessionContinueLabel, isSessionWallText, isTransientRefusalText, DISMISS_LABEL_MAX } from "./vocabulary";
 
 export type { Point } from "./overlays";
 export type { ClearingTarget } from "./clearing-target";

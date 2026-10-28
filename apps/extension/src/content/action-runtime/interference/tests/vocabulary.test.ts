@@ -23,6 +23,8 @@ import {
   isPageRequirementText,
   isRateLimitAcknowledgeLabel,
   isRateLimitLayerText,
+  isSessionContinueLabel,
+  isSessionWallText,
   isTransientRefusalText
 } from "../vocabulary";
 
@@ -306,4 +308,23 @@ test("only a layer that is about cookies or consent is read for a decline", () =
   assert.equal(isConsentLayerText("Allow the use of cookies from Circleway on this browser?"), true);
   assert.equal(isConsentLayerText("Priya Nair invited you to the Riverside Allotment Society. Accept Decline"), false);
   assert.equal(isConsentLayerText("You're going too fast. You can try again in 9 seconds."), false);
+});
+
+// A session check is an interruption with a plain way on (t765).
+test("session-check wording is recognised, and an ordinary page is not one", () => {
+  for (const text of ["Your session needs a quick check before we load more.", "Your session has expired.", "Please confirm it's you to continue", "Are you still there?"]) {
+    assert.equal(isSessionWallText(text), true, text);
+  }
+  for (const text of ["Review your order", "Session 3 of the conference starts at ten", "Continue to payment"]) {
+    assert.equal(isSessionWallText(text), false, text);
+  }
+});
+
+test("a session check's way on is a whole-label Continue, never a payment or a deletion", () => {
+  for (const label of ["Continue", "Continue as Sam Rivera", "Stay signed in", "I'm still here", "Resume"]) {
+    assert.equal(isSessionContinueLabel(label), true, label);
+  }
+  for (const label of ["Continue to payment", "Continue and delete my account", "Continue as Sam and pay now", "Sign in", "Switch accounts", ""]) {
+    assert.equal(isSessionContinueLabel(label), false, label);
+  }
 });
