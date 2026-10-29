@@ -1,0 +1,13 @@
+{
+  "name": "@fluxiq-web-extension/website-stand-in",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local stand-in for the public FluxIQ website: static pages plus the sign-up backend, dependency-free so it ports to FluxIQWebsite.",
+  "scripts": {
+    "test": "node --test \"server/**/tests/*.test.mjs\"",
+    "start": "node server/start.mjs",
+    "site:up": "node scripts/up.mjs",
+    "site:round-trip": "node scripts/round-trip.mjs"
+  }
+}

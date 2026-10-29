@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now.** This is a plan; no hosted code exists in either repository (checked
+**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); lane A (t802) and B3 (t803) are in flight in Core, and the stand-in W0-W2 (t801) here. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -97,8 +97,8 @@ This document links to them and does not restate them.
 - Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. The supervisor dispatches the contract-freeze worker (Core carries the H0 changes) and opens the
-   paired H1 task (one ID, nested worktrees); D2 starts with the D0 listener rules.
+1. In flight since 2026-10-29: Core lane A (t802), B3 (t803) and the stand-in W0-W2 (t801). Next: C0 and E once the framework lanes free the runtime files;
+   D2 starts once lane A has the gateway steps, with the D0 listener rules.
 2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
 **Blocked.** Nothing blocks W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
@@ -705,6 +705,13 @@ gaining an enterprise contact page.
 - Decisions (supervisor): single-tenancy workspace id `workspace-main` (override `FLUXIQ_WORKSPACE_ID`; lane C may revisit); a two-factor account with a sealed credential is refused `two_factor` and its link stays unused (email alone never turns two-factor off; recovery by an administrator reset); a link reset clears the PIN as the admin reset does; the listener keeps `setPassword` unavailable over HTTP (the website never sees a password). Open for lane F: an audited break-glass CLI path for a sealed two-factor administrator on a stopped server.
 - Validation: supervisor-run under the heavy-check lock on the final code: `pnpm test src/platform src/programs/identity-access src/programs/_shared .../runtime/llm .../runtime/conversations .../api/handlers` -> "Test Files 322 passed (322)", "Tests 2985 passed (2985)", real-sql "28 passed", "234 passed"; contracts "Tests 489 passed (489)"; `pnpm check` -> exit 0; `pnpm docs:check` current; `pnpm structure:check` passed (452 warnings); apps/web `vitest run` listener, welcome, reset, provisioning smoke -> "Test Files 12 passed (12)", "Tests 52 passed (52)". New tests fail on the old code (refuse-first 3/5, link-restart 5/6, set-password-restart 3/4, sqlite-iam-store, runtime-session-revocation).
 - Outcome: Accepted. Not wired yet (lanes A, C, F): starting the listener in `apps/web/src/lib/fluxiq.ts`, the `fluxiq accounts` package bin, an SMTP sender.
+
+### 2026-10-29 — Stand-in W0 and W1 merged; W2 waits on lane A (t801)
+- Agent: supervisor (Sonnet) with three workers (W1 backend, W1 pages, W2 script); report `hosted-production-plan/reports/t801-stand-in.md`, contract note `reports/t801/w0-contract-note.md`
+- Changed: new `packages/website-stand-in/` (`@fluxiq-web-extension/website-stand-in`, private, no dependencies): `server/serve.mjs` and `start.mjs`, `server/signup/` with tests, the four plain pages, `scripts/up.mjs` and `round-trip.mjs` (W2, not yet run); the root `site:up` script; the lockfile's importer entry.
+- Finding (W0, against Core): Core accepts `continueUrl` only as a same-origin path to `/connect/authorize`, and a bad one fails the whole request (the stand-in sends path and query only); Core has no `FLUXIQ_EMAIL_SENDER=file:<dir>` (the outbox is `<root>/.fluxiq/platform/outbox`, and the mail JSON has no `welcomeUrl`); `FLUXIQ_PROFILE` is read by no code; Core never starts the provisioning listener in a served panel (`startProvisioningListenerFromEnv` has no caller outside tests). The last three went to lane A (t802), which owns that wiring; `workspace: "new"` maps to `workspace-main` under single tenancy (lane C).
+- Validation: lead-run `node --test "server/**/tests/*.test.mjs"` in the package -> "# tests 40 / # pass 40 / # fail 0" (validation table, same-origin refusal, rate limit, human check off and on, `exists` and `created` identical, 503 on refusal, no body in logs); supervisor's smoke of `server/start.mjs` with no Core: the four pages and the config route 200, `/../package.json` 404, a valid sign-up 503 with a log line holding only request id, outcome and time; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` ok.
+- Outcome: Accepted for W0 and W1. W2's round trip (`pnpm site:up -- --round-trip`) is not verified; it runs once lane A starts the listener.
 
 ## Open Questions
 
