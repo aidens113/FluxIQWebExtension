@@ -34,7 +34,7 @@ const record = (value: unknown): JsonObject => typeof value === "object" && valu
  * in exploration, never pressed, so it carries no toggle signature and no
  * `ensureState`, and a trial run with the pass's like in place would press it
  * off, leaving nothing for the undo to prove. A trial run with a like in place
- * is proven by photo-toggle.spec.ts and judged-change-like-loop.spec.ts.
+ * is proven by photo-toggle.spec.ts and judged-change/tests/judged-change-like-loop.spec.ts.
  */
 test("installed gateway project build settles a looped pass that pressed another post's control once that post is unliked", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);

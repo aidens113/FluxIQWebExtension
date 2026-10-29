@@ -1,9 +1,9 @@
 // DRAFT (t775 F1): expected to fail until phase D wires the trial gates; typechecked only, not yet run headed.
 import type { JsonObject } from "fluxiq/core";
-import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
-import { expect, test } from "../../fixtures/extension-context";
-import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn } from "../index";
-import { judgeLog, proofsOf, retiredCodesIn, supervisorWithEffect } from "../change-proof";
+import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
+import { expect, test } from "../../../../fixtures/extension-context";
+import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, openStoreDetail, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn } from "../../../index";
+import { judgeLog, proofsOf, retiredCodesIn, supervisorWithEffect } from "../../../change-proof";
 
 const TASK = "Start a checkout for one product and deliver it to the other saved address.";
 const SAGE = TIDEWELL_KETTLES.find(product => product.variant?.colour === "Sage Green" && product.variant.capacity === "1.7 L")!;

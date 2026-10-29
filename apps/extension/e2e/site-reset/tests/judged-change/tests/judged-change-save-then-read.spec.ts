@@ -1,10 +1,10 @@
 import type { JsonObject } from "fluxiq/core";
-import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
-import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
-import { expect, test } from "../../fixtures/extension-context";
-import { bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
-import { actsWithOutcome, judgeLog, retiredCodesIn, supervisorWithEffect } from "../change-proof";
-import { bindDetectingRuntime } from "../photo-build";
+import { postingById } from "../../../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
+import { viewJobHref } from "../../../../../../scenario-lab/src/scenarios/job-board/board/index.js";
+import { expect, test } from "../../../../fixtures/extension-context";
+import { bindScriptedProvider, keepDiagnostic, pageHandleWhere, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../../../index";
+import { actsWithOutcome, judgeLog, retiredCodesIn, supervisorWithEffect } from "../../../change-proof";
+import { bindDetectingRuntime } from "../../../photo-build";
 
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 const TASK = "Save one job to my saved jobs, then read my saved jobs.";
