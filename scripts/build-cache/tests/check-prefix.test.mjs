@@ -21,8 +21,10 @@ const scripts = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, "package.json
 const BUILD_FIRST = ["node scripts/check/core-build.mjs", "node scripts/build-cache/cli.mjs test-contracts:build"];
 
 // `pnpm check` also refuses a drifted mirror of Core's code right after the
-// Core build gate, before anything else spends time (scripts/check/core-mirror.mjs).
-const CHECK_FIRST = ["node scripts/check/core-build.mjs", "node scripts/check/core-mirror.mjs", "node scripts/build-cache/cli.mjs test-contracts:build"];
+// Core build gate, before anything else spends time (scripts/check/core-mirror.mjs),
+// and then Core model-facing text that names a realistic scenario (t793,
+// scripts/check/model-text.mjs: "Model guidance never teaches to the test").
+const CHECK_FIRST = ["node scripts/check/core-build.mjs", "node scripts/check/core-mirror.mjs", "node scripts/check/model-text.mjs", "node scripts/build-cache/cli.mjs test-contracts:build"];
 
 /** A script's one `node --test` step. */
 function testStep(command) {
