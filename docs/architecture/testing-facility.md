@@ -1341,6 +1341,22 @@ the spec sets `labSeed` with `test.use`), the loopback-only network guard
 `readFinalState(lab, scenarioId)` for the `/__control/final-state` oracle.
 These are fixture tests, not extension-to-Core E2E tests.
 
+### Model text never names a scenario
+
+The rule that guidance given to a model never mirrors a realistic scenario
+(AGENTS.md, "Model guidance never teaches to the test") is enforced by
+`scripts/check/model-text.mjs`, a gate of `pnpm check`. It builds a vocabulary of
+the capitalised names and phrases in the string literals of the ten scenarios'
+own fixture data (sites, brands, stores, products, people, groups) that belong
+to one scenario and are not ordinary English (Core writes the word in lower case
+elsewhere), minus the reviewed `scripts/check/model-text/allow-list.mjs`, then
+scans the string and template literals (parsed with the TypeScript compiler, so comments never count) of Core's model-facing text (the automation-studio
+runtime's `llm/`, `flow-bootstrap/plan/` and its instruction, words, description,
+prompt and catalog modules) and fails with file:line and the token. The
+sibling Core is resolved as `core-mirror.mjs` resolves it. It catches names, not
+a task's shape written in common words; examples still need review to use a
+different kind of site. `--vocabulary` prints the token list.
+
 ### Realistic-site test modes
 
 Two Lab hooks serve browser specs as well. A scenario route may answer with its
