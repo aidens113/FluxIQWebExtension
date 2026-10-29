@@ -243,6 +243,13 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Validation: supervisor-run `node --test scripts/check/model-text/tests/*.test.mjs` -> "# pass 8 / # fail 0"; on the tree merged with dev (t790 in) `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 376 model-facing Core files, 11720 string literals)"; Core under the heavy-check lock `pnpm test` llm, flow-bootstrap/plan, result-verification, service/candidate-trial -> "Test Files 443 passed (443)", real-sql 2 passed; prompt contracts "Tests 70 passed (70)"; after a library rebuild `pnpm check` -> exit 0 (without it, a stale apps/web dist failed it, as on t792: a tooling gap, follow-up); docs current; structure audit passed.
 - Outcome: Accepted. The check catches names, not a scenario's shape in common words; review stays needed for shape.
 
+### 2026-10-29 - Core's check never reads a stale library build (t794)
+- Agent: supervisor; worker (brief t794), report `framework-heavy-lifting-plan/reports/t794-check-build.md`
+- Finding: twice on 2026-10-29 a merge that changed `packages/fluxiq` source failed Core's `pnpm check` in apps/web (`TS2739 ... IdentityAccessService is missing ...`) until the libraries were rebuilt by hand: apps/web reads the compiled dist for the `fluxiq/*` subpaths tsconfig `paths` does not map to source.
+- Changed (Core): the root `check` script runs `contracts:build`, `fluxiq:build` and `client-gateway-websocket:build` through the build cache before the parallel typechecks; `scripts/build-cache/tests/registry.test.mjs` fails if they are dropped or reordered; `docs/architecture/code-structure.md` says so. Option (b), source paths for every export, was rejected: a second list to keep in sync.
+- Validation: supervisor-run `node --test scripts/build-cache/tests/registry.test.mjs` -> "# pass 10 / # fail 0"; `pnpm check` -> exit 0 in 39 s with nothing changed; `pnpm structure:check` passed. Worker's probe: a new export used from apps/web without a manual build -> fluxiq:build rebuilt (92 s) and web:check passed; cold check 4 m 14 s, warm 34 s.
+- Outcome: Accepted.
+
 ## Open Questions
 
 1. **Are `values` and `differs` filled for a non-list region, such as a cart drawn with div elements?** Owner: W3. This
