@@ -734,3 +734,17 @@ for (const dialog of [{ ...observedDialog, kind: "toast" }, { ...observedDialog,
 assert.equal("dialog" in webAutomationActionResultPayload(failedValidationResult), false, "a result after no dialog gains none");
 
 console.log("Web automation gateway mapping tests passed.");
+
+// A match refused as another row's control travels as one closed word (t792):
+// that word and no other, since this path has no redaction guard for a string.
+const refusedInOtherRow = { strategy: "selector", candidateCount: 1, refusedBecause: "other-record" } as const;
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...failedValidationResult, resolution: refusedInOtherRow }).resolution,
+  refusedInOtherRow,
+  "the refusal word reaches the payload"
+);
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...failedValidationResult, resolution: { ...refusedInOtherRow, refusedBecause: "Alice's row" } as unknown as typeof refusedInOtherRow }).resolution,
+  { strategy: "selector", candidateCount: 1 },
+  "any other value is dropped, not carried"
+);

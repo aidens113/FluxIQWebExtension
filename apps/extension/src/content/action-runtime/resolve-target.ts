@@ -306,14 +306,14 @@ function resolution(action: BrowserActionCommand, target: RecordedTarget | undef
   const widened = resolveIn(action, target, { scoped: true, roots, description: "the page's open shadow roots" });
   if (widened.outcome !== "not_found") return settled(widened);
   const misses = [...first.misses, ...widened.misses];
-  return { failed: notFound(`No target resolved from ${misses.join(", ")}.`, misses, first.nearby, first.decided) };
+  return { failed: notFound(`No target resolved from ${misses.join(", ")}.`, misses, first.nearby, first.decided, first.otherRecord || widened.otherRecord) };
 }
 
 /** One pass of the resolution, in one scope. A miss is returned rather than thrown so a wider pass can follow it. */
 type ScopedResolution =
   | { outcome: "resolved"; target: ResolvedTarget }
   | { outcome: "ambiguous"; error: TargetResolutionError }
-  | { outcome: "not_found"; error: TargetResolutionError; misses: string[]; nearby: TargetCandidatePool; decided: CandidateSelection | undefined };
+  | { outcome: "not_found"; error: TargetResolutionError; misses: string[]; nearby: TargetCandidatePool; decided: CandidateSelection | undefined; otherRecord: boolean };
 
 function settled(resolution: Exclude<ScopedResolution, { outcome: "not_found" }>): PassOutcome<ResolvedTarget, TargetResolutionError> {
   return resolution.outcome === "ambiguous" ? { failed: resolution.error } : { resolved: resolution.target };
@@ -321,6 +321,7 @@ function settled(resolution: Exclude<ScopedResolution, { outcome: "not_found" }>
 
 function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefined, scope: ShadowScope): ScopedResolution {
   const misses: string[] = [];
+  let otherRecord = false; // a match was refused as another row's control: said on the failure (`notFound`)
   // Enumerating and scoring the family is the costly half of a resolution, and
   // both a point's answer and the final fallback may need it. Nothing on the
   // page changes inside this call, so it runs at most once.
@@ -338,7 +339,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
     // and says so.
     const inRecord = attempt.matches.length > 1 ? inRecordedRecord(attempt.matches, target) : attempt.matches;
     if (!inRecord.length) {
-      misses.push(`${attempt.description} (${attempt.matches.length} matched, each in another record)`);
+      misses.push(`${attempt.description} (${attempt.matches.length} matched, each in another record)`), otherRecord = true;
       continue;
     }
     // Several matches, none of them shown: not a tie between controls on the
@@ -365,7 +366,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
         // A read's words never vouch for it (`read-lookup/`), so neither does a stable part of them.
         const steady = verdict.refusedBecause === "other-record" || verdict.refusedBecause === "other-dialog" || readsItsWords(target) ? undefined : stableNameMatch(target, only, scope);
         if (!steady) {
-          misses.push(`${attempt.description} (${verdict.summary})`);
+          misses.push(`${attempt.description} (${verdict.summary})`), otherRecord ||= verdict.refusedBecause === "other-record";
           continue;
         }
         measurement = steady;
@@ -397,7 +398,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
   if (!misses.length) {
     const active = document.activeElement;
     if (active) return { outcome: "resolved", target: { element: active, resolution: { strategy: "active-element", candidateCount: 1 } } };
-    return { outcome: "not_found", error: notFound("No selector, coordinates, or active element was available.", [], NO_POOL), misses, nearby: NO_POOL, decided: undefined };
+    return { outcome: "not_found", error: notFound("No selector, coordinates, or active element was available.", [], NO_POOL), misses, nearby: NO_POOL, decided: undefined, otherRecord };
   }
 
   // Nothing answered exactly. The page may still hold the control under a new
@@ -406,7 +407,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
   const { nearby, decided } = target ? scoredFamily(target) : NO_FAMILY;
   if (decided?.outcome === "resolved") return { outcome: "resolved", target: scoredTarget(decided, nearby.candidates.length) };
   if (decided?.outcome === "ambiguous" && !isHiddenTie(decided)) return { outcome: "ambiguous", error: scoredAmbiguous(decided, misses) };
-  return { outcome: "not_found", error: notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided), misses, nearby, decided };
+  return { outcome: "not_found", error: notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided, otherRecord), misses, nearby, decided, otherRecord };
 }
 
 /** No enumeration was run at all: nothing was looked at, so nothing was cut short. */
@@ -659,7 +660,7 @@ function scoredAmbiguous(decided: Extract<CandidateSelection, { outcome: "ambigu
  * responses, and the first sends a person hunting for a fault in a selector
  * that was right. `familySeen` is what tells them apart.
  */
-function notFound(message: string, misses: string[], pool: TargetCandidatePool, decided?: CandidateSelection): TargetResolutionError {
+function notFound(message: string, misses: string[], pool: TargetCandidatePool, decided?: CandidateSelection, otherRecord = false): TargetResolutionError {
   const best = decided?.ranked[0];
   const runnerUp = decided?.ranked[1];
   const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
@@ -670,7 +671,8 @@ function notFound(message: string, misses: string[], pool: TargetCandidatePool, 
     strategy: strategyOf(misses),
     candidateCount: pool.candidates.length,
     ...(best ? { bestScore: best.score.normalizedScore, confidence: best.score.confidence } : {}),
-    ...(runnerUp ? { runnerUpScore: runnerUp.score.normalizedScore } : {})
+    ...(runnerUp ? { runnerUpScore: runnerUp.score.normalizedScore } : {}),
+    ...(otherRecord ? { refusedBecause: "other-record" as const } : {})
   });
 }
 

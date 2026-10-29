@@ -43,3 +43,4 @@ export { isDismissalLabel, isPageRequirementText, isRateLimitLayerText, isSessio
 export type { Point } from "./overlays";
 export type { ClearingTarget } from "./clearing-target";
 export type { ClearingScope } from "./clearable-layers";
+export { layerControlWords, type LayerControlRead, type LayerControlWords } from "./own-controls";

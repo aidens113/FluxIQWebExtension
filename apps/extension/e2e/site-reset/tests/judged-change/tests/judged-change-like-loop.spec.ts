@@ -1,4 +1,4 @@
-// DRAFT (t775 F1): expected to fail until phase D wires the trial gates; typechecked only, not yet run headed.
+// Run headed and passing on the t792 tree (reports/t792/proof-photo.md).
 import type { JsonObject } from "fluxiq/core";
 import { STUDIO, gridFor } from "../../../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
 import { expect, test } from "../../../../fixtures/extension-context";
@@ -36,7 +36,7 @@ for (const variant of ["newest", "pinned"] as const) {
     const answers: Record<string, JsonObject> = {};
     const pages: Record<string, string> = {};
     let columns: { link?: string; pin?: string } = {}, handle = "", likeHandle = "";
-    let likedAtStart: string[] = [], likedAtEnd: string[] = [];
+    let likedAtStart: string[] = [], likedAtEnd: string[] = [], likedBeforeTrial: string[] = [];
     try {
       await openPhotoProfile(page, installed.origin, profile);
       likedAtStart = await likedPosts(page);
@@ -96,6 +96,7 @@ for (const variant of ["newest", "pinned"] as const) {
           }
           case "submit":
             if (!candidate) return done();
+            likedBeforeTrial = await likedPosts(page);
             return send("trial", call("trial", "core.test_subflow", candidate));
           case "trial":
             likedAtEnd = await likedPosts(page);
@@ -130,6 +131,12 @@ for (const variant of ["newest", "pinned"] as const) {
       expect(skipped.every((act) => typeof act.step === "number")).toBe(true);
       if (variant === "pinned") expect(skipped.every((act) => typeof act.row === "string")).toBe(true);
       expect(actsWithOutcome(siteChange, "changed").length).toBeGreaterThanOrEqual(1);
+      // t792 proof (fix 1): the skipped pass pressed nothing and left its post's state alone. The earlier like is still there,
+      // once (a press would have unliked it), and the site gained exactly one like per changed pass. (A trial's presses do not go
+      // through the build's click counter, so the account's own liked list is the witness.)
+      expect(likedBeforeTrial).toContain(first.code);
+      expect(likedAtEnd.filter((code) => code === first.code)).toHaveLength(1);
+      expect(likedAtEnd).toHaveLength(likedBeforeTrial.length + actsWithOutcome(siteChange, "changed").length);
       // Each changed pass is its own witness at its own post (t787 fix 4), so the newest variant's proof is shown by the
       // passes that liked, and the skipped pass is listed beside them. Before t787 every pass was read at the first post,
       // which already showed the like, so this variant read `carried` while two other posts had changed.
