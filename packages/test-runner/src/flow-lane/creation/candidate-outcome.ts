@@ -36,7 +36,7 @@
 // stand. Each reader takes the run's mode and records it on the outcome, so a
 // debug and the Lab comparison (A8) can tell the two apart; nothing else differs.
 
-import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult, type AutomationStudioCandidateTrialOutcomeVerdict, type AutomationStudioFlowBootstrapCandidateKept } from "fluxiq/automation-studio";
+import { automationStudioConversationCandidateDraftSaid, parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioCandidateAuthoringResult, type AutomationStudioCandidateTrialOutcomeVerdict, type AutomationStudioFlowBootstrapCandidateKept } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowTrialAuthoringMode } from "./readiness.js";
 
@@ -91,9 +91,14 @@ export type CreatedFlowCandidateOutcome = Readonly<{
   trialCount: number | null;
   trials: readonly CreatedFlowCandidateTrialRun[] | null;
   promotedAdaptationId: string | null;
+  /** A chat draft only: which record decided `verdict` (`chatDraftVerdict`); structured sources first, Core's prose last. */
+  verdictSource?: ChatDraftVerdictSource;
 }>;
 
-type CandidateControl = { automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> };
+/** What decided a chat draft's verdict: a trial session's own record, Core's build diagnostic, or (last resort) Core's closing words. */
+export type ChatDraftVerdictSource = "session" | "diagnostic" | "sentence" | "draft" | "none";
+
+type CandidateControl = { automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: Record<string, never>, domainId?: string): Promise<unknown> };
 
 /** Core's most summaries per page, and how many pages one candidate's trials are followed through. */
 const TRIAL_PAGE_LIMIT = 100;
@@ -154,17 +159,30 @@ export async function createdFlowCandidateDraftOutcome(control: CandidateControl
  * verdict, which is recognised as `draft` and is not a verdict. A draft with
  * that sentence and no trial session at all was never test-run: `not_tested`.
  */
-export async function createdFlowChatCandidateDraftOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string, said: string | null, authoringMode: CreatedFlowTrialAuthoringMode = "candidate"): Promise<CreatedFlowCandidateOutcome> {
+export async function createdFlowChatCandidateDraftOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string, said: string | null, authoringMode: CreatedFlowTrialAuthoringMode = "candidate", domainId?: string): Promise<CreatedFlowCandidateOutcome> {
   const trials = await readCandidateTrials(control, subject, candidateId);
   const last = trials?.at(-1);
-  const read = chatDraftVerdict(said, trials);
+  // Core's build diagnostic is read only where no trial session carries the verdict; a read that fails fails the Lab.
+  const kept = last?.verdict && last.verdict !== "rejected" ? null : await readKeptCandidate(control, subject, candidateId, domainId);
+  const read = chatDraftVerdict(said, trials, kept);
   return Object.freeze({
     authoringMode, outcome: "draft", draft: null, candidateId,
     revision: last?.revision ?? null, digest: last?.digest ?? null,
     verdict: read.verdict, trialRunId: last?.runId ?? null, codes: Object.freeze(read.codes),
     judgeCalls: null, trialCount: trials?.length ?? null, trials,
-    promotedAdaptationId: null,
+    promotedAdaptationId: null, verdictSource: read.source,
   });
+}
+
+/**
+ * Core's structured account of how the build ended, where it kept one: the failure diagnostic's candidate
+ * (`get-flow-bootstrap-failure`, `diagnostic.candidate`), only when it names this candidate. `null` when Core kept
+ * none; the verdict then falls back to the sessions and, last, to Core's words. A read that fails propagates.
+ */
+async function readKeptCandidate(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string, domainId: string | undefined): Promise<AutomationStudioFlowBootstrapCandidateKept | null> {
+  const answer = await control.automationStudioCall("get-flow-bootstrap-failure", { ...subject }, {}, domainId);
+  const kept = parseAutomationStudioFlowBootstrapFailureDiagnostic(field(answer, "failure"))?.candidate;
+  return kept && kept.candidateId === candidateId ? kept : null;
 }
 
 /**
@@ -198,19 +216,28 @@ export async function createdFlowFailedCandidateOutcome(control: CandidateContro
 export function createdFlowCandidateDraftFailure(outcome: CreatedFlowCandidateOutcome, said: string | null): RunnerFailure {
   const codes = outcome.codes.length ? `; ${outcome.codes.join(", ")}` : "";
   const whose = outcome.authoringMode === "project" ? "its assembled project candidate" : "its candidate";
-  return new RunnerFailure("runtime.behavior", `FluxIQ kept ${whose} as a draft and built no Flow: the candidate's test run was judged ${outcome.verdict} (candidate ${outcome.candidateId}${codes})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
+  return new RunnerFailure("runtime.behavior", `FluxIQ kept ${whose} as a draft and built no Flow: the candidate's test run ${outcome.verdict === "not_judged" ? "was not judged" : outcome.verdict === "unknown" ? "left no verdict Core recorded" : `was judged ${outcome.verdict}`} (candidate ${outcome.candidateId}${codes})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
     details: {
       code: "lab.candidate_not_promoted", stage: "verification", authoringMode: outcome.authoringMode,
-      candidateId: outcome.candidateId, revision: outcome.revision, verdict: outcome.verdict, codes: [...outcome.codes], trialRunId: outcome.trialRunId,
+      candidateId: outcome.candidateId, revision: outcome.revision, verdict: outcome.verdict, ...(outcome.verdictSource === undefined ? {} : { verdictSource: outcome.verdictSource }), codes: [...outcome.codes], trialRunId: outcome.trialRunId,
       trials: outcome.trials === null ? null : outcome.trials.map((trial) => ({ runId: trial.runId, revision: trial.revision, start: trial.start, execution: trial.execution, code: trial.code })),
     },
   });
 }
 
-/** A chat draft's verdict: the last trial session's own record, else Core's closing words, else `unknown`. */
-export function chatDraftVerdict(said: string | null, trials: readonly CreatedFlowCandidateTrialRun[] | null): { verdict: CreatedFlowCandidateOutcome["verdict"]; codes: string[]; source: "session" | "sentence" | "draft" | "none" } {
+/**
+ * A chat draft's verdict, from data first: the last trial session's own record, then the verdict Core's build
+ * diagnostic gives the candidate's last trial (or its count of none), then a trial run that did not succeed (Core's own
+ * `execution_failed`). Core's closing words are matched only where no structured ending exists; `source` says which
+ * decided. A verdict Core gave without a judge having run is `not_judged`, never read as a judged one.
+ */
+export function chatDraftVerdict(said: string | null, trials: readonly CreatedFlowCandidateTrialRun[] | null, kept: AutomationStudioFlowBootstrapCandidateKept | null = null): { verdict: CreatedFlowCandidateOutcome["verdict"]; codes: string[]; source: ChatDraftVerdictSource } {
   const recorded = trials?.at(-1);
   if (recorded?.verdict && recorded.verdict !== "rejected") return { verdict: recorded.verdict, codes: recorded.verdictCode ? [recorded.verdictCode] : [], source: "session" };
+  const last = kept?.trials.at(-1);
+  if (last) return { verdict: last.verdict, codes: code(last.code) ? [last.code as string] : [], source: "diagnostic" };
+  if (kept && kept.trialCount === 0) return { verdict: "not_tested", codes: [], source: "diagnostic" };
+  if (recorded && recorded.execution !== null && recorded.execution !== "succeeded") return { verdict: "execution_failed", codes: recorded.code ? [recorded.code] : [], source: "session" };
   const sentence = chatDraftSentence(said);
   if (sentence.verdict !== "unknown") return { ...sentence, source: "sentence" };
   // The fixed sentence of a draft whose ending was told elsewhere (t753) names no verdict; with no trial session behind it nothing was run.

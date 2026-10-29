@@ -183,7 +183,7 @@ export async function buildCreatedFlowFromChat(
     ? await until(DRAFT_TURN_MS, async () => after(await thread()).find(isDraft)) : undefined);
   if (draft) {
     const build = failedCreatedFlowBuild({ code: "lab.verification_pending", stage: "verification", httpStatus: null }, "unknown", durationMs);
-    const candidateOutcome = await createdFlowChatCandidateDraftOutcome(control, { projectId: input.projectId, flowId }, draft.attachment!.ref, said, createdFlowTrialsCandidates(input.authoringMode) ? input.authoringMode : "candidate");
+    const candidateOutcome = await createdFlowChatCandidateDraftOutcome(control, { projectId: input.projectId, flowId }, draft.attachment!.ref, said, createdFlowTrialsCandidates(input.authoringMode) ? input.authoringMode : "candidate", scope.domainId);
     return Object.freeze({ build: Object.freeze({ ...build, outcome: "draft" as const, failure: null, candidateReference: Object.freeze({ candidateId: draft.attachment!.ref, verification: "not_performed" as const }), candidateOutcome, chat: ending({ ending: "draft" }) }), flowId, applied: null, said });
   }
 

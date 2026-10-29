@@ -17,10 +17,12 @@
  * (`run-mvhibis0-b536958b`) spent its last sixteen steps between the two. So
  * the node says what it can do, and Core asks only for that:
  *
- * - `answersRows: "page_order"` -- Core admits a process limit of N with no sort
- *   when the lasting repeat it feeds stops after the same N (saved rows = acted
- *   rows), and its answer to a sort names only `extractList.where`, `repeat
- *   most` and that limit.
+ * - `answersRows: "page_order"` -- Core admits a process limit of N when the
+ *   lasting repeat it feeds stops after the same N (saved rows = acted rows).
+ *   Since t796 Core also hands each such repeat the listing's own sort as its
+ *   order, applied before its stop, so a sort written on the listing is
+ *   admitted; one written only in the process is refused with an answer that
+ *   puts it on the listing.
  * - `recordProcessWrittenAt` -- where a model writes the two process keys this
  *   node fills from its own request, so Core reads them there too and refuses
  *   at the key the model wrote (`extractList.sort`, `extractList.maxItems`),

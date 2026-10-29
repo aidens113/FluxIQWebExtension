@@ -10,7 +10,10 @@
 // between the two. Core's rule was tested on a Core plan, never on one this
 // domain resolved, so these tests run Core's completion check on a script whose
 // listing this domain resolves, with the read's definition as this domain
-// declares it (`output-nodes/extract-list/rows-order.ts`).
+// declares it (`output-nodes/extract-list/rows-order.ts`). Since t796 Core
+// hands a repeat over the listing the listing's own sort as its order, so a
+// sort written on the listing is admitted and one written only in the process
+// is refused with an instead that puts it there.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -140,38 +143,47 @@ test("a maxItems that is not the repeat's own is refused at extractList.maxItems
   assert.doesNotMatch(JSON.stringify(refusal), /process\.limit/u);
 });
 
+const SORTED = "[{\"field\": \"due\", \"order\": \"asc\", \"as\": \"date\"}]";
+
+test("a sort on the listing, with a maxItems equal to repeat most, is admitted: Core hands the repeat the listing's own order", async () => {
+  // Refused until t796 (every live `extractList.sort` was, run-mvtdn37t); Core now gives the For Each this sort as its order.
+  const { runtime, handle } = await detected();
+  const verdict = await check(runtime, script(handle, new Map([["extractList.where", WHERE], ["extractList.sort", SORTED], ["extractList.maxItems", "3"]])));
+  assert.deepEqual(issueCodes(verdict), []);
+});
+
 /**
- * The refusal's `instead`, applied literally to the listing's lines: each key
- * it says to take out is removed, a key it says to write is written with the
- * value it gives, and a sort it shows is written in its shape.
+ * The refusal's `instead`, applied literally to the listing's lines: a sort it
+ * shows is written at the key it names in its shape, and each key it says to
+ * take out is removed, from inside the JSON line that holds it when it is one.
  */
 function applyInstead(instead: string, listing: ListingLines): ListingLines {
   const next = new Map(listing);
-  const sortShape = /`extractList\.sort: (\[.*?\])`/u.exec(instead);
-  if (sortShape) next.set("extractList.sort", sortShape[1]!.replace("<column>", "due"));
-  for (const taken of instead.matchAll(/Take ((?:`[^`]+`(?: and )?)+) out/gu)) {
-    for (const key of taken[1]!.matchAll(/`([^`]+)`/gu)) next.delete(key[1]!);
+  const sortShape = /`(extractList\.sort)`, written `(\[.*?\])`/u.exec(instead);
+  if (sortShape) next.set(sortShape[1]!, sortShape[2]!.replace("<column>", "due"));
+  for (const taken of instead.matchAll(/Take `([^`]+)` out/gu)) {
+    const key = taken[1]!;
+    if (next.delete(key)) continue;
+    const parent = key.slice(0, key.lastIndexOf("."));
+    const line = next.get(parent);
+    if (line === undefined) continue;
+    const value = JSON.parse(line) as JsonObject;
+    delete value[key.slice(key.lastIndexOf(".") + 1)];
+    next.set(parent, JSON.stringify(value));
   }
-  if (/take sort and limit out of recordOutput\.process/iu.test(instead)) next.delete("recordOutput.process");
-  const written = /write `(extractList\.[A-Za-z]+): (\d+)`/u.exec(instead);
-  if (written) next.set(written[1]!, written[2]!);
-  const limit = /`"limit": (\d+)` in `recordOutput\.process`/u.exec(instead);
-  if (limit) next.set("recordOutput.process", `{"limit": ${limit[1]}}`);
   return next;
 }
 
-test("the refusal's own instead, applied literally to a listing this domain resolved, gives a Flow the rule admits", async () => {
+test("the refusal's own instead for a sort written only in the process, applied literally, gives a Flow the rule admits", async () => {
   const { runtime, handle } = await detected();
-  // The answer the t741 sentence gave, and the shape this domain refused it in: a sort on the listing.
-  const sorted: ListingLines = new Map([["extractList.where", WHERE], ["extractList.sort", "[{\"field\": \"due\", \"order\": \"asc\", \"as\": \"date\"}]"], ["extractList.maxItems", "3"]]);
-  const first = await check(runtime, script(handle, sorted));
+  const inProcess: ListingLines = new Map([["extractList.where", WHERE], ["recordOutput.process", `{"sort": ${SORTED}, "limit": 3}`]]);
+  const first = await check(runtime, script(handle, inProcess));
   assert.deepEqual(issueCodes(first), [CODE]);
   const [refusal] = orderRefusals(first);
   assert.ok(refusal && typeof refusal.instead === "string", JSON.stringify(first));
-  // Refused at the sort the model wrote, never at the process key the resolver filled.
-  assert.match(JSON.stringify(refusal), /extractList\.sort/u);
-  assert.doesNotMatch(String(refusal.instead), /extractList\.sort:/u);
-  const answered = applyInstead(String(refusal.instead), sorted);
+  // The instead puts the order on the listing, at the key this domain declares its author writes a sort.
+  assert.match(String(refusal.instead), /`extractList\.sort`/u);
+  const answered = applyInstead(String(refusal.instead), inProcess);
   const second = await check(runtime, script(handle, answered));
   assert.deepEqual(issueCodes(second), [], `instead: ${String(refusal.instead)}\nlines: ${JSON.stringify([...answered])}`);
 });
