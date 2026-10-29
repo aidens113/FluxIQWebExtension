@@ -155,7 +155,7 @@ test("installed gateway project build retries the page's failed save, and undoes
     expect(held?.ok).toBe(false);
     expect(held?.code).toBe("candidate.undo_unproved");
     // The row sits in the list the act named, and that list held it before the build: removing it would change what
-    // existed before the build began, so no call can (t743, `undo-admission.ts` destination removal).
+    // existed before the build began, so no call can (t743, `reset-undo/admission.ts` destination removal).
     expect(held?.failed).toBe("subject_there_before");
     expect(held?.canMeet).toBe("no_call");
     expect(String(held?.condition ?? "")).not.toBe("");

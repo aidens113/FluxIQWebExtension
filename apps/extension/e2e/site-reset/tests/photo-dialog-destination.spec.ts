@@ -36,7 +36,7 @@ const LIKE_ACT = "act-2";
  * 3. Pressed again under `undoes`: the control already shows the state the build found, so it is
  *    refused unrun with `candidate.undo_already_back` (`already_back`, `this_page`), nothing clicked:
  *    the act is still open on its unread list, and a look on this page, whose fresh read settles it,
- *    meets it (Core t751 R2, `site-reset/undo-admission.ts`), as step 4's look shows.
+ *    meets it (Core t751 R2, `reset-undo/admission.ts`), as step 4's look shows.
  * 4. The Flow is tested: Core's pre-trial look at the dialog's address reads the standalone
  *    page, the named list is lost, act-2 settles restored (its toggle is back and its undo landed),
  *    and the trial runs, told that the named list could not be read again.
