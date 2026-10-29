@@ -124,7 +124,13 @@ export type WebAutomationExtractListDispatch =
 /** Core's issue for a field asking to be encrypted, which nothing can do yet (`record_schema.encrypt_unavailable`). */
 const ENCRYPT_UNAVAILABLE_ISSUE = "record_schema.encrypt_unavailable";
 
-export function webAutomationExtractListDispatch(nodeParameters: JsonObject): WebAutomationExtractListDispatch {
+/**
+ * `runStartedAt`, when the caller knows the run's start, is sent as the read's
+ * `now` so its relative dates are judged at the instant Core judges them at run
+ * end (`WebAutomationExtractListRequest.now`). A request that already carries a
+ * `now` keeps it.
+ */
+export function webAutomationExtractListDispatch(nodeParameters: JsonObject, runStartedAt?: number): WebAutomationExtractListDispatch {
   const { recordOutput: authored, ...rest } = nodeParameters;
   if (isJsonObject(rest.extractList) && webAutomationExtractListPagesBeyondOne(rest.extractList.paginate)) return { ok: false, result: pagingRetiredRefusal() };
   const read = webAutomationExtractListRequestValue(rest.extractList);
@@ -145,7 +151,7 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   const onePage = request === undefined ? undefined : intermediate ? intermediateOnePageRead(sent, request) : webAutomationExtractListOnePageRead(sent, request);
   const page = onePage === undefined ? rest : { ...rest, extractList: onePage.page };
   const timed = request !== undefined && leftDefault(page.timeoutMs) ? { ...page, timeoutMs: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS } : page;
-  const parameters = withFlowAsks(timed, request);
+  const parameters = withRunNow(withFlowAsks(timed, request), request, runStartedAt);
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
     : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns, narrowed?.shown);
@@ -187,6 +193,13 @@ function intermediateOnePageRead(sent: JsonObject, request: WebAutomationExtract
  */
 export function webAutomationExtractListAloneRowsAsked(parameters: JsonObject): JsonObject {
   return withFlowAsks(parameters, webAutomationExtractListRequestValue(parameters.extractList));
+}
+
+/** The read's parameters with the run's start as its `now`, only for a read with conditions, a run start that is an instant, and no `now` of its own. */
+function withRunNow(parameters: JsonObject, request: WebAutomationExtractListRequest | undefined, runStartedAt: number | undefined): JsonObject {
+  if (runStartedAt === undefined || !Number.isSafeInteger(runStartedAt) || runStartedAt < 0) return parameters;
+  if (request === undefined || !request.where?.length || request.now !== undefined || !isJsonObject(parameters.extractList)) return parameters;
+  return { ...parameters, extractList: { ...parameters.extractList, now: runStartedAt } };
 }
 
 /** The parameters a Flow's read is sent with: only the rows it kept, and the rows each condition removed by itself (see the header). */

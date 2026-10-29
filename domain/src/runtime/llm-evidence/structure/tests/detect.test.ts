@@ -44,7 +44,9 @@ const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one",
 /** Every key the model-facing packet may carry, at any depth. Anything else is a leak. */
 const PACKET_KEYS = new Set([
   "schemaVersion", "trust", "location", "extraction", "target", "list", "sample", "itemCount", "fields", "pagination", "confidence",
-  "key", "label", "kind", "coverage", "at", "atNote", "nextPageNote"
+  "key", "label", "kind", "coverage", "at", "atNote", "nextPageNote",
+  // What a column holds and what a list's rows carry (t800, CC1-CC3: `../column-type.ts`, `../list-items/`).
+  "type", "parsed", "fieldMarks", "markNote", "id", "rowIdentity", "items", "itemKey", "marks", "itemsNote"
 ]);
 
 const EXPECTED_PAGINATION: Record<CapturedDetectionName, WebLlmStructurePaginationMode> = {
@@ -240,7 +242,12 @@ test("every real detection becomes a selector-free packet and a handle that reso
     assert.equal(packet.itemCount, detection.proposal.itemCount, name);
     assert.equal(packet.pagination, EXPECTED_PAGINATION[name], name);
     assert.equal(packet.confidence, detection.proposal.confidence, name);
-    assert.deepEqual(packet.fields, detection.proposal.fields.map((field) => ({ key: field.key, label: field.label, kind: field.spec.kind, coverage: field.coverage })), name);
+    // A column's type is said beside it (t800, `../column-type.ts`): an address read is a `url` whatever was captured.
+    const untyped = packet.fields.map((shown) => Object.fromEntries(Object.entries(shown).filter(([key]) => key !== "type" && key !== "parsed")));
+    assert.deepEqual(untyped, detection.proposal.fields.map((field) => ({ key: field.key, label: field.label, kind: field.spec.kind, coverage: field.coverage })), name);
+    for (const [index, field] of detection.proposal.fields.entries()) {
+      if (field.spec.kind === "link" || field.spec.attribute === "href" || field.spec.attribute === "src") assert.equal(packet.fields[index]?.type, "url", `${name} ${field.key}`);
+    }
     assert.equal(packet.target, undefined);
     assert.equal("fieldsTruncated" in packet, false, "nothing is cut, so nothing says it was");
 

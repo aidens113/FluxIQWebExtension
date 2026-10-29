@@ -24,6 +24,7 @@ import {
   WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE,
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
+  WEB_AUTOMATION_EXTRACT_FIELD_MARKS,
   WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -49,6 +50,8 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       // A `text` field only: each child line read on its own and joined (`./request.ts`).
       lines: { type: "boolean", label: "Every line" },
       identity: { type: "string", label: "Link identity", enum: ["tracking-free"] },
+      // A field that reads a mark: a value only where the row carries it (`./request.ts`).
+      mark: { type: "string", label: "Mark", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_MARKS] },
       element: elementFingerprintSchema
     }
   } satisfies JsonObject;
@@ -105,6 +108,7 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
             atMost: { type: ["number", "string"], label: "At most" },
             lessThan: { type: ["number", "string"], label: "Less than" },
             greaterThan: { type: ["number", "string"], label: "Greater than" },
+            within: { type: "string", label: "Within the last" },
             as: { type: "string", label: "Bounds compare", enum: ["number", "date"] },
             equals: { type: ["array", "string", "number"], label: "Equals any of" },
             matches: { type: ["array", "string"], label: "Matches any of", items: { type: "string" } },
@@ -151,7 +155,10 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       answer: { type: "string", label: "Answer", enum: [WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT] },
       // Press each kept row's own "Read more" before reading its text, the
       // default; `false` stops it (`./request.ts`).
-      discloseText: { type: "boolean", label: "Open each kept row's collapsed text" }
+      discloseText: { type: "boolean", label: "Open each kept row's collapsed text" },
+      // The run's instant for relative dates, set by the domain's dispatch,
+      // never by an author (`./request.ts`).
+      now: { type: "integer", label: "Relative dates judged at", minimum: 0 }
     }
   };
 }
