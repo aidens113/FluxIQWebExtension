@@ -1,9 +1,9 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Web-specific half of the Core-owned plan, written 2026-10-28 (mode 1); nothing implemented; W0 (Lab verdict from structured data) is first.
+Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0 and the per-pass act ledger merged, W0 (the Lab verdict from structured data, t798) merged; W6 (t799) and W7 (t800) in flight with Core P6 and P7.
 Created: 2026-10-28
-Last updated: 2026-10-28
+Last updated: 2026-10-29
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
 Scope: Where FluxIQ Core and the web domain can compute or enforce what the build model now has to get right: membership/bounds, judging, undo/reset bookkeeping, handler conditions, toggle state, stable targets, dedupe, paging, and per-call workload.
 Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
@@ -22,9 +22,10 @@ This document holds only the web-specific half:
 
 It links to Core's contracts and does not restate them.
 
-- **True now:** the plan is written and nothing is implemented. The evidence reports in
-  `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload, fhl-core-surface,
-  fhl-domain-surface) fed the Core synthesis.
+- **True now:** Core's P0 (t793) and per-pass act ledger (t796) are merged, and so is t794 (Core's check builds its
+  libraries first). P5 (t795) and P4 (t797) are in flight in Core, and W0 (t798, the Lab verdict from structured data) is merged here. P6 with W6 (t799) and P7 with W7 (t800) are in flight as Core-paired tasks.
+  The evidence reports in `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload,
+  fhl-core-surface, fhl-domain-surface) fed the Core synthesis.
 - **The web side already computes most of what Core needs.** It has toggle signatures, `layerCleared`, the acted-on
   item, location moves, stale-target re-find by identity, value shapes and pagination detection. What is missing is
   emitting them in Core's typed, optional shapes. Two items are wholly new: per-item marks (CC2) and control intent (CC11).
@@ -249,6 +250,20 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed (Core): the root `check` script runs `contracts:build`, `fluxiq:build` and `client-gateway-websocket:build` through the build cache before the parallel typechecks; `scripts/build-cache/tests/registry.test.mjs` fails if they are dropped or reordered; `docs/architecture/code-structure.md` says so. Option (b), source paths for every export, was rejected: a second list to keep in sync.
 - Validation: supervisor-run `node --test scripts/build-cache/tests/registry.test.mjs` -> "# pass 10 / # fail 0"; `pnpm check` -> exit 0 in 39 s with nothing changed; `pnpm structure:check` passed. Worker's probe: a new export used from apps/web without a manual build -> fluxiq:build rebuilt (92 s) and web:check passed; cold check 4 m 14 s, warm 34 s.
 - Outcome: Accepted.
+
+### 2026-10-29 - Core owns a per-pass act ledger (t796)
+- Agent: supervisor (brief t796-ledger); workers w1-rule, w4-layers, w5-ending, w6-headed-proof (worker), w2-ledger, w3-repeat-order (worker-heavy); report `framework-heavy-lifting-plan/reports/t796-ledger.md`
+- Finding: debug `run-mvtdn37t-e1e4d0a7` (photo-social newest likes, no Flow): the requested like sat behind `only after:` a dismissal and was skipped on every pass, and every `extractList.sort` the build wrote was refused under a sentence about a key it had not written.
+- Changed (Core, detail in Core's ledger): a requested act behind `optional:`, `only after:` or an optional step's `on success:` is refused at submit, by its words or by the lasting class the part asks for; each trial records per pass whether every lasting or guarded step ran, and a part whose acting steps never ran is proven `not_run`; a cleared layer's handler is scoped to the subflow; a For Each over a page-order listing takes the listing's own sort as its `order`; the ending names steps that never ran and the page of each act left. Downstream: headed spec `apps/extension/e2e/site-reset/tests/photo-act-ledger.spec.ts`; the domain's listing-order test now pins the new contract (a sort on the listing is admitted; a sort only in the process is refused and its instead, applied literally, is admitted), and `output-nodes/extract-list/rows-order.ts` says so.
+- Validation: supervisor-run under the lock, downstream merged with dev: Core `pnpm test` over executor, flow-bootstrap, service, activity, project-agents, result-verification and nodes/control-flow -> "Test Files 852 passed | 1 skipped (853)", "Tests 7622 passed | 2 skipped (7624)", real-sql "Test Files 52 passed (52)", "all groups passed"; prompt contracts -> "Tests 45 passed (45)"; Core `pnpm check` -> exit 0 (after regenerating the working-doc index this entry's status edit had made stale); docs current; both structure audits passed; domain, extension and test-runner tsc clean; model-text "ok (208 scenario tokens, 377 model-facing Core files, 11791 string literals)"; domain tests "# pass 2440 / # fail 1", the failure being the listing-order test that pinned the old refusal, updated -> "# pass 5 / # fail 0"; headed `e2e/site-reset/tests` -> "32 passed (35.0m)".
+- Outcome: Accepted. Not verified live. The span-level `repeat order:` is not built. Until t795 lands, `held.ts` still holds a judge's yes over a `not_run` part.
+
+### 2026-10-29 - W0: the Lab's draft verdict from structured data (t798)
+- Agent: lead; worker (brief t798-w0); report `framework-heavy-lifting-plan/reports/t798-w0.md`
+- Changed: `packages/test-runner/src/flow-lane/creation/candidate-outcome.ts` decides a chat draft's verdict from the trial session's record, then Core's `get-flow-bootstrap-failure` diagnostic for the same candidate, then a failed trial run, and only last from Core's closing words, recording `verdictSource`; a draft no judge ran reads "was not judged", never "judged unknown" (debug mvrj-a44a); `chat/build-from-chat.ts` passes the domain. `not_judged` was not added to `RunEvaluation.reportedVerdict`: nothing could produce it (`lane-observation.ts` already writes `unverified` for an unjudged run). The budget mislabel (mvskptb1) was already fixed by t787; `live-llm/tests/budget.test.ts` pins it with the run's numbers.
+- Decision (lead review): Core answers `{failure: null}` when no build failed (`api/handlers/llm-generation.ts`), so the new read does not throw on a clean draft; only a diagnostic naming this candidate is used.
+- Validation: lead-run under the lock on the tree merged with dev: test-runner `pnpm check` -> exit 0, `pnpm build` -> exit 0, `node --test "dist/flow-lane/**/*.test.js" "dist/live-llm/**/*.test.js" "dist/run-scenario/**/*.test.js"` -> "# tests 958 / # pass 953 / # fail 0 / # skipped 5"; `node scripts/structure-audit.mjs` -> passed; `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 377 model-facing Core files, 11791 string literals)".
+- Outcome: Accepted. Not verified live; it rides in the next live round.
 
 ## Open Questions
 
