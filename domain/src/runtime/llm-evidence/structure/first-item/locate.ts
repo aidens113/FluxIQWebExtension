@@ -36,10 +36,8 @@
 import type { WebAutomationExtractionProposal, WebAutomationExtractionProposalFieldSpec } from "../../../../extraction";
 import type { WebLlmEvidenceElement } from "../../elements";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
-import { screenedPageText } from "../../withheld";
-import { webLlmSelectedWithin } from "./chain";
-import { webLlmCompoundMatcher } from "./compound";
-import { webLlmPageTree, type WebLlmPageTree, type WebLlmTreeNode } from "./tree";
+import type { WebLlmTreeNode } from "./tree";
+import { webLlmCaptureWalk, type WebLlmCaptureWalk } from "./walk";
 
 /** The captures a detection's columns are placed with. */
 export type WebLlmFirstItemPages = {
@@ -59,12 +57,11 @@ export function webLlmFirstItemHandles(proposal: WebAutomationExtractionProposal
   // A top-frame detection names the page the model read, or nothing in it. A
   // frame's capture has the frame's own address, held to it in `../detect.ts`.
   if (frameId === undefined && shown.evidence.location !== detected.evidence.location) return found;
-  const tree = webLlmPageTree(detected);
-  const items = listItems(tree, proposal);
-  if (items.length === 0) return found;
+  const walk = webLlmCaptureWalk(proposal, detected);
+  if (walk.items.length === 0) return found;
   const shownHandle = shownHandles(shown, frameId);
   for (const field of proposal.fields) {
-    const node = columnElement(tree, items, field.spec);
+    const node = columnElement(walk, field.spec);
     const handle = node === undefined ? undefined : shownHandle(node);
     if (handle !== undefined) found.set(field.key, handle);
   }
@@ -79,11 +76,10 @@ export function webLlmFirstItemHandles(proposal: WebAutomationExtractionProposal
  */
 export function webLlmFirstItemElements(proposal: WebAutomationExtractionProposal, detected: WebLlmSnapshotBinding): ReadonlyMap<string, WebLlmEvidenceElement> {
   const found = new Map<string, WebLlmEvidenceElement>();
-  const tree = webLlmPageTree(detected);
-  const items = listItems(tree, proposal);
-  if (items.length === 0) return found;
+  const walk = webLlmCaptureWalk(proposal, detected);
+  if (walk.items.length === 0) return found;
   for (const field of proposal.fields) {
-    const node = columnElement(tree, items, field.spec);
+    const node = columnElement(walk, field.spec);
     if (node !== undefined) found.set(field.key, node.element);
   }
   return found;
@@ -99,12 +95,11 @@ export function webLlmFirstItemLines(proposal: WebAutomationExtractionProposal, 
   const found = new Map<string, readonly WebLlmEvidenceElement[]>();
   const lined = proposal.fields.filter((field) => field.spec.lines === true);
   if (lined.length === 0) return found;
-  const tree = webLlmPageTree(detected);
-  const items = listItems(tree, proposal);
-  if (items.length === 0) return found;
+  const walk = webLlmCaptureWalk(proposal, detected);
+  if (walk.items.length === 0) return found;
   for (const field of lined) {
-    const node = columnElement(tree, items, field.spec);
-    if (node !== undefined) found.set(field.key, tree.children(node).map((child) => child.element));
+    const node = columnElement(walk, field.spec);
+    if (node !== undefined) found.set(field.key, walk.tree.children(node).map((child) => child.element));
   }
   return found;
 }
@@ -114,41 +109,13 @@ export function webLlmFirstItemLines(proposal: WebAutomationExtractionProposal, 
  * first item with any element for the field, and gives that element only when
  * it is the one there. A form the walk does not read gives none.
  */
-function columnElement(tree: WebLlmPageTree, items: readonly WebLlmTreeNode[], spec: WebAutomationExtractionProposalFieldSpec): WebLlmTreeNode | undefined {
-  for (const item of items) {
-    const nodes = fieldElements(tree, item, spec);
+function columnElement(walk: WebLlmCaptureWalk, spec: WebAutomationExtractionProposalFieldSpec): WebLlmTreeNode | undefined {
+  for (const item of walk.items) {
+    const nodes = walk.elementsOf(item, spec);
     if (nodes === undefined) return undefined;
     if (nodes.length > 0) return single(nodes);
   }
   return undefined;
-}
-
-/**
- * The run's items, in list order: the children of the container the item
- * selector names. The item selector is the container's then one compound, or one
- * compound alone for a test id every item shares
- * (`apps/extension/src/content/extraction/item-selector.ts`).
- */
-function listItems(tree: WebLlmPageTree, proposal: WebAutomationExtractionProposal): WebLlmTreeNode[] {
-  const container = tree.addressed(proposal.container);
-  if (container === undefined) return [];
-  const scoped = `${proposal.container} > `;
-  const compound = proposal.item.startsWith(scoped) ? proposal.item.slice(scoped.length) : proposal.item;
-  const test = webLlmCompoundMatcher(compound);
-  return test === undefined ? [] : tree.children(container).filter(test);
-}
-
-/**
- * The elements a field reads in an item: the item itself for a field with no
- * selector, the cells under its header for a table column, and otherwise the
- * elements its selector names inside the item; `undefined` for a selector form
- * the walk does not read.
- */
-function fieldElements(tree: WebLlmPageTree, item: WebLlmTreeNode, spec: WebAutomationExtractionProposalFieldSpec): readonly WebLlmTreeNode[] | undefined {
-  if (spec.selector !== undefined) return webLlmSelectedWithin(tree, item, spec.selector);
-  if (spec.header === undefined) return [item];
-  const header = screenedPageText(spec.header);
-  return tree.children(item).filter((cell) => (cell.tag === "td" || cell.tag === "th") && cell.element.cell?.header === header);
 }
 
 function single(nodes: readonly WebLlmTreeNode[]): WebLlmTreeNode | undefined {

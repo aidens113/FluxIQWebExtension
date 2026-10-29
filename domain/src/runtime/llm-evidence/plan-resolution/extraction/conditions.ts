@@ -199,6 +199,8 @@ function readCondition(entry: unknown, columns: WebExtractionConditionColumns, p
       atMost: says.says.atMost,
       lessThan: says.says.lessThan,
       greaterThan: says.says.greaterThan,
+      // A span of dates up to the run's now (t800, K1), carried like a bound.
+      within: says.says.within,
       equals: says.says.equals,
       matches: says.says.matches,
       contains: says.says.contains,

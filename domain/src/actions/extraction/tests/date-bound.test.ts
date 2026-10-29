@@ -31,7 +31,8 @@ test("a date bound is read, its as checked and not carried, since the text bound
 });
 
 test("a date bound that names no one date is refused at its key, never run as a filter that keeps nothing", () => {
-  for (const bound of ["Sep 19", "3 days ago", "today", "02/03/2026", "soon"]) {
+  // "3 days ago" and "today" are bounds since t800 (K1), read against the run's now (`condition-date.test.ts`).
+  for (const bound of ["Sep 19", "3 months ago", "tomorrow", "02/03/2026", "soon"]) {
     assert.deepEqual(webAutomationExtractConditionSayingValue({ atLeast: bound, as: "date" }, []), { ok: false, key: "atLeast" }, bound);
     assert.deepEqual(where({ field: "starts", atLeast: bound }).dropped, ["where.0"], bound);
   }
