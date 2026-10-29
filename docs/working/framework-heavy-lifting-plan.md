@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0 and the per-pass act ledger merged, W0 (the Lab verdict from structured data, t798) merged.
+Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0 and the per-pass act ledger merged, W0 (the Lab verdict from structured data, t798) merged; W6 (t799) and W7 (t800) in flight with Core P6 and P7.
 Created: 2026-10-28
 Last updated: 2026-10-29
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -23,7 +23,7 @@ This document holds only the web-specific half:
 It links to Core's contracts and does not restate them.
 
 - **True now:** Core's P0 (t793) and per-pass act ledger (t796) are merged, and so is t794 (Core's check builds its
-  libraries first). P5 (t795) and P4 (t797) are in flight in Core, and W0 (t798, the Lab verdict from structured data) is merged here.
+  libraries first). P5 (t795) and P4 (t797) are in flight in Core, and W0 (t798, the Lab verdict from structured data) is merged here. P6 with W6 (t799) and P7 with W7 (t800) are in flight as Core-paired tasks.
   The evidence reports in `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload,
   fhl-core-surface, fhl-domain-surface) fed the Core synthesis.
 - **The web side already computes most of what Core needs.** It has toggle signatures, `layerCleared`, the acted-on
