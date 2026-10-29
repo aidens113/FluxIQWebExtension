@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0 and the per-pass act ledger merged, W0 (the Lab verdict from structured data, t798) merged; W6 (t799) and W7 (t800) in flight with Core P6 and P7.
+Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0, the per-pass act ledger and P4 with W4 (t797) merged, W0 (the Lab verdict from structured data, t798) merged; W6 (t799) and W7 (t800) in flight with Core P6 and P7.
 Created: 2026-10-28
 Last updated: 2026-10-29
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -23,7 +23,7 @@ This document holds only the web-specific half:
 It links to Core's contracts and does not restate them.
 
 - **True now:** Core's P0 (t793) and per-pass act ledger (t796) are merged, and so is t794 (Core's check builds its
-  libraries first). P5 (t795) and P4 (t797) are in flight in Core, and W0 (t798, the Lab verdict from structured data) is merged here. P6 with W6 (t799) and P7 with W7 (t800) are in flight as Core-paired tasks.
+  libraries first). P4 with W4 (t797) is merged, P5 (t795) is in flight in Core, and W0 (t798, the Lab verdict from structured data) is merged here. P6 with W6 (t799) and P7 with W7 (t800) are in flight as Core-paired tasks.
   The evidence reports in `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload,
   fhl-core-surface, fhl-domain-surface) fed the Core synthesis.
 - **The web side already computes most of what Core needs.** It has toggle signatures, `layerCleared`, the acted-on
@@ -264,6 +264,12 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Decision (lead review): Core answers `{failure: null}` when no build failed (`api/handlers/llm-generation.ts`), so the new read does not throw on a clean draft; only a diagnostic naming this candidate is used.
 - Validation: lead-run under the lock on the tree merged with dev: test-runner `pnpm check` -> exit 0, `pnpm build` -> exit 0, `node --test "dist/flow-lane/**/*.test.js" "dist/live-llm/**/*.test.js" "dist/run-scenario/**/*.test.js"` -> "# tests 958 / # pass 953 / # fail 0 / # skipped 5"; `node scripts/structure-audit.mjs` -> passed; `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 377 model-facing Core files, 11791 string literals)".
 - Outcome: Accepted. Not verified live; it rides in the next live round.
+
+### 2026-10-29 - P4 with W4: one undo and reset answer (t797)
+- Agent: supervisor (brief t797-p4) with six workers; report `framework-heavy-lifting-plan/reports/t797-p4.md`
+- Changed (Core, detail in Core's ledger): one shared answer for back-at-place, undo reach and settlement; stale in-place reads not judged; unsettleable acts end with a closed reason; undo paired with its act by a reported inverse effect (CC4) or control counts. Downstream (W4): `domain/src/runtime/llm-evidence/control-spot/tests/place-per-act.test.ts` pins one place token per looped act (it passed on unchanged code: a regression guard); `docs/architecture/page-evidence.md` and three site-reset spec comments follow the single answer.
+- Validation: lead-run under the lock on the trees merged with dev: domain `tsc` clean and `DOMAIN_TEST_BUILD_LABEL=t797 node scripts/test-domain.mjs` -> "# pass 2444 / # fail 0"; extension and test-runner tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 377 model-facing Core files, 11794 string literals)"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (40.6m)"; Core checks in Core's ledger.
+- Outcome: Accepted. Follow-up (W4 remainder): the web domain fills CC4's `effect` (what a press did) so live undo pairing uses it instead of control counts.
 
 ## Open Questions
 
