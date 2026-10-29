@@ -25,15 +25,15 @@ const RULES: Readonly<Record<FeedClassRole, string>> = {
   iconButton: "position:relative;width:40px;height:40px;border-radius:50%;background:#e4e6eb;display:inline-grid;place-items:center;cursor:pointer;color:#050505",
   avatar: "width:40px;height:40px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-weight:600;font-size:15px;flex:none;overflow:hidden;text-decoration:none",
   avatarSmall: "width:28px;height:28px;font-size:11px",
-  layout: "display:grid;grid-template-columns:300px minmax(0,1fr) 300px;padding-top:56px",
+  layout: "display:grid;grid-template-columns:300px minmax(0,1fr) 300px;padding-top:56px;max-width:100vw",
   leftRail: "position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto;padding:16px 8px;box-sizing:border-box",
   rightRail: "position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto;padding:16px 8px;box-sizing:border-box",
   railItem: "display:flex;align-items:center;gap:12px;padding:8px;border-radius:8px;color:#050505;text-decoration:none;font-weight:500",
   railLabel: "margin:16px 8px 8px;color:#65676b;font-weight:600;font-size:17px",
   railIcon: "width:36px;height:36px;border-radius:50%;flex:none;display:inline-grid;place-items:center;color:#fff;font-size:13px;font-weight:700",
   railFoot: "padding:16px 8px;color:#65676b;font-size:13px;line-height:1.5",
-  center: "padding:16px 32px",
-  column: "max-width:590px;margin:0 auto;display:grid;gap:16px",
+  center: "padding:16px 32px;min-width:0",
+  column: "max-width:590px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:16px",
   card: `background:#fff;border-radius:8px;box-shadow:${PANEL_SHADOW}`,
   stories: "display:flex;gap:8px;overflow:hidden",
   story: "position:relative;width:112px;height:200px;border-radius:12px;flex:none;overflow:hidden;color:#fff;display:flex;align-items:flex-end;padding:8px;box-sizing:border-box;text-decoration:none",
@@ -42,7 +42,7 @@ const RULES: Readonly<Record<FeedClassRole, string>> = {
   composerPrompt: "flex:1;background:#f0f2f5;border-radius:20px;padding:8px 12px;color:#65676b;cursor:pointer",
   composerRow: "display:flex;align-items:center;gap:8px",
   composerOption: "flex:1;display:flex;justify-content:center;align-items:center;gap:8px;padding:8px;border-radius:8px;color:#65676b;font-weight:600;cursor:pointer",
-  feed: "display:grid;gap:16px",
+  feed: "display:grid;grid-template-columns:minmax(0,1fr);gap:16px",
   unit: `background:#fff;border-radius:8px;box-shadow:${PANEL_SHADOW};padding:12px 0 4px;position:relative`,
   unitHead: "display:flex;align-items:flex-start;gap:8px;padding:0 16px 8px",
   unitTitle: "margin:0;font-size:15px;font-weight:600;line-height:1.3333",
@@ -138,6 +138,22 @@ const RULES: Readonly<Record<FeedClassRole, string>> = {
 };
 
 /**
+ * Narrow-window rules, layout only. The browser window the Lab drives shares
+ * its width with the extension's 420px side panel, so the page can be well
+ * under 1280px wide. Below 1100px the rails narrow; below 960px the right rail
+ * moves under the feed instead of over it; the top bar shrinks its search box
+ * and tab icons so nothing is clipped. Nothing is hidden or removed.
+ */
+function narrowRules(css: FeedClasses): string[] {
+  const c = (role: FeedClassRole) => `.${css[role].split(" ")[0]}`;
+  return [
+    `@media (max-width:1100px){${c("layout")}{grid-template-columns:240px minmax(0,1fr) 240px}${c("center")}{padding:16px}${c("search")}{width:170px}${c("topNavItem")}{width:72px}}`,
+    `@media (max-width:960px){${c("layout")}{grid-template-columns:220px minmax(0,1fr)}${c("rightRail")}{grid-column:2;position:static;height:auto;overflow:visible}${c("search")}{width:120px}${c("topNavItem")}{width:60px}${c("topNav")}{gap:4px}}`,
+    `@media (max-width:760px){${c("search")}{width:90px}${c("topNavItem")}{width:48px}${c("topbar")}{padding:0 8px}}`,
+  ];
+}
+
+/**
  * The emitted stylesheet for one build. The first rules undo the lab's shared
  * page shell, which is centred and 48rem wide; a social network is neither.
  */
@@ -153,5 +169,6 @@ export function feedStylesheet(css: FeedClasses, seed: number): string {
     "@keyframes xspin{to{transform:rotate(360deg)}}",
     ...utilities,
     ...own,
+    ...narrowRules(css),
   ].join("\n");
 }

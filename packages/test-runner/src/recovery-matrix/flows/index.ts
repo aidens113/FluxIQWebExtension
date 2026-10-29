@@ -3,6 +3,7 @@
 // by export name.
 export * from "./confirm/index.js";
 export * from "./hub/index.js";
+export * from "./like-then-save.js";
 export * from "./pickup-cart-store-entry.js";
 export * from "./quick-add-alternative.js";
 export * from "./soap-search-two-blocks.js";

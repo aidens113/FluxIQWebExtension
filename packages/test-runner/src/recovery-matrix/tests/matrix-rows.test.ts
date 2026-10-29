@@ -31,15 +31,15 @@ test("a row is ready, pending on what it needs, or blocked by an authoring gap, 
 });
 
 test("--ready selects only rows that need nothing and have no authoring gap; unknown cases and rows are refused", () => {
-  assert.deepEqual(selectRecoveryMatrixCases({ ready: true }).map(item => item.matrixCase.caseId), ["1", "13a", "13b"]);
-  assert.deepEqual(selectRecoveryMatrixCases({ caseIds: ["4b"], rows: [13] }).map(item => item.matrixCase.caseId), ["4b", "13a", "13b"]);
+  assert.deepEqual(selectRecoveryMatrixCases({ ready: true }).map(item => item.matrixCase.caseId), ["1", "13a", "13b", "13c"]);
+  assert.deepEqual(selectRecoveryMatrixCases({ caseIds: ["4b"], rows: [13] }).map(item => item.matrixCase.caseId), ["4b", "13a", "13b", "13c"]);
   assert.throws(() => selectRecoveryMatrixCases({ caseIds: ["4z"] }), /no case 4z/);
   assert.throws(() => selectRecoveryMatrixCases({ rows: [12] }), /no row 12/);
   assert.throws(() => selectRecoveryMatrixCases({}), /selected no case/);
 });
 
-test("all fourteen deterministic browser cases carry explicit task text independent of titles", () => {
-  assert.equal(cases.length, 14);
+test("all fifteen deterministic browser cases carry explicit task text independent of titles", () => {
+  assert.equal(cases.length, 15);
   for (const matrixCase of cases) {
     assert.equal(typeof matrixCase.taskInstructions, "string");
     assert.ok(matrixCase.taskInstructions.trim().length > 0);
@@ -47,5 +47,19 @@ test("all fourteen deterministic browser cases carry explicit task text independ
     assert.notEqual(matrixCase.taskInstructions, matrixCase.title);
     assert.notEqual(matrixCase.taskInstructions, matrixCase.flow);
     assert.notEqual(matrixCase.taskInstructions, `Recovery matrix ${matrixCase.caseId}: ${matrixCase.title}`.slice(0, 120));
+  }
+});
+
+test("a re-acquire case names the saved steps by node key, judges by its own check, and expects no more re-acquired passes than passes", () => {
+  const named = cases.filter(item => item.reacquire !== undefined);
+  assert.deepEqual(named.map(item => item.caseId), ["13c"]);
+  for (const item of named) {
+    const spec = item.reacquire!;
+    assert.equal(item.check, "row-reacquired");
+    // Core keys a saved script's nodes by place (`s1`, `s2`, ...), not by the step labels the script wrote.
+    assert.match(spec.step, /^s[1-9][0-9]*$/u);
+    assert.match(spec.source, /^s[1-9][0-9]*$/u);
+    assert.match((flows as Record<string, string>)[item.flow] ?? "", /^  repeat over: /mu);
+    assert.ok(spec.reacquiredPasses >= 1 && spec.reacquiredPasses <= spec.passes);
   }
 });

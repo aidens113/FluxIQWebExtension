@@ -332,3 +332,48 @@ test("the build: class names move with the lab seed, and ids are generated as un
   expect(readouts.some((id) => id.startsWith("social-friend-request-rq_"))).toBe(true);
   for (const id of readouts) expect(id).toMatch(/^social-(request-audit-account|account-changes|friend-request-rq_[0-9a-z]+)$/u);
 });
+
+/** Layout pin, after paging the feed to its end: at the Lab's viewport, and with the 420px side panel open beside it, the page does not scroll sideways and neither rail overlaps the feed. */
+for (const width of [1280, 860, 720]) {
+  test(`layout: at ${width}px wide the page has no horizontal scroll, the left navigation is fully visible and the rails do not overlap the feed`, async ({ page, lab, networkGuard: _guard }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.goto(`${lab.origin}${ROOT}`);
+    await page.getByRole("button", { name: "Decline optional cookies" }).click();
+    await page.locator("[role=\"feed\"] > [role=\"article\"]").first().waitFor();
+    for (let step = 0; step < 40 && await page.getByText("No more posts to show right now.").count() === 0; step += 1) {
+      await page.mouse.wheel(0, 3000);
+      await page.waitForTimeout(300);
+    }
+    await expect(page.getByText("No more posts to show right now.")).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const shotDir = process.env.T785_SHOT_DIR;
+    if (shotDir) await page.screenshot({ path: `${shotDir}/home-${width}.png` });
+    const m = await page.evaluate(() => {
+      const rect = (element: Element | null) => element?.getBoundingClientRect() ?? null;
+      const root = document.scrollingElement as HTMLElement;
+      const leftNav = document.querySelector("nav[aria-label=\"Shortcuts\"]");
+      const rail = document.querySelector("[role=\"complementary\"]");
+      const cards = Array.from(document.querySelectorAll("[role=\"feed\"] > *")).map((card) => card.getBoundingClientRect());
+      const overlaps = (element: Element | null) => {
+        const box = rect(element);
+        if (!box) return -1;
+        return cards.filter((card) => box.left < card.right && box.right > card.left && box.top < card.bottom && box.bottom > card.top).length;
+      };
+      return {
+        scrollWidth: root.scrollWidth,
+        clientWidth: root.clientWidth,
+        navLeft: rect(leftNav)?.left ?? -1,
+        navClipped: leftNav ? leftNav.scrollWidth - leftNav.clientWidth : -1,
+        railRight: rect(rail)?.right ?? -1,
+        railOverlap: overlaps(rail),
+        navOverlap: overlaps(leftNav),
+      };
+    });
+    expect(m.scrollWidth).toBeLessThanOrEqual(m.clientWidth);
+    expect(m.navLeft).toBeGreaterThanOrEqual(0);
+    expect(m.navClipped).toBeLessThanOrEqual(0);
+    expect(m.railRight).toBeLessThanOrEqual(m.clientWidth);
+    expect(m.railOverlap).toBe(0);
+    expect(m.navOverlap).toBe(0);
+  });
+}

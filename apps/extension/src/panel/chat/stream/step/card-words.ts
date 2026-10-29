@@ -169,9 +169,18 @@ function ordinal(count: number): string {
   return `${count}${suffix}`;
 }
 
-/** What a finished action came to, as Core said it; undefined when it said nothing. */
+/**
+ * What a finished action came to, as Core said it; undefined when it said
+ * nothing. A card standing for several identical ones says it is each one's
+ * result: "Done (2 times): 7 rows from 1 page" read as one read of one page,
+ * when the playback had read two pages, one per read (t785,
+ * `run-mvskodlp-9966d618`), so it reads "Done (2 times): each time, 7 rows
+ * from 1 page".
+ */
 function resultOf(card: ActionCard): string | undefined {
-  return card.result?.trim() || undefined;
+  const said = card.result?.trim();
+  if (!said) return undefined;
+  return card.times !== undefined && card.times > 1 ? `each time, ${lowerFirst(said)}` : said;
 }
 
 /** "Not done (3 times)", "Didn't work (3 times)" for a card standing for several identical ones (`card-repeats.ts`). */

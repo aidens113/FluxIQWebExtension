@@ -73,6 +73,12 @@
 //    reading a line of the view (A8 frozen pair 5 towels,
 //    `run-mva6mlo8-f519063c`). Read off the same screened packet as the view,
 //    so they say nothing the view does not.
+//  - **A stale target is found again by identity (t786).** `reacquireTarget`
+//    matches the item a step was bound to among its source step's fresh answer
+//    (`./target-reacquire/`), and `returnToSourcePlace` puts the page back where
+//    that source ran first, from the `from` token each capture of the run
+//    recorded for its attempt -- remembered here, beside the places, never on
+//    a summary.
 
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQ } from "fluxiq";
@@ -98,6 +104,7 @@ import {
   webAutomationRouteState
 } from "./route-state";
 import { createWebStatePlacesMemo, webAutomationStateDiff, webStateDiffPlaces, webStateSnapshotPlaces } from "./state-diff";
+import { createWebSourcePlaces, webAutomationReacquireTarget, webAutomationReturnToSourcePlace } from "./target-reacquire";
 
 /**
  * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
@@ -174,6 +181,8 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
   const factEvaluator = createWebAutomationFactEvaluator(gateway.dispatch);
   const places = createWebStatePlacesMemo();
+  // Where each attempt found the page, for a stale target's source re-run (header, t786).
+  const sourcePlaces = createWebSourcePlaces();
   let captures = 0;
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
@@ -186,7 +195,10 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // step started since and it arrived moments ago: the same page, so it is
       // answered rather than read a second time (t480).
       const ended = input.point === "before_action" ? input.previousStateRef : undefined;
-      if (ended?.summary !== undefined && ended.stateSnapshotId.startsWith(STATE_SNAPSHOT_ID_PREFIX)) return ended;
+      if (ended?.summary !== undefined && ended.stateSnapshotId.startsWith(STATE_SNAPSHOT_ID_PREFIX)) {
+        sourcePlaces.keep(input.attemptId, input.point, ended.from);
+        return ended;
+      }
       const result = await gateway.dispatch({
         outputId: SNAPSHOT_OUTPUT_ID,
         payload: {},
@@ -231,6 +243,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       const stateRef = `${stateSnapshotId}@${input.attemptId}:${input.point}`;
       // Beside the summary, never on it (header, t609).
       places.keep(stateRef, webStateSnapshotPlaces(binding));
+      sourcePlaces.keep(input.attemptId, input.point, from);
       return { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
     },
     // What a Router's `state.*` conditions test, observed on the page the run
@@ -275,7 +288,12 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
     // Whether a press whose answer was lost landed, for a node that declares no
     // expected state (t430): read from the pressed control on the page, never
     // from the step's declared consequences (`./act-landing/`).
-    actLanded: (input) => webAutomationActLanded(input, factEvaluator)
+    actLanded: (input) => webAutomationActLanded(input, factEvaluator),
+    // The item a stale step was bound to, among its source's fresh answer, by
+    // identity and never by position (t786, `./target-reacquire/`). Pure.
+    reacquireTarget: (request) => webAutomationReacquireTarget(request),
+    // Back to where that source ran before it is re-run, when the page moved (t786).
+    returnToSourcePlace: (request) => webAutomationReturnToSourcePlace(request, sourcePlaces, gateway.dispatch)
   };
 }
 

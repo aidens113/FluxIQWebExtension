@@ -24,8 +24,9 @@ import type { RealisticScenarioId } from "../realistic-scenarios/index.js";
  * - `checkpoints`: a handler routing the run back to a checkpoint (C5).
  * - `call-subflow`: a step running a part in its own frame (C1).
  * - `reconciliation`: an in-flight committing act reconciled after its outcome was lost (C8, R5a).
+ * - `reacquire`: a row-bound step whose row was redrawn found again from its source read (t786).
  */
-export type RecoveryExecutorFeature = "handlers" | "entries" | "checkpoints" | "call-subflow" | "reconciliation";
+export type RecoveryExecutorFeature = "handlers" | "entries" | "checkpoints" | "call-subflow" | "reconciliation" | "reacquire";
 
 /** The checks a case can be judged by, one per required behaviour (`checks/`). */
 export type RecoveryCheckId =
@@ -41,6 +42,7 @@ export type RecoveryCheckId =
   | "checkpoint-route"
   | "worker-restart"
   | "retries-absorbed"
+  | "row-reacquired"
   | "deliberate-stop";
 
 /** What the site's state endpoint must show after the run: counts only, read from `/__control/final-state`. */
@@ -49,6 +51,8 @@ export type RecoverySiteExpectation =
   | Readonly<{ kind: "crossborder-cart"; listingId: string; storeId: string; pieces: number; adds: number; couponHeld: boolean }>
   /** Social network feed: exactly these requests confirmed, and at least `rateLimitedAtLeast` presses the site refused for going too fast. */
   | Readonly<{ kind: "social-confirmed"; requestIds: readonly string[]; rateLimitedAtLeast: number }>
+  /** Photo social: exactly these posts liked and saved, each liked once and saved once, and no other like, save or collection change. */
+  | Readonly<{ kind: "photo-liked-saved"; postCodes: readonly string[] }>
   /** Bigbox: exactly these cart lines, by product and quantity, and the shopper's store when it matters. */
   | Readonly<{ kind: "bigbox-cart"; lines: readonly Readonly<{ productId: string; qty: number }>[]; storeId: string | null }>;
 
@@ -80,7 +84,18 @@ export type RecoveryMatrixCase = Readonly<{
   skippedStep?: string;
   /** The failure the run must end with: the variant's declared failure (row 5). */
   declaredFailure?: Readonly<{ category: string; code: string }>;
+  /** The row-bound step whose stale row must be found again, and from which read (13c). */
+  reacquire?: RecoveryReacquireExpectation;
 }>;
+
+/**
+ * What a re-acquire case requires of its step (13c): it ran once per pass of
+ * its loop, `passes` times, and ended each pass succeeded within the first
+ * attempt and three retries; on at least `reacquiredPasses` of them its fourth
+ * attempt followed three target-not-found failures and carried a `found`
+ * re-acquire from `source`, the read its row came from.
+ */
+export type RecoveryReacquireExpectation = Readonly<{ step: string; source: string; passes: number; reacquiredPasses: number }>;
 
 export type RecoveryMatrixRow = Readonly<{
   /** The matrix row number, 1-13 (12 is the paid proof and is never in this table). */

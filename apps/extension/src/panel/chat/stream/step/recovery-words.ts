@@ -20,6 +20,12 @@
 //                page put in the way"), so the card names no target: "Clear
 //                the page / Done". Never a failure: one Core could not close
 //                reads "Not done: it was still in the way".
+//   reacquire    the item a step was working on moved or changed when the page
+//                changed, and was looked for again from the step that found it.
+//                Found: "Found it again after the page changed", card "Found
+//                again · <subject> / Done". Gone: "It is no longer on the
+//                page", said as not done (the retry was never tried, so never
+//                "didn't work").
 //   fixing       reserved for the step fixed inside the run after it truly
 //                failed (in-run repair, R4b): "Fixing a step", card "Fix step".
 //                Core reports it on no row yet; its words are here so that
@@ -60,7 +66,7 @@ export type RecoveryWords = {
 };
 
 /** The card's short name for each case. */
-const NAMES: Readonly<Record<RecoveryCase, string>> = { handler: "Extra step", entry: "Start from", route: "Carry on from", alternative: "Other way", interference: "Clear the page", fixing: "Fix step" };
+const NAMES: Readonly<Record<RecoveryCase, string>> = { handler: "Extra step", entry: "Start from", route: "Carry on from", alternative: "Other way", interference: "Clear the page", reacquire: "Found again", fixing: "Fix step" };
 
 /** Words that open an extra step acting on a control, which Core's verbs do not name: closing a box is pressing its button. */
 const CONTROL_WORDS = /^(close|dismiss|accept|decline|reject|hide|confirm|allow|deny|cancel|skip)$/iu;
@@ -69,6 +75,7 @@ const CONTROL_WORDS = /^(close|dismiss|accept|decline|reject|hide|confirm|allow|
 const HELD_BACK = "it was held back before it ran";
 const WOULD_SKIP = "it could have skipped something the run needs or repeated something already done";
 const STILL_THERE = "it was still in the way";
+const GONE = "it is no longer on the page";
 
 /** `recovery` in words; `step` is the label of the step it was for, when the chat knows it. */
 export function recoveryWords(recovery: RecoveryRead, step: string | undefined): RecoveryWords {
@@ -102,6 +109,10 @@ function said(recovery: RecoveryRead, step: string | undefined): [title: string,
       if (outcome !== "succeeded") return [line, "It was still covering the page.", STILL_THERE];
       return [line, "It was covering the page, so it was closed and the step went on."];
     }
+    case "reacquire":
+      if (outcome === "failed") return ["It is no longer on the page", step ? `The page changed, and the item from ${step} is gone, so there was nothing to try again.` : "The page changed, and the item is gone, so there was nothing to try again.", GONE];
+      if (outcome === "refused") return ["Didn't look for it again", "It was held back before it ran, so nothing was done.", HELD_BACK];
+      return ["Found it again after the page changed", step ? `The page changed, so it looked again and found the same one from ${step}, then tried it there.` : "The page changed, so it looked again and found the same one, then tried it there."];
     case "fixing":
       if (outcome === "failed") return ["Fixing a step", "It didn't work however it was tried, and fixing it here didn't work either."];
       if (outcome === "refused") return ["Fixing a step", "It didn't work however it was tried, and fixing it here was held back.", HELD_BACK];

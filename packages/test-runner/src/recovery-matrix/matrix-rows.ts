@@ -19,6 +19,9 @@ const QUALIFYING_REQUESTS = ["rq_8b41c7", "rq_c7a0e5", "rq_e24f90", "rq_7a95b3"]
  */
 const JONAS_CONFIRM = '[role="listitem"]:has(a[href$="/people/jonas-weber/"]) [aria-label="Confirm"]';
 
+/** photo-social's first two feed posts that show a like count: harbourlight.studio's and saltmarsh.goods' newest, neither liked nor saved when a visit starts. */
+const FIRST_FEED_POSTS = ["D1OKDvAEHfa", "D0eFDg0l9aY"] as const;
+
 /** The bigbox shopper's cart as every visit starts it: one bottle of dish soap kept from the last visit. */
 const SOAP_ONLY = { productId: "418832007", qty: 1 } as const;
 
@@ -100,6 +103,7 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
     cases: [
       { caseId: "13a", taskInstructions: "Confirm friend requests from Amara Osei, Jonas Weber, Lin Zhao and Freya Holm, who have at least five mutual friends. Leave other requests unanswered, respect the site's rate-limit wait and finish after Freya's request is accepted.", title: "the fourth confirm is refused for going too fast; the node's retry confirms it after the notice's wait", scenarioId: "social-network-feed", workflowId: "confirm-requests", flow: "CONFIRM_QUALIFYING", check: "retries-absorbed", site: { kind: "social-confirmed", requestIds: QUALIFYING_REQUESTS, rateLimitedAtLeast: 1 }, goalFacts: false },
       { caseId: "13b", taskInstructions: "Confirm only the requests from Amara Osei, Jonas Weber and Lin Zhao. Then check whether any request remains unanswered; if so, deliberately end with a failed result explaining that requests still wait rather than confirm anyone else.", title: "a check fails on purpose and its failed path ends the run at an End the Flow marked failed", scenarioId: "social-network-feed", workflowId: "confirm-requests", flow: "CONFIRM_THEN_STOP", check: "deliberate-stop", site: { kind: "social-confirmed", requestIds: QUALIFYING_REQUESTS.slice(0, 3), rateLimitedAtLeast: 0 }, goalFacts: false },
+      { caseId: "13c", taskInstructions: "On the home feed, like the first two posts that show a like count, and save each of those two posts to your saved posts right after liking it. Like and save each of them exactly once, and leave every other post as it is.", title: "a post's like moves its count, so the row the read took is gone and its bookmark fails three times; the run reads the posts again, finds the same post and saves it", scenarioId: "photo-social", flow: "LIKE_THEN_SAVE", check: "row-reacquired", reacquire: { step: "s11", source: "s7", passes: 2, reacquiredPasses: 2 }, site: { kind: "photo-liked-saved", postCodes: FIRST_FEED_POSTS }, goalFacts: false },
     ],
   },
 ];

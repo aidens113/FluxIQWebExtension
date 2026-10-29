@@ -41,3 +41,16 @@ test("the state is read from the Lab's authenticated final-state endpoint", asyn
   assert.deepEqual(state, { rateLimited: 2 });
   assert.deepEqual(seen, ["http://127.0.0.1:9/__control/final-state?scenario=social-network-feed", "Bearer token"]);
 });
+
+test("photo likes and saves must be exactly the expected posts, each changed once, with no collection touched", () => {
+  const expectation = { kind: "photo-liked-saved", postCodes: ["A1", "B2"] } as const;
+  const held = judgeSiteState(expectation, { liked: ["B2", "A1"], saved: ["Z9", "A1", "B2"], activity: ["consent", "like", "save", "like", "save"] });
+  assert.equal(held.held, true);
+  assert.equal(held.duplicatedActs, 0);
+  // A second press of the heart undoes the like; the site still logged both.
+  const twice = judgeSiteState(expectation, { liked: ["B2"], saved: ["A1", "B2"], activity: ["like", "like", "save", "like", "save"] });
+  assert.deepEqual(twice.reasons, ["posts A1 were not liked", "the site received 3 like change(s) where 2 were expected"]);
+  assert.equal(twice.duplicatedActs, 1);
+  const other = judgeSiteState(expectation, { liked: ["A1", "B2", "C3"], saved: ["A1"], activity: ["like", "like", "like", "save", "collection-toggle"] });
+  assert.deepEqual(other.reasons, ["posts C3 were liked and should not have been", "posts B2 were not saved", "the site received 3 like change(s) where 2 were expected", "the site received 1 save change(s) where 2 were expected", "the site received 1 collection change(s) although the case asks only for likes and saves"]);
+});
