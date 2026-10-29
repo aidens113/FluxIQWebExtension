@@ -236,6 +236,13 @@ Core's "What not to do" applies in full. Web-specific additions:
 
 ## Work Ledger
 
+### 2026-10-29 - P0 merged: scenario-free model text, enforced by a check (t793)
+- Agent: supervisor; worker (brief t793), review follow-up t793-R (worker); the script format's example rewritten in t790; report `framework-heavy-lifting-plan/reports/t793-p0.md`
+- Changed: Core model-facing text in `llm/diagnosis-instructions.ts`, `llm/node-tools/run-node.ts`, `flow-bootstrap/plan/evidence-schema.ts`, `service/candidate-trial/processed-out.ts`, `result-verification/repair-directive.ts` now uses reading lists, archives, branch libraries and report filing in place of cart, coupon, store, checkout and excluded-part examples; t790 replaced `flow-script-format.ts`'s "Garden Club" membership example with a print shop. Downstream `scripts/check/model-text.mjs` (in `pnpm check`) builds 209 tokens from the ten realistic scenarios' fixture literals and fails on any in the string and template literals of Core's model-facing files (TypeScript compiler parse; comments excluded); a reviewed allow list of 8 generic words; a retired-examples list.
+- Decision (supervisor review): allow-list entries must match a current Core literal; "Space Grey" (a task's answer variant, found only in comments) is not allowed.
+- Validation: supervisor-run `node --test scripts/check/model-text/tests/*.test.mjs` -> "# pass 8 / # fail 0"; on the tree merged with dev (t790 in) `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 376 model-facing Core files, 11720 string literals)"; Core under the heavy-check lock `pnpm test` llm, flow-bootstrap/plan, result-verification, service/candidate-trial -> "Test Files 443 passed (443)", real-sql 2 passed; prompt contracts "Tests 70 passed (70)"; after a library rebuild `pnpm check` -> exit 0 (without it, a stale apps/web dist failed it, as on t792: a tooling gap, follow-up); docs current; structure audit passed.
+- Outcome: Accepted. The check catches names, not a scenario's shape in common words; review stays needed for shape.
+
 ## Open Questions
 
 1. **Are `values` and `differs` filled for a non-list region, such as a cart drawn with div elements?** Owner: W3. This
