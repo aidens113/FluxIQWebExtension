@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now.** This is a plan; no hosted code exists in either repository (checked
+**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); lane A (t802) and B3 (t803) are in flight in Core, and the stand-in W0-W2 (t801) here. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -97,8 +97,8 @@ This document links to them and does not restate them.
 - Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. The supervisor dispatches the contract-freeze worker (Core carries the H0 changes) and opens the
-   paired H1 task (one ID, nested worktrees); D2 starts with the D0 listener rules.
+1. In flight since 2026-10-29: Core lane A (t802), B3 (t803) and the stand-in W0-W2 (t801). Next: C0 and E once the framework lanes free the runtime files;
+   D2 starts once lane A has the gateway steps, with the D0 listener rules.
 2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
 **Blocked.** Nothing blocks W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
