@@ -315,6 +315,29 @@ remain bounded prose on the action result rather than new summary fields.
 | Element existence checks | Fully supported | Yes | `web.dom.assert` with `kind` `exists`, `visible`, or `enabled` | `content/actions/assert.ts`, `content/action-runtime/assertion-evaluation.ts` | The claim is judged immediately and then polled every 50 ms until the deadline, so an element that arrives late satisfies it and a wrong claim fails fast instead of costing a full wait timeout. The selector is re-queried on every attempt rather than resolved once; an element handed over without a selector must still be connected. `exists` with neither a selector nor an element is reported as such rather than guessed at, and an assertion's target may come from coordinates, visual bounds, or a fingerprint, in which case a miss leaves an empty target reported as "nothing matched" rather than a throw. |
 | Element nonexistence checks | Fully supported | Yes | `web.dom.assert` with `kind: "absent"`; also the `absent` wait condition | `content/actions/assert.ts`, `content/action-runtime/wait-conditions.ts` | Absence is a first-class outcome on both paths: the assertion holds when nothing matches the selector, or when the element handed to it has detached, and the wait condition satisfies when the selector matches nothing or the text has gone. A spinner disappearing is therefore expressible both as a claim that fails fast and as a wait that reports `timed_out` if it never goes. |
 
+### Date bounds in a list read's `where`
+
+A `where` bound (`atLeast`, `atMost`, `lessThan`, `greaterThan`) may be a date
+written with its year, with `as: "date"` (t790, run `run-mvswewhy-e4e469d4`,
+whose request asked for rows "on or after" a day and whose Flow could only
+write a pattern of three days): `{"field": "due", "atLeast": "2026-10-01",
+"as": "date"}`. The condition grammar (`domain/src/actions/extraction/condition-grammar.ts`)
+reads a bound written as text as a date bound, checks that any `as` agrees
+and does not carry it (the text bound already says it), and refuses one that
+names no one date -- no year, a relative date, or a numeric
+day and month that read either way -- at its key, so the plan resolver refuses
+it before the Flow runs and a dispatch drops it as it drops any condition it
+cannot read. The page judges the item with Core's
+`automationStudioRecordConditionHolds`, which reads the value's date with the
+sort's date reader ("Monday 21 September 2026 at 04:00", "21 Sep 2026",
+"2026-09-21", "Sep 21, 2026", "21/09/2026", "3 days ago"); a bound with no
+time of day is its whole day, and an item whose value states no date the bound
+can read is never kept, whatever `not` says. Its rejection observation carries
+the value it read, as for any condition, and Core's readings say that value
+stated no date Core can read. A condition's bounds are all numbers or all
+dates, so the plan resolver's key-by-key copy of a condition carries a date
+bound whole.
+
 ### Partial and wide list answers
 
 A valid authored record schema determines column presentation order while

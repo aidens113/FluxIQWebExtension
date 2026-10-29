@@ -13,6 +13,11 @@
 // form is described under `metadata`, the one free-form keyword Core's schema
 // dialect admits, for an editor to read. A `where` condition's `read` is the
 // same union and is declared the same way.
+//
+// A `where` bound is a number or a date written as text (t790, run
+// `run-mvswewhy-e4e469d4`), so each bound is declared with both types, which
+// Core's schema fit reads as a list (`parameter-schema/fit.ts`), and `as` names
+// the kind; the condition grammar refuses a date that names no one date.
 
 import type { JsonObject } from "fluxiq/core";
 import {
@@ -83,27 +88,29 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       // them and are declared as the list, since that is the shape the reader
       // keeps (`./condition-grammar.ts`). `equals` compares a number against
       // the number in the value and a string against its text, so its items
-      // carry no declared type. An editor writing a lone value rather than a
-      // list is read, as every other forgiving spelling is.
+      // carry no declared type. A lone value is as valid as a list of one, so
+      // each is declared with both types; a number in a text comparison is read
+      // as its digits (`./condition-grammar.ts`).
       where: {
         type: "array",
         label: "Only items where",
-        description: "Each condition names a value by `field` (a key of `fields`) or `read` (a field of its own), and compares it: `is: \"present\" | \"absent\"`, a bound or `equals` on the number in it, `matches` / `contains` / `startsWith` / `endsWith` on its text, and `not` to keep what the rest rejects. Every condition must hold or the item is not read.",
+        description: "Each condition names a value by `field` (a key of `fields`) or `read` (a field of its own), and compares it: `is: \"present\" | \"absent\"`, a bound or `equals` on the number in it, a bound written as a date with its year and `as: \"date\"` on the date it states, `matches` / `contains` / `startsWith` / `endsWith` on its text, and `not` to keep what the rest rejects. Every condition must hold or the item is not read; an item whose value states no date a date bound can read is never kept.",
         items: {
           type: "object",
           label: "Condition",
           properties: {
             field: { type: "string", label: "Field key" },
             is: { type: "string", label: "Value", enum: [...WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE] },
-            atLeast: { type: "number", label: "At least" },
-            atMost: { type: "number", label: "At most" },
-            lessThan: { type: "number", label: "Less than" },
-            greaterThan: { type: "number", label: "Greater than" },
-            equals: { type: "array", label: "Equals any of" },
-            matches: { type: "array", label: "Matches any of", items: { type: "string" } },
-            contains: { type: "array", label: "Contains any of", items: { type: "string" } },
-            startsWith: { type: "array", label: "Starts with any of", items: { type: "string" } },
-            endsWith: { type: "array", label: "Ends with any of", items: { type: "string" } },
+            atLeast: { type: ["number", "string"], label: "At least" },
+            atMost: { type: ["number", "string"], label: "At most" },
+            lessThan: { type: ["number", "string"], label: "Less than" },
+            greaterThan: { type: ["number", "string"], label: "Greater than" },
+            as: { type: "string", label: "Bounds compare", enum: ["number", "date"] },
+            equals: { type: ["array", "string", "number"], label: "Equals any of" },
+            matches: { type: ["array", "string"], label: "Matches any of", items: { type: "string" } },
+            contains: { type: ["array", "string", "number"], label: "Contains any of", items: { type: ["string", "number"] } },
+            startsWith: { type: ["array", "string", "number"], label: "Starts with any of", items: { type: ["string", "number"] } },
+            endsWith: { type: ["array", "string", "number"], label: "Ends with any of", items: { type: ["string", "number"] } },
             not: { type: "boolean", label: "Keep the items this rejects" }
           },
           metadata: { read: fieldSpecSchema }
