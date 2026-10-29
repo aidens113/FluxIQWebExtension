@@ -39,13 +39,32 @@
 // act on: those refuse the condition and name the key, because a dropped
 // condition returns the whole unnarrowed list and reports success having done
 // it.
+//
+// ## A bound may be a date (t790)
+//
+// Run `run-mvswewhy-e4e469d4` was asked for rows "on or after Saturday 19
+// September 2026" and, with bounds that read only numbers, wrote a pattern of
+// three days that dropped every later row. A bound written as text is now a
+// date bound, `{field, atLeast: "2026-09-19", as: "date"}`, and what it means
+// is Core's like every other phrase. A bound must name one date on its own --
+// its year written, nothing relative, no day and month that read either way --
+// and one that does not is refused at its key, as a pattern that does not
+// compile is: run, it would keep no row and look like an empty page. A
+// condition's bounds are all numbers or all dates, and `as`, `date` or
+// `number`, must agree with them. The canonical condition carries no `as`: a
+// bound written as text is what marks a date bound everywhere a condition is
+// read, so `as` says what the bounds already say and is dropped, as `not:
+// false` is, and every caller that copies a condition key by key (the plan
+// resolver) carries the date bound whole.
 
 import {
   AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
   AUTOMATION_STUDIO_RECORD_CONDITION_PRESENCES,
   AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS,
+  automationStudioRecordConditionHolds,
   automationStudioRecordConditionPattern
 } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioRecordCondition } from "fluxiq/automation-studio/nodes";
 import type { WebAutomationExtractConditionValue, WebAutomationExtractItemCondition } from "./request";
 
 /** Everything a condition says about its value, which is every part of one but the key that names it. */
@@ -59,6 +78,10 @@ export type WebAutomationExtractConditionSaying = Omit<WebAutomationExtractItemC
 export type WebAutomationExtractConditionSayingRead =
   | { ok: true; says: WebAutomationExtractConditionSaying }
   | { ok: false; key?: string | undefined };
+
+/** The key saying what a condition's bounds compare, and the words it takes (header, t790): Core's own `as`. */
+const AS_KEY = "as";
+const CONDITION_TYPES: readonly string[] = ["date", "number"] satisfies readonly NonNullable<AutomationStudioRecordCondition["as"]>[];
 
 /** Every phrase a condition may use, in the order a canonical condition writes them. */
 const SAYING_KEYS = [
@@ -138,6 +161,7 @@ const SAYINGS: ReadonlyMap<string, SayingKey> = new Map<string, SayingKey>([
  */
 export const WEB_AUTOMATION_EXTRACT_CONDITION_KEYS: readonly string[] = [
   ...SAYING_KEYS,
+  AS_KEY,
   ...OTHER_NAMES.map(([name]) => name)
 ];
 
@@ -156,8 +180,15 @@ const COMPARISONS: readonly SayingKey[] = [...AUTOMATION_STUDIO_RECORD_CONDITION
  */
 export function webAutomationExtractConditionSayingValue(written: Record<string, unknown>, naming: readonly string[]): WebAutomationExtractConditionSayingRead {
   const said = new Map<SayingKey, unknown>();
+  let as: unknown;
   for (const [key, value] of Object.entries(written)) {
     if (value === undefined || naming.includes(key)) continue;
+    // What the bounds compare, read and checked below, never carried (header, t790).
+    if (key === AS_KEY) {
+      if (!CONDITION_TYPES.includes(value as string)) return { ok: false, key };
+      as = value;
+      continue;
+    }
     const saying = SAYINGS.get(plainKey(key));
     if (saying === undefined) return { ok: false, key };
     const read = sayingValue(saying, value);
@@ -173,6 +204,10 @@ export function webAutomationExtractConditionSayingValue(written: Record<string,
   // "The value is not there" and "the number in it is under fifty" cannot both
   // have been meant, so the pair is refused rather than read one way.
   if (said.get("is") === "absent" && COMPARISONS.some((key) => said.has(key))) return { ok: false };
+  // A condition's bounds are one kind, and `as` names that kind (header, t790).
+  const kinds = new Set(AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS.filter((key) => said.has(key)).map((key) => (typeof said.get(key) === "string" ? "date" : "number")));
+  if (kinds.size > 1) return { ok: false };
+  if (as !== undefined && !kinds.has(as as "date" | "number")) return { ok: false, key: AS_KEY };
   const says: Record<string, unknown> = {};
   for (const key of SAYING_KEYS) {
     const value = said.get(key);
@@ -186,6 +221,7 @@ function sayingValue(saying: SayingKey, value: unknown): unknown {
   if (saying === "is") return (AUTOMATION_STUDIO_RECORD_CONDITION_PRESENCES as readonly string[]).includes(value as string) ? value : undefined;
   if (saying === "not") return booleanValue(value);
   if ((AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS as readonly string[]).includes(saying)) {
+    if (typeof value === "string") return namesOneDate(value) ? value : undefined;
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
   }
   if (saying === "equals") return comparedValues(value);
@@ -226,6 +262,16 @@ function comparedTexts(saying: SayingKey, value: unknown): string[] | undefined 
     texts.push(text);
   }
   return texts;
+}
+
+/**
+ * Whether a bound written as text names one date on its own (header, t790), by
+ * Core's own reading: a date bound holds of the very date it names exactly
+ * when Core can read that date as a bound, so asking Core's judge is asking
+ * Core's bound reader, with no second reader of dates kept here.
+ */
+function namesOneDate(bound: string): boolean {
+  return automationStudioRecordConditionHolds({ atLeast: bound, as: "date" }, bound);
 }
 
 /** `true` and `false`, and the two words a model writes for them. */
