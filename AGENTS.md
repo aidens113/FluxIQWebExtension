@@ -465,6 +465,15 @@ or handle), and spends the remaining retries on the fresh target. An item
 truly gone is reported as gone. This holds on every path the retries do, and
 never repeats a lasting act whose earlier attempt may have landed.
 
+**Build the whole Flow first; test it whole only when it should work** (user,
+2026-09-30 and 2026-10-02, reaffirmed 2026-10-29): a build explores and authors
+the draft live, and its first run from the start is the test it asks for once it
+believes the Flow works. A failed test is repaired live on the failing step, from
+the page the test left, and the fix is checked by running from that step on. The
+Flow runs from its start again, judged, only when the repair believes the whole
+Flow works, and a finished Flow needs one judged whole run as it finally stands.
+Core enforces this; a lane that changes the build loop must keep it.
+
 **Reset as rarely as possible; judge the change, not the absolute state** (user,
 2026-10-27, superseding the 2026-10-12 rule that reset before every trial): a trial
 or judged run is judged against the site's state recorded just before it (from
