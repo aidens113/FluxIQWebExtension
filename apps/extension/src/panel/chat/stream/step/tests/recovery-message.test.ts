@@ -194,3 +194,15 @@ test("a notice the page put in the way, closed, is its own message in Core's wor
   assert.deepEqual(twice.map((message) => message.kind), ["step", "recovery"], "the same notice closed on two attempts is one card");
   assert.equal(cardWords(twice[1]!.actions[0]!, false).outcome, "Done (2 times)");
 });
+
+test("an item found again after the page changed reads as found, and one that is gone says so without a failure's words", () => {
+  const found = recoveryAfterStep({ kind: "reacquire", subject: "Found the item from “Read the posts” again", outcome: "succeeded" });
+  assert.deepEqual(read(found), ["recovery", "Found it again after the page changed", "The page changed, so it looked again and found the same one from “Add the kettle”, then tried it there.", "Found again", "Found the item from “Read the posts” again", "done", "Done"]);
+  const gone = recoveryAfterStep({ kind: "reacquire", subject: "The item from “Read the posts” is gone", outcome: "failed" });
+  assert.deepEqual(read(gone).slice(0, 3), ["recovery", "It is no longer on the page", "The page changed, and the item from “Add the kettle” is gone, so there was nothing to try again."]);
+  assert.deepEqual(read(gone).slice(5), ["refused", "Not done: it is no longer on the page"], "never Didn't work");
+  const held = recoveryWords({ kind: "reacquire", subject: "x", outcome: "refused" }, "Read the posts");
+  assert.equal(held.title, "Didn't look for it again");
+  assert.equal(held.because, "it was held back before it ran");
+  assert.match(recoveryWords({ kind: "reacquire", subject: "x", outcome: "succeeded" }, "Read the posts").text, /found the same one from “Read the posts”, then tried it there\./);
+});

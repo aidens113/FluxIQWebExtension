@@ -534,6 +534,11 @@ overlay (`content/activity-overlay/`), and the extension-only message and
 state types (`ACTIVITY_MESSAGES`, `ACTIVITY_DONE_VISIBLE_MS`,
 `ACTIVITY_RECENT_LIMIT`, `ExtensionActivityState`). The relay:
 
+A recovery row of kind `reacquire` (the item a step worked on was looked for
+again after the page changed) is its own chat message: "Found it again after
+the page changed" with a "Found again" card, or, when the item is gone, "It is
+no longer on the page" with a "Not done" card, never "Didn't work".
+
 - drops a malformed event and any event whose `sequence` is not greater than
   the last kept one, so a late event never overwrites a newer status. A new
   gateway session resets that mark, because Core counts per process;

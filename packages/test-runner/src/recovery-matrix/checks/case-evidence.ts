@@ -5,7 +5,7 @@
 
 import type { MatrixFlowStep } from "../compile/index.js";
 import type { RecoveryExecutorFeature } from "../matrix-row.js";
-import type { MatrixAttemptRecord, SiteReading } from "../records/index.js";
+import type { MatrixAttemptRecord, MatrixRecoveryActivity, MatrixTraceAttempt, SiteReading } from "../records/index.js";
 
 export type MatrixCaseEvidence = Readonly<{
   /**
@@ -24,6 +24,18 @@ export type MatrixCaseEvidence = Readonly<{
   model: Readonly<{ calls: number | null; interventions: number | null; harnessActivations: number }>;
   /** Whether the case's perturbation fired; `null` for a case without one. */
   faultFired: boolean | null;
+  /**
+   * The run's own trace attempts, for what the run detail does not carry (a
+   * re-acquire record, `../records/trace-attempts.ts`). Read only for a case
+   * that judges by it; absent otherwise.
+   */
+  trace?: readonly MatrixTraceAttempt[];
+  /**
+   * The recovery rows Core's live activity said about this run, collected while
+   * it ran (`../run/activity-watch.ts`); `null` when no read of the stream
+   * succeeded. Absent for a case that does not judge by them.
+   */
+  recoveries?: readonly MatrixRecoveryActivity[] | null;
 }>;
 
 export type MatrixVerdict = "passed" | "failed" | "not-proven";

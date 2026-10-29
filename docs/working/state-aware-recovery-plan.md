@@ -558,6 +558,13 @@ Their briefs are written here before dispatch, against the code as it then stand
   only its last word changed is accepted (the residual "Add to wishlist" case is bounded by the step's `done when:`)
 - Follow-up: lanes A-D round 3; the follow-ups in Current State
 
+### 2026-10-28 - t786 merged: a stale target is found again from the step that found it
+- Agent: supervisor; t786 sub-supervisor (worker-heavy core, domain, proof; worker chat); design `reports/t786-design.md`, report `reports/t786.md`
+- User (2026-10-28, both AGENTS.md): after a step's second failed retry on a target that came from an earlier step, re-run that source step, find the same item by identity and spend the remaining retries on the fresh target; a gone item is reported as gone; never repeat a lasting act whose earlier attempt may have landed.
+- Changed: Core `runtime/executor/target-reacquire/**` (lineage, trigger after the second failed retry, read-only source re-run, rebinding, accounting), step-loop and outside-graph retries, activity recovery line, gateway recovery kind `reacquire` (contracts 0.3.0, unreleased); domain `node-run/retries/{reacquire,replay-row-reacquire,looked-up-reacquire,replayed-reads}.ts` (row matched by identity, never position or handle); extension recovery words; recovery-matrix case 13c (photo-social); docs element-identity, extension-client, testing-facility, Core automation-studio.
+- Validation: supervisor on the trees merged with dev (t785): Core `pnpm test` executor, activity, service/summaries, src/ui -> "Test Files 221 passed (221)", "Tests 1976 passed (1976)", real-sql 2/7; contracts "Tests 487 passed (487)"; `pnpm check` -> exit 0; `pnpm docs:check` current; `pnpm structure:check` passed (449 warnings). Downstream domain `test-domain.mjs node-run runtime/target-reacquire host-runtime` -> "# pass 478 / # fail 0"; `test-extension.mjs panel/chat/stream/step` -> "# pass 100 / # fail 0"; recovery-matrix unit tests "# pass 78 / # fail 0"; `tsc --noEmit` domain, extension, test-runner clean; structure audit passed; headed `pnpm lab recovery-matrix --case 13c` -> `{"caseId":"13c","verdict":"passed","reasons":[]}`, case record `reacquire:found` on both passes, `reacquiredPasses: 2`, `modelCalls: 0`.
+- Outcome: Accepted. Not proven live: gone, unmatched and return-to-place paths, exploration through Core's real retry loop; open questions (wait accounting, strict match, gone wording) in the report.
+
 ## Open Questions
 
 - User: approve the MVP cut (R1-R4b and R5a before the 11-10 deadline, R4c/R5b after the RC) or move the whole
