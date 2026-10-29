@@ -24,6 +24,12 @@
 // hidden inside a closed container never reaches this: that is a step the Flow
 // cannot take, and the check answers `failed` (`./hidden-target.ts`).
 //
+// **Another row's control (t792).** A target the page refused because the only
+// match belongs to another row of the page (`resolution.refusedBecause:
+// "other-record"`, `actions/types.ts`) is neither gone nor remembered: the
+// control is there, in a row the step does not name. It answers
+// `core.replay.failed` on any page, in those words, and never `remembered`.
+//
 // The same page by location is not proof: two states can share a path. It is
 // the evidence this domain has without acting, and it is the same test for both
 // kinds of step.
@@ -42,16 +48,26 @@ import type { WebNodeRun } from "./context";
  * only checked it. `failure` is the client's own word for the miss, said on an
  * unreproducible replay as it always was. `shown` is how a checked step's
  * target is missing: `gone` from the page, or `withdrawn` -- there and hidden
- * itself, which a replayed step never reports.
+ * itself, which a replayed step never reports. `refused` is the closed word
+ * the client's resolution carried when the match was another row's control.
  */
 export async function webNodeReplayMissingTarget(
   run: WebNodeRun,
   kind: "step" | "verify",
   about: WebNodeReplayFacts,
   failure?: string,
-  shown: "gone" | "withdrawn" = "gone"
+  shown: "gone" | "withdrawn" = "gone",
+  refused?: "other-record"
 ): Promise<WebLlmEvidenceToolExecution> {
   const page = await webNodeReplayPage(run);
+  if (refused === "other-record") {
+    return webNodeReplayAnswerOnPage(run, page, {
+      code: WEB_NODE_REPLAY_RESULT_CODES.failed,
+      said: OTHER_RECORD_SAID,
+      acted: kind === "step",
+      about
+    });
+  }
   const actedOn = actedOnLocation(run.request.value);
   const replayed = kind === "step";
   const withdrawn = !replayed && shown === "withdrawn";
@@ -84,8 +100,18 @@ export async function webNodeReplayMissingTarget(
   });
 }
 
+/** What a replay says of a step whose target matched another row's control (header, t792). */
+export const OTHER_RECORD_SAID = "the step's target matched another row's control, not the control of the row this pass is on; the step did not run";
+
 /** Where the step found the page, as this domain wrote it on the step (`./replay.ts`), and Core sent it back. */
 function actedOnLocation(value: JsonObject): string | undefined {
   const from = isJsonRecord(value.from) ? value.from : undefined;
   return typeof from?.location === "string" && from.location ? from.location : undefined;
+}
+
+/** The closed word a failed result's resolution carries when the match was another row's control, or nothing (header, t792). */
+export function webNodeRefusedBecause(result: { payload?: unknown }): "other-record" | undefined {
+  const payload = result.payload;
+  const resolution = isJsonRecord(payload) && isJsonRecord(payload.resolution) ? payload.resolution : undefined;
+  return resolution?.refusedBecause === "other-record" ? "other-record" : undefined;
 }

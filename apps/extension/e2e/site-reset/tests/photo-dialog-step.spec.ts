@@ -310,3 +310,72 @@ test("installed gateway project build resolves a candidate's press in the dialog
     await installed.close();
   }
 });
+
+/**
+ * t792 fix 4, in a real browser: the messages dock left expanded over a post page opened by address covers some of the page's
+ * controls. A press on one is refused as covered by that layer, and what the domain answers names the layer's own controls: its
+ * collapse handle, an icon with no words in the layer's header, before any link inside it; the conversation links inside the
+ * dock are named as its content, never as its controls. Nothing is pressed and the dock stays expanded.
+ */
+test("installed gateway project build is told a covered press's layer has a collapse control of its own, before any link in it", async ({ extensionSession }, testInfo) => {
+  test.setTimeout(240_000);
+  const installed = await startInstalledBuild(extensionSession);
+  const { page } = installed;
+  const post = new URL(`${ROOT}p/${LIKED.code}/`, installed.origin).href;
+  const build = projectBuild(installed, "Installed covered dock", "Look at one post.", () => installed.page.url());
+  const pages: Record<string, string> = {};
+  let coveredHandle = "", coveredLine = "", refusal: JsonObject = {}, dockExpandedAfter = false, clicksBefore = 0, clicksAfter = 0;
+  try {
+    await page.goto(new URL(ROOT, installed.origin).href);
+    await page.getByTestId("cookie-policy-manage-dialog-decline-button").click();
+    await page.getByRole("button", { name: "Not Now", exact: true }).click();
+    // The post opened by its address, the dock left alone: it expands by itself over the bottom right.
+    await page.goto(post);
+    await page.locator(`fl-dock [part="collapse-button"]`).waitFor({ timeout: 9000 });
+    await installed.pair();
+    const observed = bindInstrumentedRuntime(installed);
+    const builder = async (turn: BuilderTurn) => {
+      const { last, node } = turn;
+      pages[`step-${turn.step}`] = turn.shownPage();
+      if (turn.step === 1) return node("post", "web.output.browser-navigate", { url: post });
+      if (turn.step === 2) {
+        await page.locator(`fl-dock [part="collapse-button"]`).waitFor({ timeout: 9000 });
+        return node("look", "web.output.dom-capture_snapshot", {});
+      }
+      if (turn.step === 3) {
+        // The first control the view marks as lying under the dock.
+        const line = turn.shownPage().split("\n").find(entry => /^t\d+ /u.test(entry) && entry.includes("covered-by"));
+        if (!line) throw new Error("diagnostic.nothing_covered");
+        coveredLine = line;
+        coveredHandle = line.split(" ")[0]!;
+        clicksBefore = observed.clicks();
+        return node("covered.press", "web.output.dom-click", { target: { handle: coveredHandle } }, ["modify_existing"]);
+      }
+      refusal = record(last("core.run_node"));
+      clicksAfter = observed.clicks();
+      dockExpandedAfter = await page.locator(`fl-dock [part="collapse-button"]`).isVisible();
+      return turn.complete({ subflowKey: "main" });
+    };
+    const provider = bindScriptedProvider(installed, { task: "Look at one post.", permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 8, maxCallsPerRun: 12, builder, verify: judgeLog().verify });
+    const { ending, failure } = await build.run();
+    await keepDiagnostic(testInfo, "covered-dock.json", { ending, failure, coveredLine, refusal, clicksBefore, clicksAfter, dockExpandedAfter, outcomes: observed.outcomes, receipts: provider.receipts, pages });
+    console.log(JSON.stringify({ coveredDock: { ending, failure, coveredLine, refusal } }));
+    const words = textsIn(refusal).join("\n");
+    // Refused as covered, with nothing pressed and the dock still up.
+    expect(coveredHandle).toMatch(/^t[0-9]+$/u);
+    expect(words).toMatch(/covers/u);
+    expect(clicksAfter).toBe(clicksBefore);
+    expect(dockExpandedAfter).toBe(true);
+    // The layer's own controls come first, its collapse handle among them (an icon with no words in its header), and the sentence
+    // says the links and rows inside the layer are its content.
+    const own = words.match(/own controls, header first: ([^]*?)\. A close, collapse/u)?.[1] ?? "";
+    expect(own).not.toBe("");
+    const entries = own.split("; ");
+    expect(entries[0]).toMatch(/^t[0-9]+ \(.*(no words|collapse|minimi[sz]e|close).*\)$/u);
+    expect(entries.some(entry => /link/u.test(entry))).toBe(false);
+    expect(words).toMatch(/links and rows inside the layer are its content/u);
+  } finally {
+    await build.stop();
+    await installed.close();
+  }
+});

@@ -532,6 +532,12 @@ Every page leaves the domain as `web-llm-page.v3`
   `target_covered` (`blocked_by_dialog` under a modal) with the reason
   `covered_by_layer`, the covering handles in `instead`, and the page, whose
   `COVERING` or `DIALOG` line names the layer (`node-run/covered-target.ts`).
+  Its `layerControls` (t792) name the layer's own controls by handle, header
+  controls first and an icon-only one as "a control with no words in the
+  layer's header" (`node-run/layer/own-controls.ts`); the links inside the
+  layer are its content and are never listed as its controls, and a repeat of
+  the refusal keeps them (`repeated-refusal.ts`). The client never presses one
+  by itself: naming it lets the builder close or collapse the layer.
   A refusal for a handle the page no longer has carries the page too, and
   both pages become the shown packet, so the next call can use their handles
   (C3, C4, C9).
