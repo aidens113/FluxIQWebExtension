@@ -27,6 +27,8 @@ export type LiveLlmObservedCall = {
   estimatedCostUsd: number | null;
   /** Core's canonical charge and its provenance; absent on legacy intervention-only records. */
   charged?: ExistingRunProviderCall["charged"];
+  /** Core flagged this call: the provider reported more input than Core reserved for it. A finding, not a cap breach (`reservation-findings.ts`). */
+  budgetBreach?: boolean;
 };
 
 /**
@@ -134,6 +136,7 @@ function fromProviderCall(line: ExistingRunProviderCall): LiveLlmObservedCall {
     totalTokens: line.totalTokens,
     estimatedCostUsd: line.estimatedCostUsd,
     charged: { ...line.charged },
+    budgetBreach: line.budgetBreach,
   };
 }
 

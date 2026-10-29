@@ -16,6 +16,7 @@ import { flowLaneObservation, type RunLaneObservation } from "../lane-observatio
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly, flowActionsSnapshot } from "../run-flow-lane.js";
+import { budgetOverProductFailure } from "../../live-llm/budget-over-product-failure.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
 import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatWait } from "./chat/index.js";
 import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildLlm, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
@@ -476,13 +477,22 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     // write its record must not hide why the lane failed.
     if (llmExecution && input.settleRun) {
       const breach = await input.settleRun(identifiedRunId).then(() => undefined, (settlement: unknown) => settlement);
-      if (breach instanceof RunnerFailure) throw breach;
+      // The breach is the category, the run's own failure is its cause: the Lab then reads the run as the product's.
+      if (breach instanceof RunnerFailure) throw budgetOverProductFailure(breach, error);
     }
     throw error;
   }
   progress.run = run;
   progress.stage = "judgement";
-  if (llmExecution && input.settleRun) await input.settleRun(run.runId);
+  // A budget breach is raised only after the run has been judged and published: raised here it replaced the
+  // playback's failure and the oracle's verdict (`oracleVerdict: null`, `run-mvskptb1-c9cef4fe`). Any other settlement error still stops the lane at once.
+  let breach: RunnerFailure | undefined;
+  if (llmExecution && input.settleRun) {
+    breach = await input.settleRun(run.runId).then(() => undefined, (settlement: unknown) => {
+      if (settlement instanceof RunnerFailure && settlement.category === "performance.budget") return settlement;
+      throw settlement;
+    });
+  }
   const { judgement } = request;
   // Judged before the publish and never throwing, so a Flow whose records are wrong is still published with its measurement.
   const extraction = judgement.judgeBy === "expected-dataset" ? judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin: input.scenarioOrigin }) : null;
@@ -505,10 +515,19 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   // First of the judgements: a Flow that could not have started without the
   // harness produced its records from a page it never chose, so what those
   // records match or miss says nothing about the Flow.
-  assertCreatedFlowReachesItsOwnPage(ownPage, { flowId, taskId: request.task.id, taskKind: request.task.kind });
-  assertFlowDidNotStopEarly(run);
-  assertFlowFailure(workflow.expected.failure, run.failure);
-  assertCreatedFlowOracles(extraction, oracles);
+  const assertExpectations = (): void => {
+    assertCreatedFlowReachesItsOwnPage(ownPage, { flowId, taskId: request.task.id, taskKind: request.task.kind });
+    assertFlowDidNotStopEarly(run);
+    assertFlowFailure(workflow.expected.failure, run.failure);
+    assertCreatedFlowOracles(extraction, oracles);
+  };
+  if (breach) {
+    // The breach keeps its category and carries the product's failure, if the run had one, as its cause.
+    let own: unknown;
+    try { assertExpectations(); } catch (failure) { own = failure; }
+    throw budgetOverProductFailure(breach, own);
+  }
+  assertExpectations();
   return evidence;
 }
 

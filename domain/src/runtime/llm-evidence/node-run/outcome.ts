@@ -3,6 +3,7 @@
 
 import type { JsonValue } from "fluxiq/core";
 import type { WebToggleSignature } from "../../../actions/toggle-signature";
+import type { WebPressClearedLayer } from "./press-effect";
 
 /**
  * What a node call says about itself, beside the page it left behind.
@@ -136,4 +137,15 @@ export type WebNodeRanOutcome = WebNodeOutcome & {
    * own status stands: the page answered the press.
    */
   effectUncertain?: string;
+  /**
+   * Said on a press that cleared a layer covering the page, one this build's
+   * own press did not open: the layer covered controls on the look before and
+   * covers none on the look after, the same page, and the control the press
+   * used is no longer shown (`./press-effect/cleared-layer.ts`, t787).
+   * `signature` is opaque to Core, which never reads inside it; `control` is
+   * the handle the press used. Core makes a handler of it, so a run that meets
+   * the layer again closes it the same way
+   * (`AS/runtime/flow-bootstrap/explored-interruptions.ts`).
+   */
+  layerCleared?: WebPressClearedLayer;
 };

@@ -119,10 +119,24 @@
 // gesture itself is `action-runtime/click-gesture.ts`, shared with the defence
 // that presses a blocking dialog's own way out (`action-runtime/interference/`),
 // which needs the same press and cannot import a verb.
+//
+// A press made in place says what it changed about its own control (t787).
+// Core learns a Flow step's control is a toggle from the press, and gives the
+// step `ensureState` so a run over an item already in the asked state presses
+// nothing. Until t787 only a press the build made while exploring said so,
+// from the page views around it (`domain/.../press-effect/toggle-signature.ts`),
+// and a looped step on a control first pressed by a trial was saved as a plain
+// press: its second run flipped every item back (`run-mvskptb1-c9cef4fe`). So
+// the control is read just before the press and again once it succeeded, in
+// the same shape the `ensureState` match reads (`./toggle-reading.ts`), and the
+// domain's own derive says what flipped (`webToggleSignatureOf`). The result
+// carries it as `toggle` only when the control is still in the document and the
+// page still at the same address; a link's press is not read.
 
-import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs, webToggleSignatureShown } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs, webToggleSignatureOf, webToggleSignatureShown, type WebToggleReading } from "@fluxiq-web-extension/domain/client";
 import { dispatchClickGesture, extraPressesMade, noteExtraPress, pressAgain } from "../action-runtime";
 import type {
+  ActionabilityReport,
   ActionResultEvidence,
   ClickPoint,
   IgnoredPressAnswer,
@@ -248,57 +262,10 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   const link = navigatingLink(element);
   if (!link) {
-    // An earlier attempt of this command was a press the page ignored and a
-    // layer then covered: this press, made after the layer was closed, is the
-    // press made once more (`action-runtime/ignored-press/command-presses.ts`).
-    const extra = extraPressesMade(action);
-    const again = extra > 0 ? PRESSED_AFTER_COVER : undefined;
-    const first = await press(element, report.point, action, deps, startedAt, extra === 0);
-    // Before the ignored-press rule: a page that wrote its refusal outside the
-    // control's section is a press the watch saw no sign of, and is never pressed again.
-    if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
-    if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
-    // Nothing but the page's own notice: the page reported the press failed, for Core to make again (t743).
-    if (first.noticeOnly && deps.checkActionability(element).actionable) {
-      return deps.success(action, startedAt, "Element clicked, and the page answered only with a notice.", noticeOnlyValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE);
-    }
-    // A change that came and went, and a page settled exactly as it was: certainly nothing, for Core to press once more.
-    if (first.settledUnchanged && deps.checkActionability(element).actionable) {
-      return deps.success(action, startedAt, "Element clicked, and the page settled unchanged.", settledUnchangedValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT);
-    }
-    // A robot check that came and went was an answer; so is any sign the watch saw.
-    if (first.sighting || !first.answer || first.answer.seen.length > 0) {
-      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
-    }
-    if (!pressAgain(first.answer.seen, extra)) {
-      // The press made once more, after the layer was closed, was ignored too.
-      // A control now covered, disabled or gone reads as answered, as below.
-      if (expectsAnswer(element) && deps.checkActionability(element).actionable) {
-        return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, first.accepted, IGNORED_AFTER_COVER), evidence());
-      }
-      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
-    }
-    // The page did nothing at all. The control is pressed once more at the same
-    // point, but only while it can still be pressed. One now disabled or gone
-    // was answered after all, by whatever removed it. One now covered was not:
-    // a layer that came during the wait is the page's own motion, so the cover
-    // is refused, naming the layer, and the in-page recovery closes it and runs
-    // the click again, whose press is the press made once more.
-    const now = deps.checkActionability(element);
-    if (!now.actionable) {
-      if (now.code === "covered") {
-        noteExtraPress(action);
-        return deps.rejected(action, startedAt, now.code, "the page answers the press", `${now.detail}; ${COVERED_AFTER_IGNORED}`, { ...evidence(), blockedAt: now.point, target: element });
-      }
-      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
-    }
-    const second = await press(element, report.point, action, deps, startedAt, false);
-    if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
-    if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
-    if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
-      return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
-    }
-    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, PRESSED_ONCE_MORE), evidence());
+    // What the press changes about its own control, read around it (header, t787).
+    const before = toggleReadingOf(element, deps.describeElement(element));
+    const address = element.ownerDocument.location.href;
+    return withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence), { element, before, address, deps });
   }
 
   const document = element.ownerDocument;
@@ -316,6 +283,80 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
   } finally {
     watch?.stop();
   }
+}
+
+/**
+ * `result` with what the press changed about its own control (header, t787):
+ * only on a press that succeeded, on a control still in the document, on a
+ * page still at the address it was pressed at.
+ */
+function withToggle(result: BrowserActionResult, around: { element: Element; before: WebToggleReading; address: string; deps: ContentActionDependencies }): BrowserActionResult {
+  const { element, before, address, deps } = around;
+  if (result.status !== "succeeded" || result.failure !== undefined || element.isConnected === false || element.ownerDocument.location.href !== address) return result;
+  const toggle = webToggleSignatureOf(before, toggleReadingOf(element, deps.describeElement(element)));
+  return toggle === undefined ? result : { ...result, toggle };
+}
+
+/** A press on a control that is not a link, with every answer the page can give it (header). */
+async function pressInPlace(
+  element: Element,
+  report: Extract<ActionabilityReport, { actionable: true }>,
+  action: BrowserActionCommand,
+  deps: ContentActionDependencies,
+  startedAt: number,
+  evidence: () => ActionResultEvidence
+): Promise<BrowserActionResult> {
+  // An earlier attempt of this command was a press the page ignored and a
+  // layer then covered: this press, made after the layer was closed, is the
+  // press made once more (`action-runtime/ignored-press/command-presses.ts`).
+  const extra = extraPressesMade(action);
+  const again = extra > 0 ? PRESSED_AFTER_COVER : undefined;
+  const first = await press(element, report.point, action, deps, startedAt, extra === 0);
+  // Before the ignored-press rule: a page that wrote its refusal outside the
+  // control's section is a press the watch saw no sign of, and is never pressed again.
+  if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
+  if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
+  // Nothing but the page's own notice: the page reported the press failed, for Core to make again (t743).
+  if (first.noticeOnly && deps.checkActionability(element).actionable) {
+    return deps.success(action, startedAt, "Element clicked, and the page answered only with a notice.", noticeOnlyValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE);
+  }
+  // A change that came and went, and a page settled exactly as it was: certainly nothing, for Core to press once more.
+  if (first.settledUnchanged && deps.checkActionability(element).actionable) {
+    return deps.success(action, startedAt, "Element clicked, and the page settled unchanged.", settledUnchangedValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT);
+  }
+  // A robot check that came and went was an answer; so is any sign the watch saw.
+  if (first.sighting || !first.answer || first.answer.seen.length > 0) {
+    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
+  }
+  if (!pressAgain(first.answer.seen, extra)) {
+    // The press made once more, after the layer was closed, was ignored too.
+    // A control now covered, disabled or gone reads as answered, as below.
+    if (expectsAnswer(element) && deps.checkActionability(element).actionable) {
+      return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, first.accepted, IGNORED_AFTER_COVER), evidence());
+    }
+    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
+  }
+  // The page did nothing at all. The control is pressed once more at the same
+  // point, but only while it can still be pressed. One now disabled or gone
+  // was answered after all, by whatever removed it. One now covered was not:
+  // a layer that came during the wait is the page's own motion, so the cover
+  // is refused, naming the layer, and the in-page recovery closes it and runs
+  // the click again, whose press is the press made once more.
+  const now = deps.checkActionability(element);
+  if (!now.actionable) {
+    if (now.code === "covered") {
+      noteExtraPress(action);
+      return deps.rejected(action, startedAt, now.code, "the page answers the press", `${now.detail}; ${COVERED_AFTER_IGNORED}`, { ...evidence(), blockedAt: now.point, target: element });
+    }
+    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
+  }
+  const second = await press(element, report.point, action, deps, startedAt, false);
+  if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
+  if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
+  if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
+    return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
+  }
+  return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, PRESSED_ONCE_MORE), evidence());
 }
 
 /**

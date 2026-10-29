@@ -628,6 +628,27 @@ key, a scroll a coordinate, and a check a known state.
   gateway mapping carries in the payload. Otherwise it presses as usual. The
   older draft statement `toggle: { key, to }` (Core's reversal pairing) is a
   different thing and is unchanged.
+- **A trial press answers `toggle` too (t787).** The click node reads its own
+  control before and after a press made in place and, when the press succeeded,
+  the control is still in the page and the address is unchanged, reports the
+  signature the domain's `webToggleSignatureOf` derives, on the action result's
+  `toggle` field. The gateway mapping checks it (`webToggleSignatureValue`) and
+  the output dispatcher lifts `{ signature, idempotentWith? }` beside `skipped`,
+  where Core reads it (`outputs.result.toggle`). So a step whose only press of a
+  control came from a trial pass of the same node is written with
+  `ensureState` as well. The attribute rule (`idempotentWith:
+  "web.output.dom-check"`) is one function shared by both answers
+  (`domain/src/actions/toggle-signature/output.ts`). A press that re-renders its
+  control or changes it only after a slow request reports no `toggle`.
+- **A press that clears a covering layer answers `layerCleared` (t787).** When
+  before the press a `COVERING` layer of the page view covered controls and held
+  the pressed control, and after it, on the same page, the layer covers nothing
+  or is gone and the pressed control is no longer shown, and the build's own
+  press did not open the layer, the answer carries
+  `evidence.layerCleared: { signature, control }`
+  (`node-run/press-effect/cleared-layer.ts`): the layer's and control's tag,
+  role, kind and name, with no selector, and the handle the press used. Core
+  makes it a handler of the submitted Flow (`flow-bootstrap/explored-interruptions.ts`).
 - A key press on a `<select>` whose only effect is the value change — an arrow,
   Home, End, Page Up/Down, or any single character — is evidence, because the
   recorder already reports that change as its own event.

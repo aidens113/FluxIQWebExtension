@@ -566,6 +566,15 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   extraction?: WebAutomationExtractionSummary | undefined;
   /** `web.dom.click` with `ensureState`: the target already showed that state, so nothing was pressed. */
   skipped?: "already_in_state" | undefined;
+  /**
+   * `web.dom.click` made in place: what the press changed about its own
+   * control, read from the control just before and just after it
+   * (`./toggle-signature/`), when it flipped one and the page stayed where it
+   * was (t787). Core learns from it that a Flow's step on that control is safe
+   * to run again only with `ensureState`. Lifted to the top of the dispatch
+   * payload with what Core is told of it (`../io/gateway-output-dispatcher.ts`).
+   */
+  toggle?: WebToggleSignature | undefined;
   /** `web.dom.next_page`'s answer: the list moved, has no next page, or the move failed. */
   nextPage?: WebAutomationNextPageAnswer | undefined;
   /**

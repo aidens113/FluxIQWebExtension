@@ -8,10 +8,11 @@
 // attribute, and is idempotent with `web.dom.check`; any other control says
 // the words its accessible name gained and lost, which a row's own words
 // cancel out of. A target gone or replaced, or nothing seen to change, says
-// nothing.
+// nothing. What Core is told of the signature is the same rule a Flow's own
+// press in a trial is told by (`actions/toggle-signature/output.ts`, t787).
 
-import type { WebToggleAttribute, WebToggleReading, WebToggleSignature } from "../../../../actions/toggle-signature";
-import { webToggleClassTokens, webToggleControlAncestor, webToggleSignatureOf } from "../../../../actions/toggle-signature";
+import type { WebToggleAttribute, WebToggleOutput, WebToggleReading } from "../../../../actions/toggle-signature";
+import { webToggleClassTokens, webToggleControlAncestor, webToggleOutput, webToggleSignatureOf } from "../../../../actions/toggle-signature";
 import type { WebLlmEvidenceElement } from "../../elements";
 import { attributeValue } from "../../page-view";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
@@ -19,7 +20,7 @@ import type { WebRunnableNode } from "../catalog";
 import { webMovesThePage } from "../start-location";
 
 /** The `toggle` output of a press, or `undefined`. */
-export type WebPressToggleOutput = { signature: WebToggleSignature; idempotentWith?: "web.output.dom-check" };
+export type WebPressToggleOutput = WebToggleOutput;
 
 export function webPressToggleSignature(
   node: WebRunnableNode,
@@ -33,8 +34,7 @@ export function webPressToggleSignature(
   const now = after.evidence.elements.find((element) => element.target === handle);
   if (was === undefined || now === undefined) return undefined;
   const signature = webToggleSignatureOf(reading(was, before.evidence.elements), reading(now, after.evidence.elements));
-  if (signature === undefined) return undefined;
-  return signature.via === "attribute" ? { signature, idempotentWith: "web.output.dom-check" } : { signature };
+  return signature === undefined ? undefined : webToggleOutput(signature);
 }
 
 function reading(element: WebLlmEvidenceElement, elements: readonly WebLlmEvidenceElement[]): WebToggleReading {

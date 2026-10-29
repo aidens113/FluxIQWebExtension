@@ -53,7 +53,7 @@ export async function stepLogObservedCalls(stepsDirectory: string | undefined, o
     const row = rowOf(meta);
     const known = row.requestId === null ? undefined : core.get(row.requestId);
     if (known) core.delete(row.requestId!);
-    rows.push(known ? { ...row, promptVersion: known.promptVersion, validationOk: known.validationOk, validationCodes: [...known.validationCodes], stage: row.stage ?? known.stage } : row);
+    rows.push(known ? { ...row, promptVersion: known.promptVersion, validationOk: known.validationOk, validationCodes: [...known.validationCodes], stage: row.stage ?? known.stage, ...(known.budgetBreach === undefined ? {} : { budgetBreach: known.budgetBreach }) } : row);
   }
   if (rows.length === 0) return undefined;
   const observedCalls = [...rows, ...core.values()];

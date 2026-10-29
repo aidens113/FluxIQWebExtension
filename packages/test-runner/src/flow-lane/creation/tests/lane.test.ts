@@ -317,6 +317,49 @@ test("a repair run that throws is still settled, and an overspend outranks the r
   await assert.rejects(unwritable.run, /the run broke/u, "a settlement that could not write its record does not hide why the lane failed");
 });
 
+test("a breach after a failed playback keeps the playback failure and the oracle verdict", async () => {
+  // A live playback is its own session under an id the runner names (`runLiveFlow`); the fake's reads describe `run.created`, served as that run.
+  const playedBack = (options: FakeCreationCoreOptions) => {
+    const core = fakeCreationCore(options);
+    const call = core.control.automationStudioCall.bind(core.control);
+    let named: string | undefined;
+    core.control.automationStudioCall = async (endpoint, payload, ...rest) => {
+      if (endpoint === "run-runtime-session") {
+        named = String(payload.newRunId);
+        return { runtimeSession: { runId: payload.newRunId, status: options.runStatus ?? "succeeded", flowId: FLOW_ID } };
+      }
+      const answer = await call(endpoint, payload, ...rest);
+      return named ? JSON.parse(JSON.stringify(answer).replaceAll('"run.created"', JSON.stringify(named))) : answer;
+    };
+    return core;
+  };
+  const ready = async (): Promise<PersistedFlowLlmExecution> => ({ intent: "explore_and_adapt", permittedConsequences: [] });
+  const breach = new RunnerFailure("performance.budget", "Live LLM budget exceeded: a cap");
+  const wrong = { datasets: [{ datasetId: "dataset.one", nodeIds: ["node.extract"], rows: [{ name: "Lamp", price: "$10" }] }] };
+  const breached = await runLane(playedBack(wrong), { authorizeRun: ready, settleRun: async () => { throw breach; } });
+  await assert.rejects(breached.run, (error: unknown) => {
+    if (!(error instanceof RunnerFailure) || error.category !== "performance.budget") return false;
+    const cause = error.cause;
+    return cause instanceof RunnerFailure && cause.category === "runtime.behavior" && /Extract step extract-page-one yielded 1 record\(s\), expected 2/u.test(cause.message);
+  });
+  assert.equal(breached.evidence.length, 1, "the run was judged and published before the breach was raised");
+  assert.equal(breached.evidence[0]?.observation.oracleVerdict, "failed");
+  // With no failure of its own, the breach is raised alone and the verdict is the pass it was.
+  const clean = await runLane(playedBack({}), { authorizeRun: ready, settleRun: async () => { throw breach; } });
+  await assert.rejects(clean.run, (error: unknown) => error === breach);
+  assert.equal(clean.evidence[0]?.observation.oracleVerdict, "passed");
+  // A run that threw is kept as the breach's cause too, on the throw path.
+  const thrown = new RunnerFailure("runtime.behavior", "the playback could not be read");
+  const core = playedBack({});
+  const base = core.control.automationStudioCall.bind(core.control);
+  core.control.automationStudioCall = async (endpoint, payload, ...rest) => {
+    if (endpoint === "run-runtime-session") throw thrown;
+    return await base(endpoint, payload, ...rest);
+  };
+  const failed = await runLane(core, { authorizeRun: ready, settleRun: async () => { throw breach; } });
+  await assert.rejects(failed.run, (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && error.cause === thrown);
+});
+
 /**
  * The runs that most need reading are the ones that stop before the judgement,
  * and until this they were the ones with nothing written down: `flow-lane.json`

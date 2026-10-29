@@ -14,6 +14,7 @@ import { RunnerFailure } from "../failure.js";
 import { withSettledBuild, type CreatedFlowBuild, type CreatedFlowBuildLlm, type CreatedFlowSettledBuild, type PersistedFlowLlmExecution } from "../flow-lane/index.js";
 import { authorizeFlowLiveLlmExecution, installLiveLlmSessionKey, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld } from "./budget.js";
+import { liveLlmBudgetFindings, type LiveLlmBudgetFinding } from "./budget/index.js";
 import { budgetOverProductFailure } from "./budget-over-product-failure.js";
 import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
@@ -151,6 +152,8 @@ export class LiveLlmRun {
   private reauthor: LiveLlmReauthorRecord | undefined;
   /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
   private buildRecord: CreatedFlowBuild | undefined;
+  /** What settlements noticed that is not a failure (`reservation-findings.ts`), by phase; written to the snapshot and the settle event. */
+  private findings: Array<LiveLlmBudgetFinding & { phase: "build" | "repair" }> = [];
   /**
    * Where the build record's `instructedConsequences` came from: Core's build
    * record -- its proposal or, for a build that left none, its failure
@@ -493,12 +496,14 @@ export class LiveLlmRun {
       ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
       ...(checks.length > 0 ? { resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), record: "verification" } } : {}),
     };
+    if (observed) this.noteFindings("repair", plan, observed);
     await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair });
     if (!observed || !recovery) return;
     this.repairObserved = observed;
     const runTotal = spendSummary(this.runSpend);
     // A playback that only had its result checked made no repair, so it publishes none; one that called nothing at all still settles as before.
-    if (recovery.calls > 0 || recovery.interventions > 0 || checks.length === 0) await publish({ repair: usageSummary(recovery), runTotal });
+    const found = this.findings.filter((finding) => finding.phase === "repair");
+    if (recovery.calls > 0 || recovery.interventions > 0 || checks.length === 0) await publish({ repair: usageSummary(recovery), runTotal, ...(found.length ? { findings: found } : {}) });
     if (checks.length > 0) await publish({ resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), status: this.verification?.status ?? null }, runTotal });
     assertLiveLlmBudgetHeld(plan, observed);
   }
@@ -558,10 +563,18 @@ export class LiveLlmRun {
    */
   private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>): Promise<void> {
     this.observed = observed;
+    const found = this.noteFindings("build", this.plan, observed);
     await this.writeSnapshot(bundle, observed, extra);
-    await publish(usageSummary(observed));
+    await publish({ ...usageSummary(observed), ...(found.length ? { findings: found } : {}) });
     assertLiveLlmBudgetHeld(this.plan, observed);
     assertProviderCallsAsDeclared(this.plan, observed, null);
+  }
+
+  /** Replaces `phase`'s findings with those of `observed`, and answers them. */
+  private noteFindings(phase: "build" | "repair", plan: LiveLlmPlan, observed: LiveLlmObservedUsage): Array<LiveLlmBudgetFinding & { phase: "build" | "repair" }> {
+    const found = liveLlmBudgetFindings(plan, observed).map((finding) => ({ ...finding, phase }));
+    this.findings = [...this.findings.filter((finding) => finding.phase !== phase), ...found];
+    return found;
   }
 
   /**
@@ -624,6 +637,9 @@ export class LiveLlmRun {
       // What Core's result verification did and every call it made, which the
       // accounting above does not include. `null` before a settlement read one.
       verification: this.verification ?? null,
+      // What the budget check noticed that is not a failure: Core's reservation
+      // undercounting a call while every declared cap held (`reservation-findings.ts`).
+      findings: this.findings,
       // Where `build.instructedConsequences` was read from, on a run that
       // settled a build: Core's build record (its proposal or its failure
       // diagnostic), or nowhere.

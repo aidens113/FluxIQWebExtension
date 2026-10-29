@@ -34,8 +34,9 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
   }
   const accounting = usage.accounting;
   if (accounting) {
-    // Core counts its own breaches. One is a breach whatever this runner then computes.
-    if (accounting.budgetBreaches > 0) breaches.push(`Core recorded ${accounting.budgetBreaches} budget breach(es) of its own during the run`);
+    // Core's own `budgetBreaches` counts calls that exceeded their per-call
+    // reservation, which is not a cap: it is a finding (`reservation-findings.ts`)
+    // while every cap below held, and the caps below fail the run when one did not.
     if (accounting.inputTokens > declared.maxInputTokens * calls) breaches.push(`the run used ${accounting.inputTokens} input tokens against --llm-max-input-tokens ${declared.maxInputTokens} across ${calls} authorized call(s)`);
     if (accounting.outputTokens > declared.maxOutputTokens * calls) breaches.push(`the run used ${accounting.outputTokens} output tokens against --llm-max-output-tokens ${declared.maxOutputTokens} across ${calls} authorized call(s)`);
   }

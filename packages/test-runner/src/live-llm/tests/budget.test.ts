@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "../budget.js";
+import { liveLlmBudgetFindings } from "../budget/index.js";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "../observed-usage.js";
 
@@ -64,9 +65,34 @@ test("more calls than authorized fails the run", () => {
   assert.throws(() => assertLiveLlmBudgetHeld(plan, usage({ calls: 2 })), /Live LLM budget exceeded.*2 provider call/su);
 });
 
-test("a breach Core counted itself fails the run, whatever the per-call records say", () => {
-  const breached = usage({ accounting: { calls: 1, inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004, budgetBreaches: 1, pendingCalls: 0 } });
-  assert.throws(() => assertLiveLlmBudgetHeld(plan, breached), /Core recorded 1 budget breach/u);
+test("a Core reservation overrun within every cap is not a breach", () => {
+  const first = usage().observedCalls[0]!;
+  const overrun = usage({
+    observedCalls: [{ ...first, budgetBreach: true }],
+    accounting: { calls: 1, inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004, budgetBreaches: 1, pendingCalls: 0 },
+  });
+  assert.deepEqual(liveLlmBudgetBreaches(plan, overrun), []);
+  assert.doesNotThrow(() => assertLiveLlmBudgetHeld(plan, overrun));
+  const findings = liveLlmBudgetFindings(plan, overrun);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]?.code, "reservation_undercounted");
+  assert.equal(findings[0]?.overrunCalls, 1);
+  assert.deepEqual(findings[0]?.calls, [{ call: 1, requestId: "request.diagnosis", taskKind: "runtime_diagnosis", suppliedInputTokens: 900, outputTokens: 120 }]);
+  // A build publishes only Core's count: still a finding, with no call to name.
+  const counted = liveLlmBudgetFindings(plan, usage({ accounting: { calls: 1, inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004, budgetBreaches: 2, pendingCalls: 0 } }));
+  assert.deepEqual(counted.map((finding) => [finding.code, finding.overrunCalls, finding.calls.length]), [["reservation_undercounted", 2, 0]]);
+  assert.deepEqual(liveLlmBudgetFindings(plan, usage()), [], "a run with no overrun has no finding");
+});
+
+test("a real cap breach is still a breach, and the overrun finding is left to the failure", () => {
+  const first = usage().observedCalls[0]!;
+  const breached = usage({
+    calls: 2,
+    observedCalls: [{ ...first, budgetBreach: true }],
+    accounting: { calls: 2, inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004, budgetBreaches: 1, pendingCalls: 0 },
+  });
+  assert.throws(() => assertLiveLlmBudgetHeld(plan, breached), /Live LLM budget exceeded.*2 provider call/su);
+  assert.deepEqual(liveLlmBudgetFindings(plan, breached), []);
 });
 
 test("Core's run totals bound the run even when no intervention recorded its tokens", () => {

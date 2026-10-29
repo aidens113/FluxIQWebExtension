@@ -23,6 +23,7 @@ import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wai
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
 import { webAutomationTextSightingValue } from "../actions/text-sighting";
 import { webAutomationNextPageAnswerValue } from "../actions/next-page";
+import { webToggleSignatureValue } from "../actions/toggle-signature";
 import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
@@ -363,6 +364,8 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     visibleNear: sighting?.visibleNear,
     nextPage,
     skipped: result.skipped === "already_in_state" ? result.skipped : undefined,
+    // Read off the client's untrusted value through the signature's own reader, and only on a press that was made and succeeded (t787).
+    toggle: result.status === "succeeded" && result.skipped === undefined ? webToggleSignatureValue(result.toggle) as JsonObject | undefined : undefined,
     route: result.route === "ended" && nextPage?.outcome === "ended" ? "ended" : undefined,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
