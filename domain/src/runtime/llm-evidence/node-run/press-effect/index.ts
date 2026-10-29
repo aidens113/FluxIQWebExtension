@@ -5,7 +5,8 @@
 // what it did to the pressed control's own choice -- read once
 // (`./chosen-state.ts`), said as a sentence (`./choice.ts`) and stated to the
 // draft as the control and the way it flipped (`./toggle.ts`) -- whether it
-// answered a layer that then went (`./answered-layer.ts`), which item of a
+// answered a layer that then went (`./answered-layer.ts`) or cleared one that
+// covered the page (`./cleared-layer.ts`, t787), which item of a
 // repeating list it acted on (`./acted-on.ts`, t504), for a press the page
 // refused, the line the page answered with (`./notice.ts`), and, for a press
 // that changed nothing at all, its own wait and second press
@@ -18,6 +19,7 @@
 
 export { webNodeActedOn } from "./acted-on";
 export { webAnsweredLayer } from "./answered-layer";
+export { webPressClearedLayer, type WebPressClearedLayer } from "./cleared-layer";
 export { webPressChoice } from "./choice";
 export { webPressChosenState, type WebPressChosenState } from "./chosen-state";
 export { webNodeNoticedDetail, webNodePageNotice, type WebNodeNoticedDetail } from "./notice";

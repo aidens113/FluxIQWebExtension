@@ -4,6 +4,7 @@ import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import { ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
+import { webToggleOutput, webToggleSignatureValue } from "../actions/toggle-signature";
 import { webAutomationClearedWayOutsOf, type WebAutomationClearedWayOutFlow } from "../cleared-way-outs";
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
@@ -68,6 +69,16 @@ export async function dispatchWebAutomationOutput(
     // it is lifted there like `route`: only a succeeded result, only that literal.
     // Left nested, Core never saw it and the skipped pass read as an ordinary press (t775-P).
     const skipped = succeeded && isRecord(result.payload) && result.payload.skipped === "already_in_state" ? "already_in_state" : undefined;
+    // A press the client made in place that flipped its own control says what
+    // it changed about it (`actions/types.ts` `toggle`, t787). Core records it
+    // from a trial's attempt at the top of the attempt's `outputs.result`, as it
+    // reads `skipped` (Core `flow-bootstrap/explored-toggles.ts`), so the Flow's
+    // next revision of that step carries `ensureState` though its control was
+    // never pressed while exploring. Lifted as `skipped` is, only on a success
+    // that pressed, read through the signature's own reader, and told as an
+    // explored press's toggle is (`actions/toggle-signature/output.ts`).
+    const signature = succeeded && skipped === undefined && isRecord(result.payload) ? webToggleSignatureValue(result.payload.toggle) : undefined;
+    const toggle = signature === undefined ? undefined : webToggleOutput(signature);
     // What the extension's interference clearing pressed while this action ran
     // (`actions/cleared-layers.ts`). Core reads it from the top of the dispatch
     // payload, as it reads `route`, so it is lifted there: copied through its
@@ -85,7 +96,7 @@ export async function dispatchWebAutomationOutput(
       outputId: request.outputId,
       metadata: { sessionId },
       status,
-      payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, skipped, clearedLayers }),
+      payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, skipped, toggle, clearedLayers }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would

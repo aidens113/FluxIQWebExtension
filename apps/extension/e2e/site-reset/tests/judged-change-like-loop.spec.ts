@@ -130,8 +130,13 @@ for (const variant of ["newest", "pinned"] as const) {
       expect(skipped.every((act) => typeof act.step === "number")).toBe(true);
       if (variant === "pinned") expect(skipped.every((act) => typeof act.row === "string")).toBe(true);
       expect(actsWithOutcome(siteChange, "changed").length).toBeGreaterThanOrEqual(1);
-      // The newest variant's state was put there by the same explored step: proof carried, not a fresh yes.
-      if (variant === "newest") expect(proofsOf(siteChange)).toContain("carried");
+      // Each changed pass is its own witness at its own post (t787 fix 4), so the newest variant's proof is shown by the
+      // passes that liked, and the skipped pass is listed beside them. Before t787 every pass was read at the first post,
+      // which already showed the like, so this variant read `carried` while two other posts had changed.
+      if (variant === "newest") {
+        expect(proofsOf(siteChange)).toContain("shown");
+        expect(proofsOf(siteChange)).not.toContain("contradicted");
+      }
     } finally {
       await build.stop();
       await installed.close();

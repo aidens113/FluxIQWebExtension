@@ -73,7 +73,7 @@ import { webRuntimeClearsLayers } from "./layer";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
-import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
+import { webAnsweredLayer, webPressClearedLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow, webNodeOpeningPlaces, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
 import { webNodeBuildOf, type WebNodeBuildKey } from "./build-state";
@@ -226,7 +226,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, toggle: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -485,13 +485,13 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       pageUnreadable: after === undefined ? true : undefined,
       // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
       actedOn: webNodeActedOn(node, current, named),
-      // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`).
+      // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`); one that cleared a layer over the page names it (`./press-effect/cleared-layer.ts`, t787).
       choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)), toggle: webPressToggleSignature(node, current, after, webPlanFirstTargetHandle(written)),
+      layerCleared: webPressClearedLayer(node, current, after, webPlanFirstTargetHandle(written), (layer) => run.layers.owns(buildOf(run), layer)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
       control: control.name, controlHandle: named,
-      read,
-      addable: node.proposes,
+      read, addable: node.proposes,
       inFlow: undefined, attempts: attempts > 1 ? attempts : undefined
     });
     // The state the node found is the read before it acted, and the state it
