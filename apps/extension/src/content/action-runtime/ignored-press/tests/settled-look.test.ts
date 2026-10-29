@@ -101,7 +101,9 @@ test("a busy state that holds still for a while before it reverts is still waite
   const look = page.look();
   page.show(BUSY);
   setTimeout(() => page.show(IDLE), 450);
-  assert.equal(await look.settle(1_500), true);
+  // A long window, as in the test above: under the 2026-10-29 sweep's load the 450 ms revert fired after a 1.5 s
+  // window had closed and the look ended uncertain; the revert, not the window, is what this proves is waited for.
+  assert.equal(await look.settle(10_000), true);
 });
 
 test("a section still busy when the window ends is not certain", async () => {
