@@ -2,6 +2,13 @@
 
 Status: FAILED. Diagnosis only (brief D-r6b-4, 2026-10-28). No source edits, builds, browser runs or paid runs.
 
+**Correction (supervisor, from t787's fix 2, 2026-10-28).** The in-run handler did not fail because its condition
+named a page-view layer line, as sections 2, 3 (fix 2) and Not verified below infer: its target `t275` resolved, to
+the layer's element. The model wrote the repair condition's `fact` as a description, the domain read that as
+`unknown`, and the condition never held. t787 takes `fact` from `op` for a condition about a control and refuses a
+comparison that never says what it compares (`recovery.fact_kind_unread`); the layer-line refusal was not built,
+because it would have refused this run's correct handler. See `../reports/t787.md`.
+
 The posts are named by the fixture's own codes, as `breadth/newest-likes/expected.ts` names them:
 
 - **A** `D1OKDvAEHfa`, **B** `DgYZxS8LJOe` (a reel) and **C** `DPIEH3I491a` are the oracle's answer, newest first.
