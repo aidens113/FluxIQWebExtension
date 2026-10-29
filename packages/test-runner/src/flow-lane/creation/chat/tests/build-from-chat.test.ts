@@ -77,6 +77,7 @@ function fakeChat(options: FakeChatOptions) {
         assert.equal(payload.flowId, FLOW);
         return { failure: options.kept };
       }
+      if (endpoint === "get-flow-bootstrap-failure") return {};
       throw new Error(`unexpected ${endpoint}`);
     },
     async listFlowAdaptations(projectId, flowId) {

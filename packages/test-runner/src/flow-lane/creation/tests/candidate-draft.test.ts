@@ -18,6 +18,7 @@ function candidateCore(answers: { adaptation?: unknown; sessions?: unknown }) {
     reads.push(endpoint);
     if (endpoint === "get-flow-adaptation") return answers.adaptation;
     if (endpoint === "list-runtime-sessions") { if (answers.sessions instanceof Error) throw answers.sessions; return answers.sessions; }
+    if (endpoint === "get-flow-bootstrap-failure") return {};
     throw new Error(`unexpected ${endpoint}`);
   } } };
 }
@@ -62,6 +63,7 @@ function projectCore(answers: { adaptation?: unknown; sessions?: unknown }) {
     reads.push(endpoint);
     if (endpoint === "get-flow-adaptation") return answers.adaptation;
     if (endpoint === "list-runtime-sessions") return answers.sessions;
+    if (endpoint === "get-flow-bootstrap-failure") return {};
     throw new Error(`unexpected ${endpoint}`);
   } } };
 }
@@ -123,6 +125,51 @@ test("a project draft, from the direct build, the chat or a failed build, is rea
   assert.equal(failure.details?.authoringMode, "project");
 });
 
+/** A Core that also answers the build's failure diagnostic (`get-flow-bootstrap-failure`), as the chat's draft path reads it. */
+function endingCore(answers: { sessions: unknown; failure?: unknown }) {
+  return { automationStudioCall: async (endpoint: string) => {
+    if (endpoint === "list-runtime-sessions") return answers.sessions;
+    if (endpoint === "get-flow-bootstrap-failure") {
+      if (answers.failure instanceof Error) throw answers.failure;
+      return answers.failure;
+    }
+    throw new Error(`unexpected ${endpoint}`);
+  } };
+}
+const MISLEADING_WORDS = "Its test run from the start was judged not to do what you asked.";
+
+// t798 (W0): a chat draft's verdict is Core's structured ending; Core's sentence decides only where there is none.
+test("a chat draft's verdict comes from Core's build diagnostic before Core's words, and says so", async () => {
+  const bare = { runtimeSessions: [session("trial.one", 1, { revision: 1, execution: "succeeded", start: "reset" })] };
+  const diagnostic = { code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received", accounting: { requestId: "candidate.request", estimatedInputTokens: 10, provider: "deepseek", model: "m", inputTokens: 10, outputTokens: 1, totalTokens: 11, estimatedCostUsd: 0.001 }, issueCodes: ["flow_bootstrap.evidence_completion_parameters_unresolved"] };
+  const failure = { failure: { ...diagnostic, candidate: { candidateId: "candidate", draft: "saved", revision: 1, digest: "d".repeat(64), trialCount: 1, trials: [{ revision: 1, verdict: "not_judged", trialRunId: "trial.one", code: "candidate.trial_not_judged" }] } } };
+  const outcome = await createdFlowChatCandidateDraftOutcome(endingCore({ sessions: bare, failure }), projectSubject, "candidate", MISLEADING_WORDS);
+  assert.equal(outcome.verdict, "not_judged", "the words say 'no'; the structured ending says nothing was judged");
+  assert.equal(outcome.verdictSource, "diagnostic");
+  assert.deepEqual(outcome.codes, ["candidate.trial_not_judged"]);
+  // A session's own verdict outranks the diagnostic.
+  const judged = { runtimeSessions: [session("trial.one", 1, { revision: 1, execution: "succeeded", start: "reset", verdict: "unsure", verdictCode: "candidate.trial_unsure" })] };
+  const fromSession = await createdFlowChatCandidateDraftOutcome(endingCore({ sessions: judged, failure }), projectSubject, "candidate", MISLEADING_WORDS);
+  assert.deepEqual([fromSession.verdict, fromSession.verdictSource], ["unsure", "session"]);
+  // A trial run that did not succeed is Core's own `execution_failed`, with no diagnostic and no words read.
+  const failedRun = { runtimeSessions: [session("trial.one", 1, { revision: 1, execution: "failed", code: "web.action.timeout", start: "reset" })] };
+  const executed = await createdFlowChatCandidateDraftOutcome(endingCore({ sessions: failedRun, failure: {} }), projectSubject, "candidate", MISLEADING_WORDS);
+  assert.deepEqual([executed.verdict, executed.verdictSource, executed.codes], ["execution_failed", "session", ["web.action.timeout"]]);
+  // With no structured ending at all, the words are the last fallback, and the outcome says they decided.
+  const words = await createdFlowChatCandidateDraftOutcome(endingCore({ sessions: bare, failure: undefined }), projectSubject, "candidate", null);
+  assert.deepEqual([words.verdict, words.verdictSource], ["unknown", "none"]);
+  // A diagnostic about another candidate is not this draft's ending.
+  const other = { failure: { ...diagnostic, candidate: { ...failure.failure.candidate, candidateId: "someone.else" } } };
+  assert.equal((await createdFlowChatCandidateDraftOutcome(endingCore({ sessions: bare, failure: other }), projectSubject, "candidate", null)).verdictSource, "none");
+});
+
+test("a draft nothing judged is reported as not judged, not as a judged unknown", () => {
+  const base = { authoringMode: "candidate" as const, outcome: "draft" as const, draft: null, candidateId: "candidate", revision: 1, digest: null, trialRunId: null, codes: [], judgeCalls: null, trialCount: 1, trials: null, promotedAdaptationId: null };
+  assert.match(createdFlowCandidateDraftFailure({ ...base, verdict: "not_judged" }, null).message, /was not judged/u);
+  assert.match(createdFlowCandidateDraftFailure({ ...base, verdict: "unknown" }, null).message, /left no verdict Core recorded/u);
+  assert.doesNotMatch(createdFlowCandidateDraftFailure({ ...base, verdict: "unknown" }, null).message, /judged unknown/u);
+});
+
 // t604: listing a whole project's sessions once outgrew what Core could send (A8 `run-mv8mf0x5-95071c06`). The Lab asks
 // only for its own build's trials -- this Flow, this candidate -- follows Core's cursor, and still drops a summary that is
 // not its candidate's, in case a Core ignored a filter.
@@ -134,6 +181,7 @@ test("a build's trials are read from a listing asked for its Flow and candidate,
     "cursor.three": { runtimeSessions: [session("trial.one", 1, { revision: 1 })], page: { nextCursor: null } },
   };
   const control = { automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+    if (endpoint === "get-flow-bootstrap-failure") return {};
     assert.equal(endpoint, "list-runtime-sessions");
     asked.push(payload);
     return pages[typeof payload.cursor === "string" ? payload.cursor : "first"];
