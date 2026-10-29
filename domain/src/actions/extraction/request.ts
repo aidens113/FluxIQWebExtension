@@ -13,6 +13,11 @@
 // which re-exports this module. The import is erased, so the two files name
 // each other with no runtime cycle, as `types.ts` already does with the failure
 // record.
+//
+// A `where` bound may be a date (t790, run `run-mvswewhy-e4e469d4`): a bound is
+// a number or a date written with its year (`WebAutomationExtractConditionBound`),
+// read by Core's one condition judge. A Flow writes `as: "date"` beside it; the
+// canonical condition carries no `as`, since the text bound already says it.
 
 import type { WebAutomationElementFingerprint } from "../types";
 
@@ -109,6 +114,12 @@ export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
  *   `3.7 out of 5 stars` is 3.7, `16.00 USD` is 16 -- and an item whose value is
  *   missing or holds no number fails one, because a row with no price is not a
  *   row under $50;
+ * - a bound written as a date, which a Flow writes with `as: "date"` (t790, run
+ *   `run-mvswewhy-e4e469d4`, which could only write "on or after Saturday 19
+ *   September 2026" as a pattern of three days), tests the date the value
+ *   states -- "Monday 21 September 2026 at 04:00", "21 Sep 2026",
+ *   "2026-09-21" -- and an item whose value states no date the bound can read
+ *   fails it whatever `not` says;
  * - `matches`, `contains`, `startsWith`, `endsWith` and a string `equals` test
  *   the value's text, ignoring its layout and its case;
  * - `not` inverts the whole condition, which is how an exclusion is written.
@@ -135,14 +146,14 @@ export type WebAutomationExtractItemCondition = {
   read?: WebAutomationExtractField | undefined;
   /** Whether the item must have the value or must not. Refused beside a comparison, which already requires one. */
   is?: "present" | "absent" | undefined;
-  /** The number in the value must be at least this. */
-  atLeast?: number | undefined;
-  /** The number in the value must be at most this. */
-  atMost?: number | undefined;
-  /** The number in the value must be below this. */
-  lessThan?: number | undefined;
-  /** The number in the value must be above this. */
-  greaterThan?: number | undefined;
+  /** The number in the value must be at least this, or, written as a date, the date it states on or after this one. */
+  atLeast?: WebAutomationExtractConditionBound | undefined;
+  /** The number in the value must be at most this, or, written as a date, the date it states on or before this one. */
+  atMost?: WebAutomationExtractConditionBound | undefined;
+  /** The number in the value must be below this, or, written as a date, the date it states before this one. */
+  lessThan?: WebAutomationExtractConditionBound | undefined;
+  /** The number in the value must be above this, or, written as a date, the date it states after this one. */
+  greaterThan?: WebAutomationExtractConditionBound | undefined;
   /** The value must be one of these: a number against the number in it, a string against its text. */
   equals?: WebAutomationExtractConditionValue | WebAutomationExtractConditionValue[] | undefined;
   /** The value's text must match one of these regular expressions. A bare source ignores case; `/source/flags` says what the flags say. */
@@ -159,6 +170,9 @@ export type WebAutomationExtractItemCondition = {
 
 /** One thing a value may be compared with: a number, read against the number the value states, or a string, read against its text. */
 export type WebAutomationExtractConditionValue = string | number;
+
+/** A bound: a number, against the number the value states, or a date written with its year, against the date it states (t790). */
+export type WebAutomationExtractConditionBound = number | string;
 
 export const WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE = ["present", "absent"] as const satisfies readonly NonNullable<WebAutomationExtractItemCondition["is"]>[];
 
