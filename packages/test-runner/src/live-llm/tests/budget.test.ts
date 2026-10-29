@@ -237,3 +237,17 @@ test("a one-call diagnosis is judged across its one authorized call, not the lar
   assert.throws(() => assertLiveLlmBudgetHeld(diagnosis, inflated), new RegExp(`${inflatedInput} input tokens against --llm-max-input-tokens ${DEFAULT_LLM_LAB_BUDGET.maxInputTokens} across 1 authorized call`, "u"));
   assert.throws(() => assertLiveLlmBudgetHeld(diagnosis, inflated), new RegExp(`${inflatedTotal} total tokens against its run token budget of ${PER_REQUEST}`, "u"));
 });
+
+// t798 (W0), `run-mvskptb1-c9cef4fe`: Core reserved 14,643 tokens for a call whose provider reported 15,093. Every
+// declared cap held, so the gap is a finding that names the numbers' source, and nothing fails the run as
+// `performance.budget` (which, thrown in the playback's place, hid the playback's own failure and the oracle).
+test("a reservation of 14,643 against 15,093 reported is a finding, never a budget failure", () => {
+  const first = usage().observedCalls[0]!;
+  const under = usage({
+    observedCalls: [{ ...first, inputTokens: 15_093, totalTokens: 15_093 + 120, budgetBreach: true }],
+    accounting: { calls: 1, inputTokens: 15_093, outputTokens: 120, totalTokens: 15_213, estimatedCostUsd: 0.0004, budgetBreaches: 1, pendingCalls: 0 },
+  });
+  const roomy = livePlan("diagnose", { maxCallsPerRun: 1, maxEstimatedCostUsd: 0.25, maxInputTokens: 30_000, maxTotalTokensPerRequest: 40_000, maxTotalTokensPerRun: 60_000 });
+  assert.deepEqual(liveLlmBudgetBreaches(roomy, under), []);
+  assert.deepEqual(liveLlmBudgetFindings(roomy, under).map((finding) => [finding.code, finding.overrunCalls]), [["reservation_undercounted", 1]]);
+});
