@@ -22,14 +22,13 @@ const feedbackSteps = (tested: JsonObject | undefined) => list(record(tested?.fe
  * with no witness of any kind, and every later trial was refused for the rest
  * of the build. The witness rule guarded only the exploration door.
  *
- * t751 R3 (`t751-reset-by-observed-state.md`): a subflow trial whose reversible
- * lasting step carries no witness stamp is refused unrun,
- * `candidate.trial_step_unwitnessed`, `failed: no_witness`,
- * `canMeet: another_page`, naming the step; nothing is clicked and no act is
- * recorded. Pressed once while exploring, naming the My jobs ref, and
- * submitted again, the step carries the explored act's witness: the trial runs
- * once the explored act is settled, and its own save is left with a settle
- * naming My jobs.
+ * t791 fix 4 (retiring t751 R3's refusal): a subflow trial whose reversible
+ * lasting step carries no witness stamp is no longer refused
+ * (`candidate.trial_step_unwitnessed` is retired). It runs, is judged by its end
+ * view and each step's done-when check, and the judge's packet names the gap
+ * (`siteChange.unwitnessed`). Pressed once while exploring, naming the My jobs
+ * ref, and submitted again, the step carries the explored act's witness and
+ * the second trial runs with the explored save in place.
  *
  * The builder reads My jobs complete (ref issued), opens the job and finds the
  * heart without pressing it, submits, and tests. Then it presses the heart
@@ -38,7 +37,7 @@ const feedbackSteps = (tested: JsonObject | undefined) => list(record(tested?.fe
  * under `undoes` (as the person's reset would) and tests again. Once a trial
  * has run it asks once more (t775: the trial runs with the explored save in place, so no undo is scripted).
  */
-test("installed gateway project build refuses a trial of a lasting step never pressed while exploring, then runs it once explored", async ({ extensionSession }, testInfo) => {
+test("installed gateway project build runs a trial of a lasting step never pressed while exploring and names the gap, then runs it once explored", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
   const installed = await startInstalledBuild(extensionSession);
   const { page } = installed;
@@ -164,23 +163,20 @@ test("installed gateway project build refuses a trial of a lasting step never pr
     // The Flow with the unexplored save step is accepted as a revision: submission itself never refuses for a witness.
     expect(candidate?.revision).toBe(1);
 
-    // 1. Its test is refused unrun: the lasting step carries no witness, and the call that can meet it is on another page.
+    // 1. t791 fix 4: its test is no longer refused. The lasting step carries no witness, yet the trial runs, is judged by
+    // its end view and each step's done-when check, and the judge's packet names the gap (`siteChange.unwitnessed`).
     const unexplored = answers["trial.unexplored"];
-    expect(unexplored?.ok).toBe(false);
-    expect(unexplored?.code).toBe("candidate.trial_step_unwitnessed");
-    expect(unexplored?.failed).toBe("no_witness");
-    expect(unexplored?.canMeet).toBe("another_page");
-    const unwitnessed = list(unexplored?.stepsUnwitnessed);
-    expect(unwitnessed).toHaveLength(1);
-    expect([unwitnessed[0]?.step, unwitnessed[0]?.label]).toEqual(expect.arrayContaining([expect.stringMatching(new RegExp(`^(?:${SAVE_STEP}|${SAVE_LABEL})$`, "u"))]));
-    // Nothing ran: no trial run id, no step, no act left, and My jobs reads exactly as the build found it. (A trial's
-    // own presses do not pass through the instrumented runtime, so its click count alone could not show this.)
-    expect(clicks["trial.unexplored"]?.after).toBe(clicks["trial.unexplored"]?.before);
-    expect(unexplored?.trialRunId).toBeUndefined();
-    expect(feedbackSteps(unexplored)).toEqual([]);
-    expect(actsUnder(unexplored, "leftOnSite")).toEqual([]);
+    expect(unexplored?.code).not.toBe("candidate.trial_step_unwitnessed");
+    expect(trialCode(unexplored)).toBe("yes");
+    expect(unexplored?.trialRunId).toMatch(/^trial\./u);
+    expect(feedbackSteps(unexplored).some(step => step.label === SAVE_LABEL)).toBe(true);
+    const gap = record(judge.siteChanges()[0]?.unwitnessed);
+    const gapSteps = list(gap.steps);
+    expect(gapSteps).toHaveLength(1);
+    expect(gapSteps[0]?.label).toBe(SAVE_LABEL);
+    expect(typeof gap.said).toBe("string");
     expect(baseline).toMatch(/^[a-f0-9]{20}$/u);
-    expect(afterTest).toBe(baseline);
+    expect(afterTest).toMatch(/^[a-f0-9]{20}$/u);
 
     // 2. The heart pressed once while exploring, naming the My jobs ref: admitted and landed (the board fails the
     // first save of a page load, so the press is made again).
@@ -190,19 +186,15 @@ test("installed gateway project build refuses a trial of a lasting step never pr
     expect(answers["save.explored"]?.status).toBe("succeeded");
     // The same Flow text, submitted again, is a new revision: the explored act now lends its step a witness.
     expect(resubmitted?.revision).toBe(2);
-    // The refused test recorded no act, so the explored save is the build's first.
-    const named: NamedAct[] = tests.flatMap(entry => [...actsUnder(entry.answer, "actsToUndo"), ...actsUnder(entry.answer, "leftOnSite"), ...startedWithActs(entry.answer)]);
-    const exploredNamed = named.filter(act => act.call === "save.explored");
-    if (exploredNamed.length) expect(new Set(exploredNamed.map(act => act.act))).toEqual(new Set(["act-1"]));
 
     // 3. t775: the explored save is not put back first. The trial runs at once with it in place, answers yes, and its save step
-    // succeeded; the judge's request names the explored save under `leftFromEarlier`, and no retired reset code shows anywhere.
-    const ran = tests.find(entry => trialCode(entry.answer) === "yes");
-    expect(ran?.call).toBe("trial.explored");
+    // succeeded; the judge's request names the earlier saves under `leftFromEarlier`, and no retired reset code shows anywhere.
+    const ran = tests.find(entry => entry.call === "trial.explored");
+    expect(trialCode(ran?.answer)).toBe("yes");
     expect(ran?.answer.trialRunId).toMatch(/^trial\./u);
     expect(feedbackSteps(ran?.answer).some(step => step.label === SAVE_LABEL && step.status === "succeeded")).toBe(true);
     expect(sent.some(callId => callId.startsWith("undo"))).toBe(false);
-    const left = judge.siteChanges()[0]?.leftFromEarlier;
+    const left = judge.siteChanges()[1]?.leftFromEarlier;
     expect(Array.isArray(left) ? left.length : 0).toBeGreaterThanOrEqual(1);
     expect(retiredCodesIn(answers, tests, observed.outcomes, provider.receipts, failure)).toEqual([]);
   } finally {

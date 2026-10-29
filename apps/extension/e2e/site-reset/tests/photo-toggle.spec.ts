@@ -43,7 +43,7 @@ const controlSettle = (page?: string) => `Its control${page ? ` at ${page}` : ""
  * A repeat of a single-subflow revision whose yes stands is answered with that
  * judged run and not run again (Core t679, `supervisor/whole-trial.ts`), so
  * each later trial that must run is a changed revision (a trailing look, as
- * `judged-change-add-to-cart.spec.ts` does). The second trial, on the restored
+ * `judged-change/tests/judged-change-add-to-cart.spec.ts` does). The second trial, on the restored
  * post, presses the Like and leaves it. The ledger lists the trial's act with a
  * `settle` naming its control and its page (L1 d7), and the Unlike on the
  * post's own page under `undoes` naming it is admitted. Core's look after a

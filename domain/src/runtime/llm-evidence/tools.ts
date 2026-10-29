@@ -41,7 +41,7 @@ import type {
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
 } from "fluxiq/automation-studio";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_FLOW_CONDITION_RULES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationCheckWaitParameters } from "../../actions/check-wait";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
@@ -436,12 +436,21 @@ export function createWebAutomationLlmEvidenceRuntime(
     // **What a condition may say is Core's one text (t478).** Lane D round 11
     // (`run-mv5yaapw-6d20d23d`) wrote a listing's `where` while its looks were
     // withdrawn, and wrote a digit pattern for "five or more". The rules now ride
-    // on `core.submit_candidate`'s format, which no withdrawal touches, and this
-    // says that same text (`AUTOMATION_STUDIO_FLOW_CONDITION_RULES`), never a copy.
+    // on the submission's flow format (`core.submit_candidate`, `core.submit_subflow`),
+    // which no withdrawal touches.
+    //
+    // **This points at those rules and never repeats them (R791).** It said them
+    // whole until t790 gave them the date bound: at 1,334 characters they took
+    // this description to 2,641, Core refused it as the registry was built, and
+    // every build ended `pre_provider_validation_failed` before its first turn.
+    // The detection is offered only where a submission is (a recovery explores
+    // with its own options, `recovery/annotation/exploration.ts`), so the rules
+    // are always beside it; the keys named here are what makes the model look,
+    // and the date bound is named because a read runs before any submission.
     tools: [
       {
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-        description: "Detect a repeating list or table around target handle, else the page's largest list. Returns extraction handle, field keys/labels/kinds/coverage, item count, pagination and paginationBound. Observes only, never a step of the Flow. Run the extraction node with extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], minItems?: 0}. The read reads the page shown. pagination says how the list continues: every page is Next page on the same handle (nextPage: {list: handle}) after the read, with repeat on the read through it. Narrow the page first for a partial list; minItems: 0 allows no rows. where is optional: leave it out and every item is a row, the right first attempt when unsure; narrow excess later. But rows a later step acts on, a press repeated over the read, are narrowed here by where: a condition saved with the answer never changes which rows a repeat visits. Every condition must hold and names a detected column, never guessed item text. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. " + AUTOMATION_STUDIO_FLOW_CONDITION_RULES + " If conditions reject every item, the node returns what it read and says so in its report. Lists mix ads with results: coverage below 1 often marks ads, excluded with is: \"absent\".",
+        description: "Detect a repeating list or table around target handle, else the page's largest list. Returns extraction handle, field keys/labels/kinds/coverage, item count, pagination and paginationBound. Observes only, never a step of the Flow. Run the extraction node with extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], minItems?: 0}. The read reads the page shown. pagination says how the list continues: every page is Next page on the same handle (nextPage: {list: handle}) after the read, with repeat on the read through it. Narrow the page first for a partial list; minItems: 0 allows no rows. where is optional: leave it out and every item is a row, the right first attempt when unsure; narrow excess later. But rows a later step acts on, a press repeated over the read, are narrowed here by where: a condition saved with the answer never changes which rows a repeat visits. Every condition must hold and names a detected column, never guessed item text. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. What a condition may say is the where rules in the submission's flow format: is present or absent, a bound on a number (atLeast, atMost, lessThan, greaterThan, equals) or on a date written as text with \"as\": \"date\", or a text test. A quantity or a date is always compared with a bound, never a pattern. If conditions reject every item, the node returns what it read and says so in its report. Lists mix ads with results: coverage below 1 often marks ads, excluded with is: \"absent\".",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "observe",
       },

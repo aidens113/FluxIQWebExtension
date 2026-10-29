@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_FLOW_CONDITION_RULES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_CONDITION_RULES, automationStudioHarnessOptionIssues, automationStudioHarnessOptionRegistry } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import {
   bindWebAutomationLlmEvidenceRuntime,
@@ -146,6 +146,18 @@ test("binds from the production host seam and selects the sole trusted web clien
   // as five unrelated tests failing inside the option registry. Asserted here so
   // the next clause that overflows fails as a length.
   assert.equal(detectDescription.length <= 2_000, true, `${detectDescription.length} characters, over Core's 2,000`);
+  // R791 (2026-10-29): Core's registry over this binding, as every build builds it
+  // before its first turn. It throws on the first option it refuses, and the build
+  // then ends `flow_bootstrap.pre_provider_validation_failed` naming only
+  // `thrown.Error`: t790's date bound took Core's condition rules to 1,334
+  // characters, the detection that said them whole to 2,641, and 30 of 31 headed
+  // site-reset specs failed there. The detection now points at the rules instead,
+  // with room left for them to grow.
+  const registry = automationStudioHarnessOptionRegistry({ binding: bound!, nodeIds: webRunnableNodeIds(), startLocation: "https://example.test/" });
+  for (const tool of bound!.tools) assert.deepEqual(automationStudioHarnessOptionIssues(registry.get(tool.toolId)!), [], tool.toolId);
+  assert.ok(detectDescription.length <= 1_800, `${detectDescription.length} characters`);
+  // A date is compared with a date bound at exploration too, where a read runs before any submission (t790).
+  assert.match(detectDescription, /"as": "date"/u);
   // It says filtering is optional before it says how to filter, and why: a run
   // whose conditions rejected every row returned 0 records where 13 were wanted
   // (`run-mug3tnti-9ab80b85`), and creation is meant to write the least it needs
@@ -165,9 +177,11 @@ test("binds from the production host seam and selects the sole trusted web clien
   // model that read an empty answer as an empty page would repair nothing.
   assert.match(detectDescription, /returns what it read and says so in its report/u);
   // t478, lane D round 11 (`run-mv5yaapw-6d20d23d`): the where vocabulary is
-  // Core's one text, the same the submission's format carries through any look
-  // withdrawal, never a copy of its own.
-  assert.equal(detectDescription.includes(AUTOMATION_STUDIO_FLOW_CONDITION_RULES), true, "the detection says Core's condition rules whole");
+  // Core's one text, the one the submission's format carries through any look
+  // withdrawal. R791: the detection points at it rather than saying it whole,
+  // since t790's date bound took the two together past Core's 2,000 (above).
+  assert.equal(detectDescription.includes(AUTOMATION_STUDIO_FLOW_CONDITION_RULES), false, "the detection never repeats Core's condition rules");
+  assert.match(detectDescription, /What a condition may say is the where rules in the submission's flow format/u);
   // S4 of the read-list redesign: the read reads one page and never goes
   // through pages by itself, so the description teaches no `paginate` (a read
   // that carries one is refused `paginate_retired`). `pagination` says how the

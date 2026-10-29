@@ -1,10 +1,10 @@
 // Run headed and passing on the t792 tree (reports/t792/proof-photo.md).
 import type { JsonObject } from "fluxiq/core";
-import { STUDIO, gridFor } from "../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
-import { expect, test } from "../../fixtures/extension-context";
-import { bindScriptedProvider, keepDiagnostic, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
-import { PHOTO_ROOT, bindDetectingRuntime, gridCellHandle, gridColumns, likedPosts, openPhotoProfile, postActionHandle } from "../photo-build";
-import { actsWithOutcome, judgeLog, proofsOf, retiredCodesIn, supervisorWithEffect } from "../change-proof";
+import { STUDIO, gridFor } from "../../../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
+import { expect, test } from "../../../../fixtures/extension-context";
+import { bindScriptedProvider, keepDiagnostic, projectBuild, startInstalledBuild, trialCode, type BuilderTurn, type ScriptedAnswer } from "../../../index";
+import { PHOTO_ROOT, bindDetectingRuntime, gridCellHandle, gridColumns, likedPosts, openPhotoProfile, postActionHandle } from "../../../photo-build";
+import { actsWithOutcome, judgeLog, proofsOf, retiredCodesIn, supervisorWithEffect } from "../../../change-proof";
 
 /** The studio's grid: its pinned posts first, then the rest newest first. */
 const GRID = gridFor(STUDIO);
