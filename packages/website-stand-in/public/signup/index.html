@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get started - FluxIQ</title>
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<main>
+<h1>Create your account</h1>
+<p class="muted">No password needed. We email you a link to finish.</p>
+<div id="banner" class="banner" role="alert" hidden></div>
+<form id="signup-form" method="POST" action="/api/signup" novalidate>
+<div class="field">
+<label for="email">Email</label>
+<input type="email" id="email" name="email" autocomplete="email" required aria-describedby="err-email">
+<p class="error" id="err-email" data-error-for="email" hidden></p>
+</div>
+<div class="field">
+<label for="displayName">Display name</label>
+<input type="text" id="displayName" name="displayName" autocomplete="name" maxlength="80" required aria-describedby="err-displayName">
+<p class="error" id="err-displayName" data-error-for="displayName" hidden></p>
+</div>
+<div class="field" id="invite-field" hidden>
+<label for="inviteCode">Invite code</label>
+<input type="text" id="inviteCode" name="inviteCode" autocomplete="off" aria-describedby="err-inviteCode">
+<p class="error" id="err-inviteCode" data-error-for="inviteCode" hidden></p>
+</div>
+<div class="field">
+<div class="check">
+<input type="checkbox" id="termsAccepted" name="termsAccepted" required aria-describedby="err-termsAccepted">
+<label for="termsAccepted">I accept the <a href="/terms/">terms</a> and <a href="/privacy/">privacy policy</a>.</label>
+</div>
+<p class="error" id="err-termsAccepted" data-error-for="termsAccepted" hidden></p>
+<p class="error" id="err-termsVersion" data-error-for="termsVersion" hidden></p>
+</div>
+<input type="hidden" id="termsVersion" name="termsVersion" value="">
+<input type="hidden" id="continue" name="continue" value="">
+<!-- Human check: the JS path loads Cloudflare Turnstile into this container when
+     config.humanCheck === "turnstile" (using config.siteKey). The widget adds the
+     cf-turnstile-response field itself. Without JavaScript it cannot be shown. -->
+<div id="human-check" class="field"></div>
+<p class="error" id="err-humanToken" data-error-for="humanToken" hidden></p>
+<button type="submit" id="submit">Create account</button>
+<noscript><p class="muted">JavaScript is off: the form still works, but the human check cannot be shown.</p></noscript>
+</form>
+<p class="status muted" id="status" role="status"></p>
+<p>Already have an account? <a href="/signin/">Sign in</a></p>
+</main>
+<script src="/signup/signup.js"></script>
+</body>
+</html>
