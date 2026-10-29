@@ -13,9 +13,14 @@ Related: [adaptation-and-breadth-plan.md](./adaptation-and-breadth-plan.md), [au
 
 ## Current State
 
-**Latest (2026-10-28).** Round 6 rerun accepted office-checkout-review and save-quillmark-remote (oracle, zero-call
+**Latest (2026-10-29).** recent-group-posts accepted (`run-mvtdmo5p-4dca4787`: exact oracle, zero-call replay, UI
+reviewed, and a general Flow: group present, no Join button, posted on or after the date): 15 of 40 accepted. The
+crossborder adaptation gate passed its first round (`run-mvtdpdpf-76a54b57`, Step B replay passed). newest-likes failed a
+third time with no Flow and the everything-store gate gave a second false pass; both in debug.
+
+**2026-10-28.** Round 6 rerun accepted office-checkout-review and save-quillmark-remote (oracle, zero-call
 replay, UI reviewed): 14 of 40 accepted. recent-group-posts failed on a false judge no about correct rows (t785 fixing);
-newest-likes is in debug. The paragraph below is the 2026-10-27 state.
+newest-likes is in debug.
 
 **2026-10-27 (resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
 16 audited provider-free only ([coverage map](./breadth-forty-tasks-plan/reports/diag-coverage-2026-10-27.md); the
@@ -746,3 +751,9 @@ None requiring user input.
 - Regression found integrating (R791): dev itself was broken since t790: the domain's detect description repeated Core's condition rules whole and, with t790's date rule, reached 2,641 of Core's 2,000-character tool limit, so every build failed `pre_provider_validation_failed` before its first turn. Fixed in `domain/src/runtime/llm-evidence/tools.ts` (names the keys and the date bound, points to the flow format), with a test that builds Core's real registry and caps the description. Also fixed: `scripts/build-cache/tests/check-prefix.test.mjs` now expects t793's `model-text.mjs` step (dev's `pnpm check` failed on it).
 - Validation: supervisor-run under the heavy-check lock on the merged trees: Core `pnpm test` flow-bootstrap, service, project-agents, activity, llm -> "Test Files 794 passed | 1 skipped (795)", real-sql "52 passed"; after splitting the witness-note tests out of `action-permissions.test.ts` (merge took it to 837 lines) both files "Tests 39 passed (39)" and `pnpm check` exit 0; first headed suite after merging dev -> "30 failed / 1 passed (11.7m)" (the regression above), then R791's headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "31 passed (32.2m)"; domain `tsc` (src and test) clean, `test-domain.mjs runtime/llm-evidence/tests` -> "# pass 215 / # fail 0"; `check-prefix.test.mjs` -> "# pass 2 / # fail 0"; `model-text.mjs` ok.
 - Outcome: Accepted. Risks: a page whose shown values change by themselves can read as `shown`; `site-reset/ledger.ts` is at 800 lines (P4 splits it first); one real-sql flake in project-build-reset.test.ts did not repeat (10/10 alone, 50/50 files).
+
+### 2026-10-29 - Round 6d: recent-group-posts accepted, crossborder gate round passed; newest-likes and the store gate fail
+- Agent: supervisor; lanes synced to downstream `89a9e2ed` / Core `7a822e42` (t784-t794 merged: t790 confirming ask, general membership and dates, honest quote checks; t791 page-level creation witness, unwitnessed trials run as unproven, the detect-description fix; t792 toggle ties by identity; t793 scenario-free model text; t794 check builds first); launchers `launch-r6b.sh` (slots 3, 4), `launch-gate.sh` (es, cb round 2), logs `lab-runs/2026-10-29/`
+- Result: social-network-feed-recent-group-posts `run-mvtdmo5p-4dca4787` passed, $0.081787392; crossborder gate `run-mvtdpdpf-76a54b57` passed, $0.028552512 (3 harness activations: the in-run adaptation meeting the basket redesign); everything-store gate `run-mvtdoyf3-47ffaac1` failed, oracle failed while reported passed (a second false pass), $0.071856276; photo-social-newest-likes `run-mvtdn37t-e1e4d0a7` failed, no Flow, $0.114161004 (round total $0.296357, every build under its $0.25 purse, no balance error).
+- Validation: supervisor checked both passes' observations (`"oracleVerdict":"passed","reportedVerdict":"passed"`); the social Flow's read is general (`extractList.where: [{"field": "group", "is": "present"}, {"field": "join", "is": "absent"}, {"field": "posted", "atLeast": "2026-09-19", "as": "date"}]`, no group names); zero-call replays `replay-r6d.sh social|cb` -> `"verdict":"passed","reasons":[]`, `flowContentHash` before = after, `"modelProvidersEnabled":false` for both (cb's is the gate's Step B); UI reviewed (social: a card per read and page turn, "Records saved", "Run finished"; crossborder: the variant choices, a plain "Trying the step again" before the coupon's second try, "Run finished").
+- Outcome: 15 of 40 accepted; crossborder gate 1 counted round. Debugs: `run-mvtdoyf3-47ffaac1.md` (store gate), `run-mvtdn37t-e1e4d0a7.md` (photo).
