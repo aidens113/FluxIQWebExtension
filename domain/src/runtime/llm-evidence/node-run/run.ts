@@ -69,7 +69,7 @@ import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSP
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION } from "./catalog";
 import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
-import { webRuntimeClearsLayers } from "./layer";
+import { webLayerOwnControls, webRuntimeClearsLayers } from "./layer";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
@@ -307,7 +307,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (current && covered && !webRuntimeClearsLayers(current.evidence, covered.covers, (layer) => run.layers.owns(buildOf(run), layer))) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
-        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined, closeWith: covered.closers
+        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined, closeWith: covered.closers, layerControls: webLayerOwnControls(current.evidence, covered.covers[0]!, covered.closers)
       }), record);
     }
     // No page, no control to have observed: the move that goes to the start

@@ -534,6 +534,16 @@ export type WebAutomationTargetResolution = {
    * never `true`: a shown target is the ordinary case and says nothing.
    */
   shown?: false | undefined;
+  /**
+   * `"other-record"` when the target did not resolve because the only control
+   * that matched it belongs to another row of the page (a repeat pass's row,
+   * say, whose own control the step does not name): the identity veto refused
+   * it (`content/identity/veto.ts`). The measurement beside it describes what
+   * else was weighed, so without this a reader takes a well-scored candidate
+   * for the saved control still on the page, which it is not. One closed word,
+   * never page text; absent everywhere else.
+   */
+  refusedBecause?: "other-record" | undefined;
 };
 
 /**

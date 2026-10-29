@@ -484,6 +484,8 @@ export type WebLlmToolRejectionDetail = {
    * popup, closed the popup, and never made the search again.
    */
   closeWith?: string[];
+  /** On `covered_by_layer` only: the layer's own non-closer controls, header and icon-only first, as `t1509 (a control with no words in the layer's header)`; never its links (`./node-run/layer/own-controls.ts`). */
+  layerControls?: string[];
   next?: string;
   /** Core's consequence classes this run does not hold. */
   missing?: string[];
@@ -732,6 +734,7 @@ export function rejectionDetail(fields: {
   filtersDropped?: number | undefined;
   repeatedAnswer?: number | undefined;
   closeWith?: readonly string[] | undefined;
+  layerControls?: readonly string[] | undefined;
   retryAfterMs?: number | undefined;
   tabReturned?: boolean | undefined;
 }): WebLlmToolRejectionDetail {
@@ -750,9 +753,10 @@ export function rejectionDetail(fields: {
     // back through here, names the node again without knowing it exists.
     useNode: (reason === "handle_wrong_kind_of_control" || reason === "handle_not_a_field") && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
+    layerControls: fields.layerControls === undefined || fields.layerControls.length === 0 ? undefined : [...fields.layerControls],
     // Read off the reason and the codes, so a repeat that passes them back says it again (`./rejection-next/`).
     // The site's wait and the tab's return follow the reason's own next (`./rejection-next/wait-words.ts`).
-    next: webLlmRejectionNextWithWait(webLlmRejectionNext(reason, fields.instead, fields.closeWith, fields.target), retryAfterMs, tabReturned),
+    next: webLlmRejectionNextWithWait(webLlmRejectionNext(reason, fields.instead, fields.closeWith, fields.target, fields.layerControls), retryAfterMs, tabReturned),
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,

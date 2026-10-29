@@ -80,7 +80,7 @@ import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
-import { webNodeReplayMissingTarget } from "./missing-target";
+import { webNodeRefusedBecause, webNodeReplayMissingTarget } from "./missing-target";
 import { webNodeNamedControlShown } from "./named-control-shown";
 import { webNodePageChanges, webNodePageNotice } from "./press-effect";
 import {
@@ -403,13 +403,13 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // the page the step acted on, is a control the step could not find, not
     // one the site remembered (`./named-control-shown.ts`, run mux6n7m4).
     const notFound = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
-    const shownByName = notFound && before !== undefined ? webNodeNamedControlShown(before, ran, value) : undefined;
+    const shownByName = notFound && before !== undefined && webNodeRefusedBecause(result) === undefined ? webNodeNamedControlShown(before, ran, value) : undefined;
     const answered = lastingAct === "uncertain"
       ? await failedOnPage(run, `the step was sent, and whether it took effect is uncertain (${failure}): it was not made again, since making it twice could do it twice`, about, undefined)
       : shownByName !== undefined
       ? await failedOnPage(run, `the page shows a control named "${shownByName}" but the step could not find it (${failure})`, about, undefined)
       : notFound
-      ? await webNodeReplayMissingTarget(run, "step", about, failure)
+      ? await webNodeReplayMissingTarget(run, "step", about, failure, "gone", webNodeRefusedBecause(result))
       : about.resultReason === "list_never_appeared"
         ? await listNeverAppeared(run, about, failure)
         : await failedOnPage(run, `the step did not run (${failure})`, about, failure === "refused_by_page" ? before : undefined);

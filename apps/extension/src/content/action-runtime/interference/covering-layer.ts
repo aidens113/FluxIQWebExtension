@@ -21,7 +21,9 @@
 // Nothing painted in normal flow is a layer: an element that merely sits on
 // top of the target is already named by the refusal itself.
 //
-// **What it carries.** Accessible names of pressable controls -- the browser's
+// **What it carries.** The layer's own controls first, header ones leading and
+// icon-only ones described by where they are (`./own-controls.ts`), then its
+// links as content. Accessible names of pressable controls -- the browser's
 // own and the ones a page drew out of a `<div>` -- bounded in
 // count and length -- words a person reads on a button, which the snapshot
 // already carries for the same controls. A form field is not listed, so no
@@ -33,6 +35,7 @@ import { accessibleNameFor } from "../../identity";
 import { isExtensionUiNode } from "../../picker-host";
 import { deepElementFromPoint } from "../../selector";
 import { composedClosest, composedContains, composedDescendants } from "../../shadow-dom";
+import { layerControlWords, type LayerControlRead } from "./own-controls";
 import { outermostFixed, type Point } from "./overlays";
 
 /** What is pressable on a layer: the controls a person would click, never a field they would type into. */
@@ -47,8 +50,10 @@ const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6, [role="heading"]';
 
 /** At most this many of a layer's elements are read. The same bound the way-out scan uses. */
 const LAYER_SCAN_LIMIT = 400;
-/** At most this many controls are named: a layer with more is a page, not a prompt. */
-const MAX_NAMED_CONTROLS = 5;
+/** The top band of a layer where its close or collapse control lives: at least this many pixels, or this share of its height. */
+const HEADER_MIN_BAND = 56;
+const HEADER_BAND_SHARE = 0.2;
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 /** At most this many characters of one name or heading. */
 const MAX_NAME_LENGTH = 40;
 
@@ -71,31 +76,40 @@ export function coveringLayerSentence(target: Element, point: Point): string | u
 }
 
 function describeLayer(layer: Element): string {
-  const { heading, controls } = readLayer(layer);
+  const { heading, reads } = readLayer(layer);
+  const words = layerControlWords(reads);
   const what = `${layerName(layer)}${heading ? ` headed "${heading}"` : ""}`;
-  if (!controls.names.length) return `it is part of ${what}, a layer over the page with no control to press`;
-  const more = controls.more ? `, and ${controls.more} more` : "";
-  return `it is part of ${what}, a layer over the page whose controls are ${controls.names.map((name) => `"${name}"`).join(", ")}${more}; the target can be reached once that layer is answered or closed`;
+  const links = words.links.length
+    ? `; the links inside it, ${words.links.join(", ")}${words.moreLinks ? `, and ${words.moreLinks} more` : ""}, are its content and not its controls`
+    : "";
+  if (!words.controls.length) return `it is part of ${what}, a layer over the page with no control to press${links}`;
+  const more = words.moreControls ? `, and ${words.moreControls} more` : "";
+  return `it is part of ${what}, a layer over the page whose own controls are ${words.controls.join(", ")}${more}${links}; the target can be reached once that layer is answered or closed`;
 }
 
-/** The layer's first painted heading and its painted, named, pressable controls, in page order. */
-function readLayer(layer: Element): { heading: string | undefined; controls: { names: string[]; more: number } } {
+/** The layer's first painted heading and its painted pressable elements, in page order. */
+function readLayer(layer: Element): { heading: string | undefined; reads: LayerControlRead[] } {
   let heading: string | undefined;
-  const names: string[] = [];
-  let more = 0;
+  const reads: LayerControlRead[] = [];
   let read = 0;
+  const layerBox = layer.getBoundingClientRect();
+  const headerBottom = layerBox.top + Math.max(HEADER_MIN_BAND, layerBox.height * HEADER_BAND_SHARE);
   for (const element of composedDescendants(layer)) {
     if (++read > LAYER_SCAN_LIMIT) break;
     if (element.getClientRects().length === 0) continue;
     if (heading === undefined && element.matches(HEADING_SELECTOR)) heading = bounded(element.textContent);
     if (!isPressable(element) || isSensitiveFormControl(element)) continue;
+    const iconOnly = !LETTER_OR_DIGIT.test(element.textContent ?? "");
+    // An icon has no words of its own: only what the page labelled it with names it.
     // A drawn control has no computed name from its content, so its own words stand in.
-    const name = bounded(accessibleNameFor(element) ?? element.textContent);
-    if (!name || names.includes(name)) continue;
-    if (names.length < MAX_NAMED_CONTROLS) names.push(name);
-    else more += 1;
+    const name = iconOnly
+      ? bounded(element.getAttribute("aria-label") ?? element.getAttribute("title"))
+      : bounded(accessibleNameFor(element) ?? element.textContent);
+    const link = element.matches('a[href], [role="link"]');
+    const box = element.getBoundingClientRect();
+    reads.push({ name, iconOnly, inHeader: box.top + box.height / 2 <= headerBottom, link });
   }
-  return { heading, controls: { names, more } };
+  return { heading, reads };
 }
 
 /**
