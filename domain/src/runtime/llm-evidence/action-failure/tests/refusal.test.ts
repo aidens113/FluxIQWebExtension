@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../../failure";
-import { WEB_LLM_TOOL_REJECTION_REASONS } from "../../tool-rejection";
+import { rejectionDetail, WEB_LLM_TOOL_REJECTION_REASONS } from "../../tool-rejection";
 import { repeatedRejectionDetail } from "../../repeated-refusal";
 import { webActionFailureRefusal } from "../refusal";
 
@@ -436,4 +436,18 @@ test("a refused press with no wait and no confirmed return is told what it was t
   assert.equal(other.detail?.retryAfterMs, undefined);
   assert.equal(other.detail?.tabReturned, undefined);
   assert.equal(webActionFailureRefusal(withRecord("timed_out", { code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, actual: RATE_LIMITED_RETURNED, retryAfterMs: 5000 })).detail?.retryAfterMs, undefined);
+});
+
+test("a repeat of a covered press keeps the covering layer's own controls and says them again (t792)", () => {
+  const covered = rejectionDetail({
+    reason: "covered_by_layer",
+    target: "t4",
+    instead: ["t5"],
+    closeWith: [],
+    layerControls: ["t6 (a control with no words in the layer's header)", "t7 (a button)"]
+  });
+  const repeated = repeatedRejectionDetail(covered, 2);
+  assert.deepEqual(repeated.layerControls, covered.layerControls);
+  assert.equal(repeated.next, covered.next);
+  assert.match(repeated.next ?? "", /t6/u);
 });

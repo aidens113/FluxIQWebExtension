@@ -15,9 +15,9 @@ import type { WebLlmToolRejectionReason } from "../tool-rejection";
 const RENUMBERED_BY_RELOAD = "web.handle.renumbered_by_reload";
 
 /** What to do next after a refusal for `reason`, or nothing where the reason says the whole of it. */
-export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: readonly string[] | undefined, closeWith: readonly string[] | undefined, target?: string): string | undefined {
+export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: readonly string[] | undefined, closeWith: readonly string[] | undefined, target?: string, layerControls?: readonly string[]): string | undefined {
   // Read off the cover, the target and the closers, so a repeat that passes them back says it again.
-  return reason === "covered_by_layer" ? coveredNext(instead?.[0], target, closeWith)
+  return reason === "covered_by_layer" ? coveredNext(instead?.[0], target, closeWith, layerControls)
     // Read off the codes, so a repeat that passes them back says it again.
     : reason === "handle_not_in_packet" && instead?.includes(RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
@@ -153,19 +153,38 @@ const FILTERED_LIST_NEXT = "Nothing was pressed. This page's Next leads to the l
  * A handle is inlined only when it is this domain's own token (`t12`), never
  * page text; anything else falls back to the field's name.
  */
-function coveredNext(cover: string | undefined, target: string | undefined, closeWith: readonly string[] | undefined): string {
+function coveredNext(cover: string | undefined, target: string | undefined, closeWith: readonly string[] | undefined, layerControls: readonly string[] | undefined): string {
   const layer = isHandle(cover) ? `layer ${cover}` : "the layer in instead";
   const covering = isHandle(cover) ? cover : "the layer";
   const pressed = isHandle(target) ? target : "the target";
   const opening = `Nothing was done: ${layer} covers ${pressed}. `;
   const refusedAgain = `Do not press ${pressed} again while ${covering} covers it: that press is refused the same way. `;
   const after = `Once the layer is gone, press ${pressed} again.`;
+  const own = ownControlsSentence(covering, layerControls);
   if (closeWith !== undefined && closeWith.length > 0) {
     const closers = closeWith.every(isHandle) ? eitherOf(closeWith) : "one of closeWith";
-    return `${opening}Press ${closers} first; it closes that layer. ${refusedAgain}${after}`;
+    return `${opening}Press ${closers} first; it closes that layer. ${own}${refusedAgain}${after}`;
   }
-  return `${opening}Close or answer that layer first with a control inside it (the page view lists those after the layer's own line), `
-    + `never a control marked covered-by ${covering}: those lie under the layer. ${refusedAgain}${after}`;
+  // Both forms end before "never ...": the own-controls form as its own sentence (t792), so it says "Never".
+  const first = own
+    ? `Close, collapse or answer that layer first with one of its own controls. ${own}Never press`
+    : "Close or answer that layer first with a control inside it (the page view lists those after the layer's own line), never";
+  return `${opening}${first}`
+    + ` a control marked covered-by ${covering}: those lie under the layer. ${refusedAgain}${after}`;
+}
+
+/** One layer-control entry: a handle and a few lowercase words of this domain's own, never page text. */
+const LAYER_CONTROL = /^t[1-9][0-9]* \([a-z' -]{1,80}\)$/u;
+
+/**
+ * The layer's own controls, said so a builder can close or collapse it. A
+ * layer's content links are never among them, and the first listed is the
+ * header's: a collapse control is often an icon with no words.
+ */
+function ownControlsSentence(cover: string, layerControls: readonly string[] | undefined): string {
+  const listed = (layerControls ?? []).filter((entry) => LAYER_CONTROL.test(entry));
+  if (listed.length === 0) return "";
+  return `${cover}'s own controls, header first: ${listed.join("; ")}. A close, collapse or minimise control may have no words; the links and rows inside the layer are its content, not its controls. `;
 }
 
 /** `a`, `a or b`, `a, b or c`. */

@@ -309,6 +309,11 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * gateway result rather than in this payload, and they are bounded and filtered
  * where they are built.
  *
+ * The one string beside the strategy is `refusedBecause`, the closed word
+ * `other-record` (a match that was another row's control, t792): any other
+ * value is dropped by `carriedResolution`, so a producer cannot put page text
+ * on this path by growing the field.
+ *
  * `extraction` and `dialog` are copied field by field, never passed through.
  * The summary admits only counts, a flag and well-formed field keys
  * (`actions/extraction/summary.ts`), so a producer that put page text beside
@@ -357,7 +362,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     extraction: webAutomationExtractionSummaryValue(result.extraction),
     dialog: observedDialogValue(result.dialog),
     structure: webAutomationStructureDetectionValue(result.structure),
-    resolution: result.resolution,
+    resolution: carriedResolution(result.resolution),
     checkWait: webAutomationClearedCheckWaitValue(result.checkWait),
     clearedLayers: webAutomationClearedLayersValue(result.clearedLayers),
     textPresence: sighting?.textPresence,
@@ -578,3 +583,9 @@ function compactJsonObject(value: Record<string, unknown>): JsonObject {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as JsonObject;
 }
 
+/** The resolution with its `refusedBecause` kept only when it is the one closed word (see above). */
+function carriedResolution(resolution: WebAutomationActionResult["resolution"]): WebAutomationActionResult["resolution"] {
+  if (!resolution || resolution.refusedBecause === undefined || resolution.refusedBecause === "other-record") return resolution;
+  const { refusedBecause: _dropped, ...rest } = resolution;
+  return rest;
+}

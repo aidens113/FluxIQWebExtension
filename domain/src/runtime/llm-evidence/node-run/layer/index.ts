@@ -4,3 +4,4 @@
 export { webIsLayer } from "./element";
 export { webInLayer } from "./member";
 export { webRuntimeClearsLayers } from "./runtime-clears";
+export { webLayerOwnControls } from "./own-controls";

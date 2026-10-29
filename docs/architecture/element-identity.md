@@ -210,7 +210,11 @@ failure record and the resolution:
 - **`TARGET_NOT_FOUND`** names the strategies attempted, how many controls of
   the same family the page did offer, and the best score when scoring ran —
   which is the difference between a near-miss worth widening the target for
-  and a control that is gone.
+  and a control that is gone. When the only control that matched was refused
+  for belonging to another row (the record veto's `other-record`), the
+  resolution carries `refusedBecause: "other-record"` (t792), and Core never
+  calls it a near miss: it tells the builder the step names one row's control,
+  and that a step inside a repeat needs each pass's own row's.
 
 Candidate names in those records are page text, so they are bounded and
 filtered by `identity/reportable-text.ts`: a label, never a container's

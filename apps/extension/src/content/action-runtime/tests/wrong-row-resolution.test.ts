@@ -184,3 +184,35 @@ test("and the same repaired step resolves in the row the recording named", (t) =
   // recording -- which is exactly the case the gate must not over-refuse.
   assert.equal(resolveTarget(repairedRowAction()).resolution.strategy, "selector");
 });
+
+// The refusal survives into the failure's resolution (t792).
+//
+// The measurement a failed resolution reports describes what else was weighed,
+// and read alone it looks like "the saved control is still on the page". The
+// closed word `refusedBecause: "other-record"` is what lets the domain and Core
+// tell a control the step could not find from a control that is another row's.
+
+test("a refusal because the match is another row's control reaches the resolution as one closed word", (t) => {
+  installDirectoryPage(t);
+
+  assert.throws(() => resolveTarget(recordedRowAction()), (error: unknown) => {
+    const resolution = (error as { resolution?: { refusedBecause?: string } }).resolution;
+    assert.equal(resolution?.refusedBecause, "other-record");
+    return true;
+  });
+});
+
+test("a miss that refused nothing in another row carries no refusal word", (t) => {
+  installDirectoryPage(t);
+  // Nothing matches, so the family sweep runs, and it escapes names through the browser's `CSS`.
+  (globalThis as Record<string, unknown>).CSS ??= { escape: (name: string) => name };
+  const page = globalThis.document as unknown as object;
+  Object.defineProperty(page, "querySelectorAll", { value: (): Element[] => [], configurable: true });
+  Object.defineProperty(page, "querySelector", { value: () => null, configurable: true });
+
+  assert.throws(() => resolveTarget(recordedRowAction()), (error: unknown) => {
+    const resolution = (error as { resolution?: Record<string, unknown> }).resolution;
+    assert.ok(resolution && !("refusedBecause" in resolution));
+    return true;
+  });
+});
