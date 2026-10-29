@@ -277,6 +277,13 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Validation: lead-run under the lock on the trees merged with dev: zero-call replays of four recorded live builds through the merged Core (`scratchpad/t795-w6/replay.mts`): everything-store `run-mvswh11y-9d462629` and `run-mvtdoyf3-47ffaac1` -> every false-pass revision and playback 0137 a Core no (`core.result.computed_fact_failed`, 0 judge calls), the correct revision no longer refused; social `run-mvskodlp-9966d618` and `run-mvswewhy-e4e469d4` -> step 0042 `answers`, as before; domain tests "# pass 2442 / # fail 0"; domain, extension and test-runner tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 379 model-facing Core files, 11858 string literals)"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (35.3m)".
 - Outcome: Accepted. Follow-up here: after a Core no the extension shows the toast "the fix didn't finish", which must say what Core found instead.
 
+### 2026-10-29 - The chat ending after a Core no says what FluxIQ found (t805)
+- Agent: lead; worker (brief t805); report `framework-heavy-lifting-plan/reports/t805-ending-words.md`
+- Finding: the toast came from Core's chat wording, not the extension: `runtime/activity/wording/run-ending.ts` closed a refuted run with "the fix didn't finish" even when Core refused it from its own facts and nothing was being fixed.
+- Changed (Core): `run-ending.ts` ends a Core no (`core_observation`, `core.result.computed_fact_failed`) with the failing fact's sentence, in FluxIQ's name ("it saved 15 rows, but FluxIQ counted 3 stored rows where the build declared 2."); every other ending is unchanged. Lead review changed the worker's "Core found:" to FluxIQ, the name the chat uses everywhere else.
+- Validation: worker `pnpm test src/programs/automation-studio/runtime/activity` -> "56 files / 476 tests passed", "all groups passed"; tsc clean; structure and docs current; lead-run after the wording change `pnpm exec vitest run .../activity/wording/tests/run-ending.test.ts` -> "Tests 17 passed (17)".
+- Outcome: Accepted.
+
 ## Open Questions
 
 1. **Are `values` and `differs` filled for a non-list region, such as a cart drawn with div elements?** Owner: W3. This
