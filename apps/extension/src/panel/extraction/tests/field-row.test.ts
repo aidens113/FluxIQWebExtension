@@ -57,3 +57,16 @@ test("native kind/remove/checked-radio events retain source-key identity and foc
   assert.deepEqual(calls, [["name", "link"], ["name", "exclude"], ["name"]]);
   const note = row.querySelector(".info-hint")!; assert.equal(note.tabIndex, 0); assert.match(note.getAttribute("aria-label") ?? "", /never read/u);
 }));
+
+test("a marked column says what kind of marker it is, in words, and an unmarked one says nothing", async () => withDialogDom(world => {
+  const proposal = proposalFixture();
+  proposal.fields[0] = { ...proposal.fields[0]!, spec: { ...proposal.fields[0]!.spec, mark: "badge" } };
+  const fields = extractionDraftFromProposal(proposal, "Synthetic dataset").fields;
+  const edits = { rename() {}, changeKind() {}, changeHandling() {}, remove() {} };
+  world.native(world.host).append(extractionFieldRowElement(fields[0]!, edits), extractionFieldRowElement(fields[1]!, edits));
+  const rows = world.host.querySelectorAll(".extraction-field");
+  const label = rows[0]!.querySelector(".extraction-field-mark");
+  assert.equal(label?.textContent, "Badge marker");
+  assert.match(label?.getAttribute("title") ?? "", /only on the items that have it/u);
+  assert.equal(rows[1]!.querySelector(".extraction-field-mark"), null);
+}));
