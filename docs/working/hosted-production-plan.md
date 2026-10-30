@@ -728,6 +728,12 @@ gaining an enterprise contact page.
 - Validation: lead-run `node --test "server/**/tests/*.test.mjs"` in the package -> "# pass 40 / # fail 0"; `node packages/website-stand-in/scripts/up.mjs --round-trip` -> "step 1 PASS site sign-up: status 202", "step 2 PASS welcome mail: … link origin is the app origin, path /welcome", "step 3 PASS set password: status 200", "step 4 PASS listener getAccount: … account status active", "step 5 PASS repeat sign-up: … body identical, account-exists mail arrived", "round trip PASS"; structure audit passed.
 - Outcome: Accepted. W3 (the Lab's `service-local` target, D8) is next on this side.
 
+### 2026-10-30 — The web app's direct contracts import now fails the structure audit (t812)
+- Agent: lead; worker (brief t812); report Core `hosted-production-plan/reports/t812-import-guard.md`. Why: twice on 2026-10-29 (lane A, then t809) a module under `apps/web/src` imported `@fluxiq/contracts` directly; tsc and the web tests passed through the base `paths`, but the Next production build failed TS2307 and every Lab live run failed at setup (debug `run-mvubv0rc-7e3d7b44`).
+- Changed: Core `scripts/structure-audit/config.mjs` forbids `@fluxiq/contracts` imports under `apps/web/src`, type-only and tests included; `rules/imports.mjs` lets a `forbiddenImports` entry take a `from` directory, mirrored here with its test.
+- Validation: lead-run: `node --test scripts/structure-audit/rules/tests/imports.test.mjs` -> "# pass 26 / # fail 0" in both repositories; a probe file importing `@fluxiq/contracts/client-gateway` under `apps/web/src/server` -> "FAIL [imports] … Import through a fluxiq subpath instead", removed; `pnpm structure:check` (Core) and `node scripts/structure-audit.mjs` (here) passed; `node scripts/check/core-mirror.mjs` -> "1 mirror set(s) match … structure-audit (72 files)".
+- Outcome: Accepted.
+
 ## Open Questions
 
 Owner: the user, for all of them. A recommendation follows each; the plan proceeds on it. Core's
