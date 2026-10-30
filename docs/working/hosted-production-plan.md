@@ -97,7 +97,7 @@ This document links to them and does not restate them.
 - Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. In flight since 2026-10-29: Core lane A (t802), B3 (t803) and the stand-in W0-W2 (t801). C0, A and B3 follow-ups, and W2 merged; C1 (t813) and E with D5 (t814) in flight;
+1. Merged 2026-10-29: Core lanes A (t802), B3 (t803), C0 (t808) and their follow-ups (t809), and the stand-in W0-W2 (t801, t809). In flight: C1 with the IAM wiring (t813) and E with D5 (t814);
    D2 starts once lane A has the gateway steps, with the D0 listener rules.
 2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
