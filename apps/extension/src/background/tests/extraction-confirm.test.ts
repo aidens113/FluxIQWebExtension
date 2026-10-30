@@ -232,3 +232,25 @@ test("the confirm reply says what was captured, in counts and no page value", as
   assert.equal(typeof response.durationMs, "number");
   assert.equal(JSON.stringify(response).includes(PAGE_SENTINEL), false, "counts, never a cell (D3)");
 });
+
+test("confirm keeps a column's mark in the recorded definition", async () => {
+  const h = harness();
+  const sessionId = await startAndPick(h);
+  await handleExtractionControl({ type: EXTRACTION_RUNTIME_MESSAGES.getSession, sessionId }, sidepanel, h.manager, h.deps);
+  const fields: ExtractionConfirmField[] = [
+    { key: "product_name", label: "Product name", kind: "text", selector: ".name", handling: "include" },
+    { key: "sale", label: "Sale", kind: "text", selector: ".badge", mark: "badge", handling: "include" }
+  ];
+  const request = { label: "Product catalog", item: proposal.item, fields, itemCount: 8 };
+  const response = responseOf(await handleExtractionControl(
+    { type: EXTRACTION_RUNTIME_MESSAGES.confirm, sessionId, request },
+    sidepanel,
+    h.manager,
+    h.deps
+  ));
+  assert.equal(response.ok, true, JSON.stringify(response));
+  const recorded = sentOfType(h.sent, EXTRACTION_CONTENT_MESSAGES.record);
+  const definition = recorded?.message.definition as { request: { fields: Record<string, { mark?: string }> } };
+  assert.equal(definition.request.fields.sale?.mark, "badge");
+  assert.equal(definition.request.fields.product_name?.mark, undefined);
+});

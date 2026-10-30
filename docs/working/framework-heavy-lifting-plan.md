@@ -290,6 +290,16 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Validation: lead-run under the lock on the trees merged with dev: domain tsc clean and `DOMAIN_TEST_BUILD_LABEL=t800 node scripts/test-domain.mjs` -> "# pass 2457 / # fail 0"; extension tsc clean and `EXTENSION_TEST_BUILD_LABEL=t800 node scripts/test-extension.mjs` -> "# pass 3435 / # fail 0"; test-runner tsc clean; structure audit passed; model-text ok (208 tokens, 379 files, 11865 literals); headed `e2e/site-reset/tests` -> "32 passed (34.8m)". Supervisor's headed provider-free proof on social-network-feed `replay-mvu2ksyn-10c26651`: passed, 3 of 3 rows, 15 of 15 fields, 0 model calls, the Flow keeping posts by a mark field and `atLeast`, with no group name and no date pattern.
 - Outcome: Accepted. Not verified: `within` live (the fixture's dates are absolute); the panel picker (`panel/extraction/confirm-payload.ts`, `view-model.ts`) drops `mark` (follow-up).
 
+### 2026-10-29 - P1a merged (t806)
+- One line: Core folds the build loop's bookkeeping outside the trial gate (unknown tool ids asked again, brief defaults, the first unchanged resubmission's fix point, Core-written folded lines, done reasons from the record). Full entry in Core's ledger; downstream reports only.
+- Validation: lead-run downstream against that Core: domain tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 383 model-facing Core files, 11892 string literals)".
+- Outcome: Accepted.
+
+### 2026-10-29 - P7 follow-ups merged (t807)
+- Changed (downstream): `apps/extension/src/panel/extraction/{view-model,confirm-payload,field-row}.ts`, `extraction.css` and `background/extraction/definition.ts` keep a field's `mark` through confirm and show it; Core's day-granular `within` and the record-defaults plumbing are in Core's ledger.
+- Validation: lead-run under the lock: domain tsc (both configs) clean and `DOMAIN_TEST_BUILD_LABEL=t807 node scripts/test-domain.mjs actions/extraction output-nodes/extract-list runtime/llm-evidence` -> "# pass 1542 / # fail 0"; extension tsc (both configs) clean and `EXTENSION_TEST_BUILD_LABEL=t807 node scripts/test-extension.mjs content/extraction panel background` -> "# pass 1946 / # fail 0"; structure audit passed; model-text ok. The picker was not seen in a browser.
+- Outcome: Accepted.
+
 ## Open Questions
 
 1. **Are `values` and `differs` filled for a non-list region, such as a cart drawn with div elements?** Owner: W3. This

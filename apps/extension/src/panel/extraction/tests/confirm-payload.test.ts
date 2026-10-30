@@ -75,3 +75,14 @@ test("no value read from the page reaches the confirm message", () => {
   assert.equal(serialized.includes("Anvil"), false);
   assert.equal(rows.length, 1, "the rows exist beside the draft and are simply never given to the payload");
 });
+
+test("a field's mark is kept in the confirm payload for each mark, and omitted when unset", () => {
+  for (const mark of ["badge", "flag", "state"] as const) {
+    const proposal = proposalFixture();
+    proposal.fields[0] = { ...proposal.fields[0]!, spec: { ...proposal.fields[0]!.spec, mark } };
+    const request = extractionConfirmPayload(extractionDraftFromProposal(proposal, "Products"));
+    assert.equal(payloadField(request, "name").mark, mark);
+  }
+  const plain = extractionConfirmPayload(extractionDraftFromProposal(proposalFixture(), "Products"));
+  for (const field of plain.fields) assert.equal("mark" in field && field.mark !== undefined, false);
+});

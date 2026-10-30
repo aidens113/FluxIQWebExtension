@@ -17,7 +17,7 @@
 // mark covers a column whose kind the user changed, whose old values no longer
 // describe what it now reads.
 
-import type { WebAutomationExtractFieldKind, WebAutomationExtractionProposal, WebAutomationExtractionProposalField, WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
+import type { WebAutomationExtractFieldKind, WebAutomationExtractFieldSpec, WebAutomationExtractionProposal, WebAutomationExtractionProposalField, WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 
 /** What becomes of a column. `encrypt` (D13) is reserved for Week 3 and is not offered here. */
 export type ExtractionFieldHandling = "include" | "exclude";
@@ -35,6 +35,8 @@ export type ExtractionFieldRow = {
   header?: string | undefined;
   /** `true` when the proposal reads this column's element line by line; kept only while the column reads text. */
   lines?: boolean | undefined;
+  /** What kind of marker the column reads, when it reads one: its cell is empty on an item that does not carry it. */
+  mark?: WebAutomationExtractFieldSpec["mark"] | undefined;
   required?: boolean | undefined;
   handling: ExtractionFieldHandling;
   /** The share of the run's items that have the field, from 0 to 1. */
@@ -113,6 +115,7 @@ function fieldRow(field: WebAutomationExtractionProposalField): ExtractionFieldR
     attribute: field.spec.attribute,
     header: field.spec.header,
     lines: field.spec.lines,
+    mark: field.spec.mark,
     required: field.spec.required,
     handling: sensitive ? "exclude" : "include",
     coverage: field.coverage,

@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802) and C0 (t808) are in flight in Core; the stand-in W0-W1 (t801) is merged here, with W2 waiting on lane A. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
+**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802, gateway and panel hardening) is merged and C0 (t808) is in flight in Core; the stand-in W0-W1 (t801) is merged here, with W2 waiting on lane A. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -716,6 +716,11 @@ gaining an enterprise contact page.
 ### 2026-10-29 — Core lane B3 merged (t803)
 - One line, per the boundary rule: IAM is enforced on every Core registration and app route, with parity on local and self-hosted (6,608 decisions, 0 mismatches), and inert on `service` until lane C wires it. Full entry, decisions and validation in Core's ledger; nothing changed here.
 - Validation: lead-run, quoted in Core's entry: `pnpm test` platform, `_shared` and program API dirs -> "Tests 760 passed (760)"; downstream `node scripts/structure-audit.mjs` against that Core -> passed.
+- Outcome: Accepted.
+
+### 2026-10-29 — Core lane A merged (t802)
+- One line, per the boundary rule: the gateway and panel are hardened for a public deployment, the provisioning listener starts under `service`, and `FLUXIQ_EMAIL_SENDER` takes `file:<dir>`, which unblocks the stand-in's W2 round trip once the `welcomeUrl` follow-up lands. Full entry in Core's ledger; nothing changed here.
+- Validation: lead-run here against that Core: domain "# pass 2457 / # fail 0"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (36.0m)", the extension pairing through the hardened local gateway.
 - Outcome: Accepted.
 
 ## Open Questions
