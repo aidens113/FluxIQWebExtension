@@ -300,6 +300,11 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Validation: lead-run under the lock: domain tsc (both configs) clean and `DOMAIN_TEST_BUILD_LABEL=t807 node scripts/test-domain.mjs actions/extraction output-nodes/extract-list runtime/llm-evidence` -> "# pass 1542 / # fail 0"; extension tsc (both configs) clean and `EXTENSION_TEST_BUILD_LABEL=t807 node scripts/test-extension.mjs content/extraction panel background` -> "# pass 1946 / # fail 0"; structure audit passed; model-text ok. The picker was not seen in a browser.
 - Outcome: Accepted.
 
+### 2026-10-29 - Repair from the failing step merged (t804)
+- Changed (downstream): headed provider-free spec `apps/extension/e2e/site-reset/tests/photo-repair-from-step.spec.ts`. The user's rule ("Build the whole Flow first; test it whole only when it should work") is enforced by Core; full entry in Core's ledger.
+- Validation: lead-run headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "33 passed (35.9m)", the new spec printing `{"repairFromStepCounts":{"wholeRuns":2,"fromStepRuns":1}}`: a failed whole test, a refused second one, a run from the failing step, one judged whole run that passes.
+- Outcome: Accepted.
+
 ## Open Questions
 
 1. **Are `values` and `differs` filled for a non-list region, such as a cart drawn with div elements?** Owner: W3. This
