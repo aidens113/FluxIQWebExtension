@@ -29,7 +29,7 @@ const text = (value: unknown): string => JSON.stringify(value ?? null);
  *    naming `second`; no command reaches the site for it.
  * 3. The build repairs live on `second` from the page the test left (a fresh
  *    detection and a read), submits the fix, and runs `core.test_subflow` with
- *    `from: "second"`: only that step runs (no arrival, no reset, no judge),
+ *    `from:` the step key the refusal names: only that step runs (no arrival, no reset, no judge),
  *    and the answer says `fromStep: true`.
  * 4. One whole test of the latest revision passes, judged yes, and the brief
  *    completes on it.
@@ -169,7 +169,8 @@ test("installed gateway project build repairs a failed step by running from it b
         case "repair":
           return send("submit-2", call("submit-2", "core.submit_subflow", { flow: postsFlow(profile) }));
         case "submit-2":
-          return acting("from-step", () => call("from-step", "core.test_subflow", { ...submitted("submit-2"), from: "second" }));
+          // The step key Core named in its refusal, as a model reading that refusal sends it (the plan's key, not the script's label).
+          return acting("from-step", () => call("from-step", "core.test_subflow", { ...submitted("submit-2"), from: String(answers["test-2"]?.repairStep ?? "") }));
         case "from-step":
           // 4. One judged whole test of the latest revision.
           testing = "posts-2";
@@ -183,8 +184,8 @@ test("installed gateway project build repairs a failed step by running from it b
     const { ending, failure } = await build.run();
 
     const first = answers["test-1"] ?? {}, refused = answers["test-2"] ?? {}, fromStep = answers["from-step"] ?? {}, passing = answers["test-3"] ?? {};
-    /** A `posts` test call that ran as a whole test: neither a refusal nor a from-step run. */
-    const wholeRuns = ["test-1", "test-2", "test-3"].filter(callId => answers[callId]?.code !== FROM_STEP_FIRST && answers[callId]?.fromStep !== true && answers[callId]?.ok !== false);
+    /** A `posts` test call that ran as a whole test, passed or failed: it carries a verdict, and is neither a refusal nor a from-step run. */
+    const wholeRuns = ["test-1", "test-2", "test-3"].filter(callId => answers[callId]?.code !== FROM_STEP_FIRST && answers[callId]?.fromStep !== true && answers[callId]?.verdict !== undefined);
     const fromStepRuns = ["test-1", "test-2", "from-step", "test-3"].filter(callId => answers[callId]?.fromStep === true);
     const counts = { wholeRuns: wholeRuns.length, fromStepRuns: fromStepRuns.length };
     const summary = { ending, failure, counts, completions, sent, siteActs, first, refused, fromStep, passing, submissions: ["submit-1", "submit-2"].map(callId => ({ callId, revision: answers[callId]?.revision ?? null, ok: answers[callId]?.ok ?? null, code: answers[callId]?.code ?? null })), judged, supervisorSteps: provider.supervisorSteps(), builderSteps: provider.builderSteps(), gatewayErrors: installed.gatewayErrors };
@@ -197,19 +198,19 @@ test("installed gateway project build repairs a failed step by running from it b
     // 1. The first whole test failed at the part's second step, and its answer names it.
     expect(first.verdict).toBe("execution_failed");
     expect(record(record(first.feedback).stoppedBy).label).toBe("go back to the studio's profile");
-    expect(first.stoppedAtKey).toBe("second");
-    expect(text(first)).toContain("second");
     expect(first.fromStep).toBeUndefined();
-    // 2. The second whole test is refused, names that step, and sent nothing to the site.
+    // 2. The second whole test is refused, names that step by its plan key and its words, and sent nothing to the site.
     expect(refused.ok).toBe(false);
     expect(refused.code).toBe(FROM_STEP_FIRST);
-    expect(text(refused)).toContain("second");
+    const repairStep = String(refused.repairStep);
+    expect(repairStep).toMatch(/^s\d+$/u);
+    expect(text(refused)).toContain("go back to the studio's profile");
     expect(siteActs["test-2"]).toEqual([]);
     // 3. The from-step run: only the failing step, flagged, never judged.
     expect(fromStep.fromStep).toBe(true);
     expect(fromStep.passed).toBe(true);
-    expect(fromStep.from).toBe("second");
-    expect(fromStep.passedKeys).toEqual(["second"]);
+    expect(fromStep.from).toBe(repairStep);
+    expect(fromStep.passedKeys).toEqual([repairStep]);
     const wholeCommands = siteActs["test-1"], fromCommands = siteActs["from-step"];
     if (!Array.isArray(wholeCommands) || !Array.isArray(fromCommands)) throw new Error("diagnostic.site_commands_missing");
     expect(fromCommands.length).toBeGreaterThan(0);
@@ -220,7 +221,10 @@ test("installed gateway project build repairs a failed step by running from it b
     // 4. One judged whole test passes; the brief completes on that revision.
     expect(passing.verdict).toBe("yes");
     expect(passing.fromStep).toBeUndefined();
-    expect(judged.filter(call => call.label === "posts-2")).toEqual([{ label: "posts-2", answersRequest: "yes" }]);
+    // Core confirms a lone yes with a second ask before completing, so the judged test may be asked twice; every answer is yes.
+    const judgedPassing = judged.filter(call => call.label === "posts-2");
+    expect(judgedPassing.length).toBeGreaterThan(0);
+    expect(judgedPassing.every(call => call.answersRequest === "yes")).toBe(true);
     expect(completions).toContainEqual({ brief: "posts", after: "test-3" });
     expect(counts).toEqual({ wholeRuns: 2, fromStepRuns: 1 });
   } finally {
