@@ -41,6 +41,7 @@
 .extraction-field-remove { min-height: 28px; padding: 4px 8px; font-size: 11px; }
 .extraction-field-meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
 .extraction-field-coverage { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.extraction-field-mark { grid-column: 1 / -1; justify-self: start; color: var(--text); font-size: 11px; border: 1px solid var(--muted); border-radius: 4px; padding: 1px 6px; }
 .extraction-field-handling { display: flex; align-items: center; gap: var(--space-3); color: var(--text); font-size: 12px; }
 .extraction-field-handling label { display: flex; align-items: center; gap: 6px; }
 .extraction-field-reason { color: var(--warning-text); font-size: 11px; white-space: normal; }

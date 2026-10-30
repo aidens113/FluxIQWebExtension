@@ -110,7 +110,20 @@ function metaRow(field: ExtractionFieldRow, edits: ExtractionFieldEdits): HTMLEl
   coverage.textContent = coverageLabel(field.coverage);
 
   wrap.append(kind, coverage);
+  if (field.mark !== undefined) wrap.append(markLabel(field.mark));
   return wrap;
+}
+
+const MARK_NAMES = { badge: "Badge", flag: "Flag", state: "State" } as const;
+const MARK_HINT = "This column marks items that carry it. It is filled only on the items that have it and empty on the others.";
+
+/** A short word naming the marker a column reads, so the user can tell it from a column of values without relying on colour. */
+function markLabel(mark: keyof typeof MARK_NAMES): HTMLElement {
+  const label = document.createElement("span");
+  label.className = "extraction-field-mark";
+  label.textContent = `${MARK_NAMES[mark]} marker`;
+  label.setAttribute("title", MARK_HINT);
+  return label;
 }
 
 function handlingRow(field: ExtractionFieldRow, edits: ExtractionFieldEdits): HTMLElement {

@@ -81,3 +81,11 @@ test("a draft reads one page and has no switch to read every page; the detected 
   assert.equal("paginate" in opened, false);
   assert.deepEqual(opened.pagination, { next: "a.next", maxPages: 5 });
 });
+
+test("a proposal field's mark reaches the draft row, and an unmarked field has none", () => {
+  const proposal = proposalFixture();
+  proposal.fields[0] = { ...proposal.fields[0]!, spec: { ...proposal.fields[0]!.spec, mark: "flag" } };
+  const draft = extractionDraftFromProposal(proposal, "Products");
+  assert.equal(draft.fields[0]!.mark, "flag");
+  assert.equal(draft.fields[1]!.mark, undefined);
+});
