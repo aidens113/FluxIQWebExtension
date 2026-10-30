@@ -32,6 +32,7 @@ apps/extension/
   scripts/          Extension build and smoke-test scripts
   e2e/              Playwright: the content harness (e2e/content/) and the extension suite
 apps/scenario-lab/  Fixture websites the Testing Lab drives
+apps/product/       The product host module for hosted deployments (manifest, hooks, assets)
 domain/
   src/actions/      Web action contracts and capabilities
   src/client/       Gateway mappings and client capability declarations
@@ -817,7 +818,27 @@ that file. Every launcher reads the same field: `scripts/run-fluxiq-web.mjs`
 `webPanelHostModulePath` in `packages/test-runner/src/environment.ts`. Rename
 or move the host by changing that field, never by hard-coding a path.
 
+## Product Host Module
+
+`apps/product` (`@fluxiq-web-extension/product`, private) is the second host
+module, for hosted deployments. It is inert until `FLUXIQ_HOST_MODULE` lists
+`apps/product/dist/host/platform.mjs` after the domain's host module (its path
+is the `fluxiqHostModule` field of `apps/product/package.json`). Core calls its
+`registerFluxIQPlatform(platform)` once per process. That function registers
+the product manifest (`src/manifest/`: identity, brand accents, links, sign-up
+URL, extension clients, email sender and copy) with `platform.setProduct`, and
+subscribes `seedDefaultProject` (`src/hooks/`) to `workspace.created`, which
+gives a new workspace a "My automations" project through its own Automation
+Studio service. Brand assets live in `apps/product/assets/` and are served at
+`/product/assets/<name>`; the built module finds them two directories above
+itself. The package imports Core only from `fluxiq/platform/panel`, which
+validates the manifest and refuses accents under its contrast floor, so the
+light accents are a deeper amber and the brand amber `#f5b83d` is used only in
+the dark set. `pnpm --filter @fluxiq-web-extension/product build` bundles the
+module with `fluxiq` external; `test` and `check` run beside it.
+
 ## FluxIQ Core Linkage
+
 
 Workspace packages link to FluxIQ Core packages in the sibling Core checkout
 via `link:` dependencies declared in `domain/package.json`. Core
