@@ -55,7 +55,7 @@ async function postJson(url, body, headers) {
 }
 
 /**
- * @param {{ site: string, app: string, prov: string, tokenFile: string, mail: string, log?: (line: string) => void }} input
+ * @param {{ site: string, app: string, appPublic?: string, prov: string, tokenFile: string, mail: string, log?: (line: string) => void }} input
  * @returns {Promise<{ ok: boolean, steps: { step: number, name: string, ok: boolean, note: string }[] }>}
  */
 export async function runRoundTrip(input) {
@@ -70,6 +70,7 @@ export async function runRoundTrip(input) {
 
   const siteOrigin = new URL(input.site).origin;
   const appOrigin = new URL(input.app).origin;
+  const appPublicOrigin = new URL(input.appPublic ?? input.app).origin;
   const email = `rt-${randomBytes(5).toString("hex")}@example.test`;
   const signup = { email, displayName: "Round Trip", termsAccepted: true, termsVersion: "stand-in-1" };
   const seen = new Set(readMail(input.mail).map((mail) => mail.name));
@@ -91,21 +92,22 @@ export async function runRoundTrip(input) {
     return finish();
   }
   seen.add(welcome.name);
-  const link = /https?:\/\/[^\s"<>]+\/welcome#token=([A-Za-z0-9_-]+)/u.exec(String(welcome.text ?? ""));
+  const link = /https?:\/\/[^\s"<>]+\/welcome#token=([A-Za-z0-9_-]+)/u.exec(String(welcome.welcomeUrl ?? welcome.text ?? ""));
   if (!link) {
     record(2, "welcome mail", false, "mail holds no welcome link with #token=");
     return finish();
   }
   const linkUrl = new URL(link[0]);
   const token = link[1];
-  const originOk = linkUrl.origin === appOrigin;
+  const originOk = linkUrl.origin === appPublicOrigin;
   if (!record(2, "welcome mail", originOk && linkUrl.pathname === "/welcome" && token.length === 43, `template welcome, link origin ${originOk ? "is" : "is NOT"} the app origin, path ${linkUrl.pathname}, token length ${token.length}`)) return finish();
 
   // 3
   const password = randomBytes(18).toString("base64url");
   let submitted;
   try {
-    submitted = await postJson(`${appOrigin}/welcome/submit`, { token, password }, { origin: appOrigin });
+    // No Origin header: a non-browser caller. The route compares an Origin to the origin of the URL it was reached at, and behind `next start` on loopback neither the loopback nor the public origin matched it (403 forbidden).
+    submitted = await postJson(`${appOrigin}/welcome/submit`, { token, password }, {});
   } catch (error) {
     record(3, "set password", false, `app unreachable (${error.cause?.code ?? error.name})`);
     return finish();
