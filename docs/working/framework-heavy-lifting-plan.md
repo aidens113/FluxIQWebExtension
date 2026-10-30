@@ -45,16 +45,21 @@ in Core's and the hosted plans):
 - **`main` promoted** after the 2026-10-30 first sweep (all suites green): Core `bcbcfa97`, downstream `ee5768d5`
   (`trace-offline-trials-plan.md` ledger). t812 and later reach `main` with the next sweep.
 
-**In flight at the stop.** Each lane works uncommitted in its own worktree under `C:/Users/osrs_/FluxStuff/fxwork/<id>/`,
-with no paid run and no model call.
+**Stopped at the handoff.** Every lane stopped on the user's request and wrote its report. The lead then saved each
+lane's work as a "WIP at the 2026-10-30 handoff" commit on its task branch. Nothing is merged into `dev`, no lead
+acceptance check passed, and no paid run or model call happened.
 
 | Task | Work | State at the stop | To resume |
 | --- | --- | --- | --- |
-| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Lane done; committed and merged with `dev` on its task branch (both pushed). Lead's verification (`scratchpad/verify-t799.sh`: check, Core tests, full domain and extension suites, headed site-reset suite) was running | Re-run that script; if green, ledger entries and `pnpm task finish t799` (downstream first, then detach the Core worktree and `pnpm task finish t799 --skip-checks` in Core) |
-| t810 (P5b) | Refute a judge's `asked_missing` row from the run's own membership evidence (CC2 marks), re-ask with the refutation, cited yes, provenance, `standingNo` | Sub-supervisor running | Report `framework-heavy-lifting-plan/reports/t810-p5b.md`; target case: replay of the demo `run-mvud43a2-445c7f17` must give `answers` |
-| t811 (P1b) | `then` on `core.submit_subflow` (save / whole test / from-step; no whole test by itself), `from` by script label, K5 callers, folded chat lines, `kind` optional in guidance | Sub-supervisor running | Report `reports/t811-p1b.md`; Core's plan is at its line limit, so the lane adds nothing to it |
-| t813 (hosted C1) | Workspace manager; IAM `iam` options wired from the resolved profile | Sub-supervisor running | Core `hosted-production-plan/reports/t813-c1.md` |
-| t814 (hosted E + D5) | Panel product registry and hooks; downstream `apps/product/` | Sub-supervisor running | Core `hosted-production-plan/reports/t814-e-d5.md` |
+| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Lane done; committed and merged with `dev` (both pushed). The lead stopped its own verification (`scratchpad/verify-t799.sh`) mid downstream typecheck | Re-run that script; if green, ledger entries and `pnpm task finish t799` (downstream first, then detach the Core worktree and `pnpm task finish t799 --skip-checks` in Core) |
+| t810 (P5b) | Refute a judge's `asked_missing` and wrongly-kept rows from the run's own record (`outside_mark`, `cell_differs`, `not_kept`), one evidence re-ask, cited yes, provenance, `standingNo`; web `rejectedMarks` | Partial. Offline replay of the demo's final check now gives `answers` (`core.result.no_refuted_by_record`, 10 rows refuted) where it was `unsure`; the store false passes stay a Core no. Core WIP `300fc9ab` is **local only**: the pre-push audit refused it (4 `as never` casts in new tests, `build-test/tests/` and `candidate-trial/tests/` over 25 files, an import cycle through `computed-facts/computed-no.ts` and `located-defects/index.ts`); the downstream WIP is pushed | Fix the audit findings and the TS2375 at `located-defects/tests/row-refuted.test.ts:70`, re-pin `loop_verification` and `loop_verification_build_test`, add `located` to the t804 earlier-advice fixture (w4 report), fix the replay harness's 60-character match, then the acceptance set (report `reports/t810-p5b.md`) |
+| t811 (P1b) | `then` on `core.submit_subflow` (save / whole test / from-step; Core completes on a yes), `from` by script label (`stepLabels`), K5 callers, folded test lines, guidance, K7 defaults | Partial; WIP pushed (Core `fa07015e`, downstream `562f3082`). One known failure: `project-agents/dispatch/tests/whole-trial-port.test.ts` (patch in `reports/t811/wa-fold-green.md`); the headed decide-count spec is not written; `docs:reference` is likely stale | Apply the patch, write the spec, run the acceptance set (report `reports/t811-p1b.md`) |
+| t813 (hosted C1) | Workspace manager (`apps/web/src/lib/workspaces/`, layout v3 at `<host root>/workspaces/<id>/`), IAM `iam` options from the resolved profile, `BackgroundTasksService.close()` | Partial; WIP pushed (Core `4266af93`). Worker-reported passes only; `pnpm check`, the full web suite and the Next production build not run | Run the acceptance set; have a second agent review the manager for concurrency and key handling (report Core `hosted-production-plan/reports/t813-c1.md`) |
+| t814 (hosted E + D5) | `PanelProduct` registry, host loader, branding and assets route; downstream `apps/product/` | Partial; WIP pushed (Core `f45e5faf`, downstream `4eede8cd`). Two late test fixes not re-run | Re-run `pnpm check`, `pnpm test src/platform`, apps/web tests and tsc (report Core `hosted-production-plan/reports/t814-e-d5.md`) |
+
+**Decision for the user (from t810):** a judge's no that Core wholly refutes from its own record, and that still stands
+after one re-ask with the evidence, now passes with no model yes. That is the first pass without one, and Core's plan
+lists it as Open Question 1, with the user as owner. It stays unmerged until the user agrees.
 
 If a lane ended with the session, its tree still holds the work. Read its report, then check, commit, merge `dev` in
 and verify as above. Re-dispatch only the missing part.
