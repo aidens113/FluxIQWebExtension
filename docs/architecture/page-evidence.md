@@ -170,6 +170,17 @@ Where they travel:
   trusted source (a settings form's Save, a chooser's confirming press); a
   list's `items` and `collections` still need one document. Core judges a
   value act by these (`flow-bootstrap/reset-settlement/value-tracker.ts`).
+- **One place token per act.** The permission declaration's `spot.place`, the
+  step diff's `controls` (before and after) and the start-state receipt's
+  controls all come from one function, `webControlPlace`
+  (`control-spot/place.ts`), so an act's control is addressed by the same
+  token everywhere Core reads it. The token belongs to the act's page: a
+  looped pass on another item carries its own page's token, never the first
+  pass's. `control-spot/tests/place-per-act.test.ts` guards it. Value places
+  are a separate token kind by design. The start-state answer may also carry
+  an optional `effect` record that lets Core pair an undo with its act by
+  inverse effect; the domain does not fill it yet, and Core then pairs from
+  the control counts alone.
 
 ## One Contract, In The Domain
 

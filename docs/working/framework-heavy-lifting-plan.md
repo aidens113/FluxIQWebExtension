@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0 and the per-pass act ledger merged, W0 (the Lab verdict from structured data, t798) merged.
+Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0, the per-pass act ledger and P4 with W4 (t797), P5a (t795) and P7 with W7 (t800) merged, W0 (the Lab verdict from structured data, t798) merged; W6 (t799) in flight with Core P6.
 Created: 2026-10-28
 Last updated: 2026-10-29
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -23,7 +23,7 @@ This document holds only the web-specific half:
 It links to Core's contracts and does not restate them.
 
 - **True now:** Core's P0 (t793) and per-pass act ledger (t796) are merged, and so is t794 (Core's check builds its
-  libraries first). P5 (t795) and P4 (t797) are in flight in Core, and W0 (t798, the Lab verdict from structured data) is merged here.
+  libraries first). P4 with W4 (t797) is merged, P5a (t795) is merged, and W0 (t798, the Lab verdict from structured data) is merged here. P7 with W7 (t800) is merged; P6 with W6 (t799) is in flight as a Core-paired task.
   The evidence reports in `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload,
   fhl-core-surface, fhl-domain-surface) fed the Core synthesis.
 - **The web side already computes most of what Core needs.** It has toggle signatures, `layerCleared`, the acted-on
@@ -264,6 +264,46 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Decision (lead review): Core answers `{failure: null}` when no build failed (`api/handlers/llm-generation.ts`), so the new read does not throw on a clean draft; only a diagnostic naming this candidate is used.
 - Validation: lead-run under the lock on the tree merged with dev: test-runner `pnpm check` -> exit 0, `pnpm build` -> exit 0, `node --test "dist/flow-lane/**/*.test.js" "dist/live-llm/**/*.test.js" "dist/run-scenario/**/*.test.js"` -> "# tests 958 / # pass 953 / # fail 0 / # skipped 5"; `node scripts/structure-audit.mjs` -> passed; `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 377 model-facing Core files, 11791 string literals)".
 - Outcome: Accepted. Not verified live; it rides in the next live round.
+
+### 2026-10-29 - P4 with W4: one undo and reset answer (t797)
+- Agent: supervisor (brief t797-p4) with six workers; report `framework-heavy-lifting-plan/reports/t797-p4.md`
+- Changed (Core, detail in Core's ledger): one shared answer for back-at-place, undo reach and settlement; stale in-place reads not judged; unsettleable acts end with a closed reason; undo paired with its act by a reported inverse effect (CC4) or control counts. Downstream (W4): `domain/src/runtime/llm-evidence/control-spot/tests/place-per-act.test.ts` pins one place token per looped act (it passed on unchanged code: a regression guard); `docs/architecture/page-evidence.md` and three site-reset spec comments follow the single answer.
+- Validation: lead-run under the lock on the trees merged with dev: domain `tsc` clean and `DOMAIN_TEST_BUILD_LABEL=t797 node scripts/test-domain.mjs` -> "# pass 2444 / # fail 0"; extension and test-runner tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 377 model-facing Core files, 11794 string literals)"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (40.6m)"; Core checks in Core's ledger.
+- Outcome: Accepted. Follow-up (W4 remainder): the web domain fills CC4's `effect` (what a press did) so live undo pairing uses it instead of control counts.
+
+### 2026-10-29 - P5a: Core settles rows and proofs before any judge (t795)
+- Agent: supervisor (brief t795-p5) with eight workers; report `framework-heavy-lifting-plan/reports/t795-p5.md`
+- Changed (Core, detail in Core's ledger): computed facts before any judge, a failing fact a Core no with no judge call, t796's `not_run` a Core no. Downstream: reports only.
+- Validation: lead-run under the lock on the trees merged with dev: zero-call replays of four recorded live builds through the merged Core (`scratchpad/t795-w6/replay.mts`): everything-store `run-mvswh11y-9d462629` and `run-mvtdoyf3-47ffaac1` -> every false-pass revision and playback 0137 a Core no (`core.result.computed_fact_failed`, 0 judge calls), the correct revision no longer refused; social `run-mvskodlp-9966d618` and `run-mvswewhy-e4e469d4` -> step 0042 `answers`, as before; domain tests "# pass 2442 / # fail 0"; domain, extension and test-runner tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 379 model-facing Core files, 11858 string literals)"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (35.3m)".
+- Outcome: Accepted. Follow-up here: after a Core no the extension shows the toast "the fix didn't finish", which must say what Core found instead.
+
+### 2026-10-29 - The chat ending after a Core no says what FluxIQ found (t805)
+- Agent: lead; worker (brief t805); report `framework-heavy-lifting-plan/reports/t805-ending-words.md`
+- Finding: the toast came from Core's chat wording, not the extension: `runtime/activity/wording/run-ending.ts` closed a refuted run with "the fix didn't finish" even when Core refused it from its own facts and nothing was being fixed.
+- Changed (Core): `run-ending.ts` ends a Core no (`core_observation`, `core.result.computed_fact_failed`) with the failing fact's sentence, in FluxIQ's name ("it saved 15 rows, but FluxIQ counted 3 stored rows where the build declared 2."); every other ending is unchanged. Lead review changed the worker's "Core found:" to FluxIQ, the name the chat uses everywhere else.
+- Validation: worker `pnpm test src/programs/automation-studio/runtime/activity` -> "56 files / 476 tests passed", "all groups passed"; tsc clean; structure and docs current; lead-run after the wording change `pnpm exec vitest run .../activity/wording/tests/run-ending.test.ts` -> "Tests 17 passed (17)".
+- Outcome: Accepted.
+
+### 2026-10-29 - P7 with W7: typed fields, marks, row identity, the date twin (t800)
+- Agent: supervisor (brief t800-p7) with twelve workers; report `framework-heavy-lifting-plan/reports/t800-p7.md`
+- Changed (Core, detail in Core's ledger): relative date bounds, compact ages, record defaults, three build-time checks. Downstream: packet fields carry `type` and `parsed`, lists carry `fieldMarks`, per-item marks and `rowIdentity` (`domain/src/runtime/llm-evidence/structure/**`, `apps/extension/src/content/extraction/{item-mark,item-attributes}/`); a `mark: badge|flag|state` field is stored as a column absent when off, so Core's `is: "present"` keeps the marked rows; the item filter and condition grammar share Core's date cases. The domain extract-list grammar is at 699 of its 700 characters.
+- Validation: lead-run under the lock on the trees merged with dev: domain tsc clean and `DOMAIN_TEST_BUILD_LABEL=t800 node scripts/test-domain.mjs` -> "# pass 2457 / # fail 0"; extension tsc clean and `EXTENSION_TEST_BUILD_LABEL=t800 node scripts/test-extension.mjs` -> "# pass 3435 / # fail 0"; test-runner tsc clean; structure audit passed; model-text ok (208 tokens, 379 files, 11865 literals); headed `e2e/site-reset/tests` -> "32 passed (34.8m)". Supervisor's headed provider-free proof on social-network-feed `replay-mvu2ksyn-10c26651`: passed, 3 of 3 rows, 15 of 15 fields, 0 model calls, the Flow keeping posts by a mark field and `atLeast`, with no group name and no date pattern.
+- Outcome: Accepted. Not verified: `within` live (the fixture's dates are absolute); the panel picker (`panel/extraction/confirm-payload.ts`, `view-model.ts`) drops `mark` (follow-up).
+
+### 2026-10-29 - P1a merged (t806)
+- One line: Core folds the build loop's bookkeeping outside the trial gate (unknown tool ids asked again, brief defaults, the first unchanged resubmission's fix point, Core-written folded lines, done reasons from the record). Full entry in Core's ledger; downstream reports only.
+- Validation: lead-run downstream against that Core: domain tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 383 model-facing Core files, 11892 string literals)".
+- Outcome: Accepted.
+
+### 2026-10-29 - P7 follow-ups merged (t807)
+- Changed (downstream): `apps/extension/src/panel/extraction/{view-model,confirm-payload,field-row}.ts`, `extraction.css` and `background/extraction/definition.ts` keep a field's `mark` through confirm and show it; Core's day-granular `within` and the record-defaults plumbing are in Core's ledger.
+- Validation: lead-run under the lock: domain tsc (both configs) clean and `DOMAIN_TEST_BUILD_LABEL=t807 node scripts/test-domain.mjs actions/extraction output-nodes/extract-list runtime/llm-evidence` -> "# pass 1542 / # fail 0"; extension tsc (both configs) clean and `EXTENSION_TEST_BUILD_LABEL=t807 node scripts/test-extension.mjs content/extraction panel background` -> "# pass 1946 / # fail 0"; structure audit passed; model-text ok. The picker was not seen in a browser.
+- Outcome: Accepted.
+
+### 2026-10-29 - Repair from the failing step merged (t804)
+- Changed (downstream): headed provider-free spec `apps/extension/e2e/site-reset/tests/photo-repair-from-step.spec.ts`. The user's rule ("Build the whole Flow first; test it whole only when it should work") is enforced by Core; full entry in Core's ledger.
+- Validation: lead-run headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "33 passed (35.9m)", the new spec printing `{"repairFromStepCounts":{"wholeRuns":2,"fromStepRuns":1}}`: a failed whole test, a refused second one, a run from the failing step, one judged whole run that passes.
+- Outcome: Accepted.
 
 ## Open Questions
 

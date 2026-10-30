@@ -56,13 +56,29 @@
 // read, so `as` says what the bounds already say and is dropped, as `not:
 // false` is, and every caller that copies a condition key by key (the plan
 // resolver) carries the date bound whole.
+//
+// ## And relative to the run (t800, K1)
+//
+// A request for rows "from the last week" names no day, so a bound may also be
+// `today`, `yesterday`, `now` or `<n> <unit> ago`, read against the run's now,
+// and `within: "7 days"` keeps the dates from 7 days before now up to it. Which
+// words name a date, and the span a `within` keeps, are Core's
+// (`readAutomationStudioRecordConditionDateBound`,
+// `readAutomationStudioRecordConditionWithin`), asked here rather than read a
+// second time, and Core's shared date cases hold this grammar and the page to
+// Core's verdicts (`tests/condition-date.test.ts`). Core keeps one spelling per
+// meaning; `after`, `before`, `onOrAfter` and `onOrBefore` are this grammar's
+// other names for `greaterThan`, `lessThan`, `atLeast` and `atMost`, and `in
+// the last` for `within`. A `within` is a date comparison, so it takes no
+// number bound beside it.
 
 import {
   AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
   AUTOMATION_STUDIO_RECORD_CONDITION_PRESENCES,
   AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS,
-  automationStudioRecordConditionHolds,
-  automationStudioRecordConditionPattern
+  automationStudioRecordConditionPattern,
+  readAutomationStudioRecordConditionDateBound,
+  readAutomationStudioRecordConditionWithin
 } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioRecordCondition } from "fluxiq/automation-studio/nodes";
 import type { WebAutomationExtractConditionValue, WebAutomationExtractItemCondition } from "./request";
@@ -87,6 +103,7 @@ const CONDITION_TYPES: readonly string[] = ["date", "number"] satisfies readonly
 const SAYING_KEYS = [
   "is",
   ...AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
+  "within",
   "equals",
   ...AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS,
   "not"
@@ -116,6 +133,13 @@ const OTHER_NAMES: readonly (readonly [string, SayingKey])[] = [
   ["gt", "greaterThan"],
   ["over", "greaterThan"],
   ["above", "greaterThan"],
+  // A date's other names (t800, K1): Core keeps one spelling per meaning.
+  ["after", "greaterThan"],
+  ["before", "lessThan"],
+  ["onorafter", "atLeast"],
+  ["onorbefore", "atMost"],
+  ["inthelast", "within"],
+  ["withinthelast", "within"],
   ["equal", "equals"],
   ["equalto", "equals"],
   ["eq", "equals"],
@@ -166,7 +190,7 @@ export const WEB_AUTOMATION_EXTRACT_CONDITION_KEYS: readonly string[] = [
 ];
 
 /** The phrases that compare something, which "the value is not there" cannot be said beside. */
-const COMPARISONS: readonly SayingKey[] = [...AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, "equals", ...AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS];
+const COMPARISONS: readonly SayingKey[] = [...AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, "within", "equals", ...AUTOMATION_STUDIO_RECORD_CONDITION_TEXTS];
 
 /**
  * What `written` says about its value, with `naming` the keys this caller uses
@@ -206,6 +230,7 @@ export function webAutomationExtractConditionSayingValue(written: Record<string,
   if (said.get("is") === "absent" && COMPARISONS.some((key) => said.has(key))) return { ok: false };
   // A condition's bounds are one kind, and `as` names that kind (header, t790).
   const kinds = new Set(AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS.filter((key) => said.has(key)).map((key) => (typeof said.get(key) === "string" ? "date" : "number")));
+  if (said.has("within")) kinds.add("date");
   if (kinds.size > 1) return { ok: false };
   if (as !== undefined && !kinds.has(as as "date" | "number")) return { ok: false, key: AS_KEY };
   const says: Record<string, unknown> = {};
@@ -220,6 +245,7 @@ export function webAutomationExtractConditionSayingValue(written: Record<string,
 function sayingValue(saying: SayingKey, value: unknown): unknown {
   if (saying === "is") return (AUTOMATION_STUDIO_RECORD_CONDITION_PRESENCES as readonly string[]).includes(value as string) ? value : undefined;
   if (saying === "not") return booleanValue(value);
+  if (saying === "within") return typeof value === "string" && readAutomationStudioRecordConditionWithin(value) !== undefined ? value : undefined;
   if ((AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS as readonly string[]).includes(saying)) {
     if (typeof value === "string") return namesOneDate(value) ? value : undefined;
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -265,13 +291,12 @@ function comparedTexts(saying: SayingKey, value: unknown): string[] | undefined 
 }
 
 /**
- * Whether a bound written as text names one date on its own (header, t790), by
- * Core's own reading: a date bound holds of the very date it names exactly
- * when Core can read that date as a bound, so asking Core's judge is asking
- * Core's bound reader, with no second reader of dates kept here.
+ * Whether a bound written as text names one date on its own, or relative to the
+ * run's now (header, t790, t800), by Core's own bound reader, with no second
+ * reader of dates kept here.
  */
 function namesOneDate(bound: string): boolean {
-  return automationStudioRecordConditionHolds({ atLeast: bound, as: "date" }, bound);
+  return readAutomationStudioRecordConditionDateBound(bound) !== undefined;
 }
 
 /** `true` and `false`, and the two words a model writes for them. */

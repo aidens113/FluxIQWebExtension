@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now.** This is a plan; no hosted code exists in either repository (checked
+**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802, gateway and panel hardening), C0 (t808) and the A/B3 follow-ups (t809) are merged in Core; the stand-in W0-W2 is merged here, and its live sign-up round trip passes against a service-profile Core (t809). No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -97,8 +97,8 @@ This document links to them and does not restate them.
 - Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. The supervisor dispatches the contract-freeze worker (Core carries the H0 changes) and opens the
-   paired H1 task (one ID, nested worktrees); D2 starts with the D0 listener rules.
+1. Merged 2026-10-29: Core lanes A (t802), B3 (t803), C0 (t808) and their follow-ups (t809), and the stand-in W0-W2 (t801, t809). In flight: C1 with the IAM wiring (t813) and E with D5 (t814);
+   D2 starts once lane A has the gateway steps, with the D0 listener rules.
 2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
 **Blocked.** Nothing blocks W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
@@ -705,6 +705,34 @@ gaining an enterprise contact page.
 - Decisions (supervisor): single-tenancy workspace id `workspace-main` (override `FLUXIQ_WORKSPACE_ID`; lane C may revisit); a two-factor account with a sealed credential is refused `two_factor` and its link stays unused (email alone never turns two-factor off; recovery by an administrator reset); a link reset clears the PIN as the admin reset does; the listener keeps `setPassword` unavailable over HTTP (the website never sees a password). Open for lane F: an audited break-glass CLI path for a sealed two-factor administrator on a stopped server.
 - Validation: supervisor-run under the heavy-check lock on the final code: `pnpm test src/platform src/programs/identity-access src/programs/_shared .../runtime/llm .../runtime/conversations .../api/handlers` -> "Test Files 322 passed (322)", "Tests 2985 passed (2985)", real-sql "28 passed", "234 passed"; contracts "Tests 489 passed (489)"; `pnpm check` -> exit 0; `pnpm docs:check` current; `pnpm structure:check` passed (452 warnings); apps/web `vitest run` listener, welcome, reset, provisioning smoke -> "Test Files 12 passed (12)", "Tests 52 passed (52)". New tests fail on the old code (refuse-first 3/5, link-restart 5/6, set-password-restart 3/4, sqlite-iam-store, runtime-session-revocation).
 - Outcome: Accepted. Not wired yet (lanes A, C, F): starting the listener in `apps/web/src/lib/fluxiq.ts`, the `fluxiq accounts` package bin, an SMTP sender.
+
+### 2026-10-29 — Stand-in W0 and W1 merged; W2 waits on lane A (t801)
+- Agent: supervisor (Sonnet) with three workers (W1 backend, W1 pages, W2 script); report `hosted-production-plan/reports/t801-stand-in.md`, contract note `reports/t801/w0-contract-note.md`
+- Changed: new `packages/website-stand-in/` (`@fluxiq-web-extension/website-stand-in`, private, no dependencies): `server/serve.mjs` and `start.mjs`, `server/signup/` with tests, the four plain pages, `scripts/up.mjs` and `round-trip.mjs` (W2, not yet run); the root `site:up` script; the lockfile's importer entry.
+- Finding (W0, against Core): Core accepts `continueUrl` only as a same-origin path to `/connect/authorize`, and a bad one fails the whole request (the stand-in sends path and query only); Core has no `FLUXIQ_EMAIL_SENDER=file:<dir>` (the outbox is `<root>/.fluxiq/platform/outbox`, and the mail JSON has no `welcomeUrl`); `FLUXIQ_PROFILE` is read by no code; Core never starts the provisioning listener in a served panel (`startProvisioningListenerFromEnv` has no caller outside tests). The last three went to lane A (t802), which owns that wiring; `workspace: "new"` maps to `workspace-main` under single tenancy (lane C).
+- Validation: lead-run `node --test "server/**/tests/*.test.mjs"` in the package -> "# tests 40 / # pass 40 / # fail 0" (validation table, same-origin refusal, rate limit, human check off and on, `exists` and `created` identical, 503 on refusal, no body in logs); supervisor's smoke of `server/start.mjs` with no Core: the four pages and the config route 200, `/../package.json` 404, a valid sign-up 503 with a log line holding only request id, outcome and time; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` ok.
+- Outcome: Accepted for W0 and W1. W2's round trip (`pnpm site:up -- --round-trip`) is not verified; it runs once lane A starts the listener.
+
+### 2026-10-29 — Core lane B3 merged (t803)
+- One line, per the boundary rule: IAM is enforced on every Core registration and app route, with parity on local and self-hosted (6,608 decisions, 0 mismatches), and inert on `service` until lane C wires it. Full entry, decisions and validation in Core's ledger; nothing changed here.
+- Validation: lead-run, quoted in Core's entry: `pnpm test` platform, `_shared` and program API dirs -> "Tests 760 passed (760)"; downstream `node scripts/structure-audit.mjs` against that Core -> passed.
+- Outcome: Accepted.
+
+### 2026-10-29 — Core lane A merged (t802)
+- One line, per the boundary rule: the gateway and panel are hardened for a public deployment, the provisioning listener starts under `service`, and `FLUXIQ_EMAIL_SENDER` takes `file:<dir>`, which unblocks the stand-in's W2 round trip once the `welcomeUrl` follow-up lands. Full entry in Core's ledger; nothing changed here.
+- Validation: lead-run here against that Core: domain "# pass 2457 / # fail 0"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (36.0m)", the extension pairing through the hardened local gateway.
+- Outcome: Accepted.
+
+### 2026-10-29 — Stand-in W2: the live sign-up round trip passes (t809)
+- Changed: `packages/website-stand-in/scripts/{up.mjs,round-trip.mjs}`: Core under `service` with an https public origin, the welcome submit with no Origin; Core's side (listener start, file mail sender, `welcomeUrl`) came from lanes A and t809.
+- Validation: lead-run `node --test "server/**/tests/*.test.mjs"` in the package -> "# pass 40 / # fail 0"; `node packages/website-stand-in/scripts/up.mjs --round-trip` -> "step 1 PASS site sign-up: status 202", "step 2 PASS welcome mail: … link origin is the app origin, path /welcome", "step 3 PASS set password: status 200", "step 4 PASS listener getAccount: … account status active", "step 5 PASS repeat sign-up: … body identical, account-exists mail arrived", "round trip PASS"; structure audit passed.
+- Outcome: Accepted. W3 (the Lab's `service-local` target, D8) is next on this side.
+
+### 2026-10-30 — The web app's direct contracts import now fails the structure audit (t812)
+- Agent: lead; worker (brief t812); report Core `hosted-production-plan/reports/t812-import-guard.md`. Why: twice on 2026-10-29 (lane A, then t809) a module under `apps/web/src` imported `@fluxiq/contracts` directly; tsc and the web tests passed through the base `paths`, but the Next production build failed TS2307 and every Lab live run failed at setup (debug `run-mvubv0rc-7e3d7b44`).
+- Changed: Core `scripts/structure-audit/config.mjs` forbids `@fluxiq/contracts` imports under `apps/web/src`, type-only and tests included; `rules/imports.mjs` lets a `forbiddenImports` entry take a `from` directory, mirrored here with its test.
+- Validation: lead-run: `node --test scripts/structure-audit/rules/tests/imports.test.mjs` -> "# pass 26 / # fail 0" in both repositories; a probe file importing `@fluxiq/contracts/client-gateway` under `apps/web/src/server` -> "FAIL [imports] … Import through a fluxiq subpath instead", removed; `pnpm structure:check` (Core) and `node scripts/structure-audit.mjs` (here) passed; `node scripts/check/core-mirror.mjs` -> "1 mirror set(s) match … structure-audit (72 files)".
+- Outcome: Accepted.
 
 ## Open Questions
 

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check your email - FluxIQ</title>
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<main>
+<h1>Check your email</h1>
+<p>If the address can sign up, we have sent a message with a link to finish. It may take a minute to arrive.</p>
+<form id="resend-form" hidden>
+<div class="field" id="email-field" hidden>
+<label for="email">Your email address</label>
+<input type="email" id="email" name="email" autocomplete="email">
+</div>
+<button type="submit" id="resend">Resend the email</button>
+</form>
+<p class="status" id="status" role="status"></p>
+<noscript><p class="muted">To get another message, <a href="/signup/">submit the sign-up form again</a>.</p></noscript>
+<p><a href="/signup/">Back to sign-up</a></p>
+</main>
+<script src="/check-email/check-email.js"></script>
+</body>
+</html>

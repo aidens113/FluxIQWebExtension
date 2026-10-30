@@ -77,9 +77,29 @@ export type WebAutomationExtractFieldSpec = {
   lines?: boolean | undefined;
   /** Explicit URL identity read: omit known tracking-only parameters while retaining meaningful/unknown parameters and the fragment. Only `kind: "link"`; ordinary links and raw href attributes stay unchanged. */
   identity?: "tracking-free" | undefined;
+  /** The field reads a mark (`WebAutomationExtractFieldMark`); absent, it reads a value as it always did. */
+  mark?: WebAutomationExtractFieldMark | undefined;
   /** The element the field was picked from, as the one fingerprint normalizer describes it. */
   element?: WebAutomationElementFingerprint | undefined;
 };
+
+/**
+ * What kind of mark a field reads (contract CC2): something a row carries or
+ * not that is not a text cell -- `badge`, an icon the page names and no more
+ * (an `attribute` or `text` field); `flag`, an attribute the item states about
+ * itself (an `attribute` field); `state`, a control's pressed, checked or
+ * selected state, whose selector names the element only while the state is on
+ * (an `attribute` or `text` field). Left behind on any other kind.
+ *
+ * **A mark's column holds a value only where the row carries the mark**: the
+ * mark's own words, or the attribute's name where it has none, and nothing
+ * where the row does not carry it. So `where {field, is: "present"}` keeps
+ * exactly the marked rows, on the page and in Core's processing of the stored
+ * rows alike. Only `flag` changes how the page reads: a flag written `""` or
+ * `"true"` reads as the attribute's name, and one written `"false"` as no
+ * value (`apps/extension/src/content/extraction/item-mark/`).
+ */
+export type WebAutomationExtractFieldMark = "badge" | "flag" | "state";
 
 /** What a `lines` field puts between two of its container's lines. */
 export const WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR = " · ";
@@ -119,7 +139,9 @@ export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
  *   September 2026" as a pattern of three days), tests the date the value
  *   states -- "Monday 21 September 2026 at 04:00", "21 Sep 2026",
  *   "2026-09-21" -- and an item whose value states no date the bound can read
- *   fails it whatever `not` says;
+ *   fails it whatever `not` says; a date bound may also be relative to the
+ *   run's now (`today`, `yesterday`, `now`, `7 days ago`), and `within: "7
+ *   days"` keeps the dates from 7 days before now up to it (t800, K1);
  * - `matches`, `contains`, `startsWith`, `endsWith` and a string `equals` test
  *   the value's text, ignoring its layout and its case;
  * - `not` inverts the whole condition, which is how an exclusion is written.
@@ -154,6 +176,8 @@ export type WebAutomationExtractItemCondition = {
   lessThan?: WebAutomationExtractConditionBound | undefined;
   /** The number in the value must be above this, or, written as a date, the date it states after this one. */
   greaterThan?: WebAutomationExtractConditionBound | undefined;
+  /** `"<n> <unit>"` (minutes, hours, days or weeks): the date the value states lies in the last `n` units up to now (t800). */
+  within?: string | undefined;
   /** The value must be one of these: a number against the number in it, a string against its text. */
   equals?: WebAutomationExtractConditionValue | WebAutomationExtractConditionValue[] | undefined;
   /** The value's text must match one of these regular expressions. A bare source ignores case; `/source/flags` says what the flags say. */
@@ -258,6 +282,8 @@ export const WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scr
 export const WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"] as const satisfies readonly WebAutomationExtractFieldKind[];
 
 export const WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"] as const satisfies readonly WebAutomationExtractFieldHandling[];
+
+export const WEB_AUTOMATION_EXTRACT_FIELD_MARKS = ["badge", "flag", "state"] as const satisfies readonly WebAutomationExtractFieldMark[];
 
 /**
  * How `web.dom.extract` reads the one value it returns (contract C3): the
@@ -418,6 +444,15 @@ export type WebAutomationExtractListRequest = {
    * and its retries (about 48 s each, 4.8 minutes of one round-5 build) are gone.
    */
   discloseText?: boolean | undefined;
+  /**
+   * The instant, in epoch milliseconds, a relative date in a `where` is judged
+   * at ("3 days ago", "1d", `within`, a bound of `yesterday`). Set by the
+   * domain's dispatch from the run's start, never by an author, so the page
+   * read, the build test and the run's end judge one instant
+   * (`output-nodes/extract-list/dispatch.ts`). Absent, or not a non-negative
+   * integer, the page uses its own clock as it always has.
+   */
+  now?: number | undefined;
 };
 
 /** The one value `answer` takes. */

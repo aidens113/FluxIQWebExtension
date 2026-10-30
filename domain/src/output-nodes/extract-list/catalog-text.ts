@@ -254,13 +254,25 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * always refused, so the clause says the read does it and how to stop it, and
  * never asks for the default. Its example is a review list, a kind of site no
  * realistic scenario is. At 697 of 700 there are 3 characters left.
+ *
+ * **A span of dates, `within: "7 days"` (t800, K1), is 18 characters, fitted
+ * on 2026-10-29.** Since t790 a bound may be a date and since t800 one relative
+ * to the run's now, and since t800 `within` keeps the dates in the last n units
+ * up to now; until then this grammar named only number and text tests, and a
+ * request for "the last week" had no word here. The date bound's own form is
+ * in the detect tool's description and in Core's where rules
+ * (`runtime/llm-evidence/tools.ts`), so this clause names only `within`. What
+ * paid for it, none of it a rule: `(text)` after the text tests, which their
+ * names already say, and the Read more example "(e.g. a long review)" became
+ * "(long text)", the same thing in generic words. At 699 of 700 there is 1
+ * character left.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
-  "where is optional: omit it, keep every item, narrow later; but rows a later step acts on (a repeat over) are narrowed here, by where. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
+  "where is optional: omit it, keep every item, narrow later; but rows a later step acts on (a repeat over) are narrowed here, by where. atMost/greaterThan/equals, contains/startsWith/endsWith/matches; within: \"7 days\"; list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
   `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
-  `Opens each kept row's own "Read more" (e.g. a long review) itself; discloseText: false stops it.`
+  `Opens each kept row's own "Read more" (long text) itself; discloseText: false stops it.`
 ].join(" ");
 
 /**

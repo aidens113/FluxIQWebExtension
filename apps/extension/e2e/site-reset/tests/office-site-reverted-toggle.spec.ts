@@ -165,7 +165,7 @@ test("installed gateway project build settles a toggle the site put back itself 
     expect(back?.code).toBe("candidate.undo_already_back");
     expect(clicks["undo.toggle"]?.after).toBe(clicks["undo.toggle"]?.before);
     // A fresh read had already settled the untick restored, so the claim is answered before any admission (Core t751 R2,
-    // `site-reset/undo-claims.ts`, met by no call): nothing is even asked, so no declaration reaches the permission wrapper.
+    // `reset-undo/claims.ts`, met by no call): nothing is even asked, so no declaration reaches the permission wrapper.
     expect(back?.canMeet).toBe("no_call");
     expect(observed.declarations.filter(declaration => declaration.call === "undo.toggle")).toEqual([]);
 
