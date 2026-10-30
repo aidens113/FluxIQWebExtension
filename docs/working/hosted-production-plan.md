@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802, gateway and panel hardening) is merged and C0 (t808) is in flight in Core; the stand-in W0-W1 (t801) is merged here, with W2 waiting on lane A. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
+**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802, gateway and panel hardening), C0 (t808) and the A/B3 follow-ups (t809) are merged in Core; the stand-in W0-W2 is merged here, and its live sign-up round trip passes against a service-profile Core (t809). No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -722,6 +722,11 @@ gaining an enterprise contact page.
 - One line, per the boundary rule: the gateway and panel are hardened for a public deployment, the provisioning listener starts under `service`, and `FLUXIQ_EMAIL_SENDER` takes `file:<dir>`, which unblocks the stand-in's W2 round trip once the `welcomeUrl` follow-up lands. Full entry in Core's ledger; nothing changed here.
 - Validation: lead-run here against that Core: domain "# pass 2457 / # fail 0"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (36.0m)", the extension pairing through the hardened local gateway.
 - Outcome: Accepted.
+
+### 2026-10-29 — Stand-in W2: the live sign-up round trip passes (t809)
+- Changed: `packages/website-stand-in/scripts/{up.mjs,round-trip.mjs}`: Core under `service` with an https public origin, the welcome submit with no Origin; Core's side (listener start, file mail sender, `welcomeUrl`) came from lanes A and t809.
+- Validation: lead-run `node --test "server/**/tests/*.test.mjs"` in the package -> "# pass 40 / # fail 0"; `node packages/website-stand-in/scripts/up.mjs --round-trip` -> "step 1 PASS site sign-up: status 202", "step 2 PASS welcome mail: … link origin is the app origin, path /welcome", "step 3 PASS set password: status 200", "step 4 PASS listener getAccount: … account status active", "step 5 PASS repeat sign-up: … body identical, account-exists mail arrived", "round trip PASS"; structure audit passed.
+- Outcome: Accepted. W3 (the Lab's `service-local` target, D8) is next on this side.
 
 ## Open Questions
 
