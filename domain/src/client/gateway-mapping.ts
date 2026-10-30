@@ -21,6 +21,7 @@ import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
+import { webAutomationResultObstruction } from "../actions/obstruction";
 import { webAutomationTextSightingValue } from "../actions/text-sighting";
 import { webAutomationNextPageAnswerValue } from "../actions/next-page";
 import { webToggleSignatureValue } from "../actions/toggle-signature";
@@ -365,6 +366,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     resolution: carriedResolution(result.resolution),
     checkWait: webAutomationClearedCheckWaitValue(result.checkWait),
     clearedLayers: webAutomationClearedLayersValue(result.clearedLayers),
+    obstruction: webAutomationResultObstruction(result) as JsonObject | undefined,
     textPresence: sighting?.textPresence,
     visibleNear: sighting?.visibleNear,
     nextPage,

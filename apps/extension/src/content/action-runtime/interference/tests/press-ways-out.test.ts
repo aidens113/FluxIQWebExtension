@@ -14,8 +14,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { clearInterference } from "../clear";
 import { clearableLayerOverPage } from "../presence";
-import { pressWaysOut } from "../press-ways-out";
+import { pressWaysOut as pressWaysOutWithIds } from "../press-ways-out";
 import { closesOnPress, h, withPage, type FakeElement } from "./fake-layer";
+
+/** The presses with each layer's id left off, so a row reads the words it is about; the ids have rows of their own below. */
+function pressWaysOut(...args: Parameters<typeof pressWaysOutWithIds>) {
+  return pressWaysOutWithIds(...args).map(({ id: _id, controlRef: _controlRef, ...rest }) => rest);
+}
 
 /** The feed's "You're going too fast" notice, before or after its count reaches zero. */
 function rateLimitNotice(withOk: boolean, withTryAgain: boolean) {
@@ -82,10 +87,10 @@ test("the rate-limit notice offering only Try again is left alone, and is no cle
   assert.equal(withPage(body, () => clearInterference()), 0);
 });
 
-test("a prompt in the way of another target is closed by its own way out, and recorded as a dialog", () => {
+test("a prompt in the way of another target is closed by its own way out, and recorded as another kind of layer", () => {
   const prompt = notificationPrompt();
   const { body, confirm } = page(prompt.scrim);
-  assert.deepEqual(withPage(body, () => pressWaysOut({ element: confirm })), [{ kind: "dialog", control: "Close", controlName: "Close" }]);
+  assert.deepEqual(withPage(body, () => pressWaysOut({ element: confirm })), [{ kind: "other", control: "Close", controlName: "Close" }]);
   assert.equal(prompt.close.pressed, true);
   assert.deepEqual(prompt.turnOn.events, []);
 });
@@ -121,7 +126,7 @@ test("an unresolved target that names nothing in a wall leaves the wall to be cl
   const { body } = page(prompt.scrim);
   const target = { selector: '[role="dialog"][data-lb="dlg-t"] > div:last-child', names: ["Friends", "A paragraph of recorded text far longer than any control's own name could be"] };
   assert.equal(withPage(body, () => clearableLayerOverPage(target)), true);
-  assert.deepEqual(withPage(body, () => pressWaysOut(target)), [{ kind: "dialog", control: "Close", controlName: "Close" }]);
+  assert.deepEqual(withPage(body, () => pressWaysOut(target)), [{ kind: "other", control: "Close", controlName: "Close" }]);
 });
 
 /**
@@ -147,7 +152,7 @@ test("a promotion that opened over a list page is recorded by its own words and 
   const rows = ["Garden Tools Handbook", "Pruning for Beginners", "The Allotment Year"].map((title) => h("div", { role: "listitem" }, [h("a", { href: "#" }, title)]));
   const body = h("body", {}, [h("main", {}, [h("div", { role: "list" }, rows)]), offer.promotion]);
   const cleared = withPage(body, () => pressWaysOut(undefined));
-  assert.deepEqual(cleared, [{ kind: "dialog", control: "Maybe later", name: "Join the reading club for free holds", controlName: "Maybe later, I will browse first" }]);
+  assert.deepEqual(cleared, [{ kind: "other", control: "Maybe later", name: "Join the reading club for free holds", controlName: "Maybe later, I will browse first" }]);
   assert.equal(offer.decline.pressed, true);
   assert.deepEqual(offer.join.events, []);
 });
@@ -163,5 +168,5 @@ test("a text-only dismissal keeps its visible words when it has no accessible na
   const promotion = h("div", { role: "dialog", "aria-modal": "true", "aria-label": "Reading reminders" }, [decline]);
   closesOnPress(decline, promotion);
   const cleared = withPage(h("body", {}, [promotion]), () => pressWaysOut(undefined));
-  assert.deepEqual(cleared, [{ kind: "dialog", control: "No thanks", name: "Reading reminders", controlName: "No thanks, I will browse first" }]);
+  assert.deepEqual(cleared, [{ kind: "other", control: "No thanks", name: "Reading reminders", controlName: "No thanks, I will browse first" }]);
 });

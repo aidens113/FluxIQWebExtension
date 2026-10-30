@@ -316,3 +316,29 @@ export function webPlanElementWords(element: Pick<WebLlmEvidenceElement, "readab
   const name = identity.accessibleName ?? identity.visibleText;
   return name === undefined || name.trim() === "" ? undefined : webLlmReadableWords(element, name);
 }
+
+/**
+ * What two pages' identities for one address agree on, field by field. They
+ * name the same address and not provably the same control, so the identity
+ * keeps only what both said rather than either page's version of it.
+ */
+export function agreedIdentity(left: WebPlanElementIdentity, right: WebPlanElementIdentity): WebPlanElementIdentity {
+  const agreed = <T>(a: T, b: T): T | undefined => (JSON.stringify(a) === JSON.stringify(b) ? a : undefined);
+  return present<WebPlanElementIdentity>({
+    tagName: agreed(left.tagName, right.tagName),
+    role: agreed(left.role, right.role),
+    implicitRole: agreed(left.implicitRole, right.implicitRole),
+    accessibleName: agreed(left.accessibleName, right.accessibleName),
+    label: agreed(left.label, right.label),
+    visibleText: agreed(left.visibleText, right.visibleText),
+    selector: agreed(left.selector, right.selector),
+    inputType: agreed(left.inputType, right.inputType),
+    id: agreed(left.id, right.id),
+    classNames: agreed(left.classNames, right.classNames),
+    name: agreed(left.name, right.name),
+    testId: agreed(left.testId, right.testId),
+    attributes: agreed(left.attributes, right.attributes),
+    drawing: agreed(left.drawing, right.drawing),
+    context: agreed(left.context, right.context)
+  });
+}

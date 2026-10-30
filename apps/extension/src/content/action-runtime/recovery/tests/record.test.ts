@@ -97,5 +97,5 @@ test("what the defence pressed is recorded on the result as closed words, and no
 
   // A word outside the closed set never travels, whatever put it there.
   const smuggled = recordRecovery(result(), dismissed, [{ kind: "dialog", control: "Try again" } as unknown as WebAutomationClearedLayer, { kind: "dialog", control: "Close" }]);
-  assert.deepEqual(smuggled.clearedLayers, [{ kind: "dialog", control: "Close" }]);
+  assert.deepEqual(smuggled.clearedLayers, [{ kind: "other", control: "Close" }]);
 });
