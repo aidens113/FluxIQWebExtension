@@ -84,6 +84,18 @@
 // handle as `nextPage: {list}`, and a repeat on the read through it. The
 // binding keeps the detected pagination, because Next page reads the way to
 // the next page from it (`plan-resolution/next-page-slot.ts`).
+//
+// **A column says what kind of value it holds, and a list what its rows carry
+// (t800, contracts CC1-CC3).** Each field with a sample, or a read that says
+// it, carries `type` and its sample `parsed` as that type (`./column-type.ts`).
+// A list whose page proposed marks -- a badge, a flag, a pressed, checked or
+// selected state -- names them in `fieldMarks` by their field keys, with one
+// closed sentence, `markNote`; a mark's field holds a value only on the rows
+// that carry it, so `is: "present"` on it keeps exactly those rows. Where the
+// detection's capture can answer, `rowIdentity` names the field that says
+// which item a row is and `items` gives each item, in list order, its
+// `itemKey` and its marks, with `itemsNote` (`./list-items/`). A detection with
+// none of these gives none of them, and the packet is what it was.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -96,10 +108,12 @@ import { present } from "../present";
 import { screenedPageText } from "../withheld";
 import type { WebLlmEvidenceElement } from "../elements";
 import { webLlmViewTraits } from "../page-view";
+import { webLlmColumnType, type WebLlmColumnType } from "./column-type";
 import { webLlmShownColumn } from "./field-sample";
-import { webLlmFirstItemElements, webLlmFirstItemHandles, webLlmFirstItemLines, type WebLlmFirstItemPages } from "./first-item";
+import { webLlmCaptureWalk, webLlmFirstItemElements, webLlmFirstItemHandles, webLlmFirstItemLines, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
 import { webLlmItemRow } from "./item-row";
+import { webLlmListItems, type WebLlmStructureItem, type WebLlmStructureMark } from "./list-items";
 
 export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
 
@@ -119,6 +133,12 @@ const RECORD_NOTE = "record is the one item you aimed at, read as a one-row tabl
 
 /** What the packet says of `at`, once, when a field carries one: domain text. */
 const AT_NOTE = "a field's at is the handle of that column's element in the first item that has it, never of the whole column; its line in the page view shows what the column holds. at is that item's own element, so acting on it acts on that item only -- for a control, the item its atItem names by place and words; to act on the rows a listing keeps, use the control inside one of the rows it keeps";
+
+/** What the packet says of `fieldMarks`, once, when the list has any: domain text. */
+const MARK_NOTE = "fieldMarks are the fields that mark a row by being there or not -- a badge, a flag, a pressed, checked or selected state -- each named by its field key as id; a mark's field holds a value only on the rows that carry it, so where {field: id, is: \"present\"} keeps the rows that carry it and is: \"absent\" the rows that do not";
+
+/** What the packet says of `items`, once, when the list has them: domain text. */
+const ITEMS_NOTE = "items are the list's items in page order, the first being item 1: itemKey is the item's identity read from the rowIdentity fields, the same each time the page is read, and marks says of each mark id whether the item carries it (on) or not (off)";
 
 /**
  * What the packet says of a list that continues: domain text around the
@@ -168,6 +188,10 @@ export type WebLlmStructureField = {
    * one, or an element that cannot be told.
    */
   sample?: string;
+  /** What kind of value the column holds (CC1, `./column-type.ts`); absent where it cannot be said. */
+  type?: WebLlmColumnType;
+  /** The sample read as `type`: a number, or a day or instant that does not depend on when it is read. */
+  parsed?: number | string;
 };
 
 /** The run's own section linking to more of it, outside its items and its pagination. */
@@ -219,6 +243,16 @@ export type WebLlmRepeatingStructure = {
   continues?: WebLlmStructureContinues;
   /** What a field's `at` is. A constant of this module, present when any field, the record's included, has one. */
   atNote?: string;
+  /** The fields that mark a row by being there or not (CC2), by field key; absent when the page proposed none. */
+  fieldMarks?: WebLlmStructureMark[];
+  /** What `fieldMarks` are and how a read keeps the rows that carry one. A constant of this module. */
+  markNote?: string;
+  /** The field whose value says which item a row is (CC3); absent where the capture proves none. */
+  rowIdentity?: string[];
+  /** Each item in list order, with its key and its marks (CC2, CC3); absent where the capture answers neither. */
+  items?: WebLlmStructureItem[];
+  /** What `items` are. A constant of this module, present with them. */
+  itemsNote?: string;
 };
 
 /** A detection split into what the model sees and what each handle keeps. */
@@ -247,7 +281,7 @@ export type WebLlmStructurePacketInput = {
   firstItem: WebLlmFirstItemPages | undefined;
 };
 
-type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; shown: WebLlmStructureField };
+type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; coverage: number; shown: WebLlmStructureField };
 
 /**
  * The packet and the bindings, or `undefined` when no field of the run is left
@@ -267,6 +301,11 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
 
   const paginate = boundPagination(proposal.pagination, infiniteScroll);
   const pagination = paginationMode(proposal.pagination, infiniteScroll);
+  const rows = webLlmListItems(
+    proposal.itemCount,
+    readable.map((field) => ({ key: field.key, label: field.shown.label, spec: field.spec, coverage: field.coverage })),
+    input.firstItem === undefined ? undefined : webLlmCaptureWalk(proposal, input.firstItem.detected)
+  );
   const packet = present<WebLlmRepeatingStructure>({
     schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -286,7 +325,12 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       note: RECORD_NOTE
     },
     continues: continuesOf(input.detection.continues),
-    atNote: [...readable, ...(recordBinding === undefined ? [] : recordReadable)].some((field) => field.shown.at !== undefined) ? AT_NOTE : undefined
+    atNote: [...readable, ...(recordBinding === undefined ? [] : recordReadable)].some((field) => field.shown.at !== undefined) ? AT_NOTE : undefined,
+    fieldMarks: rows.fieldMarks,
+    markNote: rows.fieldMarks === undefined ? undefined : MARK_NOTE,
+    rowIdentity: rows.rowIdentity,
+    items: rows.items,
+    itemsNote: rows.items === undefined ? undefined : ITEMS_NOTE
   });
   // A primary proposal of one item with no way to continue is a record by
   // construction: a list needs a run of three or a record pair, so only the
@@ -318,7 +362,8 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
     .map((field) => {
       const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec, lines.get(field.key), firstItem?.detected.evidence.elements);
       const handle = at.get(field.key);
-      return { key: field.key, spec: field.spec, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample) };
+      const typed = webLlmColumnType(field.label, field.spec, column.sample);
+      return { key: field.key, spec: field.spec, coverage: field.coverage, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample, typed) };
     });
 }
 
@@ -364,14 +409,25 @@ function boundList(
       dedupe: undefined,
       sort: undefined,
       // Whether the read opens each kept row's own collapsed text is the plan's to say too (t752).
-      discloseText: undefined
+      discloseText: undefined,
+      // The run's moment relative dates are read against is the dispatch's to fill (t800, K1), never a detection's.
+      now: undefined
     }),
     itemCount: proposal.itemCount,
     oneRecord: oneRecord ? true : undefined
   });
 }
 
-function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number, at: string | undefined, atItem: string | undefined, sample: string | undefined): WebLlmStructureField {
+function shownField(
+  key: string,
+  label: string,
+  kind: WebAutomationExtractFieldKind,
+  coverage: number,
+  at: string | undefined,
+  atItem: string | undefined,
+  sample: string | undefined,
+  typed: { type?: WebLlmColumnType; parsed?: number | string }
+): WebLlmStructureField {
   return present<WebLlmStructureField>({
     key,
     // A label is page structure, but it is still page text: one line,
@@ -381,7 +437,9 @@ function shownField(key: string, label: string, kind: WebAutomationExtractFieldK
     coverage: Math.round(coverage * 100) / 100,
     at,
     atItem,
-    sample
+    sample,
+    type: typed.type,
+    parsed: typed.parsed
   });
 }
 
@@ -396,6 +454,7 @@ function readableSpec(spec: WebAutomationExtractFieldSpec): WebAutomationExtract
     handling: undefined,
     lines: spec.lines,
     identity: spec.identity,
+    mark: spec.mark,
     element: undefined
   });
 }

@@ -70,12 +70,15 @@ import { webAutomationExtractListDedupeValue, webAutomationExtractListSortValue 
 import {
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
+  WEB_AUTOMATION_EXTRACT_FIELD_MARKS,
   WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_EXTRACT_PAGINATION_MODES,
   WEB_AUTOMATION_EXTRACT_READ_MODES,
   type WebAutomationExtractField,
+  type WebAutomationExtractFieldKind,
+  type WebAutomationExtractFieldMark,
   type WebAutomationExtractFieldSpec,
   type WebAutomationExtractItemCondition,
   type WebAutomationExtractListPagination,
@@ -198,6 +201,10 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
   // which can only add the rows it rejected -- wider, never narrower.
   const answer = request.answer === WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT ? WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT : undefined;
   if (request.answer !== undefined && answer === undefined) dropped.push("answer");
+  // The instant relative dates are judged at (`./request.ts`). The domain sets
+  // it, not an author, so a value that is no instant is left out unnamed and
+  // the page uses its own clock, as it did before the field existed.
+  const now = nonNegativeInteger(request.now);
   // Whether the page presses each kept row's own text disclosure (`./request.ts`).
   // The boolean written is carried, `false` being the one that changes the read
   // (pressing is the default since t752 C2); a value that is no boolean is
@@ -216,6 +223,7 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
       ...(dedupe?.dedupe !== undefined ? { dedupe: dedupe.dedupe } : {}),
       ...(sort !== undefined && sort.sort.length > 0 ? { sort: sort.sort } : {}),
       ...(answer !== undefined ? { answer } : {}),
+      ...(now !== undefined ? { now } : {}),
       ...(typeof discloseText === "boolean" ? { discloseText } : {})
     },
     dropped,
@@ -369,7 +377,9 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   // field that says `false` is the plain field it always was.
   const lines = kind === "text" ? optionalValue(spec.lines, booleanValue) : undefined;
   const identity = optionalValue(spec.identity, (entry) => entry === "tracking-free" ? entry : undefined);
-  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED || identity === REFUSED) return undefined;
+  // A mark is kept on a kind that reads it and left behind on any other, like a stray `header`.
+  const mark = optionalValue(spec.mark, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_MARKS));
+  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED || identity === REFUSED || mark === REFUSED) return undefined;
   if (identity !== undefined && kind !== "link") return undefined;
   const field: WebAutomationExtractFieldSpec = {
     kind,
@@ -380,9 +390,15 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
     ...(handling !== undefined ? { handling } : {}),
     ...(lines === true ? { lines } : {}),
     ...(identity !== undefined ? { identity } : {}),
+    ...(mark !== undefined && markReadBy(kind, mark) ? { mark } : {}),
     ...(element !== undefined ? { element } : {})
   };
   return field;
+}
+
+/** Whether a field of this kind reads the mark (`WebAutomationExtractFieldMark`): a flag only by an attribute, a badge or a state by an attribute or its text. */
+function markReadBy(kind: WebAutomationExtractFieldKind, mark: WebAutomationExtractFieldMark): boolean {
+  return kind === "attribute" || (kind === "text" && mark !== "flag");
 }
 
 /**

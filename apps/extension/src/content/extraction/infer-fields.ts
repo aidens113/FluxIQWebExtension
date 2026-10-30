@@ -129,7 +129,9 @@ import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensi
 import { badgeNaming, constantBadgeName } from "./badge-name";
 import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
+import { itemAttributeSources } from "./item-attributes";
 import { offersOwnLink } from "./item-link";
+import { stateMarkSources } from "./item-mark";
 import { pruneEquivalentFieldPaths } from "./path-equivalence";
 import { keptSources } from "./field-budget";
 import { itemShape } from "./item-shape";
@@ -177,6 +179,8 @@ export type FieldSource = {
   lineOf?: string | undefined;
   /** Whether the source reads, by its words, a control a person presses -- a button -- which only some rows may carry (see the header). */
   pressable?: true | undefined;
+  /** The mark the source reads (CC2): a flag or a state as offered (`item-mark/`); a badge once its name is the same in every item. */
+  mark?: WebAutomationExtractionProposalFieldSpec["mark"];
 };
 
 /** The form controls whose live value a record can read. */
@@ -195,25 +199,6 @@ const MAX_SHAPE_SAMPLES = 24;
  * counts toward each source's coverage.
  */
 const MAX_SCANNED_ITEMS = 12;
-
-/** How many of an item's own attributes become fields, so a container dense with data attributes cannot crowd out its values. */
-const MAX_ITEM_ATTRIBUTES = 8;
-
-/** A `data-*` attribute a field can name as written. `data-` alone names nothing, and a name a selector could not hold is not named. */
-const ITEM_ATTRIBUTE = /^data-[A-Za-z][\w-]*$/u;
-
-/**
- * The attributes that name an element rather than say anything about it.
- *
- * A test id is how this module already names elements -- it is the label and
- * the selector (`testIdName`) -- so reading it again as a column would add a
- * column of the item's own name to every record. It also has a worse effect
- * than clutter: a run of nothing but a password is refused `sensitive_region`
- * because it has no readable field (D12), and a test id proposed as a column
- * would give it one, so the row would be proposed with the secret's column
- * excluded and its id read instead.
- */
-const IDENTITY_ATTRIBUTES: ReadonlySet<string> = new Set(["data-testid", "data-test", "data-cy"]);
 
 /** A tag a path step can name without escaping, so a proposal never depends on `CSS.escape` being reachable. */
 const PLAIN_TAG = /^[a-z][a-z0-9-]*$/u;
@@ -236,7 +221,10 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
   // sources survive the bound, not the order the page offers them in: an item's
   // first descendants are its chrome and its value is further down. The kept
   // ones return to document order (`field-budget/`).
-  const sources = separateKinds(fieldSources(item, run), run, (owner, element) => pathWithinItem(owner, element)?.label);
+  // A state column's selector names its element only while the state is on, so
+  // the split by kind, which rewrites and widens selectors, never sees it (`item-mark/`).
+  const found = fieldSources(item, run);
+  const sources = [...separateKinds(found.filter((source) => source.mark !== "state"), run, (owner, element) => pathWithinItem(owner, element)?.label), ...found.filter((source) => source.mark === "state")];
   const measured = sources.map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
   const kept = keptSources(measured);
   const taken = new Set<string>();
@@ -244,7 +232,9 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
     const label = describedLabel(source, run);
     const key = webAutomationExtractionFieldKey(label, taken);
     taken.add(key);
-    return { key, label, spec: proposedFieldSpec(source, coverage), coverage };
+    // A badge is a mark only under a name every item gives it; one named per item is that item's data (`badge-name.ts`).
+    const mark = source.accessibleName === true ? (label === source.label ? undefined : "badge" as const) : source.mark;
+    return { key, label, spec: proposedFieldSpec({ ...source, mark }, coverage), coverage };
   });
 }
 
@@ -280,6 +270,7 @@ export function proposedFieldSpec(source: FieldSource, coverage: number): WebAut
     ...(source.attribute === undefined ? {} : { attribute: source.attribute }),
     ...(source.header === undefined ? {} : { header: source.header }),
     ...(source.lines === true ? { lines: true } : {}),
+    ...(source.mark === undefined || source.sensitive ? {} : { mark: source.mark }),
     required: coverage >= 1,
     ...(source.sensitive ? { handling: "exclude" as const } : {})
   };
@@ -320,7 +311,8 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
       walkedShapes.add(shape);
     }
     let position = 0;
-    for (const source of [...itemAttributeSources(candidate), ...elementSources(candidate, peers)]) {
+    const offered: FieldSource[] = [...ownLinkSources(candidate), ...itemAttributeSources(candidate, run), ...elementSources(candidate, peers)];
+    for (const source of offered) {
       position += 1;
       const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true ? "lines" : ""].join("\u0000");
       const seen = collected.get(identity);
@@ -351,23 +343,12 @@ function mostGiven(labels: ReadonlyMap<string, number>): string {
 }
 
 /**
- * The item's own `data-*` attributes, read off the item itself.
- *
- * This is the one part of a card's markup that says what the card *is* rather
- * than what it shows, and it is the mark a real results page puts on an
- * advertisement: `data-ad-id` on the everything store's sponsored cards,
- * `data-adid` on the auction marketplace's. It is also the one label a model
- * can read on a page whose class names are hashed -- the attribute's own name,
- * which the page's author wrote, and never a value read inside the item (D3).
- * An item that is itself a link also offers its own address (`item-link/`).
+ * An item that is itself a link offers its own address (`item-link/`), before
+ * its own `data-*` attributes (`item-attributes/`, which says why they are
+ * columns and when one is a flag mark).
  */
-function itemAttributeSources(item: Element): FieldSource[] {
-  const sensitive = isWithinSensitiveControl(item);
-  const ownLink = offersOwnLink(item) ? [{ kind: "link" as const, label: `item ${LINK_LABEL_SUFFIX}`, sensitive }] : [];
-  return [...ownLink, ...Array.from(item.attributes)
-    .filter((attribute) => ITEM_ATTRIBUTE.test(attribute.name) && !IDENTITY_ATTRIBUTES.has(attribute.name))
-    .slice(0, MAX_ITEM_ATTRIBUTES)
-    .map((attribute) => ({ kind: "attribute" as const, label: attribute.name, attribute: attribute.name, sensitive }))];
+function ownLinkSources(item: Element): FieldSource[] {
+  return offersOwnLink(item) ? [{ kind: "link" as const, label: `item ${LINK_LABEL_SUFFIX}`, sensitive: isWithinSensitiveControl(item) }] : [];
 }
 
 /**
@@ -453,6 +434,8 @@ function elementSources(item: Element, peers: readonly Element[]): FieldSource[]
     if (sources.length > offered && tag !== "img" && !VALUE_TAGS.has(tag)) {
       for (const attribute of statedAttributes(element, selector, peers)) sources.push({ kind: "attribute", label: `${label} ${attribute}`, selector, attribute, sensitive });
     }
+    // A control's pressed, checked or selected state, read only while it is on (`item-mark/`).
+    if (!VALUE_TAGS.has(tag)) sources.push(...stateMarkSources(element, named, sensitive));
   }
   return sources;
 }

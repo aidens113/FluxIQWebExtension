@@ -12,7 +12,9 @@
 // control column's `atItem`, and a press's `actedOn` in `../node-run/` (t504).
 // `container-words.ts` composes the words of a column's element that has none of
 // its own from its descendants, for that column's sample (`field-sample.ts`);
-// nothing outside this directory reads it.
+// nothing outside this directory reads it. `column-type.ts` says what kind of
+// value a column holds (CC1), and `list-items/` what a list's rows carry: its
+// marks, its row identity and each item's key and marks (CC2, CC3).
 
 export { detectRepeatingStructure, type WebLlmStructureDetectionContext } from "./detect";
 export {
@@ -25,6 +27,8 @@ export {
   type WebLlmExtractionHandleScope
 } from "./handles";
 export { webLlmItemRow } from "./item-row";
+export type { WebLlmColumnType } from "./column-type";
+export type { WebLlmStructureItem, WebLlmStructureMark } from "./list-items";
 export {
   WEB_LLM_STRUCTURE_PAGINATION_MODES,
   WEB_LLM_STRUCTURE_SCHEMA_VERSION,

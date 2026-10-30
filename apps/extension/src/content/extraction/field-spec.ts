@@ -57,11 +57,16 @@ type ExtractFieldSpec = Exclude<ExtractField, string>;
 
 /** What one included field reads inside each item, and whether a record may lack it. */
 export type ExtractFieldReader =
-  | { kind: "text"; selector?: string; required: boolean; lines?: true }
+  | { kind: "text"; selector?: string; required: boolean; lines?: true; mark?: "badge" | "state" }
   | { kind: "link"; selector?: string; required: boolean; identity?: "tracking-free" }
   | { kind: "value"; selector?: string; required: boolean }
-  | { kind: "attribute"; selector?: string; attribute: string; required: boolean }
+  | { kind: "attribute"; selector?: string; attribute: string; required: boolean; mark?: FieldMark }
   | { kind: "column"; header: string; required: boolean };
+
+/** A mark a field reads (`WebAutomationExtractFieldMark`): only a `flag` is read differently (`./item-mark/`). */
+type FieldMark = NonNullable<ExtractFieldSpec["mark"]>;
+
+const FIELD_MARKS: ReadonlySet<unknown> = new Set<FieldMark>(["badge", "flag", "state"]);
 
 const COLUMN_PREFIX = "column:";
 const ATTRIBUTE_NAME = /^[A-Za-z_][-A-Za-z0-9_:.]*$/u;
@@ -113,9 +118,13 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
   const selector = typeof spec.selector === "string" ? spec.selector.trim() : "";
   const where = selector ? { selector } : {};
   const kind: unknown = spec.kind;
+  // A mark the page does not know is refused, as an unknown link identity is;
+  // one its kind does not read is left behind, as the domain's reader leaves it.
+  if (spec.mark !== undefined && !FIELD_MARKS.has(spec.mark)) throw new Error(`The extract_list field ${JSON.stringify(name)} reads a mark the page does not know.`);
+  const mark = spec.mark;
   switch (kind) {
     case "text":
-      return { kind, ...where, required, ...(spec.lines === true ? { lines: true as const } : {}) };
+      return { kind, ...where, required, ...(spec.lines === true ? { lines: true as const } : {}), ...(mark === "badge" || mark === "state" ? { mark } : {}) };
     case "link":
       if (spec.identity !== undefined && spec.identity !== "tracking-free") throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a link identity the page does not know.`);
       return { kind, ...where, required, ...(spec.identity === "tracking-free" ? { identity: spec.identity } : {}) };
@@ -124,7 +133,7 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
     case "attribute": {
       const attribute = typeof spec.attribute === "string" ? spec.attribute.trim() : "";
       if (!attribute) throw new Error(`The extract_list field ${JSON.stringify(name)} reads an attribute but names none.`);
-      return { kind, ...where, attribute, required };
+      return { kind, ...where, attribute, required, ...(mark === undefined ? {} : { mark }) };
     }
     case "column": {
       const header = normalizeText(typeof spec.header === "string" ? spec.header : "");

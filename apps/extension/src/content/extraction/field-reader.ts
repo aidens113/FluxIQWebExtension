@@ -29,6 +29,8 @@
 //   host of an open shadow root, the text is instead what the page draws there
 //   (`drawnText`, below), because `textContent` never enters a shadow root;
 // - `attribute`: that attribute, unreadable when the element does not carry it;
+//   a `flag` mark's attribute reads as its own name where it is written `""` or
+//   `"true"` and is unreadable where it is written `"false"` (`item-mark/`);
 // - `link`: the `href` resolved against the element's base URL, unreadable when
 //   there is none or it resolves to anything but http or https, so a
 //   `javascript:` or `mailto:` target is never returned as a link;
@@ -54,6 +56,7 @@ import { WEB_AUTOMATION_EXTRACT_LINE_SEPARATOR, WEB_AUTOMATION_FAILURE_CODES, we
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { ExtractFieldReader } from "./field-spec";
+import { flagValue } from "./item-mark";
 import { recordControlType } from "./record-control";
 import { tightestStatedValue } from "./value-statement";
 import { trackingFreeLinkIdentity } from "./link-identity";
@@ -76,7 +79,7 @@ function readElement(item: Element, name: string, reader: ElementFieldReader, co
       if (completeness === "complete") assertTextDisclosed(element, name);
       return reader.lines === true ? readLines(element) : readText(element);
     case "attribute":
-      return element.getAttribute(reader.attribute) ?? undefined;
+      return reader.mark === "flag" ? flagValue(element, reader.attribute) : element.getAttribute(reader.attribute) ?? undefined;
     case "link":
       return linkTarget(element, reader.identity);
     case "value":

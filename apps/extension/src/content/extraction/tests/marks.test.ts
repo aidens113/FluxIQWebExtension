@@ -1,3 +1,15 @@
+// Marks (contract CC2): what a row carries or not that is not a text cell --
+// an icon badge, an item's flag, a control's pressed, checked or selected
+// state -- each a column the model can name, holding a value only on the rows
+// that carry it, so the page's item filter and Core's processing of the
+// stored rows keep the same rows for `where {field, is: "present"}`.
+//
+// The domain half -- the packet's `fieldMarks`, each item's marks and the
+// handle keeping `mark` -- is
+// `domain/src/runtime/llm-evidence/structure/tests/packet-type-marks.test.ts`.
+// The badge tests below were `badge-column.test.ts` until t800, which folded
+// them in here: a badge is a mark.
+//
 // An icon badge is a column the model can name and filter on.
 //
 // The everything store marks a Plus-eligible listing with an empty
@@ -14,11 +26,13 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { webAutomationExtractListRequestValue, type WebAutomationExtractField } from "@fluxiq-web-extension/domain/client";
+import { webAutomationExtractConditionHolds, webAutomationExtractListRequestValue, type WebAutomationExtractField } from "@fluxiq-web-extension/domain/client";
 import { readField } from "../field-reader";
 import { normalizeExtractField } from "../field-spec";
 import { inferFields } from "../infer-fields";
 import { itemFilterFor } from "../item-filter";
+import { flagValue } from "../item-mark";
+import { fakeShadowDom } from "./fake-shadow-dom";
 
 // `isSensitiveFormControl` narrows by `instanceof` on the way into every text
 // read, which is a ReferenceError under Node; no stub is one of these.
@@ -156,7 +170,8 @@ test("an icon badge 3 of 5 cards carry is a column labelled by its constant acce
   assert.ok(plus, `a column is labelled ${PLUS}: ${JSON.stringify(fields.map((field) => field.label))}`);
   assert.equal(plus.key, "brightaisle_plus");
   assert.equal(plus.coverage, 0.6);
-  assert.deepEqual(plus.spec, { kind: "attribute", selector: ":scope > div.body > div.dlv > i.plus", attribute: "aria-label", required: false });
+  // A badge under a name every item gives it is a mark (CC2, `item-mark/`): it reads the same, and the packet names it.
+  assert.deepEqual(plus.spec, { kind: "attribute", selector: ":scope > div.body > div.dlv > i.plus", attribute: "aria-label", mark: "badge", required: false });
 });
 
 test("an accessible name that differs between items is never a label, and neither is one only a single item gives", () => {
@@ -165,6 +180,7 @@ test("an accessible name that differs between items is never a label, and neithe
   const rating = inferFields(ratings[0] as Element, ratings).find((field) => field.spec.attribute === "aria-label");
   assert.ok(rating, "the icon is still offered as a column");
   assert.equal(rating.label, "div.body > div.dlv > i.stars aria-label");
+  assert.equal(rating.spec.mark, undefined, "a name per item is that item's data, never a mark");
   assert.equal(/out of 5/u.test(JSON.stringify(inferFields(ratings[0] as Element, ratings).map((field) => field.label))), false);
 
   // One item naming it differently among others that agree is not "the same in every item".
@@ -181,7 +197,7 @@ test("an svg badge is named by its own title, and an icon hidden from assistive 
   const run = [card(1, verified()), card(2, undefined), card(3, verified()), card(4, verified())];
   const field = inferFields(run[0] as Element, run).find((candidate) => candidate.label === "Verified seller");
   assert.ok(field, "the svg's title names the column");
-  assert.deepEqual(field.spec, { kind: "text", selector: ":scope > div.body > div.dlv > svg.vf > title", required: false });
+  assert.deepEqual(field.spec, { kind: "text", selector: ":scope > div.body > div.dlv > svg.vf > title", mark: "badge", required: false });
 
   const hidden = [1, 2, 3].map((index) => card(index, el("i", { class: "plus", "aria-hidden": "true", "aria-label": PLUS })));
   assert.equal(inferFields(hidden[0] as Element, hidden).some((candidate) => candidate.spec.selector?.includes("i.plus") === true), false);
@@ -211,4 +227,91 @@ test("where {field: <badge key>, is: \"present\"} keeps exactly the badged items
     return filter(item, record).length === 0;
   });
   assert.deepEqual(kept.map((item) => readField(item, "title", { kind: "text", selector: title.spec.selector as string, required: true })), ["Earbuds 1", "Earbuds 3", "Earbuds 4"]);
+});
+
+// The badge's tests above use their own stub page; the flag's and the state's
+// below use `fake-shadow-dom.ts`, which reads every selector inference writes.
+
+const dom = fakeShadowDom();
+
+type Post = { title: string; verified: boolean; promoted?: string; pressed: boolean };
+
+/** A feed post: its title link, a like toggle, and maybe a named badge; the post itself may state a flag. */
+function post({ title, verified, promoted, pressed }: Post): Element {
+  return dom.el("article", { class: "post", ...(promoted === undefined ? {} : { "data-promoted": promoted }) },
+    dom.el("a", { class: "title", href: `/posts/${title.toLowerCase().replace(/\s+/gu, "-")}/` }, title),
+    ...(verified ? [dom.el("i", { class: "badge", role: "img", "aria-label": "Verified" })] : []),
+    dom.el("button", { class: "like", "aria-pressed": pressed ? "true" : "false" }, "Like"));
+}
+
+function feed(): Element[] {
+  return [
+    post({ title: "Garden notes", verified: true, pressed: true }),
+    post({ title: "Rain gauge", verified: false, promoted: "", pressed: false }),
+    post({ title: "Seed swap", verified: true, pressed: false })
+  ];
+}
+
+/** Each item's record as the page reads it: every field, `null` where an optional one has no value. */
+function records(run: readonly Element[], fields: Record<string, WebAutomationExtractField>): Array<Record<string, string | null>> {
+  return run.map((item) => Object.fromEntries(Object.entries(fields).map(([key, field]) => {
+    const reader = normalizeExtractField(key, field);
+    return [key, reader === undefined ? null : readField(item, key, reader) ?? null];
+  })));
+}
+
+test("detection proposes the badge, the flag and the pressed state as marks, each optional and measured on the run", () => {
+  const run = feed();
+  const fields = inferFields(run[0]!, run);
+  const badge = fields.find((field) => field.label === "Verified");
+  assert.deepEqual(badge && [badge.spec, badge.coverage], [{ kind: "attribute", selector: ":scope i.badge", attribute: "aria-label", mark: "badge", required: false }, 0.67]);
+  const flag = fields.find((field) => field.label === "data-promoted");
+  assert.deepEqual(flag && [flag.spec, flag.coverage], [{ kind: "attribute", attribute: "data-promoted", mark: "flag", required: false }, 0.33]);
+  const pressed = fields.find((field) => field.spec.mark === "state");
+  assert.deepEqual(pressed && [pressed.label, pressed.spec, pressed.coverage], ["button.like (pressed)", { kind: "text", selector: ':scope button.like[aria-pressed="true"]', mark: "state", required: false }, 0.33]);
+  // The toggle's own words are still a column every post fills, apart from its state.
+  assert.equal(fields.some((field) => field.spec.kind === "text" && field.spec.selector === ":scope button.like" && field.spec.mark === undefined), true);
+});
+
+test("a flag reads its name where it is written empty or true, its own words where it has some, and nothing where it says false", () => {
+  const read = (written: string | undefined) => flagValue(dom.el("li", written === undefined ? {} : { "data-new": written }), "data-new");
+  assert.deepEqual([read(""), read("true"), read("TRUE "), read("false"), read(undefined), read("81")], ["data-new", "data-new", "data-new", undefined, undefined, "81"]);
+  // Through the field reader, an optional flag the item does not state is `null`, as every field's is.
+  const reader = normalizeExtractField("flag", { kind: "attribute", attribute: "data-new", mark: "flag" });
+  assert.equal(readField(dom.el("li", { "data-new": "false" }), "flag", reader!), null);
+  // Without the mark the same attribute reads as it always did.
+  assert.equal(readField(dom.el("li", { "data-new": "" }), "plain", normalizeExtractField("plain", { kind: "attribute", attribute: "data-new" })!), "");
+});
+
+test("is: present on a mark keeps exactly the rows that carry it, on the page and under Core's judge of the stored rows alike", () => {
+  const run = feed();
+  const fields = Object.fromEntries(inferFields(run[0]!, run).map((field) => [field.key, field.spec as WebAutomationExtractField]));
+  const marks = Object.entries(fields).filter(([, field]) => typeof field !== "string" && field.mark !== undefined).map(([key]) => key);
+  assert.equal(marks.length, 3, `three marks: ${marks.join(", ")}`);
+  const stored = records(run, fields);
+  const expected: Record<string, boolean[]> = { verified: [true, false, true], "data-promoted": [false, true, false] };
+  for (const key of marks) {
+    const request = webAutomationExtractListRequestValue({ item: "article.post", fields, where: [{ field: key, is: "present" }] });
+    assert.ok(request, `the domain reads the request on ${key}`);
+    const filter = itemFilterFor(request);
+    const onPage = run.map((item, index) => filter!(item, stored[index]!).length === 0);
+    const inCore = stored.map((row) => webAutomationExtractConditionHolds(request.where![0]!, row[key] ?? undefined));
+    assert.deepEqual(onPage, inCore, `the page and Core agree on ${key}`);
+    assert.deepEqual(onPage, expected[key] ?? [true, false, false], `${key} keeps the rows that carry it`);
+  }
+});
+
+test("a mark the page does not know refuses the field, and a mark on a kind that does not read it is left behind", () => {
+  assert.throws(() => normalizeExtractField("odd", { kind: "attribute", attribute: "data-x", mark: "maybe" as "flag" }), /mark the page does not know/u);
+  assert.deepEqual(normalizeExtractField("link", { kind: "link", selector: "a", mark: "state" }), { kind: "link", selector: "a", required: false });
+  assert.deepEqual(normalizeExtractField("text", { kind: "text", selector: "b", mark: "flag" }), { kind: "text", selector: "b", required: false });
+});
+
+test("an item attribute every item writes with a value of its own is data, not a flag; one written only true or false is a flag", () => {
+  const ids = [1, 2, 3].map((index) => dom.el("li", { "data-item-id": `i${index}` }, dom.el("span", {}, `Item ${index}`)));
+  assert.equal(inferFields(ids[0]!, ids).find((field) => field.label === "data-item-id")?.spec.mark, undefined);
+  const yesNo = ["true", "false", "true"].map((written, index) => dom.el("li", { "data-open": written }, dom.el("span", {}, `Item ${index}`)));
+  const open = inferFields(yesNo[0]!, yesNo).find((field) => field.label === "data-open");
+  assert.equal(open?.spec.mark, "flag");
+  assert.deepEqual(records(yesNo, { open: open!.spec as WebAutomationExtractField }).map((row) => row.open), ["data-open", null, "data-open"]);
 });

@@ -158,7 +158,9 @@ test("with no page shown, no column is pointed at, and the packet reads as it di
   assert.deepEqual(atOf(unseen), {});
   assert.equal(unseen.atNote, undefined);
   // A column's sample is read from the detection's own capture, so it needs no page shown; only `at` does.
-  assert.deepEqual(unseen.fields.map((shownField) => Object.keys(shownField).filter((key) => key !== "sample")), unseen.fields.map(() => ["key", "label", "kind", "coverage"]));
+  // So are its `type` and `parsed` (t800, `../column-type.ts`).
+  const fromSample = new Set(["sample", "type", "parsed"]);
+  assert.deepEqual(unseen.fields.map((shownField) => Object.keys(shownField).filter((key) => !fromSample.has(key))), unseen.fields.map(() => ["key", "label", "kind", "coverage"]));
 });
 
 test("a detection on another page than the one shown points at nothing", async () => {

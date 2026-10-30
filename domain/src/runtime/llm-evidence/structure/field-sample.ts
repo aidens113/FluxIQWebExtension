@@ -79,7 +79,9 @@ export function webLlmShownColumn(
 ): { label: string; sample: string | undefined } {
   if (spec.lines === true) return linesColumn(label, element, lines);
   const sample = sampleOf(element, spec) ?? composedSample(element, spec, page);
-  return { label: readableLabel(label, element, sample), sample };
+  const readable = readableLabel(label, element, sample);
+  // A state mark's note is the state (`(pressed)`), which a readable label must keep: the same control's words are another column.
+  return { label: spec.mark === "state" && readable !== label ? `${readable}${LABEL_NOTE.exec(label)?.[0] ?? ""}` : readable, sample };
 }
 
 /**

@@ -130,12 +130,14 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
   if (written === undefined || written.length === 0) return undefined;
   const conditions = written.map((condition, index) => normalize(condition, index, request));
   return (item, record, seen, capture, kept) => {
+    // The run's instant when the request carries it, so a relative date is judged as at run end; else this item's own clock.
+    const now = request.now ?? Date.now();
     let rejectedBy: number[] | undefined;
     const values: (string | undefined)[] = [];
     for (const [index, entry] of conditions.entries()) {
       const value = valueOf(entry, item, record);
       values.push(value);
-      if (automationStudioRecordConditionHolds(entry.says, value)) {
+      if (automationStudioRecordConditionHolds(entry.says, value, now)) {
         if (seen?.[index] === null && value) seen[index] = value;
         continue;
       }
