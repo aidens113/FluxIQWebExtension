@@ -27,22 +27,28 @@
 // once is said in the more telling place: one first seen beside another
 // condition and later seen alone moves to the alone rows.
 //
+// **And the marks the item carries** (`item-offer/`, t810) travel beside each row,
+// positionally, for Core (`rejectedMarks`); they are not part of the row's key, since
+// the same row is the same item.
+//
 // Screening happens where the rows become evidence: the domain's node run puts
 // them through the same screen as the kept rows
 // (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`).
 
-import type { WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
+import type { WebAutomationExtractionItemMark, WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 import type { ExtractedListRecord } from "./list-reader";
 
 /** The rows a read is keeping: `note` each rejection, `rows` and `alone` for the checkpoint and the outcome. */
 export type RejectedSamples = {
-  note(rejectedBy: readonly number[], record: ExtractedListRecord, observations?: readonly WebAutomationExtractionRejectionObservation[]): void;
+  note(rejectedBy: readonly number[], record: ExtractedListRecord, observations?: readonly WebAutomationExtractionRejectionObservation[], marks?: readonly WebAutomationExtractionItemMark[] | null): void;
   rows(): ExtractedListRecord[][];
   alone(): number[];
   observations(): Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
+  /** The marks the items carry, aligned with `rows()`, or `undefined` when no sampled item carries one (`item-offer/`, t810). */
+  marks(): Array<Array<WebAutomationExtractionItemMark[] | null>> | undefined;
 };
 
-type Witness = { record: ExtractedListRecord; observation: WebAutomationExtractionRejectionObservation | null };
+type Witness = { record: ExtractedListRecord; observation: WebAutomationExtractionRejectionObservation | null; marks: WebAutomationExtractionItemMark[] | null };
 type ConditionRows = { alone: Witness[]; withOthers: Witness[]; placed: Map<string, "alone" | "withOthers"> };
 
 /** Positional witnesses retain contradictory evaluated values without rereading the page. */
@@ -51,12 +57,13 @@ export function rejectedSamplesFor(
   conditions: number,
   carried: readonly ExtractedListRecord[][] | undefined,
   carriedAlone?: readonly number[] | undefined,
-  carriedObservations?: readonly (readonly (WebAutomationExtractionRejectionObservation | null)[])[] | undefined
+  carriedObservations?: readonly (readonly (WebAutomationExtractionRejectionObservation | null)[])[] | undefined,
+  carriedMarks?: readonly (readonly (readonly WebAutomationExtractionItemMark[] | null)[])[] | undefined
 ): RejectedSamples | undefined {
   if (!asked || conditions === 0) return undefined;
   const fits = carried?.length === conditions;
   const lists: ConditionRows[] = Array.from({ length: conditions }, (_unused, index) => {
-    const rows = fits ? (carried[index] ?? []).map((record, ordinal): Witness => ({ record: { ...record }, observation: carriedObservations?.[index]?.[ordinal] ? { ...carriedObservations[index]![ordinal]! } : null })) : [];
+    const rows = fits ? (carried[index] ?? []).map((record, ordinal): Witness => ({ record: { ...record }, observation: carriedObservations?.[index]?.[ordinal] ? { ...carriedObservations[index]![ordinal]! } : null, marks: copiedMarks(carriedMarks?.[index]?.[ordinal]) })) : [];
     const lead = carriedAlone?.length === conditions ? Math.min(carriedAlone[index] ?? 0, rows.length) : 0;
     const list: ConditionRows = { alone: rows.slice(0, lead), withOthers: rows.slice(lead), placed: new Map() };
     for (const row of list.alone) list.placed.set(keyOf(row), "alone");
@@ -64,13 +71,13 @@ export function rejectedSamplesFor(
     return list;
   });
   return {
-    note(rejectedBy, record, observations) {
+    note(rejectedBy, record, observations, marks) {
       const alone = rejectedBy.length === 1;
       for (const index of rejectedBy) {
         const list = lists[index];
         if (list === undefined) continue;
         const observation = observations?.find((entry) => entry.conditionIndex === index);
-        const row: Witness = { record: { ...record }, observation: observation ? { ...observation } : null };
+        const row: Witness = { record: { ...record }, observation: observation ? { ...observation } : null, marks: copiedMarks(marks) };
         const key = keyOf(row);
         const placed = list.placed.get(key);
         if (placed === "alone" || (placed === "withOthers" && !alone)) continue;
@@ -81,6 +88,8 @@ export function rejectedSamplesFor(
     },
     rows: () => lists.map((list) => [...list.alone, ...list.withOthers].map((row) => ({ ...row.record }))),
     alone: () => lists.map((list) => list.alone.length),
+    marks: () => lists.some((list) => [...list.alone, ...list.withOthers].some((row) => row.marks !== null))
+      ? lists.map((list) => [...list.alone, ...list.withOthers].map((row) => copiedMarks(row.marks))) : undefined,
     observations: () => lists.some((list) => [...list.alone, ...list.withOthers].some((row) => row.observation !== null))
       ? lists.map((list) => [...list.alone, ...list.withOthers].map((row) => row.observation ? { ...row.observation } : null)) : undefined
   };
@@ -89,4 +98,8 @@ export function rejectedSamplesFor(
 function keyOf(row: Witness): string {
   const observation = row.observation;
   return JSON.stringify([row.record, observation ? [observation.state, observation.value, observation.source, observation.readKind] : null]);
+}
+
+function copiedMarks(marks: readonly WebAutomationExtractionItemMark[] | null | undefined): WebAutomationExtractionItemMark[] | null {
+  return marks && marks.length > 0 ? marks.map((mark) => ({ ...mark })) : null;
 }

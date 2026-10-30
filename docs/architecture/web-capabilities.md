@@ -383,6 +383,22 @@ instead of pointing at the act after the read
 (`AS/runtime/llm/repeat-guard/narrowed-nothing.ts`). Run
 `run-mvbr0w7e-6a01c05b`'s repair resent such a condition six times.
 
+**What a left-out item offers (t810).** A row a condition left out is sent with
+the "outside" marks the page shows on that item: a button, `role="button"` or
+link inside it whose own name starts with an offer to enter the item's set
+(join, follow, subscribe, connect, add friend, request to join, become a member;
+never joined, following, unfollow, unsubscribe, leave, requested, pending,
+member). A feed's suggested post carries `Join group`; the person is not in that
+group. `content/extraction/item-offer/` reads it and the page sends
+`rejectedMarks` beside `rejectedSamples`, per condition and row, as
+`{ kind: "outside", said, entity? }` (`said` the control's words, `entity` the one
+linked name the control sits beside, omitted where that is not clear). The
+words live only in the extension; Core's `extraction-summary.ts` admits the
+marks as `aloneMarks` and a together set's `marks`, drops only the marks if any
+is malformed, and the read account places them as `leftOutMarks`, so a judge
+claiming the row was asked can be refuted (`result-verification/refuted-no/`).
+They travel in the read's checkpoint and are not shown to the build model.
+
 **What a condition means, how a value reads as a number or date, a row's
 identity and the sort order are Core's.** The domain and the content script
 call Core's record-process functions from the browser-safe

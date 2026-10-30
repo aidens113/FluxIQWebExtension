@@ -1,4 +1,4 @@
-import { webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
+import { webAutomationExtractionRejectedMarksValue, webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionItemMark, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 // Legacy content-reader checkpoint contracts, retained until its serial S7
 // cleanup removes the remaining consumers. Production worker transport no
 // longer carries read checkpoints. Next-page movement marks below remain live.
@@ -92,6 +92,8 @@ export type ExtractionCheckpoint = {
    */
   rejectedSamplesAlone?: number[] | undefined;
   rejectedObservations?: Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
+  /** The marks each rejected item carries, aligned with `rejectedSamples` (`content/extraction/item-offer/`, t810); unreadable ones are dropped, never the checkpoint. */
+  rejectedMarks?: Array<Array<WebAutomationExtractionItemMark[] | null>> | undefined;
   /**
    * What the read has spent on pages the server refused: the reloads it made,
    * and the refusals as too fast (429) it met, an unexplained empty page
@@ -170,7 +172,7 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, rejectedObservations, refusals, earlierPageRepeats } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, rejectedObservations, rejectedMarks, refusals, earlierPageRepeats } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
@@ -196,6 +198,7 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
   const observations = rejectedObservations === undefined || !Array.isArray(rejectedSamples) ? undefined : webAutomationExtractionRejectedObservationsValue(rejectedObservations, rejectedSamples);
   if (rejectedObservations !== undefined && observations === undefined) return undefined;
   if (observations !== undefined && (conditionCounts === undefined || observations.length !== conditionCounts.rejected.length)) return undefined;
+  const marks = rejectedMarks === undefined || !Array.isArray(rejectedSamples) ? undefined : webAutomationExtractionRejectedMarksValue(rejectedMarks, rejectedSamples);
   return {
     records: records.map((record) => ({ ...record })),
     pagesRead,
@@ -207,6 +210,7 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
     ...(rejectedSamples === undefined ? {} : { rejectedSamples: (rejectedSamples as ExtractionCheckpointRecord[][]).map((rows) => rows.map((row) => ({ ...row }))) }),
     ...(rejectedSamplesAlone === undefined ? {} : { rejectedSamplesAlone: [...rejectedSamplesAlone as number[]] }),
     ...(observations === undefined ? {} : { rejectedObservations: observations }),
+    ...(marks === undefined ? {} : { rejectedMarks: marks }),
     ...(refusalCounts === undefined ? {} : { refusals: refusalCounts }),
     ...(earlierPageRepeats === undefined ? {} : { earlierPageRepeats })
   };
