@@ -4,7 +4,7 @@
 //
 // The page half -- that detection offers the badge at all, labelled by its name
 // only when every item that has it names it the same -- is proven in
-// `apps/extension/src/content/extraction/tests/badge-column.test.ts`. This is the
+// `apps/extension/src/content/extraction/tests/marks.test.ts`. This is the
 // domain half: the wire reader keeps the column, the packet shows its key, label,
 // kind and coverage and not its selector, the handle keeps the attribute read as
 // optional, and `where {field: "brightaisle_plus", is: "present"}` survives the

@@ -308,6 +308,7 @@ function readColumn(entry: unknown, ownKey: string | undefined, detected: Detect
       handling: spec.handling,
       lines: spec.lines,
       identity: spec.identity,
+      mark: spec.mark,
       element: spec.element
     }),
     assumed: column.assumed
@@ -343,6 +344,8 @@ function namedColumn(name: string, attributeGiven: string | undefined, detected:
       // An attribute is read off the container itself, never line by line.
       lines: undefined,
       identity: undefined,
+      // Another attribute of the mark's element is that attribute's value, never the mark.
+      mark: undefined,
       element: undefined
     }),
     assumed

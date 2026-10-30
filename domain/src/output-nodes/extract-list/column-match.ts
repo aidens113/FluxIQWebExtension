@@ -95,6 +95,7 @@
 import {
   AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS,
   automationStudioMatchName,
+  automationStudioRecordConditionComparesDates,
   type AutomationStudioNameMatch,
   type AutomationStudioNameValueShape
 } from "fluxiq/automation-studio/nodes";
@@ -155,9 +156,17 @@ function unswapped(written: string, named: AutomationStudioNameMatch, aliases: r
  * that holds an address has none. Every text comparison runs on every kind of
  * column, so it distinguishes nothing and claims nothing: `undefined` is the
  * answer, not `"text"`.
+ *
+ * A date bound or a `within` (t790, t800) reads the date the value states, not
+ * a number: a date column is text to the detector, and a numeric attribute
+ * (`aria-valuenow`) is the column it must not lean towards. So a condition
+ * comparing dates claims no shape either. Until t800 its bounds asked for a
+ * number, which settled a tie between a date column and a rating towards the
+ * rating.
  */
 export function webExtractionComparedShape(says: WebAutomationExtractConditionSaying | undefined): AutomationStudioNameValueShape | undefined {
   if (says === undefined) return undefined;
+  if (automationStudioRecordConditionComparesDates(says)) return undefined;
   if (AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS.some((key) => says[key] !== undefined)) return "number";
   const equals = says.equals;
   if (typeof equals === "number") return "number";

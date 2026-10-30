@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); lane A (t802) and B3 (t803) are in flight in Core, and the stand-in W0-W2 (t801) here. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
+**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802) and C0 (t808) are in flight in Core; the stand-in W0-W1 (t801) is merged here, with W2 waiting on lane A. No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -712,6 +712,11 @@ gaining an enterprise contact page.
 - Finding (W0, against Core): Core accepts `continueUrl` only as a same-origin path to `/connect/authorize`, and a bad one fails the whole request (the stand-in sends path and query only); Core has no `FLUXIQ_EMAIL_SENDER=file:<dir>` (the outbox is `<root>/.fluxiq/platform/outbox`, and the mail JSON has no `welcomeUrl`); `FLUXIQ_PROFILE` is read by no code; Core never starts the provisioning listener in a served panel (`startProvisioningListenerFromEnv` has no caller outside tests). The last three went to lane A (t802), which owns that wiring; `workspace: "new"` maps to `workspace-main` under single tenancy (lane C).
 - Validation: lead-run `node --test "server/**/tests/*.test.mjs"` in the package -> "# tests 40 / # pass 40 / # fail 0" (validation table, same-origin refusal, rate limit, human check off and on, `exists` and `created` identical, 503 on refusal, no body in logs); supervisor's smoke of `server/start.mjs` with no Core: the four pages and the config route 200, `/../package.json` 404, a valid sign-up 503 with a log line holding only request id, outcome and time; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` ok.
 - Outcome: Accepted for W0 and W1. W2's round trip (`pnpm site:up -- --round-trip`) is not verified; it runs once lane A starts the listener.
+
+### 2026-10-29 — Core lane B3 merged (t803)
+- One line, per the boundary rule: IAM is enforced on every Core registration and app route, with parity on local and self-hosted (6,608 decisions, 0 mismatches), and inert on `service` until lane C wires it. Full entry, decisions and validation in Core's ledger; nothing changed here.
+- Validation: lead-run, quoted in Core's entry: `pnpm test` platform, `_shared` and program API dirs -> "Tests 760 passed (760)"; downstream `node scripts/structure-audit.mjs` against that Core -> passed.
+- Outcome: Accepted.
 
 ## Open Questions
 
