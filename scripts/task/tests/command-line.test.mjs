@@ -40,7 +40,7 @@ test("start --dry-run reports the id and branch it would use, and creates nothin
 
   assert.deepEqual(result, {
     command: "start", id: "t042", branch: "task/t042-flow-editor-cleanup", from: "dev",
-    worktree: null, core: null, coreBranch: null, sharedCore: null, applied: false
+    worktree: null, core: null, coreBranch: null, sharedCore: null, workspaceBuild: "not-required", applied: false
   });
   assert.equal(await git(root, "branch", "--list", "task/*"), "");
 });
@@ -50,7 +50,7 @@ test("start opens the branch here and reports it; list then shows it", async (t)
   t.after(() => removeAll(root));
 
   const started = await command(root, ["start", "first"]);
-  assert.deepEqual(started, { command: "start", id: "t001", branch: "task/t001-first", from: "dev", worktree: null, core: null, coreBranch: null, applied: true });
+  assert.deepEqual(started, { command: "start", id: "t001", branch: "task/t001-first", from: "dev", worktree: null, core: null, coreBranch: null, workspaceBuild: "not-required", applied: true });
   assert.equal(await git(root, "rev-parse", "--abbrev-ref", "HEAD"), "task/t001-first");
 
   await git(root, "commit", "--quiet", "--no-gpg-sign", "--allow-empty", "-m", "work\n\nTask: t001");
@@ -69,7 +69,7 @@ test("a paired start --dry-run names the nested worktree, Core and one branch na
   assert.deepEqual(result, {
     command: "start", id: "t124", branch: "task/t124-paired-work", from: "dev",
     worktree: path.join(base, "t124", path.basename(here)), core: path.join(base, "t124", "!FluxIQ"),
-    coreBranch: "task/t124-paired-work", sharedCore: null, applied: false
+    coreBranch: "task/t124-paired-work", sharedCore: null, workspaceBuild: "planned", applied: false
   });
 });
 
@@ -95,4 +95,15 @@ test("abandon --dry-run then abandon report the task, and the id stays spent", a
 
   const next = await command(root, ["start", "second", "--dry-run"]);
   assert.equal(next.id, "t002");
+});
+
+
+test("start forwards workspace-build skipping and reports its dry-run plan", async (t) => {
+  const root = await repository("task-cli-");
+  const base = await mkdtemp(path.join(os.tmpdir(), "task-cli-base-"));
+  t.after(() => removeAll(root, base));
+  const planned = await command(root, ["start", "narrow", "--worktree", "--base", base, "--skip-workspace-build", "--dry-run"]);
+  assert.equal(planned.workspaceBuild, "skipped");
+  assert.equal(planned.applied, false);
+  assert.equal(await git(root, "branch", "--list", "task/*"), "");
 });

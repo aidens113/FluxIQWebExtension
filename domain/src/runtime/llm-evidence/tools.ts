@@ -612,6 +612,7 @@ export function createWebAutomationLlmEvidenceRuntime(
       // does read. No expected origin either -- an exploration action may
       // legitimately move the page, and this has to describe wherever it landed.
       const request = present<WebLlmEvidenceToolRequest>({
+        referenceNow: undefined,
         projectId: input.projectId,
         flowId: input.flowId,
         callId: input.callId,

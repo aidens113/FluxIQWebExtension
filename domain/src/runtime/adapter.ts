@@ -28,6 +28,7 @@ import { webAutomationTextSightingValue, type WebAutomationTextSighting } from "
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { pickWebAutomationSession } from "./web-sessions";
 import { outputTargetFromPayload } from "../output-nodes";
+import { webAutomationExtractListReferenceNow } from "../output-nodes/extract-list";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRuntimeCapabilities } from "./capabilities";
 import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "../requests";
@@ -59,7 +60,8 @@ export function createWebAutomationRuntimeAdapter(options: WebAutomationRuntimeA
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     capabilities: () => webAutomationRuntimeCapabilities,
     canExecute: (command) => canExecuteWebAutomationCommand(command),
-    execute: (command) => executeWebAutomationRuntimeCommand(options.fluxiq, command),
+    execute: (command, context) => executeWebAutomationRuntimeCommand(options.fluxiq, command,
+      context.referenceNow === undefined ? undefined : { referenceNow: context.referenceNow }),
     executeWithCommandContext: (command, context) => {
       if (!Object.hasOwn(context, "commandContext")) throw new Error("web.required_context_missing");
       return executeWebAutomationRuntimeCommand(options.fluxiq, command, context);
@@ -82,7 +84,9 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   if (!outputId || !WEB_AUTOMATION_ACTION_TYPES.includes(outputId as never)) {
     return rejected(command, `Unsupported web automation output: ${outputId ?? "(missing)"}`, WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE);
   }
-  const payload = command.parameters ?? {};
+  const payload = outputId === "web.dom.extract_list"
+    ? webAutomationExtractListReferenceNow(command.parameters ?? {}, context?.referenceNow)
+    : command.parameters ?? {};
   const startedAt = Date.now();
   const request: Parameters<typeof dispatchWebAutomationOutput>[1] = {
     domainId: WEB_AUTOMATION_DOMAIN_ID,

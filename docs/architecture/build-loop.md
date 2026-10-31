@@ -22,6 +22,18 @@ The domain explicitly tags secondary operations: check provides selection,
 type provides submit, and browser tab provides open. A restricted catalog
 missing a required operation is rejected before invoking a model.
 
+## Relative dates share a run reference
+
+Core supplies a fixed `referenceNow` in native-node host context and runtime
+dispatch context. The web domain forwards it through the existing
+`extractList.now` request field. Browser date filtering and ordering therefore
+use the same instant as Core's result processing and judgement, even when the
+wall clock crosses midnight. Explicit request `now` values still take priority;
+legacy calls without reference metadata retain their local-clock fallback.
+Replay binding metadata carries the same reference without a model-authored
+timestamp. A fresh execution captures a fresh reference; reused replay evidence
+retains the time at which it was executed.
+
 ## Choosing a toggle's end state
 
 A successful in-place press reports paired observations as

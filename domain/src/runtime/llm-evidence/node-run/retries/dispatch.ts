@@ -59,6 +59,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../../../actions/types";
 import { webLastingActStatement } from "../../../lasting-act-statement";
 import type { WebLlmEvidenceGateway } from "../../capture";
+import { webAutomationExtractListReferenceNow } from "../../../../output-nodes/extract-list";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import type { WebNodeRun } from "../context";
@@ -102,6 +103,9 @@ export async function webNodeDispatchWithRetries(
   checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>,
   reacquire?: WebNodeReacquire
 ): Promise<WebNodeRetriedDispatch> {
+  if (command.actionType === "web.dom.extract_list") {
+    command = { ...command, parameters: webAutomationExtractListReferenceNow(command.parameters, run.request.referenceNow) };
+  }
   // Every attempt's answer, in order, so a refusal that caused the later failures can answer for the node (`./answer.ts`).
   const answers: WebNodeDispatchResult[] = [];
   const outcome = await automationStudioDispatchWithNodeRetries<WebNodeDispatchResult>({

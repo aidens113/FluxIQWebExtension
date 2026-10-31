@@ -12,12 +12,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { listRowOrderFor } from "../order-rows";
+import { itemFilterFor } from "../item-filter";
 
 type Row = Record<string, string | null>;
 
 const FIELDS = ["title", "company", "posted", "salary", "url"];
 /** One instant every relative date in these rows is measured from: 2026-09-28T12:00:00Z. */
 const NOW = Date.UTC(2026, 8, 28, 12);
+
+test("date sorting and where filtering share request now after wall-clock midnight", (t) => {
+  const referenceNow = Date.UTC(2026, 9, 6, 23, 59);
+  t.mock.method(Date, "now", () => Date.UTC(2026, 9, 7, 0, 1));
+  const request = {
+    item: ".event", fields: { title: ".title", posted: ".posted" }, now: referenceNow,
+    where: [{ field: "posted", within: "2 days" }],
+    sort: [{ field: "posted", order: "asc" as const, as: "date" as const }]
+  };
+  const rows = [{ title: "absolute", posted: "2026-10-06T00:00:00Z" }, { title: "relative", posted: "yesterday" }];
+  const filter = itemFilterFor(request)!;
+  const kept = rows.filter((row) => filter({} as Element, row).length === 0);
+  assert.equal(kept.length, 2);
+  const order = listRowOrderFor(request, ["title", "posted"])!;
+  assert.deepEqual(titles(order.apply(kept, 100).rows), ["relative", "absolute"]);
+  // Callers that deliberately supply an apply-time instant still control it.
+  assert.deepEqual(titles(order.apply(kept, 100, Date.now()).rows), ["absolute", "relative"]);
+  const { now: _now, ...legacy } = request;
+  assert.deepEqual(titles(listRowOrderFor(legacy, ["title", "posted"])!.apply(rows, 100).rows), ["absolute", "relative"]);
+});
 
 function titles(rows: readonly Row[]): (string | null)[] {
   return rows.map((row) => row.title ?? null);

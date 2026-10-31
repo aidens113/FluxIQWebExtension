@@ -524,7 +524,12 @@ FLUXIQ_BUILD_CACHE_DIR=off pnpm build    # no store: stamps only, per tree
   whose inputs another tree has already built is restored from the store, and
   `scripts/worktree/core-build.mjs` builds Core's `contracts`, `fluxiq` and
   `client-gateway-websocket` libraries through the same fingerprint and store
-  (`@fluxiq/web` is not cached). **`pnpm task finish`** runs only the structure
+  (`@fluxiq/web` is not cached). For narrow work, use
+  `pnpm task start <slug> --worktree --skip-workspace-build`: Core preparation,
+  installation and currency guards still run, while the full downstream build
+  is skipped. Build only the required downstream packages afterwards. The
+  command reports `workspaceBuild: "skipped"`; a dry run reports the same plan
+  without creating anything. **`pnpm task finish`** runs only the structure
   audit unless `--full-check` asks for `pnpm check`, whose package checks are
   likewise reused from the store; the tests still run.
 - **The Lab's Core web build** is cached separately

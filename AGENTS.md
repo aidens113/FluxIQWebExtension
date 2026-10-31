@@ -283,6 +283,10 @@ run — run as a sweep on `dev` at most twice a day, in the background, and
 whatever they find is fixed forward. Never run a 15-30 minute suite before each
 merge or after each fix: it is what made integration slow. Workers and leads
 likewise validate a fix with the tests beside it, not whole package suites.
+`pnpm task start --worktree` normally builds the whole downstream workspace.
+Use `--skip-workspace-build` for narrow work, especially after the daily
+allowance is used; it still prepares Core libraries and checks Core currency.
+Build only the downstream packages the change needs afterwards.
 Package-level commands are listed in
 [repository layout and commands](docs/architecture/repository-layout.md).
 

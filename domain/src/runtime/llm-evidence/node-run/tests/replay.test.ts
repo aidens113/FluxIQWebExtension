@@ -14,7 +14,8 @@ import {
   type WebLlmEvidenceGateway
 } from "../..";
 import { webNodeRecordCount } from "../replay";
-import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
+import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS, type WebLlmEvidenceToolRequest } from "../../capture";
+import { present } from "../../present";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -25,6 +26,28 @@ const SNAPSHOT = "web.output.dom-capture_snapshot";
 const NAVIGATE = "web.output.browser-navigate";
 const START = "https://example.test/start";
 const PERMITTED = async () => ({ permitted: true as const });
+
+test("binding replay reference metadata reaches sorted extraction without becoming model input", async (t) => {
+  const referenceNow = Date.UTC(2026, 9, 6, 23, 59);
+  t.mock.method(Date, "now", () => Date.UTC(2026, 9, 7, 0, 1));
+  for (const [reference, explicit, expected] of [[referenceNow, undefined, referenceNow], [referenceNow, 123, 123], [undefined, undefined, undefined]] as const) {
+    const stubbed = stub({ payload: { extracted: [{ when: "yesterday" }] } });
+    const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+    const extractList: JsonObject = { item: ".event", fields: { when: ".when" }, sort: [{ field: "when", order: "asc", as: "date" }] };
+    if (explicit !== undefined) extractList.now = explicit;
+    const value = { replay: "step", node: EXTRACT_LIST, parameters: { extractList }, consequences: [] };
+    const answer = await runtime.executeTool(present<WebLlmEvidenceToolRequest>({
+      projectId: PROJECT.projectId, flowId: PROJECT.flowId,
+      callId: "dryrun.1.clock", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      referenceNow: reference, value, signal: undefined, startLocation: undefined
+    }));
+    assert.equal(answer.resultCode, "core.replay.replayed");
+    const command = stubbed.commands.find((entry) => entry.actionType === "web.dom.extract_list");
+    assert.ok(command, "the actual browser extraction was dispatched");
+    assert.equal((command.parameters.extractList as JsonObject).now, expected);
+    assert.equal(Object.hasOwn(extractList, "now"), explicit !== undefined, "model-authored parameters remain unchanged");
+  }
+});
 
 test("a step that ran records where it found the page and what it read", async () => {
   const stubbed = stub();

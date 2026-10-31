@@ -90,11 +90,9 @@ function createOutputNodeImplementation(outputId: WebAutomationActionType): Auto
         if (refused !== undefined) return refused;
       }
       if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters: webAutomationCheckWaitParameters(outputId, parameters) });
-      // Core's native context does not carry the run's start yet (F1 report: add
-      // `runStartedAt` to `AutomationStudioNativeNodeContext`); until it does
-      // this is absent and a read judges relative dates at the page's clock.
-      const runStartedAt = (context as { runStartedAt?: unknown }).runStartedAt;
-      const extraction = webAutomationExtractListDispatch(parameters, typeof runStartedAt === "number" ? runStartedAt : undefined);
+      // Core fixes the enclosing execution's date reference once, so a read
+      // and the dataset's conditions agree even when the page crosses midnight.
+      const extraction = webAutomationExtractListDispatch(parameters, context.host?.referenceNow);
       return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
     } catch (error) {
       return implementationThrew(outputId, error);

@@ -58,6 +58,47 @@ const EXTRACT_LIST_NODE = "web.output.dom-extract_list";
 
 const BASE = { projectId: "project.item-conditions", flowId: "flow.item-conditions", maxEvidenceBytes: 24_000 } as const;
 
+test("a supplied date reference keeps the job-board row set after wall-clock midnight", async ({ openHarness, page }) => {
+  test.setTimeout(60_000);
+  const harness = await openHarness("job-board");
+  await page.goto(new URL("/scenarios/job-board/jobs?q=Saltmarsh+Games", harness.lab.origin).href);
+  await expect(page.locator("article[data-jk]")).toHaveCount(2);
+  // The authored catalog has d1 at 30 hours and g7 at 205 hours before
+  // 21 September 08:00 UTC. Cards round those ages to one and eight days.
+  // Check the real page's positive dataset before applying any product filter.
+  const shown = await page.locator("article[data-jk]").evaluateAll((cards) => cards.map((card) => ({
+    title: card.querySelector("h2 a")?.textContent?.trim(),
+    posted: card.querySelector("footer > span:first-child")?.textContent?.trim()
+  })));
+  expect(shown).toEqual([
+    { title: "Rust Engineer", posted: "Posted 1 day ago" },
+    { title: "QA Engineer", posted: "Posted 8 days ago" }
+  ]);
+  const referenceNow = Date.UTC(2026, 8, 21, 8);
+  await page.evaluate((wallNow) => {
+    // Shift the wall clock while keeping it ticking. Performance, timers and
+    // deadline progress retain their real speed; no fake scheduler is installed.
+    const realNow = Date.now.bind(Date);
+    const offset = wallNow - realNow();
+    Date.now = () => realNow() + offset;
+  }, Date.UTC(2026, 8, 22, 8));
+  const request: WebAutomationExtractListRequest = {
+    item: "article[data-jk]", fields: { title: "h2 a", posted: "footer > span:first-child" },
+    // At the supplied reference the one-day card is September 20; at the
+    // shifted wall clock it is September 21 and no longer precedes the bound.
+    where: [{ field: "posted", lessThan: "2026-09-21" }],
+    sort: [{ field: "posted", order: "asc", as: "date" }],
+    discloseText: false,
+    minItems: 0
+  };
+  const supplied = await read(harness, { ...request, now: referenceNow }, "job-date-reference");
+  expect(supplied.records).toEqual([shown[1], shown[0]]);
+  expect(supplied.count).toBe(2);
+  const legacy = await read(harness, request, "job-date-wall-clock");
+  expect(legacy.records).toEqual([shown[1]]);
+  expect(legacy.count).toBe(1);
+});
+
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
 type StructurePacket = { extraction: string; itemCount: number; fields: Array<{ key: string; label: string; coverage: number; sample?: string }> };
 type Record_ = Record<string, unknown>;

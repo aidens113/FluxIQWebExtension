@@ -73,7 +73,7 @@ export type ListRowOrder = {
  * `dedupe` nor `sort` -- or names only columns the read does not read, which
  * the domain's reader already resolved away and this refuses to guess at.
  */
-export function listRowOrderFor(request: Pick<WebAutomationExtractListRequest, "dedupe" | "sort">, fieldNames: readonly string[]): ListRowOrder | undefined {
+export function listRowOrderFor(request: Pick<WebAutomationExtractListRequest, "dedupe" | "sort" | "now">, fieldNames: readonly string[]): ListRowOrder | undefined {
   const readable = new Set(fieldNames);
   const by = request.dedupe === undefined ? undefined : unique(request.dedupe.by.filter((name) => readable.has(name)));
   // A dedupe whose every column is gone still means "list each once", so it
@@ -87,7 +87,7 @@ export function listRowOrderFor(request: Pick<WebAutomationExtractListRequest, "
   return {
     sorts: sort.length > 0,
     identity,
-    apply<T extends Row>(rows: readonly T[], bound: number, now: number = Date.now()): OrderedRows<T> {
+    apply<T extends Row>(rows: readonly T[], bound: number, now: number = request.now ?? Date.now()): OrderedRows<T> {
       const seen = new Set<string>();
       let duplicates = 0;
       const distinct = rows.filter((row) => {
