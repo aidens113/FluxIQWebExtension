@@ -550,7 +550,7 @@ export async function captureEvidence(
   expectedOrigin?: string,
   // A search's look (`./page-find/`): the capture also lists what is not
   // rendered, each element flagged `hidden`. Every other look is the default.
-  options?: { includeHidden: true; scope?: WebTargetScope }
+  options?: { includeHidden?: true; scope?: WebTargetScope }
 ): Promise<WebLlmSnapshotBinding> {
   assertActive(signal);
   const scope = options?.scope;

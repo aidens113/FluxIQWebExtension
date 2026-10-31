@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P10 worked-example unit shipped on paired dev with refreshed SDK/domain; P9 actual settled-safety/loop acceptance active privately. Full/paid calls held.
+Status detail: P9 owning/paired/installed-browser acceptance passes; final paired integration in progress. Full/paid held.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,17 +11,13 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Accepted merged t831, 2026-10-31:** Source merges Coreaa9afcca/Down16ae8b7f, Core0.22. Workbranch backups87cb2678/bbb1900a retained. Core137owning tests then corrected63tests, typecheck20.623s/audit pass; Down79example tests, typecheck12.959s/audit pass; all eleven examples use real public handle resolution and strict saved graph validators with three missing-source negatives. Four full UTF8 byte/hash pins and full completion digest unchanged. Core mandatory70merge-contract tests9.12s pass; Down task structure gate pass. Shared SDK131.247s/domain21.260s refreshed; compiled actual web binding verifies all four original section hashes with zero gateway/provider calls. Paired dev e77268a5/8a081369 pushed and equal origin/dev before this memory update. Private Down removed through task finish; private Core clean/detached for normal age-prune. No browser/live model performance claim.
+**Accepted private t830, 2026-10-31; integration in progress:** P9 append-only views/routes and guarded prior-call reuse pass owning/paired/browser acceptance. Core0.23 owns missing original reference before full executor, pins exact publication/reuse, and excludes only raw clock metadata from semantic list authority. Root179Core tests/8files pass68.21s, types93.033s, SDK129.098s; backed up24cbb7dc before final docs. Down191affected runtime tests pass114.385s, post-parent79example tests retain original byte pins/save proofs, Domain types20.372s and final extension types/audit pass. Domain21.307s/host3.706s and allthree extension bundles31.931s built. Actual public Native/Gate/web paired cases prove target A survives handle-map replacement/old t1becomes B, changed document blocks another main, exact node accounting/no added steps. Installed Chromium company-website proof PASS34.8s: completed1member batch,2fresh successful typing replies,13distinct successful command/replies (10snapshots,1declared-start preparation navigation strictly before first TYPE,2TYPE); no navigation after original, submission/new subscription/URL change, gateway error, judge or real provider call. Build intentionally cancelled after transport proof; no finished judged Flow/performance claim. Parent P10 code merged; Down31old cycle allowances removed614to583. Complete Down plan restored with exact original normalized body proof after CRLF-sensitive doc edit error. Final reports/evidence next, paired task integration pending; no full/paid/panel operation.
 
-**Shipped P10 scope:** Worked-example ownership only: optional strict client metadata, web-authored original tails and explicit candidate/subflow/completion rendering. Missing metadata gives grammar without inferred examples. Parser/executor/registry contracts remain unchanged. Inline medium-specific guidance, facts, intent classification and fingerprints remain subsequent P10 migrations; this unit does not finish medium neutrality.
+**Shipped P10 and baseline:** t831 worked-example ownership shipped on paired dev69dcecba/c084b96a; all79web example tests pass again after this task parent sync, including exact section hashes and saved graph acceptance. Inline guidance/facts/intent/vocabulary/fingerprints remain subsequent P10 work; read-only next-unit design recorded. t829 repeat/history acceptance and earlier dated context remain archived below.
 
-**Active private t830:** P9 under fxwork/t830 owns append-only views/routes and guarded prior-call batches. Core foundations/D0 accepted and backed up1bd5aafc; D2 actual loop/service authority and accounting source active, not accepted. D1 initial regression/structure defects corrected in frozen source; final audit passes and31old cycle allowances removed (Down614to583), behavior/type reruns await fresh paired SDK after D2 freeze. Root E generic instructions and actual UTF8 request-prefix source authored, not checked. Private Core source currently0.22 must merge this dev and advance next appropriate version before integration. Reports/Core Current State in that private checkout are authoritative; no paid or full sweeps.
+**Standing constraints:** Both Oct31 full-suite slots used; narrow checks only, main promotion waits a permitted passing sweep. No paid GO; future live model tests use CLAUDE_API_KEY/Claude/$5 whole build, no fallback. No user panel management, real user data or profiles. Preserve main .clinerules/fluxiq.md hash b052f0e6b0e6c6de0ba973810c7632eda04aadfdd5314eaaa73710edd1101a8d. Product model guidance remains generic.
 
-**Accepted baseline:** t829 runtime/history merged and pushed Core5bf93be1/Down069fdfe9, Core221focused+70merge contracts/Down233focused pass; real Chromium proof2passes42.3s (2reads then prethird stop vs7ForEach), all28replies fresh/successful, no observer commands. Shared0.21 SDK/domain/three extension targets current. Full evidence/context is preserved in the linked archive and owning p8-repeat-history reports.
-
-Both Oct31 full-suite slots used, main held. No paid GO: future live tests Claude via CLAUDE_API_KEY, $5 whole build, no fallback. No provider/API calls, panel management or real user data/profiles. Preserve main user clinerules hash b052f0e6b0e6c6de0ba973810c7632eda04aadfdd5314eaaa73710edd1101a8d. Product examples remain generic and never mirror realistic fixture tasks.
-
-Reports/briefs: Core framework-heavy-lifting-plan/reports/codex-1031/p10-client-examples/. [Accepted historical context](framework-heavy-lifting-plan/archive/2026-10-31-runtime-context.md); Core owns the paired compaction proof in that report directory. Current project state is above, not the original audit below.
+[Accepted dated context and ledger](framework-heavy-lifting-plan/archive/2026-10-31-runtime-context.md). [Exact incoming P10 parent handoff](framework-heavy-lifting-plan/archive/2026-10-31-p10-parent-integration.md). Core owns generic algorithms and paired reports; Down owns browser/domain producers. Current task acceptance above takes precedence over historical ledger entries.
 
 ## Contract fills
 
@@ -206,6 +202,13 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Report to: docs/working/framework-heavy-lifting-plan/reports/fhl-domain-surface.md
 
 ## Work Ledger
+
+### 2026-10-31 t830 paired proof and handoff restoration
+
+- Changes: missing original reference owned by Core; exact replay time retained separately from semantic list identity; web producer final receipts, immutable views and route deltas remain on the task branch. Paired unit gateway now updates only the addressed field; every original oracle retained.
+- Validation: Core provenance/prior-nodes owning command ->179tests/8files pass68.21s; Core check ->pass93.033s; SDK ->pass129.098s. Down example owning selector ->79pass; post-parent check ->pass30.614s; worker paired selector ->2pass, root full affected191selection in progress. Exact logs and commands in paired Core lead-acceptance.md.
+- Documentation correction: root found CRLF-sensitive section slicing had truncated this local handoff. Restored every original contract/phase/brief/ledger/question line from dev parent, with normalized full-body equality proof before this additive ledger entry. Exact incoming parent remains fenced and pinned; no code changed in this correction.
+- Outcome: Partial; final owning checks and installed browser acceptance pending. Full and paid runs held.
 
 Accepted dated ledger moved verbatim to [the runtime context archive](framework-heavy-lifting-plan/archive/2026-10-31-runtime-context.md).
 

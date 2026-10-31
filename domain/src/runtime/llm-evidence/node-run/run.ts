@@ -47,14 +47,12 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   assertActive,
   captureAfterAction,
-  captureEvidence,
   pageRefusal,
   toolExecution,
   toolMetadata,
   withCallStates,
   withPersonNeeded,
-  type WebLlmEvidenceToolExecution,
-  type WebLlmEvidenceToolRequest
+  type WebLlmEvidenceToolExecution
 } from "../capture";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { publishedWebLlmPage } from "../page-view";
@@ -90,7 +88,8 @@ import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./writte
 import { webListReadCode, webListReadConditionAccount } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
-import type { WebTargetScope } from "../../target-reacquire/identity";
+import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
+import { webNodeCurrentPage as currentPage, webNodeReadablePage as readablePage } from "./frozen-execution/page";
 
 /** The shapes a handle is written in, as a refusal names them (`./handle-shape/` puts a bare one into the first). */
 const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'];
@@ -157,6 +156,13 @@ type WebNodeCallRecord = {
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
+  // A selected private capsule is checked before any opening/replay/handle path.
+  // An active refusal never becomes an ordinary call with the same old handle.
+  const frozen = run.frozenExecution?.select(run) ?? { kind: "ordinary" as const };
+  if (frozen.kind === "refused") return refusal(undefined, "target_unobserved", undefined, { call: run.request.value });
+  const entry = frozen.kind === "ordinary" ? run.frozenExecution?.entry(run.request.value) : undefined;
+  const adapterValue = frozen.kind === "selected" ? frozen.call.adapterValue : entry?.kind === "captured" ? entry.value : undefined;
+  if (frozen.kind === "selected") run = { ...run, gateway: webNodeFrozenGateway(run.gateway, frozen.call.scope) };
   // Core's frame says whether this is its opening call of a round, or a move it makes itself (`./build-state/`, t728, t743).
   const { opening, coreMove } = webNodeBuildOf(run.request);
   // An opening carries a repaired proposal's calls (t648) and the build's places (t743), and runs without them (`./arrival.ts`).
@@ -172,7 +178,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // may be proposed (`./replay.ts`). It goes to the same executor so it passes
   // the same permission gate, and it is answered in Core's closed replay
   // vocabulary rather than this domain's, because Core reads the answer.
-  const replaying = webNodeReplayCall(value);
+  const replaying = frozen.kind === "ordinary" ? webNodeReplayCall(value) : undefined;
   if (replaying) {
     // Core runs the draft on the page, so no capture before it or during it says how the page stands after (`../plan-resolution/self-changing/`).
     run.stores.targets.acting(buildOf(run));
@@ -192,26 +198,28 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // Core's opening of a fresh round starts the build not there, whatever the tab shows (`./arrival.ts`). A build
   // told no start location is not touched. A round that continues a Flow forgets nothing, and each navigation the
   // Flow holds is an address shown and, told a start location, the build's arrival.
-  if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), opening);
-  if (!continuing) run.layers.opening(buildOf(run), opening);
-  if (!continuing) run.held.opening(buildOf(run), opening);
-  else run.held.hold(buildOf(run), continuing.calls);
-  for (const address of continuing?.addresses ?? []) {
+  if (frozen.kind === "ordinary") {
+    if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), opening);
+    if (!continuing) run.layers.opening(buildOf(run), opening);
+    if (!continuing) run.held.opening(buildOf(run), opening);
+    else run.held.hold(buildOf(run), continuing.calls);
+    for (const address of continuing?.addresses ?? []) {
     run.addresses.held(buildOf(run), address, run.request.startLocation);
     if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
-  }
+    }
   // A repaired proposal's addresses and the build's places are shown; neither arrives anywhere (t648, t743).
-  for (const address of [...(repaired?.addresses ?? []), ...(placed?.places ?? [])]) run.addresses.held(buildOf(run), address, run.request.startLocation);
+    for (const address of [...(repaired?.addresses ?? []), ...(placed?.places ?? [])]) run.addresses.held(buildOf(run), address, run.request.startLocation);
   // Re-armed above like any fresh build, then arrived: the steps that reached its entry began at the start location.
-  if (entered && run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
-  const node = webRunnableNode(value.node);
+    if (entered && run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
+  } else value = frozen.call.value;
+  const node = webRunnableNode(frozen.kind === "selected" ? frozen.call.definitionId : value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
   if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), { call: value });
   // A declaration written inside `parameters` is the call's, for every reader below (`./nested-consequences.ts`).
   value = webNodeCallWithDeclarationBeside(value, node);
   const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
-  const record: WebNodeCallRecord = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: isJsonRecord(value.parameters) ? value.parameters : {} };
+  const record: WebNodeCallRecord = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: frozen.kind === "selected" ? frozen.call.parameters : isJsonRecord(value.parameters) ? value.parameters : {} };
   const writing = webNodeWriteAsked(value);
   if (!parameters || writing === "invalid" || Object.keys(value).some((key) => !ACCEPTED_KEYS.includes(key))) {
     return refusal(undefined, "invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined }), record);
@@ -219,6 +227,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   let current: WebLlmSnapshotBinding | undefined;
   let actionability: ReturnType<typeof webActionabilityFromPayload>;
   let actionAnswered = false;
+  let capture: WebNodeFrozenCapture | undefined;
   try {
     // A look is one round trip. The capture this domain takes to read the page
     // *is* the snapshot node running, so taking one before it and one after it
@@ -228,9 +237,18 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // does (`run-muqc07fh-eeffbc86` refused it on the start location). It is
       // never a step of the Flow, so it cannot stand in for arriving. Only an
       // unreadable page, the blank tab, answers it with where to go.
-      const looked = await readablePage(run, run.request);
+      capture = frozen.kind === "ordinary" && adapterValue !== undefined ? await run.frozenExecution?.capture({ run, node, value, adapterValue, written: parameters, parameters: {}, look: (options) => readablePage(run, run.request, options) }) : undefined;
+      if (frozen.kind === "selected") {
+        // The scope guard is a passive look. The selected main read starts only
+        // after its own opaque capsule has been acknowledged exactly once.
+        const before = await readablePage(run, run.request, { scope: { ...frozen.call.scope, kind: "single-frame" } });
+        if (webNodeFrozenSubject(frozen.call, before) === undefined || !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
+      }
+      const looked = await readablePage(run, run.request, frozen.kind === "selected" ? { scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined, frozen.kind === "selected" ? frozen.capture : capture);
       if (!looked) return notThereYet(run, record);
+      if (frozen.kind === "selected" && webNodeFrozenSubject(frozen.call, looked) === undefined) return refusal(undefined, "target_unobserved", undefined, record);
       run.shown(looked);
+      capture?.publish(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
         nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
@@ -246,7 +264,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         { resultReason: undefined, nodeId: undefined, assumed: undefined }
       ), looked, looked);
     }
-    current = await currentPage(run, run.request);
+    current = await currentPage(run, run.request, frozen.kind === "selected" ? { includeHidden: true, scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined);
     // Absent from nowhere, which leaves the state this call found unsaid.
     record.found = current;
     // From nowhere, the only call that runs is the one that goes to the start
@@ -265,6 +283,17 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // shape the resolver reads before anything else happens, and the *written*
     // form is what the draft keeps, so the step the Flow gains resolves the
     // same way this run did.
+    let written: JsonObject;
+    let ran: JsonObject;
+    let assumed: WebLlmNameAssumption[] | undefined;
+    let handle: string | undefined;
+    if (frozen.kind === "selected") {
+      const prepared = webNodeFrozenSubject(frozen.call, current);
+      if (prepared === undefined) return refusal(undefined, "target_unobserved", undefined, record);
+      written = frozen.call.written;
+      ran = prepared.parameters;
+      handle = prepared.handle;
+    } else {
     const shaped = webNodeWithHandleShape(parameters);
     // `gatedByCaller`, because this call's permission is decided a few lines
     // below against the page the model is looking at, with a refusal that
@@ -277,8 +306,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // by handle (t432); a rerun keeps what the held Flow saved, which it did not write (`./held-literals/`).
     const resolving: WebPlanNodeResolutionInput = { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: shaped, gatedByCaller: true, onPage: current?.evidence.location }; // A handle only another page showed is refused stale with this page, never sent (t486).
     run.held.author(resolving, buildOf(run));
-    const written = resolving.parameters; // A held step's shown copy put back to what its Flow saved (`./held-literals/`, t439).
-    const { resolution: resolved, assumed } = await resolveWebPlanNode(resolving, run.stores);
+    written = resolving.parameters; // A held step's shown copy put back to what its Flow saved (`./held-literals/`, t439).
+    const resolvedCall = await resolveWebPlanNode(resolving, run.stores);
+    const { resolution: resolved } = resolvedCall;
+    assumed = resolvedCall.assumed;
     record.assumed = assumed;
     if (resolved.status === "refused") {
       // The handle codes say which way the handle stopped naming one control,
@@ -301,7 +332,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       }), record);
     }
     // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
-    const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, webPlanFirstTargetHandle(written));
+    handle = webPlanFirstTargetHandle(written);
+    ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, handle);
+    }
     // A press on a control the look just taken shows covered is sent when the
     // runtime's own defence clears every cover over it: the extension's click
     // refuses it at its gate, presses the cover's way out and presses again, as
@@ -310,7 +343,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // on it (`./covered-target.ts`, C4). That refusal names the cover and carries
     // the page it is on, so the layer can be dealt with first -- a popup that
     // opened on a timer is named this way (C9).
-    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, webPlanFirstTargetHandle(written)) : undefined;
+    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, handle) : undefined;
     if (current && covered && !webRuntimeClearsLayers(current.evidence, covered.covers, (layer) => run.layers.owns(buildOf(run), layer))) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
@@ -320,8 +353,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
     // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
-    const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, webNodeShownControlWords(run, webPlanFirstTargetHandle(written))) : { name: undefined, kind: "step" };
-    const spot = current ? webTargetSpot(current, webPlanFirstTargetHandle(written)) : {}; // Its record and dialog, and what it and its page are about, as opaque tokens: Core ties an undo to its act by them (Core t475, t719).
+    const control = current ? webObservedControl(current.evidence, handle, ran, webNodeShownControlWords(run, handle)) : { name: undefined, kind: "step" };
+    const spot = current ? webTargetSpot(current, handle) : {}; // Its record and dialog, and what it and its page are about, as opaque tokens: Core ties an undo to its act by them (Core t475, t719).
     // A node whose act the page decides must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -384,8 +417,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // A list read behind which a robot check stood still read its list (`./list-read/code.ts`).
       reads: webListReadCode(node.definitionId, current?.evidence.location, ran)
     };
-    const dispatchParameters = webNodeDispatchParameters(node, ran);
-    const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
+    capture = frozen.kind === "ordinary" && adapterValue !== undefined ? await run.frozenExecution?.capture(present<WebNodeFrozenCaptureInput>({ run, node, value, adapterValue, written, parameters: ran, before: current, look: (options) => readablePage(run, run.request, options) })) : undefined;
+    // The ordinary and frozen paths join here. Frozen semantic args bypass all
+    // target/extraction maps; only a proven current operational locator changes.
+    const dispatchParameters = frozen.kind === "selected" ? webNodeFrozenDispatchParameters(frozen.call, ran) : capture?.parameters ?? webNodeDispatchParameters(node, ran);
+    const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle, parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
+    if (frozen.kind === "selected" && !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
     record.acted = true;
     // The look just taken is the page before the act; a capture after it is not compared with it (`../plan-resolution/self-changing/`).
     run.stores.targets.acting(buildOf(run));
@@ -393,7 +430,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
     // A lasting act whose answer was lost is checked against the step's own
     // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3); a control the page re-rendered is looked for again by its identity (t786).
-    const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), reacquire);
+    const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), reacquire, frozen.kind === "selected" ? frozen.capture : capture);
     actionability = webActionabilityFromPayload(result);
     assertActive(run.request.signal);
     // One the check showed landed counts as done, whatever its lost answer said.
@@ -441,11 +478,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // t778). A lasting press the page truly ignored is made again by Core's retries on its `certainNoEffect` (t517).
     const lasting = Array.isArray(declared) && declared.some((entry) => typeof entry === "string" && entry !== "");
     const pressAgain = async () => {
-      const repeated = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran));
+      const repeated = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), undefined, frozen.kind === "selected" ? frozen.capture : capture);
       actionability = webActionabilityFromPayload(repeated.result);
       return repeated.result.status === "succeeded";
     };
-    const pressed = await webPressSettled(node, current, await look(), webPlanFirstTargetHandle(written), {
+    const pressed = await webPressSettled(node, current, await look(), handle, {
       look, pressAgain, lasting, now: () => Date.now(),
       sleep: async (ms) => {
         await new Promise((resolve) => setTimeout(resolve, ms));
@@ -475,7 +512,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // The control this call acted on, named on its result by handle (`./outcome.ts` `controlHandle`, t442). A press that changed the page acts on what it
     // pressed, whatever that prints as (`../plan-resolution/target-packets.ts` `pressed`, t378 W13); and a step later written for any control acted on
     // saves it as this act found it, never as the act left it, with what the act made true as its effect (`acted`, t442 F1, t447 F2).
-    const named = webMovesThePage(node) ? undefined : webPlanFirstTargetHandle(written);
+    const named = webMovesThePage(node) ? undefined : handle;
     if (changed === true && node.definitionId === PRESS_NODE_ID && named !== undefined) run.stores.targets.pressed(buildOf(run), named);
     if (current && node.effect === "mutate" && named !== undefined) run.stores.targets.acted(buildOf(run), named, current, after);
     // Whether the press answered a layer that stood in front of the page, one
@@ -483,7 +520,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // `./own-layers/memory.ts`); then, whichever layers this press opened are the
     // build's own from here on. Never a look, a navigation or a read.
     const pressedOnPage = node.effect === "mutate" && !webMovesThePage(node);
-    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, webPlanFirstTargetHandle(written), (layer) => run.layers.owns(buildOf(run), layer));
+    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, handle, (layer) => run.layers.owns(buildOf(run), layer));
     if (pressedOnPage) run.layers.pressed(buildOf(run), current?.evidence, after?.evidence);
     // The page, with what the node did to it written on the same result rather
     // than around it. One shape, the one every other page has: the compact
@@ -502,8 +539,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
       actedOn: webNodeActedOn(node, current, named),
       // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`); one that cleared a layer over the page names it (`./press-effect/cleared-layer.ts`, t787).
-      choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)), toggle: webPressToggleSignature(node, current, after, webPlanFirstTargetHandle(written), { targets: run.stores.targets, scope: buildOf(run) }),
-      layerCleared: webPressClearedLayer(node, current, after, webPlanFirstTargetHandle(written), (layer) => run.layers.owns(buildOf(run), layer)),
+      choice: webPressChoice(node, current, after, handle), toggle: webPressToggleSignature(node, current, after, handle, { targets: run.stores.targets, scope: buildOf(run) }),
+      layerCleared: webPressClearedLayer(node, current, after, handle, (layer) => run.layers.owns(buildOf(run), layer)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
       control: control.name, controlHandle: named,
@@ -512,6 +549,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     });
     // The state the node found is the read before it acted, and the state it
     // left is the read after -- unsaid where the page could not be read in time.
+    if (pressed.noEffect === undefined && pressed.uncertain === undefined && lastingAct === undefined) capture?.publish();
     return withClearedWait(result.payload, withCallStates(toolExecution(
       // No page, no packet: the outcome alone, which says why.
       after === undefined ? outcome as unknown as JsonValue : nodeEvidence(after.evidence, outcome),
@@ -572,7 +610,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         written: undefined,
         // The press flipped whether its control is chosen, under the control's handle: Core
         // takes it out with a later press that flips it back (`./press-effect/toggle.ts`).
-        toggle: webPressToggle(node, current, after, webPlanFirstTargetHandle(written)),
+        toggle: webPressToggle(node, current, after, handle),
         // Which list on which page a list read read, as an opaque code: Core
         // refuses a second kept read of one list (`AS/runtime/flow-draft/
         // second-copy.ts`, `run-muq4oaof-464f5bce`). Made from the page the read
@@ -612,6 +650,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
     }
     throw error;
+  } finally {
+    if (frozen.kind === "selected") frozen.finish();
   }
 }
 
@@ -743,42 +783,6 @@ function nodeEvidence(page: WebLlmPageEvidence, outcome: WebNodeOutcome): JsonVa
   const published: JsonObject = publishedWebLlmPage(page) as unknown as JsonObject;
   const said: JsonObject = outcome as unknown as JsonObject;
   return { ...published, ...said } as unknown as JsonValue;
-}
-
-/**
- * The page as it stands, or nothing at all.
- *
- * A build that was told where its Flow starts has had nothing opened for it:
- * the tab is the blank one a browser opens on, the extension refuses to read it
- * (`apps/extension/src/runtime/unsupported-page.ts`), and the capture comes back
- * `page_unreadable`. That is not a fault to report, it is the situation, and
- * `undefined` is how this module says so.
- *
- * **The rule also holds when the page is already open.** Until a navigation
- * node has succeeded in this build (`./arrival.ts`) the answer is `undefined`
- * even when the capture read a page: on `run-muncqlr0-3348202b` the tab already
- * stood on the start location, the first look read it, no step ever reached
- * it, and the Flow was refused `bootstrap.cannot_reach_start_location`. The
- * capture is still taken, so the calls made are the same whichever tab the
- * build was handed. A look alone reads the page through {@link readablePage}.
- *
- * A build that was told no start location is unchanged in every respect: the
- * refusal is raised as it always was, because there is nowhere to send the
- * model and "the page could not be read" is then the whole truth.
- */
-async function currentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest): Promise<WebLlmSnapshotBinding | undefined> {
-  const page = await readablePage(run, request);
-  return run.request.startLocation === undefined || run.arrivals.arrived(buildOf(run)) ? page : undefined;
-}
-
-/** The page as it stands, arrived or not; `undefined` only for the unreadable page of a build told its start location. */
-async function readablePage(run: WebNodeRun, request: WebLlmEvidenceToolRequest, options?: { includeHidden: true; scope: WebTargetScope }): Promise<WebLlmSnapshotBinding | undefined> {
-  try {
-    return run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal, undefined, options));
-  } catch (error) {
-    if (run.request.startLocation !== undefined && error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
-    throw error;
-  }
 }
 
 /** The build this call belongs to, as Core's frame names it and every build memory keys it (`./build-state/`). */

@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../failure";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_RUN_NODE_TOOL_ID,
@@ -436,7 +437,7 @@ test("a replayed press that ran says what it changed on the page, as an explorat
 });
 
 /** A page whose Go button the page answers, failing with `failure` or not, by writing `answer` beside it. */
-function answeringStub(failure: { code: string } | undefined, answer: string) {
+function answeringStub(failure: { code: WebAutomationFailureCode } | undefined, answer: string) {
   let answered = false;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -448,7 +449,8 @@ function answeringStub(failure: { code: string } | undefined, answer: string) {
       }
       if (command.actionType === "web.dom.click") {
         answered = true;
-        if (failure) return { status: "failed", failure: { code: failure.code }, error: "no" };
+        // Browser producers send complete closed records; the host never repairs a partial failure.
+        if (failure) return { status: "failed", failure: webAutomationFailureRecord(failure.code), error: "no" };
       }
       return { status: "succeeded", payload: { value: "ok" } };
     }
@@ -459,7 +461,7 @@ function answeringStub(failure: { code: string } | undefined, answer: string) {
 // A press that lands counts on the page's status line, as a real page answers
 // a press, so no press here is taken for one that changed nothing (t511) and
 // pressed once more.
-function stub(options: { clickFailure?: { code?: string }; nextPageFailure?: { code: string }; payload?: JsonObject; elements?: JsonObject[]; truncated?: true } = {}) {
+function stub(options: { clickFailure?: { code?: WebAutomationFailureCode }; nextPageFailure?: { code: WebAutomationFailureCode }; payload?: JsonObject; elements?: JsonObject[]; truncated?: true } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
@@ -469,10 +471,10 @@ function stub(options: { clickFailure?: { code?: string }; nextPageFailure?: { c
       if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(options.elements, options.truncated, presses) } };
       if (command.actionType === "web.dom.click" && options.clickFailure) {
         const code = options.clickFailure.code;
-        return code === undefined ? { status: "failed", error: "no" } : { status: "failed", failure: { code }, error: "no" };
+        return code === undefined ? { status: "failed", error: "no" } : { status: "failed", failure: webAutomationFailureRecord(code), error: "no" };
       }
       if (command.actionType === "web.dom.click") presses += 1;
-      if (command.actionType === "web.dom.next_page" && options.nextPageFailure) return { status: "failed", failure: { code: options.nextPageFailure.code }, error: "no" };
+      if (command.actionType === "web.dom.next_page" && options.nextPageFailure) return { status: "failed", failure: webAutomationFailureRecord(options.nextPageFailure.code), error: "no" };
       return { status: "succeeded", payload: options.payload ?? { value: "ok" } };
     }
   };
@@ -527,6 +529,9 @@ test("a replayed press is still sent when the page read could hold its target, o
       ...PROJECT, callId: "dryrun.1.12", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
       value: { replay: "step", node: CLICK, parameters: entry.parameters, consequences: [], from: entry.from }
     });
-    assert.equal(stubbed.commands.filter((command) => command.actionType === "web.dom.click").length, 1, entry.why);
+    const presses = stubbed.commands.filter((command) => command.actionType === "web.dom.click");
+    // A complete retryable target-resolution failure gets Core's first attempt and three retries.
+    assert.equal(presses.length, 4, entry.why);
+    assert.equal(presses.every((command) => command.parameters.selector === entry.parameters.selector), true, entry.why);
   }
 });

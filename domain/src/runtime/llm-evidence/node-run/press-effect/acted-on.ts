@@ -12,7 +12,7 @@
 
 import { quotedWords, webLlmElementWords } from "../../page-view";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
-import { webLlmItemRow } from "../../structure/item-row";
+import { webLlmItemRow } from "../../structure";
 import type { WebRunnableNode } from "../catalog";
 
 /**

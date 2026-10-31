@@ -29,7 +29,7 @@ test("a list read keeps its account ahead of its rows: the origin once, the firs
   assert.equal((read.extracted as unknown[]).length, 70);
   assert.deepEqual(read.firstRows, (read.extracted as unknown[]).slice(0, WEB_NODE_READ_FIRST_ROWS));
   assert.match(read.restOfRows as string, /all 70 kept rows/u);
-  assert.match(read.restOfRows as string, /core\.recall_result/u);
+  assert.equal(read.restOfRows, "extracted holds all 70 kept rows.");
   // The page's own address stays whole: it is where the origin is read from.
   assert.equal(read.url, PAGE);
 });
