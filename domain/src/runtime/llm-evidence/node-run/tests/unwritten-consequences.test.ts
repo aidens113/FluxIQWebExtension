@@ -1,3 +1,4 @@
+import { webAutomationResolvedActionEffect } from "../../../../actions/action-effect";
 // A call that declared no consequences is written back without one, and a call
 // already stored with `consequences: null` runs as though it said nothing.
 //
@@ -239,3 +240,19 @@ function page(presses: number): JsonObject {
     interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }, { tagName: "input", selector: "#query", inputType: "text", accessibleName: "Search", attributes: { name: "q" } }, { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` }]
   };
 }
+
+
+test("the actual permission declaration preserves a trusted commit beside legacy observe and empty model consequences", async () => {
+  const declarations: unknown[] = [];
+  const result = await webActionPermission({
+    check: async (declaration) => {
+      declarations.push(declaration);
+      return { permitted: true };
+    },
+    declared: [], control: { name: "Continue", kind: "button" }, verb: "press", effect: "observe",
+    actionEffect: webAutomationResolvedActionEffect("web.dom.click", { effect: "observe", consequences: [] })
+  });
+  assert.equal(result.kind, "permitted");
+  assert.deepEqual(declarations, [{ consequences: [], control: { name: "Continue", kind: "button" }, verb: "press", effect: "observe",
+    actionEffect: { effectClass: "commit", permissionConsequences: [] } }]);
+});

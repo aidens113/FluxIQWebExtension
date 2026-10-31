@@ -1,3 +1,4 @@
+import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
 // Running the draft again as the Flow will run it, with no model attached.
 //
 // Core decides that a draft must be replayed before it may be proposed
@@ -259,7 +260,7 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
   // Moving about has no lasting consequence, and the gate is still asked:
   // every act a replay takes goes through it, with no exception made for the
   // one this module writes itself.
-  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "page" }, verb: "go to", effect: "mutate" });
+  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "page" }, verb: "go to", effect: "mutate", actionEffect: webAutomationResolvedActionEffect("web.browser.navigate") });
   if (permission.kind === "refused" || permission.kind === "invalid") {
     // A reset names no node of the library -- it is this module's own move --
     // so there is no catalog id to publish, only why it was not allowed.
@@ -304,7 +305,8 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     verb: webNodeActVerb(node, parameters),
     // The node's own, so a replayed read is not gated on what the model wrote
     // about it -- the same rule the live run applies (`./run.ts`).
-    effect: node.effect
+    effect: node.effect,
+      actionEffect: webAutomationResolvedActionEffect(node.actionType, parameters)
   });
   if (permission.kind === "refused" || permission.kind === "invalid") {
     // Whether the declaration could not be read, whether the classes were not

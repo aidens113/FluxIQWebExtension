@@ -1,3 +1,4 @@
+import { WEB_AUTOMATION_NODE_ACTION_EFFECT, WEB_AUTOMATION_SUBMIT_PARAMETER, WEB_AUTOMATION_NEW_TAB_PARAMETER } from "../actions/action-effect";
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
@@ -285,6 +286,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       requiredPermissions: ["web-automation.action"]
     },
     outputAction: { fixedOutputId: definition.actionType },
+    actionEffect: WEB_AUTOMATION_NODE_ACTION_EFFECT[definition.actionType],
     // An element-target node may be run on a loop's current row; the others
     // (a navigation, a list extraction, a dialog answer) have no element to
     // scope, so they declare no port a loop could wire.
@@ -348,9 +350,9 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   const structured = (id: string, label: string): AutomationNodeParameter => ({ id, label, valueType: "object", ui: { control: "value" } });
   if (outputId === "web.browser.navigate") return [
     { id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } },
-    { id: "newTab", label: "New Tab", valueType: "boolean", defaultValue: false }
+    WEB_AUTOMATION_NEW_TAB_PARAMETER
   ];
-  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }, { id: "submit", label: "Send Form After Typing", valueType: "boolean", defaultValue: false }];
+  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }, WEB_AUTOMATION_SUBMIT_PARAMETER];
   if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
   if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers")];
   if (outputId === "web.dom.scroll") return [

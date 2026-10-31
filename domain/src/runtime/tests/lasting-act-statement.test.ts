@@ -76,3 +76,15 @@ test("typing that sends its form, or a plain type whose step declared a lasting 
   assert.equal(declared?.disposition, "refuse");
   assert.equal(declared?.actUncertain, true);
 });
+
+
+test("downloads, tabs, Next and unresolved submit state uncertainty without changing permission declarations", () => {
+  for (const [actionType, parameters] of [
+    ["web.browser.download", {}], ["web.browser.tab", {}], ["web.dom.next_page", {}],
+    ["web.dom.type", { submit: { $state: { path: "send", fallback: false } } }]
+  ] as const) {
+    const failure = stated(actionType, parameters, WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED);
+    assert.equal(failure.effect, "ambiguous", actionType);
+    assert.equal(stated(actionType, parameters, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND).effect, "unacted", actionType);
+  }
+});

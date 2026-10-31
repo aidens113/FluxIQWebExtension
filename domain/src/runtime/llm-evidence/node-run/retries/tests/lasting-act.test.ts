@@ -140,3 +140,86 @@ test("a lasting press whose effect cannot be determined ends uncertain without a
     assert.equal(outcome.attempts, 1);
   }
 });
+
+
+test("trusted commit floors hold bare failures and throws despite spoofed observe metadata", async () => {
+  for (const actionType of ["web.browser.download", "web.browser.tab", "web.dom.next_page", "web.dom.type"]) {
+    for (const throws of [false, true]) {
+      let sent = 0;
+      const gateway: WebLlmEvidenceGateway = {
+        eligibleSessionIds: () => ["session.one"],
+        executeAction: async () => {
+          sent += 1;
+          if (throws) throw new Error("acknowledgement lost");
+          return { status: "timed_out" };
+        }
+      };
+      const outcome = await webNodeDispatchWithRetries(
+        { gateway, sessionId: "session.one", request: { ...PROJECT, callId: "floor", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: {} } },
+        { definitionId: actionType, effect: "observe", declared: [] },
+        { actionType, parameters: actionType === "web.dom.type" ? { submit: { binding: "unresolved", fallback: false } } : {}, metadata: { effect: "observe", actionEffect: { effectClass: "observe" }, idempotent: true } }
+      );
+      assert.equal(sent, 1, `${actionType} throws=${throws}`);
+      assert.equal(outcome.lastingAct, "uncertain");
+    }
+  }
+});
+
+test("new commit kinds still retry a proven unacted failure or not-landed effect", async () => {
+  for (const actionType of ["web.browser.download", "web.browser.tab", "web.dom.next_page"]) {
+    for (const code of [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED]) {
+      const site = itemPage(actionType, [failed(code)]);
+      const outcome = await webNodeDispatchWithRetries(
+        { gateway: site.gateway, sessionId: "session.one", request: { ...PROJECT, callId: "floor", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: {} } },
+        { definitionId: actionType, effect: "mutate", declared: [] },
+        { actionType, parameters: {}, metadata: {} }, undefined, async () => "not_landed"
+      );
+      assert.deepEqual(site.sent, [1, 2], actionType);
+      assert.equal(outcome.result.status, "succeeded");
+    }
+  }
+});
+
+
+test("forced and unresolved new-tab navigation stays uncertain at the actual dispatch seam", async () => {
+  for (const newTab of [true, { $state: { path: "tab", fallback: false } }]) {
+    const site = itemPage("web.browser.navigate", [failed(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT)]);
+    const outcome = await webNodeDispatchWithRetries(
+      { gateway: site.gateway, sessionId: "session.one", request: { ...PROJECT, callId: "new-tab", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: {} } },
+      { definitionId: "web.output.browser-navigate", effect: "mutate", declared: [] },
+      { actionType: "web.browser.navigate", parameters: { url: ITEM, newTab }, metadata: { effect: "observe", idempotent: true } }
+    );
+    assert.deepEqual(site.sent, [1]);
+    assert.equal(outcome.lastingAct, "uncertain");
+  }
+});
+
+test("trusted replacement-state safety cannot erase a declared lasting consequence", async () => {
+  for (const actionType of ["web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.check", "web.browser.navigate"]) {
+    const site = itemPage(actionType, [failed(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT)]);
+    const outcome = await webNodeDispatchWithRetries(
+      { gateway: site.gateway, sessionId: "session.one", request: { ...PROJECT, callId: "lasting-state", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: {} } },
+      { definitionId: actionType, effect: "mutate", declared: ["modify_existing"] },
+      { actionType, parameters: { selector: "#field", text: "replacement", checked: true, url: ITEM }, metadata: { effect: "observe", idempotent: true } }
+    );
+    assert.deepEqual(site.sent, [1], actionType);
+    assert.equal(outcome.lastingAct, "uncertain", actionType);
+  }
+});
+
+
+test("inspected clear and select replacement setters preserve retries after ambiguous and verification failures", async () => {
+  for (const actionType of ["web.dom.clear", "web.dom.select"]) {
+    for (const code of [WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED]) {
+      const site = itemPage(actionType, [failed(code)]);
+      const outcome = await webNodeDispatchWithRetries(
+        { gateway: site.gateway, sessionId: "session.one", request: { ...PROJECT, callId: "replacement", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: {} } },
+        { definitionId: actionType, effect: "mutate", declared: [] },
+        { actionType, parameters: { selector: "#field", value: "desired-option" }, metadata: {} }
+      );
+      assert.deepEqual(site.sent, [1, 2], `${actionType} ${code}`);
+      assert.equal(outcome.result.status, "succeeded");
+      assert.equal(outcome.lastingAct, undefined);
+    }
+  }
+});

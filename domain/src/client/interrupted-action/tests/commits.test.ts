@@ -1,35 +1,26 @@
-// The commit rule the extension asks before every command is the one a Flow
-// step's permission gate uses (`webPlanStepMustDeclare`). It is restated as
-// plain values for the browser bundle, so this holds the two to the same
-// answer for every action type, with and without a submitting type.
-
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../../../actions/types";
-import { webAutomationOutputNodeId } from "../../../output-nodes";
-import { webPlanStepMustDeclare } from "../../../runtime/llm-evidence/plan-resolution";
-import { webAutomationActionCommits } from "..";
+import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
+import { webAutomationActionCommits, webAutomationInterruptedDispatchReading } from "..";
 
-test("every action type commits exactly when a Flow step running it must declare its consequences", () => {
-  const variants: (JsonObject | undefined)[] = [undefined, {}, { submit: true }, { submit: false }, { submit: "true" }];
-  for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
-    for (const parameters of variants) {
-      assert.equal(
-        webAutomationActionCommits(actionType, parameters),
-        webPlanStepMustDeclare(webAutomationOutputNodeId(actionType), parameters),
-        `${actionType} ${JSON.stringify(parameters)}`
-      );
+test("every interruption uses the trusted parameter-aware effect floor", () => {
+  for (const action of WEB_AUTOMATION_ACTION_TYPES) {
+    for (const parameters of [undefined, {}, { submit: true }, { submit: false }, { submit: "true" }, { submit: { binding: "state", fallback: false } }, { newTab: false }, { newTab: true }, { newTab: { $state: { path: "tab", fallback: false } } }]) {
+      const commits = webAutomationResolvedActionEffect(action, parameters)?.effectClass === "commit";
+      assert.equal(webAutomationActionCommits(action, parameters), commits, action);
+      const reading = webAutomationInterruptedDispatchReading(action, parameters, { status: "interrupted", effect: "unknown" });
+      assert.equal(reading?.failure.effect, commits ? "ambiguous" : "unacted", action);
     }
   }
 });
 
-test("a press, a key press, a dialog answer and a submitting type commit; plain typing and reads do not", () => {
-  assert.equal(webAutomationActionCommits("web.dom.click", undefined), true);
-  assert.equal(webAutomationActionCommits("web.dom.keypress", {}), true);
-  assert.equal(webAutomationActionCommits("web.dom.dialog", {}), true);
-  assert.equal(webAutomationActionCommits("web.dom.type", { submit: true }), true);
+test("downloads, tabs and Next retain uncertainty without requiring new consequence declarations", () => {
+  for (const action of ["web.browser.download", "web.browser.tab", "web.dom.next_page"]) {
+    assert.equal(webAutomationActionCommits(action, {}), true, action);
+  }
+  assert.equal(webAutomationActionCommits("unknown", {}), false);
   assert.equal(webAutomationActionCommits("web.dom.type", {}), false);
-  assert.equal(webAutomationActionCommits("web.dom.extract", {}), false);
-  assert.equal(webAutomationActionCommits("web.browser.navigate", {}), false);
+  assert.equal(webAutomationActionCommits("web.dom.type", { submit: false }), false);
+  assert.equal(webAutomationActionCommits("web.dom.type", { submit: true }), true);
 });

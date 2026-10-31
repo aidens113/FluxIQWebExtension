@@ -58,7 +58,7 @@ import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type W
 import { webResetResource, webTargetSpot } from "../../control-spot";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSnapshotBinding } from "../../sanitize";
 import { createWebLlmExtractionHandles } from "../../structure";
-import { createWebLlmTargetPackets, resolveWebPlanNode } from "..";
+import { createWebLlmTargetPackets, resolveWebPlanNode, webPlanStepPermission } from "..";
 
 const TYPE_NODE = webAutomationOutputNodeId("web.dom.type");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
@@ -479,4 +479,38 @@ test("exploration's own declaration is unchanged: a call its caller gated is nev
   const { outcome, controls } = await pressDeclaration(targets, { target: { handle: handleOf(binding, "#star-1") } }, true);
   assert.equal(outcome.resolution.status, "resolved");
   assert.deepEqual(controls, []);
+});
+
+
+test("plan permission projects the trusted parameter-sensitive floor without inventing prompts", async () => {
+  for (const [actionType, parameters, effectClass] of [
+    ["web.dom.click", {}, "commit"], ["web.dom.type", {}, "state"],
+    ["web.dom.type", { submit: false }, "state"], ["web.dom.type", { submit: true }, "commit"],
+    ["web.dom.type", { submit: { $state: { path: "send", fallback: false } } }, "commit"],
+    ["web.browser.download", {}, "commit"], ["web.browser.tab", {}, "commit"], ["web.dom.next_page", {}, "commit"]
+  ] as const) {
+    const declarations: AutomationStudioActionDeclaration[] = [];
+    const answer = await webPlanStepPermission({
+      nodeDefinitionId: webAutomationOutputNodeId(actionType), parameters, declared: [],
+      check: async (declaration) => {
+        declarations.push(declaration);
+        return { permitted: true };
+      }
+    });
+    assert.equal(answer.kind, "clear");
+    assert.equal(declarations[0]?.actionEffect?.effectClass, effectClass);
+    assert.deepEqual(declarations[0]?.actionEffect?.permissionConsequences, []);
+    assert.equal(declarations[0]?.actionEffect?.repeatSafe, effectClass === "state" ? true : undefined);
+    assert.deepEqual(declarations[0]?.consequences, []);
+  }
+  for (const actionType of ["web.browser.download", "web.browser.tab", "web.dom.next_page"] as const) {
+    let asked = false;
+    assert.deepEqual(await webPlanStepPermission({ nodeDefinitionId: webAutomationOutputNodeId(actionType), parameters: {}, declared: undefined,
+      check: async () => {
+        asked = true;
+        return { permitted: true };
+      }
+    }), { kind: "clear" });
+    assert.equal(asked, false);
+  }
 });

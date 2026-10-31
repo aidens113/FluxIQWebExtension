@@ -167,6 +167,32 @@ look is answered as an ordinary look. Bindings are supported at parameter-leaf
 level only: a `$state` inside an `extractList` `where` condition value is not
 supported: the extraction's condition readers do not resolve bindings.
 
+## Trusted Client Effect Floor
+
+Canonical web node definitions carry Core's typed `actionEffect` contract,
+resolved from `actions/action-effect/`. Click, keypress, dialog, download, tab
+operations and Next are committing operations; typing becomes committing when
+`submit` is true or unresolved. Explicit/default false keeps ordinary typing a
+state change. Reads and waits remain observations. The table is independent of
+the consequence-declaration rule above: a commit alone supplies no concrete
+permission class and adds no declaration requirement or playback prompt.
+
+The table separately promises `repeatSafe: true` for inspected absolute setters:
+plain typing replaces the value, clear empties it, select assigns the requested
+option, check establishes its requested boolean, and same-tab navigation sets
+the location. State alone never implies this promise. Typing with submit and
+navigation with true/unresolved `newTab` resolve to commit; known or declared
+lasting consequences also override repeat safety. Upload has no repeat-safety
+promise.
+
+Exploration, plan projection, native playback, verification and direct presses
+pass the canonical resolved floor separately from model metadata. Core keeps it
+through failures and retries. A thrown gateway acknowledgement becomes a typed
+unknown result without exposing exception text; an uncertain committing action
+is checked and held rather than blindly repeated. Proven unacted/not-landed
+actions retain automatic retries. The browser-safe helper imports only Core's
+`fluxiq/automation-studio/action-effect` public subpath.
+
 ## Elements Are Named By Handle Only
 
 The user's rule (2026-10-10, t432): every saved element carries the full
