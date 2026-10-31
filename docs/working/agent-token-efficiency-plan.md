@@ -1,9 +1,9 @@
 # Agent Token Efficiency Plan
 
 Status: Paused
-Status detail: Phases 0-3 executed 2026-09-10; global agent tooling is now owned by F:!AgentBrain. Phase 4 (measure and trim) is deferred until the user asks.
+Status detail: Phases 0-3 executed; MeritPrompts now owns shared Claude Code and Codex policy, hooks and lessons. Phase 4 measurement remains paused.
 Created: 2026-09-10
-Last updated: 2026-10-07
+Last updated: 2026-10-30
 Owner: Senior supervisor agent
 Scope: Keeping the senior supervisor agent's context small on every project: fix instruction loading, add a global layer under `~/.claude` fed from a shared brain repository, define global / family / project / task memory tiers, and enforce delegation, worker return, and handoff rules mechanically.
 Paired document: `F:\!FluxIQ\docs\working\agent-token-efficiency-plan.md`
@@ -13,73 +13,33 @@ Related: [AGENTS.md](../../AGENTS.md), [agent working document protocol](./agent
 
 ## Current State
 
-**Executed 2026-09-10.** Phases 0 to 3 are done; Phase 4 (measure and
-trim) starts once the hooks have run in real sessions. One step is left to
-the user: merging the settings fragment. The origin of the plan, the gaps it
-found, and its decisions are in the sections below and in the first ledger
-entry.
+**2026-10-30: MeritPrompts 0.2.0 runtime integration is complete in both repositories.**
 
-**What exists now**
+- Shared rules, runtime guides, hooks, skills and global/family lessons live
+  at `C:/Users/osrs_/MeritClaude` (MeritPrompts 0.2.0). The retired
+  `F:/!AgentBrain` is historical; the design below records the original migration.
+- Claude global installation imports shared policy, the Claude adapter and
+  global lessons; global settings register hooks for sessions in both projects.
+  Project `CLAUDE.md` keeps `@AGENTS.md` and the FluxIQ family index import.
+- Codex global installation writes `~/.codex/AGENTS.md`. Project `AGENTS.md`
+  explicitly links `CODEX.md`, which loads the Codex adapter and directs
+  explicit reads of relevant FluxIQ family lessons. Claude model aliases
+  and hooks are not installed into Codex.
+- Project-specific safety, boundaries, validation, `pnpm task`, promotion rules,
+  working-document memory and local auto-memory remain authoritative.
+- The previous installation verified 357 lesson, memory, Codex configuration
+  and skill files unchanged, and Claude settings byte-identical. Both global
+  installer drift checks and 26 installer/hook tests passed.
+- This paired update is task t815. Worker `meritprompts-core` owns only Core
+  instruction entry points and its report; the lead owns extension integration,
+  both working documents, checks and merges. No application runtime changes.
 
-- `CLAUDE.md` in both repositories imports `AGENTS.md` and the FluxIQ
-  family lessons index. Until today Claude Code loaded no repository
-  instructions in either repository, because it reads `CLAUDE.md` only.
-- The brain repository `F:\!AgentBrain` (local, four commits, no remote):
-  global rules (60 lines, budgeted), the `worker` agent (Opus 5, no `Agent`
-  tool, discovery rule and return contract in its prompt), `/resume`,
-  `/handoff`, `/lesson`, `/new-project`, five hooks with 39 recorded-payload
-  tests, eight promoted lessons (six global, two FluxIQ), seven templates,
-  a standalone working-docs audit with 18 tests, and `install.mjs`.
-- Installed into `~/.claude`: `CLAUDE.md` (two imports), `agents/worker.md`,
-  the four skills, and the settings fragment (env, permissions, five hooks),
-  merged with the user's explicit permission. `install.mjs --check` passes.
-- Live-tested in this session: a subagent's `git commit` in a throwaway
-  repository was denied by the guard with the expected reason. The `worker`
-  agent type joins the roster from the next session on.
-- `AGENTS.md` in both repositories has the `Delegation` subsection; the
-  protocol in both has the 40-line brief budget, the report format, and the
-  12-line return contract.
-- The `working-docs` audit rule (Core-owned, mirrored byte for byte) fails a
-  `Current State` over 150 lines and a ledger entry without a real
-  `Validation` bullet; 11 tests, run by `pnpm structure:test` in both.
-- The eight auto-memories are unpinned; their content lives in the brain.
-- Worker reports for this work unit are under
-  `agent-token-efficiency-plan/reports/`.
+**Validation:** both project structure audits and global drift checks passed.
+Instruction routing/import/path assertions passed in both roots. All 357
+preserved files remain identical, as does Claude settings.json; all eight
+configured hook entries resolve.
 
-**Left to the user**
-
-1. Open a new session in either repository and run `/context`: `AGENTS.md`,
-   the global rules, and both lessons indexes should appear under memory
-   files. Approve the one-time dialog for the family-index import. The
-   metrics hook then starts writing `~/.claude/brain-metrics.ndjson`.
-2. Give the brain a private remote if it should survive this machine.
-
-**Deviations from the plan as written**
-
-- Six lessons went global and two to the FluxIQ family, not two and five:
-  roles, working documents as memory, and the Opus default are now global
-  rules, so their lessons belong beside them.
-- `install.mjs` does not write `settings.json`; see above.
-- The hearsay pattern is `reported success` or
-  `workers? (reported|said|claimed)\b`; "worker reports" as a noun phrase
-  is legitimate and was a false positive on this repository's protocol.
-- The git guard also denies `merge`, `cherry-pick`, `am`, `stash`, bare
-  `reset`, `filter-repo`, `branch -d`, and `gh pr create` or `merge`, and it
-  keys on `agent_id`, so every subagent is guarded, not only `worker`. It
-  strips heredoc bodies before scanning: the live test showed a report whose
-  prose quoted `git commit` being denied.
-- Claude Code refuses a subagent `Write` to a file named `report.md`, so the
-  template is `worker-report.md` and the worker definition says never to use
-  that name.
-
-**Next steps**
-
-1. The two user steps above.
-2. Phase 4 after two weeks of use: read the metrics, compare against the
-   4 KB global and 20 KB project targets, and move `AGENTS.md` sections
-   into path-scoped rules only if the project layer is over target.
-3. Use `/new-project` on the next repository and fix what the templates get
-   wrong; both budgeted templates sit exactly at their caps.
+**Next:** no runtime integration work remains. Phase 4 measurement stays paused.
 
 **Blockers:** none.
 
@@ -423,6 +383,15 @@ for the last time.
 ---
 
 ## Work Ledger
+
+### 2026-10-30 ? MeritPrompts project runtime integration (t815)
+
+- Agent: senior supervisor; Core instruction files by worker meritprompts-core.
+- Changed: root AGENTS.md, CLAUDE.md, new CODEX.md, this document and its generated index; Core worker report.
+- Why: update both existing projects to the shared Claude Code/Codex policy without replacing project rules or second-brain memory.
+- Validation: `node C:/Users/osrs_/MeritClaude/install.mjs --check` and `--codex --check` -> both passed. Worker diff independently reviewed. `node scripts/structure-audit.mjs --json` -> exit 0, no failures in each repository. Supervisor Node assertions -> both runtime routes/imports/lesson paths passed; 357 preservation hashes unchanged; Claude settings byte-identical; eight hook entries resolve. `git diff --check` -> passed. An audit probe before worktree dependency installation completed could not resolve TypeScript; rerun after setup.
+- Outcome: Accepted; instruction integration validated.
+- Follow-up: no application tests or interactive runtime sessions needed for these instruction-only edits; phase 4 measurement remains paused.
 
 ### 2026-09-10 — Plan authored; scripts baseline repaired
 
