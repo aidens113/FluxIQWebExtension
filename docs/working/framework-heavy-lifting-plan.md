@@ -23,6 +23,7 @@ Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout
 Lab support on both pushed dev branches; see `claude-live-provider-plan.md`. Keep identical acceptance criteria and
 record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
 The user set Claude live tests to $5 per build; main ignored `.env.local` and both agent instruction files record it.
+**Full sweep2 running, promotion held:** disposable paired t818 at Core803f3c81/downstream16dd9ad3; both builds passed. Core ordinary:14826 passed/six failed; SQL:1655 passed/27 failed; Core web group finished. Downstream check found two old DeepSeek expectations and domain found five saved-repair failures. Core t819 fix is merged/pushed3f5fe961; t820 exact fixture alignment mergedc7f33647 (push underway). Every previously failed file now passes narrowly:259 unique Core tests, seven downstream saved-repair tests and five Lab command tests, final Core types/both audits/three-library rebuild pass; storage's original15s timeout remains unexplained. Downstream extension tests are running. Copied env removed, provider secrets/FLUXIQ overrides stripped, temporary runtime roots. Logs/summary: ignored test-runs/2026-10-30-sweep-2. No paid calls; no promotion before a corrected-source sweep within the daily limit.
 
 **Core owns this plan.** The findings, the responsibility map, every client contract (CC1-CC14, K1-K7), the phases
 P0-P10 and what not to do are in the owning document:
@@ -87,7 +88,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. t799, t816, t810, t811, t813 and t814 are merged; finish t817 acceptance, then run the remaining isolated full sweep.
+1. t799, t816, t810, t811, t813, t814 and t817 are merged. Finish isolated sweep2, trace and fix its failures narrowly; do not promote a failed sweep or exceed the two-sweeps-per-day rule.
 2. t817 fixed the first-already-satisfied-row defect: paired before/after evidence and explicit grounded end-state choice now pass native oracle/saved-replay proof; no first/majority click inference.
 3. After the user's go, run the live round with Claude/$5: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
@@ -441,6 +442,17 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Validation: native first-row oracle/save/replay passed; lead JSON gate ->accepted:true,15-to15callbacks,3skips,0transitions,3orderedrecords,1savedstate. Official same-origin URL comparator reused unchanged; expected records/oracle untouched.
 - Validation: obstruction-only `playwright test` ->1passed(1.9m); lead JSON gate ->4recoveries,6independentUIchecks,6exact scripted-uncertainty rows,0failedaction/recoveryrows,2handler requests,1actualskip,finalverdict yes. Three JSONs retained under ignored main test-runs/2026-10-30-t817-final.
 - Outcome: Coreae354e9d/downstreamdf58a48e merged with Core0.14.0; Core contracts70 and downstream structure passed. No paid calls, panel management or oracle weakening; native Firefox/full sweep remain unverified.
+
+### 2026-10-30 - Sweep2 provider-binding regression repaired (t819)
+- Cause: strict model validation rejected policy IDs and the old host sentinel before any fake request; recovery also omitted the Flow's chosen model/key.
+- Changed: Core recovery and caller-paid judging now retain canonical model/provider/key choices; only legacy host means unspecified. Invalid concrete bindings still fail before key access. The original seven failing integration assertions are unchanged.
+- Validation: lead `vitest run` on recovery requests, repair/replay chain, session-key resolver and caller-paid service ->41 passed; adjacent recovery/flow-settings ->176 passed; Core typecheck and full audit ->exit0. New regressions verify explicit Claude/named-key propagation and no reveal/fetch for invalid bindings.
+- Outcome: Core0.14.1 merged/pushed3f5fe961,70 mandatory merge contracts passed; frozen full sweep2 continues and cannot certify the new fix. The merge helper's default full check was stopped during tooling tests and re-run with --skip-checks after observed narrow acceptance, respecting the daily full-suite limit. Task t820 traces the remaining SQL failures; no paid calls, main promotion held.
+
+### 2026-10-30 - Remaining sweep fixtures and storage verification (t820)
+- Changed: two Core bootstrap service assertions require actual saved Flow metadata/caller/provider; one Lab command fixture expects the requested Claude live default instead of historical DeepSeek. Production behavior and oracles are unchanged.
+- Validation: remaining seven Core failure files ->37 passed/two stale assertions failed, then14 generation/extend tests passed after exact fixture updates; five other files passed unchanged. Lead storage reseal-interruption ->3 passed with unchanged15s limit and703ms race; worker also3/3 twice, probes removed. `node --test scripts/lab/live-campaign/tests/lab-run-command.test.mjs` ->5 passed. `pnpm --filter @fluxiq-web-extension/domain test carried-service-repair carried-row-service-repair` with label t820-saved-repair ->7 passed, including all five original domain failures after the t819 library rebuild.
+- Outcome: Corec7f33647 merged after70 mandatory contract tests; original storage timeout cause unproven, no source fix justified. All previously failed files pass narrowly; final Core types, both full audits and three rebuilt Core libraries pass. Full extension unit run continues; corrected-source whole sweep required within daily quota. No paid calls.
 
 ## Open Questions
 

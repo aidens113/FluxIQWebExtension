@@ -8,7 +8,7 @@ import { CATALOG, REPAIR_LIMIT_ARGS, CREATE_LIMIT_ARGS, REPAIRS } from "./tasks.
 test("each repair task becomes one adapt run of the recorded Flow, with the live limits unless they are given after --", () => {
   assert.deepEqual(labRunArguments(REPAIRS[0], parseCampaignArgs([])), [
     "run", "identity-drift", "--variant", "renamed-redesign", "--flow",
-    "--live-llm", "--llm-profile", "lab-adapt-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash", "--authoring-mode", "legacy",
+    "--live-llm", "--llm-profile", "lab-adapt-repair", "--llm-provider", "anthropic", "--llm-model", "claude-sonnet-5-5", "--authoring-mode", "legacy",
     "--llm-task", "adapt", ...REPAIR_LIMIT_ARGS,
   ]);
   const workflowOnly = labRunArguments(REPAIRS[2], parseCampaignArgs(["--llm-profile", "p"]));
@@ -27,8 +27,8 @@ test("each repair task becomes one adapt run of the recorded Flow, with the live
   // `performance.budget` after the money is spent. An operator may still give one.
   assert.equal(overridden.includes("--llm-max-run-tokens"), false);
   assert.equal(labRunArguments(CATALOG[0], parseCampaignArgs([])).includes("--llm-max-run-tokens"), false);
-  // Nor a cost: the per-build ceiling has one definition, Core's, which the
-  // Lab's plan applies to the whole build. A copied "0.25" here could only drift.
+  // Nor a cost: the Lab plan applies the live-test default to the whole build.
+  // Copying that default here could drift; an explicit lower purse still wins.
   assert.equal(labRunArguments(CATALOG[0], parseCampaignArgs([])).includes("--llm-max-cost-usd"), false);
   assert.equal(labRunArguments(REPAIRS[1], parseCampaignArgs([])).includes("--llm-max-cost-usd"), false);
   const operatorBudget = labRunArguments(REPAIRS[1], parseCampaignArgs(["--", "--llm-max-run-tokens", "5000000"]));
@@ -49,7 +49,7 @@ test("each task becomes one create-flow Lab run naming its scenario, variant and
   const options = parseCampaignArgs(["--llm-profile", "p", "--", "--target", "persistent-isolated"]);
   assert.deepEqual(labRunArguments(CATALOG[2], options), [
     "run", "data-table", "--variant", "column-reorder",
-    "--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash", "--authoring-mode", "legacy",
+    "--live-llm", "--llm-profile", "p", "--llm-provider", "anthropic", "--llm-model", "claude-sonnet-5-5", "--authoring-mode", "legacy",
     "--llm-task", "create-flow", "--instruction-task", "table-read-reordered", ...CREATE_LIMIT_ARGS, "--target", "persistent-isolated",
   ]);
   assert.equal(labRunArguments(CATALOG[0], options).includes("--variant"), false);
