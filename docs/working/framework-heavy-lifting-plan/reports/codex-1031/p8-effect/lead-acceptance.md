@@ -53,3 +53,13 @@ Updated three-library build exit0 (fluxiq78.648s). Compiled pure browser probe15
 This is a real content action regression using the native Core SDK; background transport, installed extension/panel, model authoring, judging, whole Flow completion and Firefox runtime were not exercised. No paid calls, full suite or panel server. HTML evidence preserved MAIN ignored test-runs/2026-10-31-t824-browser-report/index.html, checked present.
 
 Parent dev merged into both tasks: documentation only, no integrated source conflict. Staged whitespace review removed one blank EOF from control-words helper, no semantic change or test assertion change. Domain/extension final type refresh and structure merge gates follow before closing. Core source checkpoints3d790f7e and Down3e3318cd; task backups retained. Main still needs a later permitted full sweep.
+
+## Integration completed
+
+Post-parent-merge narrow checks passed: Core typecheck reused its valid stamp; domain check exit0 (20.466s), extension check exit0 (37.834s). No runtime tests repeated for documentation-only parent changes and a blank EOF removal.
+
+`pnpm.cmd task finish t824 'Enforce trusted action effects and safe state retries'` in downstream ->structure gate passed, merged02f215f3, task worktree removed. Then detached private Core and ran `pnpm.cmd task finish t824 'Enforce trusted action effects and safe state retries' --skip-checks` in Main Core ->mandatory3files70contracts passed, merged78cb70d8. The default whole check was explicitly skipped under the daily cap after narrow acceptance; no hooks bypassed.
+
+`git push origin dev` observed Core0ae7ebfd..78cb70d8, then downstreamb2ee519e..02f215f3. Remote task backups retained in both repositories. Main unchanged; no full suite or paid model calls. User's unrelated .clinerules/fluxiq.md remains unstaged.
+
+Main checkout filtered refresh completed: Core3libraries exit0 (fluxiq79.095s), domain package build exit0 (16.978s), extension package build exit0 (20.826s),22files each Chrome/Firefox/e2e. No panel start/reload of user's browser. Private detached Core remains for normal age-based task pruning.
