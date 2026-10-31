@@ -82,19 +82,29 @@ test("installed authoring reruns one proven state call through the actual permis
     expect(providerTurns).toBeGreaterThanOrEqual(3);
     const sent = installed.siteCommands().slice(beforeCommands);
     const received = installed.actionResultSummaries().slice(beforeResults);
+    const commandCounts: Record<string, number> = {};
+    for (const action of sent) commandCounts[action] = (commandCounts[action] ?? 0) + 1;
+    console.log(JSON.stringify({ installedBatchCommandCounts: commandCounts, received: received.length, batchStatus: summary?.status, verifications }));
     expect(sent.filter((action) => action === "web.dom.type")).toHaveLength(2);
     expect(received.filter((entry) => entry.actionType === "web.dom.type")).toHaveLength(2);
     expect(received.every((entry) => entry.status === "succeeded")).toBe(true);
     expect(received).toHaveLength(sent.length);
     expect(installed.distinctActionCommands() - beforeDistinct).toBe(sent.length);
-    expect(sent.every((action) => action === "web.dom.type" || action === "web.dom.capture_snapshot")).toBe(true);
+    const firstMain = sent.indexOf("web.dom.type");
+    const preparedNavigations = sent.flatMap((action, index) => action === "web.browser.navigate" ? [index] : []);
+    // The public project path prepares its declared start before exploration.
+    // Neither the original call nor its selected reuse may reposition afterward.
+    expect(preparedNavigations).toHaveLength(1);
+    expect(preparedNavigations[0]).toBeLessThan(firstMain);
+    expect(sent.every((action) => ["web.dom.type", "web.dom.capture_snapshot", "web.browser.navigate"].includes(action))).toBe(true);
+    expect(sent.slice(firstMain).every((action) => action === "web.dom.type" || action === "web.dom.capture_snapshot")).toBe(true);
     await expect(input).toHaveValue(VALUE);
     await expect(page.locator('section[aria-label="Your subscriptions"] tbody tr')).toHaveCount(beforeSubscriptions);
     expect(page.url()).toBe(beforeUrl);
     expect(installed.gatewayErrors).toHaveLength(0);
     console.log(JSON.stringify({
       installedBatchProof: "fresh-main-state-rerun", mainCommands: 2, received: received.length,
-      freshCommands: sent.length, verifications, providerNetworkCalls: 0,
+      freshCommands: sent.length, preparationNavigations: preparedNavigations.length, verifications, providerNetworkCalls: 0,
       ending: "intentionally_cancelled_after_transport_proof"
     }));
   } finally {

@@ -48,6 +48,7 @@ test("public Core loop, actual permission gate and web adapter preserve the orig
   assert.equal(summary.skipped, 0);
   assert.deepEqual(host.main.map((parameters) => parameters.selector), ["#original", "#refreshed"]);
   assert.deepEqual(host.main.map((parameters) => parameters.text), ["Fixed value", "Fixed value"]);
+  host.assertFieldValues();
   assert.equal(result.accounting.toolCalls, 2, "the envelope spends no extra executed-node allowance");
   assert.equal(result.steps.length, 1, "the ordinary original remains; the batch adds no authored step");
 });
@@ -57,4 +58,5 @@ test("a changed actual document prevents a second main dispatch through the pair
   assert.equal(host.main.length, 1);
   assert.notEqual(summary.status, "completed");
   assert.equal(summary.executed, 0);
+  host.assertFieldValues();
 });

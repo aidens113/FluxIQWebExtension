@@ -26,13 +26,22 @@ import { FLOW, PAGE, SNAPSHOT, TYPE, field } from "./harness";
 
 /** Real Core gate/registry and real web capsule path; gateway alone is a unit stub. */
 export function pairedHost() {
-  let controls = [field("A", "#original")];
+  const values = new Map([["A", ""], ["B", "Unchanged value"]]);
+  const fieldAt = (key: string, selector: string): JsonObject => {
+    const control = field(key, selector);
+    const value = values.get(key);
+    if (value !== undefined) control.value = value;
+    return control;
+  };
+  let controls = [fieldAt("A", "#original")];
   let timeOrigin = 123;
   let stores = { targets: createWebLlmTargetPackets(), extractions: createWebLlmExtractionHandles() };
   const main: JsonObject[] = [];
   const captureLabels: string[] = [];
   const publishLabels: string[] = [];
   const executionLabels: string[] = [];
+  const resolutionLabels: string[] = [];
+  const resultLabels: { code: string; applied: boolean; changed: boolean }[] = [];
   const gateway: WebLlmEvidenceGateway = webNodeFinalGateway({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -50,6 +59,15 @@ export function pairedHost() {
         } } };
       }
       assert.equal(command.actionType, "web.dom.type", "no reset, navigation or hidden alternative act");
+      const matched = controls.filter((control) => control.selector === command.parameters.selector);
+      assert.equal(matched.length, 1, "the unit transport types into exactly the addressed control");
+      const target = matched[0]!;
+      const record = (target.context as JsonObject).record as JsonObject;
+      const key = record.key;
+      const text = command.parameters.text;
+      assert.ok(typeof key === "string" && values.has(key) && typeof text === "string", "the addressed field has a known stable subject and concrete text");
+      values.set(key, text);
+      controls = controls.map((control) => control === target ? { ...control, value: text } : control);
       main.push(structuredClone(command.parameters));
       return { status: "succeeded", payload: { value: "Fixed value" } };
     }
@@ -79,7 +97,11 @@ export function pairedHost() {
     arrivals: createWebNodeArrivals(), addresses: createWebNodeShownAddresses(),
     layers: createWebNodeOwnLayers(), held: createWebNodeHeldLiterals()
   };
-  const execute = (request: WebLlmEvidenceToolRequest) => runWebOutputNode({ ...base, stores, request });
+  const execute = async (request: WebLlmEvidenceToolRequest) => {
+    const result = await runWebOutputNode({ ...base, stores, request });
+    resultLabels.push({ code: result.resultCode ?? "unclassified", applied: result.effectApplied, changed: result.stateDigests?.before !== result.stateDigests?.after });
+    return result;
+  };
   const permissions = automationStudioFlowBootstrapActionPermissions({
     permittedConsequences: [], instructionIds: [],
     executeTool: (call) => execute({ ...FLOW, ...call })
@@ -93,19 +115,26 @@ export function pairedHost() {
   const authority: NonNullable<AutomationStudioLlmEvidenceLoopInput["rerunAuthority"]> = {
     currentScope: () => ({ binding: frozenExecution, generation, registry: native, authority: permissions }),
     resolve: (id, parameters, effectiveInputs) => {
-      if (Object.keys(effectiveInputs).length !== 0) return undefined;
+      if (Object.keys(effectiveInputs).length !== 0) {
+        resolutionLabels.push("inputs_unproven");
+        return undefined;
+      }
       const definition = native.sdk.nodes.get(id, native.getRegistryResolution(scope));
-      if (!definition?.capabilities.executable) return undefined;
+      if (!definition?.capabilities.executable) {
+        resolutionLabels.push("definition_unavailable");
+        return undefined;
+      }
       const effect = native.resolveActionEffect({
         id: "paired-proof", definitionId: definition.id, definitionVersion: definition.version, parameterValues: parameters
       }, parameters);
+      resolutionLabels.push(effect === undefined ? "effect_unavailable" : `${effect.effectClass}.${effect.repeatSafe === true ? "repeat_safe" : "held"}`);
       return effect ? { definitionId: definition.id, definitionVersion: definition.version, effect } : undefined;
     }
   };
   return {
     authority, main,
     diagnostics: () => ({
-      main: main.length, captureLabels, publishLabels, executionLabels,
+      main: main.length, captureLabels, publishLabels, executionLabels, resolutionLabels, resultLabels,
       assessments: permissions.declarations().map((record) => ({
         kind: record.action.kind, effect: record.action.effect,
         consequences: record.consequences.length, permitted: record.permitted
@@ -123,12 +152,16 @@ export function pairedHost() {
     },
     async replaceMap() {
       stores = { targets: createWebLlmTargetPackets(), extractions: createWebLlmExtractionHandles() };
-      controls = [field("B", "#other"), field("A", "#refreshed")];
+      controls = [fieldAt("B", "#other"), fieldAt("A", "#refreshed")];
       await this.prime();
       const oldHandle = stores.targets.resolve(FLOW, "t1", PAGE);
       assert.equal(oldHandle.ok, true);
       if (oldHandle.ok) assert.equal(oldHandle.selector, "#other");
     },
-    changeDocument() { timeOrigin += 1; }
+    changeDocument() { timeOrigin += 1; },
+    assertFieldValues() {
+      assert.equal(values.get("A") === "Fixed value", true, "the original addressed field retains its typed value");
+      assert.equal(values.get("B") === "Unchanged value", true, "the other subject remains unchanged");
+    }
   };
 }
