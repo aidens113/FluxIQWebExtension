@@ -759,7 +759,9 @@ structured packet below is what the compact view is written from, and what
   navigation URL and referrer. A dialog or blocker the capture also described
   as an element carries that element's `target` handle, and its `kind` where
   the extension recognised the layer (`consent`, `rate_limit`, `robot_check`,
-  `promotion`, `assistant`; `WebAutomationLayerKind`).
+  `promotion`, `assistant`; `WebAutomationLayerKind`). The cleared-layer and
+  obstruction wire to Core uses the generic words instead (`overlay`, `notice`,
+  `rate_limit`, `assistant`, `other`), mapped from these.
 - **What stands in front of the page, on the element itself.** Nothing is moved
   to the front, so what the old order told a model -- that a consent wall or a
   robot check stands between it and the page -- is carried as facts on each

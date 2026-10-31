@@ -60,6 +60,7 @@ import type {
 } from "../types";
 import type { ActionabilityRejectionCode } from "./actionability";
 import { blockingDialog } from "./blocking-dialog";
+import { obstructionBehind, rateLimitObstruction } from "./obstruction";
 import { noteRefusedControl } from "./recovery";
 import { noteUnshownTarget } from "./reveal";
 import { challengeIn } from "./challenge-evidence";
@@ -285,12 +286,12 @@ export function actionRejected(
     const code = dialog.kind === "person"
       ? WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED
       : WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG;
-    return buildResult(action, startedAt, {
+    return withObstruction(buildResult(action, startedAt, {
       status: "failed",
       validation,
       message: `Action blocked: ${observed}; ${dialog.sentence}`,
       failure: refusalRecord(code, { expected, actual: `${reason}: ${observed}; ${dialog.sentence}` }, evidence)
-    }, evidence);
+    }, evidence), reason, evidence);
   }
   const result = buildResult(action, startedAt, {
     status: "failed",
@@ -298,6 +299,7 @@ export function actionRejected(
     message: `Action rejected: ${observed}`,
     failure: refusalRecord(refusalCode(reason), { expected, actual: `${reason}: ${observed}` }, evidence)
   }, evidence);
+  withObstruction(result, reason, evidence);
   // A control the gate refused as disabled: recovery waits at it only while it
   // shows it is changing, so how it looked is noted beside the result -- as a
   // fingerprint, in this frame, never on the record (`recovery/refused-control.ts`).
@@ -308,6 +310,17 @@ export function actionRejected(
   // the result, in this frame, never on the record. A scroll repeats no act,
   // so this does not wait for `refusedBeforeDispatch`.
   if (reason === HIDDEN_REASON && evidence.target) noteUnshownTarget(result, evidence.target);
+  return result;
+}
+
+/**
+ * The result, with the layer behind a `covered` or `hidden` refusal reported as
+ * its `obstruction` (CC7): the layer's kind, id and ways out, read here, before
+ * the recovery presses anything. Nothing is added when no layer explains it.
+ */
+function withObstruction(result: BrowserActionResult, reason: string, evidence: ActionResultEvidence): BrowserActionResult {
+  const obstruction = obstructionBehind(reason, evidence.blockedAt, evidence.target);
+  if (obstruction) result.obstruction = obstruction;
   return result;
 }
 
@@ -355,12 +368,15 @@ export function actionRateLimited(
   const why = notice.busy ? "a line that it was busy and could not carry the press out" : "a notice that it was refused for going too fast";
   const actual = `the page answered the press ${notice.afterMs} ms after it with ${why}, and confirmed nothing; ${wait}`;
   const validation = boundValidation({ status: "failed", expected, actual });
-  return buildResult(action, startedAt, {
+  const result = buildResult(action, startedAt, {
     status: "failed",
     validation,
     message: notice.busy ? `Action refused by the page for now: it said it was busy; ${wait}.` : `Action refused by the page for going too fast; ${wait}.`,
     failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs: notice.retryAfterMs })
   }, evidence);
+  // The refusal is a `rate_limit` obstruction (CC8), with the wait only when the page stated one.
+  result.obstruction = rateLimitObstruction(notice.retryAfterMs);
+  return result;
 }
 
 /**

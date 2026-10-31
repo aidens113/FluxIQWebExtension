@@ -19,7 +19,7 @@ export type WebAutomationFactConditionValue = string | number | boolean | { inpu
 /**
  * One condition. `fact` names the check: `exists`, `absent`, `visible`,
  * `enabled`, `checked`, `selected`, `text`, `url`, `value`, `count`, or
- * `dialog` -- optionally `dialog.<kind>` for one page-evidence kind. `target`
+ * `dialog` -- optionally `dialog.<kind>` for one page-evidence kind -- or its generic twin `obstruction` (CC7). `target`
  * is a durable element target: `{ selector?, element? | fingerprint?,
  * shadowHosts?, frameId? }`.
  */

@@ -416,6 +416,16 @@ profiles, or run artifacts. Never use `--no-verify`.
 
 ## Automated Testing Facility Boundary
 
+**Live model provider (user, 2026-10-30).** All live model-backed tests use
+Anthropic Claude. The Lab reads `CLAUDE_API_KEY` from the repository's
+`.env.local` (or its explicitly supplied environment); never print or commit
+the value, and never silently fall back to DeepSeek. Keep scenarios and
+acceptance criteria unchanged for comparison, and record the exact Claude
+model, verdict, provider calls, billed cost and runtime. Provider-free tests
+remain provider-free. Existing supervision and paid-launch rules still apply.
+Claude live tests default to $5 per build (user, 2026-10-30); this is the
+whole build's allowance, not $5 for each call. Explicit lower limits still hold.
+
 The browser testing facility is downstream web-automation infrastructure. Keep
 scenario manifests, fixture websites, Playwright/browser drivers, extension
 loading and control, DOM assertions, screenshot policy, and real-site controls

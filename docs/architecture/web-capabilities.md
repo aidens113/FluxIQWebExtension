@@ -679,6 +679,23 @@ key, a scroll a coordinate, and a check a known state.
   "web.output.dom-check"`) is one function shared by both answers
   (`domain/src/actions/toggle-signature/output.ts`). A press that re-renders its
   control or changes it only after a slow request reports no `toggle`.
+- **A look at a stateful control answers `control` (t799).** Each entry of the
+  resolved answer's `handleViews[]` may carry `control: { stateful: true,
+  state?, ensures?, idempotentWith? }`, so Core can give a step `ensureState`
+  from a look, before any press (`runtime/llm-evidence/control-spot/control-view.ts`,
+  `plan-resolution/handle-control/`). A control that states its state
+  (`checked`, `aria-checked`, `aria-pressed`, `aria-selected`) gives `state`
+  (`checked`, `unchecked`, `pressed`, `unpressed`, `selected`, `unselected`),
+  `ensures` (the attribute signature a press leaves, `{ via: "attribute",
+  attribute, to }` with `to` the opposite of the shown state) and
+  `idempotentWith: "web.output.dom-check"`. A checkbox, switch or radio role
+  with no stated state gives `{ stateful: true }`. A control whose state is in
+  its words or class is read through the signature a press of it taught the
+  Flow's target store (16 at most per Flow): `state: "on"` when the control
+  shows the signature, `"off"` when it shows the other side, with `ensures` the
+  signature to apply or undo; words matching neither side give nothing. A plain
+  button, or a hidden control, gives no `control`. A handle an exploration acted
+  on reports the state as the act found it, before the press.
 - **A press that clears a covering layer answers `layerCleared` (t787).** When
   before the press a `COVERING` layer of the page view covered controls and held
   the pressed control, and after it, on the same page, the layer covers nothing
@@ -1033,6 +1050,13 @@ page evidence's dialogs. A sensitive control's text, value or checked state is
 never read; evidence is an element's identity (tag, role, id, test id, name,
 accessible name, selector) and at most 120 characters of what was read,
 rebuilt field by field on the wire and secret-screened again by the domain.
+
+The fact `obstruction` (optionally `obstruction.<overlay|notice|rate_limit|assistant|other>`,
+with a target `{ kind: "obstruction" | "dialog", name }`) is answered exactly as
+`dialog` is: any open layer whose name contains the value. It is an alias, not
+a replacement; `overlay` reads as the page's `consent` kind, `notice` as
+`promotion`, and `other` narrows nothing (`runtime/facts/query.ts`). `web.facts`
+declares it beside `dialog` in `WEB_AUTOMATION_FACT_KINDS` (`runtime/capabilities.ts`).
 
 One gap is known: the interference classifiers produce no `promotion` or
 `assistant` kind (`content/action-runtime/interference/layer-kind.ts`), so a

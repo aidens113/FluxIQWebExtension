@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Web half of the Core-owned plan; executing since 2026-10-29. Handoff 2026-10-30 in Current State: framework and hosted work merged through t812; t799 verifying, t810 (P5b), t811 (P1b), t813 (C1) and t814 (E) in flight.
+Status detail: P6/W6 t799 independently verified and merged on both dev branches; t810, t811, t813 and t814 continue from the handoff. Paired t816 adds the user-requested Claude live provider with a five-dollar build allowance.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,13 +11,18 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead is independently verifying t799 on its
-paired task trees after merging current `dev`; workers are completing t811, reviewing C1 concurrency and key lifecycle
-in t813, and rechecking E/D5 in t814. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
+**Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
+paired task trees after merging current `dev`; both sides are now merged. Workers are completing t811 and final C1
+validation in t813; t814 awaits lead acceptance. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
 existing task trees; no paid run or panel management is authorised by this continuation. The user approved t810's
 fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
 evidence first; incomplete refutations must remain nonpassing.
 Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout.
+**Live provider switch, user 2026-10-30:** use Claude for every subsequent live model-backed test, reading
+`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Anthropic appears in the keys UI, but runtime and
+Lab routing were DeepSeek-only; paired t816 implements the missing support. Keep identical acceptance criteria and
+record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
+The user set Claude live tests to $5 per build; main ignored `.env.local` and both agent instruction files record it.
 
 **Core owns this plan.** The findings, the responsibility map, every client contract (CC1-CC14, K1-K7), the phases
 P0-P10 and what not to do are in the owning document:
@@ -59,7 +64,7 @@ acceptance check passed, and no paid run or model call happened.
 
 | Task | Work | State at the stop | To resume |
 | --- | --- | --- | --- |
-| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Lane done; committed and merged with `dev` (both pushed). The lead stopped its own verification (`scratchpad/verify-t799.sh`) mid downstream typecheck | Re-run that script; if green, ledger entries and `pnpm task finish t799` (downstream first, then detach the Core worktree and `pnpm task finish t799 --skip-checks` in Core) |
+| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Merged on both dev branches after lead acceptance: 235 Core, 40 domain and 29 extension tests, types/reference, native Chromium proof and final audits; Core merge gate passed 70 contract tests | First-loop-row direction and browser rung/pacing coverage remain separate follow-ups; no paid qualification claimed |
 | t810 (P5b) | Refute a judge's `asked_missing` and wrongly-kept rows from the run's own record (`outside_mark`, `cell_differs`, `not_kept`), one evidence re-ask, cited yes, provenance, `standingNo`; web `rejectedMarks` | Partial. Offline replay of the demo's final check now gives `answers` (`core.result.no_refuted_by_record`, 10 rows refuted) where it was `unsure`; the store false passes stay a Core no. Core WIP `300fc9ab` is **local only**: the pre-push audit refused it (4 `as never` casts in new tests, `build-test/tests/` and `candidate-trial/tests/` over 25 files, an import cycle through `computed-facts/computed-no.ts` and `located-defects/index.ts`); the downstream WIP is pushed | Fix the audit findings and the TS2375 at `located-defects/tests/row-refuted.test.ts:70`, re-pin `loop_verification` and `loop_verification_build_test`, add `located` to the t804 earlier-advice fixture (w4 report), fix the replay harness's 60-character match, then the acceptance set (report `reports/t810-p5b.md`) |
 | t811 (P1b) | `then` on `core.submit_subflow` (save / whole test / from-step; Core completes on a yes), `from` by script label (`stepLabels`), K5 callers, folded test lines, guidance, K7 defaults | Partial; WIP pushed (Core `fa07015e`, downstream `562f3082`). One known failure: `project-agents/dispatch/tests/whole-trial-port.test.ts` (patch in `reports/t811/wa-fold-green.md`); the headed decide-count spec is not written; `docs:reference` is likely stale | Apply the patch, write the spec, run the acceptance set (report `reports/t811-p1b.md`) |
 | t813 (hosted C1) | Workspace manager (`apps/web/src/lib/workspaces/`, layout v3 at `<host root>/workspaces/<id>/`), IAM `iam` options from the resolved profile, `BackgroundTasksService.close()` | Partial; WIP pushed (Core `4266af93`). Worker-reported passes only; `pnpm check`, the full web suite and the Next production build not run | Run the acceptance set; have a second agent review the manager for concurrency and key handling (report Core `hosted-production-plan/reports/t813-c1.md`) |
@@ -81,7 +86,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. Merge t799, t810, t811 after verification.
+1. t799 is merged; integrate t810 and t811 after verification. Complete the Claude provider switch before paid testing.
 2. Fix the t799 known limit before the photo-social rerun: in a loop whose first row is already in the asked state, the
    toggle signature is learned reversed.
 3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
@@ -401,6 +406,17 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed: this document's Current State rewritten as the session handoff (merged work, in-flight table with how to resume, the demo run, next steps, the user's standing rules, decisions waiting on the user); the demo run recorded in `breadth-forty-tasks-plan.md`.
 - Validation: no code changed in this entry. The last full sweep (`lab-runs/2026-10-30/sweep-1/summary.txt`, every step "exit 0") is quoted in `trace-offline-trials-plan.md`; work merged after it (t812) was verified narrowly, as its entry in `hosted-production-plan.md` quotes. t799's own verification did not complete: not validated.
 - Outcome: Partial (stopped). Resume from the Current State table.
+
+### 2026-10-30 - Independent P6/W6 continuation acceptance (t799)
+- Agent: Codex lead
+- Changed: corrected the legacy wire-input type in the recovery test; preserved production behavior and merged current dev into both task trees. Full evidence: `framework-heavy-lifting-plan/reports/codex-1030/t799-result.md`.
+- Validation: two owning Core test batches -> `15 files / 84 tests` and `12 files / 151 tests` passed; domain owning tests -> `40 passed, 0 failed`; extension owning tests -> `29 passed, 0 failed` and corrected fixture recheck -> `8 passed, 0 failed`.
+- Validation: `pnpm.cmd --filter fluxiq check` -> exit 0 (content-matched cache); `pnpm.cmd --filter @fluxiq-web-extension/domain check` -> exit 0; extension `pnpm.cmd check` -> exit 0 after correcting the TS2322 legacy test fixture.
+- Validation: `pnpm.cmd docs:check` in paired Core -> `Deterministic framework reference is current.`; `node scripts/check/model-text.mjs` -> `model-text: ok (208 scenario tokens, 384 model-facing Core files, 11997 string literals)`.
+- Validation: extension `pnpm.cmd test:e2e -- site-reset/tests/photo-obstruction-toggle.spec.ts --workers=1 --reporter=line` -> `1 passed (3.7m)`; native headed Chromium, isolated realistic photo-social, real installed extension/gateway, scripted provider, no paid model calls.
+- Not verified: browser execution of Core clear-interference rung, learned pace, Firefox, first-loop-row direction or changed-source paid qualification. No full sweep was run.
+- Validation: `pnpm.cmd task finish t799` -> downstream structure gate passed and task merged; Core `pnpm.cmd task finish t799 --skip-checks` -> mandatory `70 contract tests passed`, narrow acceptance already observed, paired task merged.
+
 
 ## Open Questions
 
