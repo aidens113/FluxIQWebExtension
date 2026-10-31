@@ -57,6 +57,7 @@ export async function installLiveLlmSessionKey(control: Pick<LiveLlmAuthorizatio
     authorizationPassword: input.authorizationPassword,
     ...(input.authorizationPin ? { authorizationPin: input.authorizationPin } : {}),
     model: input.plan.model,
+    provider: input.plan.provider,
   });
   // A FluxIQ session's Secret Keys unlock is computed at login, over the keys
   // that existed then, and Core releases a key to a model call only from the

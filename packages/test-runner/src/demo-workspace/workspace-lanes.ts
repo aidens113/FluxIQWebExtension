@@ -1,7 +1,8 @@
 // The baseline demo lanes: provisioning the provider key, recording the demo
 // workspace, and replaying the recorded Flow.
 import { RunnerFailure } from "../failure.js";
-import { deepSeekSecretFromDriverEnvironment, ensureDeepSeekKeyViaUi, type OpaqueSecretKeyReference } from "../secret-keys-ui.js";
+import { providerSecretFromDriverEnvironment, ensureLlmKeyViaUi, type OpaqueSecretKeyReference } from "../secret-keys-ui.js";
+import { DEFAULT_LLM_PROVIDER, type LlmProvider } from "@fluxiq-web-extension/test-contracts";
 import { selectOptionByKeyboard } from "../trusted-input/index.js";
 import { connectExtension, extensionStatus, pollStatus, withDemoBrowser } from "./browser-session.js";
 import type { DemoWorkspaceConfiguration } from "./configuration.js";
@@ -13,16 +14,21 @@ import { DEMO_SUBFLOW_NAME, generateDemoSubflowFromRecording, provisionDemoFlow,
 import { type DemoWorkspaceState, saveWorkspaceState, withWorkspaceLock } from "./workspace-state.js";
 
 export async function setupDemoWorkspaceDeepSeekKey(config: DemoWorkspaceConfiguration, environment: NodeJS.ProcessEnv): Promise<OpaqueSecretKeyReference> {
-  const secretValue = deepSeekSecretFromDriverEnvironment(environment);
+  return setupDemoWorkspaceLlmKey(config, environment, "deepseek");
+}
+
+export async function setupDemoWorkspaceLlmKey(config: DemoWorkspaceConfiguration, environment: NodeJS.ProcessEnv, provider: LlmProvider = DEFAULT_LLM_PROVIDER): Promise<OpaqueSecretKeyReference> {
+  const secretValue = providerSecretFromDriverEnvironment(environment, provider);
   return withWorkspaceLock(config, async () => {
     return withPersistentDemoCore(config, async () => {
       const { panelCookie } = await authenticatedControl(config);
       return withDemoBrowser(config, panelCookie, "demo-llm-key-setup", async ({ panelPage, evidence }) => {
-        return ensureDeepSeekKeyViaUi({
+        return ensureLlmKeyViaUi({
           page: panelPage,
           evidence,
           origin: config.origin,
           secretValue,
+          provider,
           authorizationPassword: config.password,
           authorizationPin: config.pin,
         });

@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
 import { explorationProgressOrderIssue, refuseEvidenceGuidedCreationPermissionViaUi, settleObservedResponseText } from "../explore-proposal-ui.js";
 import { readCreateUiSource } from "./module-source.js";
@@ -19,17 +19,17 @@ import { readCreateUiSource } from "./module-source.js";
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 
 test("evidence-guided proposal parser retains only bounded proposal accounting", () => {
-  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.2, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
-  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.2 });
+  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.2, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
+  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.2 });
   assert.equal("maxCalls" in EVIDENCE_GUIDED_CREATION_LIMITS, false);
   assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, status: "applied" } } }, "project.one", "flow.one"), /escaped its checkpoint scope/u);
   // The aggregate bound is the run's token budget, not per-call tokens times a call count.
   const atBudget = { ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun - 40_000, outputTokens: 40_000, totalTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun } } } };
   assert.equal(parseEvidenceGuidedCreationProposal(atBudget, "project.one", "flow.one").totalTokens, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun);
   assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun - 4_000, outputTokens: 4_001, totalTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun + 1 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
-  // The whole build is held to Core's $0.25 ceiling on a Flow build: $0.20 passes above, $0.26 does not.
-  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd, 0.25);
-  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, estimatedCostUsd: 0.26 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
+  // The whole build shares the Lab allowance; going beyond it remains refused.
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd, DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd);
+  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, estimatedCostUsd: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd + 0.01 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
 });
 
 test("no creation profile types a call count into Flow Settings", async () => {
@@ -39,7 +39,7 @@ test("no creation profile types a call count into Flow Settings", async () => {
   assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).map(([label]) => label), ["Input tokens", "Output tokens", "Total tokens", "Timeout (seconds)", "Max cost (USD)", "Provider retries"]);
   // The single-call build is one call by construction; the form has no field for it.
   assert.equal(FIRST_LIVE_CREATION_LIMITS.maxCalls, 1);
-  assert.deepEqual(creationSettingsFields(FIRST_LIVE_CREATION_LIMITS), [["Input tokens", "4000"], ["Output tokens", "1000"], ["Total tokens", "5000"], ["Timeout (seconds)", "20"], ["Max cost (USD)", "0.25"], ["Provider retries", "0"]]);
+  assert.deepEqual(creationSettingsFields(FIRST_LIVE_CREATION_LIMITS), [["Input tokens", "4000"], ["Output tokens", "1000"], ["Total tokens", "5000"], ["Timeout (seconds)", "20"], ["Max cost (USD)", String(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd)], ["Provider retries", "0"]]);
   const explorationSource = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui", "explore-proposal-ui.ts"), "utf8");
   assert.doesNotMatch(explorationSource, /maxCalls|maxUses/u);
   assert.doesNotMatch(await readCreateUiSource(), /max calls/iu);
@@ -71,18 +71,18 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   // input plus output fitting one. Pinning the numbers is how ten copies of
   // them came to disagree.
   assert.deepEqual(EVIDENCE_GUIDED_CREATION_LIMITS, {
-    provider: "deepseek", model: DEFAULT_LLM_MODEL,
+    provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
     maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
     maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
     maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
-    runDeadlineSeconds: 600, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 0.25, providerRetries: 0,
+    runDeadlineSeconds: 600, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, providerRetries: 0,
   });
   assert.ok(EVIDENCE_GUIDED_CREATION_LIMITS.maxInputTokens + EVIDENCE_GUIDED_CREATION_LIMITS.maxOutputTokens <= EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens);
   // The exploration Flow's settings follow the shared budget instead of
   // restating a triple of their own. The 8,000 input tokens they used to carry
   // is the size measured as unable to describe a real page: the guard fired
   // before the request was sent and the run built nothing.
-  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens, maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
+  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens, maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, providerRetries: 0 });
   assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).find(([label]) => label === "Timeout (seconds)"), ["Timeout (seconds)", "25"]);
   assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.timeoutSeconds, 45);
   // The panel's command timeout: the 600 s run deadline, the minute the panel's number still carries, and 15 s for the reply.

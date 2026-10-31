@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
 import type { ExistingFlowAdaptation } from "../../../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../../../failure.js";
@@ -90,7 +90,7 @@ function fakeChat(options: FakeChatOptions) {
   };
   const proposal = (status: string, extra: Partial<ExistingFlowAdaptation> = {}): ExistingFlowAdaptation => ({
     adaptationId: ADAPTATION, projectId: PROJECT, flowId: FLOW, status, adaptationKind: "flow_bootstrap",
-    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 40_000, outputTokens: 3_000, totalTokens: 43_000, estimatedCostUsd: 0.02 },
+    accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 40_000, outputTokens: 3_000, totalTokens: 43_000, estimatedCostUsd: 0.02 },
     evidenceLoop: { providerCallCount: 6, decisionCount: 6, traceStepCount: 7, iterationCount: 7, toolCallCount: 5, evidenceBytes: 30_000, toolIds: ["core.run_node"] },
     ...extra,
   });
@@ -227,7 +227,7 @@ test("a message the chat never carried to FluxIQ fails the stage with what the c
 test("a failed build's spend is read from what Core kept of it, and the failure stays the chat's", async () => {
   const kept = {
     code: "flow_bootstrap.provider_output_padding_truncated", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received",
-    accounting: { requestId: "llm-request:one", estimatedInputTokens: 1996, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 1_801_798, outputTokens: 5_840, totalTokens: 1_807_638, estimatedCostUsd: 0.2272 }
+    accounting: { requestId: "llm-request:one", estimatedInputTokens: 1996, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 1_801_798, outputTokens: 5_840, totalTokens: 1_807_638, estimatedCostUsd: 0.2272 }
   };
   const { control, chat, wait } = fakeChat({ answer: "build", ending: "failed", kept });
   const made = await buildCreatedFlowFromChat(control, chat, SCOPE, wait);
@@ -352,7 +352,7 @@ test("candidate mode refuses a Core without the trial runner, or without the sta
 test("a candidate build that failed in the chat is recorded with its candidate, kept draft, trials and verdicts (t362)", async () => {
   const kept = {
     code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received",
-    accounting: { requestId: "candidate.request", estimatedInputTokens: 10, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 718_858, outputTokens: 7_971, totalTokens: 726_829, estimatedCostUsd: 0.0392 },
+    accounting: { requestId: "candidate.request", estimatedInputTokens: 10, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 718_858, outputTokens: 7_971, totalTokens: 726_829, estimatedCostUsd: 0.0392 },
     issueCodes: ["flow_bootstrap.evidence_completion_parameters_unresolved"],
     candidate: { candidateId: CANDIDATE_ID, draft: "saved", revision: 7, digest: "d".repeat(64), trialCount: 2,
       trials: [{ revision: 2, verdict: "execution_failed", trialRunId: "trial.one", code: "web.target.not_found" }, { revision: 4, verdict: "execution_failed", trialRunId: "trial.two", code: "web.action.rate_limited" }] },
@@ -399,7 +399,7 @@ test("a project build in the chat is read as a candidate build on every ending, 
   assert.equal(made.build.candidateOutcome?.authoringMode, "project");
   assert.equal(made.build.candidateOutcome?.outcome, "promoted");
   const kept = { code: "flow_bootstrap.evidence_unusable_decision", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received",
-    accounting: { requestId: "project.request", estimatedInputTokens: 10, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 1_000, outputTokens: 100, totalTokens: 1_100, estimatedCostUsd: 0.001 },
+    accounting: { requestId: "project.request", estimatedInputTokens: 10, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 1_000, outputTokens: 100, totalTokens: 1_100, estimatedCostUsd: 0.001 },
     issueCodes: ["llm_output.invalid_evidence_decision"], candidate: { candidateId: CANDIDATE_ID, draft: "none", trialCount: 0, trials: [] } };
   const failed = fakeChat({ answer: "build", ending: "failed", kept, runtimeSessions: [] });
   const failedMade = await buildCreatedFlowFromChat(failed.control, failed.chat, PROJECT_SCOPE, failed.wait);

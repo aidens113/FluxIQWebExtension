@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { RunAllocation } from "../../allocation.js";
 import { buildFluxIQEnvironment } from "../../environment.js";
 import { LAB_AUTHORING_MODE_ENV, LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue, planLiveLlmExecution } from "../index.js";
@@ -22,7 +22,7 @@ const allocation: RunAllocation = {
 };
 
 const profile: LlmExecutionProfile = {
-  schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create", mode: "live", provider: "deepseek", model: DEFAULT_LLM_MODEL, task: "create-flow",
+  schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create", mode: "live", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, task: "create-flow",
   scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only", externalSideEffects: false, approvalMode: "manual",
   retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1, budget: { ...DEFAULT_LLM_LAB_BUDGET },
 };

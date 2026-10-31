@@ -11,7 +11,7 @@ import { selectFlowInCurrentProject } from "./panel-navigation.js";
 import { RUN_READINESS_CHECK_TEXT, runDemoFlowFromPanel, runPanel, selectRunMode, waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
 import { ADAPTING_RUN_TIMEOUT_MS } from "./adapting-run/index.js";
 import type { DemoWorkspaceState } from "./workspace-state.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export async function reviewAndApplyAdaptationViaUi(
   page: Page,
@@ -142,7 +142,7 @@ export function requireCompleteAdaptationIntervention(item: ExistingRunIntervent
     : item.kind === "runtime_patch"
       ? "automation-studio.runtime-patch.v1"
       : undefined;
-  if (!item.requestId || !item.promptVersion || item.provider !== "deepseek" || item.model !== DEFAULT_LLM_MODEL || item.validationOk !== true
+  if (!item.requestId || !item.promptVersion || item.provider !== DEFAULT_LLM_PROVIDER || item.model !== DEFAULT_LLM_MODEL || item.validationOk !== true
     || item.promptVersion !== expectedPromptVersion
     || !Number.isSafeInteger(item.inputTokens) || !Number.isSafeInteger(item.outputTokens) || !Number.isSafeInteger(item.totalTokens)
     || typeof item.estimatedCostUsd !== "number" || !Number.isFinite(item.estimatedCostUsd)) {
@@ -158,7 +158,7 @@ export function requireRunEventSequence(events: ExistingRunEvent[], kind: Existi
 
 export function adaptationInvocation(item: ExistingRunIntervention, purpose: "runtime_diagnosis" | "runtime_patch", sequence: number) {
   return {
-    requestId: item.requestId!, purpose, provider: "deepseek" as const, model: DEFAULT_LLM_MODEL,
+    requestId: item.requestId!, purpose, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
     promptSchemaVersion: item.promptVersion!, sequence, attempt: 1 as const, retryCount: 0 as const, providerCallCount: 1 as const,
     inputTokens: item.inputTokens!, outputTokens: item.outputTokens!, totalTokens: item.totalTokens!, estimatedCostUsd: item.estimatedCostUsd!, latencyMs: 0,
   };

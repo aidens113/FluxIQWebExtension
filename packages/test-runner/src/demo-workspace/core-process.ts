@@ -125,7 +125,7 @@ export async function startPersistentDemoCore(config: DemoWorkspaceConfiguration
         repositoryRoot: config.repositoryRoot,
         fluxiqRepositoryRoot: config.fluxiqRepositoryRoot,
         hostModulePath,
-      }),
+      }, process.env, process.argv.includes("--live-llm") ? process.argv : [...process.argv, "--live-llm"]),
       logPath: processLogPath(logsDirectory, `${sessionId}-core`),
     }));
     await waitForHttp(config.origin, { timeoutMs: 60_000 });

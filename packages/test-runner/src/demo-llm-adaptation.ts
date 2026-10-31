@@ -1,7 +1,7 @@
 ﻿import { randomBytes } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmInvocationProvenance, type LlmModel, type LlmRunEvaluation, validateLlmRunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmInvocationProvenance, type LlmModel, type LlmRunEvaluation, validateLlmRunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import { adaptationCallCountWithinCeiling } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
 import { attestWorkspaceSecretAbsence } from "./secret-leak-attestation.js";
@@ -11,7 +11,7 @@ export const FIRST_LIVE_ADAPTATION_PROFILE: Readonly<LlmExecutionProfile> = Obje
   schemaVersion: LLM_LAB_SCHEMA_VERSION,
   profileId: "deepseek-runtime-adaptation-first-live",
   mode: "live",
-  provider: "deepseek",
+  provider: DEFAULT_LLM_PROVIDER,
   model: DEFAULT_LLM_MODEL,
   task: "adapt",
   scenarioNetworkPolicy: "loopback-only",
@@ -77,7 +77,7 @@ type AdaptationInvocationPurpose = keyof typeof PROMPTS;
 export type DemoLlmAdaptationInvocation<Purpose extends AdaptationInvocationPurpose = AdaptationInvocationPurpose> = Readonly<{
   requestId: string;
   purpose: Purpose;
-  provider: "deepseek";
+  provider: typeof DEFAULT_LLM_PROVIDER;
   model: LlmModel;
   promptSchemaVersion: string;
   sequence: number;
@@ -352,7 +352,7 @@ function parseAdaptationInput(input: unknown): DemoLlmAdaptationCertificationInp
     if (invocation.promptSchemaVersion !== schema && invocation.promptSchemaVersion !== `${schema}+stage.${stage}`) requireLiteral(invocation.promptSchemaVersion, schema);
   });
   if (new Set(invocations.map(invocation => invocation.requestId)).size !== invocations.length) fail("Runtime adaptation provider invocations must have distinct request identities");
-  for (const invocation of invocations) { requireLiteral(invocation.provider, "deepseek"); requireLiteral(invocation.model, DEFAULT_LLM_MODEL); requireLiteral(invocation.attempt, 1); requireLiteral(invocation.retryCount, 0); requireLiteral(invocation.providerCallCount, 1); }
+  for (const invocation of invocations) { requireLiteral(invocation.provider, DEFAULT_LLM_PROVIDER); requireLiteral(invocation.model, DEFAULT_LLM_MODEL); requireLiteral(invocation.attempt, 1); requireLiteral(invocation.retryCount, 0); requireLiteral(invocation.providerCallCount, 1); }
   const adaptation = exact(root.adaptation, ["adaptationId", "requestId", "baseExecutionDigest", "resultingExecutionDigest", "validationOk", "stale", "concurrentMutationDetected", "reviewOutcome", "approvalChannel", "mutationObservedBeforeApproval", "outcome", "applySequence", "structuralChange", "externalSideEffectEscalation", "authorizationExpansion", "unsupportedOutputCount", "recordingCount", "recordingProvenanceAbsent"]);
   requireLiteral(adaptation.validationOk, true); requireLiteral(adaptation.stale, false); requireLiteral(adaptation.concurrentMutationDetected, false); requireLiteral(adaptation.reviewOutcome, "approved"); requireLiteral(adaptation.approvalChannel, "human-ui"); requireLiteral(adaptation.mutationObservedBeforeApproval, false); requireLiteral(adaptation.outcome, "applied"); requireLiteral(adaptation.structuralChange, false); requireLiteral(adaptation.externalSideEffectEscalation, false); requireLiteral(adaptation.authorizationExpansion, false); requireLiteral(adaptation.unsupportedOutputCount, 0); requireLiteral(adaptation.recordingProvenanceAbsent, true);
   const validation = exact(root.postApplyValidation, ["runId", "status", "completionSequence", "executionDigest", "providerCallCount", "interventionCount", "diagnosisCount", "adaptationCount", "actionAttemptCount", "succeededActionCount"]);

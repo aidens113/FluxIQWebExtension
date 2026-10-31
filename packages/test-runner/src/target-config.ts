@@ -169,7 +169,7 @@ export function resolveCloneCacheScopeConfiguration(env: NodeJS.ProcessEnv): Clo
  * are never edited.
  *
  * `none` governs the run's configuration, not its provider key: a live run
- * still reads `DEEPSEEK_API_KEY`, and only that name, from these files
+ * still reads its selected provider's key (`CLAUDE_API_KEY` for Claude) from these files
  * (`live-llm/provider-credential.ts`). `FLUXIQ_PROVIDER_KEY_FILES=none` is what
  * keeps the key out of them too. Inside a test neither is needed: no reader
  * opens an env file outside the temporary directory (`env-files/`).

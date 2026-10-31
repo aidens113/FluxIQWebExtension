@@ -9,7 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../failure.js";
 import { assertLlmMaxCostWithinCeiling, beginLiveLlmRun, LAB_COST_CEILING_ENV, LAB_COST_CEILING_FLAG, liveLlmBuildCostCeilingUsd } from "../index.js";
@@ -19,7 +19,7 @@ const DEFAULT = AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD;
 
 function createFlow(maxEstimatedCostUsd: number): LlmExecutionProfile {
   return {
-    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create", mode: "live", provider: "deepseek", model: DEFAULT_LLM_MODEL, task: "create-flow",
+    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create", mode: "live", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, task: "create-flow",
     scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only", externalSideEffects: false, approvalMode: "manual",
     retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1, budget: { ...DEFAULT_LLM_LAB_BUDGET, maxEstimatedCostUsd },
   };
@@ -60,11 +60,12 @@ test("a --llm-max-cost-usd equal to or below the ceiling, or no flag at all, is 
   assert.doesNotThrow(() => assertLlmMaxCostWithinCeiling(["node", "lab"], DEFAULT));
 });
 
-test("the launch is refused before its provider credential is read when the flag is above Core's default ceiling", async (t) => {
+test("a Claude launch refuses above its five-dollar ceiling before reading its credential", async (t) => {
   const root = await checkout(t);
-  assert.equal(liveLlmBuildCostCeilingUsd(root, [], {}), DEFAULT);
-  const above = DEFAULT * 2.5;
-  await assert.rejects(begin(root, above, {}), isCostRefusal(above, DEFAULT));
+  const ceiling = liveLlmBuildCostCeilingUsd(root, ["node", "lab", "--live-llm"], {});
+  assert.equal(ceiling, 5);
+  const above = ceiling + 1;
+  await assert.rejects(begin(root, above, {}), isCostRefusal(above, ceiling));
 });
 
 test("a ceiling raised through the environment admits the same flag, and still refuses one above it", async (t) => {
