@@ -51,3 +51,22 @@ test("the host method matches an output-bound control as a control and a pass's 
   assert.deepEqual(webAutomationReacquireTarget({ lineage: { kind: "row", sourceNodeId: "read", outputKey: "records", loopNodeId: "each" }, source, stale: { author: "Mara Quill", text: "Kayak trip", likes: "12 likes" }, candidates: [row] }), { outcome: "found", value: row });
   assert.deepEqual(webAutomationReacquireTarget({ lineage: { kind: "output", sourceNodeId: "find", outputKey: "url" }, source, stale: "https://x.example.test/", candidates: ["https://x.example.test/"] }), { outcome: "unmatched", reason: "unidentifiable" });
 });
+
+test("a sole descriptive match cannot replace a control from a conflicting saved record", () => {
+  const records: JsonObject[] = [
+    { key: "report-a", keyAttribute: "data-report", text: "Annual report" },
+    { text: "Annual report" }
+  ];
+  for (const record of records) {
+    const stale = { element: { tagName: "button", accessibleName: "View report", context: { record } } };
+    const other = { element: { tagName: "button", accessibleName: "View report", context: { record: { key: "report-b", keyAttribute: "data-report", text: "Quarterly report" } } } };
+    assert.equal(webReacquireElement({ stale, candidates: [other] }).outcome, "unmatched", "conflicting record identity cannot identify another item or prove the original gone");
+  }
+});
+
+test("a saved stable record key identifies the same control after its record text changes", () => {
+  const stale = { element: { tagName: "button", accessibleName: "View report", context: { record: { key: "report-a", keyAttribute: "data-report", text: "Annual report pending" } } } };
+  const fresh = { element: { tagName: "button", accessibleName: "View report", context: { record: { key: "report-a", keyAttribute: "data-report", text: "Annual report ready" } } } };
+  const other = { element: { tagName: "button", accessibleName: "View report", context: { record: { key: "report-b", keyAttribute: "data-report", text: "Quarterly report ready" } } } };
+  assert.deepEqual(webReacquireElement({ stale, candidates: [other, fresh] }), { outcome: "found", value: fresh });
+});

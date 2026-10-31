@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t827 integrated and verified on paired dev; main SDK/bundles current. Core 0.19/contracts 0.5; no full or paid calls.
+Status detail: t828 setup/discovery complete; additive Core/host interface planning active, source frozen. Parent t827 accepted/pushed; no full or paid calls.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**t827 accepted and integrated, 2026-10-31:** Core 0.19.0/contracts 0.5.0 carry a strict optional measured-target fact from the browser through dispatch, runtime, attempts and authoring history. Wire compatibility uses only existing payload.actionability; no new gateway top key, receipt or negotiation. Invalid optional data drops alone; unknown and current facts replace stale observations without changing effects, authority or uncertain-action safeguards. Lead acceptance: 338 unique Core/contract tests; 335 initial affected domain tests with all eight fixture failures corrected and 31 focused tests passing (then three after final fixture typing); 102 initial extension tests with all eight shared-command fixture failures corrected and 68 focused tests passing (seven queue tests rerun after typing). Domain/extension typechecks and filtered builds pass. Three native Chromium fixture proofs pass on job-board/company-website, including exactly one Save after lost acknowledgement. Chrome/Firefox/e2e bundles each verify 22 files; Firefox background/UI unexercised. Both structure audits pass with unchanged baselines (Core 1144, Down 615). Paired dev merges Core78400cec/downstreamf8c70bf3 passed the final Down structure gate and Core70 merge-contract tests. All three main SDK libraries, domain and Chrome/Firefox/e2e bundles are rebuilt at 0.19/0.5 (22 files per browser target). Both daily full sweeps used; main promotion held. Claude/$5 configured, no paid go/calls or panel management; user clinerules preserved. Exact failures, commands and report locations: downstream p8-actionability/lead-acceptance.md.
+**Active t828, 2026-10-31:** Paired private setup passed, mandatory three SDK libraries built (Core73.93s); source stays0.19/contracts0.5. Core and web read-only discovery confirms source-less targets cannot use existing source-node lineage; stable saved fingerprint matching exists, bare selectors carry no identity. Two Sol Max planners are settling an additive optional host hook, actual resolved retry parameters, arrival-only replacement and shared frame/completeness-aware web matching; Lead chose trusted targetRefresh:true declarations plus a separate optional reacquireUnboundTarget hook; exact patch/previous-place types await final reports. Two lead regression tests reproduce shared matcher defects (six existing pass/two new fail): a sole conflicting record is accepted and stable record keys are ignored. Production remains unchanged. Independent remainder discovery found no arbitrary-node unchanged-repeat guard and missing pace/reacquire/obstruction repair history; existing safety/retry guards stay intact. Private Core owns all p8-identity briefs/reports. Parent paired dev pushed Coreceb14f8f/downstream1830d9ab, t827 accepted and main SDK/bundles current0.19/0.5. Both daily full sweeps used; main held. Claude/$5 configured, no paid go/API calls/panel management. User clinerules untouched.
 
 **Continuing, 2026-10-31:** t823 implements a fixed referenceNow across executor/native/runtime dispatch, trials, resumed/child runs, browser filtering/sorting, replay and final judging. Fresh execution captures its start; reused evidence retains it; live timers still advance. Core0.16.0 adds optional fields and preserves old exports after extracting graph options. Lead500 Core tests/89 domain/12 extension/27 tooling tests pass; Chromium134.0.6998.35 headless UTC job-board proof passes exact2 supplied-reference rows versus1 wall-clock row after midnight. Core/domain/extension types pass; Core full audit passes and downstream remaining targeted rule passes, final merge gate pending. Extension first check lacked fresh compiled domain/node; building only domain fixed it. Setup now offers downstream --skip-workspace-build with Core safety gates retained; both AGENTS files document it. Initial setup unexpectedly attempted a full workspace build and was refused after Core inputs changed; no further full command ran. Merged Core41adfa49/downstreamda2f4301 after final structure gates and70 Core merge-contract tests; next P8 runtime robustness discovery. Remote task backups retained. Main needs a later permitted full sweep. No paid go/API calls or panel management.
 
@@ -363,6 +363,14 @@ Settled entries through t825 are preserved verbatim in [the accepted runtime led
 - Validation: `pnpm.cmd task start runtime-actionability-signal --worktree --core --skip-workspace-build` ->exit0, both task trees created, mandatory3CoreSDK builds pass (Core87.2s); exact owning commands in downstream p8-actionability/lead-acceptance.md ->338 Core/contract tests accepted, 31 domain/final68 extension reruns pass, native Chromium three tests pass, both final audits pass1144/615 unchanged.
 - Outcome: Implementation accepted; 338 Core/contract tests, affected domain/extension reruns, types/builds and three native fixture proofs pass. Both final audits and paired dev integration pass; main filtered SDK/domain/extension bundles current.
 - Follow-up: push both dev branches, then remaining P8 identity/repeat/history work. Main held for next permitted full sweep; no paid go/full suite.
+
+### 2026-10-31 - t828 source-less target discovery
+- Agent: Codex lead; two read-only Luna High workers, Core and host.
+- Changed: private paired setup and discovery briefs/reports in sibling Core.
+- Why: literal targets with no source step need identity-based refresh.
+- Validation: `pnpm.cmd task start runtime-target-identity --worktree --core --skip-workspace-build` ->exit0, both trees and mandatory3Core SDK builds complete (Core73.93s); no new runtime tests.
+- Outcome: Partial; owning matcher baseline ->six existing pass/two new regression failures. Core/host interface plans active; production unchanged.
+- Follow-up: reconcile findings and freeze the generic/host interface, then implement; no full suite/paid calls.
 
 ## Open Questions
 
