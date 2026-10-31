@@ -95,7 +95,8 @@ test("what the defence pressed is recorded on the result as closed words, and no
   const unpressed = recordRecovery(result(), RECOVERED, []);
   assert.equal(unpressed.clearedLayers, undefined);
 
-  // A word outside the closed set never travels, whatever put it there.
-  const smuggled = recordRecovery(result(), dismissed, [{ kind: "dialog", control: "Try again" } as unknown as WebAutomationClearedLayer, { kind: "dialog", control: "Close" }]);
+  // Legacy wire kinds are normalized; a forbidden control never travels.
+  const legacy: unknown = [{ kind: "dialog", control: "Try again" }, { kind: "dialog", control: "Close" }];
+  const smuggled = recordRecovery(result(), dismissed, legacy as WebAutomationClearedLayer[]);
   assert.deepEqual(smuggled.clearedLayers, [{ kind: "other", control: "Close" }]);
 });
