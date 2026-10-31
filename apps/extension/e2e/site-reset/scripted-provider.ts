@@ -68,6 +68,18 @@ export type ScriptedProviderOptions = {
 /** A scripted verification reply: its summary and its diagnosis (`answersRequest` and any words). */
 export type ScriptedVerification = { summary: string; diagnosis: JsonObject };
 
+/** Read the Core current-view tail without treating historical references as pages. */
+function projectedPage(evidence: readonly ScriptedEntry[]): { page: string; latest: boolean } | undefined {
+  const at = evidence.findIndex((entry) => entry.toolId === "core.current_view");
+  if (at < 0) return undefined;
+  const groups = evidence[at]!.value.groups;
+  if (!Array.isArray(groups)) return { page: "", latest: false };
+  const top = groups.map(record).find((group) => group.group === "top");
+  const page = record(top?.value).page;
+  const last = evidence.slice(0, at).reverse().find((entry) => entry.toolId !== "core.route_state" && entry.toolId !== "core.run_nodes");
+  return { page: typeof page === "string" ? page : "", latest: typeof top?.callId === "string" && top.callId === last?.callId };
+}
+
 /** What the scripted supervisor saw each of its calls answer, and how many turns each role took. */
 export type ScriptedProvider = {
   receipts: Array<{ call: string; code: unknown }>;
@@ -117,8 +129,8 @@ export function bindScriptedProvider(build: Pick<InstalledBuild, "service">, opt
         step: builderStep,
         evidence,
         last,
-        shownPage: () => String(shown()?.page ?? ""),
-        shownIsLatest: () => evidence.at(-1)?.value === shown(),
+        shownPage: () => projectedPage(evidence)?.page ?? String(shown()?.page ?? ""),
+        shownIsLatest: () => projectedPage(evidence)?.latest ?? (evidence.at(-1)?.value === shown()),
         call,
         node: (callId, name, parameters, consequences = [], extra = {}) => call(callId, "core.run_node", { node: name, parameters, consequences, ...extra }),
         complete: result => answer({ kind: "complete", result })

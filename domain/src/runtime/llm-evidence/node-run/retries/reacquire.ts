@@ -24,6 +24,8 @@ import { AUTOMATION_STUDIO_TARGET_GONE_CODE, type AutomationStudioFailureRecord,
 import type { JsonObject } from "fluxiq/core";
 import type { WebNodeRun } from "../context";
 import type { WebNodeDispatchResult } from "./dispatch";
+import { webAutomationExtractListReferenceNow } from "../../../../output-nodes/extract-list";
+import type { WebNodeDispatchCapture } from "../frozen-execution";
 
 /** What a caller found: the parameters to dispatch with, or why there are none. */
 export type WebNodeReacquired = { outcome: "found"; parameters: JsonObject } | { outcome: "gone" } | { outcome: "unmatched" | "unavailable" };
@@ -33,19 +35,23 @@ export type WebNodeReacquire = (failure: AutomationStudioFailureRecord) => Promi
 
 /** Core's callback for `reacquire`, dispatching `command` with the found parameters and keeping every answer in `answers` (header). */
 export function webNodeRetryReacquire(
-  run: Pick<WebNodeRun, "gateway" | "sessionId">,
+  run: Pick<WebNodeRun, "gateway" | "sessionId"> & Partial<Pick<WebNodeRun, "request">>,
   command: { actionType: string; parameters: JsonObject; metadata: JsonObject },
   reacquire: WebNodeReacquire,
-  answers: WebNodeDispatchResult[]
+  answers: WebNodeDispatchResult[],
+  capture?: WebNodeDispatchCapture
 ): (input: { failure: AutomationStudioFailureRecord }) => Promise<AutomationStudioNodeRetryReacquire<WebNodeDispatchResult>> {
   return async ({ failure }) => {
     const found = await reacquire(failure).catch((): WebNodeReacquired => ({ outcome: "unavailable" }));
     if (found.outcome === "found") {
-      const fresh = { ...command, parameters: found.parameters };
+      capture?.refreshed(found.parameters);
+      const parameters = command.actionType === "web.dom.extract_list" ? webAutomationExtractListReferenceNow(found.parameters, run.request?.referenceNow) : found.parameters;
+      const fresh = { ...command, parameters };
       return {
         outcome: "found",
         dispatch: async () => {
-          const answer = await executeWebEvidenceAction(() => run.gateway.executeAction(run.sessionId, fresh));
+          const send = () => run.gateway.executeAction(run.sessionId, fresh);
+          const answer = await executeWebEvidenceAction(() => capture === undefined ? send() : capture.dispatch(fresh, send));
           answers.push(answer);
           return answer;
         }

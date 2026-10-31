@@ -13,6 +13,7 @@ import type { WebNodeArrivals } from "./arrival";
 import type { WebNodeHeldLiterals } from "./held-literals";
 import type { WebNodeOwnLayers } from "./own-layers";
 import type { WebNodeShownAddresses } from "./shown-addresses";
+import type { WebNodeFrozenExecution } from "./frozen-execution";
 
 export type WebNodeRun = {
   gateway: WebLlmEvidenceGateway;
@@ -42,4 +43,6 @@ export type WebNodeRun = {
   layers: WebNodeOwnLayers;
   /** What the Flow a round continues holds, which the model's call did not write (`./held-literals/`). */
   held: WebNodeHeldLiterals;
+  /** Host-local rerun authority; never a field of a model call or its result. */
+  frozenExecution?: WebNodeFrozenExecution;
 };

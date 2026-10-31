@@ -15,7 +15,9 @@
 // is missing` must hold on a page with no dialog.
 
 import type { JsonObject } from "fluxiq/core";
-import { actionableEvidenceElement, webLlmReadableWords, type WebLlmPageEvidence } from "../llm-evidence";
+import { actionableEvidenceElement } from "../llm-evidence/elements";
+import { webLlmReadableWords } from "../llm-evidence/page-view/element";
+import type { WebLlmPageEvidence } from "../llm-evidence";
 
 const LIST_SEPARATOR = " | ";
 

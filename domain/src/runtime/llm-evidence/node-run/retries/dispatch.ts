@@ -68,6 +68,7 @@ import type { WebNodeRun } from "../context";
 import { webNodeRetriedAnswer } from "./answer";
 import { webNodeRetryReacquire, type WebNodeReacquire } from "./reacquire";
 import { webNodeRetryWait } from "./wait";
+import type { WebNodeDispatchCapture } from "../frozen-execution";
 
 /** What the gateway answers one command with. */
 export type WebNodeDispatchResult = Awaited<ReturnType<WebLlmEvidenceGateway["executeAction"]>>;
@@ -105,7 +106,8 @@ export async function webNodeDispatchWithRetries(
   command: { actionType: string; parameters: JsonObject; metadata: JsonObject },
   noted?: { attempts?: number },
   checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>,
-  reacquire?: WebNodeReacquire
+  reacquire?: WebNodeReacquire,
+  capture?: WebNodeDispatchCapture
 ): Promise<WebNodeRetriedDispatch> {
   if (command.actionType === "web.dom.extract_list") {
     command = { ...command, parameters: webAutomationExtractListReferenceNow(command.parameters, run.request.referenceNow) };
@@ -117,13 +119,14 @@ export async function webNodeDispatchWithRetries(
     actionEffect: webAutomationResolvedActionEffect(command.actionType, command.parameters),
     // Core sends nothing more once the build is cancelled between attempts.
     dispatch: async () => {
-      const answer = await executeWebEvidenceAction(() => run.gateway.executeAction(run.sessionId, command));
+      const send = () => run.gateway.executeAction(run.sessionId, command);
+      const answer = await executeWebEvidenceAction(() => capture === undefined ? send() : capture.dispatch(command, send));
       answers.push(answer);
       return answer;
     },
     read: (result) => webNodeRetryReading(result, command),
     checkEffect,
-    reacquire: reacquire === undefined ? undefined : webNodeRetryReacquire(run, command, reacquire, answers),
+    reacquire: reacquire === undefined ? undefined : webNodeRetryReacquire(run, command, reacquire, answers, capture),
     delay: webNodeRetryWait,
     signal: run.request.signal
   });

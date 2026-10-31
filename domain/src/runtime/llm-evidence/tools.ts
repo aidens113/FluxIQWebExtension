@@ -43,7 +43,6 @@ import type {
 } from "fluxiq/automation-studio";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webAutomationCheckWaitParameters } from "../../actions/check-wait";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { isEligibleWebSession } from "../web-sessions";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
@@ -106,6 +105,7 @@ import { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence } 
 import { createWebLlmRepeatedRefusals } from "./repeated-refusal";
 import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
+import { createWebNodeFrozenExecution, webNodeFinalGateway } from "./node-run/frozen-execution";
 import {
   webLlmToolRejectionResultCode,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -304,7 +304,8 @@ export function createWebAutomationLlmEvidenceRuntime(
   // Every command a build sends goes out through this gateway, so a click or a
   // navigation the model runs carries the same room to wait out a robot check
   // that clears by itself as the Flow's own (`actions/check-wait.ts`).
-  const gateway = withCheckWait(sessions);
+  const gateway = webNodeFinalGateway(sessions);
+  const frozenExecution = createWebNodeFrozenExecution();
   // Which node one free look runs, read from this domain's own definitions
   // rather than named here (`./node-run/catalog.ts`).
   const observationNode = webObservationNodeId();
@@ -540,7 +541,8 @@ export function createWebAutomationLlmEvidenceRuntime(
             arrivals,
             addresses,
             layers,
-            held
+            held,
+            frozenExecution
           }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
@@ -715,15 +717,6 @@ export function createWebAutomationLlmEvidenceRuntime(
       return resolveWebPlanNodeParameters(input, { targets: webLlmPacketTargets({ projectId: input.projectId, flowId: input.flowId }, retained), extractions: extractionHandles });
     },
   };
-}
-
-/** The gateway, sending each click and navigation with the check allowance (`actions/check-wait.ts`). */
-function withCheckWait(sessions: WebLlmEvidenceGateway): WebLlmEvidenceGateway {
-  return present<WebLlmEvidenceGateway>({
-    eligibleSessionIds: () => sessions.eligibleSessionIds(),
-    structureDetectionSessionIds: sessions.structureDetectionSessionIds?.bind(sessions),
-    executeAction: (sessionId, command) => sessions.executeAction(sessionId, { ...command, parameters: webAutomationCheckWaitParameters(command.actionType, command.parameters) })
-  });
 }
 
 /** Bind web-only evidence tools into Core's domain-neutral global LLM harness. */

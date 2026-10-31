@@ -22,6 +22,12 @@ The domain explicitly tags secondary operations: check provides selection,
 type provides submit, and browser tab provides open. A restricted catalog
 missing a required operation is rejected before invoking a model.
 
+## Frozen prior-call execution
+
+The host can attest exact original executions and rerun them without reusing a
+model handle against a replacement map. See [frozen node reruns](frozen-node-reruns.md)
+for scope, actual permission proof, retry/receipt handling and conservative limits.
+
 ## Relative dates share a run reference
 
 Core supplies a fixed `referenceNow` in native-node host context and runtime

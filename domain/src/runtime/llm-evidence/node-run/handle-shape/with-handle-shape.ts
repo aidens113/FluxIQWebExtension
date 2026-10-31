@@ -5,7 +5,7 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { canonicalWebLlmTargetHandle } from "../../handle-spelling";
-import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../../structure/handles";
+import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../../structure";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
