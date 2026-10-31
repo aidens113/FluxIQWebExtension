@@ -1,15 +1,17 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Resumed units, t817 and Core0.14.1 provider fix are merged. Full sweep2 finished failed; every failed file now passes targeted checks after cache/fixture repairs. Corrected-source sweep next after daily reset; main held, paid Claude comparison still waits for user's go.
+Status detail: Core b72e4214 passed full acceptance; downstream t821 finished with one robot-watch wall-clock assertion failure. All9 virtual-clock replacements and extension types passed; final downstream-only sweep next, reusing unchanged Core proof. Main held; no paid calls.
 Created: 2026-10-28
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
 Scope: Where FluxIQ Core and the web domain can compute or enforce what the build model now has to get right: membership/bounds, judging, undo/reset bookkeeping, handler conditions, toggle state, stable targets, dedupe, paging, and per-call workload.
 Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
 Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), debug notes in `language-driven-flow-loop-plan/debugs/`
 
 ## Current State
+
+**Corrected-source sweep running, 2026-10-31:** disposable paired t821 pins Coreb72e4214/downstream44377722, started07:05UTC after the local date reset. Source is frozen; copied env removed, provider secrets/inherited FLUXIQ settings stripped, temporary roots. Main ignored test-runs/2026-10-31-sweep-1 owns logs/summary; Core install/build/check passed; ordinary Core14840 passed/6 skipped/0 failed; real-SQL1684 passed/1 skipped/0 failed; Core full sweep passed (20683 tests,7 skipped); downstream install/build/check passed; domain2488/scenario1015 passed; extension hit one real-clock robot-watch assertion (1143ms versus400ms upper bound); remaining units continue. Main authoring test uses virtual timers, not wider bounds; all9 corrected tests and extension types now pass after frozen t821 finished. Core acceptance is reusable at unchangedb72e4214. No paid calls; main promotion waits for all required steps. These two tested commits, not later memory-only commits, are the promotion candidates.
 
 **Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
 paired task trees after merging current `dev`; both sides are now merged. C1 and P1b are verified and merged (P1b: Coreb4a8f453/downstream01da7fa3).
@@ -460,6 +462,12 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed: product build/check now use registered shared cache steps without relaxing the registry test; old demo0.25/DeepSeek-only and campaign DeepSeek command expectations now require Claude/$5. The log review initially missed three early check failures; all five check failures are now enumerated and covered.
 - Validation: `node --test scripts/build-cache/tests/registry.test.mjs scripts/lab/live-campaign/tests/command-line.test.mjs` ->16 passed; filtered test-runner dependency build then two compiled demo files ->9 passed; product check/build and test-runner check ->exit0. Initial main stale contracts/Node type artifacts were rebuilt/reinstalled from the unchanged frozen lockfile, then checks passed. Existing saved-repair7 and Core259 passes remain valid.
 - Outcome: all failed files have observed narrow passes; corrected-source full acceptance remains pending. Date guard test ->early launch refused before summary creation. No paid calls, panel or browser run; main promotion held and original storage timeout cause remains unproven.
+
+### 2026-10-31 - Core accepted; deterministic robot-watch unit coverage
+- Validation: t821 pinned Coreb72e4214/downstream44377722 ->Core install/build/check/test exit0,20683 passed/7 skipped; downstream install/build/check0, unit1 with exactly one failure: robot-check release after1143ms versus100-400ms real-clock bound. Domain2488, scenario1015 and Lab2534 passed; extension3458 passed/one failed.
+- Changed: robot-check-watch test file now uses virtual Date/timeouts/intervals for all9 cases; strict119ms-pending/120ms-release, post-release polling cleanup and followed-check boundaries replace elapsed host-time bounds. Production code and other test outcomes are unchanged; discovery report records neighboring timing tests.
+- Validation: `pnpm --filter @fluxiq-web-extension/extension test robot-check-watch` with label robot-clock-1031 ->9 passed; extension package check ->exit0. No check overlapped the frozen full suite.
+- Outcome: t821 disposed only after0/0 unmerged; Core b72e4214 full proof is reusable exactly. Final downstream-only build/check/test sweep is next on the corrected committed snapshot; no second Core full suite needed, no paid calls or main promotion yet.
 
 ## Open Questions
 
