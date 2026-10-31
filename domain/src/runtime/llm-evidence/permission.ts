@@ -1,3 +1,4 @@
+import type { AutomationStudioResolvedActionEffect } from "fluxiq/automation-studio/action-effect";
 // Asking Core whether an action the model declared may be taken.
 //
 // The consequence classes are what the model says its own action does -- the
@@ -91,6 +92,8 @@ export async function webActionPermission(input: {
   control: { name: string | undefined; kind: string; item?: string | undefined; dialog?: string | undefined; subject?: string | undefined; page?: string | undefined; scope?: string | undefined; resource?: string | undefined; place?: string | undefined; state?: string | undefined };
   verb: string;
   effect: "observe" | "mutate";
+  /** Resolved by the trusted web action table, never copied from model input. */
+  actionEffect?: AutomationStudioResolvedActionEffect | undefined;
 }): Promise<WebActionPermission> {
   if (input.declared === undefined) return { kind: "no_consequence" };
   // An explicit `null` from an action that only reads is "none declared", the
@@ -124,7 +127,9 @@ export async function webActionPermission(input: {
   }
   const name = boundedName(input.control.name) || `an unlabelled ${input.control.kind}`;
   const control = present<AutomationStudioActionDeclaration["control"]>({ name, kind: input.control.kind, item: input.control.item || undefined, dialog: input.control.dialog || undefined, subject: input.control.subject || undefined, page: input.control.page || undefined, scope: input.control.scope || undefined, resource: input.control.resource || undefined, place: input.control.place || undefined, state: input.control.state || undefined });
-  const verdict = await input.check({ consequences: declared, control, verb: boundedVerb(input.verb), effect: input.effect });
+  const declaration: AutomationStudioActionDeclaration = { consequences: declared, control, verb: boundedVerb(input.verb), effect: input.effect };
+  if (input.actionEffect !== undefined) declaration.actionEffect = input.actionEffect;
+  const verdict = await input.check(declaration);
   if (verdict.permitted) return { kind: "permitted" };
   return present<Extract<WebActionPermission, { kind: "refused" }>>({ kind: "refused", missing: verdict.missing, requestId: verdict.requestId, declined: verdict.declined });
 }

@@ -1,3 +1,4 @@
+import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
 // Checking a step whose effect lasts, without taking it.
 //
 // A dry run never clears site data or logs the person out, never repeats a
@@ -134,7 +135,7 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
   const parameters = isJsonRecord(value.parameters) ? webAutomationScopedToRow(value.parameters, value.item) : undefined;
   if (!node) return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the step names nothing this domain can run", false, { resultReason: "node_not_runnable_here", nodeId: undefined, assumed: undefined });
   if (!parameters) return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the step carries no parameters to check", false, { resultReason: undefined, nodeId: node.definitionId, assumed: undefined });
-  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "step" }, verb: "check", effect: "observe" });
+  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "step" }, verb: "check", effect: "observe", actionEffect: webAutomationResolvedActionEffect("web.dom.assert") });
   if (permission.kind === "refused" || permission.kind === "invalid") {
     return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the check was not permitted", false, { resultReason: webNodeReplayPermissionReason(permission), nodeId: node.definitionId, assumed: undefined });
   }

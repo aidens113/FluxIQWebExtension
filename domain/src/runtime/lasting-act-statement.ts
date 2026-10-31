@@ -13,8 +13,7 @@
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import type { WebAutomationActionType } from "../actions/types";
-import { webAutomationOutputNodeId } from "../output-nodes";
-import { webPlanStepMustDeclare } from "./llm-evidence/plan-resolution/step-permission";
+import { webAutomationResolvedActionEffect } from "../actions/action-effect";
 
 /** The fields of a failure record the statement reads and writes. */
 type StatedRecord = Pick<AutomationStudioFailureRecord, "effect" | "stage" | "retryable">;
@@ -23,8 +22,8 @@ type StatedRecord = Pick<AutomationStudioFailureRecord, "effect" | "stage" | "re
  * The failure record with this domain's statement about the act behind it.
  *
  * **A committing act** -- a press, a key press, a dialog answer, or typing that
- * sends its form: the actions whose effect is the page's to decide, the same
- * set a Flow step must declare consequences for (`webPlanStepMustDeclare`) --
+ * sends its form, a download, a tab operation or Next: actions whose lost
+ * acknowledgement cannot safely authorize repetition --
  * says on its record whether it happened:
  *
  *  - `effect: "unacted"` when the failure shows nothing was dispatched: the
@@ -75,6 +74,6 @@ export function webLastingActStatement<T extends StatedRecord>(
   failure: T
 ): T {
   const unacted = failure.effect === "unacted" || reported?.effect === "unacted" || failure.stage === "target_resolution" || failure.stage === "dispatch";
-  if (webPlanStepMustDeclare(webAutomationOutputNodeId(actionType), parameters)) return { ...failure, effect: unacted ? "unacted" : "ambiguous" };
+  if (webAutomationResolvedActionEffect(actionType, parameters)?.effectClass === "commit") return { ...failure, effect: unacted ? "unacted" : "ambiguous" };
   return reported?.effect === "unacted" ? { ...failure, effect: "unacted" } : failure;
 }

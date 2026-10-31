@@ -1,3 +1,4 @@
+import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
 // Running one node of the library against the live page, now.
 //
 // This is the whole of what replaced five invented exploration verbs. The model
@@ -73,6 +74,7 @@ import { webLayerOwnControls, webRuntimeClearsLayers } from "./layer";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
+import { webNodeShownControlWords } from "./control-words";
 import { webAnsweredLayer, webPressClearedLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow, webNodeOpeningPlaces, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
@@ -313,7 +315,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
     // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
-    const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
+    const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, webNodeShownControlWords(run, webPlanFirstTargetHandle(written))) : { name: undefined, kind: "step" };
     const spot = current ? webTargetSpot(current, webPlanFirstTargetHandle(written)) : {}; // Its record and dialog, and what it and its page are about, as opaque tokens: Core ties an undo to its act by them (Core t475, t719).
     // A node whose act the page decides must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
@@ -341,7 +343,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       verb: webNodeActVerb(node, written),
       // Not the model's word, and the reason a read is never refused: a node that only looks at the page
       // cannot have left anything behind, so what it declared is recorded and disregarded (`../permission.ts`).
-      effect: node.effect
+      effect: node.effect,
+      actionEffect: webAutomationResolvedActionEffect(node.actionType, written)
     });
     if (permission.kind === "invalid") {
       return refusal(undefined, "invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), record);
@@ -725,18 +728,6 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
     missing: undefined,
     requestId: undefined
   });
-}
-
-/**
- * The words the packet store keeps beside the identity of the control
- * `written`'s handle names, resolved bare as the call's words are
- * (`../tools.ts`, `describeCall`); nothing for a call that names no handle.
- */
-function shownWords(run: WebNodeRun, written: JsonObject): string | undefined {
-  const handle = webPlanFirstTargetHandle(written);
-  if (handle === undefined) return undefined;
-  const resolution = run.stores.targets.resolve({ projectId: run.request.projectId, flowId: run.request.flowId }, handle, undefined);
-  return resolution.ok ? resolution.words : undefined;
 }
 
 /**

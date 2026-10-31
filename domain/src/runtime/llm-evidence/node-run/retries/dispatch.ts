@@ -1,3 +1,4 @@
+import { webAutomationResolvedActionEffect } from "../../../../actions/action-effect";
 // A node a build runs against the live page -- while it explores, and while its
 // own test runs replay the draft -- is dispatched under Core's default retries,
 // the same ones a saved Flow's playback and a candidate trial get (t355).
@@ -110,9 +111,16 @@ export async function webNodeDispatchWithRetries(
   const answers: WebNodeDispatchResult[] = [];
   const outcome = await automationStudioDispatchWithNodeRetries<WebNodeDispatchResult>({
     node: { id: node.definitionId, definitionId: node.definitionId, metadata: nodeMetadata(node) },
+    actionEffect: webAutomationResolvedActionEffect(command.actionType, command.parameters),
     // Core sends nothing more once the build is cancelled between attempts.
     dispatch: async () => {
-      const answer = await run.gateway.executeAction(run.sessionId, command);
+      let answer: WebNodeDispatchResult;
+      try {
+        answer = await run.gateway.executeAction(run.sessionId, command);
+      } catch {
+        // A missing acknowledgement cannot prove that the dispatched act never landed.
+        answer = { status: "unknown", error: "The action acknowledgement was unavailable." };
+      }
       answers.push(answer);
       return answer;
     },
@@ -150,6 +158,9 @@ function webNodeRetryReading(result: WebNodeDispatchResult, command: { actionTyp
  * the consequences its call declared -- the plain strings, `[]` for none --
  * under Core's own key. Never `effect: "mutate"`, which would make every
  * page-changing node a lasting act (`automationStudioNodeActLasts`).
+ *
+ * The trusted resolved actionEffect is passed separately to Core above; this
+ * compatibility metadata cannot lower that floor.
  *
  * A call that declared nothing carries no key at all: `[]` is the author's
  * statement that nothing outlasts the step, and writing it for a call that

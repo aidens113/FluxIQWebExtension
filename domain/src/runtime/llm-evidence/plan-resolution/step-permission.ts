@@ -1,3 +1,4 @@
+import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
 // Putting a step of the Flow being built to Core's permission gate.
 //
 // Until this existed, nothing did. Core hands the domain a permission check
@@ -154,7 +155,8 @@ export async function webPlanStepPermission(input: {
     // The node's, not the model's. A step that reads the page -- an assertion,
     // a wait, an extraction -- leaves nothing behind each time the Flow runs it,
     // so a class written against it is disregarded rather than put to a person.
-    effect: NODE_EFFECTS.get(input.nodeDefinitionId) ?? "mutate"
+    effect: NODE_EFFECTS.get(input.nodeDefinitionId) ?? "mutate",
+    actionEffect: webAutomationResolvedActionEffect(ACTION_BY_NODE_ID.get(input.nodeDefinitionId) ?? "", input.parameters)
   });
   return permission.kind === "refused" ? { kind: "refused", missing: permission.missing, requestId: permission.requestId } : { kind: "clear" };
 }
