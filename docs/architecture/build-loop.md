@@ -11,6 +11,12 @@ verdict; they are in FluxIQ Core's
 so Core's pages are named by path, as the neighbouring pages do). Paths below
 are under `domain/src/`.
 
+## Authored script examples
+
+The runtime supplies its versioned worked-example tails through Core's explicit
+companion binding. See [web-authored script examples](web-script-examples.md) for
+ownership, missing-client behavior and byte-preserving parity checks.
+
 ## Declaring available operations
 
 Core checks required operations against declared node identities: node id,
