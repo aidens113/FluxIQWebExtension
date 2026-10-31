@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t822 merged on both dev branches after317 focused tests, package types, both structure audits and70 Core merge-contract tests passed. Both Oct31 full-suite slots used; main held for a later permitted full sweep. No paid calls.
+Status detail: t823 shared reference clock implementation in three disjoint worker lanes (executor, judging/replay, downstream). Fixed epoch referenceNow is separate from live now(). No paid calls; daily full-suite allowance exhausted; main held.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -10,6 +10,8 @@ Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
 Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), debug notes in `language-driven-flow-loop-plan/debugs/`
 
 ## Current State
+
+**Continuing, 2026-10-31:** t823 paired task implements a single date reference across browser filters, build trials and final judging. Stable optional epoch-ms seams: GraphExecutionOptions.referenceNow, effect dispatch context.referenceNow, native hostContext.referenceNow and SDK context.host.referenceNow. Live now() keeps advancing for timers. Executor/native/session, judge/replay and downstream lanes have disjoint written briefs under reports/codex-1031/shared-clock-*. Fresh execution captures its start; resume/children/cached replay retain it. t822 is pushed Core60cb07fe/downstreamcb2ca736. No paid go or panel management. Task creation unexpectedly attempted its automatic workspace build after the daily allowance was used; currency guard refused changed/unstamped Core inputs. Do not rerun setup. Only named tests, package type checks and filtered library builds follow.
 
 **Current fix-forward, 2026-10-31:** t822 ended exit1 despite2488 registered domain passes: src/tests/domain.test.ts failed during module load. The same hidden failure existed in t821, so the earlier claim that its robot-watch assertion was the only failure was incomplete. Core had mistaken incidental 'Choose ensureState' help for selection capability. The fix uses declared node id/label/tags/output identities only; the web domain explicitly declares check/select, type/submit and tab/open. Original integration assertions now run as named tests, with denied-operation expectations strengthened. Lead275 Core plan and42 domain tests pass; both package type checks exit0. Final catalog consolidation30/30 passes. Paired dev integration completed: Core26973484/downstream2ec3dc42; final pushes follow this memory update. Both full structure audits pass; Core merge gate70/70 passed with the default full check explicitly skipped. Both Oct31 full-suite slots are used: narrow checks only; main needs a later permitted full sweep. Coreb72e4214's20683/7-skipped proof is historical and cannot qualify this classifier change. Claude/$5 is configured, but no paid go or calls occurred.
 
@@ -91,7 +93,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. t822 is merged after narrow acceptance; push both dev branches together. Both 2026-10-31 full-suite slots are used; main remains held until a later permitted full sweep passes. No further full suite today.
+1. t822 is merged and pushed after narrow acceptance; continue t823 shared run clock. Both 2026-10-31 full-suite slots are used; main remains held until a later permitted full sweep passes. No further full suite today.
 2. t817 fixed the first-already-satisfied-row defect: paired before/after evidence and explicit grounded end-state choice now pass native oracle/saved-replay proof; no first/majority click inference.
 3. After the user's go, run the live round with Claude/$5: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
@@ -474,6 +476,11 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed: Core operation evidence excludes incidental prose/data shape; web secondary operations explicitly tagged. Integration assertions registered as named tests; no missing-capability/provider guard weakened. Core version0.15.0; no wire-schema change. Worker regressions consolidated into existing catalog.test.ts to respect the25-file limit. Core AGENTS.md now explicitly carries the twice-daily cap and narrow merge guidance, matching downstream. Worker reports in downstream reports/codex-1031.
 - Validation: `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/plan/tests` ->275 passed; final catalog-only rerun ->30 passed. `pnpm --filter @fluxiq-web-extension/domain test src/tests/domain.test.ts output-nodes/tests/model-facing-catalog.test.ts output-nodes/tests/click-ensure-state.test.ts output-nodes/tests/definitions.test.ts` ->42 passed. Both package check commands ->exit0.
 - Validation correction: t821 also contained the hidden module-load failure; t822 install/build/check0, test1. No third full suite today; no main promotion or paid calls. Both structure gates pass; paired task finishes merged Core26973484/downstream2ec3dc42; mandatory Core contract gate70/70 passed. Core finish used --skip-checks to honour the daily limit. The temporary downstream tree was removed; detached Core tree is left for normal age-gated pruning.
+
+
+### 2026-10-31 - t823 shared-clock continuation assigned
+- Changed: three disjoint briefs and optional Core execution/native clock types. Discovery found existing persisted starts and browser extractList.now, but dispatch/judge readers drift to wall time.
+- Validation: read-only source discovery -> concrete propagation gaps; task setup automatic workspace build ->exit1 (Core inputs changed, not stamped); this unintended full-build attempt is not acceptance and will not be rerun today. Implementation/narrow acceptance pending.
 
 ## Open Questions
 
