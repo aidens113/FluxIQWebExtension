@@ -6,6 +6,7 @@ import {
   renderAutomationStudioFlowScriptFormat
 } from "fluxiq/automation-studio";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
+import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";
 
 // Captured from the four public pre-extraction constants, 2026-10-31.
 // These pins remain unchanged when Core removes its authored web tails.
@@ -20,13 +21,13 @@ for (const section of ["format", "act", "loop", "state"] as const) {
   test(`${section}: explicit web examples reconstruct the pinned original UTF8 bytes`, () => {
     const tail = WEB_FLOW_SCRIPT_EXAMPLES[section];
     assert.ok(tail?.length);
-    const rendered = renderAutomationStudioFlowScriptFormat(WEB_FLOW_SCRIPT_EXAMPLES)[section];
+    const rendered = renderAutomationStudioFlowScriptFormat(WEB_FLOW_SCRIPT_EXAMPLES, WEB_FLOW_SCRIPT_GUIDANCE)[section];
     assert.equal(Buffer.byteLength(rendered, "utf8"), pins[section].bytes);
     assert.equal(createHash("sha256").update(rendered, "utf8").digest("hex"), pins[section].sha256);
   });
 }
 
 test("explicit web examples preserve the entire original completion schema digest", () => {
-  const schema = automationStudioEvidenceFlowBootstrapCompletionSchema(undefined, WEB_FLOW_SCRIPT_EXAMPLES);
+  const schema = automationStudioEvidenceFlowBootstrapCompletionSchema(undefined, WEB_FLOW_SCRIPT_EXAMPLES, WEB_FLOW_SCRIPT_GUIDANCE);
   assert.equal(createHash("sha256").update(JSON.stringify(schema), "utf8").digest("hex"), "02c766712576f5d8a7bf6cf539e951644b0fa8b3a3978293fadeb3e8cc529147");
 });

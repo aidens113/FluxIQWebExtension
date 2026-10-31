@@ -1,17 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runAutomationStudioFlowCandidateAuthoringLoop } from "fluxiq/automation-studio";
-import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
+import type { WebLlmEvidenceGateway } from "../../capture";
+import { createWebAutomationLlmEvidenceRuntime } from "../../tools";
 import { exampleSupport } from "./support";
 
 test("the actual candidate submit schema carries the unchanged wrapper and four pinned original web sections", async () => {
   const { registry, resolution, sections } = exampleSupport;
+  let executions = 0;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => [],
+    executeAction: async () => {
+      executions += 1;
+      throw new Error("no gateway should execute");
+    }
+  };
+  const binding = createWebAutomationLlmEvidenceRuntime(gateway);
   const captured: unknown[] = [];
   const stop = new Error("captured actual schema before the loop starts");
   await assert.rejects(runAutomationStudioFlowCandidateAuthoringLoop({
     submission: {
       projectId: "project.examples", flowId: "flow.examples", registry, resolution,
-      baseDependencyDigest: "accepted.examples", binding: { flowScriptExamples: WEB_FLOW_SCRIPT_EXAMPLES }
+      baseDependencyDigest: "accepted.examples", binding
     },
     observe: (loop) => {
       const tool = loop.tools.find((item) => item.toolId === "core.submit_candidate");
@@ -26,6 +36,7 @@ test("the actual candidate submit schema carries the unchanged wrapper and four 
       decide: async () => { throw new Error("no model should execute"); }
     }
   }), (error: unknown) => error === stop);
+  assert.equal(executions, 0);
   assert.deepEqual(captured, [`The whole Flow as a script. ${sections.format}\n${sections.act}\n${sections.loop}\n${sections.state}`]);
 });
 

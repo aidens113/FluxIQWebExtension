@@ -5,11 +5,12 @@ import {
 } from "fluxiq/automation-studio";
 import { listWebAutomationOutputNodeDefinitions } from "../../../../output-nodes";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
+import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";
 
 const resolution = { scope: { kind: "domain" as const, domainId: "web-automation" }, runtimeCapabilities: ["web.actions"], permissions: ["web-automation.action"] };
 const registry = new AutomationStudioNodeRegistry();
 for (const definition of listWebAutomationOutputNodeDefinitions()) registry.register(definition);
-const sections = renderAutomationStudioFlowScriptFormat(WEB_FLOW_SCRIPT_EXAMPLES);
+const sections = renderAutomationStudioFlowScriptFormat(WEB_FLOW_SCRIPT_EXAMPLES, WEB_FLOW_SCRIPT_GUIDANCE);
 
 function blocks(text: string): Array<[string, string]> {
   const found: Array<[string, string[]]> = [];

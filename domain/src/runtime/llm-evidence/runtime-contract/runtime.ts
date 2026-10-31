@@ -3,6 +3,7 @@ import type {
   AutomationStudioExplorationStopReason,
   AutomationStudioHarnessOptionBundle,
   AutomationStudioFlowScriptExamples,
+  AutomationStudioFlowScriptGuidance,
   AutomationStudioLlmDomainSystemInstructions,
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
@@ -48,6 +49,8 @@ export type WebAutomationLlmEvidenceRuntime = {
   systemInstructions: AutomationStudioLlmDomainSystemInstructions;
   /** Exact web worked-example tails supplied through Core's optional companion seam. */
   flowScriptExamples: AutomationStudioFlowScriptExamples;
+  /** Exact web operation advice supplied in Core-owned positions. */
+  flowScriptGuidance: AutomationStudioFlowScriptGuidance;
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   /**
    * That this domain can run a node of the library against its live page, and
