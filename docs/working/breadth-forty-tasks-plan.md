@@ -1,9 +1,9 @@
 # Forty-Task Breadth Round And Install Proof
 
 Status: Active
-Status detail: Paused 2026-10-19 for traces and the boundary move plan; 12 tasks accepted across 9 sites, photo-social has no pass; reset redesign L1 (t724) in flight. Office checkout, photo newest-likes and job saving failed on 2026-10-18 and are being diagnosed (briefs R2-R4). Reset r6 held.
+Status detail: Latest accepted evidence is 15 of 40 tasks (2026-10-29). Framework fixes have since merged; Claude reruns require the user's go. Newest-likes and the everything-store gate still need qualification; adaptation has one passing round, not final acceptance.
 Created: 2026-10-17
-Last updated: 2026-10-20
+Last updated: 2026-10-31
 Owner: Senior supervisor agent
 Scope: Forty new tasks across ten realistic sites, all provider-free audited, selective full live acceptance per site and repaired failure, plus installed-extension creation and replay proof.
 Paired document: `breadth-forty-tasks-plan.md` in FluxIQ Core
@@ -22,7 +22,7 @@ third time with no Flow and the everything-store gate gave a second false pass; 
 replay, UI reviewed): 14 of 40 accepted. recent-group-posts failed on a false judge no about correct rows (t785 fixing);
 newest-likes is in debug.
 
-**2026-10-27 (resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
+**Historical snapshot, 2026-10-27 (resumed; no feature freeze).** Of the 40 new tasks: 12 accepted, 10 failed, 2 owed reruns,
 16 audited provider-free only ([coverage map](./breadth-forty-tasks-plan/reports/diag-coverage-2026-10-27.md); the
 round-5 run ids there supersede the table below). Round 6 (office-checkout-review, save-quillmark-remote,
 recent-group-posts, newest-likes) launches after t751 finishes. Fixes in flight, each in its own task worktree:
