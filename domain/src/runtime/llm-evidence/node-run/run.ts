@@ -486,7 +486,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
       actedOn: webNodeActedOn(node, current, named),
       // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`); one that cleared a layer over the page names it (`./press-effect/cleared-layer.ts`, t787).
-      choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)), toggle: webPressToggleSignature(node, current, after, webPlanFirstTargetHandle(written)),
+      choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)), toggle: webPressToggleSignature(node, current, after, webPlanFirstTargetHandle(written), { targets: run.stores.targets, scope: buildOf(run) }),
       layerCleared: webPressClearedLayer(node, current, after, webPlanFirstTargetHandle(written), (layer) => run.layers.owns(buildOf(run), layer)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),

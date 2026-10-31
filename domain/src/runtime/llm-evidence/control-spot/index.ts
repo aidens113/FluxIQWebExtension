@@ -11,4 +11,7 @@ export { webControlStates } from "./states";
 // Every shown value of a read by its own place (t772 value witness).
 export { webValueStates } from "./values";
 export { isWebStatefulControl } from "./stateful";
+// What a look says of a control's state, for the plan resolution's handle views (CC9).
+export { webControlView, webControlViewOf, type WebControlView } from "./control-view";
+export { webToggleReadingOf } from "./toggle-reading";
 export { webControlRole } from "./role";

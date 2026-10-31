@@ -8,6 +8,7 @@ export * from "../actions/fact-check";
 export * from "../actions/check-wait";
 export * from "../actions/cleared-check-wait";
 export * from "../actions/cleared-layers";
+export * from "../actions/obstruction";
 export * from "../actions/text-sighting";
 export * from "../actions/toggle-signature";
 export * from "../extraction";
