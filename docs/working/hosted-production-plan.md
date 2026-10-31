@@ -1,7 +1,7 @@
 # Hosted Production Plan
 
 Status: Active
-Status detail: Hosted foundations through C0 are merged; C1 independently verified and merged, E/D5 product and owned seed independently verified and ready to integrate. C2/C3 routing and extension/deployment gates remain.
+Status detail: Hosted foundations through C0, C1 and E/D5 are independently verified and merged; product branding and retry-safe owned default projects are on dev. C2/C3 routing and extension/deployment gates remain.
 Created: 2026-10-17
 Last updated: 2026-10-30
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
