@@ -395,4 +395,3 @@ test("registered web runtime validates and exposes click capability", async () =
     }
   }
 });
-
