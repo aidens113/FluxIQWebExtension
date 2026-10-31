@@ -193,6 +193,14 @@ is checked and held rather than blindly repeated. Proven unacted/not-landed
 actions retain automatic retries. The browser-safe helper imports only Core's
 `fluxiq/automation-studio/action-effect` public subpath.
 
+Core 0.17.1 also uses that floor for optional absent steps. A known commit is
+recorded as `notDone` when skipped, including a click with a dismissal label;
+the optional route stays nonfatal. Strict positive evidence that the recorded
+effect already holds keeps its existing state-held route. An ambiguous target
+failure must settle its effect before optional skipping or another state route.
+State/observe labels cannot invent lasting acts; old clients without a contract
+retain their annotation fallback.
+
 ## Elements Are Named By Handle Only
 
 The user's rule (2026-10-10, t432): every saved element carries the full
