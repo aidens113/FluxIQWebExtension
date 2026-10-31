@@ -31,7 +31,7 @@ async function runPaired(changeDocument = false) {
   });
   const entry = decisions.flatMap((input) => input.evidence).find((item) => item.toolId === "core.run_nodes" && item.callId === "batch");
   assert.ok(entry, `the real loop records its batch's closed outcome: ${JSON.stringify({
-    code: result.ok ? "completed" : result.code, decisions: decisions.length, ...host.diagnostics()
+    code: result.ok ? "completed" : result.code, decisions: decisions.length, host: host.diagnostics()
   })}`);
   const summary = entry.value as JsonObject;
   assert.equal(JSON.stringify(decisions).includes("reportDispatch"), false);
