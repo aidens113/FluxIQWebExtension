@@ -15,6 +15,7 @@
 import type {
   WebAutomationExtractFieldHandling,
   WebAutomationExtractFieldKind,
+  WebAutomationExtractFieldSpec,
   WebAutomationExtractListRequest,
   WebAutomationExtractionProposal,
   WebAutomationRecordedExtraction
@@ -265,6 +266,8 @@ export type ExtractionConfirmField = {
   header?: string | undefined;
   /** `true` on a `text` column read as a container of lines, each child's words joined (`content/extraction/field-reader.ts`). */
   lines?: boolean | undefined;
+  /** The column reads a mark (`badge`, `flag` or `state`): its cell is empty on an item that does not carry it. Absent, the column reads a value as it always did. */
+  mark?: WebAutomationExtractFieldSpec["mark"] | undefined;
   /** `false` marks the column optional: an item the page cannot read it from carries `null` for it (D16). */
   required?: boolean | undefined;
   /**
