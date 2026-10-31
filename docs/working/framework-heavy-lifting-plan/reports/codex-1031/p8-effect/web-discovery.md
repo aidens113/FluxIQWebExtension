@@ -1,0 +1,31 @@
+# P8 web effect discovery
+
+## Findings
+
+The web side currently has several related but distinct contracts; none is yet the requested three-way `observe | state | commit` class.
+
+- `domain/src/output-nodes/definitions.ts` owns the retry-safety map `WEB_AUTOMATION_ACTION_EFFECT`, a total per-action table of only `observe | mutate`. Reads/waits, extraction, snapshot and assertion are `observe`; actions that can alter browser/page state are `mutate`. This is deliberately conservative for replay safety. `domain/src/actions/effect.ts` separately derives a matching `observe | mutate` permission effect from `WEB_AUTOMATION_ACTION_SAFETY` (safe/review), so it is not a commit classification.
+- `domain/src/actions/consequence-declaration.ts` is the domain's total action-kind declaration rule used by plan permission and emitted to native definition metadata. Click, keypress and dialog always require consequences; type requires them iff `submit === true`; all others are not required. This rule reflects whether the page determines what a press does, not whether an action can change state.
+- `domain/src/runtime/lasting-act-statement.ts` calls `webPlanStepMustDeclare`. For those committing actions it records `ambiguous` unless client evidence says `unacted` (dispatch refusal, target-resolution refusal, etc.); Core then checks declared expected state before retry. A declared lasting consequence on a normally non-committing node also causes Core to hold back an uncertain act. Other non-committing verification failures remain retryable.
+- `domain/src/client/interrupted-action/commits.ts` duplicates the commit set for the extension's background bundle: click, keypress, dialog, and submit-type. Its test exhaustively checks parity with the plan declaration rule across every action and submit variants. An interrupted commit becomes unknown/ambiguous; other interrupted actions become retryable failed/unacted. Thus interruption handling already protects uncertain commits.
+- `domain/src/runtime/llm-evidence/node-run/retries/effect-check.ts` checks a node's declared `expectedState`; missing, unjudged, or mixed judged/unjudged evidence is `unknown`. Retry tests demonstrate landed click is made once, while a fully judged not-landed click may be repeated. `domain/src/runtime/tests/lasting-act-statement.test.ts` demonstrates a failed click is refused as uncertain even when it declared no consequences, and plain typing/check/select/navigation verification failures are retried. A plain type with a declared lasting consequence is held back too.
+- The generated native output definition already carries useful trusted metadata: `effect: observe | mutate`, `consequenceDeclaration`, `parameterSchema`, plus `verifiesState` on state-verifying nodes. It also carries tags and a required-element-target flag. The schema registry is total for all action kinds. There is no per-action `observe | state | commit` field; these native facts are generated from domain-owned tables, not supplied by the model. `idempotentWith` is present for relevant toggle signatures at runtime, not a general native action class.
+
+## Truthful generic classification
+
+For a three-way class used as an effect/lasting-act floor, a conservative generic mapping is:
+
+- `observe`: waits, reads/extracts, snapshots and assertions.
+- `state`: deterministic state-setting actions when the requested end state is explicit: clear, select, check, non-submitting type, and navigation to a stated address. Scroll is repeatable but accumulative in viewport position, so do not call it `observe`; whether it belongs under `state` depends on whether the class means “sets state” or “may mutate”. Existing code labels it observe only under the narrower repeat-safety meaning.
+- `commit`: generic click/keypress/dialog, submit-type, download, and potentially tab operations. These can trigger page/browser effects whose meaning cannot be determined from the verb. The current click rule correctly treats it as commit regardless of the target: a generic click may toggle local state or place an order, and a classifier cannot infer which from button text/product names. Keep the action-kind floor at commit; observed effect evidence may refine outcome handling but cannot erase the declared floor.
+- `type` must be parameter-sensitive: `submit: true` is commit; ordinary typing sets field state. Select/check/clear are also state-setting even though current retry-safety metadata calls them mutate. Navigation is a deterministic location-state change, while download is an external action. Tab operation details may matter (open/close/switch); a single kind-wide floor should conservatively be commit unless metadata distinguishes operations.
+
+A target can help interpret an observed click but is not authoritative enough to lower its declaration: the same generic click is page-defined. Scenario fixture labels and product names are not valid grounds for classification.
+
+## Smallest file-owned implementation recommendation
+
+Add a total action-effect table beside `WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION` in `domain/src/actions/consequence-declaration.ts` (or a narrowly named sibling if ownership clarity is preferred), with a parameter-aware resolver returning `observe | state | commit`. Keep the existing consequence-declaration predicate as the permission/declaration rule, because it is already shared with the extension via `commits.ts` parity. Emit the new resolved class in `domain/src/output-nodes/definitions.ts` metadata, and have `webLastingActStatement` / client interruption derive the commit floor from that single resolver rather than maintaining an independent set. Preserve `observe | mutate` metadata for Core's existing retry-safety contract until Core consumes the new class. Add table exhaustiveness and parameter variants to the existing definition/commits tests, then add a regression asserting model-declared consequences or observed effects cannot lower the commit floor. This is a recommendation only; no implementation or tests were run.
+
+## Limits
+
+Read-only source inspection only. No tests/builds were run, per brief. I did not inspect Core executor implementation/tests beyond the FHL P8 and CC12 contract text, so the Core-side combination/floor mechanics remain to be confirmed by the paired Core discovery.

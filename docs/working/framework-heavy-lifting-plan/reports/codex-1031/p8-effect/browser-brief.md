@@ -1,0 +1,12 @@
+Role: standard worker gpt-6.1-sol medium; t824 downstream root C:/Users/osrs_/FluxStuff/fxwork/t824/!FluxIQWebExtension.
+Goal: prepare one provider-free real Chromium regression proving trusted commit floor blocks a second real toggle after an unknown/lost acknowledgement.
+Owned: new focused apps/extension/e2e/content/tests/action-effect/tests/client-floor.spec.ts (and minimal colocated helper only if needed). No fixture/product/Core edits. Report MAIN p8-effect/browser.md.
+Read existing content harness/actions spec, t823 job-board date spec, current actual domain native-definition/bundle APIs and Core runtime peer's new floor APIs. Coordinate with p8_contract_runtime if interface needed.
+Use allowed realistic job-board fixture and a stable Save/Saved toggle on an existing positive job (Saltmarsh Rust Engineer d1 is known). Read actual page/fixture source; do not assume locator/state shape or modify fixture.
+Run an actual Core graph using canonical registered domain click definition/implementation, real content harness click dispatch, and a trusted resolver reading that definition's actionEffect. No hand-written fake floor if actual definition is available.
+Give authored graph hostile legacy observe/idempotent/empty-consequence claims. Dispatch real click once, then simulate unknown acknowledgement via a generic throw/failure without producer safety proof; Core must stop uncertain before retry/alternative, actual saved state stays positive and dispatch count1. Locator must still identify toggled control so a wrong retry would undo it.
+Optional second case: positively prove landed by actual page observation and complete without another click. Preserve first+3 proven-unacted semantics in Core unit tests, not a broad browser round.
+Assert nonempty positive saved state from independent DOM and scenario state, not only trace. Metadata/context must travel through actual SDK/Core boundary, no fabricated output/dataset/judge pass.
+Use existing fixture/harness, no Core web panel, model/API/provider, real site or real user profile. Prepare only; do not launch test/build until lead rebuilt Core0.17 and coordinates validation.
+Use typed fixtures/stubs, no as-never or broad unsafe casts. If actual SDK setup is blocked, report concrete missing interface before substituting a weaker test.
+Return exact focused test:content command, expected positive state and required report contract.
