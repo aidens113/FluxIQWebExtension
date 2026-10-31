@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Historical A-D creation qualified; instruction-led foundations and focused reliability fixes integrated; structural acceptance, current adaptation/breadth and release qualification remain open.
 Created: 2026-10-05
-Last updated: 2026-10-27
+Last updated: 2026-10-31
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -12,6 +12,20 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**Status reconciliation, 2026-10-31.** The newer [breadth plan](breadth-forty-tasks-plan.md)
+records **15/40 historically accepted** as of 2026-10-29; the dated 12/40 and
+6/40 snapshots below are historical. They do not qualify the current source.
+Claude runtime, encrypted keys/model settings and the Lab provider switch are
+merged with the user's $5 whole-build allowance; no paid Claude comparison has
+run. Framework progress and active target-recovery/receipt acceptance are in
+[the framework Current State](framework-heavy-lifting-plan.md#current-state).
+Current-source adaptation/breadth, recording-with-instructions and redesigned
+multi-page extraction live qualification, hosted extension sign-in and release
+acceptance remain open. Older facility/manual-browser findings need fresh
+verification before being treated as present defects. Both October31 full-suite
+slots are used; narrow checks continue and main promotion awaits a later passing
+permitted sweep. No paid model launch or user-panel management is authorized.
 
 **2026-10-27 (resumed; no feature freeze; deadline 2026-11-10).** Where each MVP item stands:
 - **Breadth:** 12 of 40 accepted; rerun round 6 went 0 of 4 on reset bookkeeping and one judging defect (all diagnosed,

@@ -331,14 +331,13 @@ context plus the original `readsWords` instruction.
 - Candidate enumeration is per document. A merged cross-frame view exists for
   evidence ([page evidence](page-evidence.md)) but not for resolution; an
   action addresses one frame.
-- No acting verb waits before resolving. `resolveTarget` runs its strategies
-  and then scoring once and throws; nothing retries and nothing polls. A page
-  that renders late is covered by a wait step before the action, and a
-  recording proposes one: when the page added nodes and the first executable
-  entry after that is a click on a selector in the same top document, with no
-  evidence in between naming another URL, the recording mapper proposes
-  `web.dom.wait_for_selector` for that selector to be present, ahead of the
-  click (`domain/src/recording/proposals/late-target-wait.ts`; the recording
-  side is in [extension client architecture](extension-client.md#a-wait-before-a-late-target)).
-  A click recorded in a child frame proposes no wait, and a Flow without a
-  recorded addition must author the wait itself.
+- Each `resolveTarget` call makes one resolution pass. The browser action's
+  recovery ladder waits and retries when a target has not appeared, and Core
+  applies its node retry policy while preserving uncertain-effect protection.
+  Source-less identity refresh uses the recovery contract described above;
+  it never makes a missing target permission to click a different record.
+  Recorded late DOM additions can still propose an explicit
+  `web.dom.wait_for_selector` before a top-document click
+  (`domain/src/recording/proposals/late-target-wait.ts`; see
+  [extension client architecture](extension-client.md#a-wait-before-a-late-target)).
+  Child-frame recordings do not receive that top-document proposal.

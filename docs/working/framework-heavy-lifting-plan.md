@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t828 narrow checks pass; installed browser exposes timely failed result not becoming a required receipt. Debugging safely; no full/paid calls.
+Status detail: t828 lead checks and real browser proof pass; final commits and paired dev integration pending. No full/paid calls; main held.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Active t828, 2026-10-31:** Core0.20 independently accepted122tests/14files, typecheck, full audit and compiled SDK smoke; imports ratchet removed1 old violation, baseline1143. All three private SDK libraries current. Down domain source/tests types and build pass after optional-field/copy fixes; first selection142/143 passed, all corrected/additional91 pass and final18 fixture/contract tests pass; native16 rerun passes. Extension84owning tests/typecheck/build and Lab typecheck/build/four trace-reader tests pass. Source/producer/identity APIs frozen. Installed browser attempts1-2 stopped on test locators, corrected using persistent fixture identity; attempts3-5 reached Core but stopped safely with required_outcome_unknown. Attempt5 actual browser target-not-found failure arrived in4837ms, retryable true, gateway errors0; Attempt6 proves353656-byte click result suppressed as invalid_result by Core256KiB canonical hash guard; fix must support legitimate opaque gateway results without dropping payload integrity or weakening unknown-effect protection. No browser acceptance or integration claimed. Private SDK0.20/main0.19. Full suites exhausted today; no paid calls/panel management. Reports in private Core p8-identity; ignored browser attempts1-6 preserved in main.
+**Active t828, 2026-10-31:** Source-less identity recovery and full-result receipt integrity accepted locally. Lead Core122identity+62receipt tests, domain affected selections/native16, extension84, Labtrace4, affected types/builds and both audits pass; Corepacking allowance15to10/1143baseline, Down615 unchanged. Real Chromium134.0.6998.35 e2e-chromium social-network-feed proof8 passes1test/body45.6s: four actual target-not-found/unacted attempts with accepted ~354KB replies, fourth identity unmatched, zero gateway suppression/errors; Undo then explicit original-target refresh returns only selector/element patches, one required Like, exact unchanged other-post map. This proves automatic negative recovery and explicit positive refresh, not automatic fourth-attempt browser success (Core units cover that). Initial receipt hash256KiB rejection fixed at intake/observer with exact full-payload hashing; small authority bounds/unknown safety unchanged. Earlier locator/trace-field assertion mistakes and failed attempts recorded; artifacts1-8 ignored in main. Final extensioncheck21.723s passes; private SDK0.20 current, shared checkout0.19 until merge/refresh. Core taskd91ff313/Down09592ecd backups pushed; final docs/E2E commits and paired integration pending. Main held: both full-suite slots used. No paid/API calls/panel management; user clinerules preserved. NextP8repeatguard/history.
 
 **Continuing, 2026-10-31:** t823 implements a fixed referenceNow across executor/native/runtime dispatch, trials, resumed/child runs, browser filtering/sorting, replay and final judging. Fresh execution captures its start; reused evidence retains it; live timers still advance. Core0.16.0 adds optional fields and preserves old exports after extracting graph options. Lead500 Core tests/89 domain/12 extension/27 tooling tests pass; Chromium134.0.6998.35 headless UTC job-board proof passes exact2 supplied-reference rows versus1 wall-clock row after midnight. Core/domain/extension types pass; Core full audit passes and downstream remaining targeted rule passes, final merge gate pending. Extension first check lacked fresh compiled domain/node; building only domain fixed it. Setup now offers downstream --skip-workspace-build with Core safety gates retained; both AGENTS files document it. Initial setup unexpectedly attempted a full workspace build and was refused after Core inputs changed; no further full command ran. Merged Core41adfa49/downstreamda2f4301 after final structure gates and70 Core merge-contract tests; next P8 runtime robustness discovery. Remote task backups retained. Main needs a later permitted full sweep. No paid go/API calls or panel management.
 
@@ -364,13 +364,13 @@ Settled entries through t825 are preserved verbatim in [the accepted runtime led
 - Outcome: Implementation accepted; 338 Core/contract tests, affected domain/extension reruns, types/builds and three native fixture proofs pass. Both final audits and paired dev integration pass; main filtered SDK/domain/extension bundles current.
 - Follow-up: push both dev branches, then remaining P8 identity/repeat/history work. Main held for next permitted full sweep; no paid go/full suite.
 
-### 2026-10-31 - t828 source-less target discovery
-- Agent: Codex lead; two read-only Luna High workers, Core and host.
-- Changed: private paired setup and discovery briefs/reports in sibling Core.
-- Why: literal targets with no source step need identity-based refresh.
-- Validation: `pnpm.cmd task start runtime-target-identity --worktree --core --skip-workspace-build` ->exit0, both trees and mandatory3Core SDK builds complete (Core73.93s); no new runtime tests.
-- Outcome: Partial; affected web/Lab checks and Core122 pass; browser attempt1 fixture locator failed after pairing, corrected attempt2 running; no live provider calls.
-- Follow-up: reconcile findings and freeze the generic/host interface, then implement; no full suite/paid calls.
+### 2026-10-31 - t828 source-less target recovery and receipt integrity
+- Agent: Codex lead; bounded Core, shared identity, native host, capture, structural and discovery workers.
+- Changed: trusted target-refresh flags/hooks and resolved-parameter overlays; shared record gates/private capture provenance; native/authoring scoped recovery; exact full-result receipt hashing; owning tests, browser proof and architecture/status docs.
+- Why: recover a stale literal target without source lineage or wrong-record action; preserve legitimate large failed-result receipts without weakening authority or uncertain-effect safety.
+- Validation: `pnpm.cmd --filter @fluxiq-web-extension/extension exec node --no-experimental-strip-types node_modules/@playwright/test/cli.js test -c e2e/playwright.config.ts e2e/site-reset/tests/unbound-target/tests/native.spec.ts --workers=1` ->1passed/body45.6s; `pnpm.cmd --filter @fluxiq-web-extension/extension check` ->exit0/21.723s; `node scripts/structure-audit.mjs` ->passed239warnings/615baseline; owning domain/extension/Lab checks and builds pass, detailed paired Core lead report.
+- Outcome: Ready to integrate; strict real-browser negative/explicit-positive identity oracle passes; initial setup/test assertion failures and real receipt-size defect fixed/proven. No automatic positive fourth-attempt browser or paid qualification claimed.
+- Follow-up: commit/push task work, finish downstream then Core under narrow gates, refresh shared SDK/bundles; continue P8 repeat guard and bounded repair history. Main awaits later permitted full sweep; no paid go.
 
 ## Open Questions
 
