@@ -3818,9 +3818,9 @@ count, and legacy absence does not establish the aggregate.
 A build started from the extension's chat makes its Flow inside Core's
 `flow.createHere` command, and that Flow names no model, so the build runs on
 Core's default model: `FLUXIQ_LLM_DEFAULT_MODEL`, `deepseek-flash` when unset
-(`runtime/llm/deepseek/models.ts` in Core). It is built as the ceiling is: Core
+(`runtime/llm/models` in Core). It is built as the ceiling is: Core
 resolves it once when it loads, refuses to start on a value that is not one of
-its configured models (`AUTOMATION_STUDIO_DEEPSEEK_MODELS`), and uses it for
+its configured provider/model catalog, and uses it for
 every call whose caller names no model -- a new Flow's builds, and the chat
 window's own reading of a message. A Flow's `llmModel` still wins wherever it is
 set. Cost estimates and reservations price the model a call is made on, not the
@@ -3831,22 +3831,25 @@ The Lab passes the run's `--llm-model` to every Core it starts as that variable
 (`packages/test-runner/src/live-llm/default-model-env.ts`, used by
 `buildFluxIQEnvironment`), and from nothing else: not the Lab's environment, not
 `.env`, and a value inherited from whoever launched the Lab is dropped. Without
-`--llm-model` nothing is passed and Core builds on its own default, which is the
-Lab's `DEFAULT_LLM_MODEL`. An `--llm-model` Core would refuse is refused by the
+`--llm-model`, a live run passes the selected provider's Lab default (Claude
+Sonnet by default); a provider-free run passes no model override. An `--llm-model` Core would refuse is refused by the
 Lab, through Core's own `resolveAutomationStudioLlmDefaultModel`, before a Core
 starts or a key is read. The run's plan records what Core was given as
 `plan.coreDefaultModel` (`liveLlmCoreDefaultModel`), as `plan.buildCostCeilingUsd`
 records the ceiling, and `assertChatBuildable` accepts the run's model when it
-equals that. A comparison run on the stronger model is therefore:
+equals that. Programmatic `run` and matrix calls carry their supplied arguments
+and resolved environment through planning and topology startup; Core's child
+process receives that same model, purse and authoring mode. Child environments
+strip provider secrets, and omitted direct-caller context retains process defaults.
+An explicit Claude model selection is:
 
 ```text
-pnpm lab run ... --live-llm --llm-task create-flow --llm-model deepseek-v4-pro
-pnpm lab:campaign <task-id> --llm-model deepseek-v4-pro
+pnpm lab run ... --live-llm --llm-task create-flow --llm-model claude-sonnet-5-5
+pnpm lab:campaign <task-id> --llm-model claude-sonnet-5-5
 ```
 
 The live campaign always hands each run its `--llm-model` (default
-`deepseek-flash`), so a campaign run gives Core that default explicitly; it is
-the same model Core would use unset.
+`claude-sonnet-5-5`), so a campaign run gives Core the live-test model explicitly.
 
 The campaign likewise always hands each run its `--authoring-mode` (the
 campaign's own option, default `legacy`; refused after `--`), so every run's
@@ -3855,10 +3858,10 @@ Core recorded (`authoringMode`, from `snapshots/live-llm.json`), and the summary
 states the mode the campaign selected. `pnpm lab:campaign <task-id> --authoring-mode
 candidate` exists to show that refusal; it builds nothing.
 
-`deepseek-v4-pro` costs about four and a half times as much per token, so the
-same per-build ceiling buys fewer calls. A comparison requiring more room
-must explicitly change `FLUXIQ_LLM_RUN_COST_CEILING_USD` in the Lab environment
-or checkout env file; `--llm-cost-ceiling-usd` can only lower that ceiling.
+Live Claude tests use the user's $5 whole-build allowance, with explicitly
+lower limits preserved. Compare actual billed usage and cost alongside the
+verdict and elapsed time; `--llm-cost-ceiling-usd` can only lower the configured
+ceiling. Ordinary product defaults are independent of this test allowance.
 
 ## Per-step logs and the central run folder
 

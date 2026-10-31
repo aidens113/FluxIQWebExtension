@@ -115,7 +115,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // reported from inside a run that had already started a browser.
       // A demonstration dry run calls no model, whatever profile was typed beside it, so it never reads a key.
       const demonstrationDryRun = command.demonstrationId !== undefined && command.dryRun === true;
-      const live = command.llm && !demonstrationDryRun ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, targetMode: target.mode }) : undefined;
+      const live = command.llm && !demonstrationDryRun ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, targetMode: target.mode, costCeilingSources: { args: argv, environment: resolvedEnvironment } }) : undefined;
       // After the live refusals, so a missing key is reported before a missing catalog: the task, its workflow and variant, and what judges it.
       // A build typed into the extension's chat carries no permit and runs on Core's own default model; refused here, before anything starts, rather than inside the run.
       if (live?.createsFlow && !command.directApiBuild) live.assertChatBuildable();
@@ -138,13 +138,13 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
         return 0;
       }
       const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), ...(command.modelResetOnly ? { modelResetOnly: true } : {}), ...(demonstration ? { demonstration: { demonstration, dryRun: command.dryRun === true } } : {}), environment: resolvedEnvironment, target });
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), ...(command.modelResetOnly ? { modelResetOnly: true } : {}), ...(demonstration ? { demonstration: { demonstration, dryRun: command.dryRun === true } } : {}), args: argv, environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
     const manifests = await loadScenarioManifests(repositoryRoot, labPaths.scenarioLabDist);
     const results = [];
-    for (const job of expandMatrix(command, manifests.map(item => item.id).filter(isRealisticScenario))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target }));
+    for (const job of expandMatrix(command, manifests.map(item => item.id).filter(isRealisticScenario))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(command.livePanel === false ? { livePanel: false } : {}), args: argv, environment: resolvedEnvironment, target }));
     const passed = results.every(result => result.verdict === "passed");
     process.stdout.write(`${JSON.stringify({ status: passed ? "passed" : "failed", runs: results })}\n`);
     return passed ? 0 : 1;

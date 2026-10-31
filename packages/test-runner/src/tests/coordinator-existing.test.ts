@@ -7,7 +7,10 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { removeRunOwnedTopologyState, startTopology } from "../coordinator.js";
+import { removeRunOwnedTopologyState, startTopology, type TopologyOptions } from "../coordinator.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { LAB_COST_CEILING_SCOPE_ENV } from "../live-llm/index.js";
+import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
 import { ProcessSupervisor } from "../process-supervisor.js";
 import type { ExistingTargetConfiguration } from "../target-config.js";
@@ -214,8 +217,34 @@ test("an isolated topology traces its Core's client gateway by default, and pass
   assert.equal((await isolatedCoreEnvironment(false)).FLUXIQ_CLIENT_GATEWAY_TRACE, "0");
 });
 
+test("an owned Core receives its caller's model, lower purse and mode with provider secrets removed", async () => {
+  const args = ["--live-llm", "--llm-provider", "anthropic", "--llm-model", "claude-haiku-5-5", "--authoring-mode", "project"];
+  const providerSecrets = Object.fromEntries(PROVIDER_SECRET_ENVIRONMENT_VARIABLES.map(name => [name, "fake-provider-secret"]));
+  const environment: NodeJS.ProcessEnv = { ...providerSecrets, FLUXIQ_LLM_RUN_COST_CEILING_USD: "0.08", FLUXIQ_LLM_DEFAULT_MODEL: "deepseek-v4-pro", FLUXIQ_AUTHORING_MODE: "legacy" };
+  const core = await isolatedCoreEnvironment(undefined, { args: [...args, "--llm-cost-ceiling-usd", "0.06"], environment });
+  assert.equal(core.FLUXIQ_LLM_DEFAULT_MODEL, "claude-haiku-5-5");
+  assert.equal(core.FLUXIQ_AUTHORING_MODE, "project");
+  assert.equal(core.FLUXIQ_LLM_RUN_COST_CEILING_USD, "0.06");
+  assert.equal(core[LAB_COST_CEILING_SCOPE_ENV], "test");
+  for (const [name, value] of Object.entries(providerSecrets)) {
+    assert.equal(name in core, false);
+    assert.equal(environment[name], value);
+  }
+  const lower = await isolatedCoreEnvironment(undefined, { args, environment: { ...environment, FLUXIQ_LLM_RUN_COST_CEILING_USD: "0.04" } });
+  assert.equal(lower.FLUXIQ_LLM_RUN_COST_CEILING_USD, "0.04");
+});
+
+test("owned Core context keeps live Claude defaults and provider-free model isolation", async () => {
+  const environment = { FLUXIQ_LLM_DEFAULT_MODEL: "deepseek-v4-pro", FLUXIQ_AUTHORING_MODE: "project" };
+  const live = await isolatedCoreEnvironment(undefined, { args: ["--live-llm"], environment });
+  assert.equal(live.FLUXIQ_LLM_DEFAULT_MODEL, DEFAULT_LLM_MODEL);
+  const offline = await isolatedCoreEnvironment(undefined, { args: [], environment });
+  assert.equal(offline.FLUXIQ_LLM_DEFAULT_MODEL, undefined);
+  assert.equal(offline.FLUXIQ_AUTHORING_MODE, "legacy");
+});
+
 /** Starts an isolated topology over fake processes up to Core's readiness wait, and answers the environment Core was spawned with. */
-async function isolatedCoreEnvironment(tracing: boolean | undefined): Promise<NodeJS.ProcessEnv> {
+async function isolatedCoreEnvironment(tracing: boolean | undefined, context: Pick<TopologyOptions, "args" | "environment"> = {}): Promise<NodeJS.ProcessEnv> {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-isolated-tracing-"));
   const repositoryRoot = path.join(root, "repository");
   const fluxiqRepositoryRoot = path.join(root, "core");
@@ -236,6 +265,7 @@ async function isolatedCoreEnvironment(tracing: boolean | undefined): Promise<No
     await assert.rejects(startTopology({
       repositoryRoot, fluxiqRepositoryRoot, hostModulePath, scenarioEntrypoint,
       runsDirectory: path.join(root, "runs"), prepareHost: false,
+      ...context,
       ...(tracing === undefined ? {} : { tracing }),
     }, supervisor, {
       prepareCoreWebBuild: async () => build,
