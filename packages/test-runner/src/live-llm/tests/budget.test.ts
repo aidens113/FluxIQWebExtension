@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "../budget.js";
 import { liveLlmBudgetFindings } from "../budget/index.js";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
@@ -18,7 +18,7 @@ function livePlan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutio
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: `lab-${task}`,
     mode: "live",
-    provider: "deepseek",
+    provider: DEFAULT_LLM_PROVIDER,
     model: DEFAULT_LLM_MODEL,
     task,
     scenarioNetworkPolicy: "loopback-only",
@@ -46,7 +46,7 @@ function usage(overrides: Partial<LiveLlmObservedUsage> = {}): LiveLlmObservedUs
   return {
     calls: 1,
     interventions: 1,
-    observedCalls: [{ requestId: "request.diagnosis", taskKind: "runtime_diagnosis", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.runtime-diagnosis.v1", validationOk: true, validationCodes: [], inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004 }],
+    observedCalls: [{ requestId: "request.diagnosis", taskKind: "runtime_diagnosis", stage: "gather", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.runtime-diagnosis.v1", validationOk: true, validationCodes: [], inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004 }],
     perCallRecords: "recorded",
     unrecordedCalls: 0,
     totalEstimatedCostUsd: 0.0004,
@@ -97,7 +97,7 @@ test("a real cap breach is still a breach, and the overrun finding is left to th
 
 test("Core's run totals bound the run even when no intervention recorded its tokens", () => {
   const untracked = usage({
-    observedCalls: [{ requestId: null, taskKind: null, stage: null, provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: null, validationOk: false, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null }],
+    observedCalls: [{ requestId: null, taskKind: null, stage: null, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, promptVersion: null, validationOk: false, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null }],
     accounting: { calls: 1, inputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1, outputTokens: 120, totalTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 121, estimatedCostUsd: 9, budgetBreaches: 0, pendingCalls: 0 },
     totalEstimatedCostUsd: 9,
   });
@@ -149,7 +149,7 @@ const adapting = livePlan("adapt", { maxCallsPerRun: 26 });
 
 function adaptingUsage(calls: number, perCall: { inputTokens: number; outputTokens: number; estimatedCostUsd: number }): LiveLlmObservedUsage {
   const totalTokens = perCall.inputTokens + perCall.outputTokens;
-  const observedCalls = Array.from({ length: calls }, (_, index) => ({ requestId: `request.${index + 1}`, taskKind: "runtime_diagnosis", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.runtime-diagnosis.v1", validationOk: true, validationCodes: [], ...perCall, totalTokens }));
+  const observedCalls = Array.from({ length: calls }, (_, index) => ({ requestId: `request.${index + 1}`, taskKind: "runtime_diagnosis", stage: "gather", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.runtime-diagnosis.v1", validationOk: true, validationCodes: [], ...perCall, totalTokens }));
   const cost = Math.round(perCall.estimatedCostUsd * calls * 1e9) / 1e9;
   return {
     calls,

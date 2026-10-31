@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { CLAUDE_LIVE_BUILD_COST_USD, DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 // The bounded LLM profiles this Testing Lab is allowed to spend, and the Flow
 // Settings fields that carry them into the panel. Every number is a ceiling a
 // live run is measured against, so the profiles are frozen and the settings
@@ -9,8 +9,8 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension
 // these. `maxCalls` is not a Settings field: the build is one call by
 // construction, and the evaluator certifies exactly one.
 export const FIRST_LIVE_CREATION_LIMITS = Object.freeze({
-  provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: 4000, maxOutputTokens: 1000,
-  maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0,
+  provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, maxInputTokens: 4000, maxOutputTokens: 1000,
+  maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD, providerRetries: 0,
 });
 // Building a Flow by exploring a website iterates, so, like the panel's
 // `WEBSITE_EXPLORATION_LIMITS`, this profile names no call count: Core picks
@@ -23,14 +23,14 @@ export const EVIDENCE_GUIDED_CREATION_LIMITS = Object.freeze({
   // the exact size measured as unable to describe a realistic page -- and a run
   // budget that leaves no exploration decision affordable once the patch
   // reserve is held. Both follow the shared budget now.
-  provider: "deepseek", model: DEFAULT_LLM_MODEL,
+  provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
   maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
   maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
   maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
   runDeadlineSeconds: 600,
   // The whole build's spend is Core's $0.25 ceiling on a Flow build; it was $1,
   // four builds' worth, which Core no longer allows.
-  maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 0.25, providerRetries: 0,
+  maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD, maxTotalEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD, providerRetries: 0,
 });
 // The Flow Settings an exploration Flow is given.
 // 8,000 input tokens is the exact size measured, across thirty-six live
@@ -38,10 +38,10 @@ export const EVIDENCE_GUIDED_CREATION_LIMITS = Object.freeze({
 // guard fired before the request was ever sent and the run built nothing. These
 // follow the shared budget rather than repeating numbers of their own.
 export const EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS = Object.freeze({
-  provider: "deepseek", model: DEFAULT_LLM_MODEL,
+  provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
   maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
   maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25,
-  maxEstimatedCostUsd: 0.25, providerRetries: 0,
+  maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD, providerRetries: 0,
 });
 // Mirrors the panel's `WEBSITE_EXPLORATION_COMMAND_TIMEOUT_MS`: the run's whole
 // deadline, and the answer still has to come back. The extra 75 seconds match

@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { CLAUDE_LIVE_BUILD_COST_USD, DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 
 export const DEMO_LLM_PROFILE_NAMES = ["production", "conservative"] as const;
 export type DemoLlmProfileName = (typeof DEMO_LLM_PROFILE_NAMES)[number];
@@ -7,8 +7,8 @@ export type DemoLlmProfileName = (typeof DEMO_LLM_PROFILE_NAMES)[number];
 // must make, so both take the Lab's default rather than a fixed two. Cost and
 // tokens are what these profiles differ on, and what is meant to bound a run.
 const PROFILE_BUDGETS: Readonly<Record<DemoLlmProfileName, Readonly<LlmTokenBudget>>> = Object.freeze({
-  production: Object.freeze({ maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25 }),
-  conservative: Object.freeze({ maxInputTokens: 12_000, maxOutputTokens: 4_000, maxTotalTokensPerRequest: 16_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25 }),
+  production: Object.freeze({ maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD }),
+  conservative: Object.freeze({ maxInputTokens: 12_000, maxOutputTokens: 4_000, maxTotalTokensPerRequest: 16_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD }),
 });
 
 export const DEFAULT_DEMO_LLM_CREATION_PROFILE = createProfile("production", PROFILE_BUDGETS.production);
@@ -54,9 +54,9 @@ export function resolveDemoLlmCreationProfile(argv: readonly string[] = [], envi
 function createProfile(name: DemoLlmProfileName, budget: LlmTokenBudget): Readonly<LlmExecutionProfile> {
   const profile: LlmExecutionProfile = {
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
-    profileId: `deepseek-flow-bootstrap-${name}`,
+    profileId: `anthropic-flow-bootstrap-${name}`,
     mode: "live",
-    provider: "deepseek",
+    provider: DEFAULT_LLM_PROVIDER,
     model: DEFAULT_LLM_MODEL,
     task: "create-flow",
     scenarioNetworkPolicy: "loopback-only",

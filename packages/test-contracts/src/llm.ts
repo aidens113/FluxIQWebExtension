@@ -1,22 +1,7 @@
+import { CLAUDE_LIVE_BUILD_COST_USD } from "./llm-models/index.js";
+
 export const LLM_LAB_SCHEMA_VERSION = "0.1" as const;
-/**
- * The DeepSeek models a live Lab run may name, mirroring FluxIQ Core's
- * `AUTOMATION_STUDIO_DEEPSEEK_MODELS` (`runtime/llm/deepseek/models.ts`),
- * because this package depends only on Core's public contracts.
- *
- * It is a set rather than one string on purpose. Until 2026-09-23 every layer
- * on both sides of the boundary compared against the literal `"deepseek-chat"`,
- * so when DeepSeek retired that alias the only way to run at all was a
- * simultaneous source edit in Core and here. A model the operator names is now
- * a setting; what is refused is an id neither repository is configured for.
- */
-export const llmModels = ["deepseek-flash", "deepseek-v4-pro"] as const;
-export type LlmModel = (typeof llmModels)[number];
-/** What `--llm-model` means when the operator does not give one: DeepSeek-V4.1-Flash. */
-export const DEFAULT_LLM_MODEL: LlmModel = "deepseek-flash";
-export function isLlmModel(value: unknown): value is LlmModel {
-  return typeof value === "string" && (llmModels as readonly string[]).includes(value);
-}
+export * from "./llm-models/index.js";
 /**
  * The most a single request may carry: the model's own context window, input
  * and output together. FluxIQ Core holds it as `contextTokens` in
@@ -158,7 +143,7 @@ export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
   maxCallsPerRun: 26,
   timeoutMs: 30_000,
   maxRetries: 0,
-  maxEstimatedCostUsd: LLM_LAB_MAX_ESTIMATED_COST_USD,
+  maxEstimatedCostUsd: CLAUDE_LIVE_BUILD_COST_USD,
 });
 
 export function createDeterministicDryLlmProfile(task: LlmTaskKind = "diagnose"): LlmExecutionProfile {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION } from "@fluxiq-web-extension/test-contracts";
 import type { RunAllocation } from "../allocation.js";
 import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES, buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath, withoutProviderSecrets } from "../environment.js";
 import { LiveLlmRun, planLiveLlmExecution } from "../live-llm/index.js";
@@ -134,12 +134,12 @@ test("an invalid explicit build allowance is refused before constructing a Core 
 test("a new-flow chat's resolved authorization reaches Core before there is a Flow to configure", async () => {
   const run = new LiveLlmRun(planLiveLlmExecution({
     schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "new-chat", mode: "live",
-    provider: "deepseek", model: DEFAULT_LLM_MODEL, task: "create-flow",
+    provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, task: "create-flow",
     scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only",
     externalSideEffects: false, approvalMode: "manual", retainRawPrompts: false,
     retainRawResponses: false, maxConcurrentRuns: 1,
     budget: { ...DEFAULT_LLM_LAB_BUDGET, maxCallsPerRun: 3, maxEstimatedCostUsd: 0.1 },
-  }, 0.1), { name: "DEEPSEEK_API_KEY", source: "test", value: "synthetic-test-key" });
+  }, 0.1), { name: "CLAUDE_API_KEY", source: "test", value: "synthetic-test-key" });
   const env = buildFluxIQEnvironment(allocation, {
     repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core",
     buildCallLimit: run.authorizedBuildCallLimit,
@@ -152,7 +152,7 @@ test("a new-flow chat's resolved authorization reaches Core before there is a Fl
     async secretKeysCall(endpoint, payload) {
       keyCalls.push(endpoint);
       return endpoint === "snapshot" ? { keys: [] }
-        : { id: "test-key", name: payload.name, kind: "llm", provider: "DeepSeek", scope: "global", enabled: true };
+        : { id: "test-key", name: payload.name, kind: "llm", provider: DEFAULT_LLM_PROVIDER, scope: "global", enabled: true };
     },
     async automationStudioCall() { throw new Error("A new chat must not configure a nonexistent Flow"); },
   }, { projectId: "test-project", authorizationPassword: "synthetic-password" })();

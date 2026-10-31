@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, llmProviderForModel, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -9,6 +9,7 @@ import { liveLlmBuildCostCeilingUsd } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
 import { RunnerFailure } from "../../failure.js";
+import { AUTOMATION_STUDIO_ANTHROPIC_DEFAULT_MODEL, AUTOMATION_STUDIO_ANTHROPIC_MODELS, AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS } from "fluxiq/automation-studio/llm-models";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 
 /** Core's per-build ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
@@ -31,7 +32,7 @@ function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<L
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: "lab-diagnose",
     mode: "live",
-    provider: "deepseek",
+    provider: DEFAULT_LLM_PROVIDER,
     model: DEFAULT_LLM_MODEL,
     task: "diagnose" as LlmTaskKind,
     scenarioNetworkPolicy: "loopback-only",
@@ -57,7 +58,7 @@ test("a diagnose profile plans exactly one authorized provider call, whatever ca
     assert.equal(plan.declared.maxCallsPerRun, maxCallsPerRun);
   }
   const plan = planAtLabCeiling(profile());
-  assert.equal(plan.provider, "deepseek");
+  assert.equal(plan.provider, DEFAULT_LLM_PROVIDER);
   assert.equal(plan.model, DEFAULT_LLM_MODEL);
 });
 
@@ -195,7 +196,7 @@ test("the build's ceiling is Core's resolved value, and the Lab contract's bound
   // allow, or refuse one a configured ceiling allows.
   assert.equal(LLM_LAB_MAX_ESTIMATED_COST_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
   // The default declares no lower number, so an unset --llm-max-cost-usd plans the ceiling itself.
-  assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
+  assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, 5);
   // The call cap mirrors Core's runaway backstop the same way. Three 64s once drifted apart from it (t576, t583): the
   // Lab refused a run Core would take, and Core refused the settings of a Flow the Lab had just built.
   assert.equal(LLM_LAB_MAX_CALLS_PER_RUN, AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP);
@@ -246,20 +247,30 @@ test("every configured model reaches the plan, and the default is what an absent
   // here and in Core at the same moment. The model is a setting now, and these
   // pin that it is the operator's choice that travels, not a constant.
   for (const model of llmModels) {
-    assert.equal(planAtLabCeiling(profile({ model })).model, model);
+    assert.equal(planAtLabCeiling(profile({ model, provider: llmProviderForModel(model) })).model, model);
   }
   const absent = profile();
   delete (absent as { model?: string }).model;
   assert.equal(planAtLabCeiling(absent).model, DEFAULT_LLM_MODEL);
-  assert.equal(DEFAULT_LLM_MODEL, "deepseek-flash");
+  assert.equal(DEFAULT_LLM_MODEL, "claude-sonnet-5-5");
+});
+
+test("Claude's Lab catalog and context ceiling match Core's public model seam", () => {
+  assert.equal(AUTOMATION_STUDIO_ANTHROPIC_DEFAULT_MODEL, DEFAULT_LLM_MODEL);
+  assert.deepEqual([...AUTOMATION_STUDIO_ANTHROPIC_MODELS].sort(), llmModels.filter(model => model.startsWith("claude-")).sort());
+  for (const model of AUTOMATION_STUDIO_ANTHROPIC_MODELS) {
+    assert.equal(AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS[model].contextTokens, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST);
+    assert.equal(AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS[model].maxOutputTokens, 128_000);
+  }
 });
 
 test("an unsupported provider, model, task or retry count is refused", () => {
   assert.throws(() => planAtLabCeiling(profile({ provider: "openai" })), /--llm-provider openai is unsupported/u);
-  assert.throws(() => planAtLabCeiling(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
+  assert.throws(() => planAtLabCeiling(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported; Core is configured for/u);
   // The retired alias is refused by name rather than sent on and answered with
   // an opaque provider 400.
-  assert.throws(() => planAtLabCeiling(profile({ model: "deepseek-chat" })), /--llm-model deepseek-chat is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
+  assert.throws(() => planAtLabCeiling(profile({ model: "deepseek-chat" })), /--llm-model deepseek-chat is unsupported; Core is configured for/u);
+  assert.throws(() => planAtLabCeiling(profile({ provider: "deepseek", model: "claude-sonnet-5-5" })), /does not belong/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; a live Lab run builds with create-flow/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "edit-flow" })), /--llm-task edit-flow has no live runner/u);
   assert.throws(() => planAtLabCeiling(profile({}, { maxRetries: 1 })), /--llm-max-retries 1 is unsupported/u);

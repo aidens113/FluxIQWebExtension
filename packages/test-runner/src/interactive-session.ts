@@ -33,7 +33,7 @@ const SENSITIVE_CONTROL_SELECTOR = [
 ].join(",");
 
 export type InteractiveSurface = "scenario" | "panel" | "extension";
-export type InteractiveSecretEnvironmentName = "FLUXIQ_TEST_PASSWORD" | "FLUXIQ_TEST_PIN" | "FLUXIQ_TEST_TOTP" | "DEEPSEEK_API_KEY";
+export type InteractiveSecretEnvironmentName = "FLUXIQ_TEST_PASSWORD" | "FLUXIQ_TEST_PIN" | "FLUXIQ_TEST_TOTP" | "DEEPSEEK_API_KEY" | "CLAUDE_API_KEY" | "ANTHROPIC_API_KEY";
 export type InteractiveAction =
   | { id?: string; action: "chat-project"; surface: "extension"; projectId: string; timeoutMs?: number }
   | { id?: string; action: "extension-action"; actionType: InteractiveExtensionActionType; selector?: string; text?: string; value?: string; key?: string; timeoutMs?: number }
@@ -332,7 +332,7 @@ async function inspectStructure(page: Page): Promise<unknown[]> {
 function object(input: unknown): Record<string, unknown> { if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("interactive request must be an object"); return input as Record<string, unknown>; }
 function text(input: unknown, name: string, maximum: number, allowEmpty = false): string { if (typeof input !== "string" || (!allowEmpty && !input.trim()) || input.length > maximum || /[\r\n\0]/u.test(input)) throw new Error(`${name} must be a bounded single-line string`); return input; }
 function selector(input: unknown): string { return text(input, "selector", MAX_SELECTOR_LENGTH); }
-function secretEnvironmentName(input: unknown): InteractiveSecretEnvironmentName { if (input !== "FLUXIQ_TEST_PASSWORD" && input !== "FLUXIQ_TEST_PIN" && input !== "FLUXIQ_TEST_TOTP" && input !== "DEEPSEEK_API_KEY") throw new Error("secretEnv is not allowlisted"); return input; }
+function secretEnvironmentName(input: unknown): InteractiveSecretEnvironmentName { if (input !== "FLUXIQ_TEST_PASSWORD" && input !== "FLUXIQ_TEST_PIN" && input !== "FLUXIQ_TEST_TOTP" && input !== "DEEPSEEK_API_KEY" && input !== "CLAUDE_API_KEY" && input !== "ANTHROPIC_API_KEY") throw new Error("secretEnv is not allowlisted"); return input; }
 function extensionActionType(input: unknown): InteractiveExtensionActionType { if (typeof input !== "string" || !INTERACTIVE_EXTENSION_ACTION_TYPES.has(input as InteractiveExtensionActionType)) throw new Error("extension actionType is not allowlisted"); return input as InteractiveExtensionActionType; }
 function boundedInteger(input: unknown, name: string, minimum: number, maximum: number): number { if (!Number.isSafeInteger(input) || Number(input) < minimum || Number(input) > maximum) throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`); return Number(input); }
 function exactKeys(input: Record<string, unknown>, keys: readonly string[]): void { const allowed = new Set(keys); if (Object.keys(input).some(key => !allowed.has(key))) throw new Error("interactive request contains an unsupported field"); }

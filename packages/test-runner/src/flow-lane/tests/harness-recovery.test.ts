@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { DEFAULT_LLM_MODEL, harnessResultReauthorRefusals, type RunHarnessRecovery, validateRunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL, harnessResultReauthorRefusals, type RunHarnessRecovery, validateRunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { ExistingFluxIQControlClient, type ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { flowLaneObservation } from "../lane-observation.js";
@@ -32,14 +32,14 @@ function recoveredDetail(): Record<string, unknown> {
     interventions: [
       {
         interventionId: "intervention.diagnosis", kind: "diagnosis",
-        promptVersion: "automation-studio.runtime-diagnosis.v1+stage.gather", provider: "deepseek", model: DEFAULT_LLM_MODEL,
+        promptVersion: "automation-studio.runtime-diagnosis.v1+stage.gather", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
         validation: { ok: true, issues: ["diagnosis.evidence_partial: PRIVATE-ISSUE about PRIVATE-PAGE-TEXT"] },
         tokenUsage: { inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.001 },
         createdAt: 1_100, metadata: { requestId: "llm.request.private" },
         reason: "PRIVATE-ISSUE", prompt: "PRIVATE-PROMPT", response: { text: "PRIVATE-RESPONSE" },
       },
       {
-        interventionId: "intervention.patch", kind: "runtime_patch", provider: "deepseek", model: DEFAULT_LLM_MODEL,
+        interventionId: "intervention.patch", kind: "runtime_patch", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
         validation: { ok: true, issues: ["PRIVATE-ISSUE: a sentence is not a code"] },
         createdAt: 1_200, response: { patches: [{ selector: "#private-selector" }] },
       },

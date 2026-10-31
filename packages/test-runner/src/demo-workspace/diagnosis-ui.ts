@@ -3,7 +3,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { RunnerFailure } from "../failure.js";
-import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "../secret-keys-ui.js";
+import { TESTING_LAB_LLM_KEY_NAME } from "../secret-keys-ui.js";
 import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { required } from "./configuration.js";
@@ -11,7 +11,7 @@ import { assertLlmDiagnosisRecordingDerivedFlow } from "./flow-document.js";
 import { RUN_READINESS_CHECK_TEXT, runPanel, selectRunMode, waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
 import type { DemoFlowProfile } from "./provisioning.js";
 import { escapeCssAttribute, escapeRegExp } from "./selectors.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export const LLM_DIAGNOSIS_FLOW_NAME = "Web Extension LLM Target Drift Diagnosis";
 
@@ -192,14 +192,14 @@ export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemI
   const provider = llmSection.getByLabel("Provider", { exact: true });
   await provider.waitFor({ state: "visible", timeout: 10_000 });
   if (await provider.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact LLM Provider field is unavailable");
-  await evidence.step("panel", "llm-settings-provider", "Select DeepSeek", () => provider.selectOption("deepseek"));
+  await evidence.step("panel", "llm-settings-provider", "Select Anthropic Claude", () => provider.selectOption(DEFAULT_LLM_PROVIDER));
   const model = llmSection.getByLabel("Model", { exact: true });
   if (await model.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact LLM Model field is unavailable");
   await evidence.step("panel", "llm-settings-model", `Select ${DEFAULT_LLM_MODEL}`, () => model.selectOption(DEFAULT_LLM_MODEL));
-  await evidence.step("panel", "llm-settings-key", "Select the opaque Testing Lab DeepSeek key summary", async () => {
+  await evidence.step("panel", "llm-settings-key", "Select the opaque Testing Lab Claude key summary", async () => {
     const key = workspace.getByRole("combobox", { name: "Encrypted API key", exact: true });
-    await key.fill(TESTING_LAB_DEEPSEEK_KEY_NAME);
-    await workspace.getByRole("option", { name: new RegExp("^" + escapeRegExp(TESTING_LAB_DEEPSEEK_KEY_NAME)) }).click();
+    await key.fill(TESTING_LAB_LLM_KEY_NAME);
+    await workspace.getByRole("option", { name: new RegExp("^" + escapeRegExp(TESTING_LAB_LLM_KEY_NAME)) }).click();
   });
   const runLimits: ReadonlyArray<readonly [string, string]> = run === "adaptation"
     ? [["Input tokens", String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxInputTokens)], ["Output tokens", String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxOutputTokens)], ["Total tokens", String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxTotalTokensPerRequest)]]

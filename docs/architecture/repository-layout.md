@@ -317,7 +317,7 @@ tasks `pnpm lab:pair` could not see the campaign and would move the pair
 under it. Both scripts resolve every path from their own location, so the
 absolute form behaves the same from any directory.
 
-A live run reads `DEEPSEEK_API_KEY` from the process environment, or from
+A Claude live run reads `CLAUDE_API_KEY` (alias `ANTHROPIC_API_KEY`) from the process environment, or from
 `.env` or `.env.local` in the checkout it starts from. The pair has neither
 until someone provides one, and `pnpm lab:pair` says which applies, by source
 and never by value. The pair's runs and its web panel build cache live under

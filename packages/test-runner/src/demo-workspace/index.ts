@@ -15,7 +15,7 @@ export { type DemoLauncherFailure, describeDemoLauncherFailure } from "./launche
 export { createDemoFlowDocument, assertDemoParentDocument, assertDemoRecordingDerivedFlow, assertLlmDiagnosisRecordingDerivedFlow, assertDemoSubflowOwnership, assertDemoFlowDocument, demoGraphReconciliationOperations } from "./flow-document.js";
 export { type DemoLlmPreparationState, parseDemoLlmPreparationState, assertDemoLlmPreparationStateDoesNotContainSecrets } from "./preparation-state.js";
 export { startPersistentScenarioLabWithRecovery, requireDemoScenarioUrl } from "./scenario-lab.js";
-export { setupDemoWorkspaceDeepSeekKey, recordDemoWorkspace, runDemoWorkspaceFlow } from "./workspace-lanes.js";
+export { setupDemoWorkspaceDeepSeekKey, setupDemoWorkspaceLlmKey, recordDemoWorkspace, runDemoWorkspaceFlow } from "./workspace-lanes.js";
 export { type DemoWorkspaceState } from "./workspace-state.js";
 
 // The building blocks the UI end-to-end journeys compose (`ui-e2e/journeys`):

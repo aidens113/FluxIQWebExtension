@@ -38,7 +38,7 @@ test("exports conservative defaults and a non-overridable request ceiling", () =
   assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 1_000_000);
   assert.deepEqual(DEFAULT_LLM_LAB_BUDGET, {
     maxInputTokens: 992_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 1_000_000,
-    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 10,
+    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 5,
   });
   // The default request must fit under the ceiling, which is the relationship
   // that actually matters and which seven separate copies of these numbers kept
