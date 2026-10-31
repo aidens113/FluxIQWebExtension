@@ -18,6 +18,10 @@ existing task trees; no paid run or panel management is authorised by this conti
 fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
 evidence first; incomplete refutations must remain nonpassing.
 Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout.
+**Live provider switch, user 2026-10-30:** use Claude for every subsequent live model-backed test, reading
+`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Anthropic appears in the keys UI, but runtime and
+Lab routing were DeepSeek-only; paired t816 implements the missing support. Keep identical acceptance criteria and
+record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
 
 **Core owns this plan.** The findings, the responsibility map, every client contract (CC1-CC14, K1-K7), the phases
 P0-P10 and what not to do are in the owning document:
