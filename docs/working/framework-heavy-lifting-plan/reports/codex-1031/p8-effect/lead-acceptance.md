@@ -41,3 +41,15 @@ pnpm.cmd exec vitest run src/programs/automation-studio/nodes/action-effect/test
 ```
 
 Observed9files93tests passed,42.25s. Core and downstream full structure audits passed (1144/615 baselines unchanged). Typecheck found2 fixture inference errors: map inferred required metadata. Lead explicitly annotated AutomationStudioFlowNode[] (no cast); owning test6/6 passed. Final `pnpm.cmd --filter fluxiq check` exit0,16.611s. Follow-up Core commit3d790f7e; filtered SDK rebuild underway. Final downstream tests/browser proof still pending.
+
+## Final downstream and browser acceptance
+
+Updated three-library build exit0 (fluxiq78.648s). Compiled pure browser probe15inputs6282bytes; no executor/native runtime dependency. Domain check exit0 (27.074s), package build exit0 (18.802s). Same named test command above, original assertions intact ->149/149passed,63.171s.
+
+`pnpm.cmd --filter @fluxiq-web-extension/extension check` ->exit0,71.906s; browser entry coverage now enforced. `pnpm.cmd --filter @fluxiq-web-extension/extension build` ->exit0,24.390s,22files verified per Chrome/Firefox/e2e target. Existing Firefox add-on ID placeholder remains; no Firefox browser run.
+
+`pnpm.cmd --filter @fluxiq-web-extension/extension test:content action-effect/tests/client-floor.spec.ts --workers=1` ->1passed,1.2m startup+run (test2.5s), Chromium134.0.6998.35 full binary, headless UTC, allowed job-board isolated fixture. Actual canonical native public SDK graph saves d1 once; exact baseline-plus-d1 persists, same heart remains filled/present, traffic has1save/0unsave, graph has1attempt and no alternative, terminal run.outcome_uncertain after generic lost acknowledgement. Separate first-save refusal preflight proves no mutation and is not claimed as automatic retry proof.
+
+This is a real content action regression using the native Core SDK; background transport, installed extension/panel, model authoring, judging, whole Flow completion and Firefox runtime were not exercised. No paid calls, full suite or panel server. HTML evidence preserved MAIN ignored test-runs/2026-10-31-t824-browser-report/index.html, checked present.
+
+Parent dev merged into both tasks: documentation only, no integrated source conflict. Staged whitespace review removed one blank EOF from control-words helper, no semantic change or test assertion change. Domain/extension final type refresh and structure merge gates follow before closing. Core source checkpoints3d790f7e and Down3e3318cd; task backups retained. Main still needs a later permitted full sweep.
