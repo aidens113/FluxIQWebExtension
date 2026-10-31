@@ -32,6 +32,29 @@ test("the catalog lists every one of this domain's nodes", () => {
   assert.equal(catalog.length, definitions.length);
 });
 
+test("secondary operations are declared without relying on help or parameter words", () => {
+  const cases = [
+    ["web.dom.check", "Choose an option.", "choose"],
+    ["web.dom.type", "Submit the field value.", "submit"],
+    ["web.browser.tab", "Open a tab.", "open"]
+  ] as const;
+  for (const [outputId, instructionText, requested] of cases) {
+    const definition = definitions.find((entry) => entry.outputAction?.fixedOutputId === outputId);
+    assert.ok(definition, outputId);
+    const context = buildAutomationStudioFlowBootstrapContext({ registry: new AutomationStudioNodeRegistry([definition]), resolution, instructionText });
+    assert.ok(context.catalogSelection.requiredTerms.includes(requested), outputId);
+    assert.deepEqual(context.catalogSelection.missingRequiredTerms, [], outputId);
+  }
+});
+
+test("click's state-parameter help does not declare option selection", () => {
+  const click = definitions.find((entry) => entry.outputAction?.fixedOutputId === "web.dom.click");
+  assert.ok(click);
+  assert.match(click.description, /Choose ensureState/u);
+  const context = buildAutomationStudioFlowBootstrapContext({ registry: new AutomationStudioNodeRegistry([click]), resolution, instructionText: "Choose an option." });
+  assert.deepEqual(context.catalogSelection.missingRequiredTerms, ["choose"]);
+});
+
 test("no node's catalog entry asks for a selector, a locator, CSS or XPath", () => {
   for (const entry of catalog) {
     const { id: _id, ...shown } = entry;

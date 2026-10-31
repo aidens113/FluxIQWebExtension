@@ -274,14 +274,19 @@ test("the nodes that return records declare a records port for a later node to r
   }
 });
 
-test("the list extraction carries the words of a scraping request, and no other node but the next page and the single read carries catalog words", () => {
+test("catalog tags declare the actual read, paging and secondary operations", () => {
   const tags = nodeFor("web.dom.extract_list").tags ?? [];
   for (const tag of ["web-automation", "output", "scrape", "collect", "extract", "list", "table", "rows"]) {
     assert.equal(tags.includes(tag), true, `web.dom.extract_list is missing tag ${tag}`);
   }
-  // The next page carries its own paging words (`./next-page-node.test.ts`), the single read its own (t646, below).
+  // Paging/read vocabulary and supported secondary operations are explicit declarations.
+  const secondaryTags: Partial<Record<WebAutomationActionType, string[]>> = {
+    "web.dom.check": ["select"],
+    "web.dom.type": ["submit"],
+    "web.browser.tab": ["open"]
+  };
   for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => !CATALOG_TEXT_OUTPUTS.includes(candidate))) {
-    assert.deepEqual(nodeFor(outputId).tags, ["web-automation", "output"], `${outputId} tags`);
+    assert.deepEqual(nodeFor(outputId).tags, ["web-automation", "output", ...(secondaryTags[outputId] ?? [])], `${outputId} tags`);
   }
 });
 
