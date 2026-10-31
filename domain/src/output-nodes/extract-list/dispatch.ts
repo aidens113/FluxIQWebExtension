@@ -112,6 +112,7 @@ import { webAutomationDedupeLinkIdentity } from "./dedupe-link-identity";
 import { webAutomationDerivedRecordOutput } from "./derived-record-output";
 import { webAutomationExtractListOnePageRead } from "./one-page-read";
 import { webAutomationReconciledRecordOutput } from "./reconciled-record-output";
+import { webAutomationExtractListReferenceNow } from "./reference-now";
 import { webAutomationRecordOutputIssues } from "./process-issues";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "./records-path";
 import { webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationStoredColumnName } from "./stored-columns";
@@ -151,7 +152,7 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject, run
   const onePage = request === undefined ? undefined : intermediate ? intermediateOnePageRead(sent, request) : webAutomationExtractListOnePageRead(sent, request);
   const page = onePage === undefined ? rest : { ...rest, extractList: onePage.page };
   const timed = request !== undefined && leftDefault(page.timeoutMs) ? { ...page, timeoutMs: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS } : page;
-  const parameters = withRunNow(withFlowAsks(timed, request), request, runStartedAt);
+  const parameters = webAutomationExtractListReferenceNow(withFlowAsks(timed, request), runStartedAt, request);
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
     : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns, narrowed?.shown);
@@ -193,13 +194,6 @@ function intermediateOnePageRead(sent: JsonObject, request: WebAutomationExtract
  */
 export function webAutomationExtractListAloneRowsAsked(parameters: JsonObject): JsonObject {
   return withFlowAsks(parameters, webAutomationExtractListRequestValue(parameters.extractList));
-}
-
-/** The read's parameters with the run's start as its `now`, only for a read with conditions, a run start that is an instant, and no `now` of its own. */
-function withRunNow(parameters: JsonObject, request: WebAutomationExtractListRequest | undefined, runStartedAt: number | undefined): JsonObject {
-  if (runStartedAt === undefined || !Number.isSafeInteger(runStartedAt) || runStartedAt < 0) return parameters;
-  if (request === undefined || !request.where?.length || request.now !== undefined || !isJsonObject(parameters.extractList)) return parameters;
-  return { ...parameters, extractList: { ...parameters.extractList, now: runStartedAt } };
 }
 
 /** The parameters a Flow's read is sent with: only the rows it kept, and the rows each condition removed by itself (see the header). */

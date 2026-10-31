@@ -290,6 +290,8 @@ export type WebLlmEvidenceToolExecution = {
 };
 
 export type WebLlmEvidenceToolRequest = {
+  /** Core's fixed execution instant; call metadata, separate from model-authored value. */
+  referenceNow?: number;
   projectId: string;
   flowId: string;
   callId: string;

@@ -26,7 +26,13 @@ test("no run start, a read with no condition, a now of its own, or a start that 
   assert.equal(Object.hasOwn(sentList({ extractList: dated }), "now"), false);
   assert.equal(Object.hasOwn(sentList({ extractList: { item: "li.event", fields: { when: ".when" } } }, RUN_START), "now"), false);
   assert.equal(sentList({ extractList: { ...dated, now: 5 } }, RUN_START).now, 5);
-  for (const bad of [-1, 1.5, Number.NaN]) assert.equal(Object.hasOwn(sentList({ extractList: dated }, bad), "now"), false, String(bad));
+  for (const bad of [-1, 1.5, Number.NaN, 8.64e15 + 1]) assert.equal(Object.hasOwn(sentList({ extractList: dated }, bad), "now"), false, String(bad));
+});
+
+test("sort-only reads receive the execution reference, including the maximum valid epoch", () => {
+  const sortOnly = { item: "li.event", fields: { when: ".when" }, sort: [{ field: "when", as: "date", order: "asc" }] };
+  assert.equal(sentList({ extractList: sortOnly }, RUN_START).now, RUN_START);
+  assert.equal(sentList({ extractList: dated }, 8.64e15).now, 8.64e15);
 });
 
 test("a now that is no instant is left out of the read request, which then uses the page's clock", () => {

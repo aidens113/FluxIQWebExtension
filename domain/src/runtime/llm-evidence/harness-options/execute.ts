@@ -267,6 +267,7 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
     sessionId,
     scopeKey: `${sessionId}|${execution.projectId}|${execution.flowId}`,
     request: present<WebLlmEvidenceToolRequest>({
+      referenceNow: execution.referenceNow,
       projectId: execution.projectId,
       flowId: execution.flowId,
       callId: execution.callId,

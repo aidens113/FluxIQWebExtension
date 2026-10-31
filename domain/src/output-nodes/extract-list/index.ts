@@ -12,6 +12,7 @@ export * from "./process-issues";
 export * from "./reconciled-record-output";
 export * from "./record-output";
 export * from "./record-output-process";
+export * from "./reference-now";
 export * from "./records-path";
 // How its rows come out, declared to Core in its definition's metadata (t751).
 export * from "./rows-order";
