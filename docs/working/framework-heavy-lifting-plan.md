@@ -11,6 +11,14 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
+**Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead is independently verifying t799 on its
+paired task trees after merging current `dev`; workers are completing t811, reviewing C1 concurrency and key lifecycle
+in t813, and rechecking E/D5 in t814. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
+existing task trees; no paid run or panel management is authorised by this continuation. The user approved t810's
+fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
+evidence first; incomplete refutations must remain nonpassing.
+Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout.
+
 **Core owns this plan.** The findings, the responsibility map, every client contract (CC1-CC14, K1-K7), the phases
 P0-P10 and what not to do are in the owning document:
 `C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/framework-heavy-lifting-plan.md` (FluxIQ Core).
@@ -57,9 +65,10 @@ acceptance check passed, and no paid run or model call happened.
 | t813 (hosted C1) | Workspace manager (`apps/web/src/lib/workspaces/`, layout v3 at `<host root>/workspaces/<id>/`), IAM `iam` options from the resolved profile, `BackgroundTasksService.close()` | Partial; WIP pushed (Core `4266af93`). Worker-reported passes only; `pnpm check`, the full web suite and the Next production build not run | Run the acceptance set; have a second agent review the manager for concurrency and key handling (report Core `hosted-production-plan/reports/t813-c1.md`) |
 | t814 (hosted E + D5) | `PanelProduct` registry, host loader, branding and assets route; downstream `apps/product/` | Partial; WIP pushed (Core `f45e5faf`, downstream `4eede8cd`). Two late test fixes not re-run | Re-run `pnpm check`, `pnpm test src/platform`, apps/web tests and tsc (report Core `hosted-production-plan/reports/t814-e-d5.md`) |
 
-**Decision for the user (from t810):** a judge's no that Core wholly refutes from its own record, and that still stands
-after one re-ask with the evidence, now passes with no model yes. That is the first pass without one, and Core's plan
-lists it as Open Question 1, with the user as owner. It stays unmerged until the user agrees.
+**User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
+after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
+rejection to pass". Integration still requires the outstanding audit, typecheck and acceptance fixes.
+The user then clarified that the judge must be re-prompted before that outcome; Core must not bypass that recheck.
 
 If a lane ended with the session, its tree still holds the work. Read its report, then check, commit, merge `dev` in
 and verify as above. Re-dispatch only the missing part.
