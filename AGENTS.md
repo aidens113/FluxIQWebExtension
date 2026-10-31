@@ -423,6 +423,8 @@ the value, and never silently fall back to DeepSeek. Keep scenarios and
 acceptance criteria unchanged for comparison, and record the exact Claude
 model, verdict, provider calls, billed cost and runtime. Provider-free tests
 remain provider-free. Existing supervision and paid-launch rules still apply.
+Claude live tests default to $5 per build (user, 2026-10-30); this is the
+whole build's allowance, not $5 for each call. Explicit lower limits still hold.
 
 The browser testing facility is downstream web-automation infrastructure. Keep
 scenario manifests, fixture websites, Playwright/browser drivers, extension
