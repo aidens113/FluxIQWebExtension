@@ -96,3 +96,71 @@ test("a paired start clears an id recorded only in Core", async (t) => {
 
   assert.equal(paired.id, "t008");
 });
+
+// Inject only the costly preparation operations: allocation, path safety and id
+// recording still use the ordinary throwaway-repository path above.
+for (const core of [false, true]) {
+  for (const skipWorkspaceBuild of [false, true]) {
+    test(`worktree start ${core ? "prepares paired" : "moves shared"} Core and ${skipWorkspaceBuild ? "skips" : "runs"} the workspace build`, async (t) => {
+      const here = await repository("start-build-here-");
+      const coreRepositoryRoot = await repository("start-build-core-");
+      const base = await mkdtemp(path.join(os.tmpdir(), "start-build-base-"));
+      t.after(() => removeAll(here, coreRepositoryRoot, base));
+      const calls = [];
+      const started = await startTask({ repositoryRoot: here, coreRepositoryRoot, slug: "narrow", worktree: true, core, base, skipWorkspaceBuild }, {
+        createWorktree: async ({ root, coreBranch }) => {
+          calls.push("install");
+          return { root, coreRoot: coreRepositoryRoot, coreCreated: true, coreBranch };
+        },
+        buildCore: async () => { calls.push("paired-core"); },
+        moveSharedCore: async () => {
+          calls.push("shared-core");
+          return null;
+        },
+        checkCoreCurrent: async () => {
+          calls.push("currency");
+          return null;
+        },
+        runPnpm: async (root, args) => {
+          calls.push("workspace-build");
+          assert.deepEqual(args, ["build"]);
+          assert.ok(root.startsWith(base));
+        },
+        copyEnvLocal: async () => {
+          calls.push("environment");
+          return false;
+        }
+      });
+      assert.deepEqual(calls, ["install", core ? "paired-core" : "shared-core", "currency", ...skipWorkspaceBuild ? [] : ["workspace-build"], "environment"]);
+      assert.equal(started.workspaceBuild, skipWorkspaceBuild ? "skipped" : "ran");
+      assert.equal(started.applied, true);
+    });
+  }
+}
+
+test("skipping the workspace build still refuses a Core currency failure", async (t) => {
+  const here = await repository("start-build-here-");
+  const coreRepositoryRoot = await repository("start-build-core-");
+  const base = await mkdtemp(path.join(os.tmpdir(), "start-build-base-"));
+  t.after(() => removeAll(here, coreRepositoryRoot, base));
+  const calls = [];
+  await assert.rejects(startTask({ repositoryRoot: here, coreRepositoryRoot, slug: "narrow", worktree: true, core: true, base, skipWorkspaceBuild: true }, {
+    createWorktree: async ({ root }) => ({ root, coreRoot: coreRepositoryRoot, coreCreated: true }),
+    buildCore: async () => { calls.push("core"); },
+    checkCoreCurrent: async () => {
+      calls.push("currency");
+      return { refusal: "stale Core" };
+    },
+    runPnpm: async () => { assert.fail("workspace build must not run"); },
+    copyEnvLocal: async () => { assert.fail("must stop at currency failure"); }
+  }), /Core is not current.*stale Core/u);
+  assert.deepEqual(calls, ["core", "currency"]);
+});
+
+test("skipping the workspace build still refuses a dirty branch checkout", async (t) => {
+  const root = await repository("start-build-dirty-");
+  t.after(() => removeAll(root));
+  await writeFile(path.join(root, "untracked.txt"), "keep me\n");
+  await assert.rejects(startTask({ repositoryRoot: root, slug: "narrow", skipWorkspaceBuild: true }), /uncommitted or untracked/u);
+  await assert.rejects(refAt(root, "t001"));
+});

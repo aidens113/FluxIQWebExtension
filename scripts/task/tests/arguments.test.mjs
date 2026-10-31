@@ -64,3 +64,11 @@ test("sync-core takes a revision and may be told to move under running processes
 test("start may be told to move the shared Core under running processes", () => {
   assert.equal(parseTaskArguments(["start", "x", "--worktree", "--allow-running"]).flags["allow-running"], true);
 });
+
+
+test("skip-workspace-build belongs only to start", () => {
+  assert.equal(parseTaskArguments(["start", "narrow", "--skip-workspace-build"]).flags["skip-workspace-build"], true);
+  for (const command of ["finish", "abandon", "list", "prune", "sync-core"]) {
+    assert.throws(() => parseTaskArguments([command, "--skip-workspace-build"]), /not an option.*belongs to "start"/u);
+  }
+});

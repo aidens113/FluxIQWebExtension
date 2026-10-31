@@ -54,6 +54,7 @@ export async function runTaskCommandLine({ argv, repositoryRoot, coreRepositoryR
         slug: positional[0],
         worktree: Boolean(flags.worktree),
         core: Boolean(flags.core),
+        skipWorkspaceBuild: Boolean(flags["skip-workspace-build"]),
         base: values.base,
         from: values.from ?? "dev"
       })

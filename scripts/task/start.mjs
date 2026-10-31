@@ -24,7 +24,9 @@ const { taskBranchName } = await importCoreScript("scripts/task/branch-name.mjs"
 const { recordTaskId } = await importCoreScript("scripts/task/record-task-id.mjs");
 const { allocateTaskId } = await importCoreScript("scripts/task/task-id.mjs");
 
-export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, worktree = false, core = false, base, from = "dev", coreFrom = "dev", allowRunning = false, dryRun = false }) {
+export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, worktree = false, core = false, base, from = "dev", coreFrom = "dev", allowRunning = false, dryRun = false, skipWorkspaceBuild = false }, operations = {}) {
+  // Keep costly provisioning replaceable in tests without bypassing start guards.
+  const prepare = { createWorktree, buildCore, moveSharedCore, checkCoreCurrent, runPnpm, copyEnvLocal, ...operations };
   if (!slug) throw new Error('Name the work: pnpm task start <slug>, for example "flow-editor-cleanup".');
   if (core && !worktree) throw new Error("--core needs --worktree: a Core-paired task takes a nested worktree with a Core of its own, because the shared Core is detached and every other task builds against it.");
   if (core && !coreRepositoryRoot) throw new Error("--core needs a Core checkout beside this one; none was resolved, so the paired branch has nowhere to be created.");
@@ -58,7 +60,7 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     }
   }
 
-  if (dryRun) return { id, branch, from, worktree: roots?.extRoot ?? null, core: roots?.coreRoot ?? null, coreBranch: core ? branch : null, sharedCore: describeMove(sharedCore), applied: false };
+  if (dryRun) return { id, branch, from, worktree: roots?.extRoot ?? null, core: roots?.coreRoot ?? null, coreBranch: core ? branch : null, sharedCore: describeMove(sharedCore), workspaceBuild: !worktree ? "not-required" : skipWorkspaceBuild ? "skipped" : "planned", applied: false };
 
   // The id is spent from here on, whatever happens next: a start that fails
   // half-way, or a task later abandoned, must not see its number handed out
@@ -74,7 +76,7 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     // detached Core, which is what makes it cost seconds rather than a minute.
     // Either way a Core added here starts at Core's `dev`, not at whatever the
     // main Core happens to have checked out.
-    const created = await createWorktree({
+    const created = await prepare.createWorktree({
       repositoryRoot, branch, root: roots.extRoot, startPoint: from, coreRepositoryRoot, env, coreStartPoint: coreFrom,
       ...core ? { coreBranch: branch } : {}
     });
@@ -84,31 +86,31 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     // and then fails every type check with TS2307.
     let moved = null;
     if (core) {
-      if (created.coreCreated || !await built(created.coreRoot)) await buildCore(created.coreRoot, { env });
+      if (created.coreCreated || !await built(created.coreRoot)) await prepare.buildCore(created.coreRoot, { env });
     } else {
-      moved = await moveSharedCore(created.coreRoot, { repositoryRoot, coreFrom, env });
+      moved = await prepare.moveSharedCore(created.coreRoot, { repositoryRoot, coreFrom, env });
     }
     // The move above (or the paired branch made at Core's `dev`) should leave
     // the Core this worktree builds against containing Core's `dev`; this proves
     // it rather than assuming it, so a task never starts its work against an
     // old Core (`core-currency.mjs`). Only a defect in the move can trip it.
-    const coreCurrency = await checkCoreCurrent({ workRoot: created.root, coreRepositoryRoot, coreIntegrationBranch: coreFrom });
+    const coreCurrency = await prepare.checkCoreCurrent({ workRoot: created.root, coreRepositoryRoot, coreIntegrationBranch: coreFrom });
     if (coreCurrency?.refusal) throw new Error(`Task ${id}'s worktree was created at ${created.root} but its Core is not current, so it was not built. ${coreCurrency.refusal}`);
 
     // The workspace's own packages need building for the same reason Core does:
     // every `dist/` is gitignored, so a fresh worktree resolves
     // `@fluxiq-web-extension/test-evidence` and its siblings to nothing and
     // `pnpm check` dies with TS2307 on a worktree that installed perfectly.
-    // Measured at 16.5s, which is the price of a worktree that can actually be
-    // validated in.
-    await runPnpm(created.root, ["build"], { env });
+    // Callers doing narrow validation may explicitly skip this full build and
+    // build only the packages they need; Core preparation above still runs.
+    if (!skipWorkspaceBuild) await prepare.runPnpm(created.root, ["build"], { env });
 
-    const env_local = await copyEnvLocal({ fromRoot: repositoryRoot, toRoot: roots.extRoot });
-    return { id, branch, from, worktree: created.root, core: created.coreRoot, coreCreated: created.coreCreated, coreBranch: created.coreBranch, sharedCore: describeMove(moved), envLocal: env_local, applied: true };
+    const env_local = await prepare.copyEnvLocal({ fromRoot: repositoryRoot, toRoot: roots.extRoot });
+    return { id, branch, from, worktree: created.root, core: created.coreRoot, coreCreated: created.coreCreated, coreBranch: created.coreBranch, sharedCore: describeMove(moved), envLocal: env_local, workspaceBuild: skipWorkspaceBuild ? "skipped" : "ran", applied: true };
   }
 
   await runGit(repositoryRoot, ["checkout", "-b", branch, from]);
-  return { id, branch, from, worktree: null, core: null, coreBranch: null, applied: true };
+  return { id, branch, from, worktree: null, core: null, coreBranch: null, workspaceBuild: "not-required", applied: true };
 }
 
 /**
