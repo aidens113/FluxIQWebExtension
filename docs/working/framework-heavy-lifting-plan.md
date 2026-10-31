@@ -87,8 +87,8 @@ and verify as above. Re-dispatch only the missing part.
 
 **Next, in order:**
 1. t799 and the Claude provider switch are merged; integrate t810 and t811 after verification, then finish hosted C1/product acceptance.
-2. Fix the t799 known limit before the photo-social rerun (read-only discovery assigned, reports/codex-1030/first-row-toggle-discovery-brief.md): in a loop whose first row is already in the asked state, the
-   toggle signature is learned reversed.
+2. Fix the t799 known limit before the photo-social rerun (design accepted, reports/codex-1030/first-row-toggle-design.md): in a loop whose first row is already in the asked state, the
+   toggle signature is learned reversed. Preserve paired before/after evidence and require an explicit observed end-state choice; never infer intent from first/most clicks. Implement paired Core/domain before the remaining full sweep.
 3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
 4. Follow-ups:
