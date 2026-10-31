@@ -1,0 +1,14 @@
+### Brief: p10_control_intent_design
+- Role/model: Heavy discovery/design worker gpt-6.1-sol max (existing worker).
+- Repository reads: MAIN Core C:/Users/osrs_/FluxStuff/!FluxIQ and MAIN Down sibling; CC11 code is unchanged by t832 while main receives its metadata-only merge.
+- Task: inspect and propose the next smallest safe CC11 migration of Core English way-out/control intent classification to trusted client metadata, not implement.
+- Required reads: FHL Current State and original CC11/P10 sections only; prior paired p9-append-only/p10-remaining-discovery.md unit3; actual way-out-steps and owning tests, resolved control/target transport, Down snapshot/plan-resolution/known layer vocabulary owners.
+- Owns only: MAIN Down docs/working/framework-heavy-lifting-plan/reports/codex-1031/p10-control-intent-design.md.
+- Must not touch: any source, shared FHL/index/ledger, private task trees, other reports; no agents/git/tests/build/browser/provider/.env.
+- Recommend exact optional generic intent seam and producer/consumer owner path, not assumed model-authored JSON. Trace trust from actual observed snapshot/control -> resolver -> Core way-out check; prove how model parameters cannot forge host intent or use missing intent to grant a lasting act.
+- Approved broad direction: client supplies dismiss|accept|neutral|navigate-like intent; Core removes English accepting/dismiss-word heuristics, absent intent does not trigger a Core language fallback. Preserve effect/permission floors and actual web consent/offer distinction, reject/necessary-only preference and fallback consent accept behavior.
+- Explicitly resolve whether these four tags suffice without moving safety rules or retaining consent concepts in Core; recommend minimal generic contract if not. Do not silently relabel consent accept as dismiss without explaining actual contract semantics.
+- Source references and current actual owning tests required. Distinguish generic runtime safety from client semantic classification and authoring advice; account for scripts, saved/repaired targets and control parameters, not only one parser fixture.
+- Definition of done: short concrete interface/transport/trust design, exact file-disjoint work units + meaningful Core/Down acceptance checks, compatibility/fallback behavior and actual unresolved risk. No invented public test API, hardcoded fixture examples or broad fingerprint/facts/vocabulary implementation.
+- Keep report under200lines; plain language plus precise references. No runtime verification claim. Root continues t832 integration; source versions may advance only in unrelated guidance metadata.
+- Return standard contract, including Changed report-only, Validation read-only source inspection, Not verified runtime/compatibility.
