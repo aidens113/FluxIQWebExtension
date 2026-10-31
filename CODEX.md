@@ -15,3 +15,10 @@ MeritPrompts source changes and start a new session to load the new snapshot.
 Use the configured Codex models and tools; Claude agent aliases are not Codex
 model names. This integration installs guidance into Codex, with no Claude
 enforcement hooks or usage telemetry.
+
+Follow the routing table in the shared MeritPrompts Codex guide linked above.
+GPT-6.1 Sol Max is the ceiling; never use Astra for any role, fallback or
+review, and never escalate to Ultra. Use the guide's role defaults and
+availability rules; keep the model table in MeritPrompts rather than copying
+it here. Set the exact supported model and effort explicitly in worker briefs
+and dispatch controls. Instructions do not change the running lead's model.

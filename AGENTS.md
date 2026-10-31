@@ -11,6 +11,10 @@ rules supplement it and take precedence where they conflict.
   project rules and FluxIQ family lesson index. Global Claude settings own
   the MeritPrompts hooks; do not duplicate them in project configuration.
 
+Codex model ceiling: GPT-6.1 Sol at Max effort. Never use Astra for any
+role, fallback or review. Follow the shared Codex routing guide for worker
+models and escalation.
+
 ## Agent Roles
 
 **Senior supervisor agent** — the agent the user prompts directly. It owns
