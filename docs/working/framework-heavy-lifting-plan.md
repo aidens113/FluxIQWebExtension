@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P6/W6 t799 independently verified and merged on both dev branches; t810, t811, t813 and t814 continue from the handoff. Paired t816 adds the user-requested Claude live provider with a five-dollar build allowance.
+Status detail: P6/W6 t799 and Claude/$5 live-test support t816 are verified, merged and pushed in both repositories; t810, t811, t813 and t814 continue through independent acceptance.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -13,14 +13,14 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 **Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
 paired task trees after merging current `dev`; both sides are now merged. Workers are completing t811 and final C1
-validation in t813; t814 awaits lead acceptance. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
+validation in t813; t814 awaits final parent checks. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
 existing task trees; no paid run or panel management is authorised by this continuation. The user approved t810's
 fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
 evidence first; incomplete refutations must remain nonpassing.
 Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout.
 **Live provider switch, user 2026-10-30:** use Claude for every subsequent live model-backed test, reading
-`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Anthropic appears in the keys UI, but runtime and
-Lab routing were DeepSeek-only; paired t816 implements the missing support. Keep identical acceptance criteria and
+`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Paired t816 now supplies runtime, keys/settings UI and
+Lab support on both pushed dev branches; see `claude-live-provider-plan.md`. Keep identical acceptance criteria and
 record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
 The user set Claude live tests to $5 per build; main ignored `.env.local` and both agent instruction files record it.
 
@@ -86,7 +86,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. t799 is merged; integrate t810 and t811 after verification. Complete the Claude provider switch before paid testing.
+1. t799 and the Claude provider switch are merged; integrate t810 and t811 after verification, then finish hosted C1/product acceptance.
 2. Fix the t799 known limit before the photo-social rerun: in a loop whose first row is already in the asked state, the
    toggle signature is learned reversed.
 3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
