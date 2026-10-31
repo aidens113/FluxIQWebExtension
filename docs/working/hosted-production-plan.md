@@ -1,9 +1,9 @@
 # Hosted Production Plan
 
 Status: Active
-Status detail: Revised 2026-10-28 around the user's 2026-10-18 directions, then the H0 spike results folded in the same day (D0 passed); plan only, no code changed; the contract freeze and H1 are next.
+Status detail: Hosted foundations through C0 are merged; C1 independently verified and ready to integrate, E/D5 product foundations in final acceptance. C2/C3 routing and extension/deployment gates remain.
 Created: 2026-10-17
-Last updated: 2026-10-28
+Last updated: 2026-10-30
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
 Scope: Extension, domain and product side of three deployments (getfluxiq.com, local, self-hosted): server profiles and sign-in in the extension, transport and data minimisation, consent-bound execution, manifests and the Chrome Web Store, domain changes, the FluxIQWebsite additions and their local stand-in, the product host module, hosted infrastructure, user docs, privacy, cookies and legal prerequisites, Lab and e2e coverage. Core contracts live in the paired document.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/hosted-production-plan.md
@@ -13,7 +13,7 @@ Related: [extension client](../architecture/extension-client.md), [release packa
 
 ## Current State
 
-**What is true now (2026-10-29).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route, inert on `service` until lane C wires it) is merged; lane A (t802, gateway and panel hardening), C0 (t808) and the A/B3 follow-ups (t809) are merged in Core; the stand-in W0-W2 is merged here, and its live sign-up round trip passes against a service-profile Core (t809). No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
+**What is true now (2026-10-30).** Core has the frozen contracts (t784), the IAM engine (B2, t788) and the platform store and provisioning (B1, t789); B3 (t803, IAM on every route) is merged; C1 now wires profile IAM into workspace instances, with C2/C3 caller migration/routing still separate; lane A (t802, gateway and panel hardening), C0 (t808) and the A/B3 follow-ups (t809) are merged in Core; the stand-in W0-W2 is merged here, and its live sign-up round trip passes against a service-profile Core (t809). No extension hosted code exists yet (D2-D4 wait on lane A and merge 11-10). Before that (checked
 2026-10-28). The baseline comes from a read-only audit on 2026-10-17, re-checked 2026-10-28, and
 a read of FluxIQWebsite at its `dev` tip `08e51d49` (2026-10-10), downloaded read-only to
 `C:/Users/osrs_/FluxStuff/FluxIQWebsite` (an archive, not a git checkout).
@@ -733,6 +733,12 @@ gaining an enterprise contact page.
 - Changed: Core `scripts/structure-audit/config.mjs` forbids `@fluxiq/contracts` imports under `apps/web/src`, type-only and tests included; `rules/imports.mjs` lets a `forbiddenImports` entry take a `from` directory, mirrored here with its test.
 - Validation: lead-run: `node --test scripts/structure-audit/rules/tests/imports.test.mjs` -> "# pass 26 / # fail 0" in both repositories; a probe file importing `@fluxiq/contracts/client-gateway` under `apps/web/src/server` -> "FAIL [imports] … Import through a fluxiq subpath instead", removed; `pnpm structure:check` (Core) and `node scripts/structure-audit.mjs` (here) passed; `node scripts/check/core-mirror.mjs` -> "1 mirror set(s) match … structure-audit (72 files)".
 - Outcome: Accepted.
+
+### 2026-10-30 - Core C1 foundation independently accepted (t813)
+- Agent: Codex lead; report `framework-heavy-lifting-plan/reports/codex-1030/t813-result.md`.
+- Changed: Core workspace lifecycle/key custody, background-task drain and audit/reload barriers accepted after Claude/P5b integration; Core0.11.0, no downstream runtime change.
+- Validation: lead Core background-task tests ->9 passed; web workspace/provisioning/real tenant key-eviction tests ->14files/123 passed; Core/web types,3libs, docs passed; final structure failures[],474warnings/1144baseline.
+- Not verified: C2/C3 routes, tenant gateway sockets, browser/Next production behavior or full sweeps; no paid calls/panel management.
 
 ## Open Questions
 
