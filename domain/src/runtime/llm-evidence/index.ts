@@ -25,7 +25,9 @@ export * from "./harness-options";
 export { WEB_LLM_DENIED_EVIDENCE_KEYS, webLlmEvidenceKey } from "./denied-keys";
 // What a published string says instead of itself when it is shaped like a
 // credential, so a reader can tell a withheld string from the page's own.
-export { WEB_LLM_WITHHELD_TEXT, screenedText as screenedWebLlmText } from "./withheld";
+export { WEB_LLM_WITHHELD_TEXT, screenedText as screenedWebLlmText, isWithheldText, screenedPageText } from "./withheld";
+// Private host evidence consumers share the packet's defensive object reader.
+export { isJsonRecord } from "./untrusted-json";
 // A target handle as the domain spells it, `tN`, from either spelling a model
 // may write: `tN` or the old `target.N`.
 export { canonicalWebLlmTargetHandle } from "./handle-spelling";

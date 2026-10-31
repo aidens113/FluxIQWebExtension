@@ -35,7 +35,7 @@ import type {
   RecordingLogPage
 } from "../shared/protocol";
 import type { ActivityDisplay, ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
-import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
+import { activeTab, observedTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants";
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
@@ -89,7 +89,7 @@ export class FluxIQConnection {
   private readonly navigation = new NavigationRecorder();
   private readonly scriptedNavigation: ScriptedNavigationIntent;
   private readonly clicks = new PointerClickFilter();
-  private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames };
+  private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames: observedTabFrames };
   private readonly gateway: GatewaySession;
   private readonly projects: ProjectContext;
   private readonly attachment: ContentAttachment;

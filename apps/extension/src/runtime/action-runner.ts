@@ -27,7 +27,7 @@ import { waitForFrameChoice } from "./frame-address";
 import { sendNextPageAcrossDocuments } from "./next-page-continuation";
 import { readLandedPage } from "./landed-challenge";
 import type { LandedTabAccess } from "./landed-check-wait";
-import { lookAcrossFrames, type MergeFrameSnapshots } from "./look-across-frames";
+import { lookAcrossFrames, prepareFrameSnapshots, type MergeFrameSnapshots } from "./look-across-frames";
 import { metNavigatingPage } from "./navigating-page";
 import { navigationAddress, navigationTargetTab, verifyNavigationLanding } from "./navigation";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
@@ -145,6 +145,7 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   // A throw is reported by the command router as the browser worded it; one
   // whose action never reached the page also says nothing was done
   // (`page-delivery.ts`), so Core may make it again.
+  const frameMerge = await prepareFrameSnapshots(action, tabId, addressed, startedAt, request.mergeFrameSnapshots);
   const delivery = trackActionDelivery(sendToTab);
   let inFrame: BrowserActionRunResult;
   try {
@@ -153,7 +154,7 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     if (delivery.mayHaveReachedPage()) throw error;
     return withTarget(undeliveredActionFailure(action, error), tabId, frameId);
   }
-  const run = await lookAcrossFrames(action, inFrame, addressed, startedAt, request.mergeFrameSnapshots);
+  const run = await lookAcrossFrames(action, inFrame, addressed, startedAt, frameMerge);
   if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
     await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
   }

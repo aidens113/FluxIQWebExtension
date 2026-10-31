@@ -101,7 +101,7 @@ export type MergedSnapshotOptions = {
 // module stays free of the background worker's chrome wiring.
 export type TabSnapshotTransport = {
   readonly sendToTab: <TResponse = unknown>(tabId: number, message: unknown, frameId?: number) => Promise<TResponse>;
-  readonly allTabFrames: (tabId: number) => Promise<chrome.webNavigation.GetAllFrameResultDetails[]>;
+  readonly allTabFrames: (tabId: number) => Promise<chrome.webNavigation.GetAllFrameResultDetails[] | undefined>;
 };
 
 export function isDomSnapshotPayload(value: unknown): value is {
@@ -152,6 +152,22 @@ export async function captureSingleFrameSnapshot(
   return isDomSnapshotPayload(snapshot) ? snapshot : undefined;
 }
 
+/** Prepare topology before a caller sends its existing top-frame capture RPC.
+ * The returned closure carries only that actual observation into composition;
+ * an ordinary diagnostic seed cannot manufacture this earlier provenance.
+ */
+export async function prepareMergedTabSnapshot(
+  transport: TabSnapshotTransport,
+  tabId: number,
+  waitMs?: number
+): Promise<(seedSnapshot: DomSnapshotPayload, seedFrameId: number, options?: MergedSnapshotOptions) => Promise<DomSnapshotPayload | undefined>> {
+  const deadline = Date.now() + (waitMs ?? 2 * FRAME_SNAPSHOT_WAIT_MS);
+  const topology = await readFrameTopology(transport, tabId, waitMs ?? FRAME_SNAPSHOT_WAIT_MS);
+  const beforeCapture = { topology, deadline };
+  return async (seedSnapshot, seedFrameId, options = {}) =>
+    await captureMergedTabSnapshot(transport, tabId, seedSnapshot, seedFrameId, options, beforeCapture);
+}
+
 /**
  * Every frame of the tab, merged into one snapshot.
  *
@@ -163,7 +179,7 @@ export async function captureSingleFrameSnapshot(
  * browser lists them -- a fixed order, where it used to be whichever answered
  * first.
  *
- * The top frame is read once, beside the frame list, and stands for frame 0
+ * The top frame is read once, after the first frame list, and stands for frame 0
  * whether or not the list names it. Every other listed frame is asked at the
  * same time; one that has not answered when the wait ends is named in
  * `evidence.unansweredFrameIds`.
@@ -173,22 +189,28 @@ export async function captureMergedTabSnapshot(
   tabId: number,
   seedSnapshot?: DomSnapshotPayload,
   seedFrameId?: number,
-  options: MergedSnapshotOptions = {}
+  options: MergedSnapshotOptions = {},
+  beforeCapture?: { topology: Awaited<ReturnType<typeof readFrameTopology>>; deadline: number }
 ): Promise<DomSnapshotPayload | undefined> {
   const waitMs = options.waitMs ?? FRAME_SNAPSHOT_WAIT_MS;
   const includeHidden = options.includeHidden === true;
-  const seed = seedSnapshot && seedFrameId !== undefined ? { frameId: seedFrameId, snapshot: seedSnapshot } : undefined;
+  const seed = seedSnapshot && isDomSnapshotPayload(seedSnapshot) && seedFrameId !== undefined && validFrameId(seedFrameId) ? { frameId: seedFrameId, snapshot: seedSnapshot } : undefined;
+  // Keep the original two-wait merge envelope; the final topology read spends
+  // only what remains, never an additional full wait after a slow capture.
+  const deadline = beforeCapture?.deadline ?? Date.now() + 2 * waitMs;
+  const before = beforeCapture?.topology ?? await readFrameTopology(transport, tabId, waitMs);
+  const captureWaitMs = Math.max(0, Math.min(waitMs, deadline - Date.now()));
   const topRead = seed?.frameId === TOP_FRAME_ID
     ? Promise.resolve(seed.snapshot)
-    : captureSingleFrameSnapshot(transport, tabId, TOP_FRAME_ID, waitMs, includeHidden);
-  const listed = await withTimeout(transport.allTabFrames(tabId), waitMs, []);
-  const childIds = [...new Set(listed.map((frame) => frame.frameId))]
+    : captureSingleFrameSnapshot(transport, tabId, TOP_FRAME_ID, captureWaitMs, includeHidden);
+  const childIds = before.captureOrder
     .filter((frameId) => frameId !== TOP_FRAME_ID && frameId !== seed?.frameId);
   const [topAnswer, ...childAnswers] = await Promise.all([
     topRead,
-    ...childIds.map((frameId) => captureSingleFrameSnapshot(transport, tabId, frameId, waitMs, includeHidden))
+    ...childIds.map((frameId) => captureSingleFrameSnapshot(transport, tabId, frameId, captureWaitMs, includeHidden))
   ]);
 
+  const after = await readFrameTopology(transport, tabId, Math.max(0, Math.min(waitMs, deadline - Date.now())));
   const answered: Array<{ frameId: number; snapshot: DomSnapshotPayload }> = [];
   if (seed) answered.push(seed);
   if (topAnswer && seed?.frameId !== TOP_FRAME_ID) answered.push({ frameId: TOP_FRAME_ID, snapshot: topAnswer });
@@ -234,7 +256,18 @@ export async function captureMergedTabSnapshot(
     unansweredFrameIds,
     answered.every((entry) => pageEvidenceOf(entry.snapshot) !== undefined)
   );
-  if (evidence) merged.evidence = evidence;
+  if (evidence) {
+    evidence.frameCoverage = {
+      mode: "all_frames",
+      enumeration: (!seed || beforeCapture !== undefined) && before.complete && after.complete &&
+        before.frameIds.length === after.frameIds.length &&
+        before.frameIds.every((id, index) => id === after.frameIds[index])
+        ? "complete" : "unavailable",
+      frameIds: before.frameIds,
+      capturedFrameIds: [...new Set(answered.map((entry) => entry.frameId).filter(validFrameId))].sort((a, b) => a - b)
+    };
+    merged.evidence = evidence;
+  }
   return merged;
 }
 
@@ -335,6 +368,7 @@ function frameEvidenceInTopFrameTerms(
     })),
     // Frame ids are the tab's, not the frame's, so a list a frame reported --
     // none does today; only the merge writes one -- needs no restating.
+    frameCoverage: undefined, // One child cannot attest to tab topology.
     unansweredFrameIds: evidence.unansweredFrameIds
   });
 }
@@ -431,6 +465,7 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
     regions,
     repeating,
     forms,
+    frameCoverage: undefined, // Set only by the observed all-frame composition above.
     unansweredFrameIds: nonEmpty([...unansweredFrameIds, ...contributions.flatMap((evidence) => evidence.unansweredFrameIds ?? [])])
   });
 }
@@ -467,6 +502,22 @@ function sumOf(contributions: readonly PageEvidence[], read: (evidence: PageEvid
 /** The list, or `undefined` for an empty one: an item nothing reported is absent, not present and empty. */
 function nonEmpty<T>(items: T[]): T[] | undefined {
   return items.length ? items : undefined;
+}
+
+/** Invalid or absent enumeration never becomes evidence of a top-only page. */
+async function readFrameTopology(transport: TabSnapshotTransport, tabId: number, waitMs: number): Promise<{
+  complete: boolean; frameIds: number[]; captureOrder: number[];
+}> {
+  if (waitMs <= 0) return { complete: false, frameIds: [], captureOrder: [] };
+  const listed = await withTimeout(transport.allTabFrames(tabId), waitMs, undefined);
+  const ids: unknown[] = Array.isArray(listed) ? listed.map((frame) => frame?.frameId) : [];
+  const captureOrder = [...new Set(ids.filter(validFrameId))];
+  const frameIds = [...captureOrder].sort((a, b) => a - b);
+  return { complete: Array.isArray(listed) && ids.length > 0 && ids.every(validFrameId) && frameIds.includes(TOP_FRAME_ID), frameIds, captureOrder };
+}
+
+function validFrameId(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {

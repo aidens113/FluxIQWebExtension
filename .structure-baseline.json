@@ -489,7 +489,6 @@
       "apps/extension/src/panel/settings/tests/connection-settings.test.ts": 1,
       "apps/extension/src/panel/shell/mount-panel.ts": 1,
       "apps/extension/src/panel/shell/tests/top-bar.test.ts": 1,
-      "apps/extension/src/runtime/tests/look-across-frames.test.ts": 1,
       "apps/scenario-lab/e2e/network-policy.ts": 1,
       "apps/scenario-lab/src/scenarios/auction-marketplace/pages/results.ts": 1,
       "apps/scenario-lab/src/scenarios/auction-marketplace/tests/browser.test.ts": 1,

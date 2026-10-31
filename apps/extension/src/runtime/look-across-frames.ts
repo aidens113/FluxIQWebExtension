@@ -29,12 +29,27 @@ import { snapshotCaptureOptionsFor, type SnapshotCaptureOptions } from "../share
 import type { BrowserActionRunResult } from "./action-runner";
 
 /** The background worker's frame merge, seeded with the top frame's snapshot; `undefined` when it could not merge. */
-export type MergeFrameSnapshots = (
+export type MergeFrameSnapshots = ((
   tabId: number,
   topSnapshot: DomSnapshot,
   waitMs: number | undefined,
   capture: SnapshotCaptureOptions
-) => Promise<DomSnapshot | undefined>;
+) => Promise<DomSnapshot | undefined>) & {
+  /** Observe topology before the existing top RPC; the returned closure retains that observation. */
+  prepare?: (tabId: number, waitMs: number | undefined) => Promise<MergeFrameSnapshots>;
+};
+
+/** Prepare only a whole-tab look, before its top capture is sent. */
+export async function prepareFrameSnapshots(
+  action: BrowserActionCommand,
+  tabId: number,
+  addressed: boolean,
+  startedAt: number,
+  merge: MergeFrameSnapshots | undefined
+): Promise<MergeFrameSnapshots | undefined> {
+  if (action.actionType !== "web.dom.capture_snapshot" || addressed || merge?.prepare === undefined) return merge;
+  return await merge.prepare(tabId, remainingWaitMs(action, startedAt));
+}
 
 /**
  * `run` with its snapshot replaced by every frame's, when it is a look that

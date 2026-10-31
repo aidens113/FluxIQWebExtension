@@ -16,7 +16,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ensureContentScript, unreachableFrameReason } from "../tabs";
+import { allTabFrames, observedTabFrames, ensureContentScript, unreachableFrameReason } from "../tabs";
 
 /**
  * What a ping must answer before `tabs.ts` calls a frame ready. Written out
@@ -186,5 +186,32 @@ test("a frame that answers with the wrong version after injection is named as no
     );
   } finally {
     uninstallChromeStub();
+  }
+});
+
+
+test("observed enumeration preserves browser success and legacy callers retain [] on failure", async () => {
+  const frames = [{ frameId: 0 }, { frameId: 2 }];
+  for (const mode of ["success", "empty", "error", "missing", "throw", "absent"] as const) {
+    const runtime: { lastError?: { message: string } } = {};
+    const stub = {
+      runtime,
+      ...(mode === "absent" ? {} : { webNavigation: {
+        getAllFrames: (_details: unknown, callback: (answer?: unknown[]) => void) => {
+          if (mode === "throw") throw new Error("unavailable");
+          if (mode === "error") runtime.lastError = { message: "refused" };
+          callback(mode === "missing" ? undefined : mode === "empty" ? [] : frames);
+          delete runtime.lastError;
+        }
+      } })
+    };
+    (globalThis as { chrome?: unknown }).chrome = stub;
+    try {
+      const expected = mode === "success" ? frames : mode === "empty" ? [] : undefined;
+      assert.deepEqual(await observedTabFrames(TAB_ID), expected, mode);
+      assert.deepEqual(await allTabFrames(TAB_ID), expected ?? [], mode);
+    } finally {
+      uninstallChromeStub();
+    }
   }
 });

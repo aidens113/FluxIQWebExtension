@@ -322,6 +322,19 @@ export type WebAutomationPageEvidence = {
   navigation: WebAutomationNavigationEvidence;
   /** Actual producer capture settings; missing on older captures, so hidden coverage is unknown. */
   captureOptions?: { includeHidden: boolean } | undefined;
+  /** Browser enumeration and genuine snapshot replies around all-frame composition.
+   * Complete requires the same valid, nonempty topology containing frame 0 on
+   * both bounded reads. This is not proof of semantic DOM completeness.
+   * Missing on single-frame and historical captures; absence means unknown.
+   */
+  frameCoverage?: {
+    mode: "all_frames";
+    enumeration: "complete" | "unavailable";
+    /** Sorted unique nonnegative safe browser frame IDs from the first read. */
+    frameIds: number[];
+    /** Sorted unique requested frame IDs that supplied genuine snapshots (including a seed). */
+    capturedFrameIds: number[];
+  } | undefined;
   dialogs?: WebAutomationDialogEvidence | undefined;
   overlays?: WebAutomationOverlayEvidence | undefined;
   regions?: WebAutomationRegionEvidence[] | undefined;

@@ -61,6 +61,7 @@ export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: S
     loading: loadingEvidence(),
     navigation: navigationEvidence(),
     captureOptions: { includeHidden },
+    frameCoverage: undefined, // One document cannot enumerate its tab.
     dialogs,
     overlays,
     regions,

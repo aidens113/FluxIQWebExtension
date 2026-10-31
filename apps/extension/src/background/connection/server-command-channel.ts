@@ -31,13 +31,14 @@ import type {
   ServerCommandPayload
 } from "../../shared/protocol";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
-import { allTabFrames, sendToTab } from "../tabs";
+import { observedTabFrames, sendToTab } from "../tabs";
+import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import { currentAutomationTabId, ExtensionRuntimeCommandRouter } from "../../runtime";
 import { TracedCommands, withTraceMetadata, type TraceCapture } from "../trace-capture/index";
 import type { ActivePage } from "./active-page";
 import type { ActiveRecording } from "./active-recording";
 import type { ContentAttachment } from "./content-attachment";
-import { captureMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
+import { captureMergedTabSnapshot, prepareMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
 import { sessionHostLeaseLedger } from "./host-lease/index";
@@ -330,14 +331,24 @@ export class ServerCommandChannel {
       // The look takes in every frame (t200), merged exactly as a recorded
       // event's snapshot is, around the top frame's own capture.
       // A search's look asks every child frame for its hidden elements too.
-      mergeFrameSnapshots: async (tabId, topSnapshot, waitMs, capture) =>
+      mergeFrameSnapshots: Object.assign(async (tabId: number, topSnapshot: DomSnapshot, waitMs: number | undefined, capture: SnapshotCaptureOptions) =>
         await captureMergedTabSnapshot(
-          { sendToTab, allTabFrames },
+          { sendToTab, allTabFrames: observedTabFrames },
           tabId,
           topSnapshot as DomSnapshotPayload,
           TOP_FRAME_ID,
           { ...(waitMs === undefined ? {} : { waitMs }), ...(capture.includeHidden === true ? { includeHidden: true } : {}) }
-        ) as DomSnapshot | undefined
+        ) as DomSnapshot | undefined, {
+          prepare: async (tabId: number, waitMs: number | undefined) => {
+            // The original top capture is sent only after this read settles.
+            const compose = await prepareMergedTabSnapshot({ sendToTab, allTabFrames: observedTabFrames }, tabId, waitMs);
+            return async (_tabId: number, topSnapshot: DomSnapshot, remainingWaitMs: number | undefined, capture: SnapshotCaptureOptions) =>
+              await compose(topSnapshot as DomSnapshotPayload, TOP_FRAME_ID, {
+                ...(remainingWaitMs === undefined ? {} : { waitMs: remainingWaitMs }),
+                ...(capture.includeHidden === true ? { includeHidden: true } : {})
+              }) as DomSnapshot | undefined;
+          }
+        })
     });
   }
 

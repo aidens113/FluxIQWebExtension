@@ -77,9 +77,12 @@ test("a real capture survives the trip from the content script's snapshot to the
   const single = await captureMergedTabSnapshot(transportFor({ 0: frameSnapshot(MODAL_FLOWS, true) }), TAB_ID);
   assert.ok(single);
   const evidence = pageEvidenceOf(single);
-  // A single-frame page must come out of the merge exactly as it went in:
-  // anything else is the merge inventing or losing a fact on the ordinary path.
-  assert.deepEqual(evidence, MODAL_FLOWS);
+  assert.ok(evidence);
+  // Preserve every historical assertion/data item; the merge now adds its own
+  // observed topology, which these content-only fixtures never exercised.
+  const { frameCoverage, ...historical } = evidence;
+  assert.deepEqual(historical, MODAL_FLOWS);
+  assert.deepEqual(frameCoverage, { mode: "all_frames", enumeration: "complete", frameIds: [0], capturedFrameIds: [0] });
 });
 
 test("two real captures merge into one page without either being flattened away", async () => {

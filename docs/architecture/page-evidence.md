@@ -23,6 +23,41 @@ Unanswered frames remain separately reported, so this marker does not promise
 whole-tab completeness. Scoped identity recovery uses explicit addressed-frame
 captures and keeps this provenance privately, outside the model packet.
 
+## Observed all-frame topology
+
+Only background all-frame composition emits raw `evidence.frameCoverage`:
+`{ mode: "all_frames", enumeration: "complete" | "unavailable", frameIds,
+capturedFrameIds }`. Both ID lists are sorted unique nonnegative safe integers.
+`frameIds` records the valid browser IDs from the first enumeration, including
+empty child documents; `capturedFrameIds` records actual requested-ID snapshot
+replies, including a supplied seed. Missing child replies remain separately
+listed in `unansweredFrameIds`. Descriptor stamps never establish topology.
+
+Two bounded browser topology reads must surround every frame capture.
+Fresh standalone composition enumerates before requesting the top frame. A
+prepared composition closure can retain a real enumeration taken before the
+caller's existing top-frame RPC, without taking an extra snapshot. The native
+unaddressed look uses an internal prepare hook before that original RPC and
+passes the prepared closure to its normal merge; addressed looks skip it.
+The closure retains its original deadline, including time spent on the top
+capture, so composition cannot renew an expired command's allowance. Only successful, valid, nonempty enumerations containing frame 0 with the same
+ID set report `complete`. API absence/errors, timeout, empty/malformed results,
+or changed topology report `unavailable`; no fallback invents `[0]`. The final
+read spends only time remaining inside the existing two-wait merge envelope.
+A top-only page with both successful reads reports `[0]` in both lists. Legacy
+frame-list callers keep their empty-array failure behavior, while native snapshot
+transports preserve enumeration failure explicitly.
+
+The marker proves enumeration and replies, not semantic DOM completeness or an
+atomic document snapshot. A reused event/top-frame seed without the prepared
+pre-capture observation always reports `unavailable`: later enumeration cannot
+prove topology at that seed's capture instant. Loading, truncation and shown-element totals must still be checked independently.
+Explicit single-frame captures and historical content-only captures omit the
+marker, so their all-frame coverage remains unknown. This is raw provenance only;
+it adds no gateway command, capability or model-facing packet field. Historical
+fixtures retain their original data and are explicitly classified as not
+exercising topology provenance.
+
 ## Observed control states
 
 A resolved handle's CC9 `control` view distinguishes the actual readable
