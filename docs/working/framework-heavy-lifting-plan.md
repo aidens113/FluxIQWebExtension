@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t828 accepted and integrated in both dev branches; shared SDK/bundles current0.20. Remaining P8 repeat guard/history; main held, no paid calls.
+Status detail: t829 setup accepted; disjoint history implementation active, Core guard/host digest interface planning active. No new behavior validation, full suites or paid calls.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -10,6 +10,8 @@ Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
 Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), debug notes in `language-driven-flow-loop-plan/debugs/`
 
 ## Current State
+
+**Active t829, 2026-10-31:** Remaining P8 unchanged-repeat guard and bounded in-run repair history. Paired task worktrees created from pushed Coreeb79f3b6/downstreama26a305e; common setup completed exit0 (Core SDK77.335s), new Core0.21.0 source bump owned by lead; history mapping authorized on disjoint files, optional observer port frozen and lead typecheck63.929s/history27tests pass; guard/client/proof implementation briefs ready. Initial audit13relative archive links corrected by quoting the exact historical block, checksum unchanged; owning docs-links check passes. Core0.21 source/privateSDK0.20 until final build; no guard behavior acceptance yet. Three disjoint briefs cover read-only Core guard design, read-only web state-digest/provenance discovery, and approved history mapping implementation after its source-only plan. Existing0.20 source-less identity APIs/source-step precedence and receipt/effect/permission safety are stable. Guard must distinguish genuine unchanged cycling from retry attempts, authored bounded loops/row progress, changed inputs/views and resume; missing client observations retain existing behavior. History uses closed recorded facts only, never raw inputs/outputs/handles/page prose or invented safety. MVP priorities: Phase2.1 focused context,2.3 bounded loops and4.3 hardening. Full-suite slots exhausted today; no API/paid/panel operations. User clinerules remains untouched; setup temporary dependency work only.
 
 **Accepted t828, 2026-10-31:** Source-less identity recovery and full-result receipt integrity accepted locally. Lead Core122identity+62receipt tests, domain affected selections/native16, extension84, Labtrace4, affected types/builds and both audits pass; Corepacking allowance15to10/1143baseline, Down615 unchanged. Real Chromium134.0.6998.35 e2e-chromium social-network-feed proof8 passes1test/body45.6s: four actual target-not-found/unacted attempts with accepted ~354KB replies, fourth identity unmatched, zero gateway suppression/errors; Undo then explicit original-target refresh returns only selector/element patches, one required Like, exact unchanged other-post map. This proves automatic negative recovery and explicit positive refresh, not automatic fourth-attempt browser success (Core units cover that). Initial receipt hash256KiB rejection fixed at intake/observer with exact full-payload hashing; small authority bounds/unknown safety unchanged. Earlier locator/trace-field assertion mistakes and failed attempts recorded; artifacts1-8 ignored in main. Final extensioncheck21.723s passes. Integrated Core4327ad27/downstream690de074; Core mandatory70merge contracts and Down structure gate pass. Shared SDK0.20/domain/Chrome/Firefox/e2e bundles refreshed79.474s/18.898s/24.039s,22files per target. Task backups45e13d1b/cc54135d retained. First Down merge refused a preserved handoff note, clean retry passed; Core finish required clean private worktree detachment, then passed. Final paired dev push follows this memory commit. Main held: both full-suite slots used. No paid/API calls/panel management; user clinerules preserved. NextP8repeatguard/history.
 
@@ -371,6 +373,14 @@ Settled entries through t825 are preserved verbatim in [the accepted runtime led
 - Validation: `pnpm.cmd --filter @fluxiq-web-extension/extension exec node --no-experimental-strip-types node_modules/@playwright/test/cli.js test -c e2e/playwright.config.ts e2e/site-reset/tests/unbound-target/tests/native.spec.ts --workers=1` ->1passed/body45.6s; `pnpm.cmd --filter @fluxiq-web-extension/extension check` ->exit0/21.723s; `node scripts/structure-audit.mjs` ->passed239warnings/615baseline; owning domain/extension/Lab checks and builds pass, detailed paired Core lead report.
 - Outcome: Accepted and integrated Core4327ad27/downstream690de074; Core mandatory70merge contracts and Down structure gate pass. Real-browser strict oracle accepted; earlier setup/assertion errors and real receipt defect documented. Shared SDK/bundles current0.20.
 - Follow-up: final paired dev push, then P8 unchanged-repeat guard and bounded repair history. Main awaits a later permitted full sweep; no paid go, provider calls or user-panel management.
+
+### 2026-10-31 - t829 setup and accepted-memory compaction
+- Agent: Codex lead; planned three bounded workers.
+- Changed: paired task setup; three file-owned briefs and focused Current State; Core settled ledger index/t828 archived verbatim.
+- Why: finish P8 bounded execution and repair context without redoing accepted identity or receipt safety.
+- Validation: `pnpm.cmd task start runtime-repeat-history --worktree --core --skip-workspace-build` ->exit0, paired t829 trees and mandatory SDK libraries prepared, Core build77.335s; workspace build skipped, no product checks. Archive substring proof ->exact normalized block SHA256 110daea3498ec596f77454427e0593e12f5eedcebdea78cf8eae5577676abf73.
+- Outcome: Partial; setup accepted; history mapping and optional interface accepted at phase1: lead27tests/typecheck pass, archive links corrected without altering preserved block. Guard/client behavior implementation next, no browser acceptance yet.
+- Follow-up: complete setup, freeze optional observation contract, implement file-owned guard/history/client wiring; narrow checks and allowed realistic provider-free browser proof only.
 
 ## Open Questions
 
