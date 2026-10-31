@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, P1b t811, C1 t813 and E/D5 t814 are verified and merged in both repositories; paired t817 source is frozen for combined acceptance.
+Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, P1b t811, C1 t813 and E/D5 t814 are merged; t817 passed lead acceptance and both native proofs, ready to integrate before the final full sweep.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -69,7 +69,7 @@ acceptance check passed, and no paid run or model call happened.
 | t811 (P1b) | Submit-then-test, label repair, Core completion, revision-aware keys and live CLI context | Lead42 Core+26 CLI tests pass; post-sync types pass; native2/2 verifies24rows/2whole/1partial and12-to9 builder decisions with unchanged gates; model/purse/mode reaches actual child configuration | Merged Coreb4a8f453/downstream01da7fa3 with Core0.13.0;70 merge-contract tests pass; ignored JSON evidence retained in main test-runs/2026-10-30-t811-final |
 | t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Merged both repositories after lead9 background and123 web/key-custody tests, types,3libs, docs/audits; Core merge contract gate70 passed | C2/C3 caller migration and routing remain separate; no real tenant socket/browser qualification claimed |
 | t814 (hosted E + D5) | Product/brand/assets, host loading and owned default project | Lead panel32/web27/ownership36/product18 and types/builds pass; real service-IAM default ownership, retry/partial/concurrent/conflict cases covered | Merged downstream6c88f928/Core4a522cd8 with Core0.12.0;70 merge-contract tests pass; later lifecycle wiring remains separate |
-| t817 (first-row toggle) | Paired before/after evidence, explicit grounded ensureState, persistence and runtime guards | Source frozen; Core worker199 distinct owning cases pass; downstream and native source ready, no acceptance claimed. WIP checkpoints Core0bef3866/downstream15bb65d3 preserve changes | Lead owns P1b parent sync, Core0.14.0 reservation and final checks/builds; mixed-state native oracle/replay and final sweep pending |
+| t817 (first-row toggle) | Paired before/after evidence, explicit grounded ensureState, persistence and runtime guards | Lead Core204/domain37/extension9, types/libs/audits/docs pass. Native first-row oracle+saved replay15-to15callbacks/3skips/0transitions and obstruction4recoveries/handler/finalyes pass; lead JSON gates accepted and3files preserved | Ready paired integration with Core0.14.0, then last isolated full sweep; no paid Claude performance claimed |
 
 **User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
 after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
