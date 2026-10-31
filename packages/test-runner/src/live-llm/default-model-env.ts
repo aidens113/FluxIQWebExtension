@@ -9,12 +9,13 @@
 // `--llm-model` as that variable, so a chat build can be compared on another
 // model (t233). It is read from the flag and from nothing else -- not the Lab's
 // own environment, not `.env` -- and a value inherited from whoever launched
-// the Lab is dropped (`../environment.ts`), so a run without `--llm-model`
-// gives Core nothing and Core builds on its own default, which is the Lab's
-// `DEFAULT_LLM_MODEL`. This is the developer's and the Lab's knob, not the
+// the Lab is dropped (`../environment.ts`). Live runs without `--llm-model`
+// explicitly pass their selected provider's Lab default, Claude Sonnet by default.
+// Provider-free runs set no model. This is the developer's and the Lab's knob, not the
 // product's model setting.
 
 import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation-studio";
+import { DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmProvider } from "@fluxiq-web-extension/test-contracts";
 
 /** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV`). */
 export const LAB_DEFAULT_MODEL_ENV = "FLUXIQ_LLM_DEFAULT_MODEL";
@@ -24,15 +25,18 @@ export const LAB_DEFAULT_MODEL_FLAG = "--llm-model";
 
 /**
  * The model to pass to Core as its default, as Core will read it, or
- * `undefined` when `args` carries no `--llm-model`. A model Core is not
+ * the selected provider's default for a live run, or `undefined` for a provider-free run. A model Core is not
  * configured for is refused here, through Core's own resolver, so the Lab
  * never starts a Core that would stop on it.
  */
 export function labDefaultModelValue(args: readonly string[] = process.argv): string | undefined {
   const at = args.indexOf(LAB_DEFAULT_MODEL_FLAG);
-  if (at < 0) return undefined;
-  const flagged = args[at + 1];
-  if (flagged === undefined || flagged.startsWith("--")) throw new Error(`${LAB_DEFAULT_MODEL_FLAG} needs a model id, such as deepseek-v4-pro`);
+  if (at < 0 && !args.includes("--live-llm")) return undefined;
+  const providerAt = args.indexOf("--llm-provider");
+  const provider = providerAt < 0 ? DEFAULT_LLM_PROVIDER : args[providerAt + 1];
+  if (!isLlmProvider(provider)) throw new Error("--llm-provider must be anthropic or deepseek");
+  const flagged = at < 0 ? defaultLlmModelForProvider(provider) : args[at + 1];
+  if (flagged === undefined || flagged.startsWith("--")) throw new Error(`${LAB_DEFAULT_MODEL_FLAG} needs a model id, such as claude-sonnet-5-5`);
   try {
     resolveAutomationStudioLlmDefaultModel({ [AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV]: flagged });
   } catch (error) {

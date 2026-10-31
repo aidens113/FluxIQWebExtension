@@ -22,6 +22,22 @@ function repository(context: TestContext, contents: string): string {
   return root;
 }
 
+test("Claude reads only its credential from the isolated checkout and never falls back to DeepSeek", async (context: TestContext) => {
+  const root = repository(context, "CLAUDE_API_KEY=fixture-claude-0123456789\nDEEPSEEK_API_KEY=fixture-deepseek-0123456789\nFLUXIQ_TEST_TARGET=existing\n");
+  const found = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { FLUXIQ_TEST_ENV_FILES: "none" }, provider: "anthropic" });
+  assert.deepEqual(found, { name: "CLAUDE_API_KEY", source: ".env.local", value: "fixture-claude-0123456789" });
+  writeFileSync(path.join(root, ".env.local"), "DEEPSEEK_API_KEY=fixture-deepseek-0123456789\n");
+  await assert.rejects(resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: {}, provider: "anthropic" }), /CLAUDE_API_KEY/u);
+});
+
+test("Claude's standard alias works while the requested name has priority", async (context: TestContext) => {
+  const root = repository(context, "ANTHROPIC_API_KEY=fixture-alias-0123456789\n");
+  assert.equal((await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: {}, provider: "anthropic" })).name, "ANTHROPIC_API_KEY");
+  const found = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { CLAUDE_API_KEY: "fixture-primary-0123456789", ANTHROPIC_API_KEY: "fixture-other-0123456789" }, provider: "anthropic" });
+  assert.equal(found.name, "CLAUDE_API_KEY");
+  assert.equal(found.value, "fixture-primary-0123456789");
+});
+
 test("the key is read from .env.local even when env files are switched off for isolation", async (context: TestContext) => {
   const root = repository(context, "FLUXIQ_TEST_TARGET=existing\nFLUXIQ_TEST_BASE_URL=http://127.0.0.1:3300\nDEEPSEEK_API_KEY=sk-from-file-0123456789\n");
   const credential = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { FLUXIQ_TEST_ENV_FILES: "none" }, provider: "deepseek" });

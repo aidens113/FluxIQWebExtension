@@ -4,8 +4,9 @@ import { parseCampaignArgs } from "../index.mjs";
 
 test("arguments: defaults, ids, kinds, limits and the Lab passthrough", () => {
   const defaults = parseCampaignArgs([]);
-  assert.deepEqual({ ...defaults }, { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: "deepseek-flash", authoringMode: "legacy", output: undefined, labArgs: [], help: false });
+  assert.deepEqual({ ...defaults }, { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "anthropic", model: "claude-sonnet-5-5", authoringMode: "legacy", output: undefined, labArgs: [], help: false });
   assert.deepEqual(parseCampaignArgs(["--kind", "repair"]).kinds, ["repair"]);
+  assert.equal(parseCampaignArgs(["--llm-provider", "deepseek"]).model, "deepseek-flash");
   assert.throws(() => parseCampaignArgs(["--", "--flow"]), /sets --flow itself/u);
   assert.deepEqual(parseCampaignArgs(["table-read", "form-goal"]).taskIds, ["table-read", "form-goal"]);
   const parsed = parseCampaignArgs(["--kind", "extract,form", "--limit", "2", "--dry-run", "--max-attempts", "2", "--", "--llm-max-cost-usd", "0.25"]);

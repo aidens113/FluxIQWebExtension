@@ -5,6 +5,17 @@ import path from "node:path";
 import test from "node:test";
 import { LAB_COST_CEILING_ENV, labCostCeilingValue } from "../cost-ceiling-env.js";
 
+test("Claude live tests default to five dollars for the whole build and preserve lower explicit limits", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "fluxiq-claude-cost-default-"));
+  try {
+    assert.equal(labCostCeilingValue(root, ["node", "cli", "--live-llm"], {}), "5");
+    assert.equal(labCostCeilingValue(root, ["node", "cli", "--live-llm", "--llm-cost-ceiling-usd", "2"], {}), "2");
+    assert.throws(() => labCostCeilingValue(root, ["node", "cli", "--live-llm", "--llm-cost-ceiling-usd", "6"], {}), /cannot raise/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // The Lab passes the per-build cost ceiling to every Core it starts from one
 // configurable place: environment, then `.env` and `.env.local`. A run flag
 // may only lower that configured amount (user clarification, 2026-10-03).

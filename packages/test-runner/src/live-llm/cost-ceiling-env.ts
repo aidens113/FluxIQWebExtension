@@ -3,12 +3,13 @@
 // easily configurable variable ... even for test purposes in the lab").
 //
 // The configured amount comes from the Lab environment, then .env/.env.local,
-// or the $0.10 test default. A run flag can only lower it. Core consumes it
+// or the $5 Claude live-test default (other entry points retain Core's test default). A run flag can only lower it. Core consumes it
 // only with the explicit test scope below; normal user UI defaults are separate.
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
+import { CLAUDE_LIVE_BUILD_COST_USD, DEFAULT_LLM_PROVIDER } from "@fluxiq-web-extension/test-contracts";
 
 /** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV`). */
 export const LAB_COST_CEILING_ENV = "FLUXIQ_LLM_RUN_COST_CEILING_USD";
@@ -57,7 +58,10 @@ export function labCostCeilingValue(repositoryRoot: string, args: readonly strin
     [LAB_COST_CEILING_SCOPE_ENV]: "test",
     ...(value === undefined ? {} : { [LAB_COST_CEILING_ENV]: value })
   });
-  const configured = scoped(found);
+  const providerAt = args.indexOf("--llm-provider");
+  const provider = providerAt < 0 ? DEFAULT_LLM_PROVIDER : args[providerAt + 1];
+  const fallback = args.includes("--live-llm") && provider === "anthropic" ? String(CLAUDE_LIVE_BUILD_COST_USD) : undefined;
+  const configured = scoped(found ?? fallback);
   if (at < 0) return String(configured);
   const requested = scoped(args[at + 1]);
   if (requested > configured) throw new Error(`${LAB_COST_CEILING_FLAG} cannot raise the configured Lab ceiling of $${configured.toFixed(2)}. Change ${LAB_COST_CEILING_ENV} in the Lab environment or checkout env file to configure a different ceiling.`);

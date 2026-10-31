@@ -19,28 +19,28 @@ async function withCheckout(files, body) {
 }
 
 test("the process environment wins, and the result never carries the value", async () => {
-  await withCheckout({ ".env.local": `DEEPSEEK_API_KEY=${FAKE}\n` }, async (root) => {
-    const found = await providerKeySource({ env: { DEEPSEEK_API_KEY: FAKE }, extRoot: root });
-    assert.deepEqual(found, { name: "DEEPSEEK_API_KEY", found: true, source: "the process environment" });
+  await withCheckout({ ".env.local": `CLAUDE_API_KEY=${FAKE}\n` }, async (root) => {
+    const found = await providerKeySource({ env: { CLAUDE_API_KEY: FAKE }, extRoot: root });
+    assert.deepEqual(found, { name: "CLAUDE_API_KEY", found: true, source: "the process environment" });
     assert.doesNotMatch(JSON.stringify(found), new RegExp(FAKE, "u"));
   });
 });
 
 test("otherwise .env is read before .env.local, by name only", async () => {
-  await withCheckout({ ".env": "OTHER=1\n", ".env.local": `# comment\nexport DEEPSEEK_API_KEY="${FAKE}"\n` }, async (root) => {
+  await withCheckout({ ".env": "OTHER=1\n", ".env.local": `# comment\nexport CLAUDE_API_KEY="${FAKE}"\n` }, async (root) => {
     const found = await providerKeySource({ env: {}, extRoot: root });
-    assert.deepEqual(found, { name: "DEEPSEEK_API_KEY", found: true, source: path.join(root, ".env.local") });
+    assert.deepEqual(found, { name: "CLAUDE_API_KEY", found: true, source: path.join(root, ".env.local") });
     assert.doesNotMatch(JSON.stringify(found), new RegExp(FAKE, "u"));
   });
-  await withCheckout({ ".env": `DEEPSEEK_API_KEY=${FAKE}\n`, ".env.local": `DEEPSEEK_API_KEY=${FAKE}\n` }, async (root) => {
+  await withCheckout({ ".env": `CLAUDE_API_KEY=${FAKE}\n`, ".env.local": `CLAUDE_API_KEY=${FAKE}\n` }, async (root) => {
     assert.equal((await providerKeySource({ env: {}, extRoot: root })).source, path.join(root, ".env"));
   });
 });
 
 test("an empty, blank, commented or absent assignment is not a key", async () => {
-  await withCheckout({ ".env": "DEEPSEEK_API_KEY=\n# DEEPSEEK_API_KEY=x\n", ".env.local": "DEEPSEEK_API_KEY=\"\"\nOTHER_DEEPSEEK_API_KEY=x\n" }, async (root) => {
-    const found = await providerKeySource({ env: { DEEPSEEK_API_KEY: "   " }, extRoot: root });
-    assert.deepEqual(found, { name: "DEEPSEEK_API_KEY", found: false, searched: ["the process environment", path.join(root, ".env"), path.join(root, ".env.local")] });
+  await withCheckout({ ".env": "CLAUDE_API_KEY=\n# CLAUDE_API_KEY=x\n", ".env.local": "CLAUDE_API_KEY=\"\"\nOTHER_CLAUDE_API_KEY=x\n" }, async (root) => {
+    const found = await providerKeySource({ env: { CLAUDE_API_KEY: "   " }, extRoot: root });
+    assert.deepEqual(found, { name: "CLAUDE_API_KEY", found: false, searched: ["the process environment", path.join(root, ".env"), path.join(root, ".env.local")] });
   });
   await withCheckout({}, async (root) => {
     assert.equal((await providerKeySource({ env: {}, extRoot: root })).found, false);
@@ -48,8 +48,18 @@ test("an empty, blank, commented or absent assignment is not a key", async () =>
 });
 
 test("FLUXIQ_PROVIDER_KEY_FILES=none searches the process environment only, as the runner does", async () => {
-  await withCheckout({ ".env.local": `DEEPSEEK_API_KEY=${FAKE}\n` }, async (root) => {
+  await withCheckout({ ".env.local": `CLAUDE_API_KEY=${FAKE}\n` }, async (root) => {
     const found = await providerKeySource({ env: { FLUXIQ_PROVIDER_KEY_FILES: "none" }, extRoot: root });
-    assert.deepEqual(found, { name: "DEEPSEEK_API_KEY", found: false, searched: ["the process environment"] });
+    assert.deepEqual(found, { name: "CLAUDE_API_KEY", found: false, searched: ["the process environment"] });
+  });
+});
+
+test("the Claude alias is supported, and a saved DeepSeek key is never a fallback", async () => {
+  await withCheckout({ ".env.local": `ANTHROPIC_API_KEY=${FAKE}\n` }, async (root) => {
+    assert.equal((await providerKeySource({ env: {}, extRoot: root })).name, "ANTHROPIC_API_KEY");
+  });
+  await withCheckout({ ".env.local": `DEEPSEEK_API_KEY=${FAKE}\n` }, async (root) => {
+    assert.equal((await providerKeySource({ env: {}, extRoot: root })).found, false);
+    assert.equal((await providerKeySource({ env: {}, extRoot: root, provider: "deepseek" })).found, true);
   });
 });

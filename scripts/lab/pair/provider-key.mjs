@@ -9,23 +9,31 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { LIVE_LLM_CREDENTIAL_NAMES, LIVE_LLM_DEFAULT_PROVIDER } from "../provider/index.mjs";
 
-const NAME = "DEEPSEEK_API_KEY";
 const FILES = [".env", ".env.local"];
-const ASSIGNED = new RegExp(`^\\s*(?:export\\s+)?${NAME}\\s*=\\s*["']?[^\\s"'#]`, "mu");
 
 /**
- * @param {{ env: NodeJS.ProcessEnv, extRoot: string }} input
+ * @param {{ env: NodeJS.ProcessEnv, extRoot: string, provider?: keyof typeof LIVE_LLM_CREDENTIAL_NAMES }} input
  * @returns {Promise<{ name: string, found: true, source: string } | { name: string, found: false, searched: string[] }>}
  */
-export async function providerKeySource({ env, extRoot }) {
-  if ((env[NAME] ?? "").trim() !== "") return { name: NAME, found: true, source: "the process environment" };
-  if (env.FLUXIQ_PROVIDER_KEY_FILES === "none") return { name: NAME, found: false, searched: ["the process environment"] };
+export async function providerKeySource({ env, extRoot, provider = LIVE_LLM_DEFAULT_PROVIDER }) {
+  const names = LIVE_LLM_CREDENTIAL_NAMES[provider];
+  if (!names) throw new Error(`Unsupported live provider: ${provider}`);
+  const name = names[0];
+  for (const candidate of names) {
+    if ((env[candidate] ?? "").trim() !== "") return { name: candidate, found: true, source: "the process environment" };
+  }
+  if (env.FLUXIQ_PROVIDER_KEY_FILES === "none") return { name, found: false, searched: ["the process environment"] };
   for (const file of FILES) {
     const contents = await readIfPresent(path.join(extRoot, file));
-    if (contents !== null && ASSIGNED.test(contents)) return { name: NAME, found: true, source: path.join(extRoot, file) };
+    if (contents === null) continue;
+    for (const candidate of names) {
+      const assigned = new RegExp(`^\\s*(?:export\\s+)?${candidate}\\s*=\\s*["']?[^\\s"'#]`, "mu");
+      if (assigned.test(contents)) return { name: candidate, found: true, source: path.join(extRoot, file) };
+    }
   }
-  return { name: NAME, found: false, searched: ["the process environment", ...FILES.map((file) => path.join(extRoot, file))] };
+  return { name, found: false, searched: ["the process environment", ...FILES.map((file) => path.join(extRoot, file))] };
 }
 
 async function readIfPresent(file) {

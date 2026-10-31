@@ -60,7 +60,7 @@ function settingsFailureCode(status: number, error = ""): string {
   if (/pin|authoriz|forbidden|permission/iu.test(error)) return "settings-save.authorization";
   if (/flow_save_conflict|conflict|changed elsewhere/iu.test(error)) return "settings-save.conflict";
   if (/input and output limits|total-token/iu.test(error)) return "settings-save.token-total";
-  if (/llm|deepseek|provider retr|estimated-cost|exactly one llm call/iu.test(error)) return "settings-save.llm-policy";
+  if (/llm|deepseek|anthropic|claude|provider retr|estimated-cost|exactly one llm call/iu.test(error)) return "settings-save.llm-policy";
   if (/flow settings are required|flow.+not found/iu.test(error)) return "settings-save.flow";
   return Number.isInteger(status) && status >= 100 && status <= 599 ? `settings-save.http-${status}` : "settings-save.http-unknown";
 }

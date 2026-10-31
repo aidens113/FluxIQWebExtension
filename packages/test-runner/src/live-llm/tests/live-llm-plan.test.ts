@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, llmProviderForModel, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -31,7 +31,7 @@ function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<L
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: "lab-diagnose",
     mode: "live",
-    provider: "deepseek",
+    provider: DEFAULT_LLM_PROVIDER,
     model: DEFAULT_LLM_MODEL,
     task: "diagnose" as LlmTaskKind,
     scenarioNetworkPolicy: "loopback-only",
@@ -57,7 +57,7 @@ test("a diagnose profile plans exactly one authorized provider call, whatever ca
     assert.equal(plan.declared.maxCallsPerRun, maxCallsPerRun);
   }
   const plan = planAtLabCeiling(profile());
-  assert.equal(plan.provider, "deepseek");
+  assert.equal(plan.provider, DEFAULT_LLM_PROVIDER);
   assert.equal(plan.model, DEFAULT_LLM_MODEL);
 });
 
@@ -246,20 +246,21 @@ test("every configured model reaches the plan, and the default is what an absent
   // here and in Core at the same moment. The model is a setting now, and these
   // pin that it is the operator's choice that travels, not a constant.
   for (const model of llmModels) {
-    assert.equal(planAtLabCeiling(profile({ model })).model, model);
+    assert.equal(planAtLabCeiling(profile({ model, provider: llmProviderForModel(model) })).model, model);
   }
   const absent = profile();
   delete (absent as { model?: string }).model;
   assert.equal(planAtLabCeiling(absent).model, DEFAULT_LLM_MODEL);
-  assert.equal(DEFAULT_LLM_MODEL, "deepseek-flash");
+  assert.equal(DEFAULT_LLM_MODEL, "claude-sonnet-5-5");
 });
 
 test("an unsupported provider, model, task or retry count is refused", () => {
   assert.throws(() => planAtLabCeiling(profile({ provider: "openai" })), /--llm-provider openai is unsupported/u);
-  assert.throws(() => planAtLabCeiling(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
+  assert.throws(() => planAtLabCeiling(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported; Core is configured for/u);
   // The retired alias is refused by name rather than sent on and answered with
   // an opaque provider 400.
-  assert.throws(() => planAtLabCeiling(profile({ model: "deepseek-chat" })), /--llm-model deepseek-chat is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
+  assert.throws(() => planAtLabCeiling(profile({ model: "deepseek-chat" })), /--llm-model deepseek-chat is unsupported; Core is configured for/u);
+  assert.throws(() => planAtLabCeiling(profile({ provider: "deepseek", model: "claude-sonnet-5-5" })), /does not belong/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; a live Lab run builds with create-flow/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "edit-flow" })), /--llm-task edit-flow has no live runner/u);
   assert.throws(() => planAtLabCeiling(profile({}, { maxRetries: 1 })), /--llm-max-retries 1 is unsupported/u);
