@@ -7,7 +7,7 @@ import { PHOTO_ROOT, bindDetectingRuntime, gridCellHandle, gridColumns, openPhot
 import type { SupervisorTurn } from "../scripted-provider";
 
 const OPEN = "Open the studio's profile";
-const LIST = "list the links of its posts";
+const LIST = "list the first twenty-four post links in its grid, in grid order as relative URL paths";
 const TASK = `${OPEN} and ${LIST}.`;
 /** The studio's first grid tile: the grid is detected from it. */
 const FIRST = gridFor(STUDIO)[0]!;
@@ -22,17 +22,17 @@ const text = (value: unknown): string => JSON.stringify(value ?? null);
  * t804 acceptance, photo-social: Core's repair-from-step rule through the real
  * subflow trial gate and ports, headed and provider-free. The second subflow,
  * `posts`, has two steps: `first` reads the studio's grid, and `second` reads
- * it again through a list handle that was never drawn, so it fails there.
+ * a missing page address at `second`, so it fails there.
  *
  * 1. The first whole test fails at `second`: its answer names that step.
  * 2. A second whole test at once is refused `subflow.trial_from_step_first`
  *    naming `second`; no command reaches the site for it.
- * 3. The build repairs live on `second` from the page the test left (a fresh
- *    detection and a read), submits the fix, and runs `core.test_subflow` with
+ * 3. The build repairs live on `second` from the page the test left (the right
+ *    profile address), submits the fix, and runs `core.test_subflow` with
  *    `from:` the step key the refusal names: only that step runs (no arrival, no reset, no judge),
  *    and the answer says `fromStep: true`.
  * 4. One whole test of the latest revision passes, judged yes, and the brief
- *    completes on it.
+ *    Core completes on it without another provider decision.
  *
  * Whole runs are counted (2) and from-step runs (1) and printed.
  */
@@ -51,6 +51,12 @@ test("installed gateway project build repairs a failed step by running from it b
   let testing = "", brief = "", handle = "";
   let columns: { link?: string; pin?: string } = {};
   const completions: Array<{ brief: string; after: string }> = [];
+  const dispatches: Record<string, JsonObject> = {};
+  let coreCompletions = 0;
+  const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
+  const unsubscribe = automationStudioActivityHub.subscribe(event => {
+    if (event.detail?.text?.includes("Core finished this part of the task because the latest version passed its test, so nothing was left to decide.")) coreCompletions++;
+  });
   try {
     await openPhotoProfile(page, installed.origin, profile);
     await installed.pair();
@@ -62,7 +68,7 @@ test("installed gateway project build repairs a failed step by running from it b
       "part posts: list the links of the posts",
       "  step first: read the posts' links",
       "    node: web.dom.extract_list",
-      `    extractList: ${JSON.stringify({ handle, fields: { link: columns.link, badge: columns.pin } })}`,
+      `    extractList: ${JSON.stringify({ handle, fields: { link: columns.link } })}`,
       `    recordOutput: ${JSON.stringify({ datasetId: "post-links", writeMode: "replace" })}`,
       "  step second: go back to the studio's profile",
       "    node: web.browser.navigate",
@@ -77,6 +83,14 @@ test("installed gateway project build repairs a failed step by running from it b
     };
     const supervisor = (turn: SupervisorTurn): ScriptedAnswer => {
       const assembled = record(turn.last("project.assemble")?.complete);
+      if (turn.step === 3 || turn.step === 4) {
+        const key = turn.step === 3 ? "open" : "posts";
+        const returned = record((turn.last("project.dispatch")?.returns as unknown[] | undefined)?.[0]);
+        dispatches[key] = returned;
+        if (returned.outcome === "done") completions.push({ brief: key, after: key === "open" ? "open.test" : "test-3" });
+        const from = siteActs[pending];
+        if (typeof from === "number") siteActs[pending] = installed.siteCommands().slice(from);
+      }
       switch (turn.step) {
         case 1:
           return turn.call("plan", "project.write_plan", twoPartPlan(turn.plan(), [
@@ -116,10 +130,6 @@ test("installed gateway project build repairs a failed step by running from it b
         if (typeof value?.revision !== "number" || typeof value.digest !== "string") throw new Error(`diagnostic.submission_refused:${callId}:${text(value).slice(0, 600)}`);
         return { revision: value.revision, digest: value.digest };
       };
-      const done = (callId: string) => {
-        completions.push({ brief, after: previous });
-        return turn.complete({ subflowKey: brief, ...submitted(callId) });
-      };
       const acting = (callId: string, made: () => ScriptedAnswer) => {
         siteActs[callId] = installed.siteCommands().length;
         return send(callId, made());
@@ -139,7 +149,7 @@ test("installed gateway project build repairs a failed step by running from it b
             testing = "open";
             return send("open.test", call("open.test", "core.test_subflow", submitted("open.submit")));
           default:
-            return done("open.submit");
+            throw new Error("diagnostic.provider_asked_after_open_yes");
         }
       }
       switch (previous) {
@@ -152,7 +162,7 @@ test("installed gateway project build repairs a failed step by running from it b
           handle = typeof packet?.extraction === "string" ? packet.extraction : "";
           columns = gridColumns(packet);
           if (!handle || !columns.link || !columns.pin) throw new Error("diagnostic.grid_undetected");
-          return send("read", node("read", "web.output.dom-extract_list", { extractList: { handle, fields: { link: columns.link, badge: columns.pin } } }));
+          return send("read", node("read", "web.output.dom-extract_list", { extractList: { handle, fields: { link: columns.link } } }));
         }
         case "read":
           return send("submit-1", call("submit-1", "core.submit_subflow", { flow: postsFlow(new URL(WRONG_PATH, installed.origin).href) }));
@@ -176,25 +186,32 @@ test("installed gateway project build repairs a failed step by running from it b
           testing = "posts-2";
           return acting("test-3", () => call("test-3", "core.test_subflow", submitted("submit-2")));
         default:
-          return done("submit-2");
+          throw new Error("diagnostic.provider_asked_after_posts_yes");
       }
     };
     const verify = offlineFirstVerify(() => testing, judged, { yes: "The links of the studio's posts were listed.", no: () => undefined });
     const provider = bindScriptedProvider(installed, { task: TASK, permitted: [], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 80, builder, supervisor, verify });
     const { ending, failure } = await build.run();
 
-    const first = answers["test-1"] ?? {}, refused = answers["test-2"] ?? {}, fromStep = answers["from-step"] ?? {}, passing = answers["test-3"] ?? {};
+    // Core completes on the yes before another provider decision. Read that final receipt from its dispatch return.
+    const trials = dispatches.posts?.trialsAnswered as JsonObject[] | undefined;
+    const first = answers["test-1"] ?? {}, refused = answers["test-2"] ?? {}, fromStep = answers["from-step"] ?? {}, passing = [...(trials ?? [])].reverse().find(trial => trial.verdict === "yes") ?? {};
     /** A `posts` test call that ran as a whole test, passed or failed: it carries a verdict, and is neither a refusal nor a from-step run. */
-    const wholeRuns = ["test-1", "test-2", "test-3"].filter(callId => answers[callId]?.code !== FROM_STEP_FIRST && answers[callId]?.fromStep !== true && answers[callId]?.verdict !== undefined);
+    const wholeRuns = [first, refused, passing].filter(answer => answer.code !== FROM_STEP_FIRST && answer.fromStep !== true && answer.verdict !== undefined);
     const fromStepRuns = ["test-1", "test-2", "from-step", "test-3"].filter(callId => answers[callId]?.fromStep === true);
     const counts = { wholeRuns: wholeRuns.length, fromStepRuns: fromStepRuns.length };
-    const summary = { ending, failure, counts, completions, sent, siteActs, first, refused, fromStep, passing, submissions: ["submit-1", "submit-2"].map(callId => ({ callId, revision: answers[callId]?.revision ?? null, ok: answers[callId]?.ok ?? null, code: answers[callId]?.code ?? null })), judged, supervisorSteps: provider.supervisorSteps(), builderSteps: provider.builderSteps(), gatewayErrors: installed.gatewayErrors };
+    const summary = { ending, failure, counts, completions, coreCompletions, dispatches, sent, siteActs, first, refused, fromStep, passing, submissions: ["submit-1", "submit-2"].map(callId => ({ callId, revision: answers[callId]?.revision ?? null, ok: answers[callId]?.ok ?? null, code: answers[callId]?.code ?? null })), judged, supervisorSteps: provider.supervisorSteps(), builderSteps: provider.builderSteps(), gatewayErrors: installed.gatewayErrors };
     await keepDiagnostic(testInfo, "photo-repair-from-step.json", { ...summary, answers, pages });
     console.log(JSON.stringify({ repairFromStepCounts: counts }));
     console.log(JSON.stringify({ repairFromStepDiagnostic: { ending, failure, completions, sent, siteActs, judged, first: text(first).slice(0, 1500), refused: text(refused).slice(0, 1500), fromStep: text(fromStep).slice(0, 1500), passing: text(passing).slice(0, 600) } }));
 
     expect(ending).toBe("proposed");
     expect(failure).toEqual({});
+    const readRows = record(answers["read"]?.read).extracted;
+    const expectedRows = gridFor(STUDIO).slice(0, 24).map(post => ({ link: `${PHOTO_ROOT}p/${post.code}/` }));
+    expect(expectedRows).toHaveLength(24);
+    expect(Array.isArray(readRows)).toBe(true);
+    expect(readRows).toEqual(expectedRows);
     // 1. The first whole test failed at the part's second step, and its answer names it.
     expect(first.verdict).toBe("execution_failed");
     expect(record(record(first.feedback).stoppedBy).label).toBe("go back to the studio's profile");
@@ -226,8 +243,10 @@ test("installed gateway project build repairs a failed step by running from it b
     expect(judgedPassing.length).toBeGreaterThan(0);
     expect(judgedPassing.every(call => call.answersRequest === "yes")).toBe(true);
     expect(completions).toContainEqual({ brief: "posts", after: "test-3" });
+    expect(coreCompletions).toBe(2);
     expect(counts).toEqual({ wholeRuns: 2, fromStepRuns: 1 });
   } finally {
+    unsubscribe();
     await build.stop();
     await installed.close();
   }
