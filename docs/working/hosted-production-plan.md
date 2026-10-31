@@ -1,7 +1,7 @@
 # Hosted Production Plan
 
 Status: Active
-Status detail: Hosted foundations through C0 are merged; C1 independently verified and ready to integrate, E/D5 product foundations in final acceptance. C2/C3 routing and extension/deployment gates remain.
+Status detail: Hosted foundations through C0 are merged; C1 independently verified and merged, E/D5 product foundations in final acceptance. C2/C3 routing and extension/deployment gates remain.
 Created: 2026-10-17
 Last updated: 2026-10-30
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
@@ -734,9 +734,9 @@ gaining an enterprise contact page.
 - Validation: lead-run: `node --test scripts/structure-audit/rules/tests/imports.test.mjs` -> "# pass 26 / # fail 0" in both repositories; a probe file importing `@fluxiq/contracts/client-gateway` under `apps/web/src/server` -> "FAIL [imports] … Import through a fluxiq subpath instead", removed; `pnpm structure:check` (Core) and `node scripts/structure-audit.mjs` (here) passed; `node scripts/check/core-mirror.mjs` -> "1 mirror set(s) match … structure-audit (72 files)".
 - Outcome: Accepted.
 
-### 2026-10-30 - Core C1 foundation independently accepted (t813)
+### 2026-10-30 - Core C1 foundation independently accepted and merged (t813)
 - Agent: Codex lead; report `framework-heavy-lifting-plan/reports/codex-1030/t813-result.md`.
-- Changed: Core workspace lifecycle/key custody, background-task drain and audit/reload barriers accepted after Claude/P5b integration; Core0.11.0, no downstream runtime change.
+- Changed: Core workspace lifecycle/key custody, background-task drain and audit/reload barriers accepted after Claude/P5b integration; Core0.11.0; paired finish passed (Core70 contracts), merges f9affe6c/af6c544f, no downstream runtime change.
 - Validation: lead Core background-task tests ->9 passed; web workspace/provisioning/real tenant key-eviction tests ->14files/123 passed; Core/web types,3libs, docs passed; final structure failures[],474warnings/1144baseline.
 - Not verified: C2/C3 routes, tenant gateway sockets, browser/Next production behavior or full sweeps; no paid calls/panel management.
 

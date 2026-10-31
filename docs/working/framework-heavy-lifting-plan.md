@@ -12,8 +12,8 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 ## Current State
 
 **Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
-paired task trees after merging current `dev`; both sides are now merged. Workers are completing t811 and final C1
-validation in t813; t814 awaits final parent checks. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
+paired task trees after merging current `dev`; both sides are now merged. C1 is verified and merged. P1b awaits final parent
+verification; t814 awaits final parent checks. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
 existing task trees; no paid run or panel management is authorised by this continuation. The user approved t810's
 fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
 evidence first; incomplete refutations must remain nonpassing.
@@ -67,7 +67,7 @@ acceptance check passed, and no paid run or model call happened.
 | t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Merged on both dev branches after lead acceptance: 235 Core, 40 domain and 29 extension tests, types/reference, native Chromium proof and final audits; Core merge gate passed 70 contract tests | First-loop-row direction and browser rung/pacing coverage remain separate follow-ups; no paid qualification claimed |
 | t810 (P5b) | Grounded no refutation, evidence-specific judge re-prompt, checked-cell citations, provenance and replay marks | All handoff defects fixed; integrated with Claude and shared output schema; lead119 Core +8 domain checks pass, final Core types/audit pass; worker RV1467/callers805/domain541/extension501 pass. Strict saved replay remains unsure for missing new replies, never fabricated acceptance | Merged downstream ad01bd0b and Core31713e1d; 70 merge-contract tests passed; no paid qualification claimed |
 | t811 (P1b) | Submit-then-test, label-based repair, Core completion and revision-aware retry/memo keys | Observer/forwarding/pending-repair/retry defects fixed;811 owning assertions and types/builds pass. Native photo repair passes; folded-vs-separate comparison reruns with isolated profiles | Wait for comparison, integrate current dev and lead-verify final source |
-| t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Adversarial review fixed await/close/delete/reload/audit races and invalid audit bounds; worker732 Core +123 web tests passed. Synced Claude dev; lead background9 pass | Final parent sync, package/web types and lead workspace/key-custody acceptance; narrow merge gates only |
+| t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Merged both repositories after lead9 background and123 web/key-custody tests, types,3libs, docs/audits; Core merge contract gate70 passed | C2/C3 caller migration and routing remain separate; no real tenant socket/browser qualification claimed |
 | t814 (hosted E + D5) | Product registry/host loader, branding/assets, downstream apps/product | Concurrent host loading fixed; worker web27/product11/types pass; Claude parent synced and lead32 panel tests pass | Final parent checks and lead web/product acceptance; later C2/C3-dependent wiring remains outside this unit |
 
 **User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
