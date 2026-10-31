@@ -828,11 +828,16 @@ is the `fluxiqHostModule` field of `apps/product/package.json`). Core calls its
 the product manifest (`src/manifest/`: identity, brand accents, links, sign-up
 URL, extension clients, email sender and copy) with `platform.setProduct`, and
 subscribes `seedDefaultProject` (`src/hooks/`) to `workspace.created`, which
-gives a new workspace a "My automations" project through its own Automation
-Studio service. Brand assets live in `apps/product/assets/` and are served at
+gives a new workspace a "My automations" project owned by its new user through
+its own Automation Studio service and Core's public
+`recordAutomationStudioCreatedProjectOwner` helper. Attempts run in order per
+service, so repeated or simultaneous events cannot duplicate the seed. A retry
+repairs incomplete ownership; a different recorded creator or ambiguous
+matching names is refused. Brand assets live in `apps/product/assets/` and are served at
 `/product/assets/<name>`; the built module finds them two directories above
-itself. The package imports Core only from `fluxiq/platform/panel`, which
-validates the manifest and refuses accents under its contrast floor, so the
+itself. The package uses Core's public `fluxiq/automation-studio` ownership seam
+and `fluxiq/platform/panel`, which validates the manifest and refuses accents
+under its contrast floor, so the
 light accents are a deeper amber and the brand amber `#f5b83d` is used only in
 the dark set. `pnpm --filter @fluxiq-web-extension/product build` bundles the
 module with `fluxiq` external; `test` and `check` run beside it.

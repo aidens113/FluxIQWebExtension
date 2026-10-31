@@ -2,31 +2,20 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-import { createPlatformRegistry, type PlatformHookPayloads } from "fluxiq/platform/panel";
+import { createPlatformRegistry } from "fluxiq/platform/panel";
+import { createSeedWorkspace } from "../../hooks/tests/seed-workspace.ts";
 import { registerFluxIQPlatform } from "../index.ts";
 
-function fakePayload(created: string[]): PlatformHookPayloads["workspace.created"] {
-  const studio = {
-    async listProjects() {
-      return { categories: [], projects: created.map((name) => ({ id: name, name })) };
-    },
-    async createProject(input: { name: unknown }) {
-      created.push(String(input.name));
-      return { id: String(input.name), name: String(input.name) };
-    }
-  };
-  return { accountId: "acct-1", workspaceId: "ws-1", ownerUserId: "user-1", fluxiq: { programs: { automationStudio: studio } } } as unknown as PlatformHookPayloads["workspace.created"];
-}
-
-test("registers the product and the workspace.created seed", async () => {
+test("registers the product and the workspace.created owned seed", async (context) => {
+  const workspace = await createSeedWorkspace(context);
   const registry = createPlatformRegistry();
   registerFluxIQPlatform(registry.platform);
   assert.equal(registry.product()?.id, "fluxiq");
-  const created: string[] = [];
-  await registry.emit("workspace.created", fakePayload(created));
-  assert.deepEqual(created, ["My automations"]);
-  await registry.emit("workspace.created", fakePayload(created));
-  assert.deepEqual(created, ["My automations"]);
+  await registry.emit("workspace.created", workspace.payload);
+  const projects = await workspace.projects();
+  assert.deepEqual(projects.map((project) => [project.name, project.ownerUserId]), [["My automations", workspace.owner.userId]]);
+  await registry.emit("workspace.created", workspace.payload);
+  assert.deepEqual(await workspace.projects(), projects);
 });
 
 test("every manifest asset exists in the assets directory and the svg carries no script", () => {
