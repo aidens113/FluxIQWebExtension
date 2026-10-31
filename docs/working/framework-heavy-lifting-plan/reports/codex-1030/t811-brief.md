@@ -9,5 +9,6 @@ verify then submission, from label, automatic completion and caller/default cont
 Run owning tests and package typechecks, structure audit and docs:check, regenerate reference only if stale.
 Do not run pnpm check/test/build full sweeps. Own checkouts isolate tests; no global heavy lock exists currently.
 Do not change semantics to make a failing test pass. Report any underlying defect.
+Approved extension: remove only the empty dead describe/unused fixture in Core runtime/project-agents/supervisor/tests/provider-stopped.test.ts after confirming its no-tests-suite failure; preserve both real tests.
 Write report: main checkout docs/working/framework-heavy-lifting-plan/reports/codex-1030/t811-result.md.
 End: Outcome; Changed; Validation (exact command + observed result); Not verified; Report; Notes (3 lines max).
