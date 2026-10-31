@@ -15,9 +15,18 @@ const sum = (ladder: readonly number[]): number => ladder.reduce((total, ms) => 
 
 test("waiting for a page to draw a target is the long ladder, and everything else is the short one", () => {
   assert.deepEqual([...recoveryBackoffLadder("target_absent")], [250, 500, 1_000, 2_000]);
+  assert.equal(recoveryBackoffLadder("target_ambiguous"), RECOVERY_TARGET_BACKOFF_MS, "uniqueness uses the existing target wait without raising its allowance");
   for (const fault of ["output_not_observed", "page_changed", "timeout", "action_failed"] as const) {
     assert.deepEqual([...recoveryBackoffLadder(fault)], [250, 500], `${fault} is waited on the page ladder`);
   }
+});
+
+test("waiting for uniqueness shares the command deadline and never gains another ladder", () => {
+  assert.deepEqual(RECOVERY_TARGET_BACKOFF_MS.map((_, absorbed) => recoveryBackoffMs("target_ambiguous", absorbed, command(), 0, 0)), [250, 500, 1_000, 2_000]);
+  assert.equal(recoveryBackoffMs("target_ambiguous", RECOVERY_TARGET_BACKOFF_MS.length, command(), 0, 0), undefined);
+  assert.equal(recoveryBackoffMs("target_ambiguous", 0, command(200), 0, 10), 190);
+  assert.equal(recoveryBackoffMs("target_ambiguous", 0, command(200), 0, 200), undefined);
+  assert.equal(recoveryBackoffMs("target_ambiguous", 0, command(), 0, RECOVERY_BUDGET_MS), undefined);
 });
 
 test("the deliberate waiting a command can be charged is 3750 ms at most, and 750 ms for a blip", () => {

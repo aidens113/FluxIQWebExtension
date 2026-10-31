@@ -79,3 +79,29 @@ test("readsWords survives fresh replacement but never permits a stale selector o
   (parameters.element as JsonObject).context = { record: { values: ["sheet-A"] } };
   assert.deepEqual(webRefreshTargetIdentity({ parameters, observation: observation([control()]) }), { outcome: "unavailable", reason: "unsupported_target" });
 });
+
+test("complete same-place refresh cannot replace navigation with footer or missing landmark context", () => {
+  const base = { tagName: "a", accessibleName: "Open workspace", testId: "open-workspace" };
+  const parameters: JsonObject = { selector: "#old-navigation", element: { ...base, context: { landmark: "navigation" } } };
+  const saved = structuredClone(parameters);
+  for (const context of [{ landmark: "contentinfo" }, {}]) {
+    const current = observation([{ ...base, selector: "#fresh-navigation", attributes: { "data-testid": "open-workspace" }, context }]);
+    assert.deepEqual(webRefreshTargetIdentity({ parameters, observation: current }), { outcome: "unmatched", reason: "ambiguous" });
+    assert.deepEqual(parameters, saved);
+  }
+});
+
+test("validated navigation refresh retains its place and stable identity without inheriting position or optional metadata", () => {
+  const base = { tagName: "a", accessibleName: "Open workspace", testId: "open-workspace" };
+  const parameters: JsonObject = { selector: "#old-navigation", element: { ...base, id: "old-id", classNames: ["old-class"], context: { landmark: "navigation", listPosition: { index: 1, total: 2 } } } };
+  const current = { ...base, selector: "#fresh-navigation", attributes: { "data-testid": "open-workspace" }, context: { landmark: "navigation", listPosition: { index: 7, total: 8 } } };
+  const refreshed = webRefreshTargetIdentity({ parameters, observation: observation([current]) });
+  assert.equal(refreshed.outcome, "found");
+  if (refreshed.outcome !== "found") return;
+  assert.equal(refreshed.target.element.context?.landmark, "navigation");
+  assert.equal(refreshed.target.element.context?.listPosition, undefined);
+  assert.equal(refreshed.target.element.id, undefined);
+  assert.equal(refreshed.target.element.classNames, undefined);
+  const twin = { ...current, selector: "#another-navigation" };
+  assert.deepEqual(webRefreshTargetIdentity({ parameters, observation: observation([current, twin]) }), { outcome: "unmatched", reason: "ambiguous" });
+});

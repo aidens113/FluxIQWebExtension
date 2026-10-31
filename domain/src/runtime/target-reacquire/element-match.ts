@@ -17,7 +17,7 @@
 // - **classNames**, as a set.
 //
 // Never the selector, the xpath, the list or table position, or a handle
-// number. A saved record, dialog and shadow root gate every match before
+// number. A saved record, dialog, landmark and shadow root gate every match before
 // uniqueness is considered. Record keys outrank record words; missing or
 // changed record evidence cannot prove gone or authorize a different row.
 //
@@ -29,12 +29,16 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../actions/types";
 import { WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS, webElementIdentitySignals, webRecordedRecordMatches, type WebElementIdentitySignal } from "../../element-fingerprint";
 import { webReacquireText } from "./text";
+import { isWithheldText, screenedPageText } from "../llm-evidence/withheld";
 
 const STRING_FIELDS = ["tagName", "role", "implicitRole", "inputType", "visibleText", "text", "accessibleName", "label", "id", "testId", "name", "drawing", "selector"] as const;
 const KIND_FIELDS = ["tagName", "role", "implicitRole", "inputType"] as const;
 const WORD_FIELDS = ["visibleText", "text", "accessibleName", "label"] as const;
 
-type Read = { fingerprint: WebAutomationElementFingerprint; readsWords: boolean; record: WebAutomationElementContext["record"]; dialog: string | undefined; shadowHosts: readonly string[] };
+type Read = {
+  fingerprint: WebAutomationElementFingerprint; readsWords: boolean; record: WebAutomationElementContext["record"];
+  dialog: string | undefined; landmark: string | undefined; landmarkName: string | undefined; shadowHosts: readonly string[];
+};
 
 /** The one candidate that is the stale control, or why there is none (header). */
 export function webReacquireElement(input: { stale: JsonValue; candidates: readonly JsonValue[] }): AutomationStudioTargetReacquireAnswer {
@@ -44,9 +48,10 @@ export function webReacquireElement(input: { stale: JsonValue; candidates: reado
     const read = readElement(candidate);
     return read && agrees(stale, read) ? [{ candidate, read }] : [];
   });
-  if (matches.length === 0 && stale.record === undefined && stale.dialog === undefined && stale.shadowHosts.length === 0) return { outcome: "gone" };
+  if (matches.length === 0 && stale.record === undefined && stale.dialog === undefined && stale.landmark === undefined
+    && stale.landmarkName === undefined && stale.shadowHosts.length === 0) return { outcome: "gone" };
   const eligible = matches.filter(({ read }) => webRecordedRecordMatches(stale.record, read.record)
-    && stale.dialog === read.dialog && sameHosts(stale.shadowHosts, read.shadowHosts));
+    && stale.dialog === read.dialog && sameHosts(stale.shadowHosts, read.shadowHosts) && sameLandmark(stale, read));
   return eligible.length === 1 ? { outcome: "found", value: eligible[0]!.candidate } : { outcome: "unmatched", reason: "ambiguous" };
 }
 
@@ -127,6 +132,10 @@ function readElement(value: JsonValue | undefined): Read | undefined {
   if (source.context !== undefined && !record(source.context)) return undefined;
   const context = record(source.context) ? source.context : undefined;
   if (context?.dialog !== undefined && (typeof context.dialog !== "string" || context.dialog.trim() === "")) return undefined;
+  for (const field of ["landmark", "landmarkName"] as const) {
+    const value = context?.[field];
+    if (value !== undefined && !knownPlaceText(value)) return undefined;
+  }
   if (context?.shadowHosts !== undefined && (!Array.isArray(context.shadowHosts)
     || context.shadowHosts.some((host) => typeof host !== "string" || host.trim() === ""))) return undefined;
   return {
@@ -134,8 +143,21 @@ function readElement(value: JsonValue | undefined): Read | undefined {
     readsWords: source.readsWords === true,
     record: recordIdentity(context?.record),
     dialog: typeof context?.dialog === "string" && context.dialog.trim() !== "" ? context.dialog : undefined,
+    landmark: typeof context?.landmark === "string" ? context.landmark : undefined,
+    landmarkName: typeof context?.landmarkName === "string" ? context.landmarkName : undefined,
     shadowHosts: Array.isArray(context?.shadowHosts) ? context.shadowHosts.filter((host): host is string => typeof host === "string" && host !== "") : []
   };
+}
+
+/** Missing or withheld place evidence cannot identify a recorded landmark. */
+function knownPlaceText(value: JsonValue): value is string {
+  const screened = screenedPageText(value);
+  return typeof value === "string" && screened !== undefined && !isWithheldText(screened);
+}
+
+function sameLandmark(stale: Read, candidate: Read): boolean {
+  return (stale.landmark === undefined || same(stale.landmark, candidate.landmark))
+    && (stale.landmarkName === undefined || same(stale.landmarkName, candidate.landmarkName));
 }
 
 /** Keep structured record evidence; an empty/malformed declared record fails closed. */

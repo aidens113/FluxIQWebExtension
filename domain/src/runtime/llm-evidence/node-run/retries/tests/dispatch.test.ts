@@ -109,6 +109,37 @@ test("an exploring press whose target never appears fails after exactly four att
   assert.equal((pressed.evidence as Packet).attempts, 4);
 });
 
+test("an exploring press whose target becomes unique succeeds on the fourth attempt", async () => {
+  const tied = failed(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  const site = itemPage([tied, tied, tied]);
+  const pressed = await pressCoupon(site.gateway);
+  assert.equal(pressed.resultCode, "web.action.succeeded");
+  assert.equal(pressed.effectApplied, true);
+  assert.deepEqual(site.presses, [1, 2, 3, 4]);
+  assert.equal((pressed.evidence as Packet).attempts, 4);
+});
+
+test("persistent unacted ambiguity ends after exactly four failed node attempts", async () => {
+  const tied = failed(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  const site = itemPage([tied, tied, tied, tied, tied]);
+  const pressed = await pressCoupon(site.gateway);
+  assert.equal(pressed.effectApplied, false);
+  assert.equal((pressed.evidence as Packet).ok, false);
+  assert.deepEqual(site.presses, [1, 2, 3, 4]);
+  assert.equal((pressed.evidence as Packet).attempts, 4);
+});
+
+test("permanent descriptor and permission refusals dispatch once without opening the retry ladder", async () => {
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED, WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]) {
+    const refusal = failed(code);
+    const site = itemPage([refusal, refusal]);
+    const pressed = await pressCoupon(site.gateway);
+    assert.equal(pressed.effectApplied, false);
+    assert.deepEqual(site.presses, [1], code);
+    assert.equal((pressed.evidence as Packet).attempts, undefined);
+  }
+});
+
 // A press whose confirmation was lost after it acted is a committing act whose
 // outcome is uncertain, and the domain says so on its record: it is not pressed
 // again whatever its call declared. A call's `consequences: none` never unlocks

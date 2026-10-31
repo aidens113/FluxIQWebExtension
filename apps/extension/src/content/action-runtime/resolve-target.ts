@@ -161,7 +161,7 @@ import { deepElementFromPoint, resolveShadowScope, type LookupRoot, type ShadowS
 import { composedRoots } from "../shadow-dom";
 import {
   accessibleNameFor,
-  agreesWithRecordedRecord,
+  recordedPlaceRefusal,
   candidateFingerprint,
   candidateLabel,
   collectTargetCandidates,
@@ -333,13 +333,12 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       misses.push(attempt.description);
       continue;
     }
-    // Several matches are counted only where the recording's record is: the
-    // others are other rows' copies of the control, not candidates for it. A
-    // lone match is left to the veto below, which refuses one in another record
-    // and says so.
-    const inRecord = attempt.matches.length > 1 ? inRecordedRecord(attempt.matches, target) : attempt.matches;
+    // Count only candidates in the recorded place. A lone match meets the
+    // same row, dialog and landmark gate in the veto below.
+    const inRecord = attempt.matches.length > 1 ? inRecordedPlace(attempt.matches, target) : attempt.matches;
     if (!inRecord.length) {
-      misses.push(`${attempt.description} (${attempt.matches.length} matched, each in another record)`), otherRecord = true;
+      misses.push(`${attempt.description} (${attempt.matches.length} matched, each in another recorded place)`);
+      otherRecord ||= attempt.matches.some((element) => recordedPlaceRefusal(target?.context, element) === "other-record");
       continue;
     }
     // Several matches, none of them shown: not a tie between controls on the
@@ -364,7 +363,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
         // Refused by its score, it may still be the recorded control with its
         // state changed; refused by its record or dialog, it is not, at any reading.
         // A read's words never vouch for it (`read-lookup/`), so neither does a stable part of them.
-        const steady = verdict.refusedBecause === "other-record" || verdict.refusedBecause === "other-dialog" || readsItsWords(target) ? undefined : stableNameMatch(target, only, scope);
+        const steady = recordedPlaceRefusal(target.context, only) !== undefined || readsItsWords(target) ? undefined : stableNameMatch(target, only, scope);
         if (!steady) {
           misses.push(`${attempt.description} (${verdict.summary})`), otherRecord ||= verdict.refusedBecause === "other-record";
           continue;
@@ -380,7 +379,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       // And when it accepts, its measurement is what the resolution reports.
       // The veto weighed this element on the way past; carrying the number out
       // is free, where scoring it again here would not be.
-      return { outcome: "resolved", target: { element: only, resolution: exactResolution(attempt, measurement) } };
+      return { outcome: "resolved", target: { element: only, resolution: exactResolution(attempt, measurement, pool.length) } };
     }
     // Several survived the gate. Scoring is the difference between "these two
     // tied" and "these two tied, and one of them is the recorded control".
@@ -425,8 +424,8 @@ const NO_FAMILY: ScoredFamily = { nearby: NO_POOL, decided: undefined };
 function scoreFamily(target: RecordedTarget, scope: ShadowScope): ScoredFamily {
   // A loop pass scoped to one row gates the pool before its cap, so a row past
   // the page's sixtieth same-family control is still weighed (`candidates.ts`).
-  const record = target.context?.record;
-  const admits = record?.values?.length ? (element: Element) => agreesWithRecordedRecord(record, element) : undefined;
+  const place = target.context;
+  const admits = place?.record || place?.dialog || place?.landmark ? (element: Element) => recordedPlaceRefusal(place, element) === undefined : undefined;
   const family = collectTargetCandidates(candidateFamily(target), scope.roots, admits);
   const nearby = readsItsWords(target) ? withReadElements(family, target, scope.roots) : family;
   return { nearby, decided: scoreTargetCandidates(target, nearby.candidates) };
@@ -441,10 +440,10 @@ function scoreFamily(target: RecordedTarget, scope: ShadowScope): ScoredFamily {
  * nothing the veto could weigh the match by -- which is a truthful "not
  * measured" rather than a stand-in.
  */
-function exactResolution(attempt: StrategyAttempt, measurement: TargetMeasurement | undefined): BrowserActionTargetResolution {
+function exactResolution(attempt: StrategyAttempt, measurement: TargetMeasurement | undefined, candidateCount: number): BrowserActionTargetResolution {
   return {
     strategy: attempt.strategy,
-    candidateCount: attempt.matches.length,
+    candidateCount,
     ...(measurement ? { bestScore: measurement.score, confidence: measurement.confidence } : {})
   };
 }
@@ -560,10 +559,9 @@ function gatedPool(matches: Element[], target: RecordedTarget | undefined): Elem
   return preferred.length ? preferred : matches;
 }
 
-/** The matches in the record the recording named, or every match when it named none. */
-function inRecordedRecord(matches: Element[], target: RecordedTarget | undefined): Element[] {
-  const record = target?.context?.record;
-  return record ? matches.filter((element) => agreesWithRecordedRecord(record, element)) : matches;
+/** The matches in the captured row, dialog and landmark, with no restriction for absent fields. */
+function inRecordedPlace(matches: Element[], target: RecordedTarget | undefined): Element[] {
+  return matches.filter((element) => recordedPlaceRefusal(target?.context, element) === undefined);
 }
 
 /**
@@ -585,7 +583,7 @@ function stableNameMatch(target: RecordedTarget, element: Element, scope: Shadow
   if (!reading) return undefined;
   const verdict = vetoCandidate(reading.recorded, reading.candidate);
   if (verdict.refusedBecause || !verdict.measurement) return undefined;
-  const family = collectTargetCandidates(candidateFamily(target), scope.roots);
+  const family = collectTargetCandidates(candidateFamily(target), scope.roots, (candidate) => recordedPlaceRefusal(target.context, candidate) === undefined);
   if (family.truncated) return undefined;
   const alike = family.candidates.filter((candidate) => passesResolutionGate(candidate.element, target.tagName) && stableNameReading(target, candidate.element)?.stable === reading.stable);
   return alike.length === 1 && alike[0]?.element === element ? verdict.measurement : undefined;

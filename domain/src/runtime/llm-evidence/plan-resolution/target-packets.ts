@@ -420,7 +420,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
     absoluteIntent(scope, parameters, location, reach) {
       const flow = flows.get(scopeKey(scope));
       const targets = flow === undefined ? [] : reach === "view_history" ? flow.history.targets() : [...flow.pages.values()].flatMap((page) => [...page.values()]);
-      return webPlanAbsoluteControlIntent(parameters, targets, location);
+      return webPlanAbsoluteControlIntent(parameters, targets, location, flow !== undefined && (reach === "view_history" || location === undefined) ? flow.acted.values() : []);
     }
   };
 }

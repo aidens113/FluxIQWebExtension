@@ -23,12 +23,12 @@
 // it. `click.ts` already writes its in-place effect into a validation's `actual`
 // this way, so this is that file's idiom rather than a new channel.
 //
-// **The record is rebuilt through `webAutomationFailureRecord`, never spread.**
-// The builder reads the category, the retryable flag and the stage from the code
-// table, so a rebuilt record cannot contradict one of Core's consistency rules
-// and be dropped whole -- which would lose the failure rather than annotate it.
-// The code is carried over unchanged: absorbing faults does not change what
-// finally went wrong.
+// **Annotation changes text, never failure authority.** The code's builder
+// bounds the new `actual` text, while every original control stays unchanged.
+// A final refusal may explicitly prohibit retry or report an uncertain effect
+// after an earlier target wait; code defaults must not reopen it. Invalid
+// original controls remain invalid for Core's strict parser rather than being
+// repaired into new authority by this note.
 //
 // **What the defence pressed has its own field (t401).** The sentence says how
 // many layers were closed; `clearedLayers` says which kind each was and which
@@ -65,14 +65,11 @@ export function recordRecovery(result: BrowserActionResult, account: RecoveryAcc
   }
   const failure = result.failure;
   if (failure && isWebAutomationFailureCode(failure.code)) {
-    result.failure = webAutomationFailureRecord(failure.code, {
-      expected: failure.expected,
-      actual: failure.actual === undefined ? sentence : `${failure.actual}; ${sentence}`,
-      evidenceDigest: failure.evidenceDigest,
-      // The wait a page named (`web.action.rate_limited`) is the producer's
-      // fact, like the digest, and is carried over; the effect is the code's.
-      retryAfterMs: failure.retryAfterMs
-    });
+    const actual = webAutomationFailureRecord(failure.code, {
+      actual: failure.actual === undefined ? sentence : `${failure.actual}; ${sentence}`
+    }).actual;
+    // Copy rather than changing a failure object another holder may retain.
+    result.failure = { ...failure, ...(actual === undefined ? {} : { actual }) };
   }
   return result;
 }

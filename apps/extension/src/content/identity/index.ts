@@ -88,6 +88,7 @@ export { accessibleNameFor, authoredNameAttribute } from "./accessible-name";
 export { boundedText } from "./bounded-text";
 export { elementDrawing } from "./drawing";
 export { normalizedText } from "./normalized-text";
+export { recordedPlaceRefusal, type RecordedPlace, type TargetPlaceRefusal } from "./place";
 export { candidateFingerprint, candidateLabel, collectTargetCandidates } from "./candidates";
 export { corroboratesExactly } from "./corroboration";
 export { elementContext, landmarkRole } from "./context";

@@ -36,6 +36,8 @@ import test from "node:test";
 import type { TargetCandidate } from "../candidates";
 import { TARGET_SCORE_FLOOR, scoreTargetCandidate, type RecordedIdentity } from "../score";
 import { TARGET_VETO_FLOOR, vetoCandidate, vetoExactMatch } from "../veto";
+import { candidateFingerprint } from "../candidates";
+import { el, installStubDocument, stubDocument } from "../../tests/stub-dom";
 
 /** A candidate whose element is a marker: nothing on this path reads it. */
 function candidate(candidateId: string, fingerprint: Omit<TargetCandidate["fingerprint"], "candidateId">): TargetCandidate {
@@ -331,4 +333,18 @@ test("the line is exactness: a shortened label with its name kept acts, and shor
   assert.equal(vetoCandidate(RECORDED, DRIFTED[3]!.candidate).refusedBecause, undefined);
   assert.ok(normalized(RECORDED, shortenedInBoth) >= TARGET_VETO_FLOOR);
   assert.equal(vetoCandidate(RECORDED, shortenedInBoth).refusedBecause, "uncorroborated");
+});
+
+test("both exact veto paths refuse a perfectly matching control in another landmark without weighing it", (t) => {
+  const footer = el("a", { id: "open-library", class: "old-link", href: "/library" }, "Open library");
+  const document = stubDocument();
+  document.append(el("html", {}, el("body", {}, el("footer", {}, footer))));
+  installStubDocument(t, document);
+  assert.ok(footer instanceof Element);
+  const recorded: RecordedIdentity = { tagName: "a", implicitRole: "link", id: "open-library", classNames: ["old-link"], accessibleName: "Open library", context: { landmark: "navigation" } };
+  const candidateVerdict = vetoCandidate(recorded, { element: footer, fingerprint: candidateFingerprint(footer, 0) });
+  assert.deepEqual(candidateVerdict, { refusedBecause: "other-landmark" });
+  const exact = vetoExactMatch(recorded, footer);
+  assert.equal(exact.refusedBecause, "other-landmark");
+  assert.equal(exact.measurement, undefined);
 });

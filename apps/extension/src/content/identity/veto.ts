@@ -160,9 +160,8 @@
 
 import { candidateFingerprint, candidateLabel, type TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
-import { agreesWithRecordedDialog } from "./dialog";
+import { recordedPlaceRefusal, type TargetPlaceRefusal } from "./place";
 import { readWordsOf } from "./read-words";
-import { agreesWithRecordedRecord } from "./record";
 import { scoreTargetCandidate, type RecordedIdentity } from "./score";
 
 /**
@@ -179,8 +178,9 @@ export type TargetVetoReason =
   | "uncorroborated"
   /** Rule 0: the right kind of control, in the wrong record. */
   | "other-record"
-  /** Rule 0, for a dialog: the right kind of control, in another dialog or in none (t469). */
-  | "other-dialog";
+  /** Rule 0, for a dialog or landmark: the captured place is another one or is absent. */
+  | "other-dialog"
+  | "other-landmark";
 
 /**
  * What Core made of a match: the number rule 1 reads, and Core's own confidence
@@ -228,8 +228,7 @@ export type TargetVerdict =
   | { measurement?: undefined; refusedBecause?: undefined }
   | { measurement: TargetMeasurement; refusedBecause?: undefined }
   | { measurement: TargetMeasurement; refusedBecause: "contradicted" | "uncorroborated" }
-  | { measurement?: undefined; refusedBecause: "other-record" }
-  | { measurement?: undefined; refusedBecause: "other-dialog" };
+  | { measurement?: undefined; refusedBecause: TargetPlaceRefusal };
 
 /** The same verdict, with the sentence a failure record carries. Present only on a refusal. */
 export type ExactMatchVerdict = TargetVerdict & {
@@ -254,10 +253,8 @@ export function vetoCandidate(recorded: RecordedIdentity, candidate: TargetCandi
   // the same one every time -- so the rules below cannot separate it from its
   // neighbours and only this rule can. It costs nothing when the recording
   // named no record: the check returns before it reads the page.
-  if (!agreesWithRecordedRecord(target.context?.record, candidate.element)) return { refusedBecause: "other-record" };
-  // The same gate for the dialog the control sat in (t469): two dialogs' close
-  // buttons agree on every signal the rules below weigh, as two rows' actions do.
-  if (!agreesWithRecordedDialog(target.context?.dialog, candidate.element)) return { refusedBecause: "other-dialog" };
+  const place = recordedPlaceRefusal(target.context, candidate.element);
+  if (place !== undefined) return { refusedBecause: place };
   if (!recordedDistinguisher(target)) return {};
   const score = scoreTargetCandidate(target, candidate);
   if (!score) return {};
@@ -280,8 +277,8 @@ export function vetoExactMatch(recorded: RecordedIdentity, element: Element): Ex
   // The record rule is asked before the fingerprint is built, because a
   // candidate in another record is refused whatever it scores and
   // `candidateFingerprint` reads layout.
-  if (!agreesWithRecordedRecord(target.context?.record, element)) return refusedRecord(element);
-  if (!agreesWithRecordedDialog(target.context?.dialog, element)) return refusedDialog(element);
+  const place = recordedPlaceRefusal(target.context, element);
+  if (place !== undefined) return refusedPlace(place, element);
   // The precondition is asked here as well as inside `vetoCandidate`, and not
   // for tidiness: `candidateFingerprint` reads layout, and this runs on the
   // critical path of every action. A recording that named nothing must cost
@@ -289,11 +286,10 @@ export function vetoExactMatch(recorded: RecordedIdentity, element: Element): Ex
   if (!recordedDistinguisher(target)) return {};
   const verdict = vetoCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
   if (!verdict.refusedBecause) return verdict;
-  // Unreachable: the record and dialog rules ran above and passed, so
+  // Unreachable: the recorded-place rules ran above and passed, so
   // `vetoCandidate` cannot refuse for them. Written out rather than asserted,
   // because the alternative is a non-null assertion on the measurement below.
-  if (verdict.refusedBecause === "other-record") return refusedRecord(element);
-  if (verdict.refusedBecause === "other-dialog") return refusedDialog(element);
+  if (verdict.measurement === undefined) return refusedPlace(verdict.refusedBecause, element);
   // `candidateLabel` reads the page, so it is built on the refusal path only --
   // the accepted path returns numbers and never a string.
   const because = verdict.refusedBecause === "uncorroborated" ? " with nothing the recording named agreeing exactly" : "";
@@ -308,17 +304,9 @@ export function vetoExactMatch(recorded: RecordedIdentity, element: Element): Ex
  * is a row's words, it did not come from this page, and a failure message is not
  * where a recorded page's contents should surface.
  */
-function refusedRecord(element: Element): ExactMatchVerdict {
-  return { refusedBecause: "other-record", summary: `refused ${candidateLabel(element)} in another record` };
-}
-
-/**
- * The dialog refusal, said as the record refusal is. The recorded dialog's name
- * is left out for the same reason a recorded row's words are: it did not come
- * from this page.
- */
-function refusedDialog(element: Element): ExactMatchVerdict {
-  return { refusedBecause: "other-dialog", summary: `refused ${candidateLabel(element)} in another dialog` };
+function refusedPlace(reason: TargetPlaceRefusal, element: Element): ExactMatchVerdict {
+  const place = reason === "other-record" ? "record" : reason === "other-dialog" ? "dialog" : "landmark";
+  return { refusedBecause: reason, summary: `refused ${candidateLabel(element)} in another ${place}` };
 }
 
 /** What the veto judges a recording by: all of it, or for a read everything but the words it reads (header). */

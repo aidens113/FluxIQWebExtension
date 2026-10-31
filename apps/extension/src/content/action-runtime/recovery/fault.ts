@@ -11,12 +11,10 @@
 // Every code in the closed set is already bound to a `retryable` flag in
 // `domain/src/runtime/failure/codes.ts`, whose own comment says what the flag
 // answers: "whether retrying the same action unchanged can succeed without a
-// person or a Flow edit". Five codes say yes -- a target that was not found, a
-// post-condition that did not appear, a page that moved, a wait that expired,
-// and a verb that threw a reason no code names. Everything else says no, and no
-// amount of waiting turns an ambiguous target, an authored parameter Core
-// refused, a sign-in wall or a verb this build does not implement into a
-// success. Reading the flag rather than restating it means a code added to the
+// person or a Flow edit". A target that has not appeared or become unique may
+// settle while the command waits. An authored parameter Core refused, a
+// sign-in wall or a verb this build does not implement cannot. Reading the
+// flag rather than restating it means a code added to the
 // set arrives here with its answer already decided.
 //
 // **The second gate is the mutation rule, and it is the one that needed
@@ -26,12 +24,12 @@
 // post-condition could be read -- has very probably already done what it was
 // asked to do, and pressing it again buys a second order, a second message, a
 // second row. So a verb that changes the page is absorbed only on a fault
-// decided **before anything was dispatched**, which of the five is exactly
-// `target_absent`: `resolve-target.ts` throws before a verb touches the page at
-// all. The other four are all decided after the gesture, or after a read that
-// followed one, and for a mutating verb they end the attempt honestly instead.
+// decided **before anything was dispatched**: `target_absent` and an explicitly
+// unacted `target_ambiguous`. `resolve-target.ts` throws before a verb touches
+// the page at all; no tied candidate may be pressed. Faults decided after the
+// gesture, or after a read that followed one, end a mutating attempt honestly.
 //
-// A verb that only reads has no such exposure and absorbs all five: reading the
+// A verb that only reads has no such exposure and absorbs transient faults: reading the
 // same page twice costs time and nothing else.
 //
 // **`web.dom.extract_list` is judged per command, not per type, and that is the
@@ -40,8 +38,8 @@
 // "next" resumes from whichever page the first one reached, answering with rows
 // duplicated or rows skipped. So the question is not whether the verb reads; it
 // is whether running it again can move the page. A request that names no
-// `paginate` cannot, so it is a pure read and absorbs all five faults. One that
-// names pagination can, so it absorbs only `target_absent`, and its defence
+// `paginate` cannot, so it is a pure read and absorbs transient faults. One that
+// names pagination can, so it absorbs only pre-dispatch target faults, and its defence
 // against a list drawn late stays its own bounded wait, measured and settled on
 // 2026-09-25 (`extraction/page-render.ts`).
 //
@@ -80,7 +78,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../../types";
  * *command* finally reported, and a reader tallying one must not be able to
  * mistake it for the other.
  */
-export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "disabled_target" | "rate_limited" | "no_effect" | "page_reported_failure";
+export type RecoveryFault = "target_absent" | "target_ambiguous" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "disabled_target" | "rate_limited" | "no_effect" | "page_reported_failure";
 
 /**
  * Each retryable code's fault word. Total over the retryable half of the closed
@@ -90,6 +88,7 @@ export type RecoveryFault = "target_absent" | "output_not_observed" | "page_chan
  */
 export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailureCode, RecoveryFault>>> = Object.freeze({
   [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND]: "target_absent",
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS]: "target_ambiguous",
   [WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED]: "output_not_observed",
   [WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED]: "page_changed",
   [WEB_AUTOMATION_FAILURE_CODES.TIMEOUT]: "timeout",
@@ -258,9 +257,9 @@ export function faultNeedsInterference(fault: RecoveryFault): boolean {
  * is not `faultNeedsInterference`, because a missing target is usually just
  * late and must not be pressed at blind: the loop clears for it only when the
  * page shows a clearable layer (`interference/presence.ts`), and waits on the
- * target's own ladder either way. It is the one fault a mutating verb absorbs,
- * decided before anything was dispatched, so clearing and retrying repeats no
- * act.
+ * target's own ladder either way. It is decided before anything was dispatched,
+ * so clearing and retrying repeats no act. Ambiguity waits without clearing:
+ * removing page controls is not proof of the intended target's identity.
  */
 export function faultMayHideBehindLayer(fault: RecoveryFault): boolean {
   return fault === "target_absent";
@@ -289,15 +288,15 @@ function obstructionFault(code: WebAutomationFailureCode, result: BrowserActionR
 }
 
 /**
- * The one fault decided before a verb dispatched anything, so the one a verb
- * that changes the page may be retried on.
+ * Target faults decided before a verb dispatched anything, so a verb that
+ * changes the page may wait for a fresh unique resolution before acting.
  *
  * `resolve-target.ts` throws before any verb touches the page: the gesture, the
  * value, the key press and the file have not happened, and nothing on the page
  * can have moved because of this attempt. Every other fault word is reported at
  * or after the point a mutating verb has already acted.
  */
-const DECIDED_BEFORE_DISPATCH: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["target_absent"]);
+const DECIDED_BEFORE_DISPATCH: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["target_absent", "target_ambiguous"]);
 
 /**
  * The action types that only read, and so may be retried on any transient
@@ -352,6 +351,21 @@ export function recoverableFault(result: BrowserActionResult, action: Pick<Brows
   if (result.status === "succeeded") return undefined;
   const code = result.failure?.code;
   if (!isWebAutomationFailureCode(code)) return undefined;
+  // The code's pre-dispatch default cannot override an original that says the
+  // act may have happened, is permanent, or failed at another stage. Every
+  // retry reruns the resolver; a tied target is never selected here.
+  if (code === WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS) {
+    const failure = result.failure;
+    if (failure?.category !== "target_ambiguous" || failure.stage !== "target_resolution" || failure.effect !== "unacted" || failure.retryable !== true) return undefined;
+  }
+  if (code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND || code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN) {
+    const failure = result.failure;
+    if (failure?.retryable !== true) return undefined;
+    // Legacy target records may omit effect only when their original controls
+    // still prove pre-dispatch resolution. A code default cannot prove that an
+    // explicitly uncertain act or a failure at another stage never happened.
+    if (!webActionReadsOnly(action) && (failure.category !== "target_not_found" || failure.stage !== "target_resolution" || (failure.effect !== undefined && failure.effect !== "unacted"))) return undefined;
+  }
   const obstruction = obstructionFault(code, result);
   if (obstruction !== undefined) return obstruction;
   if (disabledBeforeDispatch(code, result)) return "disabled_target";

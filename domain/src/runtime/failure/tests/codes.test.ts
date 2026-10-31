@@ -35,7 +35,7 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   // takes the step's sometimes-present skip instead of the recovery ladder.
   ["TARGET_NOT_SHOWN", "web.target.not_shown", "target_not_found", true, "target_resolution"],
   ["TARGET_NOT_FOUND", "web.target.not_found", "target_not_found", true, "target_resolution"],
-  ["TARGET_AMBIGUOUS", "web.target.ambiguous", "target_ambiguous", false, "target_resolution"],
+  ["TARGET_AMBIGUOUS", "web.target.ambiguous", "target_ambiguous", true, "target_resolution"],
   ["OUTPUT_NOT_OBSERVED", "web.validation.output_not_observed", "output_not_observed", true, "verification"],
   // t464: a select asked for an option it does not offer. The same request is
   // answered the same way, so a trial no longer advises testing it again.
@@ -70,7 +70,7 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
 ];
 
 /** The rows whose producer can prove the act did not happen, which carry `effect: "unacted"`. Every other row states nothing. */
-const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
+const UNACTED: ReadonlySet<string> = new Set(["TARGET_NOT_FOUND", "TARGET_NOT_SHOWN", "TARGET_AMBIGUOUS", "RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
 
 /** The rows whose producer saw the act certainly change nothing (t517, t743), which also carry `certainNoEffect`. */
 const CERTAIN_NO_EFFECT: ReadonlySet<string> = new Set(["NO_EFFECT", "PAGE_REPORTED_FAILURE"]);
@@ -287,7 +287,7 @@ test("a target the page has and does not show is Core's target_not_found, so the
   // by state or took its sometimes-present skip -- Core does both only for
   // `target_not_found` (`R/executor/state-routing/could-not-run.ts`).
   const hidden = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN, { actual: "hidden: the element's display is none" });
-  assert.deepEqual(hidden, { category: "target_not_found", code: "web.target.not_shown", retryable: true, stage: "target_resolution", actual: "hidden: the element's display is none" });
+  assert.deepEqual(hidden, { category: "target_not_found", code: "web.target.not_shown", retryable: true, stage: "target_resolution", effect: "unacted", actual: "hidden: the element's display is none" });
   assert.deepEqual(parseAutomationStudioFailureRecord({ ...hidden, effect: "unacted" }), { ...hidden, effect: "unacted" }, "the gate's unacted statement survives Core's parser");
   const actionable = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE];
   assert.deepEqual(actionable, { category: "unexpected_state", retryable: false, stage: "execution" }, "disabled and covered are unchanged");

@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { ActionResultEvidence } from "../../results";
 import { runWithRecovery } from "../attempt";
 import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_BUDGET_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_TARGET_BACKOFF_MS } from "../budget";
@@ -23,7 +23,7 @@ function failed(actionType: string, code: WebAutomationFailureCode, actual?: str
     actionType,
     status: "failed",
     validation: { status: "failed", expected: "e", actual: "a" },
-    failure: { category: "action_failed", code, retryable: true, stage: "execution", ...(actual === undefined ? {} : { actual }) },
+    failure: webAutomationFailureRecord(code, { actual }),
     startedAt: 0,
     finishedAt: 1
   } as unknown as BrowserActionResult;
@@ -87,6 +87,121 @@ test("a target still absent after every retry: the page's own failure is reporte
   assert.equal(never.calls(), 5, "at most four retries, so five attempts");
 });
 
+test("unsafe original target controls never dispatch a mutation a second time", async () => {
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]) {
+    const original = failed("web.dom.click", code);
+    const failure = webAutomationFailureRecord(code);
+    for (const unsafe of [
+      { ...failure, effect: "ambiguous" as const },
+      { ...failure, retryable: false },
+      { ...failure, stage: "execution" as const },
+      { ...failure, category: "action_failed" as const },
+      { ...failure, category: "action_failed" as const, stage: "execution" as const }
+    ]) {
+      paused.length = 0;
+      const refusal = { ...original, failure: unsafe };
+      const site = page("web.dom.click", [refusal]);
+      const { result, account } = await runWithRecovery(command("web.dom.click"), 0, site.attempt, pause, () => 0, () => { throw new Error("unsafe originals cannot dismiss controls"); }, () => { throw new Error("unsafe originals cannot probe layers"); });
+      assert.equal(result, refusal);
+      assert.equal(site.calls(), 1, `${code}: ${JSON.stringify(unsafe)}`);
+      assert.equal(account.attempts, 1);
+      assert.deepEqual(account.absorbed, []);
+      assert.deepEqual(paused, []);
+    }
+  }
+});
+
+test("a safe target wait followed by an uncertain or permanent terminal result never dispatches again", async () => {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  const transient = { ...failed("web.dom.click", failure.code), failure };
+  for (const terminalFailure of [{ ...failure, effect: "ambiguous" as const }, { ...failure, retryable: false }]) {
+    paused.length = 0;
+    const terminal = { ...transient, failure: terminalFailure };
+    const site = page("web.dom.click", [transient, terminal]);
+    const { result, account } = await runWithRecovery(command("web.dom.click"), 0, site.attempt, pause, () => 0, () => 0, () => false);
+    assert.equal(site.calls(), 2);
+    assert.equal(result, terminal);
+    assert.deepEqual(paused, [250]);
+    assert.deepEqual(account.absorbed, ["target_absent"]);
+    const annotated = recordRecovery(result, account);
+    assert.equal(annotated.failure?.effect, terminalFailure.effect);
+    assert.equal(annotated.failure?.retryable, terminalFailure.retryable);
+  }
+});
+
+test("an ambiguous target is resolved afresh after waiting and dispatches only when it becomes unique", async () => {
+  let matches = 2;
+  let resolutions = 0;
+  let gestures = 0;
+  let elapsed = 0;
+  const result = await runWithRecovery(command("web.dom.click"), 0, async () => {
+    resolutions += 1;
+    if (matches !== 1) {
+      return { ...failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS), failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS) };
+    }
+    gestures += 1;
+    return succeeded("web.dom.click");
+  }, async (ms) => {
+    paused.push(ms);
+    elapsed += ms;
+    assert.equal(gestures, 0, "waiting must not choose either tied candidate");
+    if (elapsed >= 750) matches = 1;
+  }, () => elapsed, () => { throw new Error("uniqueness waiting must not dismiss controls"); });
+  assert.equal(result.result.status, "succeeded");
+  assert.equal(resolutions, 3);
+  assert.equal(gestures, 1);
+  assert.deepEqual(paused, [250, 500]);
+  assert.deepEqual(result.account, { attempts: 3, absorbed: ["target_ambiguous", "target_ambiguous"], waitedMs: 750, dismissed: 0, outcome: "recovered" });
+});
+
+test("a persistent tie exhausts the existing target wait without dispatching or replacing its failure", async () => {
+  const ambiguity = { ...failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS), failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS) };
+  const tied = page("web.dom.click", Array.from({ length: 9 }, () => ambiguity));
+  let elapsed = 0;
+  const { result, account } = await runWithRecovery(command("web.dom.click"), 0, tied.attempt, async (ms) => {
+    paused.push(ms);
+    elapsed += ms;
+  }, () => elapsed);
+  assert.equal(result, ambiguity);
+  assert.equal(tied.calls(), 5, "these are pre-dispatch target polls within one node attempt");
+  assert.equal(account.outcome, "exhausted");
+  assert.deepEqual(account.absorbed, Array.from({ length: 5 }, () => "target_ambiguous"));
+  assert.equal(account.waitedMs, 3_750);
+  assert.deepEqual(paused, [...RECOVERY_TARGET_BACKOFF_MS]);
+});
+
+test("a terminal refusal after an unacted ambiguity wait keeps its controls when recovery is recorded", async () => {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  const transient = { ...failed("web.dom.click", failure.code), failure };
+  for (const terminalFailure of [{ ...failure, retryable: false }, { ...failure, effect: "ambiguous" as const }]) {
+    paused.length = 0;
+    const terminal = { ...transient, failure: terminalFailure };
+    const site = page("web.dom.click", [transient, terminal]);
+    const { result, account } = await runWithRecovery(command("web.dom.click"), Date.now(), site.attempt, pause);
+    assert.equal(site.calls(), 2);
+    assert.equal(result, terminal);
+    assert.deepEqual(paused, [250]);
+    assert.deepEqual(account.absorbed, ["target_ambiguous"]);
+    const annotated = recordRecovery(result, account);
+    assert.equal(annotated.failure?.retryable, terminalFailure.retryable);
+    assert.equal(annotated.failure?.effect, terminalFailure.effect);
+    assert.equal(annotated.failure?.stage, terminalFailure.stage);
+    assert.equal(annotated.failure?.category, terminalFailure.category);
+  }
+});
+
+test("permanent descriptor, permission and unsupported refusals never enter uniqueness waiting", async () => {
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED, WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]) {
+    const refusal = { ...failed("web.dom.click", code), failure: webAutomationFailureRecord(code) };
+    const site = page("web.dom.click", [refusal]);
+    const { result, account } = await runWithRecovery(command("web.dom.click"), Date.now(), site.attempt, pause);
+    assert.equal(result, refusal);
+    assert.equal(site.calls(), 1, code);
+    assert.deepEqual(account.absorbed, []);
+  }
+  assert.deepEqual(paused, []);
+});
+
 test("a read whose post-condition did not appear yet is retried", async () => {
   const read = page("web.dom.extract", [failed("web.dom.extract", WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
   const { result, account } = await runWithRecovery(command("web.dom.extract"), Date.now(), read.attempt, pause);
@@ -140,7 +255,7 @@ test("a click whose confirmation was missed is never pressed twice", async () =>
 });
 
 test("a deterministic refusal costs no retry and no waiting", async () => {
-  const refused = page("web.dom.click", [failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS)]);
+  const refused = page("web.dom.click", [failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER)]);
   const { result, account } = await runWithRecovery(command("web.dom.click"), Date.now(), refused.attempt, pause);
   assert.equal(result.status, "failed");
   assert.equal(refused.calls(), 1);

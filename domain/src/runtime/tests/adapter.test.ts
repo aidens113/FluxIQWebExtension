@@ -30,6 +30,7 @@ import {
 import type { JsonObject } from "fluxiq/core";
 import type { FluxIQRuntimeCommand, FluxIQRuntimeCommandResult } from "fluxiq/runtime";
 import { createWebAutomationRuntimeAdapter } from "../adapter";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../failure";
 import { shownPageLines } from "../llm-evidence/page-view/tests/shown-page-lines";
 
 type GatewayActionResult = {
@@ -268,6 +269,31 @@ test("a strict generic client record preserves controls that differ from its bro
   assert.equal(result.failure?.actual, "nothing matched");
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
   assert.deepEqual(failure, before, "the original source controls and comparisons are unchanged");
+});
+
+test("unacted target ambiguity keeps retry authority at the runtime boundary without overriding original refusals", async () => {
+  const ambiguity = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  for (const failure of [ambiguity, { ...ambiguity, retryable: false }, { ...ambiguity, effect: "ambiguous" as const }]) {
+    const original = { ...failure };
+    const answer = await runCommand({ commandId: "ambiguous-target", status: "failed", failure });
+    assert.equal(answer.status, "failed");
+    assert.deepEqual(answer.failure, failure);
+    assert.deepEqual(parseAutomationStudioFailureRecord(answer.failure), failure);
+    assert.deepEqual(failure, original);
+  }
+  assert.equal(ambiguity.retryable, true);
+  assert.equal(ambiguity.effect, "unacted");
+  assert.equal(ambiguity.stage, "target_resolution");
+});
+
+test("descriptor, permission and unsupported refusals remain permanent at the runtime boundary", async () => {
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED, WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]) {
+    const failure = webAutomationFailureRecord(code);
+    const answer = await runCommand({ commandId: "permanent-refusal", status: "failed", failure });
+    assert.equal(answer.failure?.code, code);
+    assert.equal(answer.failure?.retryable, false);
+    assert.deepEqual(parseAutomationStudioFailureRecord(answer.failure), answer.failure);
+  }
 });
 
 test("an output this domain does not own is still rejected before anything is dispatched", async () => {

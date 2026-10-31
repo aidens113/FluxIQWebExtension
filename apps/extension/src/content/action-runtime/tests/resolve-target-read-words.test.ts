@@ -62,11 +62,12 @@ test("a drifted read whose classes every line shares is resolved in its own land
   assert.equal(chosen, summary, "the summary line, by its classes in the recorded landmark");
 });
 
-test("the same target unmarked is still looked up by its words, as a press is today", (t) => {
+test("an unmarked target's old words cannot select a neighbour outside its recorded landmark", (t) => {
   const { neighbour } = installAccount(t);
   const { readsWords: _mark, ...unmarked } = savedRead();
-  // Before the mark this is what the read did, and what any unmarked target still does: the words found the neighbour.
-  assert.equal(resolvedOrRefused(command("web.dom.extract", unmarked)), neighbour);
+  const resolved = resolvedOrRefused(command("web.dom.extract", unmarked));
+  assert.notEqual(resolved, neighbour);
+  assert.equal(resolved, undefined, "no remaining exact identity establishes the changed summary as the old unmarked target");
 });
 
 test("an unmarked press is still found by its words once its selector drifted", (t) => {

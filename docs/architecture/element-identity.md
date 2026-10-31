@@ -2,7 +2,7 @@
 
 How an action finds the element it acts on, and how sure it is that the
 element it found is the one that was recorded. This page is current-state
-design, verified against source on 2026-09-13. The action vocabulary itself
+design, verified against source on 2026-10-31. The action vocabulary itself
 is in [web capabilities](web-capabilities.md); what a failed resolution
 reports is in [the failure taxonomy](failure-taxonomy.md).
 
@@ -25,6 +25,17 @@ returns the element **and** the measurement that chose it, and throws
 
 Level 1 takes precedence, and its answer is gated, counted, and vetoed before
 it is acted on.
+
+The shared semantic-place gate (`content/identity/place.ts`) preserves any
+recorded record, dialog and landmark. A recorded landmark role and optional
+name must match the candidate; a missing or different landmark is not a
+fallback target. The gate applies before exact-match counts and vetoes,
+scored candidate admission and enumeration caps, and stable-name rescue. It
+also supplies the existing read-landmark filter. Missing original landmark
+metadata adds no new constraint. Thus changed IDs/classes can still recover
+the navigation link while its same-word footer twin is excluded; two real
+candidates inside the same recorded place remain ambiguous. Score weights,
+floors and margins do not change.
 
 ## Level 1: The Exact Strategies
 
@@ -86,7 +97,8 @@ actionability gate in `content/action-runtime/actionability.ts`: resolution
 answers "which element is this?" and must not move the page to do it. When
 the gate rejects every match, the matches themselves are the pool — a
 strategy that found exactly one element has resolved it, and a hidden or
-disabled target is exactly what an assertion asks about.
+disabled target is exactly what an assertion asks about. This visibility
+fallback never restores a candidate rejected by the semantic-place gate.
 
 **The count.** One survivor resolves. Several survivors are handed to
 scoring, and if scoring cannot separate them the resolution fails as
@@ -152,9 +164,13 @@ recorded descriptor are built from one set of rules.
 **Scoring** (`identity/score.ts`) delegates to Core's element matcher,
 imported from the `fluxiq/automation-studio/fingerprinting` subpath Core
 publishes for browser bundles. Core owns the signal weights, the per-signal
-comparisons and the confidence formula. This side contributes three things
+comparisons and the confidence formula. This side contributes four things
 Core cannot know about a browser:
 
+- **which semantic place is eligible**: record, dialog and recorded landmark
+  are browser-side constraints, applied before Core compares descriptive
+  signals; another landmark cannot become the winner because it kept old
+  words or classes;
 - **which recorded signals are comparable** — only the ones a live candidate
   can also produce. An xpath, an attribute map and capture-time bounds are
   withheld, because a signal no candidate can answer penalises every candidate
@@ -256,8 +272,15 @@ exact after spacing and case are set aside, never fuzzy and never by position.
   match is accepted: stable key and key attribute first, otherwise its recorded
   text. Missing or conflicting record provenance and text drift remain
   unmatched; they cannot select another record or prove the original gone.
-  A stable matching key can survive changed record text. Multiple eligible
-  matches remain ambiguous; position never breaks a tie.
+  A stable matching key can survive changed record text. Dialog, shadow-host
+  chain and any recorded landmark role/name also gate both source-based and
+  unbound control refresh. Another landmark cannot become the replacement.
+  Missing or withheld place evidence remains unmatched, including when the
+  capture is otherwise complete; it cannot prove the original gone. A fresh
+  landmark name is used only when actually observed, never copied from stale
+  metadata. Multiple eligible matches remain ambiguous; position never breaks
+  a tie. Present contradictory ID/class signals keep their existing refusal;
+  optional absent signals can still match through the remaining stable identity.
 - **Going back first** (`return-to-source-place.ts`). The host remembers the
   `from` location of each attempt's before-action capture (`source-places.ts`,
   last 64 attempts). If the source's attempt recorded a location that differs

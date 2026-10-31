@@ -141,6 +141,28 @@ test("a lasting press whose effect cannot be determined ends uncertain without a
   }
 });
 
+test("an ambiguity code cannot override explicit uncertainty or a permanent original refusal", async () => {
+  const unacted = failed(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  for (const controls of [{ effect: "ambiguous" }, { retryable: false }]) {
+    const terminal = { ...unacted, failure: { ...unacted.failure, ...controls } };
+    const { outcome, sent } = await pressWithCheck([terminal, terminal]);
+    assert.deepEqual(sent, [1]);
+    assert.equal(outcome.attempts, 1);
+    assert.equal(outcome.failure?.retryable, controls.retryable ?? true);
+    if (controls.effect === "ambiguous") assert.equal(outcome.lastingAct, "uncertain");
+  }
+});
+
+test("a safe ambiguity retry followed by an uncertain lasting effect stops before any further press", async () => {
+  const unacted = failed(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  const uncertain = { ...unacted, failure: { ...unacted.failure, effect: "ambiguous" } };
+  const { outcome, sent } = await pressWithCheck([unacted, uncertain, uncertain]);
+  assert.deepEqual(sent, [1, 2]);
+  assert.equal(outcome.attempts, 2);
+  assert.equal(outcome.lastingAct, "uncertain");
+  assert.equal(outcome.failure?.effect, "ambiguous");
+});
+
 
 test("trusted commit floors hold bare failures and throws despite spoofed observe metadata", async () => {
   for (const actionType of ["web.browser.download", "web.browser.tab", "web.dom.next_page", "web.dom.type"]) {
