@@ -107,6 +107,7 @@ const EXERCISED: Row[] = [
  * reason below was wrong and should be deleted rather than reworded.
  */
 const NOT_EXERCISED: (Row & { why: string })[] = [
+  ...(["mode", "enumeration", "frameIds", "capturedFrameIds"] as const).map((key) => ({ field: `frameCoverage.${key}`, reach: (e: WebAutomationPageEvidence) => e.frameCoverage?.[key], why: "historical content-only captures predate observed all-frame composition; topology provenance remains unknown. Background connection/tests/dom-snapshot.test.ts covers current composition; these fixtures are not regenerated." })),
   { field: "captureOptions.includeHidden", reach: (e) => e.captureOptions?.includeHidden, why: "these historical captures predate applied-setting provenance and must remain unknown. Current producer/merge cases are covered by extension content/tests/dom-snapshot.test.ts and background/connection/tests/dom-snapshot.test.ts; the installed native identity browser proof asserts the actual marker." },
   { field: "navigation.referrer", reach: (e) => e.navigation.referrer, why: "the harness opens each fixture directly, so there is no referring page. The packet's origin-and-path reduction of it is covered in llm-evidence/tests/page-evidence.test.ts." },
   { field: "navigation.redirects", reach: (e) => e.navigation.redirects, why: "no Lab fixture redirects. The producer omits the field at zero." },
@@ -131,11 +132,12 @@ const NOT_EXERCISED: (Row & { why: string })[] = [
  * needs a row in `EXERCISED` or `NOT_EXERCISED` by hand; nothing in TypeScript
  * can enumerate a nested optional key at run time.
  */
-const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page has one" | "only on a merged capture a child frame did not answer" | "only on a producer that records applied settings"> = {
+const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page has one" | "only on a merged capture a child frame did not answer" | "only on a producer that records applied settings" | "only on an observed all-frame composition"> = {
   elements: "always",
   loading: "always",
   navigation: "always",
   captureOptions: "only on a producer that records applied settings",
+  frameCoverage: "only on an observed all-frame composition",
   dialogs: "when the page has one",
   overlays: "when the page has one",
   regions: "when the page has one",
@@ -153,7 +155,7 @@ function reachesInAnyCapture(reach: Reach): boolean {
 
 test("historical captures cover their contract items and every unconditional item, with newer producer provenance recorded separately", () => {
   for (const [item, when] of Object.entries(ITEMS) as [keyof WebAutomationPageEvidence, string][]) {
-    if (when === "only on a merged capture a child frame did not answer" || when === "only on a producer that records applied settings") continue;
+    if (when === "only on a merged capture a child frame did not answer" || when === "only on a producer that records applied settings" || when === "only on an observed all-frame composition") continue;
     const carrying = CAPTURES.filter(([, evidence]) => evidence[item] !== undefined).map(([name]) => name);
     assert.notDeepEqual(carrying, [], `no capture carries \`${item}\`, so nothing proves the producer writes it`);
     if (when === "always") {
@@ -198,4 +200,12 @@ test("no capture carries a form control's value, only whether it holds one", () 
     .flatMap((form) => form.controls)
     .filter((control) => control.sensitive);
   assert.ok(sensitive.length >= 2, "sensitive-input's password and card fields should both be marked");
+});
+
+
+test("legacy captures without topology provenance remain unknown", () => {
+  for (const [, evidence] of CAPTURES) {
+    assert.equal(Object.hasOwn(evidence, "frameCoverage"), false);
+    assert.equal(evidence.frameCoverage, undefined);
+  }
 });

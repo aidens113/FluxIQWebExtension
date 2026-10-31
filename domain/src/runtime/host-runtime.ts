@@ -50,9 +50,11 @@
 //    keeps every key a later reader uses -- the view, `from`, the document's
 //    identity -- because it is the same snapshot; only the gateway round trip
 //    is gone, about half of every web step's state cost (t480).
-//  - **Snapshots are not stored here.** Core hands both refs back to
+//  - **Public snapshots are not stored here.** Core hands both refs back to
 //    `inspectStateDiff`, so the diff reads the summaries it was given. A cache
 //    keyed by `stateRef` would be a second copy of state Core already holds.
+//    The repeat observer retains a bounded private capture binding instead:
+//    summaries cannot prove complete coverage, resource or subject identity.
 //  - **Their places are, briefly (t609).** A diff also says where the step's
 //    control sat (`spot`) and which items each page listed (`items`), the
 //    opaque tokens Core ties a trial's act to its own item by (Core t598). Both
@@ -106,6 +108,7 @@ import {
 import { createWebStatePlacesMemo, webAutomationStateDiff, webStateDiffPlaces, webStateSnapshotPlaces } from "./state-diff";
 import { createWebSourcePlaces, webAutomationReacquireTarget, webAutomationReturnToSourcePlace, webAutomationReacquireUnboundTarget } from "./target-reacquire";
 import { webCapturedTargetObservation, createWebTargetPlaces, type WebTargetScope } from "./target-reacquire/identity";
+import { createWebRuntimeRepeatMemo } from "./runtime-repeat";
 
 /**
  * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
@@ -185,6 +188,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
   // Where each attempt found the page, for a stale target's source re-run (header, t786).
   const sourcePlaces = createWebSourcePlaces();
   const targetPlaces = createWebTargetPlaces();
+  const repeatCaptures = createWebRuntimeRepeatMemo();
   let captures = 0;
   const beforeAction = async (
     input: Parameters<NonNullable<WebAutomationHostRuntimeBoundary["captureStateSnapshot"]>>[0],
@@ -283,11 +287,13 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       places.keep(stateRef, webStateSnapshotPlaces(binding));
       sourcePlaces.keep(input.attemptId, input.point, from);
       const state = { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
+      repeatCaptures.keep(state, snapshot, binding, result.metadata?.sessionId, isRecord(action) ? action.sourceId : undefined, result.status === undefined || result.status === "succeeded");
       const captured = webCapturedTargetObservation({ snapshot, page: binding, sessionId: result.metadata?.sessionId, sourceId: isRecord(action) ? action.sourceId : undefined, requested: { kind: "merged", browserFrameId: 0 } });
       if (captured.kind === "observed") targetPlaces.keep(state, captured.observation);
       await beforeAction(input, state);
       return state;
     },
+    observeRuntimeRepeat: (input) => repeatCaptures.observe(input),
     // What a Router's `state.*` conditions test, observed on the page the run
     // stands on before any step runs, and what a Flow build is shown so it can
     // write them. It is the evidence packet projected, never more of the page.

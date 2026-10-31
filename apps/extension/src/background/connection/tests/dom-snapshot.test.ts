@@ -11,6 +11,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   captureMergedTabSnapshot,
+  captureSingleFrameSnapshot,
+  prepareMergedTabSnapshot,
   type DomSnapshotPayload,
   type TabSnapshotTransport
 } from "../dom-snapshot";
@@ -208,10 +210,12 @@ test("navigation is the top frame's: a child frame's origin is not the page's", 
   assert.deepEqual(evidence.navigation, topSnapshot().evidence?.navigation);
 });
 
-test("a single-frame page is merged into exactly the evidence it reported", async () => {
+test("a top-only page retains its evidence and gains observed topology provenance", async () => {
   const only = topSnapshot();
   const evidence = await mergedEvidence([{ frameId: 0, snapshot: only }]);
-  assert.deepEqual(evidence, only.evidence);
+  const { frameCoverage, ...original } = evidence;
+  assert.deepEqual(original, only.evidence);
+  assert.deepEqual(frameCoverage, { mode: "all_frames", enumeration: "complete", frameIds: [0], capturedFrameIds: [0] });
 });
 
 test("merged hidden capture proof requires an applied boolean setting from every included frame", async () => {
@@ -276,7 +280,7 @@ test("the merged page carries every item some frame reported, and no other", asy
   const reported = [...new Set(bothFrames.flatMap((frame) => Object.keys(frame.snapshot.evidence ?? {})))].sort();
   const evidence = await mergedEvidence(bothFrames);
   assert.equal(reported.length, 8, "the fixtures no longer exercise every key of the contract");
-  assert.deepEqual(Object.keys(evidence).sort(), reported, "the merge dropped or invented a page-evidence item");
+  assert.deepEqual(Object.keys(evidence).filter((key) => key !== "frameCoverage").sort(), reported, "the merge dropped or invented a page-evidence item");
 });
 
 test("an item no frame reported is absent from the merged page, not present and empty", async () => {
@@ -506,4 +510,153 @@ test("an element's frontLayer and leadStatement, and a layer's kind, cross the m
   assert.deepEqual(elements.filter((element) => element.leadStatement).map((element) => element.selector), ["#count"]);
   assert.equal(merged.evidence?.dialogs?.open[0]?.kind, "robot_check");
   assert.equal(merged.evidence?.overlays?.blockers[0]?.kind, "consent");
+});
+
+
+test("an empty parentless child is still an enumerated, captured frame", async () => {
+  const child = childSnapshot();
+  child.interactiveElements = [];
+  const merged = await captureMergedTabSnapshot(transportFor([{ frameId: 0, snapshot: topSnapshot() }, { frameId: 2, snapshot: child }]), 7);
+  assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "complete", frameIds: [0, 2], capturedFrameIds: [0, 2] });
+});
+
+test("a failed child is listed but never counted as a genuine snapshot reply", async () => {
+  const merged = await captureMergedTabSnapshot(transportFor([{ frameId: 0, snapshot: topSnapshot() }], [0, 2]), 7);
+  assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "complete", frameIds: [0, 2], capturedFrameIds: [0] });
+  assert.deepEqual(merged?.evidence?.unansweredFrameIds, [2]);
+});
+
+test("unknown, failed, empty, malformed and top-less enumeration cannot prove topology", async () => {
+  for (const result of [undefined, [], [-1, 0], [0, 0.5], [0, Number.MAX_SAFE_INTEGER + 1], [0, NaN], [2]]) {
+    const transport: TabSnapshotTransport = {
+      ...transportFor([{ frameId: 0, snapshot: topSnapshot() }]),
+      allTabFrames: async () => result?.map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+    };
+    const merged = await captureMergedTabSnapshot(transport, 7);
+    assert.equal(merged?.evidence?.frameCoverage?.enumeration, "unavailable");
+    assert.ok(merged?.evidence?.frameCoverage?.frameIds.every((id) => Number.isSafeInteger(id) && id >= 0));
+  }
+  for (const allTabFrames of [async () => { throw new Error("enumeration refused"); }, () => new Promise<chrome.webNavigation.GetAllFrameResultDetails[]>(() => {})]) {
+    const merged = await captureMergedTabSnapshot({ ...transportFor([{ frameId: 0, snapshot: topSnapshot() }]), allTabFrames }, 7, undefined, undefined, { waitMs: 10 });
+    assert.equal(merged?.evidence?.frameCoverage?.enumeration, "unavailable");
+  }
+});
+
+test("changed topology and a failed post-read are unavailable", async () => {
+  for (const after of [[0, 2], [], undefined]) {
+    let calls = 0;
+    const transport = {
+      ...transportFor([{ frameId: 0, snapshot: topSnapshot() }]),
+      allTabFrames: async () => (++calls === 1 ? [0] : after)?.map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+    };
+    const merged = await captureMergedTabSnapshot(transport, 7);
+    assert.equal(calls, 2);
+    assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "unavailable", frameIds: [0], capturedFrameIds: [0] });
+  }
+});
+
+test("topology sets and reply provenance are sorted independently of enumeration and reply order", async () => {
+  let reads = 0;
+  const transport: TabSnapshotTransport = {
+    sendToTab: async <TResponse = unknown>(_tabId: number, _message: unknown, frameId?: number): Promise<TResponse> => {
+      if (frameId === 9) await new Promise((resolve) => setTimeout(resolve, 5));
+      return (frameId === 0 ? topSnapshot() : childSnapshot()) as TResponse;
+    },
+    allTabFrames: async () => (++reads === 1 ? [9, 0, 2, 9] : [2, 9, 0]).map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+  };
+  const merged = await captureMergedTabSnapshot(transport, 7);
+  assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "complete", frameIds: [0, 2, 9], capturedFrameIds: [0, 2, 9] });
+});
+
+test("an explicit single-frame capture carries no all-frame provenance", async () => {
+  const single = await captureSingleFrameSnapshot(transportFor([{ frameId: 0, snapshot: topSnapshot() }]), 7, 0);
+  assert.equal(single?.evidence?.frameCoverage, undefined);
+});
+
+
+test("a malformed child reply is not counted as captured", async () => {
+  const transport: TabSnapshotTransport = {
+    ...transportFor([{ frameId: 0, snapshot: topSnapshot() }], [0, 2]),
+    sendToTab: async <TResponse = unknown>(_tabId: number, _message: unknown, frameId?: number): Promise<TResponse> =>
+      (frameId === 0 ? topSnapshot() : { interactiveElements: [] }) as TResponse
+  };
+  const merged = await captureMergedTabSnapshot(transport, 7);
+  assert.deepEqual(merged?.evidence?.frameCoverage?.capturedFrameIds, [0]);
+  assert.deepEqual(merged?.evidence?.unansweredFrameIds, [2]);
+});
+
+test("the post-topology read is bounded and cannot upgrade a timed-out enumeration", async () => {
+  let reads = 0;
+  const transport: TabSnapshotTransport = {
+    ...transportFor([{ frameId: 0, snapshot: topSnapshot() }]),
+    allTabFrames: async () => ++reads === 1
+      ? [{ frameId: 0 } as chrome.webNavigation.GetAllFrameResultDetails]
+      : await new Promise<chrome.webNavigation.GetAllFrameResultDetails[]>(() => {})
+  };
+  const merged = await captureMergedTabSnapshot(transport, 7, undefined, undefined, { waitMs: 10 });
+  assert.equal(reads, 2);
+  assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "unavailable", frameIds: [0], capturedFrameIds: [0] });
+});
+
+test("two topology reads bracket new snapshot requests without additional captures", async () => {
+  const order: string[] = [];
+  const transport: TabSnapshotTransport = {
+    sendToTab: async <TResponse = unknown>(): Promise<TResponse> => {
+      order.push("capture");
+      return topSnapshot() as TResponse;
+    },
+    allTabFrames: async () => {
+      order.push("enumerate");
+      return [{ frameId: 0 } as chrome.webNavigation.GetAllFrameResultDetails];
+    }
+  };
+  await captureMergedTabSnapshot(transport, 7);
+  assert.deepEqual(order, ["enumerate", "capture", "enumerate"]);
+});
+
+
+test("an existing seed without pre-capture topology cannot acquire complete provenance later", async () => {
+  const top = topSnapshot();
+  const merged = await captureMergedTabSnapshot(transportFor([{ frameId: 0, snapshot: top }]), 7, top, 0);
+  assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "unavailable", frameIds: [0], capturedFrameIds: [0] });
+});
+
+
+test("prepared topology precedes an external top seed and the merge never captures it twice", async () => {
+  const order: string[] = [];
+  const transport: TabSnapshotTransport = {
+    sendToTab: async <TResponse = unknown>(): Promise<TResponse> => {
+      order.push("capture");
+      return topSnapshot() as TResponse;
+    },
+    allTabFrames: async () => {
+      order.push("enumerate");
+      return [{ frameId: 0 } as chrome.webNavigation.GetAllFrameResultDetails];
+    }
+  };
+  const compose = await prepareMergedTabSnapshot(transport, 7);
+  const top = await captureSingleFrameSnapshot(transport, 7, 0);
+  assert.ok(top);
+  const merged = await compose(top, 0);
+  assert.deepEqual(order, ["enumerate", "capture", "enumerate"]);
+  assert.deepEqual(merged?.evidence?.frameCoverage, { mode: "all_frames", enumeration: "complete", frameIds: [0], capturedFrameIds: [0] });
+});
+
+
+test("prepared composition never renews the pre-capture deadline", async (t) => {
+  let now = 1_000;
+  t.mock.method(Date, "now", () => now);
+  let reads = 0;
+  const transport: TabSnapshotTransport = {
+    ...transportFor([{ frameId: 0, snapshot: topSnapshot() }]),
+    allTabFrames: async () => {
+      reads++;
+      return [{ frameId: 0 } as chrome.webNavigation.GetAllFrameResultDetails];
+    }
+  };
+  const compose = await prepareMergedTabSnapshot(transport, 7, 100);
+  now = 1_200;
+  const merged = await compose(topSnapshot(), 0, { waitMs: 100 });
+  assert.equal(reads, 1, "the expired deadline permits no new topology wait");
+  assert.equal(merged?.evidence?.frameCoverage?.enumeration, "unavailable");
 });

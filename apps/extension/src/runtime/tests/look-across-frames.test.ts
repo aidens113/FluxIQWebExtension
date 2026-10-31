@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BrowserActionCommand, BrowserActionResult, DomSnapshot } from "../../shared/protocol";
 import type { BrowserActionRunResult } from "../action-runner";
-import { lookAcrossFrames, type MergeFrameSnapshots } from "../look-across-frames";
+import { lookAcrossFrames, prepareFrameSnapshots, type MergeFrameSnapshots } from "../look-across-frames";
 
 const TAB_ID = 12;
 
@@ -36,7 +36,13 @@ function run(status: BrowserActionResult["status"] = "succeeded", result: Partia
 /** A merge that records what it was asked and answers `answer`. */
 function mergeAnswering(answer: DomSnapshot | undefined): { merge: MergeFrameSnapshots; asked: Array<{ tabId: number; top: DomSnapshot; waitMs: number | undefined }> } {
   const asked: Array<{ tabId: number; top: DomSnapshot; waitMs: number | undefined }> = [];
-  return { asked, merge: async (tabId, top, waitMs) => { asked.push({ tabId, top, waitMs }); return answer; } };
+  return {
+    asked,
+    merge: async (tabId, top, waitMs) => {
+      asked.push({ tabId, top, waitMs });
+      return answer;
+    }
+  };
 }
 
 const LOOK: BrowserActionCommand = { commandId: "c-look", actionType: "web.dom.capture_snapshot" };
@@ -89,4 +95,55 @@ test("a search's look (includeHidden) asks the merge to ask every frame for its 
   await lookAcrossFrames(LOOK, run(), false, Date.now(), merge);
   await lookAcrossFrames({ ...LOOK, options: { includeHidden: "yes" } }, run(), false, Date.now(), merge);
   assert.deepEqual(captures, [{ includeHidden: true }, {}, {}]);
+});
+
+
+test("native preparation precedes the existing capture and returns that capture's private merge closure", async () => {
+  const order: string[] = [];
+  const prepared: MergeFrameSnapshots = async (_tabId, top) => {
+    order.push("merge");
+    assert.equal(top, TOP);
+    return MERGED;
+  };
+  const merge: MergeFrameSnapshots = Object.assign(async () => TOP, {
+    prepare: async (tabId: number, waitMs: number | undefined) => {
+      order.push("enumerate");
+      assert.equal(tabId, TAB_ID);
+      assert.equal(waitMs, undefined);
+      return prepared;
+    }
+  });
+  const selected = await prepareFrameSnapshots(LOOK, TAB_ID, false, Date.now(), merge);
+  order.push("capture"); // The runner sends its unchanged top RPC here.
+  const looked = await lookAcrossFrames(LOOK, run(), false, Date.now(), selected);
+  assert.equal(looked.result.snapshot, MERGED);
+  assert.deepEqual(order, ["enumerate", "capture", "merge"]);
+});
+
+test("preparation preserves legacy callbacks and skips addressed captures and other actions", async () => {
+  const legacy: MergeFrameSnapshots = async () => MERGED;
+  assert.equal(await prepareFrameSnapshots(LOOK, TAB_ID, false, Date.now(), legacy), legacy);
+  assert.equal(await prepareFrameSnapshots(LOOK, TAB_ID, false, Date.now(), undefined), undefined);
+  const merge: MergeFrameSnapshots = Object.assign(async () => MERGED, {
+    prepare: async () => {
+      assert.fail("this action must not enumerate topology");
+      return legacy;
+    }
+  });
+  assert.equal(await prepareFrameSnapshots(LOOK, TAB_ID, true, Date.now(), merge), merge);
+  assert.equal(await prepareFrameSnapshots({ ...LOOK, actionType: "web.dom.click" }, TAB_ID, false, Date.now(), merge), merge);
+});
+
+test("preparation borrows only remaining deadline and cannot restore elapsed time", async (t) => {
+  t.mock.method(Date, "now", () => 10_000);
+  const waits: Array<number | undefined> = [];
+  const merge: MergeFrameSnapshots = Object.assign(async () => MERGED, {
+    prepare: async (_tabId: number, waitMs: number | undefined) => {
+      waits.push(waitMs);
+      return merge;
+    }
+  });
+  await prepareFrameSnapshots({ ...LOOK, timeoutMs: 5_000 }, TAB_ID, false, 8_500, merge);
+  await prepareFrameSnapshots({ ...LOOK, timeoutMs: 1_000 }, TAB_ID, false, 8_500, merge);
+  assert.deepEqual(waits, [3_500, 0]);
 });

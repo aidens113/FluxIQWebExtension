@@ -16,12 +16,24 @@ export async function allTabs(): Promise<TabDescriptor[]> {
 }
 
 export async function allTabFrames(tabId: number): Promise<chrome.webNavigation.GetAllFrameResultDetails[]> {
+  return await observedTabFrames(tabId) ?? [];
+}
+
+/** Preserve API failure separately from a successful browser enumeration. */
+export async function observedTabFrames(tabId: number): Promise<chrome.webNavigation.GetAllFrameResultDetails[] | undefined> {
   return new Promise((resolve) => {
-    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
-      const error = chrome.runtime.lastError;
-      if (error || !frames) resolve([]);
-      else resolve(frames);
-    });
+    try {
+      if (!chrome.webNavigation?.getAllFrames) {
+        resolve(undefined);
+        return;
+      }
+      chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+        const error = chrome.runtime.lastError;
+        resolve(error || !frames ? undefined : frames);
+      });
+    } catch {
+      resolve(undefined);
+    }
   });
 }
 

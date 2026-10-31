@@ -322,6 +322,43 @@ fingerprint contract. Scoped looks add to remembered controls rather than
 forgetting other frames. Fresh fingerprints retain only fresh addressing and
 context plus the original `readsWords` instruction.
 
+### Private runtime repeat observations (Core 0.21)
+
+`observeRuntimeRepeat` reads only captures already accepted by the native host.
+Its 32-entry private memo correlates the exact snapshot ID, state reference and
+capture timestamp; previous-reference reuse preserves that entry. Missing,
+foreign or evicted references provide no equality evidence. Observation sends
+no gateway command. Public snapshot references and summaries are unchanged.
+
+Complete means positive coverage of the relevant shown state: valid consistent
+capture totals, a settled document, no truncation or unanswered frames, and no
+missing or withheld shown controls. It does not require hidden-element capture.
+The initial producer supports positively scoped top-document views only;
+merged child views lack each document's incarnation and therefore abstain.
+Raw `evidence.frameCoverage` must explicitly report `mode:all_frames`,
+`enumeration:complete`, and exactly `[0]` for both enumerated and captured frame
+IDs. The browser producer establishes that marker from coherent actual frame
+enumeration and replies. Missing/legacy, malformed, duplicate, child or
+unavailable coverage abstains; absent normalized child IDs prove nothing.
+Actual gateway session, browser source tab/frame, safe location and document
+time origin determine the resource. Equal URLs or content alone are insufficient.
+
+Whole-page snapshot reads are explicitly targetless. Supported element reads
+and control actions require a unique captured fingerprint matched by the shared
+multi-signal, record/dialog/root-aware matcher, correlated with the dispatch
+selector. Private subject identity excludes handles, selectors and positions.
+Missing, ambiguous, unsupported or withheld identity returns unavailable.
+Row-input bindings and visual targets abstain because dispatch transforms or
+selects their subject outside this observer's accepted binding.
+Other operations need an observable-state contract before becoming eligible.
+
+The view token reuses `webLlmStateDigest` on the exact sanitized binding. Its v7
+checksum intentionally ignores handles, capture times, scroll and pure element
+reordering; it is an equality heuristic, never authority or effect certainty.
+Resource and subject tokens are collision-free private interned identifiers,
+with bounded memory; eviction can only discard comparability. No private token
+is written to a Flow, trace, model packet or public snapshot summary.
+
 ## Limits
 
 - Scoring cannot rescue every drift, and is not meant to. A control whose
@@ -341,3 +378,10 @@ context plus the original `readsWords` instruction.
   (`domain/src/recording/proposals/late-target-wait.ts`; see
   [extension client architecture](extension-client.md#a-wait-before-a-late-target)).
   Child-frame recordings do not receive that top-document proposal.
+
+
+The installed company-website repeat proof uses the canonical policy action
+and real web output under required durable receipts. It verifies a pre-third
+unchanged-read stop and seven intentional ForEach reads, with no observer
+commands. Core owning tests separately cover the NativeNodeRuntime; the
+observer does not make direct importer code admissible in required mode.

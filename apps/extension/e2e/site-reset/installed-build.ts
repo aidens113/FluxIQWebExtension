@@ -51,6 +51,8 @@ export type InstalledBuild = {
   gatewayOutcomeSummaries: (projectId: string) => Promise<readonly { outcome?: string | undefined; reason?: string | undefined }[]>;
   /** The action type of every command Core has sent the extension so far, in order: what reached the site. */
   siteCommands: () => string[];
+  /** Count of distinct command IDs already retained privately; never exposes IDs. */
+  distinctActionCommands: () => number;
   /** Puts every Lab scenario back to its first state through the Lab's authenticated control endpoint (consent unanswered again, nothing liked), for a spec that must meet the site as a first visit does. */
   resetLab: () => Promise<void>;
   /** Points the installed extension at the gateway, approves its pairing, and waits for a ready session. */
@@ -154,5 +156,5 @@ export async function startInstalledBuild(session: ExtensionSession): Promise<In
     if (path.dirname(owned) !== path.resolve(os.tmpdir()) || !path.basename(owned).startsWith(ROOT_PREFIX)) throw new Error("diagnostic.cleanup_scope");
     await rm(owned, { recursive: true, force: true });
   };
-  return { fluxiq, service, page, origin: lab.origin, rootDir: root, gatewayErrors: gateway.errors, latestRawSnapshot: () => latestRawSnapshot, actionResults: () => actionResults, gatewayOutcomeSummaries, actionResultSummaries: () => actionResultSummaries.map((entry) => ({ ...entry })), siteCommands: () => [...siteCommands], resetLab, pair, close };
+  return { fluxiq, service, page, origin: lab.origin, rootDir: root, gatewayErrors: gateway.errors, latestRawSnapshot: () => latestRawSnapshot, actionResults: () => actionResults, gatewayOutcomeSummaries, actionResultSummaries: () => actionResultSummaries.map((entry) => ({ ...entry })), siteCommands: () => [...siteCommands], distinctActionCommands: () => sentCommands.size, resetLab, pair, close };
 }
