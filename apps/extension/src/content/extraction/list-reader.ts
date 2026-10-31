@@ -146,7 +146,7 @@
 // cut, and `truncated` says it was. `order` reports both counts, including the
 // rows a sort key could not read, which go last.
 
-import { type WebAutomationExtractionRejectionObservation, WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
+import { type WebAutomationExtractionItemMark, type WebAutomationExtractionRejectionObservation, WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
 import type { ExtractionCheckpoint } from "../../shared/extraction-continuation";
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
@@ -156,6 +156,7 @@ import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
 import { listContinuesPast, type ListContinues } from "./read-coverage";
+import { itemOfferMarks } from "./item-offer";
 import { rejectedSamplesFor } from "./rejected-samples";
 import { readDisclosing } from "./text-disclosure";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
@@ -261,6 +262,8 @@ export type ListExtractionOutcome = {
   /** Per condition, how many leading rows of its `rejectedSamples` list it removed alone; beside `rejectedSamples` only. */
   rejectedSamplesAlone?: number[] | undefined;
   rejectedObservations?: Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
+  /** The marks each rejected item carries, aligned with `rejectedSamples` (`item-offer/`, t810). */
+  rejectedMarks?: Array<Array<WebAutomationExtractionItemMark[] | null>> | undefined;
   /**
    * Why a read that pages stopped paging, or absent for a read that did not page.
    *
@@ -411,7 +414,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // Per condition, a few values it read on rows every condition kept (`item-filter.ts`); this document's own, never carried.
   const keptValuesEach: string[][] = carried.rejected.map(() => []);
   // Every row each condition rejected, its alone rows first, carried across documents like the counts.
-  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples, resume?.rejectedSamplesAlone, resume?.rejectedObservations);
+  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples, resume?.rejectedSamplesAlone, resume?.rejectedObservations, resume?.rejectedMarks);
 
   // Items the selector named, counted once each, whichever page or scroll named
   // them: a set rather than a running sum, because a `loadMore` or `scroll` read
@@ -456,7 +459,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach], alone: [...aloneEach], keptValues: keptValuesEach.map((values) => [...values]) } }),
-      ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone(), ...(samples.observations() === undefined ? {} : { rejectedObservations: samples.observations() }) }),
+      ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone(), ...(samples.observations() === undefined ? {} : { rejectedObservations: samples.observations() }), ...(samples.marks() === undefined ? {} : { rejectedMarks: samples.marks() }) }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
@@ -613,7 +616,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
               for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
               const only = rejectedBy.length === 1 ? rejectedBy[0] : undefined;
               if (only !== undefined) aloneEach[only] = (aloneEach[only] ?? 0) + 1;
-              samples?.note(rejectedBy, itemRead.record, observations);
+              samples?.note(rejectedBy, itemRead.record, observations, itemOfferMarks(element));
               rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, order ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems);
             }
             read.set(element, key);

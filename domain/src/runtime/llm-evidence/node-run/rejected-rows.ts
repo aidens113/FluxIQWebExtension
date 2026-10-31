@@ -51,6 +51,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   webAutomationExtractionSummaryValue,
+  WEB_AUTOMATION_EXTRACT_REJECTED_MARKS_KEY,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
   webAutomationExtractListRequestRead,
@@ -151,7 +152,8 @@ export function webNodeReadWithRejectedRows(payload: JsonValue | undefined, para
 }
 
 /** The summary members that carry the samples, which the recorded payload leaves out. */
-const SAMPLE_KEYS: readonly string[] = [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY];
+// The marks go the same way: page words that reach Core's verdict (`rejectedMarks`, t810), not the recorded payload the builder's evidence keeps.
+const SAMPLE_KEYS: readonly string[] = [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY, WEB_AUTOMATION_EXTRACT_REJECTED_MARKS_KEY];
 
 /** The payload with `extraction.rejectedSamples` and its alone counts removed, and unchanged when it carries neither. */
 function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
