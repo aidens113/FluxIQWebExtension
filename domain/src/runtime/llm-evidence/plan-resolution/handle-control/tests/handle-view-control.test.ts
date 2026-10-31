@@ -78,16 +78,16 @@ test("a control that states its state is read from the statement: state, the sig
   const { runtime } = catalogue();
   const looked = await run(runtime, "web.output.dom-capture_snapshot", {});
   const off = await candidateView(runtime, shownHandle(looked.evidence, "Reading list"));
-  assert.deepEqual(off?.control, { stateful: true, state: "unpressed", ensures: { via: "attribute", attribute: "aria-pressed", to: true }, idempotentWith: "web.output.dom-check" });
+  assert.deepEqual(off?.control, { stateful: true, state: "unpressed", shown: { via: "attribute", attribute: "aria-pressed", to: false }, ensures: { via: "attribute", attribute: "aria-pressed", to: true }, idempotentWith: "web.output.dom-check" });
   const on = await candidateView(runtime, shownHandle(looked.evidence, "Archive view"));
-  assert.deepEqual(on?.control, { stateful: true, state: "pressed", ensures: { via: "attribute", attribute: "aria-pressed", to: false }, idempotentWith: "web.output.dom-check" });
+  assert.deepEqual(on?.control, { stateful: true, state: "pressed", shown: { via: "attribute", attribute: "aria-pressed", to: true }, ensures: { via: "attribute", attribute: "aria-pressed", to: false }, idempotentWith: "web.output.dom-check" });
 });
 
 test("a checkbox states its checked state, and a press leaves the other", async () => {
   const { runtime } = catalogue();
   const looked = await run(runtime, "web.output.dom-capture_snapshot", {});
   const view = await candidateView(runtime, shownHandle(looked.evidence, "Large print only"));
-  assert.deepEqual(view?.control, { stateful: true, state: "checked", ensures: { via: "attribute", attribute: "checked", to: false }, idempotentWith: "web.output.dom-check" });
+  assert.deepEqual(view?.control, { stateful: true, state: "checked", shown: { via: "attribute", attribute: "checked", to: true }, ensures: { via: "attribute", attribute: "checked", to: false }, idempotentWith: "web.output.dom-check" });
 });
 
 test("a plain button is no stateful control: its view carries no control at all", async () => {
@@ -127,6 +127,9 @@ test("a control that shows its state in its words is unknown until a press of th
   // And a press of the shelved row would undo it: the signature the other way round.
   const back = third?.control?.ensures as { gains?: string[]; loses?: string[] } | undefined;
   assert.ok(back?.gains?.includes("save") && back.loses?.includes("remove"), JSON.stringify(back));
+  assert.deepEqual(open?.control?.shown, third?.control?.ensures);
+  assert.deepEqual(third?.control?.shown, open?.control?.ensures);
+  assert.notDeepEqual(open?.control?.shown, open?.control?.ensures);
   // The row the press was made on is read as the act found it (a step saves its control as it was there): off, before the press.
   assert.equal((await candidateView(runtime, first))?.control?.state, "off");
 });

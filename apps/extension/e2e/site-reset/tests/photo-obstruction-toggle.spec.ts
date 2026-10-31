@@ -2,7 +2,8 @@ import type { JsonObject } from "fluxiq/core";
 import { STUDIO, gridFor } from "../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { actsWithOutcome, ensureStatesIn, judgeLog } from "../change-proof";
-import { bindInstrumentedRuntime, bindScriptedProvider, handleBefore, keepDiagnostic, projectBuild, startInstalledBuild, trialCode, type BuilderTurn } from "../index";
+import { bindInstrumentedRuntime, bindScriptedProvider, handleBefore, keepDiagnostic, startInstalledBuild, trialCode, type BuilderTurn } from "../index";
+import { photoObstructionVerifier, photoProjectBuild } from "./photo-first-row-toggle/index";
 
 const TASK = "Open one post, then open the studio's other post and like it.";
 const ROOT = "/scenarios/photo-social/";
@@ -22,7 +23,7 @@ const handlerSlice = (request: string): string | null => {
   return at < 0 ? null : request.slice(Math.max(0, at - 300), at + 2500);
 };
 
-type ActivityEvent = { label?: string; nodeId?: string; subject?: { projectId?: string }; detail?: { title?: string; text?: string; status?: string; recovery?: JsonObject } };
+type ActivityEvent = { label?: string; nodeId?: string; subject?: { projectId?: string }; detail?: { kind?: string; title?: string; text?: string; status?: string; recovery?: JsonObject } };
 /** Core's activity stream: the chat's rows (`runtime/activity`). */
 async function subscribeActivity(listener: (event: ActivityEvent) => void): Promise<() => void> {
   const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
@@ -48,8 +49,8 @@ function layersIn(value: unknown, path = "$"): Array<{ path: string; keys: strin
 /**
  * t799 / W6 headed proof, provider-free, on photo-social.
  *
- * (b) Idempotent like. The build likes a post in its dialog; the Flow's like step is tied to that press and carries Core's
- * `ensureState`, so the first trial, run over the post already liked, skips the step `already_in_state` and the post still
+ * (b) Idempotent like. The build likes a post in its dialog and explicitly copies that press's observed state into the
+ * Flow's `ensureState`, so the first trial, run over the post already liked, skips the step `already_in_state` and the post still
  * shows Unlike afterwards. Every judge request names the step's `ensureState`.
  *
  * (a) Layers closed while a trial runs. photo-social has no layer the client leaves standing over a press: its in-page
@@ -60,19 +61,24 @@ function layersIn(value: unknown, path = "$"): Array<{ path: string; keys: strin
  * put back to a first visit, the named consent overlay; the client closes each and reports the overlay with its `id`
  * and `controlRef`, and the activity shows the interference rows as recoveries that succeeded and no failed card.
  * learns that close as a `trial_close` handler on the `obstruction` fact (asserted from the Flow the judge is shown after trial 2).
+ * The scripted verifier deliberately returns unsure for the first two completed trials, then verifies the final one.
+ * Before every answer it independently asserts the actual liked post; this is controlled provider-free uncertainty,
+ * not a failed site execution or evidence about a historical model. The first confirmed yes completes normally.
  */
 test("installed gateway project build: layers over a press are closed in the run without a failed card, and a like over a liked post stays liked", async ({ extensionSession }, testInfo) => {
   test.setTimeout(420_000);
   const installed = await startInstalledBuild(extensionSession);
   const { page } = installed;
   const profile = new URL(`${ROOT}${STUDIO}/`, installed.origin).href;
-  const build = projectBuild(installed, "Installed obstruction photo", TASK, () => installed.page.url());
+  const build = photoProjectBuild(installed, "Installed obstruction photo", TASK);
   const pages: Record<string, string> = {};
   const tests: JsonObject[] = [];
   const judge = judgeLog();
+  const verifier = photoObstructionVerifier(installed, judge, LIKED.code, POST_SHOWS_UNLIKE);
   const activity: ActivityEvent[] = [];
   const unsubscribe = await subscribeActivity(event => { activity.push(event); });
   let coveringCell = "", likedCell = "", likeHandle = "";
+  let selectedState: JsonObject = {};
   let refusedSubmission: JsonObject = {};
   const submissions: JsonObject[] = [];
   let postShowsUnlikeAfterSkip = false;
@@ -115,12 +121,16 @@ test("installed gateway project build: layers over a press are closed in the run
         likeHandle = handleBefore(turn.shownPage(), "Like", "Comment");
         return node("like", "web.output.dom-click", { target: { handle: likeHandle } }, ["modify_existing"]);
       }
+      if (turn.step === 5) {
+        selectedState = record(record(turn.last("core.run_node")?.toggle).signature);
+        if (!Object.keys(selectedState).length) throw new Error("diagnostic.observed_toggle_state_missing");
+      }
       const flow = (looks: number) => [
         `flow: Cover and like`,
         `step profile: open the profile`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(profile)}`,
         `step first: open the other post`, `  node: web.dom.click`, `  target: ${coveringCell}`, `  consequences: none`,
         `step post: open the post`, `  node: web.dom.click`, `  target: ${likedCell}`, `  consequences: none`,
-        `step like: like the post`, `  node: web.dom.click`, `  target: ${likeHandle}`, `  consequences: modify_existing`,
+        `step like: like the post`, `  node: web.dom.click`, `  target: ${likeHandle}`, `  consequences: modify_existing`, `  ensureState: ${JSON.stringify(selectedState)}`,
         ...Array.from({ length: looks }, (_, index) => [`step check${index + 1}: look at the post`, `  node: web.dom.capture_snapshot`]).flat()
       ].join("\n");
       if (turn.step === 5) return call("submit", "core.submit_subflow", { flow: flow(0) });
@@ -130,7 +140,10 @@ test("installed gateway project build: layers over a press are closed in the run
         throw new Error("diagnostic.submission_refused");
       }
       if (turn.step <= 7) submissions.push(submitted);
-      if (turn.step === 6) return call("trial", "core.test_subflow", { revision: submitted.revision, digest: submitted.digest });
+      if (turn.step === 6) {
+        verifier.request("first");
+        return call("trial", "core.test_subflow", { revision: submitted.revision, digest: submitted.digest });
+      }
       if (turn.step === 7) {
         tests.push(record(turn.last("core.test_subflow")));
         postShowsUnlikeAfterSkip = await page.locator(POST_SHOWS_UNLIKE).first().isVisible();
@@ -141,24 +154,35 @@ test("installed gateway project build: layers over a press are closed in the run
       }
       submissions.push(submitted);
       const again = { revision: submitted.revision, digest: submitted.digest };
-      if (turn.step === 8) return call("trial.again", "core.test_subflow", again);
+      if (turn.step === 8) {
+        verifier.request("second");
+        return call("trial.again", "core.test_subflow", again);
+      }
       if (turn.step === 9) {
         tests.push(record(turn.last("core.test_subflow")));
         return call("submit.last", "core.submit_subflow", { flow: flow(2) });
       }
       submissions.push(submitted);
       const last = { revision: submitted.revision, digest: submitted.digest };
-      if (turn.step === 10) return call("trial.last", "core.test_subflow", last);
-      tests.push(record(turn.last("core.test_subflow")));
-      return turn.complete({ subflowKey: "main", ...last });
+      if (turn.step === 10) {
+        verifier.request("final");
+        return call("trial.last", "core.test_subflow", last);
+      }
+      throw new Error("diagnostic.confirmed_trial_did_not_complete_brief");
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: judge.verify });
+    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 24, maxCallsPerRun: 36, builder, verify: verifier.verify });
+    verifier.restoreBinding();
     const { ending, failure } = await build.run();
-    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), tests, submissions, layerReports, handlerSlices: judge.requests.map(handlerSlice), refusedSubmission, siteChanges: judge.siteChanges(), ensureStates: judge.requests.map(ensureStatesIn), activity: activity.map(event => ({ label: event.label, nodeId: event.nodeId, detail: event.detail })), declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, siteCommands: installed.siteCommands(), pages };
+    const finalTrial = ending === "proposed" ? build.finalTrial() : undefined;
+    const finalSession = finalTrial ? await build.finalSession() : undefined;
+    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), tests, finalTrial, finalTrace: finalSession?.trace, verifierChecks: verifier.checks, submissions, layerReports, handlerSlices: judge.requests.map(handlerSlice), refusedSubmission, siteChanges: judge.siteChanges(), ensureStates: judge.requests.map(ensureStatesIn), activity: activity.map(event => ({ label: event.label, nodeId: event.nodeId, detail: event.detail })), declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, siteCommands: installed.siteCommands(), pages };
     await keepDiagnostic(testInfo, "obstruction-toggle.json", diagnostic);
-    console.log(JSON.stringify({ obstructionDiagnostic: { ending, failure, tests: tests.map(trialCode) } }));
+    console.log(JSON.stringify({ obstructionDiagnostic: { ending, failure, tests: [...tests.map(trialCode), finalTrial?.verdict] } }));
     expect(ending).toBe("proposed");
-    expect(tests.map(trialCode)).toEqual(["yes", "yes", "yes"]);
+    expect([...tests.map(trialCode), finalTrial?.verdict]).toEqual(["unsure", "unsure", "yes"]);
+    expect(finalTrial?.runId).toBeTruthy();
+    expect(finalSession?.status).toBe("succeeded");
+    expect([...new Set(verifier.checks.map(check => check.trial))]).toEqual(["first", "second", "final"]);
     // (b) Trial 1 ran over the post the build had liked: the like step is skipped already in state, never pressed, and the post still shows Unlike.
     const first = labelledSteps(tests[0]);
     expect(first.map(step => step.status)).toEqual(["succeeded", "succeeded", "succeeded", "succeeded"]);
@@ -170,7 +194,11 @@ test("installed gateway project build: layers over a press are closed in the run
     expect(judge.requests.length).toBeGreaterThanOrEqual(3);
     for (const request of judge.requests) expect(ensureStatesIn(request).length).toBeGreaterThan(0);
     // Trial 3 runs after trial 2 liked the post, so it is skipped already in state again.
-    expect(labelledSteps(tests[2]).find(step => step.control === "Like")?.skipped).toBe("Its control already showed the asked state, so it was not pressed.");
+    const finalSkipped = finalSession?.trace?.attempts.filter(attempt => attempt.definitionId === "web.output.dom-click" && attempt.skipped?.reason === "already_in_state");
+    expect(finalSkipped).toHaveLength(1);
+    const skippedResult = record(record(finalSkipped?.[0]?.outputs.result).result);
+    expect(skippedResult.actionType).toBe("web.dom.click");
+    expect(skippedResult.url).toBe(new URL(`${ROOT}p/${LIKED.code}/`, installed.origin).href);
     // (a) The trial that met the dialog over the grid, and the one that met the consent overlay, closed them in the run.
     const interruptions = (trial: JsonObject | undefined) => labelledSteps(trial).flatMap(step => list(step.interruptions)).map(entry => entry.kind);
     expect(interruptions(tests[0])).toEqual(["other"]);
@@ -178,14 +206,26 @@ test("installed gateway project build: layers over a press are closed in the run
     const rows = activity.map(event => event.label ?? "");
     expect(rows.filter(row => row === "Recovered: Closed a dialog the page put in the way")).toHaveLength(3);
     expect(rows.filter(row => row === "Recovered: Closed something the page put over itself")).toHaveLength(1);
-    expect(activity.filter(event => event.detail?.status === "failed" || /didn't work/iu.test(`${event.label ?? ""} ${event.detail?.title ?? ""}`))).toEqual([]);
+    const failedRows = activity.filter(event => event.detail?.status === "failed" || /didn't work/iu.test(`${event.label ?? ""} ${event.detail?.title ?? ""}`));
+    const uncertainRows = [
+      { label: "Couldn't confirm the result answers the request", kind: "check", title: "Result check" },
+      { label: "Couldn't confirm the whole Flow's test", kind: "note", title: "Couldn't confirm the whole Flow's test" },
+      { label: "Testing one part of the Flow — didn't pass", kind: "tool", title: "Testing one part of the Flow" }
+    ].map(row => ({ ...row, status: "failed", nodeId: undefined, recovery: undefined }));
+    expect(failedRows.map(event => ({ label: event.label, kind: event.detail?.kind, title: event.detail?.title,
+      status: event.detail?.status, nodeId: event.nodeId, recovery: event.detail?.recovery }))).toEqual([...uncertainRows, ...uncertainRows]);
+    expect(failedRows.filter(event => event.nodeId !== undefined || event.detail?.recovery !== undefined)).toEqual([]);
+    for (const event of failedRows.filter(event => event.detail?.kind === "tool")) expect(event.detail?.text).toContain("subflow.trial_unsure");
     expect(activity.filter(event => event.detail?.recovery?.kind === "interference").map(event => event.detail?.recovery?.outcome)).toEqual(["succeeded", "succeeded", "succeeded", "succeeded"]);
     // Core learned trial 2's close of the named consent overlay as a handler: the Flow the judge was shown after it (the
     // requests of trial 3) holds a `builtin.control.handler` waiting for the `obstruction` fact on the overlay's name, whose press
     // is the click on the decline control the client reported; the earlier trials' Flows hold none.
-    expect(judge.requests.length).toBe(6);
-    expect(judge.requests.slice(0, 4).map(handlerSlice)).toEqual([null, null, null, null]);
-    for (const request of judge.requests.slice(4)) {
+    expect(judge.requests).toHaveLength(verifier.checks.length);
+    const earlierRequests = judge.requests.filter((_request, index) => verifier.checks[index]?.trial !== "final");
+    const finalRequests = judge.requests.filter((_request, index) => verifier.checks[index]?.trial === "final");
+    expect(earlierRequests.map(handlerSlice)).toEqual(earlierRequests.map(() => null));
+    expect(finalRequests).toHaveLength(2);
+    for (const request of finalRequests) {
       const shown = request.replaceAll(String.raw`\"`, `"`);
       expect(shown).toContain(`"definitionId":"builtin.control.handler"`);
       expect(shown).toContain(`"fact":"obstruction","op":"visible","value":"Allow the use of cookies from Framelight on this browser?"`);
@@ -201,6 +241,7 @@ test("installed gateway project build: layers over a press are closed in the run
     expect(reported.map(layer => [layer.kind, layer.hasControlRef, layer.keys.includes("id")])).toEqual([["other", true, true], ["overlay", true, true], ["other", true, true], ["other", true, true]]);
     expect(reported.find(layer => layer.kind === "overlay")?.keys).toContain("name");
   } finally {
+    verifier.restoreBinding();
     unsubscribe();
     await build.stop();
     await installed.close();

@@ -19,13 +19,15 @@ const like = (pressed: boolean): FixtureElement => ({ tag: "button", target: "t7
 
 test("Save Senior Engineer becoming Unsave Senior Engineer gains unsave and loses save", () => {
   assert.deepEqual(webPressToggleSignature(CLICK, bound([save("Save Senior Engineer")]), bound([save("Unsave Senior Engineer")]), "t7"), {
-    signature: { via: "name", gains: ["unsave"], loses: ["save"] }
+    signature: { via: "name", gains: ["unsave"], loses: ["save"] },
+    beforeSignature: { via: "name", gains: ["save"], loses: ["unsave"] }
   });
 });
 
 test("an aria-pressed false to true press gives the attribute signature, idempotent with web.dom.check", () => {
   assert.deepEqual(webPressToggleSignature(CLICK, bound([like(false)]), bound([like(true)]), "t7"), {
     signature: { via: "attribute", attribute: "aria-pressed", to: true },
+    beforeSignature: { via: "attribute", attribute: "aria-pressed", to: false },
     idempotentWith: "web.output.dom-check"
   });
 });
@@ -47,9 +49,18 @@ test("no change, a gone target, another page, a navigation or no handle says not
 test("a span whose class gains a token gives the class signature; transient-only changes give none", () => {
   const heart = (classes: string): FixtureElement => ({ tag: "span", target: "t7", attributes: [["class", classes]] });
   assert.deepEqual(webPressToggleSignature(CLICK, bound([heart("heart")]), bound([heart("heart heartOn")]), "t7"), {
-    signature: { via: "class", gains: ["heartOn"], loses: [] }
+    signature: { via: "class", gains: ["heartOn"], loses: [] },
+    beforeSignature: { via: "class", gains: [], loses: ["heartOn"] }
   });
   assert.equal(webPressToggleSignature(CLICK, bound([heart("heart")]), bound([heart("heart hover loading")]), "t7"), undefined);
+});
+
+test("an already-on first control reports actual on before and off after, without choosing intent", () => {
+  assert.deepEqual(webPressToggleSignature(CLICK, bound([like(true)]), bound([like(false)]), "t7"), {
+    signature: { via: "attribute", attribute: "aria-pressed", to: false },
+    beforeSignature: { via: "attribute", attribute: "aria-pressed", to: true },
+    idempotentWith: "web.output.dom-check"
+  });
 });
 
 test("a wrapper above the pressed element within the control supplies the class change", () => {

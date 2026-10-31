@@ -40,12 +40,14 @@ test("a press that flips the control's stated state reports that state as its to
   assert.equal(result.status, "succeeded");
   assert.deepEqual(events, FIRST_PRESS);
   assert.deepEqual(result.toggle, { via: "attribute", attribute: "aria-pressed", to: true });
+  assert.deepEqual(result.toggleBefore, { via: "attribute", attribute: "aria-pressed", to: false });
 });
 
 test("a press that changes only the control's name reports the words it gained and lost", async (t) => {
   const { result } = await press(t, { attributes: {}, name: "Like" }, { attributes: {}, name: "Unlike" });
   assert.equal(result.status, "succeeded");
   assert.deepEqual(result.toggle, { via: "name", gains: ["unlike"], loses: ["like"] });
+  assert.deepEqual(result.toggleBefore, { via: "name", gains: ["like"], loses: ["unlike"] });
 });
 
 test("a press given ensureState that was not yet shown is pressed, and reports its toggle too", async (t) => {
@@ -60,9 +62,17 @@ test("a press that changes nothing about its control reports no toggle", async (
   const { result } = await press(t, { attributes: { class: "card" }, name: "Open" }, { attributes: { class: "card" }, name: "Open" });
   assert.equal(result.status, "succeeded");
   assert.equal(Object.hasOwn(result, "toggle"), false);
+  assert.equal(Object.hasOwn(result, "toggleBefore"), false);
 });
 
 test("a press after which the page is at another address reports no toggle, whatever its control now says", async (t) => {
   const { result } = await press(t, { attributes: {}, name: "Like" }, { attributes: {}, name: "Unlike" }, { moveTo: "http://127.0.0.1:4000/elsewhere/" });
   assert.equal(Object.hasOwn(result, "toggle"), false);
+  assert.equal(Object.hasOwn(result, "toggleBefore"), false);
+});
+
+test("a control already on before an unguarded press retains that actual pre-state", async (t) => {
+  const { result } = await press(t, { attributes: { "aria-pressed": "true" }, name: "Like" }, { attributes: { "aria-pressed": "false" }, name: "Like" });
+  assert.deepEqual(result.toggleBefore, { via: "attribute", attribute: "aria-pressed", to: true });
+  assert.deepEqual(result.toggle, { via: "attribute", attribute: "aria-pressed", to: false });
 });

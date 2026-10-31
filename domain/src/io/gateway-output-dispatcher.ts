@@ -79,7 +79,8 @@ export async function dispatchWebAutomationOutput(
     // that pressed, read through the signature's own reader, and told as an
     // explored press's toggle is (`actions/toggle-signature/output.ts`).
     const signature = succeeded && skipped === undefined && isRecord(result.payload) ? webToggleSignatureValue(result.payload.toggle) : undefined;
-    const toggle = signature === undefined ? undefined : webToggleOutput(signature);
+    const beforeSignature = signature !== undefined && isRecord(result.payload) ? webToggleSignatureValue(result.payload.toggleBefore) : undefined;
+    const toggle = signature === undefined ? undefined : webToggleOutput(signature, beforeSignature);
     // What the extension's interference clearing pressed while this action ran
     // (`actions/cleared-layers.ts`). Core reads it from the top of the dispatch
     // payload, as it reads `route`, so it is lifted there: copied through its

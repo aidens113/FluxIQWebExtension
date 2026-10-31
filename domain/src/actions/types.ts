@@ -586,6 +586,8 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
    * payload with what Core is told of it (`../io/gateway-output-dispatcher.ts`).
    */
   toggle?: WebToggleSignature | undefined;
+  /** The same control's observed state before the successful press; never an inferred inverse. */
+  toggleBefore?: WebToggleSignature | undefined;
   /** `web.dom.next_page`'s answer: the list moved, has no next page, or the move failed. */
   nextPage?: WebAutomationNextPageAnswer | undefined;
   /**

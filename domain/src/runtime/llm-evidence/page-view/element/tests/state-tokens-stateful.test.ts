@@ -40,13 +40,15 @@ test("a plain button is not stateful, and a checkbox that states nothing is stat
   assert.equal(webControlView(plain, [plain]), undefined);
   const box = el({ tag: "div", role: "checkbox" });
   assert.deepEqual(webControlView(box, [box]), { stateful: true });
+  const mixed = el({ tag: "div", role: "checkbox", attributes: [["aria-checked", "mixed"]] });
+  assert.deepEqual(webControlView(mixed, [mixed]), { stateful: true }, "unreadable state supplies neither shown nor ensures");
   const hidden = el({ tag: "button", hidden: true, attributes: [["aria-pressed", "true"]] });
   assert.equal(webControlView(hidden, [hidden]), undefined, "a hidden control is no control a person can press");
 });
 
 test("a press leaves the other state, set by the check node; selected and expanded add no node of their own", () => {
   const toggle = el({ tag: "button", attributes: [["aria-pressed", "false"]] });
-  assert.deepEqual(webControlView(toggle, [toggle]), { stateful: true, state: "unpressed", ensures: { via: "attribute", attribute: "aria-pressed", to: true }, idempotentWith: "web.output.dom-check" });
+  assert.deepEqual(webControlView(toggle, [toggle]), { stateful: true, state: "unpressed", shown: { via: "attribute", attribute: "aria-pressed", to: false }, ensures: { via: "attribute", attribute: "aria-pressed", to: true }, idempotentWith: "web.output.dom-check" });
   const tab = el({ tag: "div", role: "tab", attributes: [["aria-selected", "true"]] });
   assert.equal(webControlView(tab, [tab])?.state, "selected");
 });
@@ -56,8 +58,8 @@ test("a control that shows its state in its words is read only against a signatu
   const remove = el({ tag: "button", name: "Remove from shelf" });
   const learned = [{ via: "name" as const, gains: ["remove", "from"], loses: ["save", "to"] }];
   assert.equal(webControlView(save, [save]), undefined, "nothing learned");
-  assert.deepEqual(webControlView(save, [save], learned), { stateful: true, state: "off", ensures: learned[0] });
-  assert.deepEqual(webControlView(remove, [remove], learned), { stateful: true, state: "on", ensures: { via: "name", gains: ["save", "to"], loses: ["remove", "from"] } });
+  assert.deepEqual(webControlView(save, [save], learned), { stateful: true, state: "off", shown: { via: "name", gains: ["save", "to"], loses: ["remove", "from"] }, ensures: learned[0] });
+  assert.deepEqual(webControlView(remove, [remove], learned), { stateful: true, state: "on", shown: learned[0], ensures: { via: "name", gains: ["save", "to"], loses: ["remove", "from"] } });
   const other = el({ tag: "button", name: "Share" });
   assert.equal(webControlView(other, [other], learned), undefined, "words that match neither side are not guessed");
   // A signature that gains or loses nothing is no toggle.

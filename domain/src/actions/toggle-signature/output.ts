@@ -9,8 +9,8 @@
 import type { WebToggleSignature } from "./signature";
 
 /** A press's `toggle`, as Core records it whole and never reads inside. */
-export type WebToggleOutput = { signature: WebToggleSignature; idempotentWith?: "web.output.dom-check" };
+export type WebToggleOutput = { signature: WebToggleSignature; beforeSignature?: WebToggleSignature; idempotentWith?: "web.output.dom-check" };
 
-export function webToggleOutput(signature: WebToggleSignature): WebToggleOutput {
-  return signature.via === "attribute" ? { signature, idempotentWith: "web.output.dom-check" } : { signature };
+export function webToggleOutput(signature: WebToggleSignature, beforeSignature?: WebToggleSignature): WebToggleOutput {
+  return { signature, ...(beforeSignature ? { beforeSignature } : {}), ...(signature.via === "attribute" ? { idempotentWith: "web.output.dom-check" as const } : {}) };
 }
