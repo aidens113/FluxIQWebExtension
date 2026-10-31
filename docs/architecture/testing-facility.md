@@ -1840,8 +1840,9 @@ What the chat cannot carry is refused before anything starts
 Two limits come with the chat path:
 
 - Every Flow is held to one ceiling however it is started:
-  Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10,
-  passed by the Lab to the run's Core), lowered by the Flow's own
+  Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (the Claude
+  live-test allowance is $5; explicitly lower values remain binding),
+  passed by the Lab to the run's Core and lowered by the Flow's own
   `maxEstimatedCostUsdPerRun`. Core computes it for every
   `generate-flow-bootstrap-adaptation`, and the chat's `flow.createHere` makes
   that same call. The run plans with the same value (`plan.buildCostCeilingUsd`,
@@ -1849,7 +1850,7 @@ Two limits come with the chat path:
   writes it onto its Flow. A chat build's Flow is made inside Core's command,
   so a lowered ceiling has no Flow to go onto: `--llm-max-cost-usd` below the
   run's ceiling is refused for a chat build (`assertChatBuildable`). The
-  ceiling is one purse per Flow (t438; the user, 2026-10-01: "bring the
+  ceiling is one purse per Flow (t438; the user's original 2026-10-01 limit: "bring the
   ceiling down to $0.1 per flow max"): the build, its judge, the chat's
   reading, the run's repairs and re-authors and its result check all draw on
   it in the Lab's Core. Before it was, each part had the whole ceiling, and a
