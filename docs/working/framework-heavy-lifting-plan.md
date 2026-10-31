@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, P1b t811, C1 t813 and E/D5 t814 are merged; t817 passed lead acceptance and both native proofs, ready to integrate before the final full sweep.
+Status detail: All resumed units and grounded toggle follow-up t817 are verified and merged in both repositories. Final isolated full sweep is next; paid Claude comparison still waits for the user's go.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -64,12 +64,12 @@ acceptance check passed, and no paid run or model call happened.
 
 | Task | Work | Latest continuation state | To resume |
 | --- | --- | --- | --- |
-| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Merged on both dev branches after lead acceptance: 235 Core, 40 domain and 29 extension tests, types/reference, native Chromium proof and final audits; Core merge gate passed 70 contract tests | First-loop-row direction and browser rung/pacing coverage remain separate follow-ups; no paid qualification claimed |
+| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Merged on both dev branches after lead acceptance: 235 Core, 40 domain and 29 extension tests, types/reference, native Chromium proof and final audits; Core merge gate passed 70 contract tests | First-loop direction fixed/proven by t817; browser rung/pacing coverage remain separate follow-ups; no paid qualification claimed |
 | t810 (P5b) | Grounded no refutation, evidence-specific judge re-prompt, checked-cell citations, provenance and replay marks | All handoff defects fixed; integrated with Claude and shared output schema; lead119 Core +8 domain checks pass, final Core types/audit pass; worker RV1467/callers805/domain541/extension501 pass. Strict saved replay remains unsure for missing new replies, never fabricated acceptance | Merged downstream ad01bd0b and Core31713e1d; 70 merge-contract tests passed; no paid qualification claimed |
 | t811 (P1b) | Submit-then-test, label repair, Core completion, revision-aware keys and live CLI context | Lead42 Core+26 CLI tests pass; post-sync types pass; native2/2 verifies24rows/2whole/1partial and12-to9 builder decisions with unchanged gates; model/purse/mode reaches actual child configuration | Merged Coreb4a8f453/downstream01da7fa3 with Core0.13.0;70 merge-contract tests pass; ignored JSON evidence retained in main test-runs/2026-10-30-t811-final |
 | t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Merged both repositories after lead9 background and123 web/key-custody tests, types,3libs, docs/audits; Core merge contract gate70 passed | C2/C3 caller migration and routing remain separate; no real tenant socket/browser qualification claimed |
 | t814 (hosted E + D5) | Product/brand/assets, host loading and owned default project | Lead panel32/web27/ownership36/product18 and types/builds pass; real service-IAM default ownership, retry/partial/concurrent/conflict cases covered | Merged downstream6c88f928/Core4a522cd8 with Core0.12.0;70 merge-contract tests pass; later lifecycle wiring remains separate |
-| t817 (first-row toggle) | Paired before/after evidence, explicit grounded ensureState, persistence and runtime guards | Lead Core204/domain37/extension9, types/libs/audits/docs pass. Native first-row oracle+saved replay15-to15callbacks/3skips/0transitions and obstruction4recoveries/handler/finalyes pass; lead JSON gates accepted and3files preserved | Ready paired integration with Core0.14.0, then last isolated full sweep; no paid Claude performance claimed |
+| t817 (first-row toggle) | Paired before/after evidence, explicit grounded ensureState, persistence and runtime guards | Lead Core204/domain37/extension9, types/libs/audits/docs pass. Native first-row oracle+saved replay15-to15callbacks/3skips/0transitions and obstruction4recoveries/handler/finalyes pass; lead JSON gates accepted and3files preserved | Merged Coreae354e9d/downstreamdf58a48e, Core0.14.0;70 merge contracts and downstream structure pass; final sweep pending |
 
 **User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
 after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
@@ -88,9 +88,8 @@ and verify as above. Re-dispatch only the missing part.
 
 **Next, in order:**
 1. t799, t816, t810, t811, t813 and t814 are merged; finish t817 acceptance, then run the remaining isolated full sweep.
-2. Fix the t799 known limit before the photo-social rerun (design accepted, reports/codex-1030/first-row-toggle-design.md): in a loop whose first row is already in the asked state, the
-   toggle signature is learned reversed. Preserve paired before/after evidence and require an explicit observed end-state choice; never infer intent from first/most clicks. Implement paired Core/domain before the remaining full sweep.
-3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
+2. t817 fixed the first-already-satisfied-row defect: paired before/after evidence and explicit grounded end-state choice now pass native oracle/saved-replay proof; no first/majority click inference.
+3. After the user's go, run the live round with Claude/$5: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
 4. Follow-ups:
    - one shared run `now` across page, build test and run end (needs the executor; after t799);
@@ -434,6 +433,14 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Validation: headed Chromium two-spec command ->2 passed(4.1m); lead JSON assertions ->accepted:true,24rows/2whole/1partial/0prematurecommands,12-to9 decisions,6supervisor/2Core-completions each. Three JSON files preserved under ignored main test-runs/2026-10-30-t811-final.
 - Outcome: paired task finish -> downstream structure passed, Core contracts70 passed; merged Coreb4a8f453/downstream01da7fa3. Core0.13.0; remote task backups retained.
 - Not verified: paid Claude behavior/performance, native Firefox or full sweep. No provider calls or panel management.
+
+### 2026-10-30 - Grounded toggle choice and native replay accepted (t817)
+- Agent: Codex lead; Core/domain/native worker reports under reports/codex-1030/first-row-toggle-*-result.md.
+- Changed: preserve actual beforeSignature and CC9 shown through wire/storage/restore; require a copied observed ensureState, never infer intent from first/most clicks; retain safe setters, unknown first exploration and undo behavior.
+- Validation: lead owning Vitest ->199/14files; additional shared-brief caller ->5/5 after explicit-choice fixture alignment; domain owning command ->37/37; extension action command ->9/9. Core/domain/extension types,3libs,recursive runner/deps,docs,model-text and audits pass.
+- Validation: native first-row oracle/save/replay passed; lead JSON gate ->accepted:true,15-to15callbacks,3skips,0transitions,3orderedrecords,1savedstate. Official same-origin URL comparator reused unchanged; expected records/oracle untouched.
+- Validation: obstruction-only `playwright test` ->1passed(1.9m); lead JSON gate ->4recoveries,6independentUIchecks,6exact scripted-uncertainty rows,0failedaction/recoveryrows,2handler requests,1actualskip,finalverdict yes. Three JSONs retained under ignored main test-runs/2026-10-30-t817-final.
+- Outcome: Coreae354e9d/downstreamdf58a48e merged with Core0.14.0; Core contracts70 and downstream structure passed. No paid calls, panel management or oracle weakening; native Firefox/full sweep remain unverified.
 
 ## Open Questions
 
