@@ -10,6 +10,7 @@
 
 export { webReacquireElement } from "./element-match";
 export { webAutomationReacquireTarget } from "./reacquire-target";
+export { webAutomationReacquireUnboundTarget } from "./reacquire-unbound-target";
 export { webAutomationReturnToSourcePlace, type WebSourcePlaceDispatch } from "./return-to-source-place";
 export { webReacquireRowKeyColumns } from "./row-key-columns";
 export { webReacquireRow } from "./row-match";

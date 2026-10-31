@@ -13,13 +13,13 @@
 import { attemptNodeId } from "../../flow-lane/index.js";
 
 export type MatrixReacquireRecord = Readonly<{
-  sourceNodeId: string | null;
-  kind: "row" | "output" | null;
+  sourceNodeId?: string | null;
+  kind: "row" | "output" | "identity" | null;
   outcome: "found" | "gone" | "unmatched" | "unavailable";
   /** Why it was not found, as Core's or the host's closed word (`ambiguous`, `unidentifiable`); `null` when none. */
   reason: string | null;
   /** The host went back to where the source ran before re-running it. */
-  returned: boolean;
+  returned?: boolean;
 }>;
 
 export type MatrixTraceAttempt = Readonly<{
@@ -37,6 +37,7 @@ const STATUSES = new Set(["running", "succeeded", "failed", "waiting", "cancelle
 const OUTCOMES = new Set(["found", "gone", "unmatched", "unavailable"]);
 const CODE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/u;
 const WORD = /^[a-z][a-z_]{0,63}$/u;
+const IDENTITY_REASONS = new Set(["ambiguous", "unidentifiable", "observation_unavailable", "observation_incomplete", "place_unproved", "unsupported_target", "no_refresh_declaration", "scope_rejected", "scope_unreadable", "unresolved_parameters", "parameters_unreadable", "host_failed", "malformed_answer", "invalid_patch", "binding_changed", "authority_changed", "action_effect_unavailable", "aborted"]);
 
 /** Every attempt of the runtime session's trace, in trace order; none when the session carries no trace. */
 export function matrixTraceAttempts(runtimeSession: unknown): MatrixTraceAttempt[] {
@@ -60,6 +61,16 @@ export function matrixTraceAttempts(runtimeSession: unknown): MatrixTraceAttempt
 function reacquireOf(value: unknown): MatrixReacquireRecord | null {
   const reacquire = record(value);
   if (!reacquire || typeof reacquire.outcome !== "string" || !OUTCOMES.has(reacquire.outcome)) return null;
+  if (reacquire.kind === "identity") {
+    // Identity recovery has no source lineage. Copy only its closed diagnosis;
+    // even a malformed producer cannot make it publish target or patch data.
+    if (reacquire.sourceNodeId !== undefined || reacquire.returned !== undefined) return null;
+    return {
+      kind: "identity",
+      outcome: reacquire.outcome as MatrixReacquireRecord["outcome"],
+      reason: typeof reacquire.reason === "string" && IDENTITY_REASONS.has(reacquire.reason) ? reacquire.reason : null
+    };
+  }
   return {
     sourceNodeId: typeof reacquire.sourceNodeId === "string" ? attemptNodeId(reacquire.sourceNodeId) : null,
     kind: reacquire.kind === "row" || reacquire.kind === "output" ? reacquire.kind : null,

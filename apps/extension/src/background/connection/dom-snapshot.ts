@@ -231,7 +231,8 @@ export async function captureMergedTabSnapshot(
   const evidence = mergePageEvidence(
     topEvidence ? [topEvidence, ...frameEvidence] : frameEvidence,
     topEvidence ?? pageEvidenceOf(topSnapshot),
-    unansweredFrameIds
+    unansweredFrameIds,
+    answered.every((entry) => pageEvidenceOf(entry.snapshot) !== undefined)
   );
   if (evidence) merged.evidence = evidence;
   return merged;
@@ -293,6 +294,7 @@ function frameEvidenceInTopFrameTerms(
       pendingNavigation: evidence.loading.pendingNavigation
     }),
     navigation: evidence.navigation,
+    captureOptions: evidence.captureOptions,
     dialogs: dialogs && present<DialogEvidence>({
       open: dialogs.open.map((dialog) => present<DialogEvidenceItem>({
         selector: qualify(dialog.selector), role: dialog.role, modal: dialog.modal,
@@ -389,7 +391,7 @@ function frameBoundsOnTopDocument(
  *   history length are not the page's, and reporting an ad iframe's origin as
  *   the page's origin would be worse than reporting nothing.
  */
-function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvidence | undefined, unansweredFrameIds: readonly number[]): PageEvidence | undefined {
+function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvidence | undefined, unansweredFrameIds: readonly number[], everyComponentHasEvidence: boolean): PageEvidence | undefined {
   if (!contributions.length) return base;
   const anchor = base ?? contributions[0];
   if (!anchor) return undefined;
@@ -419,6 +421,11 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
       pendingNavigation: contributions.some((evidence) => evidence.loading.pendingNavigation)
     }),
     navigation: anchor.navigation,
+    // The request is no proof: every included frame must report its actual
+    // applied setting. Older or malformed frame evidence leaves it unknown.
+    captureOptions: everyComponentHasEvidence && contributions.every((evidence) => typeof evidence.captureOptions?.includeHidden === "boolean")
+      ? { includeHidden: contributions.every((evidence) => evidence.captureOptions?.includeHidden === true) }
+      : undefined,
     dialogs,
     overlays,
     regions,

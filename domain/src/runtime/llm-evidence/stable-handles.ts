@@ -454,6 +454,7 @@ function renderedFirst(binding: WebLlmSnapshotBinding): number[] {
 function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): WebLlmSnapshotBinding {
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
+  const recordIdentities: WebLlmSnapshotBinding["recordIdentities"] = binding.recordIdentities === undefined ? undefined : new Map();
   const shadowHosts = new Map<string, readonly string[]>();
   const dialogNames = new Map<string, string>();
   const drawings = new Map<string, string>();
@@ -466,6 +467,8 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (selector !== undefined) selectors.set(target, selector);
     const record = binding.records.get(element.target);
     if (record !== undefined) records.set(target, record);
+    const recordIdentity = binding.recordIdentities?.get(element.target);
+    if (recordIdentity !== undefined) recordIdentities?.set(target, structuredClone(recordIdentity));
     const hosts = binding.shadowHosts?.get(element.target);
     if (hosts !== undefined) shadowHosts.set(target, hosts);
     const dialog = binding.dialogNames?.get(element.target);
@@ -498,5 +501,5 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken, and so does the query.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: binding.captureProvenance === undefined ? undefined : structuredClone(binding.captureProvenance), shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
 }

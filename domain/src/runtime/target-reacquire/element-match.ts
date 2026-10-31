@@ -17,41 +17,45 @@
 // - **classNames**, as a set.
 //
 // Never the selector, the xpath, the list or table position, or a handle
-// number. One match is `found` and answers that candidate as given; none is
-// `gone`; several are `unmatched`/`ambiguous`, except that where the stale
-// control carries the words of the record it sat in, and exactly one of the
-// matches sits in a record with the same words, that one is the control: a
-// "Hide post" in every card is told apart by its card, never by which card it
-// was. The record only breaks a tie, so a card whose words changed never turns
-// a match into `gone`.
+// number. A saved record, dialog and shadow root gate every match before
+// uniqueness is considered. Record keys outrank record words; missing or
+// changed record evidence cannot prove gone or authorize a different row.
 //
 // A candidate is a fingerprint, or an object carrying one under `element` (a
 // resolved step's parameters, a look-up's answer).
 
 import type { AutomationStudioTargetReacquireAnswer } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import type { WebAutomationElementFingerprint } from "../../actions/types";
-import { WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS, webElementIdentitySignals, type WebElementIdentitySignal } from "../../element-fingerprint";
+import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../actions/types";
+import { WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS, webElementIdentitySignals, webRecordedRecordMatches, type WebElementIdentitySignal } from "../../element-fingerprint";
 import { webReacquireText } from "./text";
 
 const STRING_FIELDS = ["tagName", "role", "implicitRole", "inputType", "visibleText", "text", "accessibleName", "label", "id", "testId", "name", "drawing", "selector"] as const;
 const KIND_FIELDS = ["tagName", "role", "implicitRole", "inputType"] as const;
 const WORD_FIELDS = ["visibleText", "text", "accessibleName", "label"] as const;
 
-type Read = { fingerprint: WebAutomationElementFingerprint; readsWords: boolean; record: string | undefined };
+type Read = { fingerprint: WebAutomationElementFingerprint; readsWords: boolean; record: WebAutomationElementContext["record"]; dialog: string | undefined; shadowHosts: readonly string[] };
 
 /** The one candidate that is the stale control, or why there is none (header). */
 export function webReacquireElement(input: { stale: JsonValue; candidates: readonly JsonValue[] }): AutomationStudioTargetReacquireAnswer {
   const stale = readElement(input.stale);
-  if (!stale || webElementIdentitySignals(stale.fingerprint).length < WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS) return { outcome: "unmatched", reason: "unidentifiable" };
+  if (!stale || usableSignals(stale).length < WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS) return { outcome: "unmatched", reason: "unidentifiable" };
   const matches = input.candidates.flatMap((candidate) => {
     const read = readElement(candidate);
     return read && agrees(stale, read) ? [{ candidate, read }] : [];
   });
-  if (matches.length === 1) return { outcome: "found", value: matches[0]!.candidate };
-  if (matches.length === 0) return { outcome: "gone" };
-  const inRecord = stale.record === undefined ? [] : matches.filter((match) => match.read.record === stale.record);
-  return inRecord.length === 1 ? { outcome: "found", value: inRecord[0]!.candidate } : { outcome: "unmatched", reason: "ambiguous" };
+  if (matches.length === 0 && stale.record === undefined && stale.dialog === undefined && stale.shadowHosts.length === 0) return { outcome: "gone" };
+  const eligible = matches.filter(({ read }) => webRecordedRecordMatches(stale.record, read.record)
+    && stale.dialog === read.dialog && sameHosts(stale.shadowHosts, read.shadowHosts));
+  return eligible.length === 1 ? { outcome: "found", value: eligible[0]!.candidate } : { outcome: "unmatched", reason: "ambiguous" };
+}
+
+/** Recompute the save-time floor after ignored words are removed, including its lone-class rule. */
+function usableSignals(target: Read): WebElementIdentitySignal[] {
+  if (!target.readsWords) return webElementIdentitySignals(target.fingerprint);
+  const fingerprint = { ...target.fingerprint };
+  for (const field of WORD_FIELDS) delete fingerprint[field];
+  return webElementIdentitySignals(fingerprint);
 }
 
 /** Whether every signal both carry agrees and at least two do (header). */
@@ -120,14 +124,34 @@ function readElement(value: JsonValue | undefined): Read | undefined {
   const classes = Array.isArray(source.classNames) ? source.classNames.filter((token): token is string => typeof token === "string" && token.trim() !== "") : [];
   if (classes.length > 0) fingerprint.classNames = classes;
   if (Object.keys(fingerprint).every((name) => name === "selector")) return undefined;
-  return { fingerprint: fingerprint as WebAutomationElementFingerprint, readsWords: source.readsWords === true, record: recordWords(source) };
+  if (source.context !== undefined && !record(source.context)) return undefined;
+  const context = record(source.context) ? source.context : undefined;
+  if (context?.dialog !== undefined && (typeof context.dialog !== "string" || context.dialog.trim() === "")) return undefined;
+  if (context?.shadowHosts !== undefined && (!Array.isArray(context.shadowHosts)
+    || context.shadowHosts.some((host) => typeof host !== "string" || host.trim() === ""))) return undefined;
+  return {
+    fingerprint: fingerprint as WebAutomationElementFingerprint,
+    readsWords: source.readsWords === true,
+    record: recordIdentity(context?.record),
+    dialog: typeof context?.dialog === "string" && context.dialog.trim() !== "" ? context.dialog : undefined,
+    shadowHosts: Array.isArray(context?.shadowHosts) ? context.shadowHosts.filter((host): host is string => typeof host === "string" && host !== "") : []
+  };
 }
 
-/** The words of the record the control sat in, as compared, when it carried them. */
-function recordWords(source: JsonObject): string | undefined {
-  const context = record(source.context) ? source.context : undefined;
-  const held = context && record(context.record) ? context.record : undefined;
-  return typeof held?.text === "string" && held.text.trim() !== "" ? webReacquireText(held.text) : undefined;
+/** Keep structured record evidence; an empty/malformed declared record fails closed. */
+function recordIdentity(value: JsonValue | undefined): WebAutomationElementContext["record"] {
+  if (value === undefined) return undefined;
+  if (!record(value)) return {};
+  return {
+    key: typeof value.key === "string" ? value.key : undefined,
+    keyAttribute: typeof value.keyAttribute === "string" ? value.keyAttribute : undefined,
+    text: typeof value.text === "string" ? value.text : undefined,
+    values: Array.isArray(value.values) ? value.values.filter((item): item is string => typeof item === "string") : undefined
+  };
+}
+
+function sameHosts(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((host, index) => host === right[index]);
 }
 
 function said(value: string | undefined): value is string {

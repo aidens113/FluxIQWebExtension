@@ -18,3 +18,4 @@ export {
 } from "./shortfall";
 export { webElementIdentitySignals, type WebElementIdentitySignal } from "./signals";
 export type { WebElementFingerprintSource } from "./source";
+export { webRecordedRecordValueMatches, webRecordedRecordMatches } from "./record";

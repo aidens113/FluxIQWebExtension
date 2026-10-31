@@ -4,6 +4,19 @@ import { sanitizeWebLlmSnapshot } from "..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 import { WEB_LLM_WITHHELD_TEXT } from "../withheld";
 
+test("structured stable record provenance stays private and a withheld key has no weaker fallback", () => {
+  const binding = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/sheets", interactiveElements: [
+    { tagName: "button", selector: "#open", accessibleName: "Open sheet", context: { record: { key: "sheet-A", keyAttribute: "data-sheet-id" } } },
+    { tagName: "button", selector: "#secret", accessibleName: "Open protected sheet", context: { record: { key: "sk-live0123456789abcdefghijKLMN", keyAttribute: "data-sheet-id", text: "Fallback sheet" } } }
+  ] });
+  const open = binding.evidence.elements.find((element) => element.name === "Open sheet")!;
+  const protectedSheet = binding.evidence.elements.find((element) => element.name === "Open protected sheet")!;
+  assert.deepEqual(binding.recordIdentities?.get(open.target), { key: "sheet-A", keyAttribute: "data-sheet-id" });
+  assert.equal(binding.recordIdentities?.get(protectedSheet.target), undefined);
+  assert.doesNotMatch(JSON.stringify(binding.evidence), /sheet-A|data-sheet-id|recordIdentities|captureProvenance|sk-live/u);
+  assert.equal(binding.captureProvenance, undefined, "sanitization alone grants no capture coverage");
+});
+
 test("sanitizes extension snapshots: a secret control is dropped, a URL's secrets are withheld, the rest is carried whole", () => {
   const evidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form?token=private#secret",

@@ -33,6 +33,21 @@ import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, WEB_LLM_WITHHELD_TEXT, type WebAutomationLlmEvidenceRuntime } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
+import { webPlanElementIdentity, webPlanElementIdentityAcrossViews } from "../element-identity";
+
+test("a selected saved identity retains its screened stable key across record text drift", () => {
+  const page = sanitizeWebLlmSnapshotWithBindings({ url: "https://library.test/sheets", interactiveElements: [
+    { tagName: "button", selector: "#open", accessibleName: "Open sheet", context: { record: { key: "sheet-A", keyAttribute: "data-sheet-id", text: "Waiting" } } }
+  ] });
+  const element = page.evidence.elements[0]!;
+  const recordIdentity = page.recordIdentities?.get(element.target);
+  const saved = webPlanElementIdentity(element, "#open", undefined, undefined, undefined, recordIdentity);
+  assert.deepEqual(saved.context?.record, { key: "sheet-A", keyAttribute: "data-sheet-id", text: "Waiting" });
+  const later = structuredClone(saved);
+  later.context!.record!.text = "Ready";
+  assert.deepEqual(webPlanElementIdentityAcrossViews(saved, later).context?.record, { key: "sheet-A", keyAttribute: "data-sheet-id" });
+  assert.equal(recordIdentity?.text, "Waiting");
+});
 
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 const HOME_URL = "http://127.0.0.1:4100/bigbox/";

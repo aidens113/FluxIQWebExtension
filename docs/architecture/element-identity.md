@@ -252,9 +252,12 @@ exact after spacing and case are set aside, never fuzzy and never by position.
   signal both carry agrees and at least two agree (the save-time minimum).
   Selector, xpath, list and table position and handle numbers are never
   compared. Words are skipped when the step reads them as its value
-  (`readsWords`). Several matches stay `ambiguous` unless exactly one sits in a
-  record with the stale control's record words; the record only breaks a tie,
-  so changed card words never turn a match into `gone`.
+  (`readsWords`). A saved record is a gate before even a single descriptive
+  match is accepted: stable key and key attribute first, otherwise its recorded
+  text. Missing or conflicting record provenance and text drift remain
+  unmatched; they cannot select another record or prove the original gone.
+  A stable matching key can survive changed record text. Multiple eligible
+  matches remain ambiguous; position never breaks a tie.
 - **Going back first** (`return-to-source-place.ts`). The host remembers the
   `from` location of each attempt's before-action capture (`source-places.ts`,
   last 64 attempts). If the source's attempt recorded a location that differs
@@ -283,6 +286,42 @@ Core's `automationStudioDispatchWithNodeRetries`
 read as a step the site remembered. A re-read that fails or answers no rows is
 `unavailable`, never `gone`.
 
+### Targets without a source step (Core 0.20)
+
+The optional `reacquireUnboundTarget` hook uses the same trigger and act-safety
+predicate, with actual resolved parameters and the failed attempt's captured
+state reference. Canonical web output descriptors mark only `selector` and
+`element` as `targetRefresh:true`. A successful host answer proposes those two
+fields; Core applies them only to this arrival's remaining retries. Scope,
+values, consequences, approvals and the stored Flow are not rewritten.
+
+Native execution and authoring share the raw-observation classifier, complete
+candidate conversion, record-aware matcher and fresh-target builder under
+`domain/src/runtime/target-reacquire/identity/`. Authoring no longer requires
+an old handle when a resolved saved fingerprint exists. A bare selector still
+carries no stable identity. Source-bound row/output targets keep their original
+source path, without a fallback search after that path fails.
+
+Observation is pinned to the original gateway session and explicit frame. A
+bounded private memo correlates attempt ID and before-action state reference
+with actual session/tab/frame, safe location and document time origin. Child
+targets obtain a separate scoped prior observation; a reused top-frame summary
+is never relabelled as proof of the child's document. Unknown or changed
+provenance returns unavailable without navigation to a guessed context.
+
+Fresh capture must positively report the applied hidden-element option and a
+settled, complete intended frame. Hidden matches participate in ambiguity but
+are not dispatched. Missing metadata, incomplete or mixed scope, a withheld
+identity, or record drift never establishes found or gone. Current DOM absence
+does not prove an item absent from paginated or virtualized data.
+
+Private `recordIdentities` and `captureProvenance` binding fields survive handle
+restamping. The maps and capture provenance stay outside model packets and
+durable traces; a selected screened record identity uses the existing saved
+fingerprint contract. Scoped looks add to remembered controls rather than
+forgetting other frames. Fresh fingerprints retain only fresh addressing and
+context plus the original `readsWords` instruction.
+
 ## Limits
 
 - Scoring cannot rescue every drift, and is not meant to. A control whose
@@ -292,14 +331,13 @@ read as a step the site remembered. A re-read that fails or answers no rows is
 - Candidate enumeration is per document. A merged cross-frame view exists for
   evidence ([page evidence](page-evidence.md)) but not for resolution; an
   action addresses one frame.
-- No acting verb waits before resolving. `resolveTarget` runs its strategies
-  and then scoring once and throws; nothing retries and nothing polls. A page
-  that renders late is covered by a wait step before the action, and a
-  recording proposes one: when the page added nodes and the first executable
-  entry after that is a click on a selector in the same top document, with no
-  evidence in between naming another URL, the recording mapper proposes
-  `web.dom.wait_for_selector` for that selector to be present, ahead of the
-  click (`domain/src/recording/proposals/late-target-wait.ts`; the recording
-  side is in [extension client architecture](extension-client.md#a-wait-before-a-late-target)).
-  A click recorded in a child frame proposes no wait, and a Flow without a
-  recorded addition must author the wait itself.
+- Each `resolveTarget` call makes one resolution pass. The browser action's
+  recovery ladder waits and retries when a target has not appeared, and Core
+  applies its node retry policy while preserving uncertain-effect protection.
+  Source-less identity refresh uses the recovery contract described above;
+  it never makes a missing target permission to click a different record.
+  Recorded late DOM additions can still propose an explicit
+  `web.dom.wait_for_selector` before a top-document click
+  (`domain/src/recording/proposals/late-target-wait.ts`; see
+  [extension client architecture](extension-client.md#a-wait-before-a-late-target)).
+  Child-frame recordings do not receive that top-document proposal.

@@ -41,7 +41,7 @@ export type SnapshotElementCounts = {
  * kept, paired with the elements they came from, and their `changed` and
  * `recentlyInteracted` flags are set as a side effect of building the totals.
  */
-export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: SnapshotElementCounts): PageEvidence {
+export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: SnapshotElementCounts, includeHidden: boolean): PageEvidence {
   const activity = markElementActivity(entries, recentlyInteractedElements());
   const dialogs = dialogEvidence();
   const overlays = overlayEvidence(entries.map((entry) => entry.element));
@@ -60,6 +60,7 @@ export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: S
     },
     loading: loadingEvidence(),
     navigation: navigationEvidence(),
+    captureOptions: { includeHidden },
     dialogs,
     overlays,
     regions,

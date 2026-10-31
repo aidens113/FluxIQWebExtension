@@ -61,8 +61,8 @@
 // packet did not withhold them, because the page compares them whole. The
 // packet no longer cuts any string (t200), so a whole name is every name. A
 // record the page *keyed* (`data-id` and the like) publishes no words and so
-// travels no record from here; its key lives in the binding's `records`, which
-// only the call site (`target-packets.ts`) holds.
+// publishes no record key; the call site supplies its screened structured
+// identity privately so a selected saved fingerprint retains that stable key.
 //
 // **The words a person reads for the element ride beside the identity, never in
 // it** (`webPlanElementWords`, U-B3-3). A control that lays its words out as
@@ -114,7 +114,8 @@
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { webElementIdentitySignals } from "../../../element-fingerprint";
-import type { WebLlmEvidenceElement } from "../elements";
+import type { WebLlmEvidenceElement } from "..";
+import type { WebTargetRecordIdentity } from "../../target-reacquire/identity";
 import { webPacketElementFingerprint } from "../packet-fingerprint";
 import { webLlmReadableWords } from "../page-view";
 import { present } from "../present";
@@ -132,8 +133,8 @@ type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "landm
  * bound to -- and, for an element inside open shadow roots, by the host chain
  * the binding kept beside that selector (`../packet-fingerprint/`).
  */
-export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[], dialog?: string, drawing?: string): WebPlanElementIdentity {
-  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts, dialog, drawing });
+export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[], dialog?: string, drawing?: string, recordIdentity?: WebTargetRecordIdentity): WebPlanElementIdentity {
+  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts, dialog, drawing, recordIdentity });
   const context = fingerprint.context;
   return present<WebPlanElementIdentity>({
     tagName: fingerprint.tagName,
@@ -269,7 +270,7 @@ function agreedAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElemen
     listPosition: agreed(earlier.context?.listPosition, newer.context?.listPosition),
     tablePosition: agreed(earlier.context?.tablePosition, newer.context?.tablePosition),
     shadowHosts: newer.context?.shadowHosts,
-    record: agreed(earlier.context?.record, newer.context?.record)
+    record: agreedRecord(earlier.context?.record, newer.context?.record, same)
   });
   return present<WebPlanElementIdentity>({
     tagName: newer.tagName,
@@ -289,6 +290,13 @@ function agreedAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElemen
     drawing: agreed(earlier.drawing, newer.drawing),
     context: Object.keys(context).length > 0 ? context : undefined
   });
+}
+
+/** A stable key survives text drift without retaining either view's changed record text. */
+function agreedRecord(earlier: WebTargetRecordIdentity | undefined, newer: WebTargetRecordIdentity | undefined, same: (a: unknown, b: unknown) => boolean): WebTargetRecordIdentity | undefined {
+  if (same(earlier, newer)) return earlier;
+  if (!earlier?.key || earlier.key !== newer?.key || earlier.keyAttribute !== newer.keyAttribute) return undefined;
+  return present<WebTargetRecordIdentity>({ key: earlier.key, keyAttribute: earlier.keyAttribute, text: undefined, values: same(earlier.values, newer.values) ? earlier.values : undefined });
 }
 
 /** The class tokens two views of one control both carry; nothing when they share none. */

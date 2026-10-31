@@ -8,7 +8,7 @@ import type { ClientGatewayClientMessage } from "fluxiq/client-gateway";
  * A websocket transport for the real Core gateway; every envelope is delegated unchanged. `observe` is told each client
  * message as it arrives; `commanded` (optional) the action type of each `server.execute_action` Core sends a client.
  */
-export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (message: ClientGatewayClientMessage) => void, commanded?: (actionType: string) => void) {
+export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (message: ClientGatewayClientMessage) => void, commanded?: (actionType: string, commandId?: string, traceScope?: string) => void) {
   const gateway = fluxiq.programs.clientGateway;
   const sockets = new Set<Socket>();
   const errors: string[] = [];
@@ -22,8 +22,8 @@ export async function startResetDiagnosticGateway(fluxiq: FluxIQ, observe?: (mes
     const session = gateway.connect({ socket: { send: raw => {
       if (commanded) {
         try {
-          const sent = JSON.parse(String(raw)) as { type?: unknown; payload?: { actionType?: unknown } };
-          if (sent.type === "server.execute_action") commanded(String(sent.payload?.actionType ?? ""));
+          const sent = JSON.parse(String(raw)) as { type?: unknown; payload?: { actionType?: unknown; commandId?: unknown; metadata?: { trace?: { scope?: unknown } } } };
+          if (sent.type === "server.execute_action") commanded(String(sent.payload?.actionType ?? ""), typeof sent.payload?.commandId === "string" ? sent.payload.commandId : undefined, typeof sent.payload?.metadata?.trace?.scope === "string" ? sent.payload.metadata.trace.scope : undefined);
         } catch {
           // best-effort: a frame that is not JSON is no command.
         }

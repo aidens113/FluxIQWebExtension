@@ -69,3 +69,44 @@ test("a look that described the whole page replaces the page's handles, as a sho
   assert.equal(at(targets, "t1"), "#control-1");
   assert.equal(at(targets, "t2"), "unknown", "a control a complete look did not describe has left the page");
 });
+
+test("a complete scoped look adds known controls without forgetting another frame or fabricating truncation", () => {
+  const targets = createWebLlmTargetPackets();
+  const capture = captures();
+  const merged = capture(buttons(2, "control"));
+  merged.evidence.elements[1]!.frameId = 4;
+  targets.remember(SCOPE, merged);
+  const top = capture(buttons(1, "control"));
+  top.captureProvenance = { scope: { kind: "single-frame", browserFrameId: 0 }, coverage: "complete", includesHidden: true };
+  targets.rememberLook(SCOPE, top);
+  assert.equal(top.evidence.truncated, false);
+  const child = targets.resolve(SCOPE, "t2", PAGE);
+  assert.equal(child.ok && child.selector, "#control-2");
+  assert.equal(child.ok && child.frameId, 4);
+  assert.equal(at(targets, "t1"), "#control-1");
+});
+
+test("a local child look retains its actual frame scope and leaves the existing top controls available", () => {
+  const targets = createWebLlmTargetPackets();
+  const capture = captures();
+  targets.remember(SCOPE, capture(buttons(1, "top")));
+  const child = capture(buttons(1, "child"));
+  child.captureProvenance = { scope: { kind: "single-frame", browserFrameId: 4, browserFrameUrlPath: "/editor" }, coverage: "complete", includesHidden: true };
+  targets.rememberLook(SCOPE, child);
+  assert.equal(at(targets, "t1"), "#top-1");
+  const resolution = targets.resolve(SCOPE, "t2", PAGE);
+  assert.equal(resolution.ok && resolution.frameId, 4);
+  assert.equal(resolution.ok && resolution.frameUrlPath, "/editor");
+});
+
+test("selected saved identities retain the binding's private structured record key", () => {
+  const targets = createWebLlmTargetPackets();
+  const capture = captures();
+  const binding = capture([{ tagName: "button", selector: "article button", accessibleName: "Open details", visibleText: "Open details" }]);
+  const record = { keyAttribute: "data-record-id", key: "record-17" };
+  binding.recordIdentities = new Map([[binding.evidence.elements[0]!.target, record]]);
+  targets.remember(SCOPE, binding);
+  const resolution = targets.resolve(SCOPE, "t1", PAGE);
+  assert.deepEqual(resolution.ok && resolution.element.context?.record, record);
+  assert.equal(JSON.stringify(binding.evidence).includes("record-17"), false);
+});

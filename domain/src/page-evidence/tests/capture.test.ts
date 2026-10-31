@@ -107,6 +107,7 @@ const EXERCISED: Row[] = [
  * reason below was wrong and should be deleted rather than reworded.
  */
 const NOT_EXERCISED: (Row & { why: string })[] = [
+  { field: "captureOptions.includeHidden", reach: (e) => e.captureOptions?.includeHidden, why: "these historical captures predate applied-setting provenance and must remain unknown. Current producer/merge cases are covered by extension content/tests/dom-snapshot.test.ts and background/connection/tests/dom-snapshot.test.ts; the installed native identity browser proof asserts the actual marker." },
   { field: "navigation.referrer", reach: (e) => e.navigation.referrer, why: "the harness opens each fixture directly, so there is no referring page. The packet's origin-and-path reduction of it is covered in llm-evidence/tests/page-evidence.test.ts." },
   { field: "navigation.redirects", reach: (e) => e.navigation.redirects, why: "no Lab fixture redirects. The producer omits the field at zero." },
   { field: "dialogs.armPending", reach: (e) => e.dialogs?.armPending, why: "true only between writing an arming and the page-world override taking it, which happens on the dispatching call stack. It is observable only where the override is absent." },
@@ -130,10 +131,11 @@ const NOT_EXERCISED: (Row & { why: string })[] = [
  * needs a row in `EXERCISED` or `NOT_EXERCISED` by hand; nothing in TypeScript
  * can enumerate a nested optional key at run time.
  */
-const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page has one" | "only on a merged capture a child frame did not answer"> = {
+const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page has one" | "only on a merged capture a child frame did not answer" | "only on a producer that records applied settings"> = {
   elements: "always",
   loading: "always",
   navigation: "always",
+  captureOptions: "only on a producer that records applied settings",
   dialogs: "when the page has one",
   overlays: "when the page has one",
   regions: "when the page has one",
@@ -149,9 +151,9 @@ function reachesInAnyCapture(reach: Reach): boolean {
   return CAPTURES.some(([, evidence]) => reach(evidence) !== undefined);
 }
 
-test("every item the contract declares is carried by a real capture, and the three unconditional ones by all of them", () => {
+test("historical captures cover their contract items and every unconditional item, with newer producer provenance recorded separately", () => {
   for (const [item, when] of Object.entries(ITEMS) as [keyof WebAutomationPageEvidence, string][]) {
-    if (when === "only on a merged capture a child frame did not answer") continue;
+    if (when === "only on a merged capture a child frame did not answer" || when === "only on a producer that records applied settings") continue;
     const carrying = CAPTURES.filter(([, evidence]) => evidence[item] !== undefined).map(([name]) => name);
     assert.notDeepEqual(carrying, [], `no capture carries \`${item}\`, so nothing proves the producer writes it`);
     if (when === "always") {

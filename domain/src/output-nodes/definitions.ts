@@ -339,8 +339,8 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   const selectorParameters: AutomationNodeParameter[] = [
     { id: "target", label: "Adapted Target", description: TARGET_DESCRIPTION, valueType: "object", example: { handle: "t5" }, ui: { control: "value" } },
     // Filled from the handle in `target`, never by a model (`TARGET_DESCRIPTION`).
-    { id: "selector", label: "Selector", valueType: "string", shownToModel: false, ui: { control: "text", placeholder: "CSS selector" } },
-    { id: "element", label: "Element", valueType: "object", shownToModel: false, ui: { control: "value" } },
+    { id: "selector", label: "Selector", valueType: "string", shownToModel: false, targetRefresh: true, ui: { control: "text", placeholder: "CSS selector" } },
+    { id: "element", label: "Element", valueType: "object", shownToModel: false, targetRefresh: true, ui: { control: "value" } },
     { id: "visualTarget", label: "Visual Target", valueType: "object", shownToModel: false, ui: { control: "value" } },
     { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
   ];

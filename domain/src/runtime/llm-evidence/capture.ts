@@ -36,6 +36,7 @@ import {
   type WebLlmToolRejectionReason
 } from "./tool-rejection";
 import { jsonRecord } from "./untrusted-json";
+import { webCapturedTargetObservation, type WebTargetScope } from "../target-reacquire/identity";
 
 type ClientActionResult = WebFailedActionResult & {
   payload?: JsonObject;
@@ -51,7 +52,7 @@ export type WebLlmEvidenceGateway = {
    * would answer with a bare snapshot, which is not an answer.
    */
   structureDetectionSessionIds?(): string[];
-  executeAction(sessionId: string, command: { actionType: string; parameters: JsonObject; metadata: JsonObject }): Promise<ClientActionResult>;
+  executeAction(sessionId: string, command: { actionType: string; parameters: JsonObject; metadata: JsonObject; timeoutMs?: number }): Promise<ClientActionResult>;
 };
 
 export type WebLlmEvidenceToolExecution = {
@@ -549,13 +550,22 @@ export async function captureEvidence(
   expectedOrigin?: string,
   // A search's look (`./page-find/`): the capture also lists what is not
   // rendered, each element flagged `hidden`. Every other look is the default.
-  options?: { includeHidden: true }
+  options?: { includeHidden: true; scope?: WebTargetScope }
 ): Promise<WebLlmSnapshotBinding> {
-  const result = await executeWebEvidenceAction(() => gateway.executeAction(sessionId, {
+  assertActive(signal);
+  const scope = options?.scope;
+  if (scope?.sessionId !== undefined && scope.sessionId !== sessionId) throw new RecoverableToolRejection("page_unreadable");
+  const result = await executeWebEvidenceAction(() => gateway.executeAction(sessionId, present<Parameters<WebLlmEvidenceGateway["executeAction"]>[1]>({
     actionType: "web.dom.capture_snapshot",
-    parameters: options?.includeHidden === true ? { includeHidden: true } : {},
+    parameters: present<Pick<WebTargetScope, "browserTabId" | "browserFrameId" | "browserFrameUrlPath"> & { includeHidden?: true }>({
+      includeHidden: options?.includeHidden === true ? true : undefined,
+      browserTabId: scope?.browserTabId,
+      browserFrameId: scope?.browserFrameId,
+      browserFrameUrlPath: scope?.browserFrameUrlPath
+    }),
     metadata: toolMetadata(request),
-  }));
+    timeoutMs: scope === undefined ? undefined : 5_000
+  })));
   assertActive(signal);
   // A look that met a robot check is the person's, not the model's: it is not
   // "unreadable", and a model told so would look again and again at the check.
@@ -575,10 +585,27 @@ export async function captureEvidence(
   // call's own capture answers for the state it saw
   // (`./state-digest/snapshot-states.ts`).
   const states = webLlmSnapshotStates(sanitized);
+  const captured = webCapturedTargetObservation({
+    snapshot: payload.snapshot, page: sanitized, sessionId, sourceId: payload.sourceId,
+    requested: present<WebTargetScope>({
+      kind: scope === undefined ? "merged" : scope.kind,
+      sessionId,
+      browserTabId: scope?.browserTabId,
+      browserFrameId: scope === undefined ? 0 : scope.browserFrameId,
+      browserFrameUrlPath: scope?.browserFrameUrlPath,
+      resetResource: scope?.resetResource,
+      location: scope?.location,
+      timeOrigin: scope?.timeOrigin
+    })
+  });
+  if (scope !== undefined && captured.kind === "rejected") throw new RecoverableToolRejection("page_unreadable");
+  const provenance = captured.kind === "observed" ? captured.observation : undefined;
   return present<WebLlmSnapshotBinding>({
     evidence: sanitized.evidence,
     selectors: sanitized.selectors,
     records: sanitized.records,
+    recordIdentities: sanitized.recordIdentities,
+    captureProvenance: provenance === undefined ? undefined : { scope: provenance.scope, coverage: provenance.coverage, includesHidden: provenance.includesHidden },
     shadowHosts: sanitized.shadowHosts,
     dialogNames: sanitized.dialogNames,
     drawings: sanitized.drawings,

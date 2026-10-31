@@ -37,3 +37,24 @@ test("an outcome, kind or reason Core never writes is not read, and a session wi
   assert.deepEqual(matrixTraceAttempts({}), []);
   assert.deepEqual(matrixTraceAttempts(undefined), []);
 });
+
+test("identity recovery has no fabricated source or returned flag and never copies parameters, page evidence or patches", () => {
+  const [attempt] = matrixTraceAttempts({ trace: { attempts: [{ nodeId: LIKE, status: "succeeded", reacquire: { kind: "identity", outcome: "found", at: 1_000, parameters: { selector: "private-selector" }, fingerprint: { accessibleName: "private-name" }, page: "private-page", patches: [{ value: "private-patch" }] } }] } });
+  assert.deepEqual(attempt!.reacquire, { kind: "identity", outcome: "found", reason: null });
+  assert.equal(Object.hasOwn(attempt!.reacquire!, "sourceNodeId"), false);
+  assert.equal(Object.hasOwn(attempt!.reacquire!, "returned"), false);
+  assert.equal(JSON.stringify(attempt).includes("private-"), false);
+});
+
+test("identity diagnostics are closed and source-shaped or malformed identity records are rejected", () => {
+  const attempts = matrixTraceAttempts({ trace: { attempts: [
+    { reacquire: { kind: "identity", outcome: "unavailable", reason: "place_unproved" } },
+    { reacquire: { kind: "identity", outcome: "unmatched", reason: "private_page_text" } },
+    { reacquire: { kind: "identity", outcome: "found", sourceNodeId: POSTS } },
+    { reacquire: { kind: "identity", outcome: "found", returned: false } },
+    { reacquire: { kind: "identity", outcome: "invented" } }
+  ] } });
+  assert.deepEqual(attempts[0]!.reacquire, { kind: "identity", outcome: "unavailable", reason: "place_unproved" });
+  assert.deepEqual(attempts[1]!.reacquire, { kind: "identity", outcome: "unmatched", reason: null });
+  assert.deepEqual(attempts.slice(2).map((attempt) => attempt.reacquire), [null, null, null]);
+});

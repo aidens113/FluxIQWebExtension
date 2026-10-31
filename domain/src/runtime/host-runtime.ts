@@ -87,7 +87,7 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
-import { webAutomationOutputNodeId } from "../output-nodes";
+import { webAutomationOutputNodeId, webAutomationOutputNodeDefinitions, webAutomationUrlPath } from "../output-nodes";
 import { webAutomationActLanded } from "./act-landing";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
@@ -104,7 +104,8 @@ import {
   webAutomationRouteState
 } from "./route-state";
 import { createWebStatePlacesMemo, webAutomationStateDiff, webStateDiffPlaces, webStateSnapshotPlaces } from "./state-diff";
-import { createWebSourcePlaces, webAutomationReacquireTarget, webAutomationReturnToSourcePlace } from "./target-reacquire";
+import { createWebSourcePlaces, webAutomationReacquireTarget, webAutomationReturnToSourcePlace, webAutomationReacquireUnboundTarget } from "./target-reacquire";
+import { webCapturedTargetObservation, createWebTargetPlaces, type WebTargetScope } from "./target-reacquire/identity";
 
 /**
  * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
@@ -136,7 +137,7 @@ export type WebAutomationHostRuntime = WebAutomationHostRuntimeBoundary & {
  * ordinary policy action, so a silent browser cannot strand a Flow run.
  */
 type WebAutomationHostRuntimeDispatch = (
-  request: Parameters<WebAutomationExpectationDispatch>[0] & { timeoutMs?: number }
+  request: Parameters<WebAutomationExpectationDispatch>[0] & { timeoutMs?: number; signal?: AbortSignal }
 ) => ReturnType<WebAutomationExpectationDispatch>;
 export type WebAutomationHostRuntimeGateway = { dispatch: WebAutomationHostRuntimeDispatch };
 
@@ -183,7 +184,43 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
   const places = createWebStatePlacesMemo();
   // Where each attempt found the page, for a stale target's source re-run (header, t786).
   const sourcePlaces = createWebSourcePlaces();
+  const targetPlaces = createWebTargetPlaces();
   let captures = 0;
+  const beforeAction = async (
+    input: Parameters<NonNullable<WebAutomationHostRuntimeBoundary["captureStateSnapshot"]>>[0],
+    state: Awaited<ReturnType<NonNullable<WebAutomationHostRuntimeBoundary["captureStateSnapshot"]>>>
+  ): Promise<{ kind: "captured" | "absent" | "unreadable" | "rejected" }> => {
+    if (input.point !== "before_action") return { kind: "absent" };
+    targetPlaces.bind(input.attemptId, state);
+    const top = targetPlaces.captured(state);
+    const parameters = pageTargetParameters(input.node);
+    if (top?.scope.sessionId === undefined || top.scope.browserTabId === undefined || parameters === undefined) return { kind: "absent" };
+    const requested = priorTargetScope(parameters);
+    if (requested === undefined || (requested.browserFrameId === 0 && requested.browserFrameUrlPath === undefined && (requested.browserTabId === undefined || requested.browserTabId === top.scope.browserTabId))) return { kind: "absent" };
+    // A top summary still describes the top document. A target in another
+    // frame gets its own actual before-action read, held only in this memo.
+    const scope: WebTargetScope = { ...requested, sessionId: top.scope.sessionId, browserTabId: requested.browserTabId ?? top.scope.browserTabId };
+    try {
+      const result = await gateway.dispatch({
+        outputId: SNAPSHOT_OUTPUT_ID,
+        payload: { includeHidden: true, browserTabId: scope.browserTabId!, ...(scope.browserFrameId === undefined ? {} : { browserFrameId: scope.browserFrameId }), ...(scope.browserFrameUrlPath === undefined ? {} : { browserFrameUrlPath: scope.browserFrameUrlPath }) },
+        timeoutMs: HOST_STATE_COMMAND_TIMEOUT_MS,
+        metadata: { sessionId: scope.sessionId!, source: HOST_RUNTIME_SOURCE, domainId: WEB_AUTOMATION_DOMAIN_ID, nodeId: input.node.id, attemptId: input.attemptId, point: "before_action_target" }
+      });
+      if (!result.ok || (result.status !== undefined && result.status !== "succeeded")) return { kind: "unreadable" };
+      const action = isRecord(result.payload?.result) ? result.payload.result : undefined;
+      const snapshot = action?.snapshot;
+      if (snapshot === undefined) return { kind: "unreadable" };
+      const captured = webCapturedTargetObservation({ snapshot, sessionId: result.metadata?.sessionId, sourceId: action?.sourceId, requested: scope });
+      if (captured.kind === "rejected") return { kind: "rejected" };
+      targetPlaces.keepScoped(input.attemptId, state, requested, captured.observation);
+      return { kind: "captured" };
+    } catch {
+      // An unreadable child leaves its provenance absent; the ordinary summary
+      // and source-bound recovery keep their existing behavior.
+      return { kind: "unreadable" };
+    }
+  };
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
     hostResources: createWebAutomationHostResourcePort({ sessions }),
@@ -197,6 +234,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       const ended = input.point === "before_action" ? input.previousStateRef : undefined;
       if (ended?.summary !== undefined && ended.stateSnapshotId.startsWith(STATE_SNAPSHOT_ID_PREFIX)) {
         sourcePlaces.keep(input.attemptId, input.point, ended.from);
+        await beforeAction(input, ended);
         return ended;
       }
       const result = await gateway.dispatch({
@@ -244,7 +282,11 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // Beside the summary, never on it (header, t609).
       places.keep(stateRef, webStateSnapshotPlaces(binding));
       sourcePlaces.keep(input.attemptId, input.point, from);
-      return { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
+      const state = { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
+      const captured = webCapturedTargetObservation({ snapshot, page: binding, sessionId: result.metadata?.sessionId, sourceId: isRecord(action) ? action.sourceId : undefined, requested: { kind: "merged", browserFrameId: 0 } });
+      if (captured.kind === "observed") targetPlaces.keep(state, captured.observation);
+      await beforeAction(input, state);
+      return state;
     },
     // What a Router's `state.*` conditions test, observed on the page the run
     // stands on before any step runs, and what a Flow build is shown so it can
@@ -292,9 +334,31 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
     // The item a stale step was bound to, among its source's fresh answer, by
     // identity and never by position (t786, `./target-reacquire/`). Pure.
     reacquireTarget: (request) => webAutomationReacquireTarget(request),
+    reacquireUnboundTarget: (request) => webAutomationReacquireUnboundTarget(request, targetPlaces, gateway.dispatch),
     // Back to where that source ran before it is re-run, when the page moved (t786).
     returnToSourcePlace: (request) => webAutomationReturnToSourcePlace(request, sourcePlaces, gateway.dispatch)
   };
+}
+
+/** Resolved parameters of a registered web action, without interpreting its target identity. */
+function pageTargetParameters(node: { definitionId: string; parameterValues?: JsonObject }): JsonObject | undefined {
+  const wrapper = node.definitionId === POLICY_ACTION_DEFINITION_ID;
+  const definition = webAutomationOutputNodeDefinitions.find((candidate) => wrapper ? candidate.outputAction?.fixedOutputId === node.parameterValues?.outputId : candidate.id === node.definitionId);
+  if (definition === undefined || !["selector", "element"].every((id) => definition.parameters.some((parameter) => parameter.id === id && parameter.targetRefresh === true))) return undefined;
+  const parameters = wrapper ? node.parameterValues?.parameters : node.parameterValues;
+  const element = isRecord(parameters) && isRecord(parameters.element) ? parameters.element : undefined;
+  const context = isRecord(element?.context) ? element.context : undefined;
+  if (!isRecord(parameters) || element === undefined || Object.keys(element).length === 0 || isRecord(parameters.target) || (isRecord(context?.record) && context.record.values !== undefined)) return undefined;
+  return parameters;
+}
+
+function priorTargetScope(parameters: JsonObject): WebTargetScope | undefined {
+  const tab = parameters.browserTabId ?? parameters.tabId;
+  const frame = parameters.browserFrameId ?? parameters.frameId;
+  const rawPath = parameters.browserFrameUrlPath;
+  const path = webAutomationUrlPath(rawPath);
+  if ((tab !== undefined && (typeof tab !== "number" || !Number.isSafeInteger(tab) || tab < 0)) || (frame !== undefined && (typeof frame !== "number" || !Number.isSafeInteger(frame) || frame < 0)) || (rawPath !== undefined && path === undefined)) return undefined;
+  return { kind: "single-frame", ...(tab === undefined ? {} : { browserTabId: tab }), ...(frame === undefined ? path === undefined ? { browserFrameId: 0 } : {} : { browserFrameId: frame }), ...(path === undefined ? {} : { browserFrameUrlPath: path }) };
 }
 
 /** Binds the boundary onto the running FluxIQ instance, beside the runtime service. */

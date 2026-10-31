@@ -119,27 +119,37 @@ function cards(order: string[], prefix: string): JsonObject {
   return {
     url: "https://social.test/feed",
     title: "Feed",
+    frame: { isTop: true },
     viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 },
-    interactiveElements: order.map((who, index) => ({ tagName: "button", selector: `${prefix} > article:nth-of-type(${index + 1}) > button`, accessibleName: `Like ${who}'s post`, visibleText: "Like" }))
+    interactiveElements: order.map((who, index) => ({ tagName: "button", selector: `${prefix} > article:nth-of-type(${index + 1}) > button`, accessibleName: `Like ${who}'s post`, visibleText: "Like" })),
+    evidence: {
+      elements: { scanned: order.length, candidates: order.length, matched: order.length, returned: order.length, truncated: false },
+      loading: { documentState: "complete", busy: false, pendingNavigation: false },
+      navigation: { timeOrigin: 100 }, captureOptions: { includeHidden: true }
+    }
   };
 }
 
 function page(snapshots: JsonObject[]) {
   let looks = 0;
   return runOf(async (_session, command) => {
-    if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: snapshots[Math.min(looks++, snapshots.length - 1)]! } };
+    if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: snapshots[Math.min(looks++, snapshots.length - 1)]!, sourceId: "tab:17:frame:0" } };
     return { status: "succeeded" };
   });
 }
 
 /** The run's look, as `../../run.ts` takes it: the page as it stands. */
 function lookOf(run: WebNodeRun) {
-  return async () => await captureEvidence(run.gateway, run.sessionId, run.request);
+  return async (options?: Parameters<typeof captureEvidence>[5]) => await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal, undefined, options);
+}
+
+async function priorLike() {
+  const { run } = page([cards(["Ilya", "Mara"], "#feed")]);
+  return captureEvidence(run.gateway, run.sessionId, run.request);
 }
 
 async function staleLike(): Promise<JsonObject> {
-  const { run } = page([cards(["Ilya", "Mara"], "#feed")]);
-  const binding = await captureEvidence(run.gateway, run.sessionId, run.request);
+  const binding = await priorLike();
   const element = binding.evidence.elements.find((candidate) => candidate.name === "Like Mara's post")!;
   const selector = binding.selectors.get(element.target)!;
   return { selector, element: webPacketElementFingerprint(element, { selector }) as unknown as JsonObject };
@@ -148,7 +158,7 @@ async function staleLike(): Promise<JsonObject> {
 test("a press whose control was renumbered looks again and is dispatched on the same control's fresh selector", async () => {
   const stale = await staleLike();
   const { run, looked } = page([cards(["Mara", "Ilya", "Noor"], "#feed-v2")]);
-  const reacquire = webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, look: lookOf(run) });
+  const reacquire = webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, before: await priorLike(), look: lookOf(run) });
   assert.ok(reacquire);
   const found = await reacquire(STALE_FAILURE);
   assert.equal(found.outcome, "found");
@@ -158,17 +168,149 @@ test("a press whose control was renumbered looks again and is dispatched on the 
   assert.equal(looked.length, 1);
 });
 
-test("a control no look shows is gone; two that could be it are unmatched; a step with no handle has no finder", async () => {
+test("only complete absence is gone; ambiguity remains unmatched; a saved identity needs no transient handle", async () => {
   const stale = await staleLike();
+  const before = await priorLike();
   const gone = page([cards(["Ilya", "Noor"], "#feed-v2")]);
-  assert.deepEqual(await webNodeLookedUpReacquire(gone.run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, look: lookOf(gone.run) })!(STALE_FAILURE), { outcome: "gone" });
+  assert.deepEqual(await webNodeLookedUpReacquire(gone.run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, before, look: lookOf(gone.run) })!(STALE_FAILURE), { outcome: "gone" });
   const twice = page([cards(["Mara", "Mara"], "#feed-v2")]);
-  assert.deepEqual(await webNodeLookedUpReacquire(twice.run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, look: lookOf(twice.run) })!(STALE_FAILURE), { outcome: "unmatched" });
+  assert.deepEqual(await webNodeLookedUpReacquire(twice.run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, before, look: lookOf(twice.run) })!(STALE_FAILURE), { outcome: "unmatched" });
   // A look that cannot be read propagates, and Core's callback reads it as unavailable (`../reacquire.ts`).
-  const unread = webNodeLookedUpReacquire(gone.run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, look: async () => { throw new Error("page_unreadable"); } })!;
+  const unread = webNodeLookedUpReacquire(gone.run, { definitionId: "web.output.dom-click", handle: "t7", parameters: stale, before, look: async () => { throw new Error("page_unreadable"); } })!;
   await assert.rejects(unread(STALE_FAILURE));
   assert.deepEqual(await webNodeRetryReacquire(gone.run, { actionType: "web.dom.click", parameters: stale, metadata: {} }, unread, [])({ failure: STALE_FAILURE }), { outcome: "unavailable" });
-  assert.equal(webNodeLookedUpReacquire(gone.run, { definitionId: "web.output.dom-click", handle: undefined, parameters: stale, look: lookOf(gone.run) }), undefined);
+  const renamed = page([cards(["Mara"], "#renewed")]);
+  const noHandle = webNodeLookedUpReacquire(renamed.run, { definitionId: "web.output.dom-click", handle: undefined, parameters: stale, before, look: lookOf(renamed.run) });
+  assert.ok(noHandle);
+  const refreshed = await noHandle(STALE_FAILURE);
+  assert.equal(refreshed.outcome, "found");
+  assert.equal(refreshed.outcome === "found" && refreshed.parameters.selector, "#renewed > article:nth-of-type(1) > button");
+});
+
+test("authoring pins a scoped hidden-inclusive read and preserves action arguments and read semantics", async () => {
+  const fieldAt = (selector: string): JsonObject => ({
+    url: "https://preferences.test/profile", title: "Profile preferences", frame: { isTop: true },
+    interactiveElements: [{ tagName: "input", inputType: "text", selector, accessibleName: "Display title", label: "Display title", attributes: { id: "display-title", name: "displayTitle", "data-testid": "profile-display-title" } }],
+    evidence: {
+      elements: { scanned: 1, candidates: 1, matched: 1, returned: 1, truncated: false },
+      loading: { documentState: "complete", busy: false, pendingNavigation: false },
+      navigation: { timeOrigin: 100 }, captureOptions: { includeHidden: true }
+    }
+  });
+  const original = page([fieldAt("#original-form input[name='displayTitle']")]);
+  const before = await captureEvidence(original.run.gateway, original.run.sessionId, original.run.request);
+  const field = before.evidence.elements[0]!;
+  const selector = before.selectors.get(field.target)!;
+  const stale: JsonObject = { selector, element: webPacketElementFingerprint(field, { selector }) as unknown as JsonObject };
+  (stale.element as JsonObject).readsWords = true;
+  const parameters: JsonObject = { ...stale, text: "original value", ensureState: { value: true }, timeoutMs: 900 };
+  const sent: Command[] = [];
+  const { run, looked } = runOf(async (session, command) => {
+    assert.equal(session, "session.one");
+    sent.push(command);
+    return { status: "succeeded", payload: { snapshot: fieldAt("#renewed-form input[name='displayTitle']"), sourceId: "tab:17:frame:0" } };
+  });
+  const callback = webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-type", handle: undefined, parameters, before, look: lookOf(run) });
+  assert.ok(callback);
+  const answer = await callback(STALE_FAILURE);
+  assert.equal(answer.outcome, "found");
+  if (answer.outcome !== "found") return;
+  assert.deepEqual(sent[0]!.parameters, { includeHidden: true, browserTabId: 17, browserFrameId: 0 });
+  assert.equal((sent[0] as Command & { timeoutMs?: number }).timeoutMs, 5_000);
+  assert.equal(answer.parameters.text, "original value");
+  assert.deepEqual(answer.parameters.ensureState, { value: true });
+  assert.equal(answer.parameters.timeoutMs, 900);
+  assert.equal((answer.parameters.element as JsonObject).readsWords, true);
+  assert.equal(looked.length, 1);
+  assert.equal(parameters.selector, stale.selector);
+});
+
+test("authoring declines state-bound targets, rows, unsupported reads and absent prior resource proof", async () => {
+  const stale = await staleLike();
+  const { run } = page([cards(["Mara"], "#fresh")]);
+  const savedElement = stale.element as JsonObject;
+  for (const parameters of [{ ...stale, target: { handle: "t7" } }, { selector: "#bare" }, { ...stale, element: { ...savedElement, context: { record: { values: ["row one"] } } } }]) {
+    assert.equal(webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: undefined, parameters, look: lookOf(run) }), undefined);
+  }
+  assert.equal(webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-extract_list", handle: undefined, parameters: stale, look: lookOf(run) }), undefined);
+  let reads = 0;
+  const missing = webNodeLookedUpReacquire(run, {
+    definitionId: "web.output.dom-click", handle: undefined, parameters: stale,
+    look: async () => {
+      reads += 1;
+      return undefined;
+    }
+  });
+  assert.deepEqual(await missing!(STALE_FAILURE), { outcome: "unavailable" });
+  assert.equal(reads, 0);
+});
+
+test("a scoped authoring read never silently selects a different gateway session", async () => {
+  let commands = 0;
+  const { run } = runOf(async () => {
+    commands += 1;
+    return { status: "succeeded" };
+  });
+  await assert.rejects(captureEvidence(run.gateway, run.sessionId, run.request, undefined, undefined, { includeHidden: true, scope: { kind: "single-frame", sessionId: "paired.previous", browserTabId: 17, browserFrameId: 0 } }));
+  assert.equal(commands, 0);
+});
+
+test("scoped authoring can refresh a child only from its actual prior document", async () => {
+  const stale = await staleLike();
+  const sent: Command[] = [];
+  const { run } = runOf(async (_session, command) => {
+    sent.push(command);
+    const raw = cards(["Mara"], "#child-fresh");
+    raw.url = "https://social.test/editor";
+    raw.frame = { isTop: false };
+    return { status: "succeeded", payload: { snapshot: raw, sourceId: "tab:17:frame:4" } };
+  });
+  const scope = { kind: "single-frame" as const, browserTabId: 17, browserFrameId: 4, browserFrameUrlPath: "/editor" };
+  const before = await captureEvidence(run.gateway, run.sessionId, run.request, undefined, undefined, { includeHidden: true, scope });
+  const parameters = { ...stale, browserFrameId: 4, browserFrameUrlPath: "/editor" };
+  const found = await webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: undefined, parameters, before, look: lookOf(run) })!(STALE_FAILURE);
+  assert.equal(found.outcome, "found");
+  assert.deepEqual(sent.at(-1)!.parameters, { includeHidden: true, browserTabId: 17, browserFrameId: 4, browserFrameUrlPath: "/editor" });
+  const unknownChild = await webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: undefined, parameters, before: await priorLike(), look: lookOf(run) })!(STALE_FAILURE);
+  assert.deepEqual(unknownChild, { outcome: "unavailable" });
+  const legacy = await webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: undefined, parameters: { ...stale, tabId: 17, frameId: 4, browserFrameUrlPath: "/editor" }, before, look: lookOf(run) })!(STALE_FAILURE);
+  assert.equal(legacy.outcome, "found");
+  const canonical = await webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: undefined, parameters: { ...parameters, browserTabId: 17, tabId: 99, frameId: 9 }, before, look: lookOf(run) })!(STALE_FAILURE);
+  assert.equal(canonical.outcome, "found");
+});
+
+test("partial, unacknowledged hidden capture and hidden look-alikes never turn authoring recovery into gone", async () => {
+  const stale = await staleLike();
+  const before = await priorLike();
+  for (const mode of ["partial", "marker", "hidden", "place"] as const) {
+    const raw = cards(["Mara"], "#fresh");
+    const evidence = raw.evidence as JsonObject;
+    if (mode === "partial") (evidence.elements as JsonObject).truncated = true;
+    if (mode === "marker") delete evidence.captureOptions;
+    if (mode === "hidden") ((raw.interactiveElements as JsonObject[])[0]!).hidden = true;
+    if (mode === "place") raw.url = "https://social.test/elsewhere";
+    const { run } = page([raw]);
+    const answer = await webNodeLookedUpReacquire(run, { definitionId: "web.output.dom-click", handle: undefined, parameters: stale, before, look: lookOf(run) })!(STALE_FAILURE);
+    assert.ok(answer.outcome === "unavailable" || answer.outcome === "unmatched", mode);
+  }
+});
+
+test("authoring cancellation during a late read discards the replacement", async () => {
+  const stale = await staleLike();
+  const before = await priorLike();
+  const controller = new AbortController();
+  const { run } = page([cards(["Mara"], "#fresh")]);
+  run.request = { ...run.request, signal: controller.signal };
+  const callback = webNodeLookedUpReacquire(run, {
+    definitionId: "web.output.dom-click", handle: undefined, parameters: stale, before,
+    look: async (options) => {
+      const captured = await lookOf(run)(options);
+      controller.abort();
+      return captured;
+    }
+  });
+  const answer = await webNodeRetryReacquire(run, { actionType: "web.dom.click", parameters: stale, metadata: {} }, callback!, [])({ failure: STALE_FAILURE });
+  assert.deepEqual(answer, { outcome: "unavailable" });
 });
 
 
