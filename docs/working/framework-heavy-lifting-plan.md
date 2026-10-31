@@ -21,6 +21,8 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 [Accepted dated context and ledger](framework-heavy-lifting-plan/archive/2026-10-31-runtime-context.md). [Exact incoming P10 parent handoff](framework-heavy-lifting-plan/archive/2026-10-31-p10-parent-integration.md). Core owns generic algorithms and paired reports; Down owns browser/domain producers. Current task acceptance above takes precedence over historical ledger entries.
 
+[Exact parent handoff retained during sync](framework-heavy-lifting-plan/archive/2026-10-31-t832-parent-handoff.md).
+
 ## Contract fills
 
 Paths: `D/` = `domain/src/`, `E/` = `apps/extension/src/`, `LE/` = `D/runtime/llm-evidence/`. For each contract's shape
