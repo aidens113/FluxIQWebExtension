@@ -62,9 +62,9 @@ test("the command line: a repair dry run prints the adapt commands and runs noth
   assert.equal(dry.code, 0, dry.stderr);
   const limits = REPAIR_LIMIT_ARGS.join(" ");
   assert.deepEqual(dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#")), [
-    `pnpm lab run local-classifieds --variant renamed-redesign --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
-    `pnpm lab run local-classifieds --variant save-and-exit --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
-    `pnpm lab run professional-network --workflow extract-card-secrets --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
+    `pnpm lab run local-classifieds --variant renamed-redesign --flow --live-llm --llm-profile lab-adapt-repair --llm-provider anthropic --llm-model claude-sonnet-5-5 --authoring-mode legacy --llm-task adapt ${limits}`,
+    `pnpm lab run local-classifieds --variant save-and-exit --flow --live-llm --llm-profile lab-adapt-repair --llm-provider anthropic --llm-model claude-sonnet-5-5 --authoring-mode legacy --llm-task adapt ${limits}`,
+    `pnpm lab run professional-network --workflow extract-card-secrets --flow --live-llm --llm-profile lab-adapt-repair --llm-provider anthropic --llm-model claude-sonnet-5-5 --authoring-mode legacy --llm-task adapt ${limits}`,
   ]);
   const every = await runCli(["--dry-run"], env);
   assert.equal(every.stdout.trim().split("\n").filter((line) => !line.startsWith("#")).length, REALISTIC_CATALOG.length + REALISTIC_REPAIRS.length);
@@ -95,8 +95,8 @@ test("the command line: a dry run prints commands and runs nothing", () => withT
   assert.equal(dry.code, 0, dry.stderr);
   const commands = dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#"));
   assert.deepEqual(commands, [
-    "pnpm lab run job-board --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
-    "pnpm lab run job-board --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
+    "pnpm lab run job-board --live-llm --llm-profile lab-create-flow --llm-provider anthropic --llm-model claude-sonnet-5-5 --authoring-mode legacy --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
+    "pnpm lab run job-board --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider anthropic --llm-model claude-sonnet-5-5 --authoring-mode legacy --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
   ]);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });
