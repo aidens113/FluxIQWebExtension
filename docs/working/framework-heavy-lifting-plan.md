@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Core b72e4214 passed full acceptance; downstream t821 finished with one robot-watch wall-clock assertion failure. All9 virtual-clock replacements and extension types passed; final downstream-only sweep next, reusing unchanged Core proof. Main held; no paid calls.
+Status detail: t822 capability-identity fix passes 317 focused tests and both package type checks; paired dev integration pending. Both Oct31 full-suite slots used; main held for a later permitted full sweep. No paid calls.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Corrected-source sweep running, 2026-10-31:** disposable paired t821 pins Coreb72e4214/downstream44377722, started07:05UTC after the local date reset. Source is frozen; copied env removed, provider secrets/inherited FLUXIQ settings stripped, temporary roots. Main ignored test-runs/2026-10-31-sweep-1 owns logs/summary; Core install/build/check passed; ordinary Core14840 passed/6 skipped/0 failed; real-SQL1684 passed/1 skipped/0 failed; Core full sweep passed (20683 tests,7 skipped); downstream install/build/check passed; domain2488/scenario1015 passed; extension hit one real-clock robot-watch assertion (1143ms versus400ms upper bound); remaining units continue. Main authoring test uses virtual timers, not wider bounds; all9 corrected tests and extension types now pass after frozen t821 finished. Core acceptance is reusable at unchangedb72e4214. No paid calls; main promotion waits for all required steps. These two tested commits, not later memory-only commits, are the promotion candidates.
+**Current fix-forward, 2026-10-31:** t822 ended exit1 despite2488 registered domain passes: src/tests/domain.test.ts failed during module load. The same hidden failure existed in t821, so the earlier claim that its robot-watch assertion was the only failure was incomplete. Core had mistaken incidental 'Choose ensureState' help for selection capability. The fix uses declared node id/label/tags/output identities only; the web domain explicitly declares check/select, type/submit and tab/open. Original integration assertions now run as named tests, with denied-operation expectations strengthened. Lead275 Core plan and42 domain tests pass; both package type checks exit0. Final catalog consolidation30/30 passes. Paired dev integration is pending. Both Oct31 full-suite slots are used: narrow checks only; main needs a later permitted full sweep. Coreb72e4214's20683/7-skipped proof is historical and cannot qualify this classifier change. Claude/$5 is configured, but no paid go or calls occurred.
 
 **Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
 paired task trees after merging current `dev`; both sides are now merged. C1 and P1b are verified and merged (P1b: Coreb4a8f453/downstream01da7fa3).
@@ -91,7 +91,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. All resumed units plus t817/t819/t820 are merged. Sweep2 is complete; targeted repairs pass. Finish documenting/pushing the last downstream cache/fixture fixes, then run the corrected-source isolated sweep after local2026-10-31 begins; do not promote failed evidence or exceed two sweeps per day.
+1. Finish t822's capability-identity fix with narrow acceptance and paired dev integration. Both 2026-10-31 full-suite slots are used; main remains held until a later permitted full sweep passes. No further full suite today.
 2. t817 fixed the first-already-satisfied-row defect: paired before/after evidence and explicit grounded end-state choice now pass native oracle/saved-replay proof; no first/majority click inference.
 3. After the user's go, run the live round with Claude/$5: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
@@ -101,7 +101,7 @@ and verify as above. Re-dispatch only the missing part.
    - the extension picker seen in a browser.
 5. Hosted:
    - after C1, C2 (call-site migration) and C3 (routing, per-workspace singletons);
-   - D2-D4 extension sign-in, built now, merged 11-10;
+   - D2-D4 extension sign-in, consent and minimisation remain to implement; their scheduled merge date is not evidence of completion;
    - F packaging, D6 infrastructure, D7 docs and legal, D8 with the stand-in's W3;
    - the owner's email verification under `service`;
    - `docs/architecture/platform.md` (close options, held keys, per-root pools).
@@ -468,6 +468,12 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed: robot-check-watch test file now uses virtual Date/timeouts/intervals for all9 cases; strict119ms-pending/120ms-release, post-release polling cleanup and followed-check boundaries replace elapsed host-time bounds. Production code and other test outcomes are unchanged; discovery report records neighboring timing tests.
 - Validation: `pnpm --filter @fluxiq-web-extension/extension test robot-check-watch` with label robot-clock-1031 ->9 passed; extension package check ->exit0. No check overlapped the frozen full suite.
 - Outcome: t821 disposed only after0/0 unmerged; Core b72e4214 full proof is reusable exactly. Final downstream-only build/check/test sweep is next on the corrected committed snapshot; no second Core full suite needed, no paid calls or main promotion yet.
+
+
+### 2026-10-31 - t822 catalog capability and integration reporting fix
+- Changed: Core operation evidence excludes incidental prose/data shape; web secondary operations explicitly tagged. Integration assertions registered as named tests; no missing-capability/provider guard weakened. Core version0.15.0; no wire-schema change. Worker reports in downstream reports/codex-1031.
+- Validation: `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/plan/tests` ->275 passed; final catalog-only rerun ->30 passed. `pnpm --filter @fluxiq-web-extension/domain test src/tests/domain.test.ts output-nodes/tests/model-facing-catalog.test.ts output-nodes/tests/click-ensure-state.test.ts output-nodes/tests/definitions.test.ts` ->42 passed. Both package check commands ->exit0.
+- Validation correction: t821 also contained the hidden module-load failure; t822 install/build/check0, test1. No third full suite today; no main promotion or paid calls. Final structure gates and paired integration pending.
 
 ## Open Questions
 

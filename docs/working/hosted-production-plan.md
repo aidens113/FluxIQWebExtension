@@ -97,8 +97,7 @@ This document links to them and does not restate them.
 - Public on store approval ("within a few days, but it can take up to a few weeks", Google).
 
 **Next.**
-1. Merged 2026-10-29: Core lanes A (t802), B3 (t803), C0 (t808) and their follow-ups (t809), and the stand-in W0-W2 (t801, t809). In flight: C1 with the IAM wiring (t813) and E with D5 (t814);
-   D2 starts once lane A has the gateway steps, with the D0 listener rules.
+1. C1 with profile IAM (t813) and E with owned default-project creation (t814) are merged on both dev branches, alongside A, B3, C0 and W0-W2. Next implementation remains C2/C3 caller migration and routing, and D2-D4 extension sign-in, consent and minimisation with the D0 listener rules. These remaining stages are not implemented by the merged foundations.
 2. The user answers U9 (VM, DNS, store developer account) this week, and U10 and U11 before 11-10.
 
 **Blocked.** Nothing blocks W1 or H1. W4 (editing FluxIQWebsite) waits for the user's go (U11).
