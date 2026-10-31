@@ -30,11 +30,18 @@ test("a result that closed nothing carries no clearedLayers key", () => {
 
 test("the payload copies the two closed words alone", () => {
   const extra = [{ kind: "dialog", control: "No thanks", label: "No thanks, I would rather pay full price" }] as unknown as WebAutomationActionResult["clearedLayers"];
-  assert.deepEqual(webAutomationActionResultPayload(clicked({ clearedLayers: extra })).clearedLayers, [{ kind: "dialog", control: "No thanks" }]);
+  assert.deepEqual(webAutomationActionResultPayload(clicked({ clearedLayers: extra })).clearedLayers, [{ kind: "other", control: "No thanks" }]);
 });
 
 // t470: the way out the clearing pressed crosses the gateway to the domain's server half.
 test("a cleared layer's way out crosses the gateway with it", () => {
   const wayOut = { url: "https://social.test/requests", element: { tagName: "div", selector: "#ok", role: "button", visibleText: "OK" } };
   assert.deepEqual(webAutomationActionResultPayload(clicked({ clearedLayers: [{ kind: "rate_limit", control: "OK", wayOut }] })).clearedLayers, [{ kind: "rate_limit", control: "OK", wayOut }]);
+});
+
+// CC7 (interface I1): the id and the control's durable target cross the gateway beside the two words.
+test("a cleared layer's id and controlRef cross the gateway with it, and the generic kind is what travels", () => {
+  const controlRef = { selector: "button", element: { tagName: "button", selector: "button", accessibleName: "Not now" } };
+  const layers = [{ kind: "promotion", control: "Not now", id: "layer:0badc0de", controlRef }] as unknown as WebAutomationActionResult["clearedLayers"];
+  assert.deepEqual(webAutomationActionResultPayload(clicked({ clearedLayers: layers })).clearedLayers, [{ kind: "notice", control: "Not now", id: "layer:0badc0de", controlRef }]);
 });

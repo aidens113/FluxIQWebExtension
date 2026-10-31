@@ -124,6 +124,36 @@ function ownLabelSays(element: Element, rule: (label: string) => boolean): boole
   return text.length > 0 && rule(text);
 }
 
+/** What pressing a control on a layer would do to the layer, as far as its structure says (CC7, interface I2). */
+export type WayOutIntent = "dismiss" | "accept" | "neutral";
+
+/**
+ * The intent of pressing `control` on `overlay`, computed from structure and the
+ * press guard, never from a page's own words beyond the closed vocabulary the
+ * defence already presses by (`vocabulary.ts`):
+ *
+ * - `dismiss`: a control the defence would press to clear the layer -- a close
+ *   glyph or dismissal, a consent layer's decline, a rate-limit notice's OK --
+ *   that may be pressed (`mayBePressed`);
+ * - `accept`: a control whose press acts -- it submits, toggles, retries,
+ *   confirms, accepts or goes on (`press-guard/`) -- so Core never presses it;
+ * - `neutral`: any other control the client cannot tell the effect of.
+ *
+ * `undefined` for a control that is no way out at all: disabled, or a link that
+ * leaves the document.
+ */
+export function wayOutIntent(overlay: Element, control: Element): WayOutIntent | undefined {
+  if (isDisabled(control) || leavesTheDocument(control)) return undefined;
+  if (actsOnPress(control)) return "accept";
+  const text = boundedLayerText(overlay);
+  const closes = (says: (element: Element) => boolean): boolean => says(control) || [...composedDescendants(control)].slice(0, DISMISS_SCAN_LIMIT).some(says);
+  const dismisses = closes(saysDismissal)
+    || (isConsentLayerText(text) && closes(saysConsentDecline))
+    || (isSessionWallText(text) && closes(saysSessionContinue))
+    || (isRateLimitLayerText(text) && closes(saysRateLimitAcknowledge));
+  return dismisses ? "dismiss" : "neutral";
+}
+
 /** Whether this element's own attribute, name or text says it closes what it sits in. */
 function saysDismissal(element: Element): boolean {
   if (element.hasAttribute("data-dismiss") || element.hasAttribute("data-bs-dismiss")) return true;

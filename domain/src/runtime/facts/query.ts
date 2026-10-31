@@ -20,10 +20,15 @@
 //   count (target with a selector required)
 //     op = equals with a number, or count with "<cmp> <n>" (`>= 3`, `= 0`).
 //   dialog | dialog.<consent|rate_limit|robot_check|promotion|assistant>
+//   obstruction | obstruction.<overlay|notice|rate_limit|assistant|other>
 //     op = exists | visible | absent, value = optional text the dialog's name
 //     contains (or, without a value, the name of a `{ kind: "dialog", name }`
 //     target, the form Core's candidate script saves); or contains, value =
-//     that text, asking that such a dialog is open.
+//     that text, asking that such a dialog is open. `obstruction` is answered
+//     exactly as `dialog` is -- any open layer whose name contains the words --
+//     and `dialog` stays as its alias (CC7, interface I3); its generic kinds are
+//     the page-evidence kinds they stand for (overlay = consent, notice =
+//     promotion), `other` naming no kind.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type {
@@ -44,6 +49,8 @@ const STATE_FACTS = new Set(["exists", "absent", "visible", "enabled", "checked"
 const COMPARISONS = new Set<string>(["equals", "contains", "matches"]);
 const COUNT_PATTERN = /^\s*(=|==|!=|>=|<=|>|<)\s*(\d{1,9})\s*$/u;
 const LAYER_KINDS = new Set<string>(["consent", "rate_limit", "robot_check", "promotion", "assistant"]);
+/** An `obstruction.<kind>` path word, as the page-evidence kind it narrows to; `other` narrows nothing. */
+const OBSTRUCTION_KINDS: Readonly<Record<string, WebAutomationLayerKind | "any">> = { overlay: "consent", notice: "promotion", rate_limit: "rate_limit", assistant: "assistant", other: "any" };
 const OPS = new Set<string>(["exists", "absent", "visible", "enabled", "equals", "contains", "matches", "count"]);
 
 /** The claim a raw condition names, with its bindings resolved from `context`. */
@@ -87,9 +94,10 @@ function claimFor(condition: WebAutomationFactCondition, value: Literal): WebAut
     if (!target?.selector || !counted) return undefined;
     return { kind: "count", target: { ...target, selector: target.selector }, ...counted };
   }
-  if (word === "dialog") {
-    if (sub !== undefined && !LAYER_KINDS.has(sub)) return undefined;
-    const dialogKind = sub as WebAutomationLayerKind | undefined;
+  if (word === "dialog" || word === "obstruction") {
+    if (sub !== undefined && !(word === "obstruction" ? sub in OBSTRUCTION_KINDS : LAYER_KINDS.has(sub))) return undefined;
+    const narrowed = sub === undefined ? undefined : word === "obstruction" ? OBSTRUCTION_KINDS[sub] : sub as WebAutomationLayerKind;
+    const dialogKind = narrowed === "any" ? undefined : narrowed;
     // Core's candidate script saves a dialog fact as `op: visible | absent`
     // with the name in a `{ kind: "dialog", role, name }` target; the role
     // cannot narrow a layer kind, so it reads as any dialog.
@@ -181,7 +189,7 @@ function conditionValue(entry: unknown): WebAutomationFactCondition | undefined 
 
 /** The name a saved `{ kind: "dialog", name }` target carries, if any. */
 function dialogTargetName(target: JsonObject | undefined): string | undefined {
-  return target?.kind === "dialog" && typeof target.name === "string" ? target.name : undefined;
+  return (target?.kind === "dialog" || target?.kind === "obstruction") && typeof target.name === "string" ? target.name : undefined;
 }
 
 function splitFact(fact: string): [string, string | undefined] {

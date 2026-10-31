@@ -11,7 +11,7 @@
 // Only the child processes this script started are ever stopped, by PID.
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, appendFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -144,26 +144,6 @@ async function waitFor(label, probe) {
   throw new Error(`${label} was not ready after ${READY_MS / 1000}s (${last})`);
 }
 
-/** The instance's mail folder: <fluxiq paths.fluxiq>/platform/outbox below FLUXIQ_ROOT, found once Core has made it. */
-function resolveOutbox(root, fallback) {
-  const stack = [{ dir: root, depth: 0 }];
-  while (stack.length > 0) {
-    const { dir, depth } = stack.pop();
-    let entries;
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const name of entries) {
-      const full = path.join(dir, name);
-      if (name === "outbox" && path.basename(dir) === "platform") return full;
-      if (depth < 4 && !name.startsWith("node_modules") && statSync(full, { throwIfNoEntry: false })?.isDirectory()) stack.push({ dir: full, depth: depth + 1 });
-    }
-  }
-  return fallback;
-}
-
 async function main() {
   const stamp = new Date().toISOString().replaceAll(/[:.]/gu, "-");
   const runDir = path.join(packageRoot, "test-runs", "site-up", stamp);
@@ -182,20 +162,24 @@ async function main() {
   const provPort = await freePort(taken);
   const sitePort = await freePort(taken);
   const appOrigin = `http://127.0.0.1:${appPort}`;
+  // The service profile insists on an https public origin. Core listens on plain loopback; the public origin is the name its links and Origin checks use (nothing resolves it; the round trip talks to the loopback address, whose own origin the welcome route compares an Origin header to).
+  const publicOrigin = "https://app.standin.test";
   const provUrl = `http://127.0.0.1:${provPort}`;
   const tokenFile = path.join(runDir, "provisioning-token");
   writeFileSync(tokenFile, `${randomBytes(32).toString("base64url")}\n`, { mode: 0o600 });
   const fluxiqRoot = path.join(runDir, "core-root");
   mkdirSync(fluxiqRoot, { recursive: true });
+  const mailDir = path.join(runDir, "mail");
 
   const coreEnv = {
     ...basicEnvironment(),
     FLUXIQ_PROFILE: "service",
     FLUXIQ_ROOT: fluxiqRoot,
-    FLUXIQ_PUBLIC_ORIGIN: appOrigin,
+    FLUXIQ_PUBLIC_ORIGIN: publicOrigin,
     FLUXIQ_PROVISIONING_LISTEN: `127.0.0.1:${provPort}`,
     FLUXIQ_PROVISIONING_TOKEN_FILE: tokenFile,
     FLUXIQ_HOST_MODULE: host,
+    FLUXIQ_EMAIL_SENDER: `file:${mailDir}`,
     FLUXIQ_CLIENT_GATEWAY_ENABLED: "false",
     NEXT_TELEMETRY_DISABLED: "1"
   };
@@ -219,7 +203,7 @@ async function main() {
     });
   } catch (error) {
     stopAll();
-    throw new Error(`${error.message}. Core's server never starts the listener: startProvisioningListenerFromEnv has no caller outside tests (apps/web/src/instrumentation.ts only initializes the runtime). See reports/t801/w2.md.`);
+    throw new Error(`${error.message}. Look at core.log in the run directory: under FLUXIQ_PROFILE=service Core starts the provisioning listener at FLUXIQ_PROVISIONING_LISTEN.`);
   }
 
   const serverStart = path.join(packageRoot, "server", "start.mjs");
@@ -230,7 +214,7 @@ async function main() {
       SITE_PORT: String(sitePort),
       FLUXIQ_PROVISIONING_URL: provUrl,
       FLUXIQ_PROVISIONING_TOKEN_FILE: tokenFile,
-      SITE_APP_ORIGIN: appOrigin,
+      SITE_APP_ORIGIN: publicOrigin,
       SITE_TERMS_VERSION: "stand-in-1",
       SITE_HUMAN_CHECK: "off"
     };
@@ -245,10 +229,10 @@ async function main() {
     say("server/start.mjs is not there yet: the site was not started");
   }
 
-  const outbox = resolveOutbox(fluxiqRoot, path.join(fluxiqRoot, ".fluxiq", "platform", "outbox"));
+  const outbox = mailDir;
   say(`site:   ${siteUrl ?? "(not started)"}`);
-  say(`app:    ${appOrigin}`);
-  say(`mail:   ${outbox}  (Core has no FLUXIQ_EMAIL_SENDER=file:<dir>; this is its fixed outbox under the run's data root)`);
+  say(`app:    ${appOrigin} (public origin ${publicOrigin})`);
+  say(`mail:   ${outbox}  (FLUXIQ_EMAIL_SENDER=file:<dir>)`);
   say(`run:    ${runDir}`);
 
   if (args.has("--round-trip")) {
@@ -256,7 +240,7 @@ async function main() {
       say("round trip FAIL: the site is not running");
       return 1;
     }
-    const result = await runRoundTrip({ site: siteUrl, app: appOrigin, prov: provUrl, tokenFile, mail: resolveOutbox(fluxiqRoot, outbox) });
+    const result = await runRoundTrip({ site: siteUrl, app: appOrigin, appPublic: publicOrigin, prov: provUrl, tokenFile, mail: outbox });
     say(result.ok ? "round trip PASS" : "round trip FAIL");
     return result.ok ? 0 : 1;
   }

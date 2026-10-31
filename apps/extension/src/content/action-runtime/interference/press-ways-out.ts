@@ -6,7 +6,7 @@
 // did. The record is what lets Core's trace and the chat say "Closed a notice
 // the page put in the way" rather than only that something was closed: the
 // layer's kind comes from the same classifier the snapshot names layers by
-// (`layer-kind.ts`), or `dialog` when none names it, and the control is named
+// (`obstruction/generic-kind.ts`), or `other` when none names it (CC7), and the control is named
 // by the allow-list phrase that admitted it (`control-word.ts`).
 //
 // **The two names (t516).** An interruption met in a run must become a branch
@@ -41,7 +41,7 @@ import { dispatchClickGesture } from "../click-gesture";
 import { clearableLayers, type ClearingScope } from "./clearable-layers";
 import type { ClearingTarget } from "./clearing-target";
 import { clearedControlWord } from "./control-word";
-import { layerKind } from "./layer-kind";
+import { controlRefOf, genericLayerKind, layerId } from "./obstruction";
 import { pressableWayOut } from "./pressable-way-out";
 
 /**
@@ -72,7 +72,7 @@ export function pressWaysOut(spare: Element | ClearingTarget | undefined, scope:
       const control = pressableWayOut(overlay);
       if (!control) continue;
       // Named before the press: a layer that closes is gone from the page after it.
-      const record: WebAutomationClearedLayer = { kind: clearedKind(overlay), control: clearedControlWord(control), ...namesOf(overlay, control) };
+      const record: WebAutomationClearedLayer = { kind: genericLayerKind(overlay), control: clearedControlWord(control), ...namesOf(overlay, control), ...identityOf(overlay, control) };
       try {
         if (isTopFrame()) record.wayOut = { url: location.href, element: describeElement(control) as unknown as Record<string, unknown> };
       } catch {
@@ -86,10 +86,10 @@ export function pressWaysOut(spare: Element | ClearingTarget | undefined, scope:
   return cleared;
 }
 
-/** The layer's interference kind, or `dialog` when no classifier names it. A robot check is never pressed, so never named here. */
-function clearedKind(overlay: Element): WebAutomationClearedLayer["kind"] {
-  const kind = layerKind(overlay);
-  return kind === undefined || kind === "robot_check" ? "dialog" : kind;
+/** The layer's stable id and the pressed control's durable target (CC7, interface I1), read before the press. */
+function identityOf(overlay: Element, control: Element): Pick<WebAutomationClearedLayer, "id" | "controlRef"> {
+  const controlRef = controlRefOf(control);
+  return { id: layerId(overlay), ...(controlRef ? { controlRef } : {}) };
 }
 
 /** The layer's accessible name and the dismissal's accessible name or safely readable text. */

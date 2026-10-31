@@ -16,9 +16,12 @@ export const WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.d
  */
 export const WEB_AUTOMATION_FACTS_CAPABILITY_ID = "web.facts";
 
-/** The fact kinds `web.facts` version 1 answers, as a fact condition's `fact` names them. */
+/**
+ * The fact kinds `web.facts` version 1 answers, as a fact condition's `fact` names them. `obstruction` (CC7, t799) is
+ * Core's generic name for a layer over the page, answered exactly as `dialog`, which stays as its alias.
+ */
 export const WEB_AUTOMATION_FACT_KINDS = Object.freeze([
-  "exists", "absent", "visible", "enabled", "text", "url", "value", "count", "dialog", "checked", "selected"
+  "exists", "absent", "visible", "enabled", "text", "url", "value", "count", "dialog", "obstruction", "checked", "selected"
 ] as const);
 
 const FACTS_CAPABILITY_METADATA = {

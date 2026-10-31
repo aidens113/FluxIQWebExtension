@@ -1,5 +1,20 @@
 # Agent Instructions
 
+## Runtime Integration
+
+Shared agent policy is installed globally from MeritPrompts. These project
+rules supplement it and take precedence where they conflict.
+
+- Codex sessions: read [CODEX.md](CODEX.md) for runtime guidance and the
+  FluxIQ family lesson index.
+- Claude Code sessions: read [CLAUDE.md](CLAUDE.md); its imports load the
+  project rules and FluxIQ family lesson index. Global Claude settings own
+  the MeritPrompts hooks; do not duplicate them in project configuration.
+
+Codex model ceiling: GPT-6.1 Sol at Max effort. Never use Astra for any
+role, fallback or review. Follow the shared Codex routing guide for worker
+models and escalation.
+
 ## Agent Roles
 
 **Senior supervisor agent** — the agent the user prompts directly. It owns
@@ -157,15 +172,11 @@ needs verifying, so reads are the cost: route discovery through a worker or
 `Explore` and read the conclusion. Briefs follow the protocol format, at most
 40 lines; the worker's final message follows the protocol's return contract.
 
-Model routing follows the global MeritClaude rules: each piece of work goes
-to the cheapest tier that will reliably finish it. `Explore` with
-`model: "haiku"` for search; `worker-light` (Haiku) for running a named
-command or a fully specified edit; `worker` (Sonnet, the default) for bounded
-implementation from a clear brief; `worker-heavy` (Opus) for root-cause
-debugging, cross-module design, and the live build loop or Core architecture;
-`supervisor` (Opus) to own a whole lane with its own team. A supervisor
-dispatches a worker in the foreground when it needs the result to continue,
-because a background worker's completion does not wake it.
+Model routing follows the global MeritPrompts rules and the current
+runtime guide. Use the configured models and agent tools available in that
+runtime. Claude Code tier names and model aliases apply only to Claude Code;
+Codex uses its own supported models and tools. Keep dependent work waiting
+for the worker result and verify it before integration.
 
 ## Repository Boundaries
 
@@ -292,8 +303,8 @@ worker is still the same unit of work. Agent identity travels in commit
 trailers instead. Full design and the measurements behind it are in
 [the agent git workflow plan](docs/working/agent-git-workflow-plan.md).
 
-MeritClaude's automatic git management applies here only as this file allows:
-branches go through `pnpm task`, never MeritClaude's `branch.mjs`, and `main`
+MeritPrompts's automatic git management applies here only as this file allows:
+branches go through `pnpm task`, never MeritPrompts's `branch.mjs`, and `main`
 moves only as Committing And Pushing says.
 
 The senior supervisor agent picks the tier when it writes the brief:
@@ -389,7 +400,7 @@ manage pushing to main"). The senior supervisor agent fast-forwards `main` to a
 `pnpm test`, `pnpm build`, and Core's whole vitest run) passed and nothing known
 to be broken is on it. Paired work promotes both repositories in the same unit.
 Promotion is a fast-forward only (`git push origin <dev-commit>:main`); if `main`
-has diverged from `dev`, stop and ask. Never promote through MeritClaude's
+has diverged from `dev`, stop and ask. Never promote through MeritPrompts's
 `branch.mjs promote`, which also publishes packages.
 
 These actions still require explicit user approval every time:
@@ -404,6 +415,16 @@ Never commit secrets, `.fluxiq` contents, recorded page data, browser
 profiles, or run artifacts. Never use `--no-verify`.
 
 ## Automated Testing Facility Boundary
+
+**Live model provider (user, 2026-10-30).** All live model-backed tests use
+Anthropic Claude. The Lab reads `CLAUDE_API_KEY` from the repository's
+`.env.local` (or its explicitly supplied environment); never print or commit
+the value, and never silently fall back to DeepSeek. Keep scenarios and
+acceptance criteria unchanged for comparison, and record the exact Claude
+model, verdict, provider calls, billed cost and runtime. Provider-free tests
+remain provider-free. Existing supervision and paid-launch rules still apply.
+Claude live tests default to $5 per build (user, 2026-10-30); this is the
+whole build's allowance, not $5 for each call. Explicit lower limits still hold.
 
 The browser testing facility is downstream web-automation infrastructure. Keep
 scenario manifests, fixture websites, Playwright/browser drivers, extension

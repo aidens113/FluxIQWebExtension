@@ -227,11 +227,12 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
-import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
-import { webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
+import { agreedIdentity, webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
 import { webLlmPageText } from "../page-view";
-import { webResetCollections, webTargetSpot } from "../control-spot";
+import { webControlViewOf, webResetCollections, webTargetSpot, type WebControlView } from "../control-spot";
+import type { WebToggleSignature } from "../../../actions/toggle-signature";
+import { webPlanLearnedToggles, webPlanToggleLookOf, type WebPlanToggleLook } from "./handle-control";
 import { webPlanActEffect } from "./act-effect";
 import { createWebLlmSelfChangingNames, type WebLlmSelfChangingNames } from "./self-changing";
 import { webLlmFrameUrlPath } from "./frame-url-path";
@@ -283,6 +284,8 @@ export type WebLlmTargetResolution =
       notAField?: WebLlmNotAFieldKind;
       /** Where the control sits on the view it resolved from, as opaque tokens; absent where it sits nowhere a token names (header, t751 G). */
       spot?: WebLlmTargetSpot;
+      /** What its view shows of the control's state, when stateful (CC9); absent where the look shows none. */
+      control?: WebControlView;
     }
   /** `not_shown`: under `view_history`, a handle the store holds that no evidence printed (header). */
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" | "not_shown"; renumberedByReload?: true };
@@ -300,6 +303,8 @@ export type WebLlmTargetPackets = {
    * refusal hands back as the handle it could not use -- is not printed by it.
    */
   printed(scope: WebLlmTargetScope, result: unknown, echoed?: unknown): void;
+  /** A press flipped a control that shows its state in its words or class, leaving `signature`: later looks read their state against it (CC9). */
+  learnToggle(scope: WebLlmTargetScope, signature: WebToggleSignature): void;
   /** Exploration pressed `handle` and the page changed: a press acts on it, whatever its element prints as (header). */
   pressed(scope: WebLlmTargetScope, handle: string): void;
   /** Exploration acted on `handle` from the page `before` showed, leaving the page `after` shows: a candidate's step saves its control as it was there, and what the act made true (header). */
@@ -318,6 +323,8 @@ type PageTarget = {
   notAField: WebLlmNotAFieldKind | undefined;
   /** Where its control sits on this view (header, t751 G). */
   spot: WebLlmTargetSpot;
+  /** The look at its toggle state, kept so what the Flow learns later can still be read against it (CC9). */
+  toggle?: WebPlanToggleLook | undefined;
 };
 type PageTargets = Map<string, PageTarget>;
 /**
@@ -335,6 +342,8 @@ type FlowPages = {
   documents: Map<string, number>; history: WebLlmViewHistory<PageTarget>;
   printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>; selfChanging: WebLlmSelfChangingNames;
   steps: WebLlmStepViews<PageTarget>;
+  /** The signatures this Flow's presses of toggling controls produced (CC9). */
+  learned: WebToggleSignature[];
 };
 /** A control as the first act on it found it, and what that act made true when it added anything (`act-effect.ts`). */
 type ActedTarget = PageTarget & { effect: JsonObject | undefined };
@@ -355,7 +364,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       acted: new Map<string, ActedTarget>(),
       partial: new Set<string>(),
       selfChanging: createWebLlmSelfChangingNames(),
-      steps: createWebLlmStepViews(acrossView, (target: PageTarget) => target.element.context?.dialog !== undefined, webLlmDialogControlPlaces)
+      steps: createWebLlmStepViews(acrossView, (target: PageTarget) => target.element.context?.dialog !== undefined, webLlmDialogControlPlaces),
+      learned: []
     };
     flows.delete(key);
     flows.set(key, flow);
@@ -405,6 +415,10 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const held = { has: (handle: string): boolean => flow.history.find(handle, undefined) !== undefined };
       const echo = webLlmPrintedTargetHandles(echoed, held, "anywhere");
       keepNewest(flow.printed, [...webLlmPrintedTargetHandles(result, held, "line_start")].filter((handle) => !echo.has(handle)), PRINTED_PER_FLOW);
+    },
+    learnToggle(scope, signature) {
+      const flow = flows.get(scopeKey(scope));
+      if (flow !== undefined) flow.learned = webPlanLearnedToggles(flow.learned, signature);
     },
     pressed(scope, written) {
       const handle = canonicalWebLlmTargetHandle(written);
@@ -464,7 +478,7 @@ function resolveFromHistory(flow: FlowPages, handle: string, location: string | 
   // one now; `ambiguous` and `not_unique` name no one control (header).
   if ((current.code !== "unknown" && current.code !== "stale") || current.renumberedByReload === true) return current;
   if (found.target.shared) return { ok: false, code: "not_unique" };
-  const earlier = resolved(found.target);
+  const earlier = resolved(found.target, flow.learned);
   earlier.shownIn = found.shownIn;
   return earlier;
 }
@@ -477,7 +491,7 @@ function resolveFromHistory(flow: FlowPages, handle: string, location: string | 
 function inStandingView(flow: FlowPages, handle: string, location: string | undefined, after: readonly WebLlmPlanStepMove[], current: WebLlmTargetResolution): WebLlmTargetResolution {
   const standing = flow.steps.standing(handle, location, after);
   if (standing === undefined || standing.target.shared || (current.ok && addressOf(current) === addressOf(standing.target))) return current;
-  const resolution = resolved(standing.target);
+  const resolution = resolved(standing.target, flow.learned);
   resolution.shownIn = standing.shownIn;
   return resolution;
 }
@@ -533,6 +547,9 @@ function actedAs(flow: FlowPages, handle: string, resolution: WebLlmTargetResolu
   if (acted.effect !== undefined) resolution.effect = structuredClone(acted.effect);
   if (Object.keys(acted.spot).length === 0) delete resolution.spot;
   else resolution.spot = { ...acted.spot };
+  delete resolution.control;
+  const control = controlOf(acted, flow.learned);
+  if (control !== undefined) resolution.control = control;
   return resolution;
 }
 
@@ -543,7 +560,7 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
     if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
     const target = page.get(handle);
     if (target === undefined) return missing("unknown", flow.renumbered.get(location)?.has(handle) === true);
-    return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
+    return target.shared ? { ok: false, code: "not_unique" } : resolved(target, flow.learned);
   }
   const seen = new Map<string, PageTarget>();
   for (const page of flow.pages.values()) {
@@ -566,13 +583,14 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
       // A field on any page is a field (header).
       notAField: known.notAField === undefined || target.notAField === undefined ? undefined : known.notAField,
       // The newest page's, as `shownIn` is the newest view (header).
-      spot: target.spot
+      spot: target.spot,
+      toggle: target.toggle
     });
   }
   if (seen.size > 1) return { ok: false, code: "ambiguous" };
   const only = [...seen.values()][0];
   if (only?.shared) return { ok: false, code: "not_unique" };
-  if (only !== undefined) return resolved(only);
+  if (only !== undefined) return resolved(only, flow.learned);
   return missing(flow.letGo.size > 0 ? "stale" : "unknown", [...flow.renumbered.values()].some((marked) => marked.has(handle)));
 }
 
@@ -622,7 +640,8 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
       shared: false,
       pressable: pressable.has(element.target),
       notAField: notFields.get(element.target),
-      spot: spotOf(element.target)
+      spot: spotOf(element.target),
+      toggle: webPlanToggleLookOf(element, binding.evidence.elements)
     };
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
@@ -759,40 +778,20 @@ function addressOf(target: Pick<PageTarget, "selector" | "frameId" | "element">)
 }
 
 /** A resolution whose identity is the caller's own copy, so nothing done to it reaches the store. */
-function resolved(target: PageTarget): Extract<WebLlmTargetResolution, { ok: true }> {
+function resolved(target: PageTarget, learned: readonly WebToggleSignature[] = []): Extract<WebLlmTargetResolution, { ok: true }> {
   const resolution: Extract<WebLlmTargetResolution, { ok: true }> = { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
   if (target.frameUrlPath !== undefined) resolution.frameUrlPath = target.frameUrlPath;
   if (target.words !== undefined) resolution.words = target.words;
   if (!target.pressable) resolution.notAControl = true;
   if (target.notAField !== undefined) resolution.notAField = target.notAField;
   if (Object.keys(target.spot).length > 0) resolution.spot = { ...target.spot };
+  const control = controlOf(target, learned);
+  if (control !== undefined) resolution.control = control;
   return resolution;
 }
 
-/**
- * What two pages' identities for one address agree on, field by field. They
- * name the same address and not provably the same control, so the identity
- * keeps only what both said rather than either page's version of it.
- */
-function agreedIdentity(left: WebPlanElementIdentity, right: WebPlanElementIdentity): WebPlanElementIdentity {
-  const agreed = <T>(a: T, b: T): T | undefined => (JSON.stringify(a) === JSON.stringify(b) ? a : undefined);
-  return present<WebPlanElementIdentity>({
-    tagName: agreed(left.tagName, right.tagName),
-    role: agreed(left.role, right.role),
-    implicitRole: agreed(left.implicitRole, right.implicitRole),
-    accessibleName: agreed(left.accessibleName, right.accessibleName),
-    label: agreed(left.label, right.label),
-    visibleText: agreed(left.visibleText, right.visibleText),
-    selector: agreed(left.selector, right.selector),
-    inputType: agreed(left.inputType, right.inputType),
-    id: agreed(left.id, right.id),
-    classNames: agreed(left.classNames, right.classNames),
-    name: agreed(left.name, right.name),
-    testId: agreed(left.testId, right.testId),
-    attributes: agreed(left.attributes, right.attributes),
-    drawing: agreed(left.drawing, right.drawing),
-    context: agreed(left.context, right.context)
-  });
+function controlOf(target: PageTarget, learned: readonly WebToggleSignature[]): WebControlView | undefined {
+  return target.toggle === undefined ? undefined : webControlViewOf(target.toggle.reading, target.toggle.role, learned);
 }
 
 function scopeKey(scope: WebLlmTargetScope): string {

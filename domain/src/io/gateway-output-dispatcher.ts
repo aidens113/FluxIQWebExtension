@@ -4,6 +4,7 @@ import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
 import { ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
+import { webAutomationObstructionValue } from "../actions/obstruction";
 import { webToggleOutput, webToggleSignatureValue } from "../actions/toggle-signature";
 import { webAutomationClearedWayOutsOf, type WebAutomationClearedWayOutFlow } from "../cleared-way-outs";
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
@@ -89,6 +90,10 @@ export async function dispatchWebAutomationOutput(
     // host still names the way out for that Flow's trials and later runs (t728).
     const clearedLayers = coreClearedLayers(fluxiq, isRecord(result.payload) ? result.payload.clearedLayers : undefined, dispatchFlow(request));
     if (clearedLayers?.some((layer) => layer.wayOut !== undefined)) await webAutomationClearedWayOutsOf(fluxiq).settled();
+    // What stood in the way (`actions/obstruction.ts`, CC7): lifted beside the
+    // result so Core reads it from `outputs.result.obstruction`, with the node
+    // definition a way out is pressed by named on each way that has a control.
+    const obstruction = obstructionWithDefinition(isRecord(result.payload) ? result.payload.obstruction : undefined);
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
@@ -96,7 +101,7 @@ export async function dispatchWebAutomationOutput(
       outputId: request.outputId,
       metadata: { sessionId },
       status,
-      payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, skipped, toggle, clearedLayers }),
+      payload: compact({ status, message, result: isRecord(result.payload) && (clearedLayers || obstruction) ? { ...result.payload, ...(clearedLayers ? { clearedLayers } : {}), ...(obstruction ? { obstruction } : {}) } : result.payload, route, skipped, toggle, clearedLayers, obstruction }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would
@@ -123,13 +128,27 @@ export async function dispatchWebAutomationOutput(
  */
 function coreClearedLayers(fluxiq: FluxIQ, reported: unknown, flow: WebAutomationClearedWayOutFlow | undefined): JsonObject[] | undefined {
   const wayOuts = webAutomationClearedWayOutsOf(fluxiq);
-  return webAutomationClearedLayersValue(reported)?.map(({ kind, control, name, controlName, wayOut }) => ({
+  return webAutomationClearedLayersValue(reported)?.map(({ kind, control, name, controlName, wayOut, id, controlRef }) => ({
     kind,
     control,
+    ...(id === undefined ? {} : { id }),
     ...(name === undefined ? {} : { name }),
     ...(controlName === undefined ? {} : { controlName }),
-    ...(wayOut === undefined ? {} : { wayOut: wayOuts.keep(wayOut, flow), wayOutDefinitionId: WAY_OUT_PRESS_DEFINITION_ID })
+    ...(wayOut === undefined ? {} : { wayOut: wayOuts.keep(wayOut, flow) }),
+    // The durable target of the pressed way out (CC7, I1), only beside the node that presses it.
+    ...(wayOut === undefined && controlRef === undefined ? {} : { wayOutDefinitionId: WAY_OUT_PRESS_DEFINITION_ID }),
+    ...(controlRef === undefined ? {} : { controlRef: controlRef as JsonObject })
   }));
+}
+
+/** The obstruction the client reported, copied through its bounds, each way out that has a control naming the node that presses it. */
+function obstructionWithDefinition(reported: unknown): JsonObject | undefined {
+  const obstruction = webAutomationObstructionValue(reported);
+  if (obstruction === undefined) return undefined;
+  return {
+    ...obstruction,
+    dismiss: obstruction.dismiss.map((way) => (way.controlRef !== undefined && way.definitionId === undefined ? { ...way, definitionId: WAY_OUT_PRESS_DEFINITION_ID } : way))
+  } as unknown as JsonObject;
 }
 
 /**
