@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingFlowSpend, ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { settledBuildOf, type CreatedFlowBuild } from "../../flow-lane/index.js";
@@ -22,14 +22,14 @@ import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 
-const CREDENTIAL = { name: "DEEPSEEK_API_KEY", source: "test", value: "test-provider-credential-value" };
+const CREDENTIAL = { name: "CLAUDE_API_KEY", source: "test", value: "test-provider-credential-value" };
 
 function profile(budget: Partial<LlmExecutionProfile["budget"]>): LlmExecutionProfile {
   return {
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: "lab-adapt",
     mode: "live",
-    provider: "deepseek",
+    provider: DEFAULT_LLM_PROVIDER,
     model: DEFAULT_LLM_MODEL,
     task: "adapt",
     scenarioNetworkPolicy: "loopback-only",
@@ -54,7 +54,7 @@ function fakeCore(purse: ExistingFlowSpend | null = flowPurse({ build: [5, 0.02]
       async reauthenticate(): Promise<void> {},
       async secretKeysCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
         if (endpoint === "snapshot") return { keys: [] };
-        return { id: "key-1", name: payload.name, kind: "llm", provider: "DeepSeek", scope: "global", enabled: true };
+        return { id: "key-1", name: payload.name, kind: "llm", provider: payload.provider, metadata: payload.metadata, scope: "global", enabled: true };
       },
       async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
         if (endpoint === "update-flow-settings") {
@@ -82,9 +82,9 @@ const detail: ExistingRunDetail = {
   subflows: [],
   actionAttempts: [],
   interventions: [
-    { interventionId: "i-1", kind: "diagnosis", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
-    { interventionId: "i-2", kind: "diagnosis", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
-    { interventionId: "i-3", kind: "runtime_patch", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-1", kind: "diagnosis", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-2", kind: "diagnosis", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-3", kind: "runtime_patch", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
   ],
   llmAccounting: { calls: 3, inputTokens: 2_700, outputTokens: 300, totalTokens: 3_000, estimatedCostUsd: 0.003, budgetBreaches: 0, pendingCalls: 0 },
   llmGate: { invoked: true },
@@ -118,7 +118,7 @@ test("a live run refuses before a credential is read when its task or target doe
     await assert.rejects(begin("create-flow", targetMode), new RegExp(`the ${targetMode} target's is not; use --target isolated or persistent-isolated`, "u"));
   }
   // Only once the task and the target fit does the missing credential refuse.
-  await assert.rejects(begin("create-flow", "isolated"), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /DEEPSEEK_API_KEY is not set/u.test(error.message));
+  await assert.rejects(begin("create-flow", "isolated"), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /CLAUDE_API_KEY is not set/u.test(error.message));
 });
 
 test("a create-flow run fits only a scenario run that carries an instruction task, and no other task fits any", () => {
@@ -132,7 +132,7 @@ test("a create-flow run fits only a scenario run that carries an instruction tas
   // A dry run's description names where the key was found, never the key.
   const described = create.describe();
   assert.equal(described.purpose, "build_and_adapt");
-  assert.deepEqual(described.credentialSource, { name: "DEEPSEEK_API_KEY", from: "test" });
+  assert.deepEqual(described.credentialSource, { name: "CLAUDE_API_KEY", from: "test" });
   assert.equal(JSON.stringify(described).includes(CREDENTIAL.value), false);
 });
 
@@ -189,7 +189,7 @@ const proposedBuild: CreatedFlowBuild = {
   adaptationId: "adaptation-1",
   providerCalls: 5,
   providerInvocation: "attempted",
-  accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 20_000, outputTokens: 3_000, totalTokens: 23_000, estimatedCostUsd: 0.02 },
+  accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 20_000, outputTokens: 3_000, totalTokens: 23_000, estimatedCostUsd: 0.02 },
   evidenceLoop: { decisionCount: 5, toolCallCount: 4, evidenceBytes: 9_000, toolIds: ["web.recovery.inspect"], steps: null },
   instructedConsequences: [],
   declaredConsequences: null,
@@ -281,7 +281,7 @@ test("a build that left no proposal carries the consequences Core's diagnostic n
   const steps = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-llm-instructed-"));
   t.after(() => rm(steps, { recursive: true, force: true }));
   await mkdir(path.join(steps, "0015-decide"));
-  await writeFile(path.join(steps, "0015-decide", "meta.json"), JSON.stringify({ kind: "decide", provider: "deepseek", costUsd: 0.000379548, part: "creation", phase: "read" }));
+  await writeFile(path.join(steps, "0015-decide", "meta.json"), JSON.stringify({ kind: "decide", provider: DEFAULT_LLM_PROVIDER, costUsd: 0.000379548, part: "creation", phase: "read" }));
   await writeFile(path.join(steps, "0015-decide", "decision.json"), JSON.stringify({ response: { decision: { kind: "complete", result: { instructed: [{ consequence: "delete", quote: "a step log reading" }] } } } }));
   const instructed = [{ consequence: "modify_existing", quote: null }, { consequence: "create_new", quote: null }];
   const stopped: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, instructedConsequences: instructed, failure: { code: "flow_bootstrap.evidence_budget_exhausted", stage: null, httpStatus: null } };
@@ -321,7 +321,7 @@ test("a build that reached no provider fails the run closed, after its evidence 
   const refused: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, providerCalls: 0, providerInvocation: "not_attempted", accounting: null, evidenceLoop: null, failure: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 } };
   const { written, settle } = await settleBuildOnce(refused);
   await assert.rejects(settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
-    && /Live LLM run reached no provider: --live-llm authorized 26 deepseek call\(s\) for --llm-task create-flow and Core made none\. Core's Flow build stopped at provider_resolution before a provider answered\. \(flow_bootstrap\.provider_resolution_failed\)/u.test(error.message));
+    && /Live LLM run reached no provider: --live-llm authorized 26 anthropic call\(s\) for --llm-task create-flow and Core made none\. Core's Flow build stopped at provider_resolution before a provider answered\. \(flow_bootstrap\.provider_resolution_failed\)/u.test(error.message));
   assert.ok(written.some(entry => entry.path === "snapshots/live-llm.json"), "the refusal's evidence is written first");
   // A build that outlived its request with nothing to show counts as having called, so it fails on its own code, never as spend-free.
   const unfinished = await settleBuildOnce({ ...refused, providerCalls: null, providerInvocation: "unknown", failure: { code: "lab.generation_unfinished", stage: null, httpStatus: null } }, {}, null);
@@ -340,7 +340,7 @@ test("a build over its run budget, over its call count, or run on another model 
   const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
   await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });
-  await assert.rejects(otherModel.settle(), /Core's Flow build ran on deepseek\/deepseek-reasoner, not the authorized deepseek\/deepseek-flash/u);
+  await assert.rejects(otherModel.settle(), /Core's Flow build ran on anthropic\/deepseek-reasoner, not the authorized anthropic\/claude-sonnet-5-5/u);
 });
 
 // A created Flow's playback is readied for the model too, so a Flow that
@@ -533,15 +533,15 @@ const reauthoredBuild: CreatedFlowBuild = {
   ...proposedBuild,
   providerCalls: 22,
   loopProviderCalls: 21,
-  accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 310_347, outputTokens: 5_531, totalTokens: 315_878, estimatedCostUsd: 0.04178802 },
+  accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 310_347, outputTokens: 5_531, totalTokens: 315_878, estimatedCostUsd: 0.04178802 },
 };
 /** The playback's parsed detail: no accounting and no per-call lines, so it is read from its interventions, the two checks among them. */
 const { llmAccounting: _noAccounting, ...detailWithoutAccounting } = detail;
 const reauthoredPlayback: ExistingRunDetail = {
   ...detailWithoutAccounting,
   interventions: [
-    { interventionId: "i-judge-1", kind: "diagnosis", requestId: JUDGE_1, provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 2_991, outputTokens: 511, totalTokens: 3_502, estimatedCostUsd: 0.001247076 },
-    { interventionId: "i-judge-2", kind: "diagnosis", requestId: JUDGE_2, provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 2_991, outputTokens: 428, totalTokens: 3_419, estimatedCostUsd: 0.000582996 },
+    { interventionId: "i-judge-1", kind: "diagnosis", requestId: JUDGE_1, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 2_991, outputTokens: 511, totalTokens: 3_502, estimatedCostUsd: 0.001247076 },
+    { interventionId: "i-judge-2", kind: "diagnosis", requestId: JUDGE_2, provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 2_991, outputTokens: 428, totalTokens: 3_419, estimatedCostUsd: 0.000582996 },
     { interventionId: "i-ladder", kind: "diagnosis", validationOk: false, validationCodes: ["recovery.ladder_diagnosis_unanswered"] },
   ],
 };
@@ -561,7 +561,7 @@ function reauthoredRawDetail(attempts: unknown[]) {
   };
 }
 const REAUTHOR_ID = "adaptation.bootstrap.2b83be32-6264-481a-baec-e18bf3dc3922";
-const appliedReauthor = { attempt: 1, routed: true, adaptationId: REAUTHOR_ID, applied: true, durationMs: 173_400, accounting: { requestId: "evidence.aa628a38", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 441_137, outputTokens: 10_071, totalTokens: 451_208, estimatedCostUsd: 0.042481212 } };
+const appliedReauthor = { attempt: 1, routed: true, adaptationId: REAUTHOR_ID, applied: true, durationMs: 173_400, accounting: { requestId: "evidence.aa628a38", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 441_137, outputTokens: 10_071, totalTokens: 451_208, estimatedCostUsd: 0.042481212 } };
 const reauthorAdaptation = () => ({ adaptation: { evidenceLoop: { providerCallCount: 35, additionalProviderCallCount: 1, totalProviderCallCount: 36 } } });
 
 const REAUTHORED_PURSE = flowPurse({ build: [22, 0.04178802], judge: [2, 0.001830072], reauthor: [36, 0.042481212] });
@@ -650,7 +650,7 @@ test("a run whose Flow Core holds no itemised spend for reports the unknown figu
   const steps = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-run-steps-"));
   t.after(() => rm(steps, { recursive: true, force: true }));
   await mkdir(path.join(steps, "0001-chat"));
-  await writeFile(path.join(steps, "0001-chat", "meta.json"), JSON.stringify({ kind: "chat", provider: "deepseek", model: DEFAULT_LLM_MODEL, costUsd: 0.0003 }));
+  await writeFile(path.join(steps, "0001-chat", "meta.json"), JSON.stringify({ kind: "chat", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, costUsd: 0.0003 }));
 
   const none = await settleReauthoredRun([appliedReauthor], reauthorAdaptation, null);
   assert.equal(none.snapshot.runSpend.source, "no_record");
@@ -718,9 +718,9 @@ const { llmAccounting: _checkedNoAccounting, ...checkedBase } = detail;
 const checkedPlayback: ExistingRunDetail = {
   ...checkedBase,
   interventions: [
-    { interventionId: "i-recovery", kind: "diagnosis", requestId: "llm.runtime_diagnosis.a", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
-    { interventionId: "i-verify-1", kind: "diagnosis", requestId: "llm.loop_verification.b", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 1_944, outputTokens: 300, totalTokens: 2_244, estimatedCostUsd: 0.00125 },
-    { interventionId: "i-verify-2", kind: "diagnosis", requestId: "llm.loop_verification.c", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 1_944, outputTokens: 280, totalTokens: 2_224, estimatedCostUsd: 0.00123 },
+    { interventionId: "i-recovery", kind: "diagnosis", requestId: "llm.runtime_diagnosis.a", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-verify-1", kind: "diagnosis", requestId: "llm.loop_verification.b", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 1_944, outputTokens: 300, totalTokens: 2_244, estimatedCostUsd: 0.00125 },
+    { interventionId: "i-verify-2", kind: "diagnosis", requestId: "llm.loop_verification.c", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 1_944, outputTokens: 280, totalTokens: 2_224, estimatedCostUsd: 0.00123 },
   ],
 };
 

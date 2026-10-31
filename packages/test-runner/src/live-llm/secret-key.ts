@@ -7,7 +7,7 @@
 import { RunnerFailure } from "../failure.js";
 import { isLlmModel, isLlmModelForProvider, llmProviderForModel, type LlmProvider } from "@fluxiq-web-extension/test-contracts";
 
-/** Core's own provider label for DeepSeek keys, as the Secret Keys program stores it. */
+/** The default Claude key name in Core's Secret Keys program. */
 export const LAB_LIVE_LLM_KEY_NAME = "FluxIQ Testing Lab Claude";
 
 /** `created` is true when this call installed the key, which is what tells a caller its session predates it. */
@@ -18,10 +18,10 @@ export type LiveLlmSecretKeyControl = {
 };
 
 /**
- * Creates or reuses this Core's Testing Lab DeepSeek key and returns its opaque
+ * Creates or reuses this Core's Testing Lab provider key and returns its opaque
  * reference. An isolated run's Core is new, so this creates one; a persistent
  * workspace's already holds it, so this reuses it after checking it is still
- * the enabled DeepSeek key it claims to be.
+ * an enabled key for the requested provider and model.
  */
 export async function ensureLiveLlmSecretKey(control: LiveLlmSecretKeyControl, input: {
   secretValue: string;

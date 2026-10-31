@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { FIRST_LIVE_DIAGNOSIS_PROFILE, evaluateDemoLlmDiagnosis } from "../demo-llm-live.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const root = path.resolve(import.meta.dirname, "../../../..");
 const summary = (runId: string, status: "failed" | "succeeded", interventions: number) => ({
@@ -27,7 +27,7 @@ test("certifies one diagnosis only after the failed action and a zero-call repla
   const result = evaluateDemoLlmDiagnosis({
     diagnosis: {
       summary: summary("run.diagnosis", "failed", 1), routeDecisions: [], subflows: [], actionAttempts: [action("failed")],
-      interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
+      interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
       adaptationIds: [], changeProposalIds: [], providerCallCount: 1,
     },
     diagnosisEvents: [
@@ -44,7 +44,7 @@ test("certifies one diagnosis only after the failed action and a zero-call repla
 test("fails closed on provider, prompt, usage, mutation, ordering, and replay violations", () => {
   const source = {
     summary: summary("run.diagnosis", "failed", 1), routeDecisions: [], subflows: [], actionAttempts: [action("failed")],
-    interventions: [{ interventionId: "intervention.one", kind: "diagnosis" as const, promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
+    interventions: [{ interventionId: "intervention.one", kind: "diagnosis" as const, promptVersion: "automation-studio.runtime-diagnosis.v1", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
     adaptationIds: [], changeProposalIds: [], providerCallCount: 1,
   };
   const events = [{ sequence: 1, eventId: "event.action", eventKind: "action_attempt" as const, timestampMs: 15, title: "Action", status: "failed" }, { sequence: 2, eventId: "event.llm", eventKind: "intervention" as const, timestampMs: 20, title: "Diagnosis" }];
@@ -65,18 +65,19 @@ test("live command is real-UI, credential-boundary safe, and provider-secret fre
   assert.equal(packageJson.scripts["demo:llm:diagnose"], "node scripts/run-demo-llm-diagnosis.mjs");
   const launcher = await readFile(path.join(root, "scripts/run-demo-llm-diagnosis.mjs"), "utf8");
   assert.equal(launcher.includes("withoutProviderSecrets(process.env)"), true);
-  assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|setupDemoWorkspaceDeepSeekKey|deepSeekSecretFromDriverEnvironment/u);
+  assert.doesNotMatch(launcher, /CLAUDE_API_KEY|ANTHROPIC_API_KEY|DEEPSEEK_API_KEY|setupDemoWorkspaceDeepSeekKey|deepSeekSecretFromDriverEnvironment/u);
   const laneModule = await readFile(path.join(root, "packages/test-runner/src/demo-workspace/diagnosis-lanes.ts"), "utf8");
   const uiModule = await readFile(path.join(root, "packages/test-runner/src/demo-workspace/diagnosis-ui.ts"), "utf8");
   // Skip diagnosis-lanes.ts's import header: its alphabetically sorted import
   // line names restoreDiagnosisScenario before runDiagnosisFromPanel, which
   // would invert the ordering assertion below.
   const lane = [laneModule.slice(laneModule.indexOf("export async function runDemoLlmDiagnosis")), uiModule].join("\n");
-  for (const required of ["withWorkspaceLock", "withPersistentDemoCore", "withDemoBrowser", "configureFirstLiveDiagnosisViaUi", "connectExtension", "introduce-missing-target", "runDiagnosisFromPanel", "restoreDiagnosisScenario", "runDemoFlowFromPanel", "authenticated session", "Encrypted API key", "TESTING_LAB_DEEPSEEK_KEY_NAME"]) assert.equal(lane.includes(required), true);
+  for (const required of ["withWorkspaceLock", "withPersistentDemoCore", "withDemoBrowser", "configureFirstLiveDiagnosisViaUi", "connectExtension", "introduce-missing-target", "runDiagnosisFromPanel", "restoreDiagnosisScenario", "runDemoFlowFromPanel", "authenticated session", "Encrypted API key", "TESTING_LAB_LLM_KEY_NAME"]) assert.equal(lane.includes(required), true, required);
   assert.doesNotMatch(lane, /Authorize One Diagnosis|llm-runtime-password|llm-runtime-pin/u);
   assert.match(lane, /const provider = llmSection\.getByLabel\("Provider", \{ exact: true \}\)/u);
-  assert.match(lane, /provider\.waitFor\(\{ state: "visible", timeout: 10_000 \}\)[\s\S]*provider\.selectOption\("deepseek"\)/u);
+  assert.match(lane, /provider\.waitFor\(\{ state: "visible", timeout: 10_000 \}\)[\s\S]*provider\.selectOption\(DEFAULT_LLM_PROVIDER\)/u);
   assert.match(lane, /const model = llmSection\.getByLabel\("Model", \{ exact: true \}\)/u);
+  assert.match(lane, /model\.selectOption\(DEFAULT_LLM_MODEL\)/u);
   assert.match(lane, /const input = llmSection\.getByLabel\(label, \{ exact: true \}\)/u);
   assert.doesNotMatch(lane, /exactWrappedSettingsControl|label:has\(> span:text-is/u);
   const settingsLoaded = lane.indexOf('getByText("Loading saved Flow settings..."');

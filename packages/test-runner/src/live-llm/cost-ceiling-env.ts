@@ -35,7 +35,8 @@ function dotenvValue(text: string, name: string): string | undefined {
 
 /**
  * One test-scoped ceiling for Core and the Lab plan. The environment wins over
- * checkout files; .env.local wins over .env. The default is $0.10. A flag may
+ * checkout files; .env.local wins over .env. Claude live runs default to $5;
+ * other runs retain Core's test default. A flag may
  * lower that configured amount, but may never bypass it with a higher amount.
  */
 export function labCostCeilingValue(repositoryRoot: string, args: readonly string[] = process.argv, env: NodeJS.ProcessEnv = process.env): string {

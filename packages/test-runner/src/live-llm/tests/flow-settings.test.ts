@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { configureFlowLiveLlmExecution, type LiveLlmFlowSettingsControl } from "../flow-settings.js";
 import { planAtLabCeiling } from "./lab-ceiling.js";
 
@@ -16,7 +16,7 @@ function profile(task: LlmTaskKind): LlmExecutionProfile {
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: "lab-settings",
     mode: "live",
-    provider: "deepseek",
+    provider: DEFAULT_LLM_PROVIDER,
     model: DEFAULT_LLM_MODEL,
     task,
     scenarioNetworkPolicy: "loopback-only",

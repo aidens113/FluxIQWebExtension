@@ -69,20 +69,22 @@ export async function resolveLiveLlmProviderCredential(input: {
       }
       return credential(candidate, "the process environment", fromEnvironment, candidate);
     }
-    if (keyFiles.includes(fileSource)) return credential(candidate, fileSource, fromEnvironment, candidate);
   }
-  const searched: string[] = [];
-  for (const fileName of keyFiles) {
-    assertTestMayReadEnvFile(input.repositoryRoot, fileName);
-    const filePath = path.join(path.resolve(input.repositoryRoot), fileName);
-    searched.push(fileName);
-    for (const candidate of names) {
+  // Process values win across aliases. In files, the user's CLAUDE_API_KEY
+  // wins over the compatible Anthropic alias even when it is in .env.local.
+  for (const candidate of names) {
+    const loaded = input.environment[candidate];
+    const fileSource = testEnvironmentValueSource(input.environment, candidate);
+    if (loaded !== undefined && fileSource !== undefined && keyFiles.includes(fileSource)) return credential(candidate, fileSource, loaded, candidate);
+    for (const fileName of keyFiles) {
+      assertTestMayReadEnvFile(input.repositoryRoot, fileName);
+      const filePath = path.join(path.resolve(input.repositoryRoot), fileName);
       const value = await readOneName(filePath, candidate);
       if (value !== undefined) return credential(candidate, fileName, value, candidate);
     }
   }
   if (keyFiles.length === 0) throw missing(`${name} is not set in the environment, and ${KEY_FILES_SWITCH}=none keeps it from being read from ${CANDIDATE_FILES.join(" or ")}`);
-  throw missing(`${name} is not set in the environment and no ${searched.join(" or ")} in ${path.resolve(input.repositoryRoot)} declares it`);
+  throw missing(`${name} is not set in the environment and no ${keyFiles.join(" or ")} in ${path.resolve(input.repositoryRoot)} declares it`);
 }
 
 /** The env files the key may come from: both, or none under `FLUXIQ_PROVIDER_KEY_FILES=none`. */

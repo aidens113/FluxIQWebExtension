@@ -36,6 +36,11 @@ test("Claude's standard alias works while the requested name has priority", asyn
   const found = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { CLAUDE_API_KEY: "fixture-primary-0123456789", ANTHROPIC_API_KEY: "fixture-other-0123456789" }, provider: "anthropic" });
   assert.equal(found.name, "CLAUDE_API_KEY");
   assert.equal(found.value, "fixture-primary-0123456789");
+  writeFileSync(path.join(root, ".env"), "ANTHROPIC_API_KEY=fixture-old-alias-0123456789\n");
+  writeFileSync(path.join(root, ".env.local"), "CLAUDE_API_KEY=fixture-local-primary-0123456789\n");
+  assert.equal((await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: {}, provider: "anthropic" })).name, "CLAUDE_API_KEY");
+  const explicit = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { ANTHROPIC_API_KEY: "fixture-process-alias-0123456789" }, provider: "anthropic" });
+  assert.equal(explicit.value, "fixture-process-alias-0123456789");
 });
 
 test("the key is read from .env.local even when env files are switched off for isolation", async (context: TestContext) => {

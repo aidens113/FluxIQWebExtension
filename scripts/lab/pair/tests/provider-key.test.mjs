@@ -63,3 +63,9 @@ test("the Claude alias is supported, and a saved DeepSeek key is never a fallbac
     assert.equal((await providerKeySource({ env: {}, extRoot: root, provider: "deepseek" })).found, true);
   });
 });
+
+test("the requested Claude key in .env.local takes priority over an alias in .env", async () => {
+  await withCheckout({ ".env": `ANTHROPIC_API_KEY=${FAKE}\n`, ".env.local": `CLAUDE_API_KEY=${FAKE}\n` }, async (root) => {
+    assert.deepEqual(await providerKeySource({ env: {}, extRoot: root }), { name: "CLAUDE_API_KEY", found: true, source: path.join(root, ".env.local") });
+  });
+});

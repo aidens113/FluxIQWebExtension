@@ -201,7 +201,7 @@ export const CONFIG = {
         // build environment is stripped of, so the extension never inherits one.
         "scripts/provider-secret-environment.mjs",
         // The Lab's key-install path into Core's Secret Keys. The runner reads
-        // the operator's DeepSeek key once (process environment, then .env,
+        // the operator's selected-provider key once (process environment, then .env,
         // then .env.local) and types it into Core's Secret Keys UI, after which
         // only Core holds it and only Core calls the provider.
         "packages/test-runner/src/live-llm/provider-credential.ts",
@@ -214,6 +214,9 @@ export const CONFIG = {
         // The pair launcher reports whether a live run from the pair would
         // find its key, by source and never by value.
         "scripts/lab/pair/provider-key.mjs",
+        // Provider credential names only, shared by the launcher's source probe;
+        // HTTP adapters and key custody remain in Core.
+        "scripts/lab/provider/defaults.mjs",
         // Tests of the files above: they name the key to assert it is read
         // from the right source, carried by name only, and never printed.
         "packages/test-runner/src/live-llm/tests/call-rows.test.ts",

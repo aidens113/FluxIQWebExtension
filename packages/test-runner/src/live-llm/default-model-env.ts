@@ -15,7 +15,7 @@
 // product's model setting.
 
 import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation-studio";
-import { DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmProvider } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmModelForProvider, isLlmProvider } from "@fluxiq-web-extension/test-contracts";
 
 /** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV`). */
 export const LAB_DEFAULT_MODEL_ENV = "FLUXIQ_LLM_DEFAULT_MODEL";
@@ -42,5 +42,6 @@ export function labDefaultModelValue(args: readonly string[] = process.argv): st
   } catch (error) {
     throw new Error(`${LAB_DEFAULT_MODEL_FLAG} ${flagged} cannot be the default model of the run's Core: ${error instanceof Error ? error.message : String(error)}`);
   }
+  if (!isLlmModelForProvider(provider, flagged)) throw new Error(`${LAB_DEFAULT_MODEL_FLAG} ${flagged} does not belong to --llm-provider ${provider}`);
   return flagged;
 }

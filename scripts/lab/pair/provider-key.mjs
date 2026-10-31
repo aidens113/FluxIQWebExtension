@@ -25,10 +25,10 @@ export async function providerKeySource({ env, extRoot, provider = LIVE_LLM_DEFA
     if ((env[candidate] ?? "").trim() !== "") return { name: candidate, found: true, source: "the process environment" };
   }
   if (env.FLUXIQ_PROVIDER_KEY_FILES === "none") return { name, found: false, searched: ["the process environment"] };
-  for (const file of FILES) {
-    const contents = await readIfPresent(path.join(extRoot, file));
-    if (contents === null) continue;
-    for (const candidate of names) {
+  for (const candidate of names) {
+    for (const file of FILES) {
+      const contents = await readIfPresent(path.join(extRoot, file));
+      if (contents === null) continue;
       const assigned = new RegExp(`^\\s*(?:export\\s+)?${candidate}\\s*=\\s*["']?[^\\s"'#]`, "mu");
       if (assigned.test(contents)) return { name: candidate, found: true, source: path.join(extRoot, file) };
     }

@@ -9,6 +9,7 @@ import { liveLlmBuildCostCeilingUsd } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
 import { RunnerFailure } from "../../failure.js";
+import { AUTOMATION_STUDIO_ANTHROPIC_DEFAULT_MODEL, AUTOMATION_STUDIO_ANTHROPIC_MODELS, AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS } from "fluxiq/automation-studio/llm-models";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 
 /** Core's per-build ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
@@ -195,7 +196,7 @@ test("the build's ceiling is Core's resolved value, and the Lab contract's bound
   // allow, or refuse one a configured ceiling allows.
   assert.equal(LLM_LAB_MAX_ESTIMATED_COST_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
   // The default declares no lower number, so an unset --llm-max-cost-usd plans the ceiling itself.
-  assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
+  assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, 5);
   // The call cap mirrors Core's runaway backstop the same way. Three 64s once drifted apart from it (t576, t583): the
   // Lab refused a run Core would take, and Core refused the settings of a Flow the Lab had just built.
   assert.equal(LLM_LAB_MAX_CALLS_PER_RUN, AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP);
@@ -252,6 +253,15 @@ test("every configured model reaches the plan, and the default is what an absent
   delete (absent as { model?: string }).model;
   assert.equal(planAtLabCeiling(absent).model, DEFAULT_LLM_MODEL);
   assert.equal(DEFAULT_LLM_MODEL, "claude-sonnet-5-5");
+});
+
+test("Claude's Lab catalog and context ceiling match Core's public model seam", () => {
+  assert.equal(AUTOMATION_STUDIO_ANTHROPIC_DEFAULT_MODEL, DEFAULT_LLM_MODEL);
+  assert.deepEqual([...AUTOMATION_STUDIO_ANTHROPIC_MODELS].sort(), llmModels.filter(model => model.startsWith("claude-")).sort());
+  for (const model of AUTOMATION_STUDIO_ANTHROPIC_MODELS) {
+    assert.equal(AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS[model].contextTokens, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST);
+    assert.equal(AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS[model].maxOutputTokens, 128_000);
+  }
 });
 
 test("an unsupported provider, model, task or retry count is refused", () => {
