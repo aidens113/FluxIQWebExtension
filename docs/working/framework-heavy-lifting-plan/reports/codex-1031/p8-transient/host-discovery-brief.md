@@ -1,0 +1,12 @@
+Role: read-only discovery/standard worker gpt-6.1-sol medium, t826 host producer planning only.
+Use current t826 paired source roots. Read this directory's contract-brief.md frozen API and paired existing p8-skip/signals-discovery.md (its historical t825 paths mean current t826 equivalents).
+Goal: name exact minimal host-only producer/preservation/serialization changes; no implementation before verified Core reader interface release.
+Read domain/runtime/failure/{codes,carrier,classify}.ts, runtime/adapter.ts, io/gateway-output-dispatcher.ts and llm-evidence/capture.ts plus exploration/replay/action-failure result builders needed. Locate immediate import/call sites before deciding a helper is host-only.
+First production only explicit existing RATE_LIMITED and already-classified temporary transport facts after current wire parsing. Do not infer temporary from retryable, disabled/hidden/covered, NO_EFFECT, body text, or arbitrary waits. Do not infer unacted from temporary.
+Preserve original parsed failure category/code/stage/effect/retryability/certainty and comparisons; code-derived fallback must not lower a valid original ambiguous/authoritative record. Host annotation never changes actual effect certainty.
+No browser/source shared constructor may newly emit transient on the wire. If codes.ts/carrier/classify are browser-reachable, use a narrower host-only annotation after parsing; prove the call graph in the report.
+Tool output failure is CONTROL-only via frozen projectAutomationStudioFailureControlRecord helper before ANY JSON/model serialization; private facts retain original comparisons. Malformed optional signal never erases evidence or actual effectApplied. Clear failure on success rather than reuse a prior call's record.
+Keep browser wire/schema and CC10 actionability unchanged. Identify mirrored exact key list and every named reconstruction that can erase new failure metadata.
+Only write task-owned host-discovery.md with proposed owned source paths, precise tests, original-record precedence and browser non-emission proof. No source/shared Current/Ledger/other report edits.
+Full suites max2/day already exhausted. No tests/types/build/check/API/browser/panel/git/agents or .env/.fluxiq/user data. Core contract worker owns readers and is editing; rely on frozen brief, not partial generated SDK.
+Return required Outcome/Changed/Validation/Not verified/Report/Notes contract, concise source locations and remaining uncertainty. Lead will separately release implementation after interface acceptance.

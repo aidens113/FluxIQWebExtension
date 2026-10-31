@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_TARGET_GONE_CODE, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_TARGET_GONE_CODE, parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../../../capture";
 import { captureEvidence } from "../../../capture";
@@ -169,4 +169,22 @@ test("a control no look shows is gone; two that could be it are unmatched; a ste
   await assert.rejects(unread(STALE_FAILURE));
   assert.deepEqual(await webNodeRetryReacquire(gone.run, { actionType: "web.dom.click", parameters: stale, metadata: {} }, unread, [])({ failure: STALE_FAILURE }), { outcome: "unavailable" });
   assert.equal(webNodeLookedUpReacquire(gone.run, { definitionId: "web.output.dom-click", handle: undefined, parameters: stale, look: lookOf(gone.run) }), undefined);
+});
+
+
+test("fresh-target dispatch records original thrown failures and unknown acknowledgements in the same attempt history", async () => {
+  for (const attached of [true, false]) {
+    const original: AutomationStudioFailureRecord = { category: "action_failed", code: "web.transport.transient", retryable: true, stage: "execution", effect: "ambiguous" };
+    const { run } = runOf(async () => { throw attached ? Object.assign(new Error("lost"), { failure: original }) : new Error("lost"); });
+    const answers: WebNodeDispatchResult[] = [];
+    const reacquire = webNodeRetryReacquire(run, { actionType: "web.dom.click", parameters: {}, metadata: {} }, async () => ({ outcome: "found", parameters: { selector: "#fresh" } }), answers);
+    const fresh = await reacquire({ failure: STALE_FAILURE });
+    assert.equal(fresh.outcome, "found");
+    if (fresh.outcome !== "found") continue;
+    const result = await fresh.dispatch(4);
+    assert.equal(answers.length, 1);
+    assert.equal(answers[0], result);
+    assert.equal(result.status, attached ? "failed" : "unknown");
+    assert.equal(parseAutomationStudioFailureRecord(result.failure)?.effect, attached ? "ambiguous" : undefined);
+  }
 });

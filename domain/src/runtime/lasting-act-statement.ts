@@ -73,7 +73,10 @@ export function webLastingActStatement<T extends StatedRecord>(
   reported: Pick<AutomationStudioFailureRecord, "effect"> | undefined,
   failure: T
 ): T {
-  const unacted = failure.effect === "unacted" || reported?.effect === "unacted" || failure.stage === "target_resolution" || failure.stage === "dispatch";
+  // Explicit original ambiguity outranks a code row or stage's unacted inference.
+  const explicit = reported?.effect ?? failure.effect;
+  if (explicit === "ambiguous") return { ...failure, effect: "ambiguous" };
+  const unacted = explicit === "unacted" || (explicit === undefined && (failure.stage === "target_resolution" || failure.stage === "dispatch"));
   if (webAutomationResolvedActionEffect(actionType, parameters)?.effectClass === "commit") return { ...failure, effect: unacted ? "unacted" : "ambiguous" };
   return reported?.effect === "unacted" ? { ...failure, effect: "unacted" } : failure;
 }

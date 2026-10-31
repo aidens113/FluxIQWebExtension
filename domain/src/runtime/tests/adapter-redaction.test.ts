@@ -113,17 +113,40 @@ test("a sensitive control's post-condition is withheld from the dispatch payload
   assert.equal(action.element !== undefined, true, "the descriptor the guard read still rides with the result");
 });
 
-test("a code this domain does not name is still withheld before it becomes UNKNOWN", async () => {
+test("a strict unknown code keeps original controls while sensitive comparisons are withheld", async () => {
+  const original: AutomationStudioFailureRecord = { ...leakingClientRecord, code: "web.validation.invented" };
+  const before = { ...original };
   const result = await runCommand({
     commandId: "client.command.fifteen",
     status: "failed",
     message: "The field did not keep the text.",
-    failure: { ...leakingClientRecord, code: "web.validation.invented" },
+    failure: original,
     payload: sensitivePayload({ status: "failed" })
   });
-  assert.equal(JSON.stringify(result).includes(producerSentinel), false, "the UNKNOWN branch re-uses the sender's `actual`, so it needs the guard too");
+  assert.equal(JSON.stringify(result).includes(producerSentinel), false, "unknown codes receive the same comparison guard");
+  assert.deepEqual(result.failure, { ...original, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT });
+  assert.equal(result.failure?.transient, undefined);
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+  assert.deepEqual(original, before, "screening changes the parsed clone, not the source record");
+});
+
+test("an unparseable unknown-code record retains fallback diagnostics without leaking sensitive comparisons", async () => {
+  const malformed: AutomationStudioFailureRecord = {
+    ...leakingClientRecord, code: "web.validation.invented", certainNoEffect: true
+  };
+  const result = await runCommand({
+    commandId: "client.command.invalid-unknown", status: "failed", message: "The field did not keep the text.",
+    failure: malformed, payload: sensitivePayload({ status: "failed" })
+  });
+  assert.equal(JSON.stringify(result).includes(producerSentinel), false);
   assert.equal(result.failure?.code, "web.action.unknown");
-  assert.match(String(result.failure?.actual), /unrecognized web automation failure code/u, "the drift is still named");
+  assert.equal(result.failure?.category, "ambiguous_or_unknown");
+  assert.equal(result.failure?.retryable, false);
+  assert.equal(result.failure?.expected, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT);
+  assert.match(String(result.failure?.actual), /unrecognized web automation failure code: web.validation.invented/u);
+  assert.equal(result.failure?.certainNoEffect, undefined);
+  assert.equal(result.failure?.transient, undefined);
+  assert.equal(malformed.certainNoEffect, true, "fallback does not alter the rejected original");
 });
 
 test("an ordinary control keeps the comparison an operator acts on", async () => {

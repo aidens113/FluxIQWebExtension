@@ -386,7 +386,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
     // A lasting act whose answer was lost is checked against the step's own
     // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3); a control the page re-rendered is looked for again by its identity (t786).
-    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), webNodeLookedUpReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: webNodeDispatchParameters(node, ran), look: () => readablePage(run, run.request) }));
+    const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), webNodeLookedUpReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: webNodeDispatchParameters(node, ran), look: () => readablePage(run, run.request) }));
     assertActive(run.request.signal);
     // One the check showed landed counts as done, whatever its lost answer said.
     if (result.status !== "succeeded" && lastingAct !== "landed") {
@@ -403,8 +403,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // A lasting act Core left uncertain and did not repeat says that instead (`./retries/uncertain-outcome.ts`, t361).
       const refused = webNodeFailureRefusal(result, lastingAct, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran) });
       throw current
-        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
-        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded);
+        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal, failure)
+        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded, failure);
     }
     // The command worked. Should the look after it meet a robot check, the step
     // stands with what it read, as a success's statement would say.
@@ -591,7 +591,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       const page = error.page ? run.restamp(error.page) : undefined;
       if (page) run.shown(page);
       // A refusal the page wrote quotes what it wrote (`./press-effect/notice.ts`).
-      const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record);
+      const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record, error.failure);
       // A robot check is the person's. The refusal is kept as the run's record
       // says it, and Core puts the check to the person rather than to the model.
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
@@ -618,7 +618,8 @@ function refusal(
   page: WebLlmSnapshotBinding | undefined,
   code: WebLlmToolRejectionCode,
   detail: ReturnType<typeof rejectionDetail> | undefined,
-  record: WebNodeCallRecord
+  record: WebNodeCallRecord,
+  failure?: unknown
 ): WebLlmEvidenceToolExecution {
   // The refusal carries the whole page it found, whenever it has one, and the attempts Core's retries spent (`./retries/`).
   const value = page ? toolRejection(code, page.evidence, detail, record.attempts) : toolRejection(code, undefined, detail, record.attempts);
@@ -664,7 +665,7 @@ function refusal(
     // for every refusal before it, which is the honest answer: nothing had been
     // resolved, so nothing was guessed at.
     assumed: record.assumed
-  }), record.found, left);
+  }, failure), record.found, left);
   const diagnostic = webBuildRefusalDiagnostic({ page: record.found?.evidence, parameters: record.parameters ?? (isJsonRecord(record.call?.parameters) ? record.call.parameters : undefined), target: detail?.target, code, reason: detail?.reason });
   if (diagnostic) result.diagnostic = diagnostic;
   return result;

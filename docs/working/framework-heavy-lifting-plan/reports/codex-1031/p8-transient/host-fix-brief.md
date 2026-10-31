@@ -1,0 +1,12 @@
+Role: standard fix worker gpt-6.1-sol high, t826 host audit repair; source from previous Sol Medium lane is frozen.
+Root C:/Users/osrs_/FluxStuff/fxwork/t826/!FluxIQWebExtension. Read p8-transient/host.md and files below only; report host-fix.md here.
+Owned: domain/src/runtime/host-failure/carried.ts plus owning tests; runtime/llm-evidence/tool-rejection.ts and its directory barrel/new focused projected-failure carrier helper if necessary; node-run/retries/tests/transient.test.ts; tests of extracted subject.
+Must not touch other host/runtime/adapter paths, Core, versions, architecture, shared Current/Ledger, source facts/guidance, browser/constructors, others' reports or git.
+Frozen interface publicprojectAutomationStudioFailureControlRecord, strict transient/unacted/retryable signal; all actual evidence/effectApplied/person flags retain old meaning. Preserve original and full history protections.
+Observed root Down audit exit1: contract-spread transient.test.ts lines16/87 uses literal/call spreads; explicit typed named fields or named typed spreads only. Repair test shape, not rule/baseline.
+Observed failure-as-empty carried.ts line11 catch returnsundefined for unreadable descriptor. Make reader fail closed WITHOUT laundering malformed optional metadata into an executed-call erasure. A narrow named boundary classification is preferred; no broad exception suppression or audit marker. Inspect owning throw wrapper semantics before choosing safe behavior, but request any extra exact owned edit path first.
+Observed file-lines tool-rejection.ts804>800. Split by actual cohesive responsibility, e.g. projection of carried optional control failure; no comment stripping/padding/minifying/raising limits. Existing helper has one exported thing per file and directory barrel. Root owns docs-link fix alreadydone.
+No behavior changes to retry/permission/English classifiers, no dropped actual call facts, and no new comparison/digest in optional controls before throwing/serialization.
+CoreSDK rebuild in flight; do not run generated Down tests/type/build until root release. You may prepare focused regression tests/inspect source. No full suite/API/browser/panel/agents/git/.env/.fluxiq/user data.
+Announce sourcefreeze with exact changed paths then root validates all affected host tests/types. Max2workers for later named tests only if released. No baseline increases.
+Finish task-owned report with Outcome/Changed/Validation/Not verified/Report/Notes; attach failed gate and exact resolution.

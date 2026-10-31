@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { webNodeRetriedAnswer, type WebNodeDispatchResult } from "..";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../failure";
@@ -41,4 +42,17 @@ test("the last attempt answers when it is the refusal, a success, or a failure t
   const succeeded = { status: "succeeded", payload: { value: "ok" } } as WebNodeDispatchResult;
   const withSuccess = [failed(C.RATE_LIMITED), succeeded];
   assert.equal(webNodeRetriedAnswer(withSuccess, succeeded), succeeded);
+});
+
+
+test("a valid ambiguous or authoritative target-coded suffix cannot be replaced by an older rate-limit refusal", () => {
+  const earlier = failed(C.RATE_LIMITED);
+  const failures: AutomationStudioFailureRecord[] = [
+    { category: "unexpected_state", code: C.TARGET_NOT_ACTIONABLE, retryable: false, effect: "ambiguous" },
+    { category: "auth_required", code: C.TARGET_NOT_ACTIONABLE, retryable: false }
+  ];
+  for (const failure of failures) {
+    const last: WebNodeDispatchResult = { status: "failed", failure };
+    assert.equal(webNodeRetriedAnswer([earlier, last], last), last);
+  }
 });

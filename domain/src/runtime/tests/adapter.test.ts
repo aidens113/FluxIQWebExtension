@@ -162,13 +162,32 @@ test("a press the client saw certainly change nothing reaches Core as an unacted
   // The client's click watch: once the page settled, nothing on it had changed
   // and the control was still there to press. Core makes a lasting press so
   // once more, and only once.
-  const ignored = { category: "action_failed", code: "web.action.no_effect", retryable: true, stage: "execution", actual: "the page settled unchanged" } as AutomationStudioFailureRecord;
+  const ignored: AutomationStudioFailureRecord = {
+    category: "action_failed", code: "web.action.no_effect", retryable: true, stage: "execution",
+    actual: "the page settled unchanged", effect: "unacted", certainNoEffect: true
+  };
   const result = await runCommand({ commandId: "client.command.ignored", status: "failed", message: "Element clicked.", failure: ignored });
   assert.deepEqual(result.failure, { category: "action_failed", code: "web.action.no_effect", retryable: true, stage: "execution", actual: "the page settled unchanged", effect: "unacted", certainNoEffect: true });
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure, "Core's parser keeps the mark");
-  // The mark is the code's, never the sender's: no other failure can claim it.
+  assert.equal(ignored.effect, "unacted");
+  assert.equal(ignored.certainNoEffect, true);
+  // Explicit positive controls in a strict generic original also survive when
+  // its code is broader than the browser producer's canonical NO_EFFECT code.
   const claimed = await runCommand({ commandId: "client.command.claimed", status: "failed", message: "The press failed.", failure: { category: "action_failed", code: "web.action.failed", retryable: true, stage: "execution", effect: "unacted", certainNoEffect: true } });
-  assert.equal(claimed.failure?.certainNoEffect, undefined);
+  assert.equal(claimed.failure?.certainNoEffect, true);
+  assert.equal(claimed.failure?.effect, "unacted");
+  assert.deepEqual(parseAutomationStudioFailureRecord(claimed.failure), claimed.failure);
+});
+
+test("a legacy NO_EFFECT code alone does not prove an unacted press or certain no effect", async () => {
+  const legacy: AutomationStudioFailureRecord = {
+    category: "action_failed", code: "web.action.no_effect", retryable: true, stage: "execution", actual: "the page settled unchanged"
+  };
+  const result = await runCommand({ commandId: "client.command.legacy-no-effect", status: "failed", message: "Element clicked.", failure: legacy });
+  assert.deepEqual(result.failure, { ...legacy, effect: "ambiguous" });
+  assert.equal(result.failure?.certainNoEffect, undefined);
+  assert.equal(legacy.effect, undefined);
+  assert.equal(legacy.certainNoEffect, undefined);
 });
 
 test("a committing press states whether it was dispatched, so Core repeats only a press that never happened (t359)", async () => {
@@ -194,30 +213,20 @@ test("a committing press states whether it was dispatched, so Core repeats only 
   assert.equal(typed?.retryable, true);
 });
 
-test("a client record naming a code this domain does not own becomes UNKNOWN, carrying the code it used", async () => {
-  // `result.failure` crossed the WebSocket, so its `code` is a bare string
-  // until the adapter checks it -- Core's contract is to validate what crossed
-  // a process boundary, and this is that boundary. `web.action.output_not_observed`
-  // is what the client emitted before Wave 3 closed the set and is nobody's
-  // code now; until this check it reached Core's attempt trace unaltered, where
-  // nothing downstream can act on a code no allowlist names. This is the same
-  // answer `carriedWebAutomationFailure` gives a thrown record whose code is
-  // outside the set, because it is the same drift arriving another way.
+test("a strict client record naming an unknown code preserves its original classification and comparison", async () => {
+  // Generic Core controls remain meaningful even when this browser code table
+  // does not name the producer's code. The unknown code earns no new authority.
   const failure: AutomationStudioFailureRecord = { category: "output_not_observed", code: "web.action.output_not_observed", retryable: true, actual: "the field is empty" };
   const result = await runCommand({ commandId: "client.command.six.b", status: "failed", message: "Value not observed.", failure });
-  assert.equal(result.failure?.code, "web.action.unknown");
-  assert.equal(result.failure?.category, "ambiguous_or_unknown");
-  assert.equal(result.failure?.actual, "the field is empty; unrecognized web automation failure code: web.action.output_not_observed", "what the client saw is kept beside the code nobody names");
+  assert.deepEqual(result.failure, { ...failure, effect: "ambiguous" });
+  assert.equal(result.failure?.transient, undefined);
+  assert.equal(failure.effect, undefined, "the source record is not modified");
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });
 
-test("a client record whose category contradicts its code is rebuilt from the code's own row", async () => {
-  // A client one version behind, or one assembling records by hand, can pair a
-  // named code with a category that its row forbids. Core's parser drops an
-  // inconsistent record whole rather than repairing it, so trusting the sender
-  // field by field risks losing the failure entirely. The code is the only part
-  // this domain owns, so the code decides; what only the client could see rides
-  // across untouched.
+test("a strict generic client record preserves controls that differ from its browser code defaults", async () => {
+  // Original control facts outrank this build's code table. A familiar target
+  // code cannot grant a retry the strictly valid original explicitly refused.
   const failure: AutomationStudioFailureRecord = {
     category: "action_failed",
     code: "web.target.not_found",
@@ -226,13 +235,18 @@ test("a client record whose category contradicts its code is rebuilt from the co
     expected: "an element matching #pay",
     actual: "nothing matched"
   };
+  const before = { ...failure };
   const result = await runCommand({ commandId: "client.command.six.c", status: "failed", message: "Nothing matched #pay.", failure });
-  assert.equal(result.failure?.category, "target_not_found", "the code decides the category, not the sender");
-  assert.equal(result.failure?.retryable, true, "an element may appear once the page settles, whatever the sender said");
-  assert.equal(result.failure?.stage, "target_resolution");
+  assert.equal(result.failure?.code, failure.code);
+  assert.equal(result.failure?.category, "action_failed");
+  assert.equal(result.failure?.retryable, false, "a code default cannot grant new retry authority");
+  assert.equal(result.failure?.stage, "execution");
+  assert.equal(result.failure?.transient, undefined);
+  assert.equal(result.failure?.certainNoEffect, undefined);
   assert.equal(result.failure?.expected, "an element matching #pay");
   assert.equal(result.failure?.actual, "nothing matched");
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+  assert.deepEqual(failure, before, "the original source controls and comparisons are unchanged");
 });
 
 test("an output this domain does not own is still rejected before anything is dispatched", async () => {
@@ -408,4 +422,29 @@ test("actual required runtime domain owner forwards service-issued context throu
 test("required Runtime refuses copied context before selecting/sending", async () => {
   const adapter = createWebAutomationRuntimeAdapter({ fluxiq: { programs: {} } as unknown as FluxIQ });
   await assert.rejects(() => Promise.resolve(adapter.executeWithCommandContext!(clickCommand, { commandContext: {} as ClientGatewayCommandContext })));
+});
+
+
+test("a strict original failure outranks code defaults, including unknown codes and ambiguous temporary causes", async () => {
+  for (const code of ["web.action.rate_limited", "client.future_failure"]) {
+    const failure: AutomationStudioFailureRecord = { category: "action_failed", code, retryable: true, stage: "confirmation", effect: "ambiguous", expected: "safe expected", actual: "safe actual", retryAfterMs: 12 };
+    const result = await runCommand({ commandId: "original", status: "failed", failure });
+    assert.equal(result.failure?.code, code);
+    assert.equal(result.failure?.stage, "confirmation");
+    assert.equal(result.failure?.effect, "ambiguous");
+    assert.equal(result.failure?.retryAfterMs, 12);
+    assert.equal(result.failure?.actual, "safe actual");
+    assert.equal(failure.transient, undefined);
+  }
+  const authoritative: AutomationStudioFailureRecord = { category: "auth_required", code: "web.action.rate_limited", retryable: false, effect: "ambiguous" };
+  assert.deepEqual((await runCommand({ commandId: "authority", status: "failed", failure: authoritative })).failure, authoritative);
+  assert.equal((await runCommand({ ...succeeded, failure: authoritative })).failure, undefined);
+});
+
+
+test("a malformed supplied temporary record cannot qualify through the diagnostic code fallback", async () => {
+  const malformed = { category: "auth_required", code: "web.action.rate_limited", retryable: false, transient: true } as const;
+  const result = await runCommand({ commandId: "invalid-original", status: "failed", failure: malformed });
+  assert.equal(result.failure?.transient, undefined);
+  assert.equal(result.failure?.code, "web.action.rate_limited", "existing fallback diagnostics remain");
 });
