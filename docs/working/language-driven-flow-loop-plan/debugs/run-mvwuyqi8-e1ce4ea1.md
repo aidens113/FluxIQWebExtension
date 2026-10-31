@@ -1,6 +1,6 @@
 # Debug: run-mvwuyqi8-e1ce4ea1
 
-Status: Repair t835 passed owning checks and actual provider-free production startup; integration pending, no retry yet.
+Status: Repair t835 passed owning checks and actual provider-free production startup; paired merges Core88bbcb31/Down30ccaf53 accepted, no retry yet.
 Run: company-website/company-website-gas-engineers, workflow gas-engineers, Claude lane slot1, 2026-10-31.
 Pinned source: Core55ebfc148d2accd5b5c8c6e52c7bda72ce4eb3d0 / Down9045ca0dcc58189d70ee450c647525bf32340097.
 Provider configured: anthropic / claude-sonnet-5-5 / CLAUDE_API_KEY, whole build allowance $5.
@@ -20,3 +20,5 @@ t835 traces the exact generated stack to the native ESM loading seam and fixes p
 Artifacts remain ignored in the pinned Lab run bundle and central lab-runs/2026-10-31/run-mvwuyqi8-e1ce4ea1. No credentials, profiles or recorded page data are copied here.
 
 Validation: t835 lead11loader/11cache tests, fresh SDK117.462s/types99.507s and both plain structure audits passed. Actual isolated production startup via compiled Lab coordinator PASS185.844s: page200, gateway401, runtime initialized, providersdisabled; test processes closed. No paid retry before source integration/repin.
+
+Integration: source merges Core88bbcb31/Down30ccaf53; Core0.25.2, mandatory70contract tests pass10.05s. Both task backups retained. Dedicated Lab repin follows paired dev publication; normal guards and unchanged eight-row acceptance apply.
