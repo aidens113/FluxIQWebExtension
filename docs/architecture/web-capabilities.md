@@ -398,6 +398,9 @@ marks as `aloneMarks` and a together set's `marks`, drops only the marks if any
 is malformed, and the read account places them as `leftOutMarks`, so a judge
 claiming the row was asked can be refuted (`result-verification/refuted-no/`).
 They travel in the read's checkpoint and are not shown to the build model.
+Build-test replay sends the same screened marks beside each alone row and each
+grouped row. Marks stay aligned when labels are screened; copies with identical
+cells but conflicting marks carry no outside evidence for the grouped row.
 
 **What a condition means, how a value reads as a number or date, a row's
 identity and the sort order are Core's.** The domain and the content script

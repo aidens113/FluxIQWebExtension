@@ -80,3 +80,39 @@ test("a row found under one condition's list past its lead alone is not said: it
   const rows = webNodeReplayReadRows(read([[PAPERBACK_CHEAP, BOTH], [HARDCOVER_DEAR]], [1, 1]), WHERE, WHERE) as JsonObject;
   assert.equal(rows.leftOutTogether, undefined);
 });
+
+const OFFER = { kind: "outside", said: "Request access", entity: "Archive Readers" };
+
+test("client marks reach both alone and grouped replay rows in the same positions", () => {
+  const payload = read([[PAPERBACK_CHEAP, BOTH, BOTH_TOO], [HARDCOVER_DEAR, BOTH, BOTH_TOO]], [1, 1]);
+  (payload.extraction as JsonObject).rejectedMarks = [[[OFFER], [OFFER], null], [null, [OFFER], null]];
+  const rows = webNodeReplayReadRows(payload, WHERE, WHERE) as JsonObject;
+  const alone = rows.leftOutOnlyByThis as JsonObject[];
+  assert.deepEqual(alone.map((entry) => entry.marks), [[[OFFER]], [null]]);
+  assert.deepEqual((rows.leftOutTogether as JsonObject[])[0]!.marks, [[OFFER], null]);
+});
+
+test("replay marks are screened before either alone or grouped rows leave the domain", () => {
+  const payload = read([[PAPERBACK_CHEAP, BOTH], [HARDCOVER_DEAR, BOTH]], [1, 1]);
+  const privateOffer = { kind: "outside", said: "Request access", entity: "Gift card 4111 1111 1111 1111" };
+  (payload.extraction as JsonObject).rejectedMarks = [[[privateOffer], [privateOffer]], [null, [privateOffer]]];
+  const rows = webNodeReplayReadRows(payload, WHERE, WHERE) as JsonObject;
+  const expected = [{ ...privateOffer, entity: `Gift card ${WEB_LLM_WITHHELD_TEXT}` }];
+  assert.deepEqual((rows.leftOutOnlyByThis as JsonObject[])[0]!.marks, [expected]);
+  assert.deepEqual((rows.leftOutTogether as JsonObject[])[0]!.marks, [expected]);
+  assert.doesNotMatch(JSON.stringify(rows), /4111 1111/u);
+});
+
+test("identical cells with conflicting item marks do not acquire another copy's outside evidence", () => {
+  const payload = read([[PAPERBACK_CHEAP, BOTH], [HARDCOVER_DEAR, BOTH]], [1, 1]);
+  (payload.extraction as JsonObject).rejectedMarks = [[null, [OFFER]], [null, null]];
+  const rows = webNodeReplayReadRows(payload, WHERE, WHERE) as JsonObject;
+  assert.deepEqual((rows.leftOutTogether as JsonObject[])[0]!.marks, [null]);
+});
+
+test("malformed or misaligned marks cost only the marks, never the replay's rows", () => {
+  const payload = read([[PAPERBACK_CHEAP, BOTH], [HARDCOVER_DEAR, BOTH]], [1, 1]);
+  const baseline = webNodeReplayReadRows(payload, WHERE, WHERE);
+  (payload.extraction as JsonObject).rejectedMarks = [[[OFFER]], [null, [OFFER]]];
+  assert.deepEqual(webNodeReplayReadRows(payload, WHERE, WHERE), baseline);
+});

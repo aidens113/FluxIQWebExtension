@@ -9,7 +9,7 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { validateAutomationStudioRecords, type AutomationStudioRecordSchema } from "fluxiq/automation-studio/nodes";
-import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue, type WebAutomationExtractionRejectionObservation } from "../../../actions/extraction";
+import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue, type WebAutomationExtractionItemMark, type WebAutomationExtractionRejectionObservation } from "../../../actions/extraction";
 import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
 import { webAutomationExtractListDispatch } from "../../../output-nodes";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
@@ -250,7 +250,7 @@ export function webNodeReplayReadSaid(payload: JsonValue | undefined, where: unk
 type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined; leftOutTogether?: WebNodeReplayLeftOutTogether[] | undefined; note?: string | undefined };
 
 /** The rows one condition removed by itself. */
-type WebNodeReplayLeftOut = { condition: string; conditionIndex?: number; rows: JsonObject[]; observations?: Array<WebAutomationExtractionRejectionObservation | null> };
+type WebNodeReplayLeftOut = { condition: string; conditionIndex?: number; rows: JsonObject[]; observations?: Array<WebAutomationExtractionRejectionObservation | null>; marks?: Array<WebAutomationExtractionItemMark[] | null> };
 
 /** A value that is an address rather than text: a URL, or a path from an origin. Core's label rule's own. */
 const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
@@ -328,15 +328,17 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
   const rows = labelled(Array.isArray(payload.extracted) ? payload.extracted : [], fields);
   const samples = summary.rejectedSamples;
   const leads = summary.rejectedSamplesAlone;
+  const marks = summary.rejectedMarks?.map((sampled) => sampled.map(screenedMarks));
   const named = conditionNames(where, samples?.length ?? 0);
   const tested = testedColumns(ranWhere, samples?.length ?? 0, fields);
   const leftOut = (samples ?? []).flatMap((sampled, index): JsonObject[] => {
-    const witnesses = sampled.slice(0, leads?.[index] ?? 0).map((row, ordinal) => ({ rows: labelled([row], fields, tested[index]), observation: summary.rejectedObservations?.[index]?.[ordinal] ?? null })).filter((entry) => entry.rows.length > 0);
+    const witnesses = sampled.slice(0, leads?.[index] ?? 0).map((row, ordinal) => ({ rows: labelled([row], fields, tested[index]), observation: summary.rejectedObservations?.[index]?.[ordinal] ?? null, marks: marks?.[index]?.[ordinal] ?? null })).filter((entry) => entry.rows.length > 0);
     const alone = witnesses.flatMap((entry) => entry.rows);
     const observations = summary.rejectedObservations === undefined ? undefined : witnesses.map((entry) => screenedObservation(entry.observation, Array.isArray(ranWhere) ? ranWhere[index] : undefined));
-    return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, conditionIndex: summary.rejectedObservations === undefined ? undefined : index, rows: alone, observations }) as unknown as JsonObject] : [];
+    const rowMarks = marks === undefined ? undefined : witnesses.flatMap((entry) => entry.rows.map(() => entry.marks));
+    return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, conditionIndex: summary.rejectedObservations === undefined ? undefined : index, rows: alone, observations, marks: rowMarks }) as unknown as JsonObject] : [];
   });
-  const together = webNodeReplayLeftOutTogether(samples, leads, named, (row) => labelled([row], fields));
+  const together = webNodeReplayLeftOutTogether(samples, leads, named, (row) => labelled([row], fields), marks);
   if (!rows.length && !leftOut.length && !together.length) return undefined;
   const notes = [
     ...(summary.conditions?.unfiltered && rows.length ? [WEB_NODE_REPLAY_UNFILTERED_ROWS_NOTE] : []),
@@ -348,6 +350,13 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
     leftOutTogether: together.length ? together : undefined,
     note: notes.length ? notes.join(" ") : undefined
   }) as unknown as JsonObject;
+}
+
+/** The client's marks as replay evidence, screened like the rows and their observations. */
+function screenedMarks(marks: readonly WebAutomationExtractionItemMark[] | null): WebAutomationExtractionItemMark[] | null {
+  return marks?.map((mark) => present<WebAutomationExtractionItemMark>({
+    kind: "outside", said: screenedText(mark.said), entity: mark.entity === undefined ? undefined : screenedText(mark.entity)
+  })) ?? null;
 }
 
 /** A privacy refusal is explicit, never the placeholder presented as an observed value. */

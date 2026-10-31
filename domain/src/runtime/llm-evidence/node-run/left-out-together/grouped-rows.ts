@@ -25,10 +25,10 @@
 // label and a credential-shaped label is written withheld.
 
 import type { JsonObject } from "fluxiq/core";
-import type { WebAutomationExtractionRejectedRow } from "../../../../actions/extraction";
+import type { WebAutomationExtractionItemMark, WebAutomationExtractionRejectedMarks, WebAutomationExtractionRejectedRow } from "../../../../actions/extraction";
 
 /** One set of conditions and the rows that failed exactly those: Core's `readRows.leftOutTogether` entry. */
-export type WebNodeReplayLeftOutTogether = { conditions: string[]; conditionIndexes: number[]; rows: JsonObject[] };
+export type WebNodeReplayLeftOutTogether = { conditions: string[]; conditionIndexes: number[]; rows: JsonObject[]; marks?: Array<WebAutomationExtractionItemMark[] | null> };
 
 /**
  * Each set of conditions that left rows out together, in the order of their
@@ -39,28 +39,38 @@ export function webNodeReplayLeftOutTogether(
   samples: readonly (readonly WebAutomationExtractionRejectedRow[])[] | undefined,
   leads: readonly number[] | undefined,
   named: readonly string[],
-  label: (row: WebAutomationExtractionRejectedRow) => JsonObject[]
+  label: (row: WebAutomationExtractionRejectedRow) => JsonObject[],
+  /** Already screened by the caller, like the row labels; aligned with samples. */
+  marks?: WebAutomationExtractionRejectedMarks
 ): WebNodeReplayLeftOutTogether[] {
   if (samples === undefined || leads === undefined) return [];
-  const byRow = new Map<string, { row: WebAutomationExtractionRejectedRow; failed: number[] }>();
+  const byRow = new Map<string, { row: WebAutomationExtractionRejectedRow; failed: number[]; marks: WebAutomationExtractionItemMark[] | null; consistent: boolean }>();
   samples.forEach((sampled, index) => {
     const lead = leads[index];
     if (lead === undefined) return;
-    for (const row of sampled.slice(lead)) {
+    for (const [offset, row] of sampled.slice(lead).entries()) {
       const key = JSON.stringify(row);
-      const said = byRow.get(key) ?? { row, failed: [] };
+      const rowMarks = marks?.[index]?.[lead + offset] ?? null;
+      const said = byRow.get(key) ?? { row, failed: [], marks: rowMarks, consistent: true };
+      // Identical cells can come from distinct items. A conflicting mark must
+      // not be assigned to the row merely because it was seen on one copy.
+      if (JSON.stringify(said.marks) !== JSON.stringify(rowMarks)) said.consistent = false;
       if (!said.failed.includes(index)) said.failed.push(index);
       byRow.set(key, said);
     }
   });
   const bySet = new Map<string, WebNodeReplayLeftOutTogether>();
-  for (const { row, failed } of byRow.values()) {
+  for (const { row, failed, marks: rowMarks, consistent } of byRow.values()) {
     if (failed.length < 2) continue;
     const rows = label(row);
     if (!rows.length) continue;
     const key = failed.join(",");
-    const set = bySet.get(key) ?? { conditions: failed.map((index) => named[index] ?? `condition ${index + 1}`), conditionIndexes: [...failed], rows: [] };
+    const set: WebNodeReplayLeftOutTogether = bySet.get(key) ?? { conditions: failed.map((index) => named[index] ?? `condition ${index + 1}`), conditionIndexes: [...failed], rows: [] };
     set.rows.push(...rows);
+    if (marks !== undefined) {
+      set.marks ??= [];
+      set.marks.push(...rows.map(() => consistent ? rowMarks : null));
+    }
     bySet.set(key, set);
   }
   return [...bySet.values()].sort((a, b) => compareSets(a.conditionIndexes, b.conditionIndexes));
