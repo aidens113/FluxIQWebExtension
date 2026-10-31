@@ -34,9 +34,11 @@ export function webPressToggleSignature(
   const was = before.evidence.elements.find((element) => element.target === handle);
   const now = after.evidence.elements.find((element) => element.target === handle);
   if (was === undefined || now === undefined) return undefined;
-  const signature = webToggleSignatureOf(webToggleReadingOf(was, before.evidence.elements), webToggleReadingOf(now, after.evidence.elements));
+  const beforeReading = webToggleReadingOf(was, before.evidence.elements);
+  const afterReading = webToggleReadingOf(now, after.evidence.elements);
+  const signature = webToggleSignatureOf(beforeReading, afterReading);
   if (signature === undefined) return undefined;
   // What the press flipped is what later looks at that kind of control read their state against (CC9).
   learnInto?.targets.learnToggle(learnInto.scope, signature);
-  return webToggleOutput(signature);
+  return webToggleOutput(signature, webToggleSignatureOf(afterReading, beforeReading));
 }

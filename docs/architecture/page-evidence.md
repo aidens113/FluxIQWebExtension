@@ -12,6 +12,25 @@ Element descriptors and the recording path around them are in
 [extension client architecture](extension-client.md#recording-evidence); what
 is withheld from a capture is in [sensitive values](sensitive-values.md).
 
+## Observed control states
+
+A resolved handle's CC9 `control` view distinguishes the actual readable
+state (`shown`) from the state another press would leave (`ensures`). Both
+are opaque state signatures; the optional `state` word describes what is
+currently shown. A stated boolean attribute gives `shown` with its actual
+value and `ensures` with the other value. Learned name/class transitions
+give these signatures only when the actual reading matches a known side.
+A state-holding role with no readable state supplies only `stateful: true`.
+
+Successful presses preserve the actual before and after readings as
+`toggle.beforeSignature` and `toggle.signature`, respectively. These are
+observations, not the requested end state. Authoring a known toggle requires
+an explicit `ensureState` copied from this step's observed choices; Core
+refuses unsupported or contradictory choices instead of inferring a
+direction from the first control pressed. The paired browser/domain and
+Core updates ship together because older Core validators do not accept the
+additional `shown` field.
+
 ## Passive result checks
 
 Candidate-trial and saved-run checks use the web domain's optional Core

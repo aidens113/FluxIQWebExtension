@@ -24,7 +24,7 @@ import { webControlRole } from "./role";
 import { webToggleReadingOf } from "./toggle-reading";
 
 /** A control's state as the plan resolution answers it, on a handle's view (Core `AutomationStudioPlanHandleView.control`). */
-export type WebControlView = { stateful: true; state?: string; ensures?: JsonObject; idempotentWith?: string };
+export type WebControlView = { stateful: true; state?: string; shown?: JsonObject; ensures?: JsonObject; idempotentWith?: string };
 
 /** Roles of controls that hold a state of their own even when the page states none. */
 const STATE_HOLDING_ROLES: ReadonlySet<string> = new Set(["checkbox", "switch", "radio", "menuitemcheckbox", "menuitemradio"]);
@@ -53,7 +53,7 @@ export function webControlViewOf(reading: WebToggleReading, role: string, learne
     if (shown === undefined) continue;
     const ensures: WebToggleSignature = { via: "attribute", attribute, to: !shown };
     const idempotentWith = webToggleOutput(ensures).idempotentWith;
-    return present<WebControlView>({ stateful: true, state: shown ? on : off, ensures: ensures as unknown as JsonObject, idempotentWith });
+    return present<WebControlView>({ stateful: true, state: shown ? on : off, shown: { via: "attribute", attribute, to: shown }, ensures: ensures as unknown as JsonObject, idempotentWith });
   }
   const worded = wordedView(reading, learned);
   if (worded !== undefined) return worded;
@@ -65,8 +65,8 @@ function wordedView(reading: WebToggleReading, learned: readonly WebToggleSignat
   for (const signature of learned) {
     if (signature.via === "attribute" || signature.gains.length === 0 || signature.loses.length === 0) continue;
     const other: WebToggleSignature = { via: signature.via, gains: signature.loses, loses: signature.gains };
-    if (webToggleSignatureShown(signature, reading)) return { stateful: true, state: "on", ensures: other as unknown as JsonObject };
-    if (webToggleSignatureShown(other, reading)) return { stateful: true, state: "off", ensures: signature as unknown as JsonObject };
+    if (webToggleSignatureShown(signature, reading)) return { stateful: true, state: "on", shown: signature as unknown as JsonObject, ensures: other as unknown as JsonObject };
+    if (webToggleSignatureShown(other, reading)) return { stateful: true, state: "off", shown: other as unknown as JsonObject, ensures: signature as unknown as JsonObject };
   }
   return undefined;
 }

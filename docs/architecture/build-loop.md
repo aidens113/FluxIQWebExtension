@@ -11,6 +11,26 @@ verdict; they are in FluxIQ Core's
 so Core's pages are named by path, as the neighbouring pages do). Paths below
 are under `domain/src/`.
 
+## Choosing a toggle's end state
+
+A successful in-place press reports paired observations as
+`toggle: { signature, beforeSignature?, idempotentWith? }`. `signature` is
+the state after the press; `beforeSignature` is computed from the actual
+readings in the reverse direction. The extension carries these as raw
+`toggle` and `toggleBefore`; the gateway dispatcher wraps them for Core.
+Failed, skipped, navigated-away or removed controls supply no new toggle
+observation. Legacy after-only observations remain valid without an invented
+pre-state.
+
+The click catalog exposes `ensureState`. For a known toggle the model must
+choose the state the instruction asks to leave by copying an exact observed
+signature from this step's paired evidence or its control view. Core grounds
+that choice and refuses missing, unobserved or conflicting choices with
+answerable evidence. The first press and the most frequent transition do not
+choose task intent. The selected signature remains the executable step's
+state across loop passes and later opposite transitions. A control already
+showing it answers `skipped: "already_in_state"` without a press.
+
 ## Which Build Runs
 
 Every build starts from explicit task instructions owned by the Flow. Optional

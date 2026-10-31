@@ -353,10 +353,8 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
     { ...structured("scroll", "Scroll Mode"), description: SCROLL_REQUEST_DESCRIPTION, example: { mode: "untilStable", maxScrolls: 20 } }
   ];
-  // `ensureState` is Core's, never a model's (t775): the toggle signature an explored press of the control
-  // answered, given to a step on it so a site already in that state is not flipped back. Declared so that Core's
-  // check of a plan keeps it as written; undeclared, it was resolved as the nearest name, `expectedState` (t775-P).
-  if (outputId === "web.dom.click") return [...selectorParameters, { ...structured("ensureState", "Ensure State"), shownToModel: false }];
+  // The model chooses the instructed end state from observations; Core grounds the exact copy.
+  if (outputId === "web.dom.click") return [...selectorParameters, { ...structured("ensureState", "Ensure State"), description: "Choose the state the instruction asks to leave. Copy an exact observed state signature from this control's shown state or observed before/after press states; a control already showing it is skipped." }];
   if (outputId === "web.dom.extract") return [...selectorParameters, webAutomationExtractReadParameter()];
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [

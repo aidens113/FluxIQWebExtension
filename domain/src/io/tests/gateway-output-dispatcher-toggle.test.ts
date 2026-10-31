@@ -47,6 +47,19 @@ test("a press that flipped a stated state names the node that sets that state, a
   assert.deepEqual(result.payload?.toggle, { signature, idempotentWith: "web.output.dom-check" });
 });
 
+test("both actual states survive dispatch when the first pressed control starts on", async () => {
+  const signature = { via: "attribute", attribute: "aria-pressed", to: false };
+  const beforeSignature = { via: "attribute", attribute: "aria-pressed", to: true };
+  const result = await dispatchWith("succeeded", { status: "succeeded", toggle: signature, toggleBefore: beforeSignature });
+  assert.deepEqual(result.payload?.toggle, { signature, beforeSignature, idempotentWith: "web.output.dom-check" });
+});
+
+test("malformed optional before evidence is dropped without inventing an inverse", async () => {
+  const signature = { via: "name", gains: ["unsave"], loses: ["save"] };
+  const result = await dispatchWith("succeeded", { toggle: signature, toggleBefore: { via: "name", gains: [], loses: [] } });
+  assert.deepEqual(result.payload?.toggle, { signature });
+});
+
 test("a failed press, a skipped one, a malformed signature or none puts no toggle on the dispatch payload", async () => {
   const signature = { via: "name", gains: ["unlike"], loses: ["like"] };
   for (const [status, payload] of [

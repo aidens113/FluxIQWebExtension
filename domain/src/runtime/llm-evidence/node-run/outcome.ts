@@ -62,7 +62,7 @@ export type WebNodeOutcome = {
    * (`./press-effect/toggle-signature.ts`). Absent where nothing about the
    * control was seen to change.
    */
-  toggle?: { signature: WebToggleSignature; idempotentWith?: "web.output.dom-check" };
+  toggle?: { signature: WebToggleSignature; beforeSignature?: WebToggleSignature; idempotentWith?: "web.output.dom-check" };
   /**
    * What a press, a type or a choice changed on the page it stayed on, in the
    * view's line terms: `t941 "Space Grey" no longer marked`,

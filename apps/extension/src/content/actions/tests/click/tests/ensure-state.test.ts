@@ -26,6 +26,8 @@ test("a target that already shows the aria-pressed state is not pressed, and ans
   assert.equal(result.status, "succeeded");
   assert.equal(result.skipped, "already_in_state");
   assert.deepEqual(events, []);
+  assert.equal(Object.hasOwn(result, "toggle"), false);
+  assert.equal(Object.hasOwn(result, "toggleBefore"), false);
 });
 
 test("a name-only toggle that already has the gained words and none of the lost is skipped; one that has not is pressed", async (t) => {

@@ -293,8 +293,10 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 function withToggle(result: BrowserActionResult, around: { element: Element; before: WebToggleReading; address: string; deps: ContentActionDependencies }): BrowserActionResult {
   const { element, before, address, deps } = around;
   if (result.status !== "succeeded" || result.failure !== undefined || element.isConnected === false || element.ownerDocument.location.href !== address) return result;
-  const toggle = webToggleSignatureOf(before, toggleReadingOf(element, deps.describeElement(element)));
-  return toggle === undefined ? result : { ...result, toggle };
+  const after = toggleReadingOf(element, deps.describeElement(element));
+  const toggle = webToggleSignatureOf(before, after);
+  const toggleBefore = webToggleSignatureOf(after, before);
+  return toggle === undefined ? result : { ...result, toggle, ...(toggleBefore ? { toggleBefore } : {}) };
 }
 
 /** A press on a control that is not a link, with every answer the page can give it (header). */

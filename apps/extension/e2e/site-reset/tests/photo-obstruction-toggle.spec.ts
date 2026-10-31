@@ -48,8 +48,8 @@ function layersIn(value: unknown, path = "$"): Array<{ path: string; keys: strin
 /**
  * t799 / W6 headed proof, provider-free, on photo-social.
  *
- * (b) Idempotent like. The build likes a post in its dialog; the Flow's like step is tied to that press and carries Core's
- * `ensureState`, so the first trial, run over the post already liked, skips the step `already_in_state` and the post still
+ * (b) Idempotent like. The build likes a post in its dialog and explicitly copies that press's observed state into the
+ * Flow's `ensureState`, so the first trial, run over the post already liked, skips the step `already_in_state` and the post still
  * shows Unlike afterwards. Every judge request names the step's `ensureState`.
  *
  * (a) Layers closed while a trial runs. photo-social has no layer the client leaves standing over a press: its in-page
@@ -73,6 +73,7 @@ test("installed gateway project build: layers over a press are closed in the run
   const activity: ActivityEvent[] = [];
   const unsubscribe = await subscribeActivity(event => { activity.push(event); });
   let coveringCell = "", likedCell = "", likeHandle = "";
+  let selectedState: JsonObject = {};
   let refusedSubmission: JsonObject = {};
   const submissions: JsonObject[] = [];
   let postShowsUnlikeAfterSkip = false;
@@ -115,12 +116,16 @@ test("installed gateway project build: layers over a press are closed in the run
         likeHandle = handleBefore(turn.shownPage(), "Like", "Comment");
         return node("like", "web.output.dom-click", { target: { handle: likeHandle } }, ["modify_existing"]);
       }
+      if (turn.step === 5) {
+        selectedState = record(record(turn.last("core.run_node")?.toggle).signature);
+        if (!Object.keys(selectedState).length) throw new Error("diagnostic.observed_toggle_state_missing");
+      }
       const flow = (looks: number) => [
         `flow: Cover and like`,
         `step profile: open the profile`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(profile)}`,
         `step first: open the other post`, `  node: web.dom.click`, `  target: ${coveringCell}`, `  consequences: none`,
         `step post: open the post`, `  node: web.dom.click`, `  target: ${likedCell}`, `  consequences: none`,
-        `step like: like the post`, `  node: web.dom.click`, `  target: ${likeHandle}`, `  consequences: modify_existing`,
+        `step like: like the post`, `  node: web.dom.click`, `  target: ${likeHandle}`, `  consequences: modify_existing`, `  ensureState: ${JSON.stringify(selectedState)}`,
         ...Array.from({ length: looks }, (_, index) => [`step check${index + 1}: look at the post`, `  node: web.dom.capture_snapshot`]).flat()
       ].join("\n");
       if (turn.step === 5) return call("submit", "core.submit_subflow", { flow: flow(0) });

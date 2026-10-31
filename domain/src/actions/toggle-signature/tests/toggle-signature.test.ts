@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { webToggleSignatureOf, webToggleSignatureShown, webToggleSignatureValue, type WebToggleReading } from "..";
+import { webToggleOutput, webToggleSignatureOf, webToggleSignatureShown, webToggleSignatureValue, type WebToggleReading } from "..";
 
 const named = (name: string): WebToggleReading => ({ states: {}, name });
+
+test("toggle output retains observed pre-state and supports legacy after-only observations", () => {
+  const signature = webToggleSignatureOf(named("Save"), named("Unsave"))!;
+  const beforeSignature = webToggleSignatureOf(named("Unsave"), named("Save"))!;
+  assert.deepEqual(webToggleOutput(signature, beforeSignature), { signature, beforeSignature });
+  assert.deepEqual(webToggleOutput(signature), { signature });
+});
 
 test("a name flipping Save to Unsave gains unsave and loses save, whatever the row", () => {
   const signature = webToggleSignatureOf(named("Save Senior Engineer"), named("Unsave Senior Engineer"));

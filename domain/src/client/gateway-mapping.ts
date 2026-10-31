@@ -373,6 +373,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     skipped: result.skipped === "already_in_state" ? result.skipped : undefined,
     // Read off the client's untrusted value through the signature's own reader, and only on a press that was made and succeeded (t787).
     toggle: result.status === "succeeded" && result.skipped === undefined ? webToggleSignatureValue(result.toggle) as JsonObject | undefined : undefined,
+    toggleBefore: result.status === "succeeded" && result.skipped === undefined ? webToggleSignatureValue(result.toggleBefore) as JsonObject | undefined : undefined,
     route: result.route === "ended" && nextPage?.outcome === "ended" ? "ended" : undefined,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt

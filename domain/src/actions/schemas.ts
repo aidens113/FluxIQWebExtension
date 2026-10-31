@@ -252,7 +252,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
   {
     actionType: "web.dom.click",
     label: "Click",
-    description: "Click a DOM element. With ensureState -- the toggle signature an earlier press of this control produced -- a control that already shows that state is not pressed and the step answers skipped: already_in_state.",
+    description: "Click a DOM element. Choose ensureState as an exact observed state signature for the state the instruction asks to leave. A control already showing it is not pressed and answers skipped: already_in_state.",
     parameterSchema: {
       ...selectorSchema,
       properties: {
