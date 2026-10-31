@@ -188,7 +188,7 @@ test("no value reaches the identity: not a control's contents, not a withheld na
   const scope = { projectId: "project.one", flowId: "flow.one" };
   targets.remember(scope, binding);
   const resolution = targets.resolve(scope, "t1", undefined);
-  assert.deepEqual(resolution, { ok: true, selector: "#password", frameId: undefined, element: { tagName: "input", selector: "#password", inputType: "password" } });
+  assert.deepEqual(resolution, { ok: true, selector: "#password", frameId: undefined, element: { tagName: "input", selector: "#password", inputType: "password" }, controlIntent: { intent: "neutral" } });
 });
 
 test("a list item and a child frame's element keep their place in the identity", async () => {

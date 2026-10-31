@@ -160,6 +160,7 @@ test("a control whose autocomplete says it holds a secret keeps the author's des
     ok: true,
     selector: "#card",
     frameId: undefined,
+    controlIntent: { intent: "neutral" },
     element: {
       tagName: "input",
       implicitRole: "textbox",

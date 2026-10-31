@@ -33,7 +33,7 @@ const COUPON = (label: string): JsonObject => ({ tagName: "button", selector: "#
 const ADD: JsonObject = { tagName: "button", selector: "#add-to-cart", visibleText: "Add to cart" };
 
 /** A build's exploration as round 4's went: the popup shown, closed, then the item page, its coupon pressed. */
-function explored() {
+function explored(couponWords = "Get coupons") {
   const targets = createWebLlmTargetPackets();
   const handles = createWebLlmStableTargetHandles();
   const capture = (url: string, elements: JsonObject[]) => handles.restamp(SCOPE, sanitizeWebLlmSnapshotWithBindings({ url, interactiveElements: elements }));
@@ -49,7 +49,7 @@ function explored() {
   targets.remember(SCOPE, withPopup);
   // The popup closed: the next view of the same page carries neither control.
   targets.remember(SCOPE, capture(START, [SEARCH]));
-  const itemView = capture(ITEM, [COUPON("Get coupons"), ADD]);
+  const itemView = capture(ITEM, [COUPON(couponWords), ADD]);
   const item = itemView.evidence.location;
   targets.remember(SCOPE, itemView);
   // The look after the press: the page relabelled the coupon.
@@ -103,11 +103,12 @@ test("exploration's node run on a handle from a view it has left is still refuse
   const legacy = await resolveWebPlanNodeParameters(input({ target: { handle: close } }), stores);
   assert.equal(legacy.status === "refused" && legacy.issueCodes.includes("web.handle.unknown"), true, JSON.stringify(legacy));
 
-  // And a handle on the current page resolves to exactly `status` and `parameters`, as Core requires of it.
+  // The current page's actual action receives only the declared host companion.
   const add = targets.resolve(SCOPE, "t5", undefined);
   assert.equal(add.ok && add.selector, "#add-to-cart");
   const current = await resolveWebPlanNodeParameters(input({ target: { handle: "t5" } }), stores);
-  assert.deepEqual(Object.keys(current).sort(), ["parameters", "status"]);
+  assert.deepEqual(Object.keys(current).sort(), ["controlIntent", "parameters", "status"]);
+  if (current.status === "resolved") assert.deepEqual(current.controlIntent, { intent: "accept" });
 });
 
 test("a handle no view ever showed is refused by name under the view history, and one the current page shows records its view", async () => {
@@ -126,7 +127,10 @@ test("a handle no view ever showed is refused by name under the view history, an
 });
 
 test("a control that left the page keeps what its views agreed on, and the newest label where the agreement alone would name it by its tag", () => {
-  const { targets, capture } = explored();
+  const conflicted = explored();
+  conflicted.targets.remember(SCOPE, conflicted.capture(ITEM, [ADD]));
+  assert.deepEqual(conflicted.targets.resolve(SCOPE, "t4", undefined, "view_history"), { ok: false, code: "ambiguous" }, "an accepting-to-neutral history cannot lose its known semantic conflict");
+  const { targets, capture } = explored("Ready");
   // The item page again, the coupon gone from it.
   targets.remember(SCOPE, capture(ITEM, [ADD]));
   assert.equal(targets.resolve(SCOPE, "t4", undefined).ok, false, "the current pages no longer carry the coupon");

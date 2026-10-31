@@ -68,7 +68,11 @@ test("a fact target handle resolves to the selector and element identity a click
   await inspect(runtime);
   const fact = await resolve(runtime, FACT_TARGET_NODE, { target: { handle: "t1" } });
   assert.deepEqual(fact, { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  assert.deepEqual(fact, await resolve(runtime, CLICK_NODE, { target: { handle: "t1" } }), "the same shape a click's resolved parameters take");
+  const click = await resolve(runtime, CLICK_NODE, { target: { handle: "t1" } });
+  assert.deepEqual(click, { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY }, controlIntent: { intent: "neutral" } });
+  assert.ok(fact.status === "resolved" && click.status === "resolved");
+  assert.deepEqual(fact.parameters, click.parameters, "the same shape a click's resolved parameters take");
+  assert.equal(Object.hasOwn(fact, "controlIntent"), false, "a passive fact contributes no executable control annotation");
 });
 
 test("a fact target in a child frame names the frame and its path", async () => {
