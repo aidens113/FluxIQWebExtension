@@ -40,3 +40,9 @@ Commands run in `fxwork/t814/!FluxIQ` unless stated otherwise. Use `pnpm.cmd` be
 - Later t813-dependent host/provisioning/email/discovery wiring was deliberately not implemented, as instructed.
 - Existing seed-project owner assignment still needs the Core public ownership seam identified in the previous report; this resume did not change that API or claim the owner is assigned.
 - Acquired `lab-slots/heavy-check.lock` for the heavy batch, checked its owner marker, released it after final library refresh and notified the lead. No checks/processes remain running from this resume.
+
+## Lead completion of the authored D5 requirement
+
+The ownership limitation above was a worker scope boundary, not a phase deferral. The lead commissioned a second review and completed the required owned seed through an additive public trusted-host Core helper (db4192ca) and serialized product initialization (eea545f0). The helper reuses creator persistence, needs no fabricated session and cannot replace another recorded creator. Retried initialization repairs a partial seed without duplication; concurrent callers preserve their own outcomes.
+
+Independent lead acceptance: Core ownership36 and product18 passed, including real service-IAM owner/non-owner checks; Core/product/web typechecks passed after the public export; earlier panel32 and web27 passed after parent integration. Models remain provider-free; browser render, later C2/C3 lifecycle wiring and the final full sweep are separate. Details: `t814-ownership-fix-result.md`.
