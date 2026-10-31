@@ -170,8 +170,14 @@ test("a stable fact the newest view gives is lent before its words", () => {
   assert.equal(signals(merged), 3);
 });
 
-test("A8 brief-2 rebuilt: a candidate naming the coupon a predecessor's act changed resolves with at least two signals", async () => {
+test("A8 Get coupons to Collected history without an actual retained predecessor act refuses semantic ambiguity", async () => {
   const { handle, stores } = viewed(a8Coupon("Get coupons", "b"), a8Coupon("Collected", "b x"));
+  const answer = await resolveWebPlanNodeParameters(candidateInput(handle, { handleReach: "view_history" }), stores);
+  assert.deepEqual(answer, { status: "refused", issueCodes: ["web.handle.ambiguous", "web.handle.ambiguous:target"] });
+});
+
+test("same-semantics historical identity merging retains newest words, stable class and at least two signals", async () => {
+  const { handle, stores } = viewed(a8Coupon("Coupon ready", "b"), a8Coupon("Collected", "b x"));
   const answer = await resolveWebPlanNodeParameters(candidateInput(handle, { handleReach: "view_history" }), stores);
   assert.equal(answer.status, "resolved", JSON.stringify(answer));
   if (answer.status !== "resolved") return;

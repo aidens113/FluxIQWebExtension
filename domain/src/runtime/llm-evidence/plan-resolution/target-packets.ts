@@ -12,14 +12,8 @@
 //   on what it names. Two pages that give one handle different selectors make
 //   a bare handle `ambiguous`, never a guess at the newer one.
 //
-// The authoring tools number handles for the whole Flow (`../stable-handles.ts`),
-// so two pages they show never give one handle to different controls, and a
-// bare handle -- the way the Flow script format writes a step's target --
-// resolves. They used to number every page from `t1`, and a bare handle
-// was then ambiguous as soon as the exploration had seen two pages: 6 of E1
-// lane B's 12 builds on the realistic stores. The rule above stays, for a
-// packet numbered any other way and for a Flow whose numbers had to start
-// again.
+// The authoring tools number handles for the whole Flow (`../stable-handles.ts`).
+// Ambiguity checks still apply to packets whose numbering restarted.
 //
 // A selector the page gave to more than one described element -- every product
 // card's link can share one -- names none of them in particular, so resolving
@@ -40,79 +34,27 @@
 // frame held when it was shown (`frameUrlPath`, `frame-url-path.ts`). Pages that
 // agree on a bare handle keep the newest path any of them gave.
 //
-// A look the model is not shown -- the one a node run takes before it acts --
-// is remembered too, and when it was cut short it is only added: its handles
-// join the page's and none the page already had is forgotten. A look describes
-// forty controls, and one taken after a notice appeared above the results
-// sidebar ended before the "Voltbay" filter the packet just shown had ended on.
-// Remembered as the page's packet, it forgot that filter's handle, and four
-// presses on it were refused `handle_not_in_packet`, two straight after a
-// packet that showed it (`run-muohbi3e-e5847e5a`). Handles are numbered for the
-// whole Flow, so a handle kept this way still names the one control it was
-// given for. A look that described the whole page replaces, as a shown packet
-// does: a control missing from it has left the page.
+// A look the model is not shown is remembered too. A partial look only adds
+// handles; a whole look replaces the page, so a missing control has left it.
 //
-// A rerun puts its page back by reloading it, and a reload can address the
-// page's controls differently, so the authoring tools may number them anew
-// (`../stable-handles.ts` re-matches what it can). Live, 7-in-1 was `t985` on
-// one load and `t1194` on the next, and a rerun sent with the handle read before
-// the reload was refused `handle_not_in_packet`, twice, with nothing saying the
-// page had been reloaded (`run-musq0b1m-0472cfa0`, Cause 4). So a view that
-// replaces a page's handles and arrived by reload (`navigation.type`, the
-// browser's own record of how the document was reached) marks each handle it
-// dropped whose control it still shows under another handle: tag and words the
-// same. Such a handle still resolves to nothing, and says it was renumbered by
-// a reload (`renumberedByReload`). A handle shown again loses its mark; a
-// control that left the page, or a drop with no reload, is never marked.
+// A whole reload view marks a dropped handle whose control remains under a
+// new handle, matched by tag and words (`renumberedByReload`). Reappearing
+// handles lose their mark; controls that left without a reload are not marked.
 //
-// **Only the first view of a new document marks (t741, C2).** `navigation.type`
-// stays `reload` for the document's whole life, so every later view of a page
-// once reloaded counted as a reload: a "Read more" exploration pressed expanded
-// its review and left the page while another "Read more" still showed, and the
-// pressed handle was marked and refused before the view history and its acted
-// identity could name it (social round 3, 0137-0165, no reload made). So a view
-// marks only when its document (`navigation.timeOrigin`, one value per
-// document) differs from the one the page's previous whole view showed, kept per
-// page beside the marks (`documents`). Where either view lacks it, any reload
-// view marks, as before.
+// Only the first view of a new document marks (t741 C2), using navigation's
+// timeOrigin beside the page's marks. With either origin absent, reload views
+// retain the earlier conservative marking behavior.
 //
-// **A re-viewed handle keeps only what its views agree on (t356, C1).** A newer
-// view of a page replaces its handles, and used to replace each handle's
-// identity with the newest one: after exploration pressed "Get coupons" the page
-// relabelled it "Collected", and the candidate script bound `t925` to
-// "Collected", which the trial's freshly reset page never shows
-// (`run-muyrpbnk-fef374e7`, 0032 `web.target.not_found`). Now a handle the newer
-// view shows as the same control keeps the identity both views agree on
-// (`element-identity.ts` `webPlanElementIdentityAcrossViews`): a label the act
-// changed is dropped, never adopted. A handle the newer view no longer shows
-// still leaves the page with it, as above.
+// Re-viewed controls keep the identity their views agree on (t356 C1).
+// Candidate submissions restore the first act's original identity (t442 F1)
+// only for that same retained location, document, frame and containing layer.
+// Its intent comes from that original capture too, never its changed label.
+// Exploration otherwise keeps the agreed identity. An unrelated selected B
+// cannot receive A's original identity merely by sharing its address.
 //
-// **A control exploration acted on is saved as the act found it (t442, F1).**
-// The agreement above serves exploration, which acts on the page as it now is.
-// Saved into a Flow it left R4a's and R4b's coupon step as `{div, class b}`:
-// "Get coupons" before the press, "Collected" after it, so no words survived,
-// and a wordless identity matches the done control as well as the undone one
-// (`r4b-coupon-step-identity.md`). So each handle exploration acted on also
-// keeps the identity its control had in the view the act was made from
-// (`acted`, from `../node-run/run.ts`; the first act's, since a Flow meets the
-// control as exploration first did). A candidate submission (`view_history`)
-// saves that identity in full; what the act changed -- the new words, the class
-// it toggled -- is the step's effect, never who the control is. Exploration's
-// own acts keep the agreed identity, so nothing it presses on the page as it
-// now is is vetoed for words the act took away. Only while the handle still
-// names the address it was acted on at; a handle nothing acted on keeps the
-// agreed identity everywhere.
-//
-// **What that act made true is the step's effect (t447, F2).** The act that
-// fixes the identity also fixes the effect: `acted` is handed the page the act
-// left as well, and keeps what the act added to it beside the identity
-// (`act-effect.ts`, the route-state effect a Flow node keeps). A candidate's
-// resolution carries it (`effect`), only where it carries the acted identity,
-// so the step a Flow saves for the act says both who its control was and what
-// pressing it did; Core writes the effect onto the node's
-// `routeSignatures.effect`, and a run that finds the effect already on the
-// page passes the step over as done rather than failing it. An effect only
-// ever skips a step: Core never runs an act again because of one.
+// What the act added is its effect (`act-effect.ts`, t447 F2), carried beside
+// that original identity. Core can skip a step whose effect already holds;
+// the effect never makes it repeat an act.
 //
 // **What the page changes by itself is no act's effect (t496).** Each Flow also
 // keeps what its pages were seen changing with nothing done to them -- a banner
@@ -153,12 +95,8 @@
 // another handle, keeps the handle it no longer shows at that control's place
 // (`step-views/kept-by-place.ts`, t781).
 //
-// t743 d5 kept the two documents as two views of the page and the acted identity
-// per address instead. The first act at the own page's address was then the
-// press that undid the dialog's act, made from the state the build had left, and
-// a Flow saving the own page's control saved the words that undo found
-// ("Unlike"): the acted identity below stays the handle's first act's, lent only
-// at the address that act named.
+// The first act's identity is lent only to its retained source. Saving an
+// undo's later state in its place would make the Flow author the undo (t743).
 //
 // **A candidate names only what evidence printed (t378, lane B C4).** A capture
 // holds every element, and the page view prints only those with words or a
@@ -226,6 +164,9 @@
 // has bounds of its own (`view-history.ts`).
 
 import type { JsonObject } from "fluxiq/core";
+import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import { collectWebLlmControlIntents } from "../control-intent";
+import { sameWebPlanControlIntent, webPlanAbsoluteControlIntent, webPlanControlIntentSource } from "./control-intents";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { agreedIdentity, webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
@@ -286,6 +227,8 @@ export type WebLlmTargetResolution =
       spot?: WebLlmTargetSpot;
       /** What its view shows of the control's state, when stateful (CC9); absent where the look shows none. */
       control?: WebControlView;
+      /** Trusted classification of this exact retained control; never part of its saved identity. */
+      controlIntent?: AutomationStudioResolvedControlIntent;
     }
   /** `not_shown`: under `view_history`, a handle the store holds that no evidence printed (header). */
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" | "not_shown"; renumberedByReload?: true };
@@ -315,6 +258,8 @@ export type WebLlmTargetPackets = {
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach, after?: readonly WebLlmPlanStepMove[]): WebLlmTargetResolution;
   /** A bare handle for an act on the page at `page`: that page's, `stale` when only another page holds it (header, t486). */
   resolveOn(scope: WebLlmTargetScope, handle: string, page: string): WebLlmTargetResolution;
+  /** Correlate a host-held absolute target only against this Flow's actual retained targets. */
+  absoluteIntent(scope: WebLlmTargetScope, parameters: JsonObject, location: string | undefined, reach?: WebLlmTargetReach): ReturnType<typeof webPlanAbsoluteControlIntent>;
 };
 
 type PageTarget = {
@@ -325,6 +270,12 @@ type PageTarget = {
   spot: WebLlmTargetSpot;
   /** The look at its toggle state, kept so what the Flow learns later can still be read against it (CC9). */
   toggle?: WebPlanToggleLook | undefined;
+  controlIntent: AutomationStudioResolvedControlIntent | undefined;
+  intentConflict: boolean;
+  sourceIntentConflict: boolean;
+  crossPageIntentConflict?: boolean;
+  intentSource: ReturnType<ReturnType<typeof webPlanControlIntentSource>>;
+  observedElement: WebPlanElementIdentity;
 };
 type PageTargets = Map<string, PageTarget>;
 /**
@@ -347,6 +298,9 @@ type FlowPages = {
 };
 /** A control as the first act on it found it, and what that act made true when it added anything (`act-effect.ts`). */
 type ActedTarget = PageTarget & { effect: JsonObject | undefined };
+/** Provenance stays private even while a temporary resolution is rebuilt or its pre-act identity restored. */
+const intentSources = new WeakMap<object, Pick<PageTarget, "intentSource" | "intentConflict" | "sourceIntentConflict" | "crossPageIntentConflict" | "observedElement"> & { exact: boolean }>();
+const capturedTargets = new WeakMap<WebLlmSnapshotBinding, PageTargets>();
 
 export function createWebLlmTargetPackets(): WebLlmTargetPackets {
   const flows = new Map<string, FlowPages>();
@@ -451,17 +405,22 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
       const current = resolveCurrent(flow, handle, location);
-      if (reach !== "view_history") return pressedBefore(flow, handle, current);
+      if (reach !== "view_history") return checkedIntent(pressedBefore(flow, handle, current), true);
       const standing = after === undefined ? current : inStandingView(flow, handle, location, after, current);
       const reached = resolveFromHistory(flow, handle, location, standing);
       // A candidate names only what evidence printed, and saves a control acted on as the act found it (header).
-      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : actedAs(flow, handle, pressedBefore(flow, handle, reached));
+      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : checkedIntent(actedAs(flow, handle, pressedBefore(flow, handle, reached)));
     },
     resolveOn(scope, written, page) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
-      return pressedBefore(flow, handle, resolveOnPage(flow, handle, page));
+      return checkedIntent(pressedBefore(flow, handle, resolveOnPage(flow, handle, page)), true);
+    },
+    absoluteIntent(scope, parameters, location, reach) {
+      const flow = flows.get(scopeKey(scope));
+      const targets = flow === undefined ? [] : reach === "view_history" ? flow.history.targets() : [...flow.pages.values()].flatMap((page) => [...page.values()]);
+      return webPlanAbsoluteControlIntent(parameters, targets, location);
     }
   };
 }
@@ -479,7 +438,7 @@ function resolveFromHistory(flow: FlowPages, handle: string, location: string | 
   // one now; `ambiguous` and `not_unique` name no one control (header).
   if ((current.code !== "unknown" && current.code !== "stale") || current.renumberedByReload === true) return current;
   if (found.target.shared) return { ok: false, code: "not_unique" };
-  const earlier = resolved(found.target, flow.learned);
+  const earlier = resolved(found.target, flow.learned, location !== undefined);
   earlier.shownIn = found.shownIn;
   return earlier;
 }
@@ -491,8 +450,9 @@ function resolveFromHistory(flow: FlowPages, handle: string, location: string | 
  */
 function inStandingView(flow: FlowPages, handle: string, location: string | undefined, after: readonly WebLlmPlanStepMove[], current: WebLlmTargetResolution): WebLlmTargetResolution {
   const standing = flow.steps.standing(handle, location, after);
-  if (standing === undefined || standing.target.shared || (current.ok && addressOf(current) === addressOf(standing.target))) return current;
-  const resolution = resolved(standing.target, flow.learned);
+  if (standing === undefined || standing.target.shared || (current.ok && addressOf(current) === addressOf(standing.target)
+    && intentSources.get(current)?.intentSource.key === standing.target.intentSource.key)) return current;
+  const resolution = resolved(standing.target, flow.learned, true);
   resolution.shownIn = standing.shownIn;
   return resolution;
 }
@@ -542,7 +502,20 @@ function pressedBefore(flow: FlowPages, handle: string, resolution: WebLlmTarget
 function actedAs(flow: FlowPages, handle: string, resolution: WebLlmTargetResolution): WebLlmTargetResolution {
   const acted = flow.acted.get(handle);
   if (!resolution.ok || acted === undefined || addressOf(acted) !== addressOf(resolution)) return resolution;
+  const source = intentSources.get(resolution);
+  if (source?.crossPageIntentConflict) return { ok: false, code: "ambiguous" };
+  // A positively selected B keeps its own captured identity, never A's pre-act identity at the same address.
+  if (source?.intentSource.key !== acted.intentSource.key) {
+    if (source?.exact) {
+      resolution.element = structuredClone(source.observedElement);
+      source.intentConflict = source.sourceIntentConflict;
+    }
+    return resolution;
+  }
   resolution.element = structuredClone(acted.element);
+  delete resolution.controlIntent;
+  if (acted.controlIntent !== undefined) resolution.controlIntent = { ...acted.controlIntent };
+  intentSources.set(resolution, { intentSource: acted.intentSource, intentConflict: acted.intentConflict, sourceIntentConflict: acted.sourceIntentConflict, observedElement: acted.observedElement, exact: true });
   if (acted.words === undefined) delete resolution.words;
   else resolution.words = acted.words;
   if (acted.effect !== undefined) resolution.effect = structuredClone(acted.effect);
@@ -561,7 +534,7 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
     if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
     const target = page.get(handle);
     if (target === undefined) return missing("unknown", flow.renumbered.get(location)?.has(handle) === true);
-    return target.shared ? { ok: false, code: "not_unique" } : resolved(target, flow.learned);
+    return target.shared ? { ok: false, code: "not_unique" } : resolved(target, flow.learned, true);
   }
   const seen = new Map<string, PageTarget>();
   for (const page of flow.pages.values()) {
@@ -585,7 +558,13 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
       notAField: known.notAField === undefined || target.notAField === undefined ? undefined : known.notAField,
       // The newest page's, as `shownIn` is the newest view (header).
       spot: target.spot,
-      toggle: target.toggle
+      toggle: target.toggle,
+      controlIntent: target.controlIntent,
+      intentConflict: known.intentConflict || target.intentConflict || !sameWebPlanControlIntent(known.controlIntent, target.controlIntent),
+      sourceIntentConflict: target.sourceIntentConflict,
+      crossPageIntentConflict: known.crossPageIntentConflict || target.crossPageIntentConflict || !sameWebPlanControlIntent(known.controlIntent, target.controlIntent),
+      intentSource: target.intentSource,
+      observedElement: target.observedElement
     });
   }
   if (seen.size > 1) return { ok: false, code: "ambiguous" };
@@ -623,11 +602,15 @@ function documentPath(location: string): string {
 
 /** Each described element's target in one capture, marked shared where the capture gave its address to several. */
 function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
+  const retained = capturedTargets.get(binding);
+  if (retained !== undefined) return retained;
   const targets: PageTargets = new Map();
   const uses = new Map<string, number>();
   const pressable = webLlmPressableTargets(binding.evidence.elements);
   const notFields = webLlmNotAFieldTargets(binding.evidence.elements);
   const spotOf = spotsOf(binding);
+  const intents = collectWebLlmControlIntents(binding);
+  const sourceOf = webPlanControlIntentSource(binding);
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
@@ -642,13 +625,19 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
       pressable: pressable.has(element.target),
       notAField: notFields.get(element.target),
       spot: spotOf(element.target),
-      toggle: webPlanToggleLookOf(element, binding.evidence.elements)
+      toggle: webPlanToggleLookOf(element, binding.evidence.elements),
+      controlIntent: intents.get(element.target),
+      intentConflict: false,
+      sourceIntentConflict: false,
+      intentSource: sourceOf(element),
+      observedElement: identity
     };
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
     targets.set(element.target, target);
   }
   for (const target of targets.values()) target.shared = (uses.get(addressOf(target)) ?? 0) > 1;
+  capturedTargets.set(binding, targets);
   return targets;
 }
 
@@ -697,7 +686,10 @@ function acrossViews(before: PageTargets | undefined, targets: PageTargets): Pag
 function acrossView(earlier: PageTarget | undefined, target: PageTarget): PageTarget {
   if (earlier === undefined || addressOf(earlier) !== addressOf(target)) return target;
   const element = webPlanElementIdentityAcrossViews(earlier.element, target.element);
-  return { ...target, element, words: earlier.words === target.words ? spacedName(element, target.words) : undefined };
+  return { ...target, element, words: earlier.words === target.words ? spacedName(element, target.words) : undefined,
+    intentConflict: earlier.intentConflict || target.intentConflict || !sameWebPlanControlIntent(earlier.controlIntent, target.controlIntent),
+    sourceIntentConflict: target.sourceIntentConflict || (earlier.intentSource.key === target.intentSource.key
+      && (earlier.sourceIntentConflict || !sameWebPlanControlIntent(earlier.controlIntent, target.controlIntent))) };
 }
 
 /** A handle that names nothing, marked when a reload renumbered it. */
@@ -779,8 +771,10 @@ function addressOf(target: Pick<PageTarget, "selector" | "frameId" | "element">)
 }
 
 /** A resolution whose identity is the caller's own copy, so nothing done to it reaches the store. */
-function resolved(target: PageTarget, learned: readonly WebToggleSignature[] = []): Extract<WebLlmTargetResolution, { ok: true }> {
+function resolved(target: PageTarget, learned: readonly WebToggleSignature[] = [], exact = false): Extract<WebLlmTargetResolution, { ok: true }> {
   const resolution: Extract<WebLlmTargetResolution, { ok: true }> = { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+  intentSources.set(resolution, { intentSource: target.intentSource, intentConflict: target.intentConflict, sourceIntentConflict: target.sourceIntentConflict, crossPageIntentConflict: target.crossPageIntentConflict ?? false, observedElement: target.observedElement, exact });
+  if (target.controlIntent !== undefined) resolution.controlIntent = { ...target.controlIntent };
   if (target.frameUrlPath !== undefined) resolution.frameUrlPath = target.frameUrlPath;
   if (target.words !== undefined) resolution.words = target.words;
   if (!target.pressable) resolution.notAControl = true;
@@ -793,6 +787,12 @@ function resolved(target: PageTarget, learned: readonly WebToggleSignature[] = [
 
 function controlOf(target: PageTarget, learned: readonly WebToggleSignature[]): WebControlView | undefined {
   return target.toggle === undefined ? undefined : webControlViewOf(target.toggle.reading, target.toggle.role, learned);
+}
+
+/** A known semantic disagreement is an ambiguous control, never compatible absence. */
+function checkedIntent(resolution: WebLlmTargetResolution, current = false): WebLlmTargetResolution {
+  const source = resolution.ok ? intentSources.get(resolution) : undefined;
+  return (current ? source?.crossPageIntentConflict : source?.intentConflict) ? { ok: false, code: "ambiguous" } : resolution;
 }
 
 function scopeKey(scope: WebLlmTargetScope): string {

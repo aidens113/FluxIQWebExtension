@@ -44,9 +44,10 @@
 // model wrote beside a `target` handle is replaced the same way: the model was never shown one, so it can only be a
 // guess.
 //
-// Nothing is guessed. A node with no handle is `unchanged` -- a literal
-// selector a hand-authored or drafted step holds stays exactly as written and
-// is never reported as resolved -- with one exception: once this Flow's exploration was shown a
+// Nothing is guessed. A node with no handle stays exactly as written. An
+// exact unique host-held target matched to a retained actual control can be
+// reported resolved with unchanged parameters and a private intent companion.
+// With no such positive match it stays `unchanged`. Once exploration saw a
 // detected list, a literal `extractList` can only be a guess at selectors the
 // model was never shown, and live every one of them read no field
 // (`run-mu4wwkbc-df6cfe60`), so it is refused as `extraction_required` --
@@ -84,7 +85,7 @@
 // on, to its control as the act found it, never as the act left it (t442), with what the act made true as the step's
 // `effect`, which Core keeps as the node's `routeSignatures.effect` (t447). Without it -- a node
 // run, a rerun, a legacy completion -- a handle resolves against the current
-// pages exactly as before, and the answer carries nothing beside its parameters.
+// pages exactly as before. Trusted control intent can accompany either mode.
 // Only a handle some evidence printed resolves that way (t378, lane B C4): one
 // the store holds in a numbering gap the page view left -- lane B's `t551`,
 // `t560` and `t570` -- is `not_shown` there (`target-packets.ts`) and refused
@@ -110,7 +111,7 @@
 // (`target-packets.ts` `resolveOn`); a slot's key written dotted beside it is
 // read as its own (`dotted-keys.ts`, W2).
 
-import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck, AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { webAutomationCheckWaitNode, webAutomationCommandWaitsOutChecks } from "../../../actions/check-wait";
@@ -138,6 +139,7 @@ import { WEB_LLM_NOT_A_FIELD_KINDS, type WebLlmNotAFieldKind } from "./typing-ta
 import { webPlanReadDottedKeys } from "./dotted-keys";
 import { webPlanModelWrote, webPlanModelWroteAny, webPlanWrittenLiterals, type WebPlanAuthorship } from "./written-literals";
 import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } from "./target-packets";
+import { sameWebPlanControlIntent, webPlanResolvedAnswer } from "./control-intents";
 
 /**
  * Every code a refusal is made of, in the order a refusal lists them: why the
@@ -277,22 +279,15 @@ export type WebPlanHandleView = { handle: string; view: number; location: string
 /**
  * The answer Core reads, and **nothing beside it**.
  *
- * Core accepts a resolved answer with exactly `status` and `parameters`
- * (`AS/runtime/llm/harness-options/plan-parameter-resolution.ts`:
- * `exactKeys(answer, ["status", "parameters"])`), and refuses the node as
- * `bootstrap.parameter_resolution_invalid` for anything else. So a diagnostic
- * added here would not be quietly dropped -- it would refuse every resolved
- * node of every plan. What this resolution assumed on the way therefore travels
- * beside it, on `WebPlanNodeOutcome`, and `resolveWebPlanNode` is the one place
- * the two are separated. The exceptions are `handleViews`, which Core accepts
- * only on an answer to a resolution that asked for the view history
- * (`handleReach`), and which is written only then; and `effect`, a step's
- * acted-on control's effect (header, t447), which Core writes onto the node.
+ * The narrow factory permits only Core's declared companions: handle views,
+ * observed effect and trusted control intent. Diagnostics and assumptions
+ * stay on WebPlanNodeOutcome. Intent is contextual host evidence and never
+ * enters node parameters, identity, handle views or persistence.
  */
 export type WebPlanNodeResolution =
   | { status: "unchanged" }
   /** `handleViews` only when Core asked for the view history (`handleReach`), and only for a node whose handles resolved from a view; `effect`, what exploration's act on the step's control made true (header). */
-  | { status: "resolved"; parameters: JsonObject; handleViews?: WebPlanHandleView[]; effect?: JsonObject }
+  | { status: "resolved"; parameters: JsonObject; handleViews?: WebPlanHandleView[]; effect?: JsonObject; controlIntent?: AutomationStudioResolvedControlIntent }
   /** `issues`, the field and the names it can use where a refusal names them (`extraction/stored-columns.ts`, t489). */
   | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode | `record_output.${string}`)[]; issues?: WebPlanRefusalIssue[] }
   /** A person must answer this one. `requestId` is null where there was nobody to ask. */
@@ -390,12 +385,12 @@ type Scope = { projectId: string; flowId: string };
 /** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
 type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean; onPage: string | undefined; after: readonly WebLlmPlanStepMove[] | undefined };
 /** `notAField`: what the element is, where it holds no typed text (`target-packets.ts`, t486). */
-type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined; spot?: Extract<WebLlmTargetResolution, { ok: true }>["spot"] };
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined; spot?: Extract<WebLlmTargetResolution, { ok: true }>["spot"]; controlIntent?: AutomationStudioResolvedControlIntent | undefined };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does; `details`, said after every position (`extraction/stored-columns.ts`). */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined; details?: readonly string[]; issues?: readonly WebPlanRefusalIssue[] };
 type NodeOutcome =
   | { status: "unchanged" }
-  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[]; effect?: JsonObject | undefined; spot?: Extract<WebLlmTargetResolution, { ok: true }>["spot"] }
+  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[]; effect?: JsonObject | undefined; spot?: Extract<WebLlmTargetResolution, { ok: true }>["spot"]; controlIntent?: AutomationStudioResolvedControlIntent | undefined }
   | { status: "refused"; refusals: Refusal[] };
 
 const TARGET_ISSUES = {
@@ -440,13 +435,10 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
   if (outcome.status === "refused") return answered(refusal(input.parameters, outcome.refusals), []);
-  // Rebuilt rather than handed on: the answer Core reads carries exactly
-  // `status` and `parameters` (`WebPlanNodeResolution`), and naming its members
-  // here is what keeps a field added to the outcome from reaching Core, where
-  // one more key refuses the node outright.
+  // Rebuilt by the narrow factory: only declared trusted companions can reach Core.
   const assumed = outcome.status === "resolved" ? outcome.assumed : [];
   const resolved: WebPlanNodeResolution = outcome.status === "resolved"
-    ? withHandleViews({ status: "resolved", parameters: outcome.parameters }, input.handleReach, outcome.views, outcome.effect)
+    ? webPlanResolvedAnswer(outcome, input.handleReach)
     : { status: "unchanged" };
   // The step is asked about with the parameters it would really run with, so
   // the request names the control the model was shown rather than a handle.
@@ -476,31 +468,6 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
   }
   if (permission.kind === "refused") return answered({ status: "needs_permission", missing: permission.missing, requestId: permission.requestId }, assumed);
   return answered(resolved, assumed);
-}
-
-/**
- * A resolved answer, with the views its handles came from when Core asked for
- * the view history (header) and there are any, and a step's `effect` when its
- * control was acted on (t447). Nothing else beside its parameters, since Core refuses any other key.
- */
-function withHandleViews(
-  answer: Extract<WebPlanNodeResolution, { status: "resolved" }>,
-  reach: WebLlmTargetReach | undefined,
-  views: readonly WebPlanHandleView[],
-  effect: JsonObject | undefined
-): WebPlanNodeResolution {
-  if (reach === "view_history" && effect !== undefined) answer.effect = effect;
-  if (reach !== "view_history" || views.length === 0) return answer;
-  const seen = new Set<string>();
-  const handleViews: WebPlanHandleView[] = [];
-  for (const entry of views) {
-    const key = `${entry.handle}\u0000${entry.view}\u0000${entry.location}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    handleViews.push(present<WebPlanHandleView>({ handle: entry.handle, view: entry.view, location: entry.location, control: entry.control }));
-  }
-  answer.handleViews = handleViews;
-  return answer;
 }
 
 /** The outcome, with its assumptions screened for what may leave this domain (`../name-assumption.ts`). */
@@ -591,7 +558,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       }
       const outcome = resolveTarget(state.fallback, scope, stores.targets, press);
       if (typeof outcome !== "string") replaced.set(key, {
-        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect, notAField: outcome.notAField, spot: outcome.spot
+        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect, notAField: outcome.notAField, spot: outcome.spot, controlIntent: outcome.controlIntent
       });
       else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key, "$state", "fallback"] });
       continue;
@@ -614,7 +581,14 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   if (refusals.length > 0) return { status: "refused", refusals };
   const undispatchable = extractionNode && scope.step ? webPlanUndispatchable(Object.fromEntries(Object.entries(parameters).map(([key, value]) => [key, replaced.get(key)?.value ?? value]))) : undefined;
   if (undispatchable) return { status: "refused", refusals: undispatchable.map((entry) => ({ code: entry.code, kind: entry.code === "web.handle.unknown_field" ? "extraction" : undefined, path: entry.path, details: entry.details, issues: entry.issues })) };
-  if (replaced.size === 0) return { status: "unchanged" };
+  if (replaced.size === 0) {
+    const actual = nodeDefinitionId !== FACT_TARGET_NODE_ID && SELECTOR_NODE_IDS.has(nodeDefinitionId)
+      ? stores.targets.absoluteIntent(scope, parameters, scope.onPage, scope.reach) : undefined;
+    if (actual?.status === "ambiguous") return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [] }] };
+    return actual?.status === "found"
+      ? { status: "resolved", parameters: written, assumed, views: [], controlIntent: actual.controlIntent }
+      : { status: "unchanged" };
+  }
 
   // Slots naming the element must all name the same one; which of two the node acts on is not this resolver's to pick.
   const named = TARGET_SLOTS.flatMap((slot) => {
@@ -623,7 +597,9 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   });
   const element = named[0]?.resolved;
   const bound = replaced.get("target")?.statePath !== undefined ? replaced.get("target") : undefined;
-  const disagreeing = named.find(({ resolved }) => resolved.value !== element?.value || (resolved.frameId ?? 0) !== (element?.frameId ?? 0));
+  const disagreeing = named.find(({ resolved }) => resolved.value !== element?.value || (resolved.frameId ?? 0) !== (element?.frameId ?? 0)
+    || resolved.frameUrlPath !== element?.frameUrlPath || !sameTargetIdentity(resolved.element, element?.element)
+    || !sameWebPlanControlIntent(resolved.controlIntent, element?.controlIntent));
   if (disagreeing) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [disagreeing.slot] }] };
   if (bound) {
     // A literal conflicting locator/identity is not silently thrown away.
@@ -683,7 +659,8 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   }
   const views = [...replaced.values()].flatMap((entry) => entry.views ?? []);
   // A step's effect is its element's (t447); a fact's target is read, never acted on, so it has none.
-  return { status: "resolved", parameters: extractionNode && scope.step ? webPlanRunRecordOutput(resolved) : resolved, assumed, views, effect: scope.step ? element?.effect : undefined, spot: element?.spot };
+  return { status: "resolved", parameters: extractionNode && scope.step ? webPlanRunRecordOutput(resolved) : resolved, assumed, views, effect: scope.step ? element?.effect : undefined, spot: element?.spot,
+    controlIntent: nodeDefinitionId === FACT_TARGET_NODE_ID ? undefined : element?.controlIntent };
 }
 
 /** Exact supported state grammar; the public Core guard also accepts extras. */
@@ -728,7 +705,8 @@ function resolveRunOutput(parameters: JsonObject, scope: Scoped, stores: WebPlan
   // `parameters.extractList.…` on this node and a reader holding the Run Output
   // node's authored parameters finds it exactly there.
   const assumed = inner?.status === "resolved" ? inner.assumed.map((entry) => nested(entry)) : [];
-  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [], effect: inner?.status === "resolved" ? inner.effect : undefined, spot: inner?.status === "resolved" ? inner.spot : undefined };
+  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [], effect: inner?.status === "resolved" ? inner.effect : undefined, spot: inner?.status === "resolved" ? inner.spot : undefined,
+    controlIntent: inner?.status === "resolved" ? inner.controlIntent : undefined };
 }
 
 /** One assumption of a payload, said as a position on the node that carries the payload. */
@@ -756,6 +734,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   if (resolution.effect !== undefined) resolved.effect = resolution.effect;
   if (resolution.notAField !== undefined) resolved.notAField = resolution.notAField;
   if (resolution.spot !== undefined) resolved.spot = resolution.spot;
+  if (resolution.controlIntent !== undefined) resolved.controlIntent = resolution.controlIntent;
   return resolved;
 }
 

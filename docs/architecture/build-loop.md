@@ -331,11 +331,40 @@ as before. t743 tried keeping the two documents as two views with the
 acted identity kept per address, and that was reverted: the first act at the
 standalone address was the press that undid the dialog's act, so the Flow saved
 the words that undo found ("Unlike"). The acted identity stays the handle's
-first act's, lent only at the address that act named. One limit remains. Plan
+first act's, lent only to its matching retained source. One limit remains. Plan
 order is used as run order, so in a Flow whose nodes branch, the node listed
 before a press may not be the step that runs before it. A handler, or any node
 the domain does not run, counts as moving the page anywhere, so a press after one
 resolves as before.
+
+**Control intent is host evidence, separate from saved targets.** Each actual
+retained binding is classified once, by its own captured control and containing
+layer. Its private target carries `accept`, `dismiss`, `neutral` or `navigate`;
+only an actual consent response may carry `accept` with `responseOnly: true`.
+The resolver supplies that annotation as the top-level `controlIntent`
+companion, including nested Run Output and bound-target fallbacks. It never
+writes it into executable parameters, fingerprints, handler facts or model
+packets. Fact targets and unrelated parameters contribute no annotation.
+
+Intent follows the exact selected target's location, frame, document and layer.
+Explicit historical location selection retains that location's own identity,
+not the newest target under the reused handle. A restored pre-act identity
+keeps its original capture's intent; another positively selected control at the
+same address keeps its own identity. Candidate/history semantic disagreements
+refuse as an ambiguous target instead of choosing a permissive tag or dropping
+the companion. Current exact-page resolution uses its latest actual capture's
+intent with the existing identity merge; bare cross-page conflicts still refuse
+and pre-act restoration cannot erase them.
+Repair resolution uses only the runtime's exact retained packet binding.
+
+A host-held absolute target can receive the companion without changing its
+parameters only when its full observed identity, selector and frame match one
+unique retained source. Multiple matching sources refuse. Missing evidence
+preserves the existing unchanged result and supplies no safety claim. Model
+absolute selectors remain refused, and annotation-shaped fields in model or
+saved JSON never supply authority. The companion does not grant permission,
+lower an action's effect floor, make a lasting act repeatable or change the
+extension's automatic interference-clearing policy.
 
 ## Choice Changes And Stable Handles
 

@@ -29,9 +29,11 @@ export type WebLlmViewHistory<T> = {
   record(location: string, targets: ReadonlyMap<string, T>): number;
   /** What the views that carried `handle` agree it names, and the newest of them -- on `location`, when one is named; nothing when none carried it (there). */
   find(handle: string, location: string | undefined): { target: T; shownIn: WebLlmTargetView } | undefined;
+  /** Exact retained targets by location, for private host-target correlation; never reconstructed from model JSON. */
+  targets(): readonly T[];
 };
 
-type Entry<T> = { target: T; view: number; location: string; views: Map<string, number> };
+type Entry<T> = { target: T; view: number; location: string; views: Map<string, { view: number; target: T }> };
 
 /** A Flow's view history, merging a handle's views with `across` (the earlier view's target, if any, and the newer one). */
 export function createWebLlmViewHistory<T>(across: (earlier: T | undefined, target: T) => T): WebLlmViewHistory<T> {
@@ -42,9 +44,10 @@ export function createWebLlmViewHistory<T>(across: (earlier: T | undefined, targ
       captures += 1;
       for (const [handle, target] of targets) {
         const earlier = entries.get(handle);
-        const views = earlier?.views ?? new Map<string, number>();
+        const views = earlier?.views ?? new Map<string, { view: number; target: T }>();
+        const atLocation = across(views.get(location)?.target, target);
         views.delete(location);
-        views.set(location, captures);
+        views.set(location, { view: captures, target: atLocation });
         for (const oldest of views.keys()) {
           if (views.size <= RETAINED_LOCATIONS) break;
           views.delete(oldest);
@@ -62,8 +65,11 @@ export function createWebLlmViewHistory<T>(across: (earlier: T | undefined, targ
       const entry = entries.get(handle);
       if (entry === undefined) return undefined;
       if (location === undefined) return { target: entry.target, shownIn: { view: entry.view, location: entry.location } };
-      const view = entry.views.get(location);
-      return view === undefined ? undefined : { target: entry.target, shownIn: { view, location } };
+      const found = entry.views.get(location);
+      return found === undefined ? undefined : { target: found.target, shownIn: { view: found.view, location } };
+    },
+    targets() {
+      return [...entries.values()].flatMap((entry) => [...entry.views.values()].map((found) => found.target));
     }
   };
 }
