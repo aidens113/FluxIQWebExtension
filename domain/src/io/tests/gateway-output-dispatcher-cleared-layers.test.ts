@@ -40,7 +40,7 @@ function fakeFluxIQ(payload: JsonObject | undefined): FluxIQ {
 test("layers the clearing closed are lifted to the top of the dispatch payload", async () => {
   const result = await dispatchWith({ status: "succeeded", clearedLayers: [{ kind: "rate_limit", control: "OK" }, { kind: "dialog", control: "Not now" }] });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.payload?.clearedLayers, [{ kind: "rate_limit", control: "OK" }, { kind: "dialog", control: "Not now" }]);
+  assert.deepEqual(result.payload?.clearedLayers, [{ kind: "rate_limit", control: "OK" }, { kind: "other", control: "Not now" }]);
 });
 
 test("nothing cleared, or only unknown words, puts no clearedLayers on the dispatch payload", async () => {
@@ -66,7 +66,7 @@ test("the way out each layer was closed by is kept here, and Core is handed only
   const lifted = result.payload?.clearedLayers as Array<{ kind: string; control: string; wayOut?: string }>;
   assert.equal(lifted.length, 2);
   assert.match(lifted[0]!.wayOut ?? "", /^way-out\.[0-9a-f]{32}$/u);
-  assert.deepEqual(lifted[1], { kind: "dialog", control: "Not now" });
+  assert.deepEqual(lifted[1], { kind: "other", control: "Not now" });
   assert.deepEqual((result.payload?.result as { clearedLayers?: unknown }).clearedLayers, lifted);
   assert.doesNotMatch(JSON.stringify(result.payload), /rate-limit-ok|social\.test/u);
   assert.deepEqual(webAutomationClearedWayOutsOf(fluxiq).get(lifted[0]!.wayOut!), wayOut);
@@ -155,4 +155,27 @@ test("a way out pressed for a Flow is still named for it after the host restarts
   assert.ok(handles[layer!.wayOut]);
   // Another Flow was never pressed it.
   assert.deepEqual(await runtime.clearedControlHandles!({ ...scope, flowId: "flow.other", wayOuts: [layer!.wayOut] }), {});
+});
+
+// CC7 (interface I1): a layer's id and its control's durable target reach Core, and the control's press node is named
+// beside the target -- also when the client sent no descriptor to keep.
+test("a layer's id and controlRef reach Core with the node definition that presses the control", async () => {
+  const controlRef = { selector: "button", element: { tagName: "button", selector: "button", accessibleName: "Maybe later" } };
+  const payload = { status: "succeeded", clearedLayers: [{ kind: "promotion", control: "Maybe later", id: "layer:00c0ffee", controlRef }, { kind: "dialog", control: "Close", id: "layer:00c0ffee" }] } as unknown as JsonObject;
+  const result = await dispatchWith(payload);
+  const [pressed, bare] = result.payload?.clearedLayers as Array<Record<string, unknown>>;
+  assert.deepEqual(pressed, { kind: "notice", control: "Maybe later", id: "layer:00c0ffee", wayOutDefinitionId: webAutomationOutputNodeId("web.dom.click"), controlRef });
+  assert.deepEqual(bare, { kind: "other", control: "Close", id: "layer:00c0ffee" });
+});
+
+// CC7 (interface I2): what stood in the way is lifted beside the result with each way out's press node named.
+test("an obstruction is lifted to the dispatch payload, each way out with a control naming its press node", async () => {
+  const controlRef = { selector: "button", element: { tagName: "button", selector: "button", accessibleName: "Close" } };
+  const obstruction = { id: "layer:00c0ffee", name: "Reading club", kind: "consent", dismiss: [{ intent: "dismiss", controlRef }, { intent: "accept" }, { intent: "bogus" }], extra: "dropped" };
+  const result = await dispatchWith({ status: "failed", obstruction } as unknown as JsonObject);
+  const lifted = result.payload?.obstruction as { kind: string; dismiss: Array<Record<string, unknown>>; extra?: unknown };
+  assert.equal(lifted.kind, "overlay");
+  assert.equal(lifted.extra, undefined);
+  assert.deepEqual(lifted.dismiss, [{ intent: "dismiss", controlRef, definitionId: webAutomationOutputNodeId("web.dom.click") }, { intent: "accept" }]);
+  assert.deepEqual((result.payload?.result as { obstruction?: unknown }).obstruction, lifted);
 });

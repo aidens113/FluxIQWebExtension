@@ -8,7 +8,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD } from "fluxiq/automation-studio";
 import type { RunAllocation } from "../../allocation.js";
 import { buildFluxIQEnvironment } from "../../environment.js";
@@ -23,7 +23,7 @@ const allocation: RunAllocation = {
 };
 
 const profile: LlmExecutionProfile = {
-  schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create-flow", mode: "live", provider: "deepseek", model: DEFAULT_LLM_MODEL, task: "create-flow",
+  schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create-flow", mode: "live", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, task: "create-flow",
   scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only", externalSideEffects: false, approvalMode: "manual",
   retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1, budget: { ...DEFAULT_LLM_LAB_BUDGET },
 };
@@ -39,7 +39,7 @@ async function checkout(t: test.TestContext, envLocal?: string): Promise<string>
 async function bothSides(repositoryRoot: string, args: readonly string[], environment: NodeJS.ProcessEnv) {
   const core = buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, environment, args);
   const run = await beginLiveLlmRun({
-    profile, repositoryRoot, environment: { DEEPSEEK_API_KEY: "test-provider-credential-value" }, targetMode: "isolated",
+    profile, repositoryRoot, environment: { CLAUDE_API_KEY: "test-provider-credential-value" }, targetMode: "isolated",
     costCeilingSources: { args, environment },
   });
   assert.equal(core[LAB_COST_CEILING_SCOPE_ENV], "test");
@@ -60,6 +60,11 @@ test("a ceiling from the checkout's .env.local reaches both Core's environment a
 test("with no ceiling configured the Lab still explicitly scopes Core to the test default", async (t) => {
   const root = await checkout(t);
   assert.deepEqual(await bothSides(root, ["node", "lab"], {}), { core: "0.1", plan: AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD });
+});
+
+test("Claude's default five-dollar build allowance reaches both Core and the live plan", async (t) => {
+  const root = await checkout(t);
+  assert.deepEqual(await bothSides(root, ["node", "lab", "--live-llm"], {}), { core: "5", plan: 5 });
 });
 
 test("a higher per-run override is refused before Core starts or the Lab plans provider work", async (t) => {

@@ -19,22 +19,22 @@ const builds = [
 // Held outside the try so the failure path can still redact with it: the
 // environment that carries the key is loaded inside the try, and a failure
 // before or during that load must not lose the ability to strip it.
-let secretLiteral = process.env.DEEPSEEK_API_KEY ?? "";
+let secretLiteral = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? "";
 
 try {
   for (const args of builds) await runBuild(args);
-  const [{ loadTestEnvironment }, { resolveDemoWorkspaceConfiguration, setupDemoWorkspaceDeepSeekKey }, { certifyDemoLlmSetupArtifacts }] = await Promise.all([
+  const [{ loadTestEnvironment }, { resolveDemoWorkspaceConfiguration, setupDemoWorkspaceLlmKey }, { certifyDemoLlmSetupArtifacts }] = await Promise.all([
     import("@fluxiq-web-extension/test-runner/target-config"),
     import("@fluxiq-web-extension/test-runner/demo-workspace"),
     import("@fluxiq-web-extension/test-runner/demo-llm-attestation"),
   ]);
   const environment = await loadTestEnvironment(repositoryRoot, process.env);
-  secretLiteral = environment.DEEPSEEK_API_KEY ?? secretLiteral;
+  secretLiteral = environment.CLAUDE_API_KEY ?? environment.ANTHROPIC_API_KEY ?? secretLiteral;
   const config = resolveDemoWorkspaceConfiguration(repositoryRoot, environment);
-  const key = await setupDemoWorkspaceDeepSeekKey(config, environment);
+  const key = await setupDemoWorkspaceLlmKey(config, environment);
   const attestation = await certifyDemoLlmSetupArtifacts({
     workspaceRoot: config.workspaceDirectory,
-    secretLiteral: environment.DEEPSEEK_API_KEY,
+    secretLiteral,
   });
   process.stdout.write(JSON.stringify({ status: "configured", keyName: key.name, attestation }) + "\n");
 } catch (cause) {
@@ -46,7 +46,7 @@ try {
   // and it must not itself depend on a module that may be what failed to build.
   process.stderr.write(JSON.stringify({
     status: "failed",
-    message: "DeepSeek Secret Keys UI setup failed",
+    message: "Claude Secret Keys UI setup failed",
     causes: describeFailure(cause),
   }) + "\n");
   process.exitCode = 1;

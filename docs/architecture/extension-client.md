@@ -1382,6 +1382,40 @@ also reports the pressed control's descriptor as `wayOut`; that descriptor
 stays in the domain, which passes Core an opaque reference and
 `wayOutDefinitionId: "web.output.dom-click"`.
 
+On the wire a cleared layer's kind is one of `overlay` (a consent wall),
+`rate_limit`, `notice`, `assistant` or `other` (a layer no classifier names);
+the extension produces `overlay`, `rate_limit` and `other`. The older words
+(`consent`, `promotion`, `dialog`) are still read and mapped, never sent. A
+layer also carries `id` (`layer:` and 8 hex digits of a hash over its role, tag,
+accessible name with digits removed, and the digit-free names of its controls,
+so the same layer keeps its id across visits;
+`interference/obstruction/stable-id.ts`) and `controlRef`, a durable target for
+the pressed way out beside `wayOutDefinitionId`: the parameters a click node runs with, as the domain resolves them,
+`{ selector, element }`, not wrapped in a `target`, where `element` holds identity signals
+only (tag, text, accessible name, role, id, test id, href, and the recorded
+dialog/record context), at most 200 characters per string and 8 KB in all; a
+sensitive control gives none. Resolving it on a later visit goes through the
+ordinary target resolver, which finds the control by selector, vetoes or scores
+it by fingerprint and checks the layer's recorded name, so another layer's
+identical button is not pressed.
+
+**Obstruction.** An action refused as `covered` or `hidden` reports
+`obstruction` on its result: the layer in the way (`id`, `name`, `kind`) and up
+to six ways out, each painted pressable control with an `intent`. `dismiss` is a
+control the press guard's own allow-list would press and that may be pressed (a
+close glyph, a consent decline on a consent layer, OK on a rate-limit notice);
+`accept` is anything that commits on press (submits, toggles, retries, confirms,
+accepts, goes on), which Core never presses; `neutral` is the rest. Disabled
+controls and links leaving the document are omitted, and a layer only a person
+can answer (robot check, credential, payment) lists none. Each way out with a
+`controlRef` gets `definitionId` of the click node. A `web.action.rate_limited`
+failure reports `obstruction: { kind: "rate_limit", retryAfterMs?, dismiss }`,
+the wait only when the notice stated one; a list read that stopped on a rate
+limit reports the same. The dispatcher lifts `obstruction` to the dispatch
+payload, as it does `clearedLayers`. Core's `clear_interference` rung presses a
+`dismiss` way out (else `neutral`) through the same press guard, which still
+refuses anything committing.
+
 After a successful step, Core learns a `before` handler scoped to that step:
 dialog visible by name, press the resolved dismissal, check the dialog is
 absent, resume. It adds no leading wait. The domain reconstructs a partial

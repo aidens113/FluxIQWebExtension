@@ -7,7 +7,7 @@
 // repeated rather than imported because `scripts/` resolves no workspace
 // package; a copy that drifts is refused by name at `planLiveLlmExecution`
 // before a key is read, rather than reaching DeepSeek as an opaque 400.
-const DEFAULT_LLM_MODEL = "deepseek-flash";
+import { LIVE_LLM_DEFAULT_MODEL as DEFAULT_LLM_MODEL, LIVE_LLM_DEFAULT_PROVIDER, LIVE_LLM_PROVIDER_DEFAULT_MODELS } from "../provider/index.mjs";
 
 // Mirrors Core's `AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT` (`model/authoring-mode/`),
 // for the same reason as the model above. The campaign always names the mode
@@ -25,7 +25,7 @@ export const CAMPAIGN_USAGE = `Usage: pnpm lab:campaign [task-id ...] [--kind fo
 
 /** @param {string[]} argv */
 export function parseCampaignArgs(argv) {
-  const options = { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: DEFAULT_LLM_MODEL, authoringMode: DEFAULT_AUTHORING_MODE, output: undefined, labArgs: [], help: false };
+  const options = { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: LIVE_LLM_DEFAULT_PROVIDER, model: DEFAULT_LLM_MODEL, authoringMode: DEFAULT_AUTHORING_MODE, output: undefined, labArgs: [], help: false };
   const value = (index, name) => { const next = argv[index + 1]; if (next === undefined || next.startsWith("--")) throw new Error(`${name} requires a value`); return next; };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -52,6 +52,7 @@ export function parseCampaignArgs(argv) {
   if (options.kinds.length > 0 && options.all) throw new Error("--kind already selects; drop --all");
   const owned = options.labArgs.filter((arg) => CAMPAIGN_OWNED_OPTIONS.has(arg));
   if (owned.length > 0) throw new Error(`The campaign sets ${owned.join(", ")} itself, per task; remove it after --`);
+  if (!argv.includes("--llm-model") && Object.hasOwn(LIVE_LLM_PROVIDER_DEFAULT_MODELS, options.provider)) options.model = LIVE_LLM_PROVIDER_DEFAULT_MODELS[options.provider];
   return options;
 }
 

@@ -18,6 +18,7 @@ import type { WebAutomationExtractionSummary, WebAutomationExtractListRequest, W
 import type { WebAutomationStructureDetection, WebAutomationStructureDetectionRequest } from "../extraction";
 import type { WebAutomationClearedCheckWait } from "./cleared-check-wait";
 import type { WebAutomationClearedLayer } from "./cleared-layers";
+import type { WebAutomationObstruction } from "./obstruction";
 import type { WebAutomationNextPageAnswer, WebAutomationNextPageRequest } from "./next-page";
 import type { WebAutomationTextPresence } from "./text-sighting";
 import type { WebToggleSignature } from "./toggle-signature";
@@ -611,6 +612,12 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
    * (`./cleared-layers.ts`). Absent when nothing was pressed.
    */
   clearedLayers?: WebAutomationClearedLayer[] | undefined;
+  /**
+   * What stands in the way now: on a result whose target was covered, or that
+   * failed because a layer stood over the page, and on a rate-limit refusal
+   * (`./obstruction.ts`, CC7 and CC8). Absent when nothing did.
+   */
+  obstruction?: WebAutomationObstruction | undefined;
   /**
    * A failed wait for text, or a failed text assertion: whether the document
    * holds the text without showing it (`hidden`) or not at all (`absent`).

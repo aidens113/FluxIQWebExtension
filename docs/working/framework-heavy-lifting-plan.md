@@ -1,15 +1,28 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: Web-specific half of the Core-owned plan (written 2026-10-28); executing since 2026-10-29: Core P0, the per-pass act ledger and P4 with W4 (t797), P5a (t795) and P7 with W7 (t800) merged, W0 (the Lab verdict from structured data, t798) merged; W6 (t799) in flight with Core P6.
+Status detail: P6/W6 t799 independently verified and merged on both dev branches; t810, t811, t813 and t814 continue from the handoff. Paired t816 adds the user-requested Claude live provider with a five-dollar build allowance.
 Created: 2026-10-28
-Last updated: 2026-10-29
+Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
 Scope: Where FluxIQ Core and the web domain can compute or enforce what the build model now has to get right: membership/bounds, judging, undo/reset bookkeeping, handler conditions, toggle state, stable targets, dedupe, paging, and per-call workload.
 Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
 Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), debug notes in `language-driven-flow-loop-plan/debugs/`
 
 ## Current State
+
+**Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
+paired task trees after merging current `dev`; both sides are now merged. Workers are completing t811 and final C1
+validation in t813; t814 awaits lead acceptance. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
+existing task trees; no paid run or panel management is authorised by this continuation. The user approved t810's
+fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
+evidence first; incomplete refutations must remain nonpassing.
+Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout.
+**Live provider switch, user 2026-10-30:** use Claude for every subsequent live model-backed test, reading
+`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Anthropic appears in the keys UI, but runtime and
+Lab routing were DeepSeek-only; paired t816 implements the missing support. Keep identical acceptance criteria and
+record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
+The user set Claude live tests to $5 per build; main ignored `.env.local` and both agent instruction files record it.
 
 **Core owns this plan.** The findings, the responsibility map, every client contract (CC1-CC14, K1-K7), the phases
 P0-P10 and what not to do are in the owning document:
@@ -22,15 +35,98 @@ This document holds only the web-specific half:
 
 It links to Core's contracts and does not restate them.
 
-- **True now:** Core's P0 (t793) and per-pass act ledger (t796) are merged, and so is t794 (Core's check builds its
-  libraries first). P4 with W4 (t797) is merged, P5a (t795) is merged, and W0 (t798, the Lab verdict from structured data) is merged here. P7 with W7 (t800) is merged; P6 with W6 (t799) is in flight as a Core-paired task.
-  The evidence reports in `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload,
+### Session handoff, 2026-10-30 (lead; the user asked to stop and write everything down)
+
+This section is also the session's handoff for the hosted lanes, whose detail is in `hosted-production-plan.md`.
+
+**Merged and pushed to both `dev` branches** (each verified by the lead under the heavy-check lock; ledgers below and
+in Core's and the hosted plans):
+- Framework:
+  - P0 (t793), the check's library build (t794), the per-pass act ledger (t796), P4 one undo answer (t797);
+  - P5a computed facts before any judge (t795), the chat ending after a Core no (t805);
+  - P7 dates, marks, record defaults (t800), the P7 follow-ups (t807);
+  - P1a folded bookkeeping (t806);
+  - **repair from the failing step (t804)**, the user's rule "Build the whole Flow first; test it whole only when it
+    should work", now in both AGENTS.md and enforced by Core.
+- Lab: W0 verdict from structured data (t798).
+- Hosted:
+  - B3 IAM on every route (t803), lane A gateway and panel hardening (t802);
+  - C0 closeable instances (t808), the A and B3 follow-ups (t809);
+  - the website stand-in W0-W2 (t801, t809): **the live sign-up round trip passes**;
+  - the web app's direct contracts-import guard (t812).
+- Fixes on `dev`: the panel production build import (Core 4d7c2264) and the contract-test identity fake (Core c5cb635b).
+- **`main` promoted** after the 2026-10-30 first sweep (all suites green): Core `bcbcfa97`, downstream `ee5768d5`
+  (`trace-offline-trials-plan.md` ledger). t812 and later reach `main` with the next sweep.
+
+**Stopped at the handoff.** Every lane stopped on the user's request and wrote its report. The lead then saved each
+lane's work as a "WIP at the 2026-10-30 handoff" commit on its task branch. Nothing is merged into `dev`, no lead
+acceptance check passed, and no paid run or model call happened.
+
+| Task | Work | State at the stop | To resume |
+| --- | --- | --- | --- |
+| t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Merged on both dev branches after lead acceptance: 235 Core, 40 domain and 29 extension tests, types/reference, native Chromium proof and final audits; Core merge gate passed 70 contract tests | First-loop-row direction and browser rung/pacing coverage remain separate follow-ups; no paid qualification claimed |
+| t810 (P5b) | Refute a judge's `asked_missing` and wrongly-kept rows from the run's own record (`outside_mark`, `cell_differs`, `not_kept`), one evidence re-ask, cited yes, provenance, `standingNo`; web `rejectedMarks` | Partial. Offline replay of the demo's final check now gives `answers` (`core.result.no_refuted_by_record`, 10 rows refuted) where it was `unsure`; the store false passes stay a Core no. Core WIP `300fc9ab` is **local only**: the pre-push audit refused it (4 `as never` casts in new tests, `build-test/tests/` and `candidate-trial/tests/` over 25 files, an import cycle through `computed-facts/computed-no.ts` and `located-defects/index.ts`); the downstream WIP is pushed | Fix the audit findings and the TS2375 at `located-defects/tests/row-refuted.test.ts:70`, re-pin `loop_verification` and `loop_verification_build_test`, add `located` to the t804 earlier-advice fixture (w4 report), fix the replay harness's 60-character match, then the acceptance set (report `reports/t810-p5b.md`) |
+| t811 (P1b) | `then` on `core.submit_subflow` (save / whole test / from-step; Core completes on a yes), `from` by script label (`stepLabels`), K5 callers, folded test lines, guidance, K7 defaults | Partial; WIP pushed (Core `fa07015e`, downstream `562f3082`). One known failure: `project-agents/dispatch/tests/whole-trial-port.test.ts` (patch in `reports/t811/wa-fold-green.md`); the headed decide-count spec is not written; `docs:reference` is likely stale | Apply the patch, write the spec, run the acceptance set (report `reports/t811-p1b.md`) |
+| t813 (hosted C1) | Workspace manager (`apps/web/src/lib/workspaces/`, layout v3 at `<host root>/workspaces/<id>/`), IAM `iam` options from the resolved profile, `BackgroundTasksService.close()` | Partial; WIP pushed (Core `4266af93`). Worker-reported passes only; `pnpm check`, the full web suite and the Next production build not run | Run the acceptance set; have a second agent review the manager for concurrency and key handling (report Core `hosted-production-plan/reports/t813-c1.md`) |
+| t814 (hosted E + D5) | `PanelProduct` registry, host loader, branding and assets route; downstream `apps/product/` | Partial; WIP pushed (Core `f45e5faf`, downstream `4eede8cd`). Two late test fixes not re-run | Re-run `pnpm check`, `pnpm test src/platform`, apps/web tests and tsc (report Core `hosted-production-plan/reports/t814-e-d5.md`) |
+
+**User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
+after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
+rejection to pass". Integration still requires the outstanding audit, typecheck and acceptance fixes.
+The user then clarified that the judge must be re-prompted before that outcome; Core must not bypass that recheck.
+
+If a lane ended with the session, its tree still holds the work. Read its report, then check, commit, merge `dev` in
+and verify as above. Re-dispatch only the missing part.
+
+**The demo run (user-requested, 2026-10-29).** `run-mvud43a2-445c7f17` (social-network-feed recent group posts, $0.11):
+- The build followed the user's lifecycle: built live, one whole test.
+- The saved Flow was correct (`oracleVerdict: passed`), but the final judges said no with self-contradicting
+  `asked_missing` rows, so the run reported `unverified`. That is P5b's target (debug in
+  `language-driven-flow-loop-plan/debugs/`).
+- The run found the panel-build defect that the t812 guard now catches at merge.
+
+**Next, in order:**
+1. t799 is merged; integrate t810 and t811 after verification. Complete the Claude provider switch before paid testing.
+2. Fix the t799 known limit before the photo-social rerun: in a loop whose first row is already in the asked state, the
+   toggle signature is learned reversed.
+3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
+   recording-plus-instructions passes. Debug every failure.
+4. Follow-ups:
+   - one shared run `now` across page, build test and run end (needs the executor; after t799);
+   - a verbatim-cell fact;
+   - the extension picker seen in a browser.
+5. Hosted:
+   - after C1, C2 (call-site migration) and C3 (routing, per-workspace singletons);
+   - D2-D4 extension sign-in, built now, merged 11-10;
+   - F packaging, D6 infrastructure, D7 docs and legal, D8 with the stand-in's W3;
+   - the owner's email verification under `service`;
+   - `docs/architecture/platform.md` (close options, held keys, per-root pools).
+
+**Standing rules from the user this session:**
+- Build first; repair from the failing step (AGENTS.md).
+- No paid run without the user's "go" while they are present ("wait till I say go").
+- Do not rebuild during demo preparation.
+- Stop means stop starting work; running lanes keep their state.
+
+**Waiting on the user:**
+- by about 11-03: the VM, DNS and the store developer account;
+- analytics (U10) and the FluxIQWebsite edit permission (U11);
+- Core's N1-N7 and a Firefox install;
+- deleting the merged task branches on GitHub (t781, t793, t795-t812);
+- the stale lock-waiter shell pid 260134 left by a t801 worker, which the lead did not kill on the worker's behalf.
+
+**Machine notes:**
+- Heavy checks share `C:/Users/osrs_/FluxStuff/lab-slots/heavy-check.lock`; nobody removes a lock they did not
+  create.
+- Sweep and verify scripts are in the session scratchpad (the `sweep-1030a.sh` pattern: detached worktrees on pinned
+  heads, then a fast-forward `main` push).
+- Finished tasks' detached Core worktrees under `fxwork/` are left for `pnpm task prune`.
+
+**Earlier context:**
+- The evidence reports in `framework-heavy-lifting-plan/reports/` (fhl-debug-notes, fhl-step-workload,
   fhl-core-surface, fhl-domain-surface) fed the Core synthesis.
-- **The web side already computes most of what Core needs.** It has toggle signatures, `layerCleared`, the acted-on
-  item, location moves, stale-target re-find by identity, value shapes and pagination detection. What is missing is
-  emitting them in Core's typed, optional shapes. Two items are wholly new: per-item marks (CC2) and control intent (CC11).
-- **Next:** W0 (Lab verdict from structured data) before the first live round. Then each W-phase pairs with its Core
-  phase in one Core-paired `pnpm task`, after Core's default has shipped, so Core never waits on the web side.
+- The web side already computes most of what Core needs; per-item marks (CC2) shipped in t800, and control intent
+  (CC11) is still wholly new.
 - **Blocked:** nothing.
 - **Unverified premises** (Open Questions below):
   - whether `values` and `differs` are filled for a non-list region;
@@ -304,6 +400,23 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed (downstream): headed provider-free spec `apps/extension/e2e/site-reset/tests/photo-repair-from-step.spec.ts`. The user's rule ("Build the whole Flow first; test it whole only when it should work") is enforced by Core; full entry in Core's ledger.
 - Validation: lead-run headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "33 passed (35.9m)", the new spec printing `{"repairFromStepCounts":{"wholeRuns":2,"fromStepRuns":1}}`: a failed whole test, a refused second one, a run from the failing step, one judged whole run that passes.
 - Outcome: Accepted.
+
+### 2026-10-30 - Session handoff: stopped at the user's request
+- Agent: lead. The user asked to stop, write everything down, and stop tests where safe. The lead stopped its own t799 verification (`verify-t799.sh`, mid downstream typecheck: its processes ended and the heavy-check lock it held removed), and asked t810, t811, t813 and t814 to stop starting tests, write their reports of current state and end, uncommitted.
+- Changed: this document's Current State rewritten as the session handoff (merged work, in-flight table with how to resume, the demo run, next steps, the user's standing rules, decisions waiting on the user); the demo run recorded in `breadth-forty-tasks-plan.md`.
+- Validation: no code changed in this entry. The last full sweep (`lab-runs/2026-10-30/sweep-1/summary.txt`, every step "exit 0") is quoted in `trace-offline-trials-plan.md`; work merged after it (t812) was verified narrowly, as its entry in `hosted-production-plan.md` quotes. t799's own verification did not complete: not validated.
+- Outcome: Partial (stopped). Resume from the Current State table.
+
+### 2026-10-30 - Independent P6/W6 continuation acceptance (t799)
+- Agent: Codex lead
+- Changed: corrected the legacy wire-input type in the recovery test; preserved production behavior and merged current dev into both task trees. Full evidence: `framework-heavy-lifting-plan/reports/codex-1030/t799-result.md`.
+- Validation: two owning Core test batches -> `15 files / 84 tests` and `12 files / 151 tests` passed; domain owning tests -> `40 passed, 0 failed`; extension owning tests -> `29 passed, 0 failed` and corrected fixture recheck -> `8 passed, 0 failed`.
+- Validation: `pnpm.cmd --filter fluxiq check` -> exit 0 (content-matched cache); `pnpm.cmd --filter @fluxiq-web-extension/domain check` -> exit 0; extension `pnpm.cmd check` -> exit 0 after correcting the TS2322 legacy test fixture.
+- Validation: `pnpm.cmd docs:check` in paired Core -> `Deterministic framework reference is current.`; `node scripts/check/model-text.mjs` -> `model-text: ok (208 scenario tokens, 384 model-facing Core files, 11997 string literals)`.
+- Validation: extension `pnpm.cmd test:e2e -- site-reset/tests/photo-obstruction-toggle.spec.ts --workers=1 --reporter=line` -> `1 passed (3.7m)`; native headed Chromium, isolated realistic photo-social, real installed extension/gateway, scripted provider, no paid model calls.
+- Not verified: browser execution of Core clear-interference rung, learned pace, Firefox, first-loop-row direction or changed-source paid qualification. No full sweep was run.
+- Validation: `pnpm.cmd task finish t799` -> downstream structure gate passed and task merged; Core `pnpm.cmd task finish t799 --skip-checks` -> mandatory `70 contract tests passed`, narrow acceptance already observed, paired task merged.
+
 
 ## Open Questions
 
