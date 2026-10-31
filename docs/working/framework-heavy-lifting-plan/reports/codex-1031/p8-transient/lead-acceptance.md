@@ -1,6 +1,6 @@
 # t826 lead acceptance
 
-Status: Source and provider-free integration accepted; paired dev merge/push pending.
+Status: Accepted, merged, and pushed to both dev branches. Local artifacts current.
 No paid Claude comparison or main promotion claim.
 
 From private Core, lead observed:
@@ -49,3 +49,9 @@ Browser compatibility:
 HTML/logs copied before cleanup into MAIN ignored test-runs/2026-10-31-t826-browser-report (index verified) and test-runs/2026-10-31-t826-validation (2logs). No background/panel/Firefox/whole-build/replay/model-judge or paid comparison exercised. No new full suite; both daily slots already used. Final Down pre-push/finish structure gates remain mandatory before dev integration.
 
 Memory compaction: Down settled ledger24entries plus misplaced accepted t825 entry archived25blocks verbatim, SHA256 3176a64bc6b5f4fc9796b4e82c7fcb251d6c29299e82d3dd189fae8024168492. Active document375lines, ledger2entries; Core796lines,1activeledgerentry. Working-doc indexes regenerated with unchanged baselines.
+
+Integration: task branches backed up and both silent pre-push structure gates passed. `pnpm.cmd task finish t826` downstream ->exit0, structure gate passed, merge59489463; Down authoring worktree removed only after evidence copy. Private Core clean at0eedb489 then detached; `pnpm.cmd task finish t826 --skip-checks` in Core ->exit0, mandatory3files/70contracts passed8.74s, merge03e518b3. Default full check explicitly skipped under daily allowance. Remote task backups retained; private Core left detached for age-based prune. Main user clinerules byte hash unchanged after integration.
+
+Main filtered SDK refresh ->exit0: contracts13.1s, fluxiq79.5s, gateway4.9s; domain build ->exit0,21.2s. Extension build and final dev pushes pending; main promotion remains held. Lead temporary Main memory-note diffs were preserved as ignored patches before restoring only those lead-owned files so task finish could integrate the committed newer memory. No user file was restored/staged/committed.
+
+Final publication receipts: `git push origin dev` ->exit0 Core e784f2e9..150bea7d and Down e0c03bf7..d28c18ee, with pre-push structure gates passing. `pnpm.cmd --filter @fluxiq-web-extension/extension build` ->exit0,22.94s,22verified files in each chrome/firefox/e2e target; typecheck included. SDK/domain/extension local artifacts all current. Existing Firefox add-on-id placeholder remains a release qualification item, not a new build failure. Both remote task backups retained; no remote deletion, main promotion, provider call, panel operation or user file change. Next work is CC10 mixed-version actionability design before emission.
