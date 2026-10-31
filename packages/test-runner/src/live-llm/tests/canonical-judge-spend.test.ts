@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
 import { LiveLlmRun } from "../live-llm-run.js";
@@ -16,12 +16,12 @@ function record(value: unknown): Record<string, unknown> {
 // Lab counts it once without matching request ids across records (which `run-spend.ts` did until t728).
 test("real build and playback settlement count a canonical paid result check once in the snapshot and public usage", async () => {
   const profile: LlmExecutionProfile = {
-    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "canonical-check", mode: "live", provider: "deepseek", model: DEFAULT_LLM_MODEL,
+    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "canonical-check", mode: "live", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
     task: "create-flow", scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only",
     externalSideEffects: false, approvalMode: "manual", retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1,
     budget: { ...DEFAULT_LLM_LAB_BUDGET },
   };
-  const run = new LiveLlmRun(planAtLabCeiling(profile), { name: "DEEPSEEK_API_KEY", source: "test", value: "unit-test-only" });
+  const run = new LiveLlmRun(planAtLabCeiling(profile), { name: "CLAUDE_API_KEY", source: "test", value: "unit-test-only" });
   let metadata: unknown;
   let purse = flowPurse({ build: [1, 0.001] });
   const spendReads: string[] = [];
@@ -34,7 +34,7 @@ test("real build and playback settlement count a canonical paid result check onc
     async secretKeysCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
       if (endpoint === "snapshot") return { keys: [] };
       assert.equal(endpoint, "create-key");
-      return { id: "key-1", name: payload.name, kind: "llm", provider: "DeepSeek", scope: "global", enabled: true };
+      return { id: "key-1", name: payload.name, kind: "llm", provider: payload.provider, metadata: payload.metadata, scope: "global", enabled: true };
     },
     async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
       if (endpoint === "update-flow-settings") {
@@ -47,7 +47,7 @@ test("real build and playback settlement count a canonical paid result check onc
   };
   const build: CreatedFlowBuild = {
     outcome: "proposed", adaptationId: "adaptation-1", providerCalls: 1, providerInvocation: "attempted",
-    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 100, outputTokens: 10, totalTokens: 110, estimatedCostUsd: 0.001 },
+    accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 100, outputTokens: 10, totalTokens: 110, estimatedCostUsd: 0.001 },
     evidenceLoop: null, instructedConsequences: [], declaredConsequences: null, consequenceCrossCheck: null, permissionRequest: null,
     loopProviderCalls: 1, failure: null, recoveredAfterTimeout: false, durationMs: 1,
   };
@@ -65,7 +65,7 @@ test("real build and playback settlement count a canonical paid result check onc
     llmGate: { invoked: true },
     providerCalls: [{
       sequence: 1, requestId: "paid-check-1", taskKind: "result_verification", stage: "verify", allowance: "run",
-      provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: null, validationOk: true, validationCodes: [], budgetBreach: false,
+      provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, promptVersion: null, validationOk: true, validationCodes: [], budgetBreach: false,
       inputTokens: 100, outputTokens: 10, totalTokens: 110, estimatedCostUsd: 0.002,
       charged: { inputTokens: 100, outputTokens: 10, totalTokens: 110, estimatedCostUsd: 0.002, tokens: "reported", cost: "reported" },
     }],

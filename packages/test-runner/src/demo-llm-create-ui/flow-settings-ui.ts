@@ -6,12 +6,12 @@
 
 import type { Page } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "../browser-evidence.js";
-import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "../secret-keys-ui.js";
+import { TESTING_LAB_LLM_KEY_NAME } from "../secret-keys-ui.js";
 import { EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, FIRST_LIVE_CREATION_LIMITS, type CreationSettingsLimits, creationSettingsFields } from "./limits.js";
 import { escapeRegExp, exactVirtualizedHierarchyObject, exactVisible, setSelect, slug, waitForEndpoint } from "./panel-interaction.js";
 import { fail } from "./runner-fail.js";
 import { readSanitizedSettingsSaveFailure } from "./settings-save-failure.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export async function configureFirstLiveCreationViaUi(page: Page, flowTreeItemId: string, pin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
   await configureCreationLimitsViaUi(page, flowTreeItemId, pin, evidence, FIRST_LIVE_CREATION_LIMITS);
@@ -48,21 +48,21 @@ async function configureCreationLimitsViaUi(page: Page, flowTreeItemId: string, 
   await exactVisible(section, "the LLM Connection settings section");
   await evidence.step("panel", "create-settings-section", "Open LLM Connection settings", () => section.click());
   const root = workspace.locator("#flow-settings-llm");
-  await setSelect(root, "Provider", "deepseek", page, evidence);
+  await setSelect(root, "Provider", DEFAULT_LLM_PROVIDER, page, evidence);
   await setSelect(root, "Model", DEFAULT_LLM_MODEL, page, evidence);
   const key = workspace.getByRole("combobox", { name: "Encrypted API key", exact: true });
   await exactVisible(key, "the encrypted API key selector");
-  if (await key.inputValue() !== TESTING_LAB_DEEPSEEK_KEY_NAME) {
-    await evidence.step("panel", "create-settings-key", "Select the stored Testing Lab DeepSeek key", async () => {
-      await key.fill(TESTING_LAB_DEEPSEEK_KEY_NAME);
+  if (await key.inputValue() !== TESTING_LAB_LLM_KEY_NAME) {
+    await evidence.step("panel", "create-settings-key", "Select the stored Testing Lab Claude key", async () => {
+      await key.fill(TESTING_LAB_LLM_KEY_NAME);
       const option = workspace.getByRole("option", {
-        name: new RegExp(`^${escapeRegExp(TESTING_LAB_DEEPSEEK_KEY_NAME)}`, "u"),
+        name: new RegExp(`^${escapeRegExp(TESTING_LAB_LLM_KEY_NAME)}`, "u"),
       });
-      await exactVisible(option, "the stored Testing Lab DeepSeek key option");
+      await exactVisible(option, "the stored Testing Lab Claude key option");
       await option.click();
     });
   }
-  if (await key.inputValue() !== TESTING_LAB_DEEPSEEK_KEY_NAME) fail("The exact stored Testing Lab DeepSeek key was not selected");
+  if (await key.inputValue() !== TESTING_LAB_LLM_KEY_NAME) fail("The exact stored Testing Lab Claude key was not selected");
   const fields = creationSettingsFields(limits);
   for (const [label, value] of fields) {
     const input = root.getByLabel(label, { exact: true });

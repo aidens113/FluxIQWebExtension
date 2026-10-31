@@ -7,7 +7,7 @@ import { BLANK_LLM_INSTRUCTION_BODY } from "./demo-llm-blank-workspace.js";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
 import { loadScenarioManifest } from "./scenarios.js";
 import type { WebScenario } from "@fluxiq-web-extension/test-contracts";
-import { type LlmModel } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, type LlmModel } from "@fluxiq-web-extension/test-contracts";
 
 export const DEMO_LLM_EXPLORATION_SCENARIO_ENV = "FLUXIQ_LLM_SCENARIO_ID" as const;
 export const DEMO_LLM_EXPLORATION_INSTRUCTION_ENV = "FLUXIQ_LLM_INSTRUCTION" as const;
@@ -35,7 +35,7 @@ export type DemoLlmExplorationRequestReadiness = Readonly<{
   recorderRequiredIdle: true;
   manualReviewRequired: true;
   providerBudget: Readonly<{
-    provider: "deepseek";
+    provider: typeof DEFAULT_LLM_PROVIDER;
     model: LlmModel;
     maxInputTokens: number;
     maxOutputTokens: number;

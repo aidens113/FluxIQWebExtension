@@ -9,7 +9,7 @@
 // operator still allows is a consequence (`--llm-permit`).
 
 import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
-import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, defaultLlmModelForProvider, isLlmModel, isLlmModelForProvider, isLlmProvider, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmProvider, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 
@@ -33,7 +33,7 @@ const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 
 export type LiveLlmPlan = {
   profileId: string;
-  provider: "deepseek";
+  provider: LlmProvider;
   model: LlmModel;
   task: LlmTaskKind;
   purpose: LiveLlmPurpose;
@@ -108,12 +108,13 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
   if (!Number.isFinite(buildCostCeilingUsd) || buildCostCeilingUsd <= 0) throw refusal(`the per-build cost ceiling ${buildCostCeilingUsd} is not a positive amount`);
   if (!isLlmModel(coreDefaultModel)) throw refusal(`the run's Core default model ${describe(coreDefaultModel)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
-  if (profile.provider !== "deepseek") throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; Core resolves only deepseek`);
-  const model = profile.model ?? DEFAULT_LLM_MODEL;
+  if (!isLlmProvider(profile.provider)) throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; use anthropic or deepseek`);
+  const model = profile.model ?? defaultLlmModelForProvider(profile.provider);
   // A model neither repository is configured for is refused here by name,
   // before a key is read, rather than left for Core to discover once the run
   // has started.
   if (!isLlmModel(model)) throw refusal(`--llm-model ${describe(profile.model)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
+  if (!isLlmModelForProvider(profile.provider, model)) throw refusal(`--llm-model ${describe(model)} does not belong to --llm-provider ${profile.provider}`);
   const purpose = purposeOf(profile.task);
   const budget = profile.budget;
   if (budget.maxRetries !== 0) throw refusal(`--llm-max-retries ${budget.maxRetries} is unsupported; a live provider run permits no retries`);
@@ -139,7 +140,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
   const buildCeilingUsd = Math.min(buildCostCeilingUsd, budget.maxEstimatedCostUsd);
   return {
     profileId: profile.profileId,
-    provider: "deepseek",
+    provider: profile.provider,
     model,
     task: profile.task,
     purpose,
@@ -243,5 +244,5 @@ function refusal(detail: string): RunnerFailure {
  */
 export function assertLiveLlmLaunchable(plan: Pick<LiveLlmPlan, "task">): void {
   if (plan.task !== "diagnose" && plan.task !== "adapt" && plan.task !== "repair") return;
-  throw new RunnerFailure("recording.contract", `--llm-task ${plan.task} ran against a Flow built from the run's recording, and recording-only Flow creation is retired. A live run now builds its Flow from written instructions and diagnoses, repairs and adapts it inside that same run: pnpm lab run <scenario> --live-llm --llm-profile <profile> --llm-provider deepseek --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace <name> --replays 1, with a task whose variant drifts after creation. Then pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task> reuses the repair with no model.`, { details: { code: "automation.instruction_led_authoring_required", retiredTask: plan.task } });
+  throw new RunnerFailure("recording.contract", `--llm-task ${plan.task} ran against a Flow built from the run's recording, and recording-only Flow creation is retired. A live run now builds its Flow from written instructions and diagnoses, repairs and adapts it inside that same run: pnpm lab run <scenario> --live-llm --llm-profile <profile> --llm-provider anthropic --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace <name> --replays 1, with a task whose variant drifts after creation. Then pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task> reuses the repair with no model.`, { details: { code: "automation.instruction_led_authoring_required", retiredTask: plan.task } });
 }

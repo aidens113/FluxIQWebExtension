@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { liveLlmBudgetFindings } from "../budget/index.js";
 import { liveLlmBudgetBreaches } from "../budget.js";
 import { liveLlmBuildUsage } from "../build-usage.js";
@@ -23,7 +23,7 @@ const plan = planAtLabCeiling({
   schemaVersion: LLM_LAB_SCHEMA_VERSION,
   profileId: "lab-create-flow",
   mode: "live",
-  provider: "deepseek",
+  provider: DEFAULT_LLM_PROVIDER,
   model: DEFAULT_LLM_MODEL,
   task: "create-flow",
   scenarioNetworkPolicy: "loopback-only",
@@ -43,7 +43,7 @@ function buildWith(steps: readonly CreatedFlowBuildStep[] | null, overrides: Par
     providerCalls: 3,
     loopProviderCalls: 3,
     providerInvocation: "attempted",
-    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 1_200, totalTokens: 31_200, estimatedCostUsd: 0.02 },
+    accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 1_200, totalTokens: 31_200, estimatedCostUsd: 0.02 },
     evidenceLoop: { decisionCount: 3, toolCallCount: 3, evidenceBytes: 18_000, toolIds: ["core.run_node"], steps },
     failure: null,
     recoveredAfterTimeout: false,
@@ -75,7 +75,7 @@ test("a build's provider calls are itemized from the decision rows that record t
     ["evidence.3", 11_000, 11_400, 0.007],
   ]);
   // The build ran on the one provider and model its Flow's settings name, and those are what its calls carry.
-  assert.deepEqual([...new Set(usage.observedCalls.map((call) => `${call.provider}/${call.model}`))], [`deepseek/${DEFAULT_LLM_MODEL}`]);
+  assert.deepEqual([...new Set(usage.observedCalls.map((call) => `${call.provider}/${call.model}`))], [`${DEFAULT_LLM_PROVIDER}/${DEFAULT_LLM_MODEL}`]);
   assert.deepEqual(liveLlmBudgetBreaches(plan, usage), []);
 });
 
@@ -172,7 +172,7 @@ test("a build Core published no per-call record for says so, rather than reporti
 });
 
 test("a build whose calls Core says cost more than its purse held them at is a reservation finding while every cap held", () => {
-  const accounting = { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 1_200, totalTokens: 31_200, estimatedCostUsd: 0.02 };
+  const accounting = { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 1_200, totalTokens: 31_200, estimatedCostUsd: 0.02 };
   const breached = liveLlmBuildUsage(buildWith(null, { accounting: { ...accounting, budgetBreaches: 2 } }));
   assert.equal(breached.accounting?.budgetBreaches, 2);
   assert.deepEqual(liveLlmBudgetBreaches(plan, breached), []);
@@ -192,7 +192,7 @@ test("a build whose calls Core says cost more than its purse held them at is a r
 test("a build its record gave no call count for is counted from the build's calls in the Flow's purse", () => {
   const purse = liveLlmRunSpend(flowPurse({ build: [26, 0.041698], judge: [6, 0.006668], chat: [1, 0.000091] }), 0.25);
   const candidate = buildWith(null, { providerCalls: null, loopProviderCalls: null, evidenceLoop: null,
-    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 687_932, outputTokens: 9_198, totalTokens: 697_130, estimatedCostUsd: 0.048366 } });
+    accounting: { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, inputTokens: 687_932, outputTokens: 9_198, totalTokens: 697_130, estimatedCostUsd: 0.048366 } });
   const usage = liveLlmBuildUsage(candidate, purse);
   assert.equal(usage.calls, 32);
   assert.equal(usage.accounting?.calls, 32);

@@ -8,14 +8,14 @@
 // (`./build-cost-ceiling.ts`), so the chat-build check compares the run's model
 // with what its Core was actually given rather than with a constant.
 
-import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel, type AutomationStudioDeepSeekModel } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation-studio";
 import { labDefaultModelValue } from "./default-model-env.js";
 
 /**
  * Core's default model for the Core started with `args`: `--llm-model` when it
  * is given, else Core's own default. Throws on a model Core would refuse.
  */
-export function liveLlmCoreDefaultModel(args: readonly string[] = process.argv): AutomationStudioDeepSeekModel {
+export function liveLlmCoreDefaultModel(args: readonly string[] = process.argv): string {
   const value = labDefaultModelValue(args);
   return resolveAutomationStudioLlmDefaultModel(value === undefined ? {} : { [AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV]: value });
 }

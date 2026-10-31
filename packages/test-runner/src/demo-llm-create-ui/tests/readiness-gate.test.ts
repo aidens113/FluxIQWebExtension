@@ -11,21 +11,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FIRST_LIVE_CREATION_LIMITS, buildApproveApplyCreationViaUi, readProviderFreeGenerationReadiness } from "../index.js";
 import { readCreateUiBuildOutput } from "./module-source.js";
-import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "../../secret-keys-ui.js";
+import { TESTING_LAB_DEEPSEEK_KEY_NAME, TESTING_LAB_LLM_KEY_NAME } from "../../secret-keys-ui.js";
 import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 test("Phase 3 UI driver pins exact one-call limits and explicit review actions", async () => {
-  assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, { provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: 4000, maxOutputTokens: 1000, maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
+  assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, { provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, maxInputTokens: 4000, maxOutputTokens: 1000, maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, providerRetries: 0 });
   const source = await readCreateUiBuildOutput();
   for (const seam of ["Tell FluxIQ what to automate", "Build proposal from active instructions", "Suggested changes", "authenticated session", "the generated Flow's Adaptations table", "Select the exact generated Flow bootstrap proposal", "Approve Adaptation", "Apply Adaptation", "Apply Changes", "Flow mutated before explicit human approval"]) assert.match(source, new RegExp(seam));
   assert.equal(TESTING_LAB_DEEPSEEK_KEY_NAME, "FluxIQ Testing Lab DeepSeek");
-  assert.match(source, /if \(await key\.inputValue\(\) !== TESTING_LAB_DEEPSEEK_KEY_NAME\)/u);
-  assert.match(source, /key\.fill\(TESTING_LAB_DEEPSEEK_KEY_NAME\)/u);
-  assert.match(source, /escapeRegExp\(TESTING_LAB_DEEPSEEK_KEY_NAME\)/u);
-  assert.match(source, /exact stored Testing Lab DeepSeek key was not selected/u);
-  assert.doesNotMatch(source, /key\.fill\("Testing Lab DeepSeek"\)/u);
-  assert.doesNotMatch(source, /rawPrompt|rawResponse|DEEPSEEK_API_KEY|recordDemoWorkspace/u);
+  assert.equal(TESTING_LAB_LLM_KEY_NAME, "FluxIQ Testing Lab Claude");
+  assert.match(source, /if \(await key\.inputValue\(\) !== TESTING_LAB_LLM_KEY_NAME\)/u);
+  assert.match(source, /key\.fill\(TESTING_LAB_LLM_KEY_NAME\)/u);
+  assert.match(source, /escapeRegExp\(TESTING_LAB_LLM_KEY_NAME\)/u);
+  assert.match(source, /exact stored Testing Lab Claude key was not selected/u);
+  assert.doesNotMatch(source, /key\.fill\("Testing Lab (?:Claude|DeepSeek)"\)/u);
+  assert.doesNotMatch(source, /rawPrompt|rawResponse|CLAUDE_API_KEY|ANTHROPIC_API_KEY|DEEPSEEK_API_KEY|recordDemoWorkspace/u);
   assert.match(source, /configureCreationLimitsViaUi\(page, flowTreeItemId, pin, evidence, FIRST_LIVE_CREATION_LIMITS\)/u);
   for (const limit of ["maxInputTokens", "maxOutputTokens", "maxTotalTokens", "timeoutSeconds", "maxEstimatedCostUsd", "providerRetries"]) assert.match(source, new RegExp(`limits\\.${limit}`, "u"));
   // Flow Settings has no call limit, so the driver never types or reads one.

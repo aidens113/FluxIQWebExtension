@@ -1,5 +1,5 @@
 export * from "../constants";
-export { webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectionObservation } from "../actions/extraction";
+export { webAutomationExtractionRejectedMarksValue, webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionItemMark, type WebAutomationExtractionRejectedMarks, type WebAutomationExtractionRejectionObservation } from "../actions/extraction";
 export * from "../actions/types";
 export * from "../actions/schemas";
 export * from "../actions/scroll-request-issues";

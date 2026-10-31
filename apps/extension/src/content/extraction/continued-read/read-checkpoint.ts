@@ -26,7 +26,7 @@ export type ReadSoFar = {
   /** What the conditions did, or `undefined` for a request that named none. */
   conditions: ExtractionCheckpointConditions | undefined;
   /** The rows each condition rejected, or `undefined` for a read not asked for them. */
-  samples: Pick<RejectedSamples, "rows" | "alone"> & Partial<Pick<RejectedSamples, "observations">> | undefined;
+  samples: Pick<RejectedSamples, "rows" | "alone"> & Partial<Pick<RejectedSamples, "observations" | "marks">> | undefined;
   /** What the read spent on refused pages; left out while it spent nothing. */
   refusals: ExtractionCheckpointRefusals;
   /** Repeats of an earlier page's records left out, or `undefined` for a read that does not count them. */
@@ -37,6 +37,7 @@ export type ReadSoFar = {
 export function readCheckpoint(read: ReadSoFar): ExtractionCheckpoint {
   const { conditions, samples, refusals } = read;
   const observations = samples?.observations?.()?.map((entries) => entries.map((entry) => entry ? { ...entry } : null));
+  const marks = samples?.marks?.()?.map((entries) => entries.map((entry) => entry?.map((mark) => ({ ...mark })) ?? null));
   return {
     records: read.records.map((record) => ({ ...record })),
     pagesRead: read.pagesRead,
@@ -45,7 +46,7 @@ export function readCheckpoint(read: ReadSoFar): ExtractionCheckpoint {
     filtered: read.filtered,
     ...(read.itemsSeen === undefined ? {} : { itemsSeen: read.itemsSeen }),
     ...(conditions === undefined ? {} : { conditions: { applied: conditions.applied, kept: conditions.kept, rejected: [...conditions.rejected], ...copiedPerCondition(conditions) } }),
-    ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone(), ...(observations === undefined ? {} : { rejectedObservations: observations }) }),
+    ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone(), ...(observations === undefined ? {} : { rejectedObservations: observations }), ...(marks === undefined ? {} : { rejectedMarks: marks }) }),
     ...(refusals.retries + refusals.rateLimits === 0 ? {} : { refusals: { retries: refusals.retries, rateLimits: refusals.rateLimits } }),
     ...(read.earlierPageRepeats === undefined ? {} : { earlierPageRepeats: read.earlierPageRepeats })
   };

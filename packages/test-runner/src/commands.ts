@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmProvider, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
 import { LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue } from "./live-llm/index.js";
 import { parseRecoveryMatrixCommand, type RecoveryMatrixCommand } from "./recovery-matrix/command.js";
@@ -179,12 +179,13 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
   }
   const required = (name: string): string => option(args, name) ?? (() => { throw new Error(name + " is required with --live-llm"); })();
   const profileId = required("--llm-profile");
-  const provider = required("--llm-provider");
+  const provider = option(args, "--llm-provider") ?? DEFAULT_LLM_PROVIDER;
+  if (!isLlmProvider(provider)) throw new Error("--llm-provider must be anthropic or deepseek");
   // Optional, unlike the rest: the model is a setting with a default, and the
   // default lives once, in the Lab contract. Requiring it here is how the
   // retired `deepseek-chat` alias came to be typed into every recorded command
   // line in the repository.
-  const model = option(args, "--llm-model") ?? DEFAULT_LLM_MODEL;
+  const model = option(args, "--llm-model") ?? defaultLlmModelForProvider(provider);
   const task = required("--llm-task");
   // Refused here, by Core's own resolver, rather than when Core starts.
   if (args.filter(value => value === LAB_AUTHORING_MODE_FLAG).length > 1) throw new Error(`${LAB_AUTHORING_MODE_FLAG} may only be specified once`);

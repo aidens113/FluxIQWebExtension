@@ -2,9 +2,10 @@ import type { Page, Response } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "./browser-evidence.js";
 import { redactText } from "@fluxiq-web-extension/test-evidence";
 import { RunnerFailure } from "./failure.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmModelForProvider, type LlmModel, type LlmProvider } from "@fluxiq-web-extension/test-contracts";
 
 export const TESTING_LAB_DEEPSEEK_KEY_NAME = "FluxIQ Testing Lab DeepSeek";
+export const TESTING_LAB_LLM_KEY_NAME = "FluxIQ Testing Lab Claude";
 const SECRET_KEYS_PATH = "/programs/secret-keys";
 const SNAPSHOT_PATH = "/api/programs/secret-keys/snapshot";
 const CREATE_PATH = "/api/programs/secret-keys/create-key";
@@ -31,10 +32,20 @@ export type EnsureDeepSeekKeyInput = {
   authorizationPassword: string;
   authorizationPin?: string;
   keyName?: string;
+  provider?: LlmProvider;
+  model?: LlmModel;
 };
+
+export type EnsureLlmKeyInput = EnsureDeepSeekKeyInput;
 
 export function deepSeekSecretFromDriverEnvironment(environment: NodeJS.ProcessEnv): string {
   return sensitiveValue(environment.DEEPSEEK_API_KEY, "DeepSeek API key");
+}
+
+export function providerSecretFromDriverEnvironment(environment: NodeJS.ProcessEnv, provider: LlmProvider = DEFAULT_LLM_PROVIDER): string {
+  return provider === "anthropic"
+    ? sensitiveValue(environment.CLAUDE_API_KEY ?? environment.ANTHROPIC_API_KEY, "Claude API key")
+    : deepSeekSecretFromDriverEnvironment(environment);
 }
 
 /**
@@ -42,12 +53,21 @@ export function deepSeekSecretFromDriverEnvironment(environment: NodeJS.ProcessE
  * Programs UI. Secret values never become part of the returned result.
  */
 export async function ensureDeepSeekKeyViaUi(input: EnsureDeepSeekKeyInput): Promise<OpaqueSecretKeyReference> {
+  return ensureLlmKeyViaUi({ ...input, provider: "deepseek" });
+}
+
+/** Creates or reuses only the requested provider/model; never substitutes another saved key. */
+export async function ensureLlmKeyViaUi(input: EnsureLlmKeyInput): Promise<OpaqueSecretKeyReference> {
+  const provider = input.provider ?? DEFAULT_LLM_PROVIDER;
+  const model = input.model ?? defaultLlmModelForProvider(provider);
+  if (!isLlmModelForProvider(provider, model)) throw new Error("The key model does not belong to its provider");
+  const providerLabel = provider === "anthropic" ? "Anthropic" : "DeepSeek";
   const origin = exactOrigin(input.origin);
-  const secretValue = sensitiveValue(input.secretValue, "DeepSeek API key");
+  const secretValue = sensitiveValue(input.secretValue, `${providerLabel} API key`);
   const authorizationPassword = sensitiveValue(input.authorizationPassword, "authorization password");
   const authorizationPin = input.authorizationPin === undefined ? undefined : boundedPin(input.authorizationPin);
   const redactionLiterals = [secretValue, authorizationPassword, ...(authorizationPin ? [authorizationPin] : [])];
-  const keyName = safeMetadataText(input.keyName ?? TESTING_LAB_DEEPSEEK_KEY_NAME, "key name", 128, redactionLiterals);
+  const keyName = safeMetadataText(input.keyName ?? (provider === "anthropic" ? TESTING_LAB_LLM_KEY_NAME : TESTING_LAB_DEEPSEEK_KEY_NAME), "key name", 128, redactionLiterals);
   const page = input.page;
   const evidence = input.evidence;
 
@@ -63,15 +83,15 @@ export async function ensureDeepSeekKeyViaUi(input: EnsureDeepSeekKeyInput): Pro
     if (named.length > 1) throw new Error("duplicate key metadata");
     if (named.length === 1) {
       const reusable = named[0]!;
-      assertReusableDeepSeekKey(reusable);
-      await evidence.step("panel", "secret-keys-reuse-search", "Verify the saved DeepSeek key in the Secret Keys UI", async () => {
+      assertReusableLlmKey(reusable, provider, model);
+      await evidence.step("panel", "secret-keys-reuse-search", `Verify the saved ${providerLabel} key in the Secret Keys UI`, async () => {
         await page.getByRole("searchbox", { name: "Search secret keys" }).fill(keyName);
         await page.getByText(keyName, { exact: true }).first().waitFor({ timeout: 10_000 });
       });
       return opaqueReference(reusable);
     }
 
-    return await createDeepSeekKey(page, evidence, origin, keyName, secretValue, authorizationPassword, authorizationPin, redactionLiterals);
+    return await createLlmKey(page, evidence, origin, keyName, secretValue, authorizationPassword, authorizationPin, redactionLiterals, provider, model);
   } catch (cause) {
     // Carry the cause, but never in the message. Discarding it entirely made
     // every UI failure here -- a missing button, a rejected response, a
@@ -87,13 +107,13 @@ export async function ensureDeepSeekKeyViaUi(input: EnsureDeepSeekKeyInput): Pro
     });
     throw new RunnerFailure(
       "environment.missing",
-      "The DeepSeek key could not be safely created or reused through the FluxIQ Secret Keys UI",
+      `The ${providerLabel} key could not be safely created or reused through the FluxIQ Secret Keys UI`,
       { cause, details: { detail } }
     );
   }
 }
 
-async function createDeepSeekKey(
+async function createLlmKey(
   page: Page,
   evidence: BrowserEvidenceRecorder,
   origin: string,
@@ -102,17 +122,20 @@ async function createDeepSeekKey(
   authorizationPassword: string,
   authorizationPin: string | undefined,
   redactionLiterals: readonly string[],
+  provider: LlmProvider,
+  model: LlmModel,
 ): Promise<OpaqueSecretKeyReference> {
+  const providerLabel = provider === "anthropic" ? "Anthropic" : "DeepSeek";
   try {
     await evidence.step("panel", "secret-key-add-open", "Open the Add Secret Key dialog", () => page.getByRole("button", { name: "Add Key" }).click());
     const form = page.getByRole("dialog", { name: "Add Secret Key" });
-    await evidence.step("panel", "secret-key-name", "Name the Testing Lab DeepSeek key", () => form.getByLabel("Name").fill(keyName));
+    await evidence.step("panel", "secret-key-name", "Name the Testing Lab provider key", () => form.getByLabel("Name").fill(keyName));
     await evidence.step("panel", "secret-key-type", "Choose the LLM key type", () => form.getByLabel("Type").selectOption("llm"));
-    await evidence.step("panel", "secret-key-provider", "Choose the DeepSeek provider", () => form.getByLabel("Provider").selectOption("DeepSeek"));
-    await evidence.step("panel", "secret-key-model", "Scope the key to the DeepSeek chat model", () => form.getByLabel("Model").fill(DEFAULT_LLM_MODEL));
+    await evidence.step("panel", "secret-key-provider", `Choose the ${providerLabel} provider`, () => form.getByLabel("Provider").selectOption(providerLabel));
+    await evidence.step("panel", "secret-key-model", "Scope the key to the requested model", () => form.getByLabel("Model").fill(model));
     await evidence.step("panel", "secret-key-scope", "Use global runtime scope for the Testing Lab key", () => form.getByLabel("Scope").selectOption("global"));
     await evidence.step("panel", "secret-key-description", "Describe the Testing Lab key", () => form.getByLabel("Description").fill("Testing Lab live-provider certification"));
-    await evidence.step("panel", "secret-key-value", "Enter the DeepSeek secret value", () => form.getByLabel("Secret value").fill(secretValue), { sensitive: true });
+    await evidence.step("panel", "secret-key-value", "Enter the provider secret value", () => form.getByLabel("Secret value").fill(secretValue), { sensitive: true });
     await evidence.step("panel", "secret-key-continue", "Continue to Secret Key authorization", () => form.getByRole("button", { name: "Continue" }).click(), { sensitive: true });
 
     const authorization = page.getByRole("dialog", { name: "Authorize New Key" });
@@ -120,14 +143,14 @@ async function createDeepSeekKey(
     if (authorizationPin !== undefined) {
       await evidence.step("panel", "secret-key-pin", "Enter Secret Key authorization PIN", () => authorization.getByLabel("Your PIN").fill(authorizationPin), { sensitive: true });
     }
-    const createResponse = await evidence.step("panel", "secret-key-save", "Save the encrypted DeepSeek key", async () => {
+    const createResponse = await evidence.step("panel", "secret-key-save", "Save the encrypted provider key", async () => {
       const response = page.waitForResponse(candidate => endpoint(candidate, origin, CREATE_PATH), { timeout: 30_000 });
       await authorization.getByRole("button", { name: "Save Key" }).click();
       return response;
     }, { sensitive: true });
     if (!createResponse.ok()) throw new Error("key creation response failed");
     const created = parseMutation(await responseJson(createResponse), redactionLiterals);
-    assertReusableDeepSeekKey(created);
+    assertReusableLlmKey(created, provider, model);
     if (created.name !== keyName) throw new Error("created key identity mismatch");
     await authorization.waitFor({ state: "hidden", timeout: 30_000 });
     return opaqueReference(created);
@@ -189,8 +212,8 @@ function parseKey(input: unknown, redactionLiterals: readonly string[]): SecretK
   return { id, name, kind: input.kind, scope: input.scope as SecretKeyMetadata["scope"], enabled: input.enabled, ...(provider ? { provider } : {}), ...(scopeRef ? { scopeRef } : {}), ...(model ? { model } : {}) };
 }
 
-function assertReusableDeepSeekKey(key: SecretKeyMetadata): void {
-  if (key.kind !== "llm" || key.provider !== "DeepSeek" || key.scope !== "global" || key.scopeRef !== undefined || key.enabled !== true || (key.model !== undefined && key.model !== DEFAULT_LLM_MODEL)) {
+function assertReusableLlmKey(key: SecretKeyMetadata, provider: LlmProvider, model: LlmModel): void {
+  if (key.kind !== "llm" || key.provider?.toLowerCase() !== provider || key.scope !== "global" || key.scopeRef !== undefined || key.enabled !== true || (key.model !== undefined && key.model !== model)) {
     throw new Error("the named Secret Key is incompatible");
   }
 }

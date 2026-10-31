@@ -6,7 +6,7 @@ import test from "node:test";
 import { FIRST_LIVE_CREATION_LIMITS } from "../demo-llm-create-ui/index.js";
 import { FIRST_LIVE_CREATION_PROFILE, evaluateDemoLlmCreation, persistDemoLlmCreationResult } from "../demo-llm-creation.js";
 import { DEFAULT_DEMO_LLM_CREATION_PROFILE } from "../demo-llm-profile.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 function validInput(): any {
   return {
@@ -18,7 +18,7 @@ function validInput(): any {
       recordingCount: 2, recordingProvenanceAbsent: true,
     },
     invocations: [{
-      requestId: "request.one", purpose: "flow_bootstrap", provider: "deepseek", model: DEFAULT_LLM_MODEL,
+      requestId: "request.one", purpose: "flow_bootstrap", provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL,
       promptSchemaVersion: "automation-studio.flow-bootstrap.v1", attempt: 1, retryCount: 0, providerCallCount: 1,
       inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500, estimatedCostUsd: 0.02, latencyMs: 500,
     }],
@@ -45,11 +45,11 @@ test("first creation profile enforces the one-call strict live ceiling", () => {
   assert.equal(FIRST_LIVE_CREATION_PROFILE, DEFAULT_DEMO_LLM_CREATION_PROFILE);
   assert.deepEqual(FIRST_LIVE_CREATION_PROFILE.budget, {
     maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000,
-    maxCallsPerRun: 26, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    maxCallsPerRun: 26, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd,
   });
   assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, {
-    provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: 4_000, maxOutputTokens: 1_000,
-    maxTotalTokens: 5_000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0,
+    provider: DEFAULT_LLM_PROVIDER, model: DEFAULT_LLM_MODEL, maxInputTokens: 4_000, maxOutputTokens: 1_000,
+    maxTotalTokens: 5_000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, providerRetries: 0,
   });
   const twoCalls = validInput();
   twoCalls.invocations.push({ ...twoCalls.invocations[0], requestId: "request.two" });
@@ -85,9 +85,11 @@ test("rejects missing, extra, nonfinite, retried, or over-budget provider accoun
     const input = validInput(); input.invocations[0][field] = value;
     assert.throws(() => evaluateDemoLlmCreation(input), /fixed safety fact/);
   }
-  for (const [field, value] of [["inputTokens", 2001], ["outputTokens", 513], ["totalTokens", 3001], ["estimatedCostUsd", 0.251], ["latencyMs", Number.NaN]] as const) {
+  const budget = FIRST_LIVE_CREATION_PROFILE.budget;
+  for (const [field, value] of [["inputTokens", budget.maxInputTokens + 1], ["outputTokens", budget.maxOutputTokens + 1], ["totalTokens", budget.maxTotalTokensPerRequest + 1], ["estimatedCostUsd", budget.maxEstimatedCostUsd + 0.01], ["latencyMs", Number.NaN]] as const) {
     const input = validInput(); input.invocations[0][field] = value;
-    assert.throws(() => evaluateDemoLlmCreation(input), /budget|finite/);
+    if (field === "inputTokens" || field === "outputTokens") input.invocations[0].totalTokens = input.invocations[0].inputTokens + input.invocations[0].outputTokens;
+    assert.throws(() => evaluateDemoLlmCreation(input), /budget|finite/, field);
   }
   const mismatch = validInput(); mismatch.invocations[0].totalTokens = 1499;
   assert.throws(() => evaluateDemoLlmCreation(mismatch), /budget/);

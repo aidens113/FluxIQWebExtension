@@ -38,7 +38,7 @@ Each command chooses `"surface":"scenario"`, `"surface":"panel"`, or `"surface":
 {"action":"stop"}
 ```
 
-The session accepts no JavaScript/evaluate command, limits requests, selectors, waits, and action count, and applies the deterministic exact-origin network guard. Navigation cannot leave the selected scenario, panel, or extension origin. Literal entry into password, PIN, one-time-code, payment, or explicitly sensitive controls is denied. A protected field can instead use `secretEnv`, restricted to `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_TOTP`, or `DEEPSEEK_API_KEY`; the environment value is resolved in process memory, may only target a sensitive control, and is never returned. Screenshots are written only beneath the run allocation and are denied whenever a sensitive control contains a value. `inspect` returns bounded structural metadata without page text or input values. Provider credentials are removed from the browser environment. The command itself makes no provider request; a request can occur only through an explicit UI action in the loaded product.
+The session accepts no JavaScript/evaluate command, limits requests, selectors, waits, and action count, and applies the deterministic exact-origin network guard. Navigation cannot leave the selected scenario, panel, or extension origin. Literal entry into password, PIN, one-time-code, payment, or explicitly sensitive controls is denied. A protected field can instead use `secretEnv`, restricted to `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_TOTP`, `CLAUDE_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`; the environment value is resolved in process memory, may only target a sensitive control, and is never returned. Screenshots are written only beneath the run allocation and are denied whenever a sensitive control contains a value. `inspect` returns bounded structural metadata without page text or input values. Provider credentials are removed from the browser environment. The command itself makes no provider request; a request can occur only through an explicit UI action in the loaded product.
 
 ### The live panel beside the page
 
@@ -590,7 +590,7 @@ installation. Any other value of that variable is rejected.
 | `FLUXIQ_DEMO_HEADLESS` | Optional `true`/`false`; defaults to `true`. Set `false` only for visible browser debugging. |
 
 **The provider key is not configuration, and `FLUXIQ_TEST_ENV_FILES=none` does
-not cover it.** A live run reads `DEEPSEEK_API_KEY`, and only that name, from
+not cover it.** A Claude live run reads `CLAUDE_API_KEY` (with `ANTHROPIC_API_KEY` as an alias), and only the selected provider's credential, from
 the process environment, then `.env`, then `.env.local`, whatever
 `FLUXIQ_TEST_ENV_FILES` says (`live-llm/provider-credential.ts`). That is by
 design: the Lab's isolated live runs set `FLUXIQ_TEST_ENV_FILES=none` to drop an
@@ -603,10 +603,10 @@ paid run. To say "no key from any env file", set
 environment or not at all, a value `.env.local` folded into the run's
 environment is ignored, and the refusal names the switch. Any other value is
 rejected. A provider-free probe of a live command line sets both, with no
-`DEEPSEEK_API_KEY` in the shell:
+Claude or other provider credentials in the shell:
 
 ```powershell
-$env:FLUXIQ_TEST_ENV_FILES = "none"; $env:FLUXIQ_PROVIDER_KEY_FILES = "none"; Remove-Item Env:DEEPSEEK_API_KEY -ErrorAction SilentlyContinue
+$env:FLUXIQ_TEST_ENV_FILES = "none"; $env:FLUXIQ_PROVIDER_KEY_FILES = "none"; Remove-Item Env:CLAUDE_API_KEY, Env:ANTHROPIC_API_KEY, Env:DEEPSEEK_API_KEY -ErrorAction SilentlyContinue
 ```
 
 `lab:pair`'s key report (`scripts/lab/pair/provider-key.mjs`) follows the same
@@ -872,10 +872,10 @@ configuration. Generated
 credentials are never printed, and the command refuses to overwrite an
 existing file unless passed `--force`.
 
-`demo:llm:setup` loads `DEEPSEEK_API_KEY` into driver memory, then reuses the
+`demo:llm:setup` loads `CLAUDE_API_KEY` (or `ANTHROPIC_API_KEY`) into driver memory, then reuses the
 same workspace lock, copied-Core lifecycle, authentication cache, headless
 browser profiles, and evidence policy. It creates or reuses the exact global
-DeepSeek key through the real Secret Keys Programs UI. Before reporting
+Anthropic Claude key through the real Secret Keys Programs UI. Before reporting
 success, it scans the workspace's evidence, logs, `latest-evidence.json`,
 metadata files, and Core storage tree (`fluxiq-root/.fluxiq`) for the key, under
 the same `SECRET_LEAK_ATTESTATION_RUN_LIMITS` as the
@@ -3609,6 +3609,8 @@ Run artifacts may contain page evidence even when synthetic. Keep all captures,
 profiles, credentials, cookies, authorization headers, pairing tokens, and
 recorded page data out of source control and user-facing logs.
 ## Live LLM Safety Envelope
+
+Since the user's 2026-10-30 switch, live tests default to provider `anthropic` and model `claude-sonnet-5-5`, with the user-approved $5 whole-build allowance across all calls. Explicit lower limits still hold, and ordinary product defaults are separate. The Lab never substitutes a DeepSeek key when Claude is unavailable. Explicit legacy DeepSeek configurations remain supported. Core owns both providers' HTTP adapters, encrypted session-key release, schema validation and usage-aware billing; the Lab owns only credential injection, provider/model selection and acceptance reporting. Keep realistic instructions and oracles unchanged, and record the exact model, verdict, calls, billed usage/cost and elapsed time for comparison. Provider-free checks continue to make no model calls.
 
 Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
 

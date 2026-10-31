@@ -3,16 +3,16 @@
 // provider-free exploration stops at, the accounting of the one paid call,
 // and the topology an applied proposal actually built.
 
-import { type LlmModel } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_PROVIDER, type LlmModel } from "@fluxiq-web-extension/test-contracts";
 export type EvidenceGuidedCreationCheckpoint = Readonly<{
-  adaptationId: string; status: "proposed"; provider: "deepseek"; model: LlmModel;
+  adaptationId: string; status: "proposed"; provider: typeof DEFAULT_LLM_PROVIDER; model: LlmModel;
   providerCallCount: number; toolCallCount: number; evidenceBytes: number; toolIds: string[];
   inputTokens: number; outputTokens: number; totalTokens: number; estimatedCostUsd: number;
 }>;
 
 export type LiveCreationGeneration = Readonly<{
   adaptationId: string; baseExecutionDigest: string; proposalDigest: string; requestId: string;
-  provider: "deepseek"; model: LlmModel; promptSchemaVersion: string;
+  provider: typeof DEFAULT_LLM_PROVIDER; model: LlmModel; promptSchemaVersion: string;
   inputTokens: number; outputTokens: number; totalTokens: number; estimatedCostUsd: number; latencyMs: number;
 }>;
 

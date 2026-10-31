@@ -10,7 +10,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER, isLlmModel, llmProviderForModel, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { RunAllocation } from "../../allocation.js";
 import { buildFluxIQEnvironment } from "../../environment.js";
 import { RunnerFailure } from "../../failure.js";
@@ -25,11 +25,11 @@ const allocation: RunAllocation = {
   scenarioPort: 31001, webPort: 31002, gatewayPort: 31003, controllerToken: "controller_token_1234567890",
 };
 
-const CREDENTIAL = { DEEPSEEK_API_KEY: "test-provider-credential-value" };
+const CREDENTIAL = { DEEPSEEK_API_KEY: "test-provider-credential-value", CLAUDE_API_KEY: "test-claude-credential-value" };
 
 function createFlow(model: string): LlmExecutionProfile {
   return {
-    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create", mode: "live", provider: "deepseek", model, task: "create-flow",
+    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "lab-create", mode: "live", provider: isLlmModel(model) ? llmProviderForModel(model) : DEFAULT_LLM_PROVIDER, model, task: "create-flow",
     scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only", externalSideEffects: false, approvalMode: "manual",
     retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1, budget: { ...DEFAULT_LLM_LAB_BUDGET },
   };
@@ -50,7 +50,7 @@ async function bothSides(repositoryRoot: string, model: string, args: readonly s
 
 test("a chat build with --llm-model deepseek-v4-pro starts Core on it and passes the chat-build check", async (t) => {
   const root = await checkout(t);
-  const { core, run } = await bothSides(root, "deepseek-v4-pro", ["node", "lab", "run", "--live-llm", LAB_DEFAULT_MODEL_FLAG, "deepseek-v4-pro"]);
+  const { core, run } = await bothSides(root, "deepseek-v4-pro", ["node", "lab", "run", "--live-llm", "--llm-provider", "deepseek", LAB_DEFAULT_MODEL_FLAG, "deepseek-v4-pro"]);
   assert.equal(core[LAB_DEFAULT_MODEL_ENV], "deepseek-v4-pro");
   assert.equal(LAB_DEFAULT_MODEL_ENV, "FLUXIQ_LLM_DEFAULT_MODEL");
   assert.equal(run.createsFlow, true);
@@ -59,11 +59,11 @@ test("a chat build with --llm-model deepseek-v4-pro starts Core on it and passes
   assert.equal(run.describe().coreDefaultModel, "deepseek-v4-pro");
 });
 
-test("without --llm-model Core is given no default model, an inherited one is dropped, and a chat build runs on Core's own", async (t) => {
+test("without --llm-model a live Core receives Claude's default instead of an inherited model", async (t) => {
   const root = await checkout(t);
   const { core, run } = await bothSides(root, DEFAULT_LLM_MODEL, ["node", "lab", "run", "--live-llm"], { [LAB_DEFAULT_MODEL_ENV]: "deepseek-v4-pro" });
-  assert.equal(Object.hasOwn(core, LAB_DEFAULT_MODEL_ENV), false);
-  assert.equal(liveLlmCoreDefaultModel(["node", "lab"]), DEFAULT_LLM_MODEL);
+  assert.equal(core[LAB_DEFAULT_MODEL_ENV], DEFAULT_LLM_MODEL);
+  assert.equal(liveLlmCoreDefaultModel(["node", "lab", "--live-llm"]), DEFAULT_LLM_MODEL);
   run.assertChatBuildable();
   assert.equal(run.describe().coreDefaultModel, DEFAULT_LLM_MODEL);
 });
@@ -72,13 +72,13 @@ test("a chat build on a model its Core was not started on is refused before anyt
   // The plan says deepseek-v4-pro, but the run's Core was given no default model.
   const run = new LiveLlmRun(planLiveLlmExecution(createFlow("deepseek-v4-pro"), LAB_CEILING_USD), { name: "DEEPSEEK_API_KEY", source: "test", value: CREDENTIAL.DEEPSEEK_API_KEY });
   assert.throws(() => run.assertChatBuildable(), (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid"
-    && error.message.includes("the default model the run's Core was started with (deepseek-flash), not deepseek-v4-pro"));
+    && error.message.includes(`the default model the run's Core was started with (${DEFAULT_LLM_MODEL}), not deepseek-v4-pro`));
 });
 
 test("an unknown --llm-model is refused before Core's environment is built or a credential is read", async (t) => {
   const root = await checkout(t);
   const args = ["node", "lab", "run", "--live-llm", LAB_DEFAULT_MODEL_FLAG, "gpt-9"];
-  assert.throws(() => buildFluxIQEnvironment(allocation, { repositoryRoot: root, fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, {}, args), /--llm-model gpt-9 cannot be the default model of the run's Core: FLUXIQ_LLM_DEFAULT_MODEL must name a DeepSeek model/u);
+  assert.throws(() => buildFluxIQEnvironment(allocation, { repositoryRoot: root, fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, {}, args), /--llm-model gpt-9 cannot be the default model of the run's Core/u);
   // No key anywhere: the model is refused first, so the refusal is never the missing credential.
   await assert.rejects(
     beginLiveLlmRun({ profile: createFlow("gpt-9"), repositoryRoot: root, environment: {}, targetMode: "isolated", costCeilingSources: { args, environment: {} } }),

@@ -7,6 +7,7 @@ export * from "./order-report";
 export * from "./order-request";
 export * from "./read-request";
 export * from "./recorded-definition";
+export * from "./rejected-marks";
 export * from "./rejected-samples";
 export * from "./request";
 export * from "./retired-paging";

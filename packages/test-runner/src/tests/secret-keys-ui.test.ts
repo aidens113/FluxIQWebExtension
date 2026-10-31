@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Page, Response } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "../browser-evidence.js";
-import { TESTING_LAB_DEEPSEEK_KEY_NAME, deepSeekSecretFromDriverEnvironment, ensureDeepSeekKeyViaUi } from "../secret-keys-ui.js";
-import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { TESTING_LAB_DEEPSEEK_KEY_NAME, TESTING_LAB_LLM_KEY_NAME, deepSeekSecretFromDriverEnvironment, ensureDeepSeekKeyViaUi, ensureLlmKeyViaUi, providerSecretFromDriverEnvironment } from "../secret-keys-ui.js";
+import { DEFAULT_LLM_MODEL, defaultLlmModelForProvider } from "@fluxiq-web-extension/test-contracts";
 
 type RecordedStep = { id: string; summary: string; sensitive: boolean };
 
@@ -56,7 +56,7 @@ const metadata = {
   provider: "DeepSeek",
   scope: "global",
   enabled: true,
-  metadata: { model: DEFAULT_LLM_MODEL },
+  metadata: { model: defaultLlmModelForProvider("deepseek") },
 };
 const envelope = (payload: unknown) => ({ ok: true, payload });
 const origin = "http://127.0.0.1:3210";
@@ -91,6 +91,23 @@ test("creates a DeepSeek key through sensitive UI boundaries and returns only op
   }
   assert.equal(page.cleanupEvaluated, true);
   assert.equal(page.locators.some(locator => /Reveal/u.test(locator)), false);
+});
+
+test("the default UI path creates an Anthropic Claude key with sensitive inputs suppressed", async () => {
+  const claude = { ...metadata, id: "secret.claude.testing-lab", name: TESTING_LAB_LLM_KEY_NAME, provider: "Anthropic", metadata: { model: DEFAULT_LLM_MODEL } };
+  const page = pageWith(
+    { path: "/api/programs/secret-keys/snapshot", payload: { keys: [] } },
+    { path: "/api/programs/secret-keys/create-key", payload: claude },
+  );
+  const evidence = new FakeEvidence();
+  const secret = "claude-synthetic-sentinel";
+  const result = await ensureLlmKeyViaUi({ page: page as unknown as Page, evidence: evidence as unknown as BrowserEvidenceRecorder, origin, secretValue: secret, authorizationPassword: "fixture-password" });
+  assert.equal(result.id, claude.id);
+  assert.ok(page.operations.some(operation => operation.endsWith("Provider:Anthropic")));
+  assert.equal(JSON.stringify({ result, steps: evidence.steps, operations: page.operations }).includes(secret), false);
+  assert.equal(page.cleanupEvaluated, true);
+  assert.equal(providerSecretFromDriverEnvironment({ CLAUDE_API_KEY: "fixture-primary", ANTHROPIC_API_KEY: "fixture-alias" }), "fixture-primary");
+  assert.throws(() => providerSecretFromDriverEnvironment({ DEEPSEEK_API_KEY: "fixture-other-provider" }), /Claude API key/u);
 });
 
 test("reuses the same compatible key idempotently without opening creation or Reveal", async () => {
