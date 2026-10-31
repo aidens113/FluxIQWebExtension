@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, C1 t813 and E/D5 t814 are independently verified and merged in both repositories; P1b t811 is in final combined acceptance.
+Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, C1 t813 and E/D5 t814 are independently verified and merged in both repositories; P1b t811 is in final combined acceptance and the first-row toggle follow-up is being investigated read-only.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -87,7 +87,7 @@ and verify as above. Re-dispatch only the missing part.
 
 **Next, in order:**
 1. t799 and the Claude provider switch are merged; integrate t810 and t811 after verification, then finish hosted C1/product acceptance.
-2. Fix the t799 known limit before the photo-social rerun: in a loop whose first row is already in the asked state, the
+2. Fix the t799 known limit before the photo-social rerun (read-only discovery assigned, reports/codex-1030/first-row-toggle-discovery-brief.md): in a loop whose first row is already in the asked state, the
    toggle signature is learned reversed.
 3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
