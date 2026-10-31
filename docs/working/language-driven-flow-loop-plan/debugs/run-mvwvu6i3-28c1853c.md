@@ -1,6 +1,6 @@
 # Debug: run-mvwvu6i3-28c1853c
 
-Status: Actual public creation/budget repair t836 validated; integration and production API proof pending, no retry.
+Status: Actual public creation/budget repair t836 validated; merged Corece5f553e/Down0d55efbc; publication and production API proof pending, no retry.
 Run: company-website/company-website-gas-engineers, workflow gas-engineers, 2026-10-31.
 Pinned source: Coreaafff7809f6f32519b44591bf82ea3edf76311a4 / Down2e32da57b1b31dd169174a92eb14738e96ec70f5.
 Provider: anthropic / claude-sonnet-5-5, credential CLAUDE_API_KEY through encrypted product routing.
@@ -21,3 +21,5 @@ Prove the real creation/build path receives5 in a Lab-scoped configured run, res
 Artifacts remain ignored in the pinned run bundle and central lab-runs/2026-10-31/run-mvwvu6i3-28c1853c. No prompts, page data, credentials or profiles are copied here. Both Oct31 full-suite slots were already used; only owning tests/types/builds/audits apply.
 
 Repair validation: public service duplicated blank creation and left extracted owner unused. Now delegates through existing facade; fresh test-scoped Flow gets host allowance, normal defaults and saved lower policies retained. Runtime per-call reader now uses the API shared server bound10, preserving explicit1 under5. Lead32tests/4files124.92s, final SDK141.848s/types94.678s and final plain audits1143/583 pass. Service line budget only tightens4315to4304. Earlier component/cast/harness proofs superseded by actual temporary-dataDir/public-service/real persistence cases. Exact published-pin production API proof with providers disabled remains required before next paid attempt.
+
+Integration: paired source merges Corece5f553e/Down0d55efbc, Core0.25.3. Post-parent15limit cases passed55.65s; mandatory70Core merge contracts passed7.74s. Both remote task backups retained; private Core clean detachedb8e5f8ea. Normal launch guards apply after publication and exact-pin API proof.
