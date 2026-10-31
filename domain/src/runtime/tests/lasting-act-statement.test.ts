@@ -88,3 +88,13 @@ test("downloads, tabs, Next and unresolved submit state uncertainty without chan
     assert.equal(stated(actionType, parameters, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND).effect, "unacted", actionType);
   }
 });
+
+
+test("explicit original ambiguity outranks a dispatch or target stage and a reconstructed unacted row", () => {
+  for (const stage of ["dispatch", "target_resolution"] as const) {
+    const reconstructed = { ...record(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED), stage };
+    const original = { effect: "ambiguous" as const };
+    assert.equal(webLastingActStatement("web.dom.click", {}, original, reconstructed).effect, "ambiguous");
+    assert.equal(webLastingActStatement("web.dom.type", {}, original, reconstructed).effect, "ambiguous");
+  }
+});

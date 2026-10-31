@@ -585,7 +585,7 @@ export function createWebAutomationLlmEvidenceRuntime(
           const page = error.page === undefined ? undefined : retain(stable(input, error.page));
           if (page !== undefined) shown(input, sessionId, page);
           const refused = withCallStates(
-            toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code)),
+            toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code), undefined, undefined, undefined, error.failure),
             observed ?? page,
             page ?? observed
           );

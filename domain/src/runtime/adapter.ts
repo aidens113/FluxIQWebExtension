@@ -1,10 +1,11 @@
+import { readWebHostFailure, webHostFailure } from "./host-failure";
 // The FluxIQ runtime adapter for the web-automation domain: the hop between a
 // Core runtime command and the paired browser client.
 //
 // Two things happen here that happen nowhere else on the path. Every command
-// that did not succeed leaves with a structured failure record, built from the
-// closed code set in `./failure` -- the client's own record wins when it sent
-// one, because it stood nearest the page, and otherwise the classifier reads
+// that did not succeed leaves with a structured failure record -- a strictly
+// valid client original wins, including a code this build does not name,
+// because it stood nearest the page, and otherwise the classifier reads
 // the status and the message. Before this, a command that failed with only a
 // message (an unpaired client, a refused output, a client-side timeout) reached
 // Core with no record at all, and `failureForCommandStatus` had nothing but the
@@ -191,9 +192,9 @@ function rejected(command: FluxIQRuntimeCommand, message: string, code: WebAutom
 
 /**
  * The record for a command that did not succeed. A record the client sent wins
- * whenever this domain can name what it says -- it was built where the page
- * could be seen -- and gains only the digest of the evidence captured with it.
- * Everything else is classified from the status and the message.
+ * whenever Core can strictly parse it -- it was built where the page could be
+ * seen. Comparisons are screened and missing evidence digests supplied here.
+ * Unparseable or absent originals use the diagnostic status/message fallback.
  */
 function commandFailure(
   status: FluxIQRuntimeCommandStatus,
@@ -203,7 +204,19 @@ function commandFailure(
   reported: AutomationStudioFailureRecord | undefined,
   evidenceDigest: string | undefined,
   withholdComparison: boolean
-): WebAutomationFailureRecord | undefined {
+): AutomationStudioFailureRecord | undefined {
+  if (status === "succeeded" || status === "cancelled") return undefined;
+  const original = readWebHostFailure(reported);
+  if (original !== undefined) {
+    const expected = secretSafeComparisonText(original.expected, withholdComparison);
+    const actual = secretSafeComparisonText(original.actual, withholdComparison);
+    if (expected === undefined) delete original.expected;
+    else original.expected = expected;
+    if (actual === undefined) delete original.actual;
+    else original.actual = actual;
+    if (original.evidenceDigest === undefined && evidenceDigest !== undefined) original.evidenceDigest = evidenceDigest;
+    return webHostFailure(webLastingActStatement(actionType, parameters, original, original));
+  }
   const client = clientReportedFailure(reported, withholdComparison);
   const outcome: WebAutomationActionOutcome = {
     // `rejected` is a dispatch status Core's command vocabulary has and the
@@ -217,19 +230,17 @@ function commandFailure(
   const classified = classifyWebAutomationFailure(undefined, outcome);
   if (classified === undefined) return undefined;
   // What this domain states about the act behind it (`./lasting-act-statement.ts`).
-  const failure = webLastingActStatement(actionType, parameters, reported, classified);
+  const stated = webLastingActStatement(actionType, parameters, reported, classified);
+  const failure = reported === undefined ? webHostFailure(stated) ?? stated : stated;
   if (evidenceDigest === undefined || failure.evidenceDigest !== undefined) return failure;
   return { ...failure, evidenceDigest };
 }
 
 /**
- * The client's own record, re-established on the closed set.
+ * Diagnostic fallback for a supplied original Core could not strictly parse.
  *
- * This is the boundary the record crosses: it arrived over the WebSocket from
- * the browser, so its `code` is a bare string until something checks it, and
- * Core's own contract is to validate what crossed a process boundary. Nothing
- * did, which is how a code no part of this domain names could ride into an
- * attempt trace, where nothing downstream can act on it.
+ * Strictly valid generic records bypass this fallback, including unknown
+ * codes and original controls that differ from the browser code table.
  *
  * A named code is rebuilt through `webAutomationFailureRecord` rather than
  * trusted field by field, so the category, the retryable flag and the stage are
@@ -238,11 +249,8 @@ function commandFailure(
  * the failure whole. What only the sender could know -- what it expected, what
  * it saw, which evidence packet it captured -- is carried across untouched.
  *
- * A code this domain does not name is not a classification, whatever the sender
- * believed, so it becomes UNKNOWN carrying the code it used. That is what
- * `carriedWebAutomationFailure` already does with a thrown record's
- * unrecognized code, and the same drift deserves the same answer whichever way
- * it arrives.
+ * An unparseable original naming an unknown code retains the old UNKNOWN
+ * diagnostic with its reported code beside it. It gains no transient admission.
  *
  * `expected` and `actual` are the one thing here that is *not* carried across
  * untouched. They are a comparison of what an action asked a control for and

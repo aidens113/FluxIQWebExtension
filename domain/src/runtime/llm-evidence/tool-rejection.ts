@@ -64,7 +64,10 @@ import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation-stud
 import { publishedWebLlmPage, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import { webLlmRejectionNext, webLlmRejectionNextWithWait } from "./rejection-next";
-import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
+import type { WebLlmPageEvidence } from "./sanitize";
+import { RecoverableToolRejection } from "./tool-rejection/index";
+
+export { RecoverableToolRejection } from "./tool-rejection/index";
 
 export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as const;
 
@@ -582,25 +585,6 @@ export type WebLlmToolRejection = {
    */
   attempts?: number;
 };
-
-export class RecoverableToolRejection extends Error {
-  /**
-   * `page` is set only for a refusal the page caused, and only when the page could be captured.
-   *
-   * `personNeeded` is set only when the page answered `USER_INTERVENTION_REQUIRED`:
-   * a robot check stood in the way and nothing was done about it. Such a refusal
-   * is not for the model -- the call's result says `personNeeded` and Core puts
-   * the check to the person (`./node-run/run.ts`).
-   */
-  constructor(
-    readonly code: WebLlmToolRejectionCode,
-    readonly detail?: WebLlmToolRejectionDetail,
-    readonly page?: WebLlmSnapshotBinding,
-    readonly personNeeded?: true
-  ) {
-    super(code);
-  }
-}
 
 /** Refuse the call. Throws, so a caller cannot forget to stop. */
 export function recoverable(code: WebLlmToolRejectionCode, detail?: WebLlmToolRejectionDetail): never {

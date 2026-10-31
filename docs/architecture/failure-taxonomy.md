@@ -2,7 +2,7 @@
 
 Every way the browser path can report that an action did not work, and the
 mechanism that keeps that list closed. Current-state design, verified against
-source on 2026-09-13.
+source on 2026-10-31.
 
 Core owns the failure *categories* (`AutomationStudioAdaptiveFailureClass`)
 and the record shape; the producer owns the *code*. This repository's codes
@@ -10,6 +10,23 @@ live in one module,
 [`domain/src/runtime/failure/codes.ts`](../../domain/src/runtime/failure/codes.ts),
 which is also where each code is bound to the category, retryable flag and
 stage it always carries.
+
+The host preserves a valid original Core failure record before using this
+table as a fallback. An explicit ambiguous effect or authority refusal cannot
+be weakened by the code's default row or a pre-dispatch stage inference.
+The host may annotate an already parsed `RATE_LIMITED` or classified
+`TRANSPORT_TRANSIENT` record with `transient: true`; shared browser-facing
+constructors do not emit that field. Temporary cause alone says nothing about
+whether an action occurred or may be repeated.
+
+Evidence tool results carry an optional control-only failure through exploration,
+replay and refusal paths. The public Core projection validates it and excludes
+expected/actual comparison text and evidence digests before serialization.
+Successful results omit stale failures; malformed optional metadata leaves the
+actual evidence and effectApplied flag intact. A selected rate-limit answer
+must not hide ambiguity or authority from earlier attempts in the same call.
+The paired Core document `docs/architecture/automation-studio/failure-control.md`
+defines the typed gate; browser wording and codes remain owned here.
 
 ## The Closed Set
 

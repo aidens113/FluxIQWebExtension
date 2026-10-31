@@ -1,3 +1,5 @@
+import { executeWebEvidenceAction } from "../../action-failure";
+import { readWebHostFailure, webHostAttemptFailure } from "../../../host-failure";
 import { webAutomationResolvedActionEffect } from "../../../../actions/action-effect";
 // A node a build runs against the live page -- while it explores, and while its
 // own test runs replay the draft -- is dispatched under Core's default retries,
@@ -62,7 +64,6 @@ import { webLastingActStatement } from "../../../lasting-act-statement";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { webAutomationExtractListReferenceNow } from "../../../../output-nodes/extract-list";
 import { present } from "../../present";
-import { isJsonRecord } from "../../untrusted-json";
 import type { WebNodeRun } from "../context";
 import { webNodeRetriedAnswer } from "./answer";
 import { webNodeRetryReacquire, type WebNodeReacquire } from "./reacquire";
@@ -79,6 +80,8 @@ export type WebNodeDispatchResult = Awaited<ReturnType<WebLlmEvidenceGateway["ex
 export type WebNodeRetriedDispatch = {
   result: WebNodeDispatchResult;
   attempts: number;
+  /** Host control facts preserving uncertainty across every requested attempt. */
+  failure?: AutomationStudioFailureRecord;
   lastingAct?: "landed" | "uncertain";
   /** What finding a stale target again came to, when Core asked (t786). */
   reacquire?: "found" | "gone" | "unmatched" | "unavailable";
@@ -114,13 +117,7 @@ export async function webNodeDispatchWithRetries(
     actionEffect: webAutomationResolvedActionEffect(command.actionType, command.parameters),
     // Core sends nothing more once the build is cancelled between attempts.
     dispatch: async () => {
-      let answer: WebNodeDispatchResult;
-      try {
-        answer = await run.gateway.executeAction(run.sessionId, command);
-      } catch {
-        // A missing acknowledgement cannot prove that the dispatched act never landed.
-        answer = { status: "unknown", error: "The action acknowledgement was unavailable." };
-      }
+      const answer = await executeWebEvidenceAction(() => run.gateway.executeAction(run.sessionId, command));
       answers.push(answer);
       return answer;
     },
@@ -134,7 +131,7 @@ export async function webNodeDispatchWithRetries(
   if (noted) noted.attempts = outcome.attempts;
   // A lasting act Core settled keeps the answer it settled on.
   const result = outcome.lastingAct === undefined ? webNodeRetriedAnswer(answers, outcome.result) : outcome.result;
-  return present<WebNodeRetriedDispatch>({ result, attempts: outcome.attempts, lastingAct: outcome.lastingAct, reacquire: outcome.reacquire });
+  return present<WebNodeRetriedDispatch>({ result, attempts: outcome.attempts, failure: webHostAttemptFailure(answers, result, outcome.lastingAct), lastingAct: outcome.lastingAct, reacquire: outcome.reacquire });
 }
 
 /**
@@ -187,8 +184,5 @@ function webActionType(actionType: string): WebAutomationActionType | undefined 
  * field rather than trusted as a type.
  */
 function failureRecord(value: unknown): AutomationStudioFailureRecord | undefined {
-  if (!isJsonRecord(value)) return undefined;
-  const { code, category, retryable } = value;
-  if (typeof code !== "string" || typeof category !== "string" || typeof retryable !== "boolean") return undefined;
-  return value as unknown as AutomationStudioFailureRecord;
+  return readWebHostFailure(value);
 }

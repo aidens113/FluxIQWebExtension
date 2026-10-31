@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t825 Core0.17.1 accepted/merged/pushed Core62c18d24/downstream2e1c90be;301lead tests/types/audits/Chromium pass, local filtered bundles refreshed. Next P8 CC8 typed transient path; no paid/full calls, main held.
+Status detail: t826 typed temporary-failure source accepted273Core/contract tests plus focused host checks/types/build and Chromium saved-once proof; paired integration pending. No full/paid calls; main held.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Active continuation, 2026-10-31:** t825 complete: Core0.17.1 merged/pushed Core62c18d24/downstream2e1c90be. Parser-valid ambiguous target failures no longer skip or state-route before settlement; actual graph tests hold act1/onward0/check1. Typed skipped-act truth preserves nonfatal notDone, strict own-effect proof, risk raises and exact legacy fallback. Lead301unique/28files plus overlapping58 correction rerun, Core/domain types, both audits1144/615,70 Core merge contracts and filtered SDK/domain builds pass; Core memory4blocks archived byte-exact,794lines. Chromium134 headless UTC job-board Save compatibility1/1passes on0.17.1; new target-routing cases remain graph-unit proof. HTML test-runs/2026-10-31-t825-browser-report; no background/panel/Firefox/model/whole-build acceptance claimed. Main Core/domain/extension filtered builds refreshed (22files perChrome/Firefox/e2e, existing Firefox ID placeholder). Remote task backups retained, private Core detached for normal pruning. Next CC8 end-to-end typed transient contract/parser/tool-result/producer/consumer paths from p8-skip/signals-discovery.md; host-side first, browser wire unchanged, CC10 serial afterward. Main remains held for later permitted full sweep; daily2used, Claude/$5 configured but no paid go/calls. User .clinerules remains unstaged.
+**Active continuation, 2026-10-31:** t826-runtime-transient-signal source accepted, paired dev integration pending. Contracts0.4.0/Core0.18.0: strict transient flag, optional CONTROL-only tool failure, original uncertainty/authority and all-attempt history retained, malformed metadata drops alone, raw dumps project before serialization. Authoring repeat memory/refusal streak/amendment replay use strict transient+retryable+unacted with actual !effectApplied/!personNeeded; no web-English admission. Host annotates parsed RATE_LIMITED/classified TRANSPORT_TRANSIENT only after existing wire parsing; browser constructors/wire unchanged. Lead273unique named Core/contract tests pass, types/audit1144 pass,3SDKlibs rebuilt. Down235initial tests231pass4old-expectation failures; focused final82pass covers4/new cautious fixtures/retry typings; types/build pass. Audit615 passed before final test-only repairs, final gate pending. Chromium headless UTC job-board real Save lost-ack compatibility1pass (2.6s test/about1.6min overall), no duplicate/unsave/alternative; new host contract tested provider-free through actual public Core loop, not browser authoring. Task-owned reports p8-transient/; HTML/logs retained MAIN ignored test-runs/2026-10-31-t826-*. t825 dev Coree784f2e9/downstreame0c03bf7; MAIN bundles0.17.1 until integration refresh. No paid go/calls/panel or further whole suites; both daily sweeps used, main held. User .clinerules unstaged. Next CC10 after paired acceptance.
 
 **Continuing, 2026-10-31:** t823 implements a fixed referenceNow across executor/native/runtime dispatch, trials, resumed/child runs, browser filtering/sorting, replay and final judging. Fresh execution captures its start; reused evidence retains it; live timers still advance. Core0.16.0 adds optional fields and preserves old exports after extracting graph options. Lead500 Core tests/89 domain/12 extension/27 tooling tests pass; Chromium134.0.6998.35 headless UTC job-board proof passes exact2 supplied-reference rows versus1 wall-clock row after midnight. Core/domain/extension types pass; Core full audit passes and downstream remaining targeted rule passes, final merge gate pending. Extension first check lacked fresh compiled domain/node; building only domain fixed it. Setup now offers downstream --skip-workspace-build with Core safety gates retained; both AGENTS files document it. Initial setup unexpectedly attempted a full workspace build and was refused after Core inputs changed; no further full command ran. Merged Core41adfa49/downstreamda2f4301 after final structure gates and70 Core merge-contract tests; next P8 runtime robustness discovery. Remote task backups retained. Main needs a later permitted full sweep. No paid go/API calls or panel management.
 
@@ -240,16 +240,14 @@ emits none of it behaves as today.
 
 ### W8. Transient faults, actionability, effect class, identity re-find (CC8, CC10, CC12)
 
-- **CC8 `transient`.** `D/runtime/failure/codes.ts` and `D/runtime/adapter.ts:264` set it. The English "retry later"
-  phrases leave Core (P8) and live here as the domain's classifier.
-- **CC10.** `E/content/action-runtime/actionability.ts` reports `actionable {ok, reason, coveredBy}` on the dispatch
-  result. The `LOADING busy` header (`LE/page-view/header.ts`) maps to `busy`.
+- **CC8 `transient` accepted t826.** Host-only `D/runtime/host-failure/`, adapter and tool producers annotate parsed rate limits/transport faults after wire parsing; browser-shared constructors never emit it. Core reads CONTROL-only failure facts, preserving uncertainty and actual flags; no English retry exemption remains.
+- **CC10 pending.** Content already computes closed hidden/disabled/covered facts; Core OutputDispatchResult has no actionability field. Next unit defines a portable typed projection and mixed-version reading before host emission, without treating it as unacted proof or reading English headers in Core.
 - **CC12.** The effect class per action kind comes from `D/runtime/lasting-act-statement.ts`,
   `D/client/interrupted-action/commits.ts` and `LE/node-run/run.ts` (`webPlanStepMustDeclare`). A purchase-like
   submit is `commit`, so Core never lowers it.
 - **Re-find by identity without a source step.** `D/runtime/target-reacquire/reacquire-target.ts` and `element-match.ts`
   answer from the stored fingerprint against the current view.
-- Tests: `D/runtime/failure/tests/transient.test.ts`, `D/runtime/target-reacquire/tests/identity-only.test.ts`,
+- Tests: `D/runtime/host-failure/tests/failure.test.ts` and `LE/node-run/retries/tests/transient.test.ts`, `D/runtime/target-reacquire/tests/identity-only.test.ts`,
   `D/runtime/tests/lasting-act-class.test.ts`.
 
 ### W10. Receive the concepts Core gives up (CC11, CC13, CC14)
@@ -269,7 +267,7 @@ The web binding supplies today's behaviour, so web prompts and refusals do not c
 | `dialog` fact and target (`script-statements/fact-condition.ts:95`, `service/runtime-session/interruption-handler.ts:40`, `plan/contracts.ts:125`, `harness-options/plan-fact-targets.ts:17`) | `D/runtime/facts/evaluate.ts`, `condition.ts` answer `obstruction` (alias kept) | CC7 |
 | Closed layer kinds `consent\|promotion\|dialog` (`executor/node-execution/cleared-layer.ts:13`) | the kind mapping in `LE/node-run/press-effect/cleared-layer.ts` | CC7 |
 | DOM fingerprint keys and weights (selector 14, xpath 11 and others; `model/action-element-target.ts`, `fingerprinting/element-fingerprint.ts`) | `D/element-fingerprint/build.ts`, `signals.ts` name the signals and weights | open signals map (P10) |
-| Transient phrases (`llm/repeat-guard/retry-later.ts:7`, `executor/defensive/thrown-error.ts:43,214`) | `D/runtime/failure/codes.ts` | CC8 |
+| Authoring transient phrases removed t826; generic defensive transport/status fallback remains in Core | host-only `D/runtime/host-failure/` after existing wire parsing | CC8 |
 
 Rules for the move:
 
@@ -340,160 +338,23 @@ Core's "What not to do" applies in full. Web-specific additions:
 
 ## Work Ledger
 
-### 2026-10-29 - P0 merged: scenario-free model text, enforced by a check (t793)
-- Agent: supervisor; worker (brief t793), review follow-up t793-R (worker); the script format's example rewritten in t790; report `framework-heavy-lifting-plan/reports/t793-p0.md`
-- Changed: Core model-facing text in `llm/diagnosis-instructions.ts`, `llm/node-tools/run-node.ts`, `flow-bootstrap/plan/evidence-schema.ts`, `service/candidate-trial/processed-out.ts`, `result-verification/repair-directive.ts` now uses reading lists, archives, branch libraries and report filing in place of cart, coupon, store, checkout and excluded-part examples; t790 replaced `flow-script-format.ts`'s "Garden Club" membership example with a print shop. Downstream `scripts/check/model-text.mjs` (in `pnpm check`) builds 209 tokens from the ten realistic scenarios' fixture literals and fails on any in the string and template literals of Core's model-facing files (TypeScript compiler parse; comments excluded); a reviewed allow list of 8 generic words; a retired-examples list.
-- Decision (supervisor review): allow-list entries must match a current Core literal; "Space Grey" (a task's answer variant, found only in comments) is not allowed.
-- Validation: supervisor-run `node --test scripts/check/model-text/tests/*.test.mjs` -> "# pass 8 / # fail 0"; on the tree merged with dev (t790 in) `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 376 model-facing Core files, 11720 string literals)"; Core under the heavy-check lock `pnpm test` llm, flow-bootstrap/plan, result-verification, service/candidate-trial -> "Test Files 443 passed (443)", real-sql 2 passed; prompt contracts "Tests 70 passed (70)"; after a library rebuild `pnpm check` -> exit 0 (without it, a stale apps/web dist failed it, as on t792: a tooling gap, follow-up); docs current; structure audit passed.
-- Outcome: Accepted. The check catches names, not a scenario's shape in common words; review stays needed for shape.
+Settled entries through t825 are preserved verbatim in [the accepted runtime ledger archive](framework-heavy-lifting-plan/archive/2026-10-31-accepted-runtime-ledger.md).
 
-### 2026-10-29 - Core's check never reads a stale library build (t794)
-- Agent: supervisor; worker (brief t794), report `framework-heavy-lifting-plan/reports/t794-check-build.md`
-- Finding: twice on 2026-10-29 a merge that changed `packages/fluxiq` source failed Core's `pnpm check` in apps/web (`TS2739 ... IdentityAccessService is missing ...`) until the libraries were rebuilt by hand: apps/web reads the compiled dist for the `fluxiq/*` subpaths tsconfig `paths` does not map to source.
-- Changed (Core): the root `check` script runs `contracts:build`, `fluxiq:build` and `client-gateway-websocket:build` through the build cache before the parallel typechecks; `scripts/build-cache/tests/registry.test.mjs` fails if they are dropped or reordered; `docs/architecture/code-structure.md` says so. Option (b), source paths for every export, was rejected: a second list to keep in sync.
-- Validation: supervisor-run `node --test scripts/build-cache/tests/registry.test.mjs` -> "# pass 10 / # fail 0"; `pnpm check` -> exit 0 in 39 s with nothing changed; `pnpm structure:check` passed. Worker's probe: a new export used from apps/web without a manual build -> fluxiq:build rebuilt (92 s) and web:check passed; cold check 4 m 14 s, warm 34 s.
-- Outcome: Accepted.
+### 2026-10-31 - compact accepted runtime ledger
+- Agent: Codex lead.
+- Changed: archived all24 settled ledger entries and the misplaced accepted t825 entry without changing their content; restored section order.
+- Why: the ledger exceeded20 entries and the protocol requires compaction on touch.
+- Validation: `python -` ->25 source blocks preserved exactly in archive; payload hash printed and source section order restored.
+- Outcome: Accepted; no runtime source changes.
+- Follow-up: maintain the active t826 acceptance entry below.
 
-### 2026-10-29 - Core owns a per-pass act ledger (t796)
-- Agent: supervisor (brief t796-ledger); workers w1-rule, w4-layers, w5-ending, w6-headed-proof (worker), w2-ledger, w3-repeat-order (worker-heavy); report `framework-heavy-lifting-plan/reports/t796-ledger.md`
-- Finding: debug `run-mvtdn37t-e1e4d0a7` (photo-social newest likes, no Flow): the requested like sat behind `only after:` a dismissal and was skipped on every pass, and every `extractList.sort` the build wrote was refused under a sentence about a key it had not written.
-- Changed (Core, detail in Core's ledger): a requested act behind `optional:`, `only after:` or an optional step's `on success:` is refused at submit, by its words or by the lasting class the part asks for; each trial records per pass whether every lasting or guarded step ran, and a part whose acting steps never ran is proven `not_run`; a cleared layer's handler is scoped to the subflow; a For Each over a page-order listing takes the listing's own sort as its `order`; the ending names steps that never ran and the page of each act left. Downstream: headed spec `apps/extension/e2e/site-reset/tests/photo-act-ledger.spec.ts`; the domain's listing-order test now pins the new contract (a sort on the listing is admitted; a sort only in the process is refused and its instead, applied literally, is admitted), and `output-nodes/extract-list/rows-order.ts` says so.
-- Validation: supervisor-run under the lock, downstream merged with dev: Core `pnpm test` over executor, flow-bootstrap, service, activity, project-agents, result-verification and nodes/control-flow -> "Test Files 852 passed | 1 skipped (853)", "Tests 7622 passed | 2 skipped (7624)", real-sql "Test Files 52 passed (52)", "all groups passed"; prompt contracts -> "Tests 45 passed (45)"; Core `pnpm check` -> exit 0 (after regenerating the working-doc index this entry's status edit had made stale); docs current; both structure audits passed; domain, extension and test-runner tsc clean; model-text "ok (208 scenario tokens, 377 model-facing Core files, 11791 string literals)"; domain tests "# pass 2440 / # fail 1", the failure being the listing-order test that pinned the old refusal, updated -> "# pass 5 / # fail 0"; headed `e2e/site-reset/tests` -> "32 passed (35.0m)".
-- Outcome: Accepted. Not verified live. The span-level `repeat order:` is not built. Until t795 lands, `held.ts` still holds a judge's yes over a `not_run` part.
-
-### 2026-10-29 - W0: the Lab's draft verdict from structured data (t798)
-- Agent: lead; worker (brief t798-w0); report `framework-heavy-lifting-plan/reports/t798-w0.md`
-- Changed: `packages/test-runner/src/flow-lane/creation/candidate-outcome.ts` decides a chat draft's verdict from the trial session's record, then Core's `get-flow-bootstrap-failure` diagnostic for the same candidate, then a failed trial run, and only last from Core's closing words, recording `verdictSource`; a draft no judge ran reads "was not judged", never "judged unknown" (debug mvrj-a44a); `chat/build-from-chat.ts` passes the domain. `not_judged` was not added to `RunEvaluation.reportedVerdict`: nothing could produce it (`lane-observation.ts` already writes `unverified` for an unjudged run). The budget mislabel (mvskptb1) was already fixed by t787; `live-llm/tests/budget.test.ts` pins it with the run's numbers.
-- Decision (lead review): Core answers `{failure: null}` when no build failed (`api/handlers/llm-generation.ts`), so the new read does not throw on a clean draft; only a diagnostic naming this candidate is used.
-- Validation: lead-run under the lock on the tree merged with dev: test-runner `pnpm check` -> exit 0, `pnpm build` -> exit 0, `node --test "dist/flow-lane/**/*.test.js" "dist/live-llm/**/*.test.js" "dist/run-scenario/**/*.test.js"` -> "# tests 958 / # pass 953 / # fail 0 / # skipped 5"; `node scripts/structure-audit.mjs` -> passed; `node scripts/check/model-text.mjs` -> "model-text: ok (209 scenario tokens, 377 model-facing Core files, 11791 string literals)".
-- Outcome: Accepted. Not verified live; it rides in the next live round.
-
-### 2026-10-29 - P4 with W4: one undo and reset answer (t797)
-- Agent: supervisor (brief t797-p4) with six workers; report `framework-heavy-lifting-plan/reports/t797-p4.md`
-- Changed (Core, detail in Core's ledger): one shared answer for back-at-place, undo reach and settlement; stale in-place reads not judged; unsettleable acts end with a closed reason; undo paired with its act by a reported inverse effect (CC4) or control counts. Downstream (W4): `domain/src/runtime/llm-evidence/control-spot/tests/place-per-act.test.ts` pins one place token per looped act (it passed on unchanged code: a regression guard); `docs/architecture/page-evidence.md` and three site-reset spec comments follow the single answer.
-- Validation: lead-run under the lock on the trees merged with dev: domain `tsc` clean and `DOMAIN_TEST_BUILD_LABEL=t797 node scripts/test-domain.mjs` -> "# pass 2444 / # fail 0"; extension and test-runner tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 377 model-facing Core files, 11794 string literals)"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (40.6m)"; Core checks in Core's ledger.
-- Outcome: Accepted. Follow-up (W4 remainder): the web domain fills CC4's `effect` (what a press did) so live undo pairing uses it instead of control counts.
-
-### 2026-10-29 - P5a: Core settles rows and proofs before any judge (t795)
-- Agent: supervisor (brief t795-p5) with eight workers; report `framework-heavy-lifting-plan/reports/t795-p5.md`
-- Changed (Core, detail in Core's ledger): computed facts before any judge, a failing fact a Core no with no judge call, t796's `not_run` a Core no. Downstream: reports only.
-- Validation: lead-run under the lock on the trees merged with dev: zero-call replays of four recorded live builds through the merged Core (`scratchpad/t795-w6/replay.mts`): everything-store `run-mvswh11y-9d462629` and `run-mvtdoyf3-47ffaac1` -> every false-pass revision and playback 0137 a Core no (`core.result.computed_fact_failed`, 0 judge calls), the correct revision no longer refused; social `run-mvskodlp-9966d618` and `run-mvswewhy-e4e469d4` -> step 0042 `answers`, as before; domain tests "# pass 2442 / # fail 0"; domain, extension and test-runner tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 379 model-facing Core files, 11858 string literals)"; headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "32 passed (35.3m)".
-- Outcome: Accepted. Follow-up here: after a Core no the extension shows the toast "the fix didn't finish", which must say what Core found instead.
-
-### 2026-10-29 - The chat ending after a Core no says what FluxIQ found (t805)
-- Agent: lead; worker (brief t805); report `framework-heavy-lifting-plan/reports/t805-ending-words.md`
-- Finding: the toast came from Core's chat wording, not the extension: `runtime/activity/wording/run-ending.ts` closed a refuted run with "the fix didn't finish" even when Core refused it from its own facts and nothing was being fixed.
-- Changed (Core): `run-ending.ts` ends a Core no (`core_observation`, `core.result.computed_fact_failed`) with the failing fact's sentence, in FluxIQ's name ("it saved 15 rows, but FluxIQ counted 3 stored rows where the build declared 2."); every other ending is unchanged. Lead review changed the worker's "Core found:" to FluxIQ, the name the chat uses everywhere else.
-- Validation: worker `pnpm test src/programs/automation-studio/runtime/activity` -> "56 files / 476 tests passed", "all groups passed"; tsc clean; structure and docs current; lead-run after the wording change `pnpm exec vitest run .../activity/wording/tests/run-ending.test.ts` -> "Tests 17 passed (17)".
-- Outcome: Accepted.
-
-### 2026-10-29 - P7 with W7: typed fields, marks, row identity, the date twin (t800)
-- Agent: supervisor (brief t800-p7) with twelve workers; report `framework-heavy-lifting-plan/reports/t800-p7.md`
-- Changed (Core, detail in Core's ledger): relative date bounds, compact ages, record defaults, three build-time checks. Downstream: packet fields carry `type` and `parsed`, lists carry `fieldMarks`, per-item marks and `rowIdentity` (`domain/src/runtime/llm-evidence/structure/**`, `apps/extension/src/content/extraction/{item-mark,item-attributes}/`); a `mark: badge|flag|state` field is stored as a column absent when off, so Core's `is: "present"` keeps the marked rows; the item filter and condition grammar share Core's date cases. The domain extract-list grammar is at 699 of its 700 characters.
-- Validation: lead-run under the lock on the trees merged with dev: domain tsc clean and `DOMAIN_TEST_BUILD_LABEL=t800 node scripts/test-domain.mjs` -> "# pass 2457 / # fail 0"; extension tsc clean and `EXTENSION_TEST_BUILD_LABEL=t800 node scripts/test-extension.mjs` -> "# pass 3435 / # fail 0"; test-runner tsc clean; structure audit passed; model-text ok (208 tokens, 379 files, 11865 literals); headed `e2e/site-reset/tests` -> "32 passed (34.8m)". Supervisor's headed provider-free proof on social-network-feed `replay-mvu2ksyn-10c26651`: passed, 3 of 3 rows, 15 of 15 fields, 0 model calls, the Flow keeping posts by a mark field and `atLeast`, with no group name and no date pattern.
-- Outcome: Accepted. Not verified: `within` live (the fixture's dates are absolute); the panel picker (`panel/extraction/confirm-payload.ts`, `view-model.ts`) drops `mark` (follow-up).
-
-### 2026-10-29 - P1a merged (t806)
-- One line: Core folds the build loop's bookkeeping outside the trial gate (unknown tool ids asked again, brief defaults, the first unchanged resubmission's fix point, Core-written folded lines, done reasons from the record). Full entry in Core's ledger; downstream reports only.
-- Validation: lead-run downstream against that Core: domain tsc clean; `node scripts/structure-audit.mjs` passed; `node scripts/check/model-text.mjs` -> "model-text: ok (208 scenario tokens, 383 model-facing Core files, 11892 string literals)".
-- Outcome: Accepted.
-
-### 2026-10-29 - P7 follow-ups merged (t807)
-- Changed (downstream): `apps/extension/src/panel/extraction/{view-model,confirm-payload,field-row}.ts`, `extraction.css` and `background/extraction/definition.ts` keep a field's `mark` through confirm and show it; Core's day-granular `within` and the record-defaults plumbing are in Core's ledger.
-- Validation: lead-run under the lock: domain tsc (both configs) clean and `DOMAIN_TEST_BUILD_LABEL=t807 node scripts/test-domain.mjs actions/extraction output-nodes/extract-list runtime/llm-evidence` -> "# pass 1542 / # fail 0"; extension tsc (both configs) clean and `EXTENSION_TEST_BUILD_LABEL=t807 node scripts/test-extension.mjs content/extraction panel background` -> "# pass 1946 / # fail 0"; structure audit passed; model-text ok. The picker was not seen in a browser.
-- Outcome: Accepted.
-
-### 2026-10-29 - Repair from the failing step merged (t804)
-- Changed (downstream): headed provider-free spec `apps/extension/e2e/site-reset/tests/photo-repair-from-step.spec.ts`. The user's rule ("Build the whole Flow first; test it whole only when it should work") is enforced by Core; full entry in Core's ledger.
-- Validation: lead-run headed `pnpm test:e2e e2e/site-reset/tests --workers=1` -> "33 passed (35.9m)", the new spec printing `{"repairFromStepCounts":{"wholeRuns":2,"fromStepRuns":1}}`: a failed whole test, a refused second one, a run from the failing step, one judged whole run that passes.
-- Outcome: Accepted.
-
-### 2026-10-30 - Session handoff: stopped at the user's request
-- Agent: lead. The user asked to stop, write everything down, and stop tests where safe. The lead stopped its own t799 verification (`verify-t799.sh`, mid downstream typecheck: its processes ended and the heavy-check lock it held removed), and asked t810, t811, t813 and t814 to stop starting tests, write their reports of current state and end, uncommitted.
-- Changed: this document's Current State rewritten as the session handoff (merged work, in-flight table with how to resume, the demo run, next steps, the user's standing rules, decisions waiting on the user); the demo run recorded in `breadth-forty-tasks-plan.md`.
-- Validation: no code changed in this entry. The last full sweep (`lab-runs/2026-10-30/sweep-1/summary.txt`, every step "exit 0") is quoted in `trace-offline-trials-plan.md`; work merged after it (t812) was verified narrowly, as its entry in `hosted-production-plan.md` quotes. t799's own verification did not complete: not validated.
-- Outcome: Partial (stopped). Resume from the Current State table.
-
-### 2026-10-30 - Independent P6/W6 continuation acceptance (t799)
-- Agent: Codex lead
-- Changed: corrected the legacy wire-input type in the recovery test; preserved production behavior and merged current dev into both task trees. Full evidence: `framework-heavy-lifting-plan/reports/codex-1030/t799-result.md`.
-- Validation: two owning Core test batches -> `15 files / 84 tests` and `12 files / 151 tests` passed; domain owning tests -> `40 passed, 0 failed`; extension owning tests -> `29 passed, 0 failed` and corrected fixture recheck -> `8 passed, 0 failed`.
-- Validation: `pnpm.cmd --filter fluxiq check` -> exit 0 (content-matched cache); `pnpm.cmd --filter @fluxiq-web-extension/domain check` -> exit 0; extension `pnpm.cmd check` -> exit 0 after correcting the TS2322 legacy test fixture.
-- Validation: `pnpm.cmd docs:check` in paired Core -> `Deterministic framework reference is current.`; `node scripts/check/model-text.mjs` -> `model-text: ok (208 scenario tokens, 384 model-facing Core files, 11997 string literals)`.
-- Validation: extension `pnpm.cmd test:e2e -- site-reset/tests/photo-obstruction-toggle.spec.ts --workers=1 --reporter=line` -> `1 passed (3.7m)`; native headed Chromium, isolated realistic photo-social, real installed extension/gateway, scripted provider, no paid model calls.
-- Not verified: browser execution of Core clear-interference rung, learned pace, Firefox, first-loop-row direction or changed-source paid qualification. No full sweep was run.
-- Validation: `pnpm.cmd task finish t799` -> downstream structure gate passed and task merged; Core `pnpm.cmd task finish t799 --skip-checks` -> mandatory `70 contract tests passed`, narrow acceptance already observed, paired task merged.
-
-
-### 2026-10-30 - P5b continuation independently verified (t810)
-- Agent: Codex lead; worker resume_t813.
-- Changed: all recorded handoff defects fixed, mandatory evidence-specific rechecks enforced, shared Claude/DeepSeek checked-cell schema preserved; screened replay marks reach Core.
-- Validation: lead Core recheck/native/schema/pin batch -> `8 files, 119 passed`; `DOMAIN_TEST_BUILD_LABEL=t810-lead node scripts/test-domain.mjs runtime/llm-evidence/node-run/left-out-together` -> `8 passed`; Core typecheck -> content-matched exit0; final Core structure -> `failures: [], 473 warnings, 1144 baselined`.
-- Validation: worker owning tests -> Core1467 +805, domain541 and extension501 passed; affected source/test types, builds, docs/model-text/freshness passed. Full report: `framework-heavy-lifting-plan/reports/codex-1030/t810-result.md`.
-- Not verified: a newly observed live judge reply. Strict saved replay stays unsure without mandatory replies; scripted repeated replies are not historical acceptance. No paid calls, panel management or full sweep.
-- Outcome: Paired task finish passed; downstream structure gate and Core mandatory contract gate70 passed; both code branches integrated.
-
-### 2026-10-30 - P1b and consistent live invocation context accepted (t811)
-- Agent: Codex lead; worker resume_t811, report reports/codex-1030/t811-result.md.
-- Changed: folded submit/test, labelled repair, Core completion and proposal-aware repeat/memo keys; caller args/environment now reach both live planning and spawned Core model/purse/mode. Claude default and explicit legacy CLI cases stay covered.
-- Validation: lead Core helper/gate Vitest ->42 passed; `node --test` over compiled cli-llm/auth-cli/coordinator-existing/coordinator-persistent ->26 passed; post-parent Core/runner/extension checks passed, including refreshed extension types.
-- Validation: headed Chromium two-spec command ->2 passed(4.1m); lead JSON assertions ->accepted:true,24rows/2whole/1partial/0prematurecommands,12-to9 decisions,6supervisor/2Core-completions each. Three JSON files preserved under ignored main test-runs/2026-10-30-t811-final.
-- Outcome: paired task finish -> downstream structure passed, Core contracts70 passed; merged Coreb4a8f453/downstream01da7fa3. Core0.13.0; remote task backups retained.
-- Not verified: paid Claude behavior/performance, native Firefox or full sweep. No provider calls or panel management.
-
-### 2026-10-30 - Grounded toggle choice and native replay accepted (t817)
-- Agent: Codex lead; Core/domain/native worker reports under reports/codex-1030/first-row-toggle-*-result.md.
-- Changed: preserve actual beforeSignature and CC9 shown through wire/storage/restore; require a copied observed ensureState, never infer intent from first/most clicks; retain safe setters, unknown first exploration and undo behavior.
-- Validation: lead owning Vitest ->199/14files; additional shared-brief caller ->5/5 after explicit-choice fixture alignment; domain owning command ->37/37; extension action command ->9/9. Core/domain/extension types,3libs,recursive runner/deps,docs,model-text and audits pass.
-- Validation: native first-row oracle/save/replay passed; lead JSON gate ->accepted:true,15-to15callbacks,3skips,0transitions,3orderedrecords,1savedstate. Official same-origin URL comparator reused unchanged; expected records/oracle untouched.
-- Validation: obstruction-only `playwright test` ->1passed(1.9m); lead JSON gate ->4recoveries,6independentUIchecks,6exact scripted-uncertainty rows,0failedaction/recoveryrows,2handler requests,1actualskip,finalverdict yes. Three JSONs retained under ignored main test-runs/2026-10-30-t817-final.
-- Outcome: Coreae354e9d/downstreamdf58a48e merged with Core0.14.0; Core contracts70 and downstream structure passed. No paid calls, panel management or oracle weakening; native Firefox/full sweep remain unverified.
-
-### 2026-10-30 - Sweep2 provider-binding regression repaired (t819)
-- Cause: strict model validation rejected policy IDs and the old host sentinel before any fake request; recovery also omitted the Flow's chosen model/key.
-- Changed: Core recovery and caller-paid judging now retain canonical model/provider/key choices; only legacy host means unspecified. Invalid concrete bindings still fail before key access. The original seven failing integration assertions are unchanged.
-- Validation: lead `vitest run` on recovery requests, repair/replay chain, session-key resolver and caller-paid service ->41 passed; adjacent recovery/flow-settings ->176 passed; Core typecheck and full audit ->exit0. New regressions verify explicit Claude/named-key propagation and no reveal/fetch for invalid bindings.
-- Outcome: Core0.14.1 merged/pushed3f5fe961,70 mandatory merge contracts passed; frozen full sweep2 continues and cannot certify the new fix. The merge helper's default full check was stopped during tooling tests and re-run with --skip-checks after observed narrow acceptance, respecting the daily full-suite limit. Task t820 traces the remaining SQL failures; no paid calls, main promotion held.
-
-### 2026-10-30 - Remaining sweep fixtures and storage verification (t820)
-- Changed: two Core bootstrap service assertions require actual saved Flow metadata/caller/provider; one Lab command fixture expects the requested Claude live default instead of historical DeepSeek. Production behavior and oracles are unchanged.
-- Validation: remaining seven Core failure files ->37 passed/two stale assertions failed, then14 generation/extend tests passed after exact fixture updates; five other files passed unchanged. Lead storage reseal-interruption ->3 passed with unchanged15s limit and703ms race; worker also3/3 twice, probes removed. `node --test scripts/lab/live-campaign/tests/lab-run-command.test.mjs` ->5 passed. `pnpm --filter @fluxiq-web-extension/domain test carried-service-repair carried-row-service-repair` with label t820-saved-repair ->7 passed, including all five original domain failures after the t819 library rebuild.
-- Outcome: Corec7f33647 merged after70 mandatory contract tests; original storage timeout cause unproven, no source fix justified. All previously failed files pass narrowly; final Core types, both full audits and three rebuilt Core libraries pass. Full extension unit run continues; corrected-source whole sweep required within daily quota. No paid calls.
-
-### 2026-10-30 - Complete sweep2 inventory and final narrow repairs
-- Validation: `node test-runs/2026-10-30-sweep-2/runner.mjs t818 803f3c81f25909b76a69b55a80cb68cc7c4724ba 16dd9ad3848acaa2c37f6dbe505ce29f95b58eed` ->both builds/Core check exit0; Core test1(six ordinary/27SQL), downstream check1(five), test1(five domain/three demo). Core web3454/extension3459 pass. t818 abandoned safely with unmerged0/0; evidence kept in main ignored test-runs.
-- Changed: product build/check now use registered shared cache steps without relaxing the registry test; old demo0.25/DeepSeek-only and campaign DeepSeek command expectations now require Claude/$5. The log review initially missed three early check failures; all five check failures are now enumerated and covered.
-- Validation: `node --test scripts/build-cache/tests/registry.test.mjs scripts/lab/live-campaign/tests/command-line.test.mjs` ->16 passed; filtered test-runner dependency build then two compiled demo files ->9 passed; product check/build and test-runner check ->exit0. Initial main stale contracts/Node type artifacts were rebuilt/reinstalled from the unchanged frozen lockfile, then checks passed. Existing saved-repair7 and Core259 passes remain valid.
-- Outcome: all failed files have observed narrow passes; corrected-source full acceptance remains pending. Date guard test ->early launch refused before summary creation. No paid calls, panel or browser run; main promotion held and original storage timeout cause remains unproven.
-
-### 2026-10-31 - Core accepted; deterministic robot-watch unit coverage
-- Validation: t821 pinned Coreb72e4214/downstream44377722 ->Core install/build/check/test exit0,20683 passed/7 skipped; downstream install/build/check0, unit1 with exactly one failure: robot-check release after1143ms versus100-400ms real-clock bound. Domain2488, scenario1015 and Lab2534 passed; extension3458 passed/one failed.
-- Changed: robot-check-watch test file now uses virtual Date/timeouts/intervals for all9 cases; strict119ms-pending/120ms-release, post-release polling cleanup and followed-check boundaries replace elapsed host-time bounds. Production code and other test outcomes are unchanged; discovery report records neighboring timing tests.
-- Validation: `pnpm --filter @fluxiq-web-extension/extension test robot-check-watch` with label robot-clock-1031 ->9 passed; extension package check ->exit0. No check overlapped the frozen full suite.
-- Outcome: t821 disposed only after0/0 unmerged; Core b72e4214 full proof is reusable exactly. Final downstream-only build/check/test sweep is next on the corrected committed snapshot; no second Core full suite needed, no paid calls or main promotion yet.
-
-
-### 2026-10-31 - t822 catalog capability and integration reporting fix
-- Changed: Core operation evidence excludes incidental prose/data shape; web secondary operations explicitly tagged. Integration assertions registered as named tests; no missing-capability/provider guard weakened. Core version0.15.0; no wire-schema change. Worker regressions consolidated into existing catalog.test.ts to respect the25-file limit. Core AGENTS.md now explicitly carries the twice-daily cap and narrow merge guidance, matching downstream. Worker reports in downstream reports/codex-1031.
-- Validation: `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/runtime/flow-bootstrap/plan/tests` ->275 passed; final catalog-only rerun ->30 passed. `pnpm --filter @fluxiq-web-extension/domain test src/tests/domain.test.ts output-nodes/tests/model-facing-catalog.test.ts output-nodes/tests/click-ensure-state.test.ts output-nodes/tests/definitions.test.ts` ->42 passed. Both package check commands ->exit0.
-- Validation correction: t821 also contained the hidden module-load failure; t822 install/build/check0, test1. No third full suite today; no main promotion or paid calls. Both structure gates pass; paired task finishes merged Core26973484/downstream2ec3dc42; mandatory Core contract gate70/70 passed. Core finish used --skip-checks to honour the daily limit. The temporary downstream tree was removed; detached Core tree is left for normal age-gated pruning.
-
-
-### 2026-10-31 - t823 shared-clock continuation assigned
-- Changed: three disjoint briefs and optional Core execution/native clock types. Discovery found existing persisted starts and browser extractList.now, but dispatch/judge readers drift to wall time.
-- Validation: read-only source discovery -> concrete propagation gaps; task setup automatic workspace build ->exit1 (Core inputs changed, not stamped); this unintended full-build attempt is not acceptance and will not be rerun today. Implementation/narrow acceptance pending.
-
-
-### 2026-10-31 - t823 shared clock lead acceptance
-- Changed: optional fixed reference through runtime/replay/judge/browser; live timers unchanged. Validator moved to a light module, options contract extracted with compatibility exports, tests consolidated without weaker assertions/baselines. Task setup can skip full workspace build.
-- Validation: `pnpm.cmd --filter fluxiq exec vitest run @clockOwnerTests src/programs/automation-studio/runtime/result-verification/computed-facts/tests src/programs/automation-studio/runtime/result-verification/agreement/tests src/programs/automation-studio/runtime/result-verification/value-readings/tests --maxWorkers=2 --minWorkers=1` ->46files/500passed; clockOwnerTests was18changed owning files. Core check and filtered3libs ->exit0; full Core audit ->passed.
-- Validation: named domain clock4files ->38passed and native/adapter2files ->51passed; named order/date extension tests ->12passed; named task argument/CLI/start tests ->27passed. Domain/extension check ->exit0 after domain-only build supplied missing compiled domain/node. Focused test:content job-board date-reference ->1passed in headless Chromium134.0.6998.35 UTC; exact positive2vs1 rows. Logs ignored in test-runs/2026-10-31-t823-*.
-- Outcome: accepted and merged Core41adfa49/downstreamda2f4301; Core finish --skip-checks passed70 mandatory contracts. Downstream structure gate passed; its finished tree removed and leftover merged local branch removed by task abandon after unmerged0/Core:null verification. Source reports under downstream codex-1031/shared-clock-*. No paid/model calls, panel launch, full-suite rerun or main promotion; initial setup automatic build refusal is recorded above.
-
-### 2026-10-31 t824 independent acceptance in progress
-- Changed: Phase1 typed contracts backed up as Coree00fc7d9; Phase2 isolated. Fixed reproduced whole-child retries/failed alternatives after an uncertain commit; exact sources and worker regression evidence in p8-effect/contract-runtime.md.
-- Validation: `pnpm.cmd exec vitest run src/programs/automation-studio/runtime/action-permissions/tests/client-floor.test.ts src/programs/automation-studio/runtime/action-permissions/tests/gate.test.ts src/programs/automation-studio/runtime/action-permissions/plan/tests/projection.test.ts src/programs/automation-studio/runtime/flow-bootstrap/tests/action-permissions.test.ts src/programs/automation-studio/runtime/flow-bootstrap/tests/action-permissions-witness-notes.test.ts src/programs/automation-studio/runtime/llm/harness-options/tests/plan-parameter-resolution.test.ts src/programs/automation-studio/runtime/llm/harness-options/tests/plan-step-consequences.test.ts src/programs/automation-studio/runtime/llm/harness-options/tests/bootstrap-completion.test.ts src/programs/automation-studio/runtime/recovery/annotation/tests/step-evidence-resolution.test.ts src/programs/automation-studio/runtime/service/runtime-session/tests/interruption-learning.test.ts src/programs/automation-studio/runtime/service/runtime-session/tests/in-run-repair.test.ts --maxWorkers=2 --minWorkers=1` -> 11 files,230 tests passed; `pnpm.cmd --filter fluxiq check` ->exit0 after4 type fixes; `node scripts/structure-audit.mjs` ->passed in both trees after scoped corrections, no baseline increases. Lead additional26 named Core files276/276 pass; exact paths/command retained in p8-effect/lead-acceptance.md. No full suite/API/browser run yet.
-- Outcome: Lead acceptance passed:149/149 domain tests, all touched-package types, both audits, filtered Core/domain/extension builds; Chromium real Save lost-ack proof1/1 passes. Done: paired dev merged/pushed Core78cb70d8/downstream02f215f3; Core merge contracts70/70 pass; main filtered artifacts refreshed. Whole-suite/main, background/Firefox browser, full live Claude comparison remain unverified/held.
+### 2026-10-31 - t826 typed transient end-to-end acceptance
+- Agent: Codex lead; contract/consumer SolMax, host SolMedium with SolHigh validation fixes.
+- Changed: host-only temporary annotation, strict original/control/history preservation and projected tool failure across exploration/replay/capture/reset/throws; Core0.18/contracts0.4 readers/guards/privacy.
+- Why: regex exemptions hid temporary facts and uncertainty; reconstruction could weaken originals or leak diagnostic comparisons into new controls.
+- Validation: `pnpm.cmd --filter @fluxiq-web-extension/domain check` ->exit0,24.8s; `pnpm.cmd --filter @fluxiq-web-extension/domain build` ->exit0,23.0s. Initial235 named domain tests231pass4legacy-expectation failures; focused final82pass covers all4/new cautious fixtures/retry typing. Lead273unique named Core/contract tests pass, both audits passed before final test-only typing repairs; exact commands/failures in p8-transient/lead-acceptance.md.
+- Outcome: Partial; source/browser acceptance complete: Chromium saved-once lost-ack compatibility1pass,2.6s test/about1.6min total. Paired dev integration pending; no full/API/model calls or panel management.
+- Follow-up: final structure gate, commit/push/integrate both, refresh local filtered artifacts; main waits permitted sweep and paid Claude comparison waits go.
 
 ## Open Questions
 
@@ -512,11 +373,3 @@ Core's "What not to do" applies in full. Web-specific additions:
 6. **Can the list packet carry per-item values for every field?** Core P7's discriminating-field note needs them.
    Owner: W7.
 7. **Does `extractList` honour a `done when` end marker as the read's bound?** (mvskodlp F4; not verified.) Owner: W7.
-
-### 2026-10-31 - t825 skipped effects and target settlement accepted
-- Agent: Codex lead; Core worker p8_contract_runtime; read-only next signals discovery p8_signal_discovery.
-- Changed: paired Core0.17.1 runtime fix and authored runtime docs; exact evidence p8-skip/lead-acceptance.md.
-- Why: parser-valid ambiguous target failures bypassed settlement through optional/general routes; typed client floors also replace label guesses for known skipped acts.
-- Validation: `pnpm.cmd --filter @fluxiq-web-extension/domain check` ->exit0; `node scripts/structure-audit.mjs` ->passed615; `pnpm.cmd --filter @fluxiq-web-extension/extension test:content action-effect/tests/client-floor.spec.ts --workers=1` ->1passed58.4s. Lead Core301unique/28files/types/audit1144 and70merge contracts pass; filtered local builds pass.
-- Outcome: Accepted; Core62c18d24/downstream2e1c90be merged/pushed; HTML evidence retained, main and paid comparison held.
-- Follow-up: CC8 typed transient propagation first, CC10 serial after overlapping producer paths; no more whole suites today.

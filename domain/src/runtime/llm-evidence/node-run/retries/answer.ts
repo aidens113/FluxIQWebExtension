@@ -1,3 +1,4 @@
+import { readWebHostFailure } from "../../../host-failure";
 // Which of a node's attempts answers for it once its retries are spent (t741 C1).
 //
 // Core's retries hand back the last attempt's answer. That is right whenever
@@ -38,6 +39,8 @@ export function webNodeRetriedAnswer(answers: readonly WebNodeDispatchResult[], 
   if (answers[answers.length - 1] !== last || last.status === "succeeded") return last;
   for (let index = answers.length - 1; index >= 0; index -= 1) {
     const answer = answers[index]!;
+    const original = readWebHostFailure(answer.failure);
+    if (original !== undefined && (original.effect === "ambiguous" || (!original.retryable && !(original.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE && original.category === "unexpected_state")))) return last;
     const code = failureCode(answer);
     if (code === WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED) return index === answers.length - 1 ? last : answer;
     if (code === undefined || !TARGET_GONE.has(code) || covered(answer)) return last;

@@ -1,3 +1,4 @@
+import { webHostFailure } from "../../host-failure";
 import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
 // Running the draft again as the Flow will run it, with no model attached.
 //
@@ -71,7 +72,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER } from "../../../client";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { WEB_AUTOMATION_EXTRACT_VALUE_PORT, webAutomationExtractListAloneRowsAsked, webAutomationScopedToRow } from "../../../output-nodes";
-import { webActionNeedsPerson } from "../action-failure";
+import { executeWebEvidenceAction, webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withNodeOutputs, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
@@ -267,10 +268,10 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
     return answer(REPLAY_RESULT_CODES.resetFailed, "the reset was not permitted", false, { resultReason: permissionReason(permission), nodeId: undefined, assumed: undefined });
   }
   const parameters = { url: location, [WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER]: true };
-  const result = await run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters, metadata: toolMetadata(run.request) });
+  const result = await executeWebEvidenceAction(() => run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters, metadata: toolMetadata(run.request) }));
   assertActive(run.request.signal);
   if (result.status === "succeeded") return answer(REPLAY_RESULT_CODES.replayed, "the page was put back", true);
-  const failed = answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back");
+  const failed = answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back", false, { resultReason: undefined, nodeId: undefined, assumed: undefined, failure: webHostFailure(result.failure) });
   // A reset that landed on a robot check is the person's to clear, exactly as
   // the step that first went there was (`./run.ts`). The replay code stays
   // Core's own; `personNeeded` says why, and proposes nothing.
@@ -370,7 +371,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // since redrawn re-reads the list it came from and is scoped to the same row,
   // fresh, for its last retries (`./retries/replay-row-reacquire.ts`, t786).
   const reacquire = webNodeReplayRowReacquire(run, { item: value.item, parameters: ran, metadata: toolMetadata(run.request), readRows: flowRows });
-  const { result, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), reacquire);
+  const { result, lastingAct, failure: controlFailure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), reacquire);
   assertActive(run.request.signal);
   // One the check showed landed counts as done, whatever its lost answer said.
   if (result.status !== "succeeded" && lastingAct !== "landed") {
@@ -385,7 +386,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // because its read came back empty was recorded identically to one that
     // failed because the browser would not script the page. The node's id still
     // says which step of the draft it was.
-    const about: WebNodeReplayFacts = { resultReason: refused.detail?.reason, nodeId: node.definitionId, assumed };
+    const about: WebNodeReplayFacts = { resultReason: refused.detail?.reason, nodeId: node.definitionId, assumed, failure: controlFailure };
     // The one failure a page-level reset explains. A control that is simply not
     // there, on the very page the step worked on, is what a site that remembers
     // the step looks like -- a consent banner answered once stays answered --

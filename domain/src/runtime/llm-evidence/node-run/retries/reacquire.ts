@@ -1,3 +1,4 @@
+import { executeWebEvidenceAction } from "../../action-failure";
 // A node a build runs against the live page finds its stale target again
 // (t786, D7): the domain's side of Core's `reacquire` callback on
 // `automationStudioDispatchWithNodeRetries`.
@@ -44,7 +45,7 @@ export function webNodeRetryReacquire(
       return {
         outcome: "found",
         dispatch: async () => {
-          const answer = await run.gateway.executeAction(run.sessionId, fresh);
+          const answer = await executeWebEvidenceAction(() => run.gateway.executeAction(run.sessionId, fresh));
           answers.push(answer);
           return answer;
         }

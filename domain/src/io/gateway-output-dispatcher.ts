@@ -1,3 +1,4 @@
+import { webHostFailure, webHostThrownFailure } from "../runtime/host-failure";
 import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
 import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
@@ -48,7 +49,10 @@ export async function dispatchWebAutomationOutput(
     // other act a failure that did nothing (`client/interrupted-action/`).
     const interrupted = webAutomationInterruptedDispatchReading(request.outputId, request.payload, result.payload);
     const status = interrupted?.status ?? result.status;
-    const failure = interrupted?.failure ?? result.failure;
+    const reportedFailure = interrupted?.failure ?? result.failure;
+    // Keep the existing invalid-original fallback path visible to the adapter;
+    // an invalid supplied record must never become a new temporary admission.
+    const failure = status === "succeeded" || status === "cancelled" ? undefined : webHostFailure(reportedFailure) ?? reportedFailure;
     const succeeded = status === "succeeded";
     const message = interrupted?.message ?? stringValue(result.message);
     // A robot check that stood on the landed page and cleared by itself rides
@@ -113,7 +117,10 @@ export async function dispatchWebAutomationOutput(
     };
   } catch (error) {
     if (required) { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.required_dispatch_failed"); throw error; }
-    return { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
+    const result: OutputDispatchResult<JsonObject> = { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
+    const failure = webHostThrownFailure(error);
+    if (failure !== undefined) result.failure = failure;
+    return result;
   }
 }
 

@@ -1,3 +1,5 @@
+import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { webHostFailure } from "../host-failure";
 // Taking one sanitized look at the whole page, and acting on it first when the
 // look needs an action to be worth taking.
 //
@@ -18,7 +20,7 @@ import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-st
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import type { WebAutomationClearedCheckWait } from "../../actions/cleared-check-wait";
-import { webActionFailureRefusal, webActionNeedsPerson, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
+import { executeWebEvidenceAction, webActionFailureRefusal, webActionNeedsPerson, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { webResetResource } from "./control-spot";
@@ -54,6 +56,8 @@ export type WebLlmEvidenceToolExecution = {
   kind: "llm_evidence_tool_execution";
   evidence: JsonValue;
   effectApplied: boolean;
+  /** CONTROL only: projected before any raw result serializer can observe it. */
+  failure?: AutomationStudioFailureRecord;
   targetsUnchanged?: boolean;
   resultCode?: string;
   /**
@@ -380,7 +384,7 @@ type WebLlmEvidenceToolCallFacts = {
  * until then every replayed list read would be refused whole.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "outputs", "draft"
+  "kind", "evidence", "effectApplied", "failure", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "outputs", "draft"
 ];
 
 export function toolExecution(
@@ -389,12 +393,14 @@ export function toolExecution(
   resultCode: string,
   targetsUnchanged?: boolean,
   draft?: WebLlmEvidenceToolExecution["draft"],
-  said?: WebLlmEvidenceToolCallFacts
+  said?: WebLlmEvidenceToolCallFacts,
+  failure?: unknown
 ): WebLlmEvidenceToolExecution {
   return readable(present<WebLlmEvidenceToolExecution>({
     kind: "llm_evidence_tool_execution",
     evidence,
     effectApplied,
+    failure: projectAutomationStudioFailureControlRecord(failure),
     targetsUnchanged,
     resultCode,
     // Said by the caller where it holds the reason, and otherwise read back out
@@ -540,19 +546,19 @@ export async function captureEvidence(
   // rendered, each element flagged `hidden`. Every other look is the default.
   options?: { includeHidden: true }
 ): Promise<WebLlmSnapshotBinding> {
-  const result = await gateway.executeAction(sessionId, {
+  const result = await executeWebEvidenceAction(() => gateway.executeAction(sessionId, {
     actionType: "web.dom.capture_snapshot",
     parameters: options?.includeHidden === true ? { includeHidden: true } : {},
     metadata: toolMetadata(request),
-  });
+  }));
   assertActive(signal);
   // A look that met a robot check is the person's, not the model's: it is not
   // "unreadable", and a model told so would look again and again at the check.
   // Checks that clear themselves were already waited out by the client.
-  if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true);
+  if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true, webHostFailure(result.failure));
   // A page that cannot be read now -- still loading, mid-navigation -- is a
   // condition the model can wait out or work around, not a fault.
-  if (result.status !== "succeeded") recoverable("page_unreadable");
+  if (result.status !== "succeeded") throw new RecoverableToolRejection("page_unreadable", undefined, undefined, undefined, webHostFailure(result.failure));
   const payload = jsonRecord(result.payload, "web evidence action payload");
   const sanitized = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     expectedOrigin,
@@ -695,9 +701,9 @@ export async function actAndCapture(
   signal?: AbortSignal,
   expectedOrigin?: string
 ): Promise<WebLlmSnapshotBinding> {
-  const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
+  const result = await executeWebEvidenceAction(() => gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) }));
   assertActive(signal);
-  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRefusal(result, { actionType, parameters }), signal);
+  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRefusal(result, { actionType, parameters }), signal, webHostFailure(result.failure));
   const after = await captureAfterAction(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
   return after ?? recoverable("page_unreadable");
 }
@@ -722,13 +728,14 @@ export async function pageRefusal(
   request: WebLlmEvidenceToolRequest,
   current: WebLlmSnapshotBinding,
   refusal: WebActionRefusal,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  failure?: unknown
 ): Promise<RecoverableToolRejection> {
   try {
     const page = await captureEvidence(gateway, sessionId, request, signal, new URL(current.evidence.location).origin);
-    return new RecoverableToolRejection(refusal.code, refusal.detail, page, refusal.personNeeded);
+    return new RecoverableToolRejection(refusal.code, refusal.detail, page, refusal.personNeeded, failure);
   } catch (error) {
     if (signal?.aborted) throw error;
-    return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, refusal.personNeeded);
+    return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, refusal.personNeeded, failure);
   }
 }

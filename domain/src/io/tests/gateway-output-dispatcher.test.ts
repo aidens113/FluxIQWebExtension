@@ -151,3 +151,13 @@ test("required IO refuses copied and unregistered contexts before selecting/send
   for (const context of [{} as ClientGatewayCommandContext, ClientGatewayCommandContext.issue({ projectId: "project.1", runId: "run.1", flowId: "flow.1", invocationId: "invoke.1", attemptId: "attempt.1", effectOrdinal: 0 })])
     await assert.rejects(() => dispatchWebAutomationOutput(fluxiq, { ...dispatchRequest, commandContext: context }));
 });
+
+
+test("host IO adds temporary cause without lowering a strict original ambiguous failure or reusing it on success", async () => {
+  const original: AutomationStudioFailureRecord = { category: "action_failed", code: "web.action.rate_limited", retryable: true, stage: "confirmation", effect: "ambiguous", retryAfterMs: 7, expected: "safe expectation", actual: "safe comparison" };
+  const result = await dispatch({ commandId: "temporary", status: "failed", failure: original });
+  assert.deepEqual(result.failure, { ...original, transient: true });
+  assert.equal(original.effect, "ambiguous");
+  assert.equal(original.transient, undefined);
+  assert.equal((await dispatch({ commandId: "success", status: "succeeded", failure: original })).failure, undefined);
+});

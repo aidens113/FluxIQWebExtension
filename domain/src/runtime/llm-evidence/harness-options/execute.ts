@@ -137,7 +137,8 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
             // A harness option is not a node of the library: it names no
             // catalog id, so there is none to publish, and it resolves no plan
             // node, so there is no assumed name either.
-            { resultReason: error.detail?.reason, nodeId: undefined, assumed: undefined }
+            { resultReason: error.detail?.reason, nodeId: undefined, assumed: undefined },
+            error.failure
           );
           // A robot check is the person's, never the repair model's: marked,
           // Core puts it to the person and shows the model nothing of it
