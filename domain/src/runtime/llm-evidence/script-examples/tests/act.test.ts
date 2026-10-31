@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 import { acceptAutomationStudioFlowBootstrapResult, automationStudioEvidenceFlowBootstrapCompletionSchema } from "fluxiq/automation-studio";
 import { exampleSupport } from "./support";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
+import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";
 const { registry } = exampleSupport;
 const AUTOMATION_STUDIO_FLOW_SCRIPT_FORMAT = exampleSupport.sections.format;
 const AUTOMATION_STUDIO_FLOW_SCRIPT_ACT_EXAMPLE = exampleSupport.sections.act;
-const AUTOMATION_STUDIO_EVIDENCE_FLOW_BOOTSTRAP_COMPLETION_SCHEMA = automationStudioEvidenceFlowBootstrapCompletionSchema(undefined, WEB_FLOW_SCRIPT_EXAMPLES);
+const AUTOMATION_STUDIO_EVIDENCE_FLOW_BOOTSTRAP_COMPLETION_SCHEMA = automationStudioEvidenceFlowBootstrapCompletionSchema(undefined, WEB_FLOW_SCRIPT_EXAMPLES, WEB_FLOW_SCRIPT_GUIDANCE);
 
 describe("the Flow script act-on-one-item example", () => {
 

@@ -3,11 +3,12 @@ import { describe, it } from "node:test";
 import { acceptAutomationStudioFlowBootstrapResult, automationStudioEvidenceFlowBootstrapCompletionSchema } from "fluxiq/automation-studio";
 import { exampleSupport } from "./support";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
+import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";
 const { registry, resolution: EXAMPLE_RESOLUTION, blocks: exampleBlocks } = exampleSupport;
 const AUTOMATION_STUDIO_FLOW_SCRIPT_FORMAT = exampleSupport.sections.format;
 const AUTOMATION_STUDIO_FLOW_SCRIPT_LOOP_FORMAT = exampleSupport.sections.loop;
 const AUTOMATION_STUDIO_FLOW_SCRIPT_STATE_FORMAT = exampleSupport.sections.state;
-const AUTOMATION_STUDIO_EVIDENCE_FLOW_BOOTSTRAP_COMPLETION_SCHEMA = automationStudioEvidenceFlowBootstrapCompletionSchema(undefined, WEB_FLOW_SCRIPT_EXAMPLES);
+const AUTOMATION_STUDIO_EVIDENCE_FLOW_BOOTSTRAP_COMPLETION_SCHEMA = automationStudioEvidenceFlowBootstrapCompletionSchema(undefined, WEB_FLOW_SCRIPT_EXAMPLES, WEB_FLOW_SCRIPT_GUIDANCE);
 
 describe("the state-aware Flow script format", () => {
 

@@ -59,6 +59,7 @@ import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { WEB_LLM_VIEW_KEYS } from "./observed-state";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "./script-examples";
+import { WEB_FLOW_SCRIPT_GUIDANCE } from "./script-guidance";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
 import {
@@ -229,6 +230,7 @@ export function createWebAutomationLlmEvidenceRuntime(
     // Placed by Core in the system message of every model request (t237).
     systemInstructions: WEB_LLM_SYSTEM_INSTRUCTIONS,
     flowScriptExamples: WEB_FLOW_SCRIPT_EXAMPLES,
+    flowScriptGuidance: WEB_FLOW_SCRIPT_GUIDANCE,
     // The options a runtime recovery may explore with, declared in full so
     // they carry their own availability, safety and stages and never reach
     // Flow authoring. `same_scope` is the safe default and matches what the
