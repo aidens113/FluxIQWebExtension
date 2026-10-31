@@ -49,6 +49,22 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  apps/product:
+    dependencies:
+      fluxiq:
+        specifier: link:../../../!FluxIQ/packages/fluxiq
+        version: link:../../../!FluxIQ/packages/fluxiq
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      esbuild:
+        specifier: ^0.24.2
+        version: 0.24.2
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   apps/scenario-lab:
     dependencies:
       '@fluxiq-web-extension/test-contracts':
