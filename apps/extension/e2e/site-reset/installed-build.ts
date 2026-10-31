@@ -37,6 +37,8 @@ export type InstalledBuild = {
   actionResults: () => number;
   /** The action type of every command Core has sent the extension so far, in order: what reached the site. */
   siteCommands: () => string[];
+  /** Puts every Lab scenario back to its first state through the Lab's authenticated control endpoint (consent unanswered again, nothing liked), for a spec that must meet the site as a first visit does. */
+  resetLab: () => Promise<void>;
   /** Points the installed extension at the gateway, approves its pairing, and waits for a ready session. */
   pair: () => Promise<void>;
   close: () => Promise<void>;
@@ -58,7 +60,12 @@ export async function startInstalledBuild(session: ExtensionSession): Promise<In
     const snapshot = record(record(message.payload).payload).snapshot;
     if (snapshot !== null && typeof snapshot === "object" && !Array.isArray(snapshot)) latestRawSnapshot = snapshot;
   }, actionType => { siteCommands.push(actionType); });
-  const lab = await startScenarioLab({ runToken: randomBytes(24).toString("hex") });
+  const runToken = randomBytes(24).toString("hex");
+  const lab = await startScenarioLab({ runToken });
+  const resetLab = async () => {
+    const response = await fetch(`${lab.origin}/__control/reset`, { method: "POST", headers: { authorization: `Bearer ${runToken}`, "content-type": "application/json" }, body: "{}" });
+    if (!response.ok) throw new Error(`diagnostic.lab_reset_${response.status}`);
+  };
   const service = fluxiq.programs.automationStudio;
   const nodes = new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES });
   service.bindNativeNodeRuntime(nodes.register(createWebAutomationOutputNodeManifest(), createWebAutomationOutputNodeImplementationBundle()));
@@ -87,5 +94,5 @@ export async function startInstalledBuild(session: ExtensionSession): Promise<In
     if (path.dirname(owned) !== path.resolve(os.tmpdir()) || !path.basename(owned).startsWith(ROOT_PREFIX)) throw new Error("diagnostic.cleanup_scope");
     await rm(owned, { recursive: true, force: true });
   };
-  return { fluxiq, service, page, origin: lab.origin, rootDir: root, gatewayErrors: gateway.errors, latestRawSnapshot: () => latestRawSnapshot, actionResults: () => actionResults, siteCommands: () => [...siteCommands], pair, close };
+  return { fluxiq, service, page, origin: lab.origin, rootDir: root, gatewayErrors: gateway.errors, latestRawSnapshot: () => latestRawSnapshot, actionResults: () => actionResults, siteCommands: () => [...siteCommands], resetLab, pair, close };
 }

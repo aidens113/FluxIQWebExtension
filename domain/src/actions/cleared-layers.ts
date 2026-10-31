@@ -50,14 +50,18 @@
 // (`../runtime/llm-evidence/way-out-handles/`). A way out from a child frame is
 // not reported: its descriptor carries no frame address.
 
-import type { WebAutomationLayerKind } from "../page-evidence";
-
 /**
- * What a cleared layer was: an interference kind the extension recognises, or
- * `dialog` for a layer no classifier named (a promotion, a newsletter modal).
- * A robot check is never cleared, so it never appears here.
+ * What a cleared layer was, in the generic words Core reads (CC7, interface
+ * I1): `overlay` (a consent wall or sheet), `notice` (a promotion, a
+ * newsletter modal), `rate_limit`, `assistant`, and `other` for a layer no
+ * classifier named. A robot check is never cleared, so it never appears here.
+ * The client sent `consent`, `promotion` and `dialog` before; those are still
+ * read, as `overlay`, `notice` and `other`, and never sent on.
  */
-export type WebAutomationClearedLayerKind = Exclude<WebAutomationLayerKind, "robot_check"> | "dialog";
+export type WebAutomationClearedLayerKind = "overlay" | "notice" | "rate_limit" | "assistant" | "other";
+
+/** The older words a producer may still send, and the generic word each stands for. */
+const OLD_KIND_WORDS: Readonly<Record<string, WebAutomationClearedLayerKind>> = Object.freeze({ consent: "overlay", promotion: "notice", dialog: "other" });
 
 /** Every dismissal the clearing may press, by the allow-list phrase that admitted it. */
 export const WEB_AUTOMATION_CLEARED_CONTROL_WORDS = [
@@ -110,7 +114,47 @@ export type WebAutomationClearedLayer = {
   /** The pressed control's accessible name. */
   controlName?: string | undefined;
   wayOut?: WebAutomationClearedWayOut | undefined;
+  /**
+   * An opaque id, stable for the layer across visits (CC7, I1): a hash of its
+   * role and accessible name with any digits left out, never of text that
+   * changes. At most 80 characters of `[A-Za-z0-9._:-]`.
+   */
+  id?: string | undefined;
+  /**
+   * The durable target of the pressed way out, in the form the pressing node
+   * (`web.dom.click`) accepts as `target` at run time with no handle: `{ selector,
+   * element }`, the element's identity signals (`controlRefOf` in the extension).
+   * At most `WEB_AUTOMATION_CONTROL_REF_MAX_BYTES` as JSON.
+   */
+  controlRef?: Record<string, unknown> | undefined;
 };
+
+/** The most bytes a `controlRef` may be as JSON (Core's bound, interface I1). */
+export const WEB_AUTOMATION_CONTROL_REF_MAX_BYTES = 8_192;
+
+/** The longest layer id, and the characters it is made of (interface I1). */
+export const WEB_AUTOMATION_LAYER_ID_MAX = 80;
+const LAYER_ID = /^[A-Za-z0-9._:-]+$/u;
+
+/** A layer id as it may travel: within the bound and the alphabet, else none. */
+export function webAutomationLayerIdValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 && value.length <= WEB_AUTOMATION_LAYER_ID_MAX && LAYER_ID.test(value) ? value : undefined;
+}
+
+/** A control reference as it may travel: a JSON object within the byte bound, else none. */
+export function webAutomationControlRefValue(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  // A reference arrives as JSON (the wire, or the content script's structured message), so it always serializes.
+  const bytes = new TextEncoder().encode(JSON.stringify(value)).length;
+  return bytes <= WEB_AUTOMATION_CONTROL_REF_MAX_BYTES ? value as Record<string, unknown> : undefined;
+}
+
+/** A layer kind word, old or generic, as the generic word; none for a word that is neither. */
+export function webAutomationClearedKindValue(value: unknown): WebAutomationClearedLayerKind | undefined {
+  if (typeof value !== "string") return undefined;
+  if (GENERIC_KINDS.has(value)) return value as WebAutomationClearedLayerKind;
+  return Object.hasOwn(OLD_KIND_WORDS, value) ? OLD_KIND_WORDS[value] : undefined;
+}
 
 /** The most characters of a layer's or a control's name that travel: a heading or a button's line, never a paragraph. */
 export const WEB_AUTOMATION_CLEARED_NAME_MAX = 120;
@@ -122,7 +166,7 @@ export const WEB_AUTOMATION_CLEARED_LAYERS_MAX = 12;
 const WAY_OUT_URL_MAX = 2_048;
 const WAY_OUT_ELEMENT_MAX_BYTES = 16_384;
 
-const KINDS: ReadonlySet<string> = new Set<WebAutomationClearedLayerKind>(["consent", "rate_limit", "promotion", "assistant", "dialog"]);
+const GENERIC_KINDS: ReadonlySet<string> = new Set<WebAutomationClearedLayerKind>(["overlay", "notice", "rate_limit", "assistant", "other"]);
 const WORDS: ReadonlySet<string> = new Set<string>(WEB_AUTOMATION_CLEARED_CONTROL_WORDS);
 
 /**
@@ -136,18 +180,23 @@ export function webAutomationClearedLayersValue(value: unknown): WebAutomationCl
   for (const entry of value) {
     if (layers.length >= WEB_AUTOMATION_CLEARED_LAYERS_MAX) break;
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
-    const { kind, control, name, controlName, wayOut } = entry as { kind?: unknown; control?: unknown; name?: unknown; controlName?: unknown; wayOut?: unknown };
-    if (typeof kind !== "string" || !KINDS.has(kind)) continue;
+    const { kind, control, name, controlName, wayOut, id, controlRef } = entry as { kind?: unknown; control?: unknown; name?: unknown; controlName?: unknown; wayOut?: unknown; id?: unknown; controlRef?: unknown };
+    const genericKind = webAutomationClearedKindValue(kind);
+    if (genericKind === undefined) continue;
     if (typeof control !== "string" || !WORDS.has(control)) continue;
     const layerName = nameValue(name);
     const pressedName = nameValue(controlName);
     const pressed = wayOutValue(wayOut);
+    const layerId = webAutomationLayerIdValue(id);
+    const ref = webAutomationControlRefValue(controlRef);
     layers.push({
-      kind: kind as WebAutomationClearedLayerKind,
+      kind: genericKind,
       control: control as WebAutomationClearedControlWord,
       ...(layerName ? { name: layerName } : {}),
       ...(pressedName ? { controlName: pressedName } : {}),
-      ...(pressed ? { wayOut: pressed } : {})
+      ...(pressed ? { wayOut: pressed } : {}),
+      ...(layerId ? { id: layerId } : {}),
+      ...(ref ? { controlRef: ref } : {})
     });
   }
   return layers.length > 0 ? layers : undefined;

@@ -64,15 +64,26 @@ const MAX_NAME_LENGTH = 40;
  */
 export function coveringLayerSentence(target: Element, point: Point): string | undefined {
   try {
-    const hit = deepElementFromPoint(point.x, point.y, target.ownerDocument);
-    // The extension's own overlays are never a layer the page put over the target.
-    if (!hit || isExtensionUiNode(hit) || composedContains(target, hit)) return undefined;
-    const layer = composedClosest(hit, DIALOG_SELECTOR) ?? outermostFixed(hit);
-    if (!layer || composedContains(layer, target)) return undefined;
-    return describeLayer(layer);
+    const layer = coveringLayerOf(target, point);
+    return layer ? describeLayer(layer) : undefined;
   } catch (error) {
     return `the layer over it could not be read (${error instanceof Error ? error.name : "unknown error"})`;
   }
+}
+
+/**
+ * The layer over `target` at `point`, or `undefined` when what covers it is not a
+ * layer: the declared dialog around what the hit test landed on, else the
+ * outermost fixed or sticky ancestor of it. The extension's own overlays and a
+ * layer that holds the target are never one. May throw on a page it cannot read.
+ */
+export function coveringLayerOf(target: Element, point: Point): Element | undefined {
+  const hit = deepElementFromPoint(point.x, point.y, target.ownerDocument);
+  // The extension's own overlays are never a layer the page put over the target.
+  if (!hit || isExtensionUiNode(hit) || composedContains(target, hit)) return undefined;
+  const layer = composedClosest(hit, DIALOG_SELECTOR) ?? outermostFixed(hit);
+  if (!layer || composedContains(layer, target)) return undefined;
+  return layer;
 }
 
 function describeLayer(layer: Element): string {

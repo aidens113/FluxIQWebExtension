@@ -117,6 +117,8 @@ import { webAutomationCheckWaitNode, webAutomationCommandWaitsOutChecks } from "
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output-nodes";
+import type { WebControlView } from "../control-spot";
+import { present } from "../present";
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
@@ -270,7 +272,7 @@ export type WebPlanNodeResolutionInput = {
 };
 
 /** The view one target handle of a node resolved from: its number in the Flow's captures and the page it showed (`target-packets.ts`). */
-export type WebPlanHandleView = { handle: string; view: number; location: string };
+export type WebPlanHandleView = { handle: string; view: number; location: string; control?: WebControlView };
 
 /**
  * The answer Core reads, and **nothing beside it**.
@@ -495,7 +497,7 @@ function withHandleViews(
     const key = `${entry.handle}\u0000${entry.view}\u0000${entry.location}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    handleViews.push({ handle: entry.handle, view: entry.view, location: entry.location });
+    handleViews.push(present<WebPlanHandleView>({ handle: entry.handle, view: entry.view, location: entry.location, control: entry.control }));
   }
   answer.handleViews = handleViews;
   return answer;
@@ -750,7 +752,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   if (!resolution.ok) return resolution.renumberedByReload === true ? "web.handle.renumbered_by_reload" : TARGET_ISSUES[resolution.code];
   if (press && resolution.notAControl === true) return "web.handle.not_a_control";
   const resolved: Resolved = { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
-  if (resolution.shownIn !== undefined) resolved.views = [{ handle, view: resolution.shownIn.view, location: resolution.shownIn.location }];
+  if (resolution.shownIn !== undefined) resolved.views = [present<WebPlanHandleView>({ handle, view: resolution.shownIn.view, location: resolution.shownIn.location, control: resolution.control })];
   if (resolution.effect !== undefined) resolved.effect = resolution.effect;
   if (resolution.notAField !== undefined) resolved.notAField = resolution.notAField;
   if (resolution.spot !== undefined) resolved.spot = resolution.spot;
