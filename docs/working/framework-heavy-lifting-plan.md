@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, C1 t813 and E/D5 t814 are independently verified and merged in both repositories; P1b t811 is in final combined acceptance and the first-row toggle follow-up is being investigated read-only.
+Status detail: P6/W6 t799, Claude/$5 t816, P5b t810, C1 t813 and E/D5 t814 are independently verified and merged in both repositories; P1b t811 is in final acceptance and paired t817 is implementing the grounded toggle-state fix.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -69,6 +69,7 @@ acceptance check passed, and no paid run or model call happened.
 | t811 (P1b) | Submit-then-test, label-based repair, Core completion and revision-aware retry/memo keys | Observer/forwarding/pending-repair/retry defects fixed;811 owning assertions and types/builds pass. Native photo repair passes; folded-vs-separate comparison reruns with isolated profiles | Wait for comparison, integrate current dev and lead-verify final source |
 | t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Merged both repositories after lead9 background and123 web/key-custody tests, types,3libs, docs/audits; Core merge contract gate70 passed | C2/C3 caller migration and routing remain separate; no real tenant socket/browser qualification claimed |
 | t814 (hosted E + D5) | Product/brand/assets, host loading and owned default project | Lead panel32/web27/ownership36/product18 and types/builds pass; real service-IAM default ownership, retry/partial/concurrent/conflict cases covered | Merged downstream6c88f928/Core4a522cd8 with Core0.12.0;70 merge-contract tests pass; later lifecycle wiring remains separate |
+| t817 (first-row toggle) | Paired before/after evidence, explicit grounded ensureState, persistence and runtime guards | Paired task setup passed; worker domain gateway repro2pass1fail loses pre-state; Core2fail reproduces missing refusal and overwritten shown state; parallel implementation active | P1b parent sync and Core0.14.0 reservation precede final builds; lead acceptance, native mixed-state proof and final sweep pending |
 
 **User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
 after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
