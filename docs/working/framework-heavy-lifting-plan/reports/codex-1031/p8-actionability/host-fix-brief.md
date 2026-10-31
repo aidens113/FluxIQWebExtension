@@ -1,0 +1,9 @@
+Role: heavy fix worker gpt-6.1-sol max; escalated from HostSolHigh after observed structural failures. AllDownsourcefrozen/no Downchecksactive.
+Root fxwork/t827/!FluxIQWebExtension; read host.md and exactownedfiles; own host-fix.md report. No generatedchecks untilRootSDKrelease.
+Owned ONLY domain/src/runtime/llm-evidence/node-run/{found-at.ts,run.ts} movehelper to location/{found-at,index}.ts; actions/actionability/tests/property.test.ts; client/tests/browser-result-mapping.test.ts; io/tests/gateway-output-dispatcher.test.ts; runtime/llm-evidence/node-run/retries/tests/actionability.test.ts.
+ObservedDownaudit: node-run26>25 afterfound-at addition; unpack statement-packing property.test.ts23/43/58, browser-result-mapping50, dispatcher94, retries/actionability165. Browserstructuralissues separateHighlane.
+Move unchangedcohesivefound-at helper into node-run/location/found-at.ts, addbarrel and importback fromrun via ./location; fixrelativeimports inhelper. Verifyresolvedold/newpathsinsideprivateworkspace beforemove. LeaveoldfacadeunusedfileNONE; don'talteralgorithm/behavior. Newdirdepth<=9/flat<=25, run792max800 unchangedorless.
+Unpackstatementslinebyline only; no minifying/comment removal/baseline/rule weakening. Do noteditwire/measurement/causalcontrols/retry/permission/effect/readiness behavior, pagebindings orrawobjects. Rawpayloadcopy andsharedpurehelper interfacesremainfrozen.
+Mustnotedit otherDomainpaths, extension/Core/E2e/leadcompatibilitytests, packageversions/exports/Current/Ledger/otherreports/guidance/git. RootCoreSDKbuildmayrunindependentlyonCoretree.
+Source repaironly, announcefreeze/exactpaths and optional scoped diffcheck. No tests/types/build/audit/provider/API/browser/panel/agents/secrets/runtime-state. LeadvalidatesafterSDKrelease.
+Return Outcome/Changed/Validation/Not verified/Report/Notes withexactmovepaths and pendingchecks.

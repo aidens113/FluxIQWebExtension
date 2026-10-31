@@ -28,6 +28,27 @@ must not hide ambiguity or authority from earlier attempts in the same call.
 The paired Core document `docs/architecture/automation-studio/failure-control.md`
 defines the typed gate; browser wording and codes remain owned here.
 
+Target actionability is a separate measured observation in Core0.19/contracts0.5:
+either `{actionable:true}` or `{actionable:false,cause:"hidden"|"disabled"|"covered"}`.
+Browser gates project their actual report without geometry or detail; an
+already-in-state success and an unmeasured operation report no fact. A later
+post-dispatch measurement does not make the earlier act unacted or retryable.
+Valid typed causes take precedence over legacy closed-prefix interpretation;
+the compatibility fallback remains in this domain only when the typed fact is
+absent. Authority/person-needed/actual effect facts keep their precedence.
+
+The authoritative browser result type carries the optional observation, and
+the gateway mapper places a validated copy only in its existing
+`payload.actionability`. It adds no gateway top-level key or failure field.
+The host lifts the fact after acceptance, preserving raw result/digest inputs.
+Direct authoring consumers quarantine bad optional controls in a local copy;
+the central tool producer and recoverable carrier project before serialization.
+Per-call action/page returns keep controls separate from retained page bindings,
+and a fresh press or checkbox restoration replaces an older fact even when its
+own measurement is absent. The paired Core document
+`docs/architecture/automation-studio/target-actionability.md` describes the
+generic recording and mixed-version contract.
+
 ## The Closed Set
 
 `WEB_AUTOMATION_FAILURE_CODES` names the closed code set. Read a code from that

@@ -156,6 +156,7 @@ test("check: sets the checkbox, and the site stores the request the page sent wi
   await toStepTwo(page);
   await toStepThree(page);
   const reply = await harness.runAction({ commandId: "check-on", actionType: "web.dom.check", selector: PRIVACY, checked: true });
+  expect(reply.actionability).toEqual({ actionable: true });
   expect(reply).toMatchObject({
     status: "succeeded",
     message: "Check state set.",
@@ -257,6 +258,8 @@ test("check: a disabled control is rejected with the disabled reason and is left
   await expect(page.locator(STRICTLY_NECESSARY)).toBeChecked();
 
   const reply = await harness.runAction({ commandId: "check-disabled", actionType: "web.dom.check", selector: STRICTLY_NECESSARY, checked: false });
+  expect(reply.actionability).toEqual({ actionable: false, cause: "disabled" });
+  expect(reply.failure?.effect).toBe("unacted");
   expect(reply).toMatchObject({
     status: "failed",
     validation: { status: "failed", actual: "the element is disabled" },

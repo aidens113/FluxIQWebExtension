@@ -78,6 +78,27 @@ async function runCommand(
   return await adapter.execute(command, {});
 }
 
+test("the runtime lifts a separate current target fact across statuses while leaving original control authority intact", async () => {
+  for (const status of ["succeeded", "failed", "timed_out", "unknown", "cancelled"] as const) {
+    const actionability = { actionable: false, cause: "covered" } as const;
+    const original: GatewayActionResult = { commandId: "measured", status, payload: { actionability } };
+    const before = JSON.stringify(original);
+    const result = await runCommand(original);
+    assert.equal(result.status, status);
+    assert.deepEqual(result.actionability, actionability);
+    assert.notEqual(result.actionability, actionability);
+    assert.equal(JSON.stringify(original), before);
+  }
+  const failure: AutomationStudioFailureRecord = { category: "auth_required", code: "web.action.rate_limited", retryable: false, effect: "ambiguous" };
+  const result = await runCommand({ commandId: "measured-authority", status: "failed", failure, payload: { actionability: { actionable: false, cause: "hidden" } } });
+  assert.deepEqual(result.failure, failure);
+  assert.deepEqual(result.actionability, { actionable: false, cause: "hidden" });
+  assert.equal((await runCommand(succeeded)).actionability, undefined);
+  const malformed = await runCommand({ commandId: "malformed", status: "succeeded", payload: { actionability: { actionable: true, private: "untrusted" } } });
+  assert.equal(malformed.status, "succeeded");
+  assert.equal(malformed.actionability, undefined);
+});
+
 test("a succeeded command keeps its status and promotes the client's message", async () => {
   const result = await runCommand(succeeded);
   assert.equal(result.status, "succeeded");

@@ -138,7 +138,8 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
             // catalog id, so there is none to publish, and it resolves no plan
             // node, so there is no assumed name either.
             { resultReason: error.detail?.reason, nodeId: undefined, assumed: undefined },
-            error.failure
+            error.failure,
+            error.actionability
           );
           // A robot check is the person's, never the repair model's: marked,
           // Core puts it to the person and shows the model nothing of it
@@ -172,11 +173,11 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         restamp: (binding) => binding,
         consequences: input.request.value.consequences
       });
-      const snapshot = shown(input, pressed);
+      const snapshot = shown(input, pressed.page);
       // Recovery packets intentionally renumber each capture, so they cannot
       // prove a target from the decision packet kept its meaning across this
       // action. Stay conservative until recovery adopts stable handles.
-      return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false);
+      return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, pressed.actionability);
     }),
     [WEB_RECOVERY_ENTER_FIELD_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, ["target", "value"]);
@@ -193,8 +194,8 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         value: input.request.value.value,
         restamp: (binding) => binding
       });
-      const snapshot = shown(input, entered);
-      return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false);
+      const snapshot = shown(input, entered.page);
+      return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, entered.actionability);
     }),
     // The authoring detection, bound through this exploration's packets and
     // keeping its handle in the runtime's store. It returns a structure packet,
@@ -251,7 +252,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // The recapture asserts it landed in the scope the policy allowed, not in
       // the one it started from: this is the one option permitted to move.
       const moved = await actAndCapture(context.gateway, input.sessionId, input.request, "web.browser.navigate", { url: destination.href }, current, input.request.signal, webAutomationExplorationScope(destination.href));
-      return toolExecution(pageOf(shown(input, moved)), true, WEB_LLM_ACTION_RESULT_CODE, false);
+      return toolExecution(pageOf(shown(input, moved.page)), true, WEB_LLM_ACTION_RESULT_CODE, false, undefined, undefined, undefined, moved.actionability);
     })
   };
 }

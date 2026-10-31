@@ -40,6 +40,31 @@ function failed(actionType: string, code: WebAutomationFailureCode, actual?: str
 const LIST = { item: ".row", fields: { name: ".name" } } as NonNullable<BrowserActionCommand["extractList"]>;
 const PAGED_LIST = { ...LIST, paginate: { next: ".next" } } as NonNullable<BrowserActionCommand["extractList"]>;
 
+test("typed measured causes win the legacy reason distinction without changing failure authority", () => {
+  const base = failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, "covered: old detail");
+  for (const actionability of [{ actionable: true }, { actionable: false, cause: "disabled" }] as const) {
+    assert.equal(recoverableFault({ ...base, actionability }, command("web.dom.click")), undefined);
+  }
+  for (const cause of ["hidden", "covered"] as const) {
+    const actionability = { actionable: false, cause } as const;
+    assert.equal(recoverableFault({ ...base, failure: { ...base.failure!, actual: "disabled: old detail" }, actionability }, command("web.dom.click")), "obstructed_target");
+    for (const code of [WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED]) {
+      assert.equal(recoverableFault({ ...failed("web.dom.click", code), actionability }, command("web.dom.click")), undefined, code);
+    }
+  }
+  assert.equal(recoverableFault({ ...base, actionability: { actionable: false, cause: "invented" } } as unknown as BrowserActionResult, command("web.dom.click")), "obstructed_target");
+  assert.equal(recoverableFault({ ...base, actionability: { actionable: true }, failure: { ...base.failure!, code: WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG } }, command("web.dom.click")), "blocking_dialog");
+});
+
+test("typed disabled still requires the existing unacted effect and never grants an ambiguous press", () => {
+  const base = failed("web.dom.check", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, "covered: old detail");
+  const actionability = { actionable: false, cause: "disabled" } as const;
+  assert.equal(recoverableFault({ ...base, actionability }, command("web.dom.check")), undefined);
+  const unacted = { ...base, failure: { ...base.failure!, effect: "unacted" as const }, actionability };
+  assert.equal(recoverableFault(unacted, command("web.dom.check")), "disabled_target");
+  assert.equal(recoverableFault({ ...unacted, actionability: { actionable: true } }, command("web.dom.check")), undefined);
+});
+
 test("a succeeded result is never a fault, whatever it carries", () => {
   const result = { ...failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND), status: "succeeded" } as BrowserActionResult;
   assert.equal(recoverableFault(result, command("web.dom.click")), undefined);

@@ -24,6 +24,21 @@ import { webActionFailureRefusal } from "../refusal";
 /** The words the page put in its own comparison text, none of which may reach a refusal. */
 const PAGE_WORDS = ["Tidewell", "sage green", ".product-row td", "Brightaisle"] as const;
 
+test("current typed actionability wins the covered distinction without overriding failure or person authority", () => {
+  const failure = { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, actual: "hidden: legacy words" };
+  assert.equal(webActionFailureRefusal({ status: "failed", failure, payload: { actionability: { actionable: false, cause: "covered" } } }).code, "target_covered");
+  const covered = { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, actual: "covered: legacy words" };
+  for (const actionability of [{ actionable: true }, { actionable: false, cause: "hidden" }, { actionable: false, cause: "disabled" }]) {
+    assert.equal(webActionFailureRefusal({ status: "failed", failure: covered, payload: { actionability } }).code, "target_not_actionable");
+  }
+  assert.equal(webActionFailureRefusal({ status: "failed", failure: covered }).code, "target_covered");
+  assert.equal(webActionFailureRefusal({ status: "failed", failure: covered, payload: { actionability: { actionable: true, extra: "bad" } } }).code, "target_covered");
+  assert.equal(webActionFailureRefusal({ status: "timed_out", failure: covered, payload: { actionability: { actionable: false, cause: "covered" } } }).code, "action_timed_out");
+  const person = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED }, payload: { actionability: { actionable: false, cause: "covered" } } });
+  assert.equal(person.code, "needs_person");
+  assert.equal(person.personNeeded, true);
+});
+
 test("only the closed incomplete_text prefix on an unobserved output gives disclosure recovery, never its page text", () => {
   const actual = `incomplete_text: ${PAGE_WORDS.join(" ")}`;
   const refused = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, actual } });

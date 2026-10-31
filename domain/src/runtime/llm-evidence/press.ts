@@ -25,11 +25,12 @@ import { webAutomationResolvedActionEffect } from "../../actions/action-effect";
 // own tick of that row into an untick. That is housekeeping, not a refusal.
 
 import { canonicalWebLlmTargetHandle } from "./handle-spelling";
-import { actAndCapture, type WebLlmEvidenceGateway, type WebLlmEvidenceToolRequest } from "./capture";
+import { actAndCapture, type WebLlmActionPage, type WebLlmEvidenceGateway, type WebLlmEvidenceToolRequest } from "./capture";
 import { webActionPermission } from "./permission";
 import type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
-import { recoverable, rejectionDetail } from "./tool-rejection";
+import { recoverable, RecoverableToolRejection, rejectionDetail } from "./tool-rejection";
+import { present } from "./present";
 
 /**
  * What a model told a press was declined should do next. The person said no to
@@ -68,7 +69,7 @@ export type WebControlPress = {
  * request Core raised goes to the person. A declaration that is not a list of
  * Core's classes is `invalid_input`: nothing is pressed on an unreadable claim.
  */
-export async function pressControl(press: WebControlPress): Promise<WebLlmSnapshotBinding> {
+export async function pressControl(press: WebControlPress): Promise<WebLlmActionPage> {
   const permission = await webActionPermission({
     check: press.request.permission,
     declared: press.consequences,
@@ -92,14 +93,19 @@ export async function pressControl(press: WebControlPress): Promise<WebLlmSnapsh
     }));
   }
   const target = { selector: press.element.selector };
-  const pressed = press.restamp(await actAndCapture(press.gateway, press.sessionId, press.request, "web.dom.click", target, press.current, press.request.signal));
+  const action = await actAndCapture(press.gateway, press.sessionId, press.request, "web.dom.click", target, press.current, press.request.signal);
+  const pressed = press.restamp(action.page);
+  let actionability = action.actionability;
   // Put back before anything else can refuse, so a `no_progress` cannot leave
   // the row ticked.
-  if (isCheckbox(press.element)) await restoreCheckbox(press, pressed);
-  if (JSON.stringify(pressed.evidence) === JSON.stringify(press.current.evidence)) {
-    recoverable("no_progress", rejectionDetail({ reason: "page_unchanged_after_action", target: undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  if (isCheckbox(press.element)) {
+    const restored = await restoreCheckbox(press, pressed);
+    if (restored !== undefined) actionability = restored.actionability;
   }
-  return pressed;
+  if (JSON.stringify(pressed.evidence) === JSON.stringify(press.current.evidence)) {
+    throw new RecoverableToolRejection("no_progress", rejectionDetail({ reason: "page_unchanged_after_action", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), undefined, undefined, undefined, actionability);
+  }
+  return present<WebLlmActionPage>({ page: pressed, actionability });
 }
 
 /**
@@ -108,11 +114,11 @@ export async function pressControl(press: WebControlPress): Promise<WebLlmSnapsh
  * press is left alone rather than pressed at a position that may now hold
  * something else.
  */
-async function restoreCheckbox(press: WebControlPress, pressed: WebLlmSnapshotBinding): Promise<void> {
+async function restoreCheckbox(press: WebControlPress, pressed: WebLlmSnapshotBinding): Promise<WebLlmActionPage | undefined> {
   const selector = press.element.selector;
   const same = pressed.evidence.elements.filter((element) => pressed.selectors.get(element.target) === selector);
   if (same.length !== 1 || same[0]!.name !== press.element.name || !isCheckbox(same[0]!)) return;
-  await actAndCapture(press.gateway, press.sessionId, press.request, "web.dom.click", { selector }, pressed, press.request.signal);
+  return await actAndCapture(press.gateway, press.sessionId, press.request, "web.dom.click", { selector }, pressed, press.request.signal);
 }
 
 /** One plain word for what the control is, as the person being asked would call it. */

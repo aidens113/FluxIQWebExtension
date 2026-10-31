@@ -29,8 +29,8 @@ type Click = { status: string; failure?: JsonObject; error?: string };
  * real search answers, so it is never taken for a press that changed nothing
  * (t511) and pressed once more.
  */
-function promptPage() {
-  const state = { prompt: false, clicks: [] as string[], captureFails: false, searching: false };
+function promptPage(reportUnacted = true) {
+  const state = { prompt: false, clicks: [] as string[], performedClicks: [] as string[], captureFails: false, searching: false };
   const feed = Array.from({ length: 44 }, (_, index) => ({
     tagName: "button", selector: `#post-${index + 1}`, visibleText: `Post ${index + 1}`, attributes: { type: "button" },
     bounds: { x: 20, y: 20 + index * 30, width: 100, height: 20 }
@@ -58,13 +58,19 @@ function promptPage() {
       const selector = String(command.parameters.selector);
       state.clicks.push(selector);
       if (selector === "#not-now") {
+        state.performedClicks.push(selector);
         state.prompt = false;
         return { status: "succeeded" };
       }
       if (state.prompt) {
-        const blocked: Click = { status: "failed", error: `Action blocked: ${PRIVATE}`, failure: { category: "unexpected_state", code: WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG, retryable: false, stage: "execution", actual: `covered: ${PRIVATE}` } };
+        const failure: JsonObject = { category: "unexpected_state", code: WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG, retryable: false, stage: "execution", actual: `covered: ${PRIVATE}` };
+        // This fixture refuses before performing the click. Only its explicit
+        // effect report tells the caller that; the dialog code alone cannot.
+        if (reportUnacted) failure.effect = "unacted";
+        const blocked: Click = { status: "failed", error: `Action blocked: ${PRIVATE}`, failure };
         return blocked;
       }
+      state.performedClicks.push(selector);
       if (selector === "#open-search") state.searching = true;
       return { status: "succeeded" };
     }
@@ -135,6 +141,61 @@ test("a refusal whose page cannot be captured again is the bare code", async () 
   // The step is recorded under the node's own name and never reaches the Flow.
   assert.equal(refused.draft?.actionId, "web.output.dom-click");
   assert.equal(refused.effectApplied, false);
+  assert.deepEqual(state.performedClicks, [], "the fixture refused before performing a click");
+});
+
+test("an unreadable committing refusal without positive unacted evidence stays uncertain and is never pressed again", async () => {
+  for (const measured of [false, true]) {
+    const { state, gateway } = promptPage(false);
+    const asked: unknown[] = [];
+    let failedCaptures = 0;
+    const runtime = createWebAutomationLlmEvidenceRuntime({
+      eligibleSessionIds: gateway.eligibleSessionIds,
+      executeAction: async (sessionId, command) => {
+        if (command.actionType === "web.dom.capture_snapshot") {
+          if (state.captureFails) failedCaptures += 1;
+          return await gateway.executeAction(sessionId, command);
+        }
+        const result = await gateway.executeAction(sessionId, command);
+        state.captureFails = true;
+        return measured
+          ? { ...result, payload: { actionability: { actionable: false, cause: "covered" } } }
+          : result;
+      }
+    });
+    const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+    state.prompt = true;
+    const refused = await runtime.executeTool({
+      ...BASE,
+      callId: "call.press",
+      toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+      value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(inspected.evidence, "Search people") } }, consequences: [] },
+      permission: async (declaration: unknown) => {
+        asked.push(declaration);
+        return { permitted: true as const };
+      }
+    });
+    assert.deepEqual(asked, [{
+      consequences: [],
+      control: { name: "Search people", kind: "button" },
+      verb: "click",
+      effect: "mutate",
+      actionEffect: { effectClass: "commit", permissionConsequences: [] }
+    }]);
+    const evidence = refused.evidence as { schemaVersion: string; ok: boolean; code: string; detail: { reason: string; next: string }; page?: unknown };
+    assert.deepEqual([evidence.schemaVersion, evidence.ok, evidence.code], ["web-llm-tool-result.v1", false, "blocked_by_dialog"]);
+    assert.equal(evidence.detail.reason, "outcome_uncertain");
+    assert.match(evidence.detail.next, /not made again automatically/u);
+    assert.equal(evidence.page, undefined);
+    assert.equal(refused.resultCode, "web.action.rejected.blocked_by_dialog");
+    assert.equal(refused.effectApplied, false);
+    assert.deepEqual(refused.actionability, measured ? { actionable: false, cause: "covered" } : undefined);
+    assert.ok(failedCaptures > 0, "the refusal's page could not be captured");
+    assert.deepEqual(state.clicks, ["#open-search"], "the uncertain committing call is dispatched once");
+    assert.deepEqual(state.performedClicks, [], "the fixture performed no click, but never reported that fact");
+    assert.equal(state.searching, false);
+    assert.equal(JSON.stringify(refused).includes("ember789"), false);
+  }
 });
 
 test("a page that cannot be captured is refused rather than thrown", async () => {

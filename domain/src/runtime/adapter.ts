@@ -1,4 +1,5 @@
 import { readWebHostFailure, webHostFailure } from "./host-failure";
+import { webActionabilityProperty } from "../actions/actionability";
 // The FluxIQ runtime adapter for the web-automation domain: the hop between a
 // Core runtime command and the paired browser client.
 //
@@ -136,6 +137,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
       ...(diagnostics ? { failureDiagnostics: diagnostics.report, ...(diagnostics.evidence ? { failureEvidence: publishedWebLlmPage(diagnostics.evidence) as unknown as JsonObject } : {}) } : {})
     })
   };
+  const actionability = webActionabilityProperty(result);
+  if (actionability !== undefined) runtimeResult.actionability = actionability;
   if (result.payload !== undefined) {
     // A value read off a sensitive control is dropped on the rule's verdict
     // alone (D2). No declaration buys it back and no validation status skips

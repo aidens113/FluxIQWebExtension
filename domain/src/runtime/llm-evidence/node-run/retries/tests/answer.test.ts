@@ -15,6 +15,30 @@ function failed(code: WebAutomationFailureCode, actual = "not yet"): WebNodeDisp
 
 const C = WEB_AUTOMATION_FAILURE_CODES;
 
+test("typed covered preserves its measured answer while typed alternatives suppress misleading legacy prefixes", () => {
+  const earlier = failed(C.RATE_LIMITED);
+  const coveredAnswer = failed(C.TARGET_NOT_ACTIONABLE, "hidden: legacy");
+  const covered: WebNodeDispatchResult = {
+    ...coveredAnswer, payload: { actionability: { actionable: false, cause: "covered" } }
+  };
+  assert.equal(webNodeRetriedAnswer([earlier, covered], covered), covered);
+  for (const actionability of [{ actionable: true }, { actionable: false, cause: "hidden" }, { actionable: false, cause: "disabled" }]) {
+    const answer = failed(C.TARGET_NOT_ACTIONABLE, "covered: legacy");
+    const last: WebNodeDispatchResult = {
+      ...answer, payload: { actionability }
+    };
+    assert.equal(webNodeRetriedAnswer([earlier, last], last), earlier);
+  }
+  const malformedAnswer = failed(C.TARGET_NOT_ACTIONABLE, "covered: legacy");
+  const malformed: WebNodeDispatchResult = {
+    ...malformedAnswer, payload: { actionability: { actionable: true, extra: "bad" } }
+  };
+  assert.equal(webNodeRetriedAnswer([earlier, malformed], malformed), malformed);
+  const failure: AutomationStudioFailureRecord = { category: "auth_required", code: C.TARGET_NOT_ACTIONABLE, retryable: false, effect: "ambiguous" };
+  const authority: WebNodeDispatchResult = { status: "failed", failure, payload: { actionability: { actionable: false, cause: "hidden" } } };
+  assert.equal(webNodeRetriedAnswer([earlier, authority], authority), authority);
+});
+
 test("a refusal for now followed only by the control gone answers, the latest refusal when there are two", () => {
   for (const gone of [C.TARGET_NOT_SHOWN, C.TARGET_NOT_FOUND, C.TARGET_NOT_ACTIONABLE]) {
     const refused = failed(C.RATE_LIMITED);

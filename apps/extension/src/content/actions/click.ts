@@ -149,6 +149,7 @@ import type {
   RobotCheckWatch
 } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
+import { portableActionability } from "../action-runtime/actionability/index";
 import { toggleReadingOf } from "./toggle-reading";
 import type { ContentActionDependencies } from "./types";
 
@@ -244,7 +245,10 @@ type PressOutcome = {
 
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
+  let measured: ActionabilityReport | undefined;
+  const measure = (): ActionabilityReport => (measured = deps.checkActionability(element));
   const evidence = (): ActionResultEvidence => ({
+    ...(measured ? { actionability: portableActionability(measured) } : {}),
     element: deps.describeElement(element),
     snapshot: deps.captureSnapshot(),
     resolution
@@ -255,7 +259,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     return alreadyInState(action, deps, startedAt, evidence());
   }
 
-  const report = deps.checkActionability(element);
+  const report = measure();
   if (!report.actionable) {
     return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true });
   }
@@ -265,7 +269,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     // What the press changes about its own control, read around it (header, t787).
     const before = toggleReadingOf(element, deps.describeElement(element));
     const address = element.ownerDocument.location.href;
-    return withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence), { element, before, address, deps });
+    return withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence, measure), { element, before, address, deps });
   }
 
   const document = element.ownerDocument;
@@ -306,7 +310,8 @@ async function pressInPlace(
   action: BrowserActionCommand,
   deps: ContentActionDependencies,
   startedAt: number,
-  evidence: () => ActionResultEvidence
+  evidence: () => ActionResultEvidence,
+  measure: () => ActionabilityReport
 ): Promise<BrowserActionResult> {
   // An earlier attempt of this command was a press the page ignored and a
   // layer then covered: this press, made after the layer was closed, is the
@@ -319,11 +324,11 @@ async function pressInPlace(
   if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
   if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
   // Nothing but the page's own notice: the page reported the press failed, for Core to make again (t743).
-  if (first.noticeOnly && deps.checkActionability(element).actionable) {
+  if (first.noticeOnly && measure().actionable) {
     return deps.success(action, startedAt, "Element clicked, and the page answered only with a notice.", noticeOnlyValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE);
   }
   // A change that came and went, and a page settled exactly as it was: certainly nothing, for Core to press once more.
-  if (first.settledUnchanged && deps.checkActionability(element).actionable) {
+  if (first.settledUnchanged && measure().actionable) {
     return deps.success(action, startedAt, "Element clicked, and the page settled unchanged.", settledUnchangedValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT);
   }
   // A robot check that came and went was an answer; so is any sign the watch saw.
@@ -333,7 +338,7 @@ async function pressInPlace(
   if (!pressAgain(first.answer.seen, extra)) {
     // The press made once more, after the layer was closed, was ignored too.
     // A control now covered, disabled or gone reads as answered, as below.
-    if (expectsAnswer(element) && deps.checkActionability(element).actionable) {
+    if (expectsAnswer(element) && measure().actionable) {
       return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, first.accepted, IGNORED_AFTER_COVER), evidence());
     }
     return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
@@ -344,7 +349,7 @@ async function pressInPlace(
   // a layer that came during the wait is the page's own motion, so the cover
   // is refused, naming the layer, and the in-page recovery closes it and runs
   // the click again, whose press is the press made once more.
-  const now = deps.checkActionability(element);
+  const now = measure();
   if (!now.actionable) {
     if (now.code === "covered") {
       noteExtraPress(action);

@@ -1,4 +1,6 @@
 import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
+import { webActionabilityFromPayload } from "../../../actions/actionability";
+import { foundAt } from "./location";
 // Running one node of the library against the live page, now.
 //
 // This is the whole of what replaced five invented exploration verbs. The model
@@ -214,6 +216,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     return refusal(undefined, "invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined }), record);
   }
   let current: WebLlmSnapshotBinding | undefined;
+  let actionability: ReturnType<typeof webActionabilityFromPayload>;
+  let actionAnswered = false;
   try {
     // A look is one round trip. The capture this domain takes to read the page
     // *is* the snapshot node running, so taking one before it and one after it
@@ -387,6 +391,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // A lasting act whose answer was lost is checked against the step's own
     // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3); a control the page re-rendered is looked for again by its identity (t786).
     const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), webNodeLookedUpReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: webNodeDispatchParameters(node, ran), look: () => readablePage(run, run.request) }));
+    actionability = webActionabilityFromPayload(result);
     assertActive(run.request.signal);
     // One the check showed landed counts as done, whatever its lost answer said.
     if (result.status !== "succeeded" && lastingAct !== "landed") {
@@ -403,9 +408,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // A lasting act Core left uncertain and did not repeat says that instead (`./retries/uncertain-outcome.ts`, t361).
       const refused = webNodeFailureRefusal(result, lastingAct, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran) });
       throw current
-        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal, failure)
-        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded, failure);
+        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal, failure, actionability)
+        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded, failure, actionability);
     }
+    actionAnswered = true;
     // The command worked. Should the look after it meet a robot check, the step
     // stands with what it read, as a success's statement would say.
     record.standing.replay = webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: result.payload as JsonValue | undefined, reads: node.proposes });
@@ -431,7 +437,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // whose state a press flips: read through the wait, it is said to be uncertain (`./press-effect/repeat-press.ts`,
     // t778). A lasting press the page truly ignored is made again by Core's retries on its `certainNoEffect` (t517).
     const lasting = Array.isArray(declared) && declared.some((entry) => typeof entry === "string" && entry !== "");
-    const pressAgain = async () => (await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran))).result.status === "succeeded";
+    const pressAgain = async () => {
+      const repeated = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran));
+      actionability = webActionabilityFromPayload(repeated.result);
+      return repeated.result.status === "succeeded";
+    };
     const pressed = await webPressSettled(node, current, await look(), webPlanFirstTargetHandle(written), {
       look, pressAgain, lasting, now: () => Date.now(),
       sleep: async (ms) => {
@@ -579,7 +589,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // is said: the draft statement above already names the node under
       // `actionId`. What the resolution had to assume is said, because this is
       // the call the Flow's step is made of and the guess is in it.
-      { resultReason: undefined, nodeId: undefined, assumed }
+      { resultReason: undefined, nodeId: undefined, assumed },
+      undefined,
+      actionability
     ), current, after));
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
@@ -591,7 +603,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       const page = error.page ? run.restamp(error.page) : undefined;
       if (page) run.shown(page);
       // A refusal the page wrote quotes what it wrote (`./press-effect/notice.ts`).
-      const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record, error.failure);
+      const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record, actionAnswered ? undefined : error.failure, actionAnswered ? actionability : error.actionability);
       // A robot check is the person's. The refusal is kept as the run's record
       // says it, and Core puts the check to the person rather than to the model.
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
@@ -600,26 +612,14 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   }
 }
 
-/**
- * Where a step found the page: the page it acted on, or for a step from nowhere
- * where it was sent, or failing both where it arrived.
- *
- * Never empty in practice -- a call with no page before it is one a start
- * location was given for (`currentPage`) -- and the empty string is only what
- * the type needs for the case that cannot occur: `./replay.ts` reads it as a
- * location it will not return to, which is the safe reading.
- */
-function foundAt(current: WebLlmSnapshotBinding | undefined, startLocation: string | undefined, after: WebLlmSnapshotBinding | undefined): string {
-  return current?.evidence.location ?? startLocation ?? after?.evidence.location ?? "";
-}
-
 /** A refusal as the call's result: the code, why, and the page as it now stands. */
 function refusal(
   page: WebLlmSnapshotBinding | undefined,
   code: WebLlmToolRejectionCode,
   detail: ReturnType<typeof rejectionDetail> | undefined,
   record: WebNodeCallRecord,
-  failure?: unknown
+  failure?: unknown,
+  actionability?: unknown
 ): WebLlmEvidenceToolExecution {
   // The refusal carries the whole page it found, whenever it has one, and the attempts Core's retries spent (`./retries/`).
   const value = page ? toolRejection(code, page.evidence, detail, record.attempts) : toolRejection(code, undefined, detail, record.attempts);
@@ -665,7 +665,7 @@ function refusal(
     // for every refusal before it, which is the honest answer: nothing had been
     // resolved, so nothing was guessed at.
     assumed: record.assumed
-  }, failure), record.found, left);
+  }, failure, actionability), record.found, left);
   const diagnostic = webBuildRefusalDiagnostic({ page: record.found?.evidence, parameters: record.parameters ?? (isJsonRecord(record.call?.parameters) ? record.call.parameters : undefined), target: detail?.target, code, reason: detail?.reason });
   if (diagnostic) result.diagnostic = diagnostic;
   return result;

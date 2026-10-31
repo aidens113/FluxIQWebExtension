@@ -25,6 +25,7 @@ test("a target that already shows the aria-pressed state is not pressed, and ans
   const { result, events } = await press(t, { "aria-pressed": "true" }, "Like", action);
   assert.equal(result.status, "succeeded");
   assert.equal(result.skipped, "already_in_state");
+  assert.equal(Object.hasOwn(result, "actionability"), false);
   assert.deepEqual(events, []);
   assert.equal(Object.hasOwn(result, "toggle"), false);
   assert.equal(Object.hasOwn(result, "toggleBefore"), false);

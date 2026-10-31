@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ClientGatewayOutbox, clientGatewayMemoryArea, createClientGatewayMessage, type ClientGatewayOutboxState } from "@fluxiq/client-gateway-websocket";
+import { gatewayActionResultFromBrowserResult, type WebAutomationActionResult } from "@fluxiq-web-extension/domain/client";
+import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
 import { extensionOutboxStore } from "../index";
 
 const OUTBOX_STORAGE_KEY = "fluxiq.outbox";
@@ -62,4 +64,75 @@ test("a state that is not an object reads as an empty queue", async () => {
   const store = extensionOutboxStore(area, { onRepaired: (fields) => reports.push(fields) });
   assert.deepEqual(await store.read(), { entries: [] });
   assert.deepEqual(reports, [["outbox"]]);
+});
+
+test("measured controls survive the existing wire envelope and a serialized offline queue restart", async () => {
+  const measurements: AutomationStudioTargetActionabilityRecord[] = [
+    { actionable: true },
+    { actionable: false, cause: "hidden" },
+    { actionable: false, cause: "disabled" },
+    { actionable: false, cause: "covered" }
+  ];
+  // The unchanged Core 0.18 durable result schema closes only these top keys.
+  const oldWireKeys = new Set(["commandId", "status", "startedAt", "completedAt", "message", "target", "payload", "error", "clearedWait", "failure", "metadata"]);
+  for (const measurement of measurements) {
+    const raw: WebAutomationActionResult = {
+      commandId: "queued.measured",
+      actionType: "web.dom.click",
+      status: measurement.actionable ? "succeeded" : "failed",
+      validation: { status: measurement.actionable ? "passed" : "failed", expected: "measured target", actual: "measured target" },
+      actionability: measurement,
+      failure: measurement.actionable ? undefined : {
+        category: "action_failed", code: "web.action.failed", retryable: true,
+        stage: "execution", effect: "ambiguous"
+      },
+      startedAt: 1,
+      finishedAt: 2
+    };
+    const before = JSON.stringify(raw);
+    const wire = gatewayActionResultFromBrowserResult(raw);
+    assert.ok(Object.keys(wire).every((key) => oldWireKeys.has(key)));
+    assert.equal(Object.hasOwn(wire, "actionability"), false);
+    assert.deepEqual(wire.payload?.actionability, measurement);
+    assert.equal(JSON.stringify(raw), before, "mapping cannot mutate the digest's source");
+    const area = clientGatewayMemoryArea();
+    const first = new ClientGatewayOutbox(extensionOutboxStore(area));
+    await first.setLineage(binding.session);
+    await first.enqueue(createClientGatewayMessage("client.action_result", wire), binding);
+    // Serialize the actual stored state, then reconstruct the old saved-state
+    // reader and public outbox exactly as a new background worker does.
+    await area.set(JSON.parse(JSON.stringify(await area.get(null))));
+    const repairs: string[][] = [];
+    const restarted = new ClientGatewayOutbox(extensionOutboxStore(area, { onRepaired: (fields) => repairs.push(fields) }));
+    const replayed = await restarted.actionResult(wire.commandId, binding.session);
+    assert.deepEqual(replayed, wire);
+    assert.deepEqual(replayed?.payload?.actionability, measurement);
+    assert.equal(replayed?.status, raw.status);
+    assert.equal(replayed?.failure?.effect, measurement.actionable ? undefined : "ambiguous");
+    assert.deepEqual(repairs, [], "optional payload metadata cannot invalidate a completed result");
+  }
+});
+
+test("an unreadable optional browser control cannot erase the succeeded queued result", async () => {
+  let reads = 0;
+  const raw: WebAutomationActionResult = {
+    commandId: "queued.unreadable", actionType: "web.dom.click", status: "succeeded",
+    validation: { status: "passed", expected: "measured target", actual: "measured target" }, startedAt: 1, finishedAt: 2
+  };
+  Object.defineProperty(raw, "actionability", {
+    enumerable: true,
+    get() {
+      reads += 1;
+      throw new Error("Optional control is unreadable.");
+    }
+  });
+  const wire = gatewayActionResultFromBrowserResult(raw);
+  assert.equal(reads, 0);
+  assert.equal(wire.status, "succeeded");
+  assert.equal(Object.hasOwn(wire.payload ?? {}, "actionability"), false);
+  const area = clientGatewayMemoryArea();
+  const first = new ClientGatewayOutbox(extensionOutboxStore(area));
+  await first.enqueue(createClientGatewayMessage("client.action_result", wire), binding);
+  const restarted = new ClientGatewayOutbox(extensionOutboxStore(area));
+  assert.deepEqual(await restarted.actionResult(wire.commandId, binding.session), wire);
 });

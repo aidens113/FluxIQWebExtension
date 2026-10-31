@@ -45,6 +45,78 @@ const CLICK = { commandId: "c1", actionType: "web.dom.click" } as BrowserActionC
 /** A gate refusal as `actions/click.ts` hands it over: a snapshot already taken, refused before anything dispatched. */
 const GATE: ActionResultEvidence = { snapshot: {} as DomSnapshot, refusedBeforeDispatch: true };
 
+test("result construction copies only valid current actionability without inferring it from a reason", async (t) => {
+  const reject = await installRejectionPage(t);
+  for (const actionability of [{ actionable: true }, ...["hidden", "disabled", "covered"].map((cause) => ({ actionable: false, cause }))]) {
+    const evidence = { ...GATE, actionability } as ActionResultEvidence;
+    const original = structuredClone(evidence);
+    const result = reject(CLICK, 0, "disabled", "enabled", "disabled", evidence);
+    assert.deepEqual(result.actionability, actionability);
+    assert.notEqual(result.actionability, actionability);
+    assert.deepEqual(evidence, original);
+    assert.equal(result.failure?.effect, "unacted");
+  }
+  const legacy = reject(CLICK, 0, "covered", "reachable", "covered", GATE);
+  assert.equal(Object.hasOwn(legacy, "actionability"), false, "a factory reason is not a measurement");
+});
+
+test("invalid or unreadable optional actionability drops alone and cannot change a real failure", async (t) => {
+  const reject = await installRejectionPage(t);
+  const baseline = reject(CLICK, 0, "disabled", "enabled", "disabled", GATE);
+  let getters = 0;
+  const accessor = Object.defineProperty({ ...GATE }, "actionability", {
+    get() {
+      getters += 1;
+      throw new Error("must not read");
+    }
+  });
+  const invalid: unknown[] = [
+    { ...GATE, actionability: { actionable: true, point: { x: 1, y: 2 }, detail: "private" } },
+    { ...GATE, actionability: { actionable: false, cause: "other" } },
+    {
+      ...GATE,
+      actionability: Object.defineProperty({}, "actionable", {
+        get() {
+          getters += 1;
+          throw new Error("must not read");
+        }
+      })
+    },
+    accessor,
+    new Proxy({ ...GATE }, {
+      getOwnPropertyDescriptor(target, key) {
+        if (key === "actionability") throw new Error("unreadable control");
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      }
+    })
+  ];
+  for (const evidence of invalid) {
+    const result = reject(CLICK, 0, "disabled", "enabled", "disabled", evidence as ActionResultEvidence);
+    assert.equal(Object.hasOwn(result, "actionability"), false);
+    assert.deepEqual(result.failure, baseline.failure);
+    assert.equal(result.status, baseline.status);
+    assert.equal(result.snapshot, GATE.snapshot);
+  }
+  assert.equal(getters, 0);
+});
+
+test("unmeasured success stays absent and malformed control cannot erase a person's post-press refusal", async (t) => {
+  await installRejectionPage(t);
+  const { success, actionNeedsPerson } = await import("../results");
+  const unmeasured = success(CLICK, 0, "observed", { status: "passed", expected: "observed", actual: "observed" }, GATE);
+  assert.equal(Object.hasOwn(unmeasured, "actionability"), false);
+  const sighting = { outcome: "person_only", afterMs: 10, waitedMs: 20 } as const;
+  const baseline = actionNeedsPerson(CLICK, 0, sighting, GATE);
+  for (const actionability of [{ actionable: false, cause: "covered" }, { actionable: true, geometry: "private" }]) {
+    const result = actionNeedsPerson(CLICK, 0, sighting, { ...GATE, actionability } as ActionResultEvidence);
+    assert.deepEqual(result.failure, baseline.failure);
+    assert.deepEqual(result.validation, baseline.validation);
+    assert.equal(result.failure?.effect, undefined);
+    assert.equal(result.status, "failed");
+    assert.deepEqual(result.actionability, "geometry" in actionability ? undefined : actionability);
+  }
+});
+
 test("a target the gate found hidden is TARGET_NOT_SHOWN: Core's target_not_found, retryable, at target resolution, nothing done", async (t) => {
   const actionRejected = await installRejectionPage(t);
   const result = actionRejected(CLICK, Date.now(), "hidden", "a target that can be clicked", "the element's display is none", GATE);

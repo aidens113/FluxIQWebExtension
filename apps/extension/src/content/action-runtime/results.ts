@@ -44,6 +44,7 @@ import {
   classifyWebAutomationFailure,
   isWebAutomationFailureCode,
   webAutomationFailureRecord,
+  webActionabilityProperty,
   type WebAutomationFailureCode,
   type WebAutomationTextSighting
 } from "@fluxiq-web-extension/domain/client";
@@ -88,6 +89,7 @@ type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
  * the action rides on `dialog`, never on `extracted`.
  */
 export type ActionResultEvidence = {
+  actionability?: BrowserActionResult["actionability"];
   element?: DomElementDescriptor | undefined;
   snapshot?: DomSnapshot | undefined;
   extracted?: JsonValue | undefined;
@@ -602,6 +604,8 @@ function buildResult(
   if (core.failure !== undefined) {
     result.failure = authGateFailure(action, core.failure) ?? challengeGateFailure(action, core.failure) ?? core.failure;
   }
+  const actionability = webActionabilityProperty(evidence);
+  if (actionability) result.actionability = actionability;
   if (evidence.element) result.element = evidence.element;
   if (action.visualTarget) result.visualTarget = action.visualTarget;
   // A failure always carries the page it failed on: the domain builds the

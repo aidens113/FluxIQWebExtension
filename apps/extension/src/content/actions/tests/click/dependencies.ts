@@ -3,7 +3,7 @@
 // `click.test.ts` on 2026-10-20, unchanged.
 
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
-import type { ActionabilityRejectionCode, ActionabilityReport, RateLimitNotice, RobotCheckSighting } from "../../../action-runtime";
+import type { ActionabilityRejectionCode, ActionabilityReport, ActionResultEvidence, RateLimitNotice, RobotCheckSighting } from "../../../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../../types";
 import type { ContentActionDependencies } from "../../types";
 import type { CheckRecord, IgnoredRecord, NoticeRecord } from "./watches";
@@ -28,7 +28,8 @@ export function dependencies(
       return judged === 1 || pressableAgain ? PRESSABLE : notPressable(againAs);
     },
     // The record the real builder writes for a gate's refusal (`results.ts`): its reason word leads `actual`.
-    rejected: (action: BrowserActionCommand, startedAt: number, code: string, expected: string, actual: string): BrowserActionResult => ({
+    rejected: (action: BrowserActionCommand, startedAt: number, code: string, expected: string, actual: string, evidence?: ActionResultEvidence): BrowserActionResult => ({
+      ...(evidence?.actionability ? { actionability: evidence.actionability } : {}),
       commandId: action.commandId,
       actionType: action.actionType,
       status: "failed",
@@ -44,9 +45,10 @@ export function dependencies(
     watchRateLimitNotice: notices.make,
     watchRobotCheck: checks.make,
     watchIgnoredPress: ignored.make,
-    needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: RobotCheckSighting): BrowserActionResult => {
+    needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: RobotCheckSighting, evidence?: ActionResultEvidence): BrowserActionResult => {
       checks.record.handedOver.push(sighting);
       return {
+        ...(evidence?.actionability ? { actionability: evidence.actionability } : {}),
         commandId: action.commandId,
         actionType: action.actionType,
         status: "failed",
@@ -56,9 +58,10 @@ export function dependencies(
         finishedAt: startedAt
       };
     },
-    rateLimited: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice): BrowserActionResult => {
+    rateLimited: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice, evidence?: ActionResultEvidence): BrowserActionResult => {
       notices.record.refusedWith.push(notice);
       return {
+        ...(evidence?.actionability ? { actionability: evidence.actionability } : {}),
         commandId: action.commandId,
         actionType: action.actionType,
         status: "failed",
@@ -68,9 +71,10 @@ export function dependencies(
         finishedAt: startedAt
       };
     },
-    refusedByPage: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice): BrowserActionResult => {
+    refusedByPage: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice, evidence?: ActionResultEvidence): BrowserActionResult => {
       notices.record.refusedByPageWith.push(notice);
       return {
+        ...(evidence?.actionability ? { actionability: evidence.actionability } : {}),
         commandId: action.commandId,
         actionType: action.actionType,
         status: "failed",
@@ -81,7 +85,8 @@ export function dependencies(
       };
     },
     // As the real builder (`results.ts`): a failed validation carries the code the verb named, when it named one.
-    success: (action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionValidation, _evidence?: unknown, failureCode?: WebAutomationFailureCode): BrowserActionResult => ({
+    success: (action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionValidation, evidence?: ActionResultEvidence, failureCode?: WebAutomationFailureCode): BrowserActionResult => ({
+      ...(evidence?.actionability ? { actionability: evidence.actionability } : {}),
       commandId: action.commandId,
       actionType: action.actionType,
       status: validation.status === "failed" ? "failed" : "succeeded",

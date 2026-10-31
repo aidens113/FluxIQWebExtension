@@ -71,7 +71,7 @@ test("a canonical committing Save is not toggled twice after its real acknowledg
     nodes: [
       { id: "save", definitionId, parameterValues: { selector: HEART }, metadata: {
         effect: "observe", actionEffect: { effectClass: "observe", permissionConsequences: [] },
-        idempotent: true, idempotentWith: [], declaredConsequences: []
+        idempotent: true, idempotentWith: [], declaredConsequences: [], actionability: { actionable: true }
       } },
       { id: "alternative", definitionId, parameterValues: { selector: HEART } }
     ],
@@ -103,6 +103,7 @@ test("a canonical committing Save is not toggled twice after its real acknowledg
     graphDispatches += 1;
     const reply = await harness.runAction({ commandId: `save.graph.${graphDispatches}`, actionType: "web.dom.click", selector: parameters.selector, timeoutMs: 5_000 });
     expect(reply.status).toBe("succeeded");
+    expect(reply.actionability).toEqual({ actionable: true });
     await expect.poll(async () => (await savedJobs(harness)).includes(JOB.key)).toBe(true);
     await expect(heart).toHaveClass(new RegExp(CLASSES.heartOn, "u"));
     // The gesture really landed; Core receives no producer safety proof and
@@ -113,6 +114,7 @@ test("a canonical committing Save is not toggled twice after its real acknowledg
   expect(trace.status).toBe("failed");
   expect(trace.failure?.code).toBe("run.outcome_uncertain");
   expect(trace.attempts.map((attempt) => attempt.nodeId)).toEqual(["save"]);
+  expect(trace.attempts[0]?.actionability, "a lost acknowledgement cannot borrow an authored target fact").toBeUndefined();
   expect(graphDispatches, "one Core graph dispatch, after one non-mutating preflight gesture").toBe(1);
   expect(traffic).toEqual(["save"]);
   expect(await savedJobs(harness)).toEqual([...before, JOB.key]);
