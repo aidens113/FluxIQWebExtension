@@ -11,6 +11,17 @@ verdict; they are in FluxIQ Core's
 so Core's pages are named by path, as the neighbouring pages do). Paths below
 are under `domain/src/`.
 
+## Declaring available operations
+
+Core checks required operations against declared node identities: node id,
+label, tags and fixed or allowed output ids. Descriptions, parameter names,
+data ports and category text remain in the complete model-facing catalog but
+do not declare executable operations. In particular, the click node's help
+asking the author to choose `ensureState` does not provide a selection action.
+The domain explicitly tags secondary operations: check provides selection,
+type provides submit, and browser tab provides open. A restricted catalog
+missing a required operation is rejected before invoking a model.
+
 ## Choosing a toggle's end state
 
 A successful in-place press reports paired observations as

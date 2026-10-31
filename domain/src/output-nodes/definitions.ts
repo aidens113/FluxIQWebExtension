@@ -74,6 +74,13 @@ const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description
   "web.dom.next_page": { description: WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION, tags: WEB_AUTOMATION_NEXT_PAGE_TAGS }
 };
 
+/** Secondary operations the action supports, declared independently of its authoring help. */
+const operationTagsByOutput: Partial<Record<WebAutomationActionType, readonly string[]>> = {
+  "web.dom.check": ["select"],
+  "web.dom.type": ["submit"],
+  "web.browser.tab": ["open"]
+};
+
 /**
  * The outputs an action routes down besides `success` and `failed`, each named
  * by the word its result's `route` carries (contract C1). Only the next page
@@ -297,7 +304,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
-    tags: ["web-automation", "output", ...(catalogText?.tags ?? [])],
+    tags: ["web-automation", "output", ...(operationTagsByOutput[definition.actionType] ?? []), ...(catalogText?.tags ?? [])],
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
