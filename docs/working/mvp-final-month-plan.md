@@ -25,7 +25,7 @@ multi-page extraction live qualification, hosted extension sign-in and release
 acceptance remain open. Older facility/manual-browser findings need fresh
 verification before being treated as present defects. Both October31 full-suite
 slots are used; narrow checks continue and main promotion awaits a later passing
-permitted sweep. No paid model launch or user-panel management is authorized.
+permitted sweep. Requested supervised Claude live tests use $5; user-panel management remains unrequested.
 
 **2026-10-27 (resumed; no feature freeze; deadline 2026-11-10).** Where each MVP item stands:
 - **Breadth:** 12 of 40 accepted; rerun round 6 went 0 of 4 on reset bookkeeping and one judging defect (all diagnosed,
