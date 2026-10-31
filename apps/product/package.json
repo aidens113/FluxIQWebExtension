@@ -1,0 +1,21 @@
+{
+  "name": "@fluxiq-web-extension/product",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The FluxIQ product host module: the panel's product manifest and lifecycle hooks, inert until a hosted deployment lists it in FLUXIQ_HOST_MODULE after the domain's host module.",
+  "fluxiqHostModule": "./dist/host/platform.mjs",
+  "scripts": {
+    "build": "node ../../scripts/check/core-build.mjs && node scripts/build-host.mjs",
+    "check": "node ../../scripts/check/core-build.mjs && tsc -p tsconfig.json --noEmit",
+    "test": "node ../../scripts/check/core-build.mjs && node scripts/test-product.mjs"
+  },
+  "dependencies": {
+    "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.0"
+  }
+}

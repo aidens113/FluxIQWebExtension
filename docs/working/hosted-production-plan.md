@@ -1,7 +1,7 @@
 # Hosted Production Plan
 
 Status: Active
-Status detail: Hosted foundations through C0 are merged; C1 independently verified and merged, E/D5 product foundations in final acceptance. C2/C3 routing and extension/deployment gates remain.
+Status detail: Hosted foundations through C0 are merged; C1 independently verified and merged, E/D5 product and owned seed independently verified and ready to integrate. C2/C3 routing and extension/deployment gates remain.
 Created: 2026-10-17
 Last updated: 2026-10-30
 Owner: Lane lead hosted-production-planner (plan); the senior supervisor agent owns execution
@@ -739,6 +739,12 @@ gaining an enterprise contact page.
 - Changed: Core workspace lifecycle/key custody, background-task drain and audit/reload barriers accepted after Claude/P5b integration; Core0.11.0; paired finish passed (Core70 contracts), merges f9affe6c/af6c544f, no downstream runtime change.
 - Validation: lead Core background-task tests ->9 passed; web workspace/provisioning/real tenant key-eviction tests ->14files/123 passed; Core/web types,3libs, docs passed; final structure failures[],474warnings/1144baseline.
 - Not verified: C2/C3 routes, tenant gateway sockets, browser/Next production behavior or full sweeps; no paid calls/panel management.
+
+### 2026-10-30 - E/D5 product and owned seed accepted (t814)
+- Agent: Codex lead; reports `framework-heavy-lifting-plan/reports/codex-1030/t814-result.md` and `t814-ownership-fix-result.md`.
+- Changed: product host/branding/assets, once-only loading and owned My automations seed via a public trusted-host Core helper. Repeated/concurrent events serialize, partial creation repairs, creator conflicts refuse.
+- Validation: lead Core panel32/ownership36, web27 and product18 passed; Core/web/product types and fresh library/build/docs/structure passed; model-text207tokens/415Corefiles/12471literals.
+- Not verified: later C2/C3 lifecycle wiring, browser rendering or full sweep; no paid calls or panel management.
 
 ## Open Questions
 
