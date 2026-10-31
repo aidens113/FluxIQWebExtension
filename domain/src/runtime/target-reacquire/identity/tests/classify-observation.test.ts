@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeWebLlmSnapshotWithBindings } from "../../../llm-evidence";
+import { sanitizeWebLlmSnapshotWithBindings, WEB_LLM_WITHHELD_TEXT } from "../../../llm-evidence";
 import { webTargetObservation } from "..";
 
 function snapshot() {
@@ -64,4 +64,19 @@ test("merged, unanswered, malformed and contradictory capture claims never becom
   const malformed = snapshot();
   Object.assign(malformed.interactiveElements[0]!, { context: { shadowHosts: [7] } });
   assert.equal(observed(malformed).coverage, "unknown");
+});
+
+test("malformed or withheld landmark claims cannot prove complete identity coverage", () => {
+  for (const context of [
+    { landmark: 7 }, { landmark: "" }, { landmark: WEB_LLM_WITHHELD_TEXT },
+    { landmark: "navigation", landmarkName: [] }, { landmark: "navigation", landmarkName: "" },
+    { landmark: "navigation", landmarkName: WEB_LLM_WITHHELD_TEXT }
+  ]) {
+    const raw = snapshot();
+    Object.assign(raw.interactiveElements[0]!, { context });
+    assert.equal(observed(raw).coverage, "unknown");
+  }
+  const valid = snapshot();
+  Object.assign(valid.interactiveElements[0]!, { context: { landmark: "navigation", landmarkName: "Primary menu" } });
+  assert.equal(observed(valid).coverage, "complete");
 });

@@ -275,6 +275,23 @@ test("only a positively complete hidden-inclusive absence reports native gone", 
   assert.deepEqual(await boundary.reacquireUnboundTarget!(identityRequest(before)), { outcome: "gone", coverage: "complete" });
 });
 
+test("actual unbound recovery refuses another or unverified saved landmark and emits no replacement patches", async () => {
+  for (const context of [{ landmark: "contentinfo", landmarkName: "Primary menu" }, { landmark: "navigation", landmarkName: "Other menu" }, { landmark: "navigation" }, {}]) {
+    const page = identityBrowser();
+    const boundary = createWebAutomationHostRuntime(page.gateway);
+    const original = { ...CONTROL, context: { landmark: "navigation", landmarkName: "Primary menu" } };
+    const node = identityNode({ element: original });
+    page.change((reply) => ({ ...reply, payload: { result: { snapshot: identitySnapshot(0, { interactiveElements: [{ ...original, selector: "#old-apply", attributes: { "data-testid": "apply-control" } }] }), sourceId: "tab:17:frame:0" } } }));
+    const before = await identityBefore(boundary, node);
+    page.change((reply) => ({ ...reply, payload: { result: { snapshot: identitySnapshot(0, { interactiveElements: [{ ...CONTROL, selector: "#fresh-apply", attributes: { "data-testid": "apply-control" }, context }] }), sourceId: "tab:17:frame:0" } } }));
+    const saved = structuredClone(node.parameterValues);
+    const answer = await boundary.reacquireUnboundTarget!(identityRequest(before, node));
+    assert.deepEqual(answer, { outcome: "unmatched", reason: "ambiguous" });
+    assert.deepEqual(node.parameterValues, saved);
+    assert.equal(page.sent.filter((request) => request.outputId !== "web.dom.capture_snapshot").length, 0);
+  }
+});
+
 test("abort before a capture and cancellation during its late response discard native patches", async () => {
   const page = identityBrowser();
   const boundary = createWebAutomationHostRuntime(page.gateway);

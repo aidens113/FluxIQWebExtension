@@ -23,6 +23,8 @@ import test from "node:test";
 import type { TargetCandidate } from "../candidates";
 import { DRAWING_ATTRIBUTE } from "../drawing-attribute";
 import { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidates } from "../score";
+import { candidateFingerprint } from "../candidates";
+import { el, installStubDocument, stubDocument } from "../../tests/stub-dom";
 
 /** A candidate whose element is a marker: `score.ts` compares it, never reads it. */
 function candidate(candidateId: string, fingerprint: Omit<TargetCandidate["fingerprint"], "candidateId">): TargetCandidate {
@@ -263,4 +265,26 @@ test("an icon that draws nothing, or something else, scores exactly what it scor
     const withDrawing = scoreTargetCandidates({ ...recorded, drawing: SAVE_DRAWING }, [other]).ranked[0]?.score.normalizedScore;
     assert.equal(withDrawing, without);
   }
+});
+
+test("landmark admission excludes a footer twin before ranking the restyled original control", (t) => {
+  const primary = el("a", { id: "open-v2", class: "new-link", href: "/library" }, "Open library");
+  const footer = el("a", { id: "footer-open", class: "old-link", href: "/library" }, "Open library");
+  const document = stubDocument();
+  document.append(el("html", {}, el("body", {}, el("footer", {}, footer), el("nav", {}, primary))));
+  installStubDocument(t, document);
+  for (const element of document.descendants()) Object.defineProperty(element, "ownerDocument", { value: document });
+  assert.ok(primary instanceof Element);
+  assert.ok(footer instanceof Element);
+  const recorded = { tagName: "a", implicitRole: "link", id: "open-original", selector: "#open-original", classNames: ["old-link"], accessibleName: "Open library", visibleText: "Open library", context: { landmark: "navigation" } };
+  const selection = scoreTargetCandidates(recorded, [
+    { element: footer, fingerprint: candidateFingerprint(footer, 0) },
+    { element: primary, fingerprint: candidateFingerprint(primary, 1) }
+  ]);
+  assert.equal(selection.outcome, "resolved");
+  assert.equal(selection.ranked.length, 1);
+  if (selection.outcome === "resolved") assert.equal(selection.chosen.element, primary);
+  const missing = scoreTargetCandidates(recorded, [{ element: footer, fingerprint: candidateFingerprint(footer, 0) }]);
+  assert.equal(missing.outcome, "unmatched");
+  assert.deepEqual(missing.ranked, []);
 });

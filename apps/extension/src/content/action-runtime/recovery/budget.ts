@@ -117,7 +117,7 @@ export const RECOVERY_BUDGET_MS = 5_000;
  */
 export function recoveryBackoffLadder(fault: RecoveryFault, revealing = false): readonly number[] {
   if (revealing && fault === "obstructed_target") return RECOVERY_REVEAL_BACKOFF_MS;
-  if (fault === "target_absent") return RECOVERY_TARGET_BACKOFF_MS;
+  if (fault === "target_absent" || fault === "target_ambiguous") return RECOVERY_TARGET_BACKOFF_MS;
   if (fault === "disabled_target") return RECOVERY_DISABLED_BACKOFF_MS;
   if (faultNeedsInterference(fault)) return RECOVERY_INTERFERENCE_BACKOFF_MS;
   return RECOVERY_BLIP_BACKOFF_MS;

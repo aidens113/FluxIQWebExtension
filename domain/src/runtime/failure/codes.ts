@@ -329,18 +329,21 @@ export const WEB_AUTOMATION_RETRY_AFTER_MAX_MS = 3_600_000;
  * `retryable` answers only Core's question -- whether retrying the same action
  * unchanged can succeed without a person or a Flow edit. Core forbids six
  * categories from ever being retryable, so those rows have no choice; the rest
- * are judged: a target that could not be found may appear once the page
- * settles, whereas an ambiguous one stays ambiguous until the Flow says which
- * it meant.
+ * are judged: a target may appear, or become uniquely resolvable, once the page
+ * settles or its original source is refreshed. A tie is still refused on each
+ * attempt; retryability never authorizes choosing one candidate from it.
  */
 export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomationFailureCode, WebAutomationFailureCodeDefinition>> = Object.freeze({
   "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
   "web.target.not_actionable": { category: "unexpected_state", retryable: false, stage: "execution" },
   // A target the page has and does not show is a step that is not available:
   // Core finds the current step by state for it, as for one not found at all.
-  "web.target.not_shown": { category: "target_not_found", retryable: true, stage: "target_resolution", shown: false },
-  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
-  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  // The hidden gate and the resolver both refuse before any verb dispatches.
+  "web.target.not_shown": { category: "target_not_found", retryable: true, stage: "target_resolution", effect: "unacted", shown: false },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution", effect: "unacted" },
+  // The resolver refused before dispatch. Waiting or refreshing the source may
+  // make the target unique; no gesture has happened to repeat.
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: true, stage: "target_resolution", effect: "unacted" },
   "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
   // The verb ran, the option asked for is not one the control offers, and
   // asking again offers the same list (the code's own comment above).

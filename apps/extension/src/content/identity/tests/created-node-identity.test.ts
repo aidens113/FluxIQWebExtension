@@ -16,8 +16,9 @@
 // the `command.element` the page would read is scored here by the same `veto.ts`
 // and `score.ts` the resolver uses. The candidates are shaped as
 // `candidateFingerprint` describes the fixture's controls
-// (`apps/scenario-lab/src/scenarios/instruction-only-form/scenario.ts`); nothing
-// on this path reads the element, so it is a marker, as in `veto.test.ts`.
+// (`apps/scenario-lab/src/scenarios/instruction-only-form/scenario.ts`). Their
+// DOM candidates retain the actual main landmark that the captured identity
+// requires; the place gate must not be bypassed with non-DOM markers.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -28,6 +29,8 @@ import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAuto
 import type { TargetCandidate } from "../candidates";
 import { TARGET_SCORE_FLOOR, scoreTargetCandidates, type RecordedIdentity } from "../score";
 import { vetoCandidate } from "../veto";
+import { el, installStubDocument, stubDocument } from "../../tests/stub-dom";
+import type { TestContext } from "node:test";
 
 const PAGE_URL = "http://127.0.0.1:4100/instruction-only-form";
 
@@ -52,6 +55,25 @@ const SUBMIT = candidate("instruction-submit", { tagName: "button", role: "butto
 const DRIFT_BUTTON = candidate("instruction-introduce-target-drift", { tagName: "button", role: "button", testId: "instruction-introduce-target-drift", selector: '[data-testid="instruction-introduce-target-drift"]', visibleText: "Introduce target drift", accessibleName: "Introduce target drift", bounds, isVisibleOnViewport: true });
 /** A different text field a drifted page could put under the same selector. */
 const EMAIL_INPUT = candidate("instruction-email", { tagName: "input", role: "textbox", testId: "instruction-email", selector: '[data-testid="instruction-email"]', accessibleName: "Email", label: "Email", bounds, isVisibleOnViewport: true });
+
+/** Install the candidates' captured main landmark before the real place gate reads them. */
+function installCandidatePage(t: TestContext): void {
+  const document = stubDocument();
+  const main = el("main");
+  document.append(el("html", {}, el("body", {}, main)));
+  installStubDocument(t, document);
+  for (const candidate of [NAME_INPUT, PLAN_SELECT, SUBMIT, DRIFT_BUTTON, EMAIL_INPUT]) {
+    const fingerprint = candidate.fingerprint;
+    const attributes: Record<string, string> = { "data-testid": fingerprint.testId ?? fingerprint.candidateId };
+    if (fingerprint.role) attributes.role = fingerprint.role;
+    if (fingerprint.accessibleName) attributes["aria-label"] = fingerprint.accessibleName;
+    const element = el(fingerprint.tagName ?? "button", attributes, fingerprint.visibleText ?? "");
+    main.append(element);
+    Object.defineProperty(element, "ownerDocument", { value: document });
+    assert.ok(element instanceof Element);
+    candidate.element = element;
+  }
+}
 
 async function resolvedNode(nodeDefinitionId: string, parameters: JsonObject): Promise<JsonObject> {
   const runtime = createWebAutomationLlmEvidenceRuntime({
@@ -83,14 +105,16 @@ function pageIdentity(actionType: string, parameters: JsonObject): RecordedIdent
 
 const TYPE_PARAMETERS: JsonObject = { selector: { handle: "target.2" }, text: "Ada Lovelace" };
 
-test("the live failure, reproduced: a type node with no element is refused on the right input", () => {
+test("the live failure, reproduced: a type node with no element is refused on the right input", (t) => {
+  installCandidatePage(t);
   const identity = pageIdentity("web.dom.type", { selector: '[data-testid="instruction-name"]', text: "Ada Lovelace" });
   assert.equal(identity.visibleText, "Ada Lovelace", "Core read the typed text as the input's identity");
   const verdict = vetoCandidate(identity, NAME_INPUT);
   assert.equal(verdict.refusedBecause, "uncorroborated");
 });
 
-test("a created type node's identity is accepted on its own input, above the floor, and refused on another", async () => {
+test("a created type node's identity is accepted on its own input, above the floor, and refused on another", async (t) => {
+  installCandidatePage(t);
   const identity = pageIdentity("web.dom.type", await resolvedNode(webAutomationOutputNodeId("web.dom.type"), TYPE_PARAMETERS));
   assert.equal(identity.visibleText, undefined);
   assert.equal(identity.accessibleName, "Name");
@@ -114,7 +138,8 @@ test("a created type node's identity is accepted on its own input, above the flo
   assert.notEqual(scoreTargetCandidates(identity, [EMAIL_INPUT]).outcome, "resolved", "a lone wrong input is not chosen");
 });
 
-test("a created click node's identity is accepted on its own button and refused on another", async () => {
+test("a created click node's identity is accepted on its own button and refused on another", async (t) => {
+  installCandidatePage(t);
   const identity = pageIdentity("web.dom.click", await resolvedNode(webAutomationOutputNodeId("web.dom.click"), { selector: { handle: "target.4" } }));
   assert.equal(identity.accessibleName, "Submit");
   const accepted = vetoCandidate(identity, SUBMIT);

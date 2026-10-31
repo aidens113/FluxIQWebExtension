@@ -11,9 +11,10 @@ import { AUTOMATION_STUDIO_TARGET_GONE_CODE, parseAutomationStudioFailureRecord,
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../../../capture";
 import { captureEvidence } from "../../../capture";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../../../../failure";
 import { webPacketElementFingerprint } from "../../../packet-fingerprint";
 import type { WebNodeRun } from "../../context";
-import { webNodeLookedUpReacquire, webNodeReplayedReads, webNodeReplayRowReacquire, webNodeRetryReacquire, type WebNodeDispatchResult } from "..";
+import { webNodeDispatchWithRetries, webNodeLookedUpReacquire, webNodeReplayedReads, webNodeReplayRowReacquire, webNodeRetryReacquire, type WebNodeDispatchResult } from "..";
 
 const STALE_FAILURE: AutomationStudioFailureRecord = { category: "target_not_found", code: "web.target.not_found", retryable: true, effect: "unacted" };
 const REQUEST = { projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: "fluxiq.run_node", value: {} };
@@ -99,6 +100,39 @@ test("a pass whose row was redrawn re-reads its list once and is scoped to the s
   const element = found.parameters.element as JsonObject;
   assert.deepEqual((element.context as { record: JsonObject }).record.values, ["Mara Quill", "Kayak trip on the north lake", "13 likes"]);
   assert.deepEqual(sent, [{ actionType: READ, parameters: { extractList: { handle: "list" } }, metadata: { callId: "pass.2" } }]);
+});
+
+test("three unacted ambiguity failures re-read the source before attempt four and keep the same row after it moves", async () => {
+  const fresh = { ...ROWS[1]!, likes: "13 likes" };
+  const sent: Command[] = [];
+  let clicks = 0;
+  let gestures = 0;
+  const { run } = runOf(async (_session, command) => {
+    sent.push(command);
+    if (command.actionType === READ) return { status: "succeeded", payload: { extracted: [fresh, ROWS[0]!] } };
+    assert.equal(command.actionType, "web.dom.click");
+    clicks += 1;
+    if (clicks <= 3) {
+      return { status: "failed", failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS) as unknown as JsonObject };
+    }
+    const element = command.parameters.element as JsonObject;
+    assert.deepEqual((element.context as { record: JsonObject }).record.values, ["Mara Quill", "Kayak trip on the north lake", "13 likes"]);
+    gestures += 1;
+    return { status: "succeeded" };
+  });
+  webNodeReplayedReads(run).remember({ command: { actionType: READ, parameters: { extractList: { handle: "list" } } }, parameters: { extractList: {} }, rows: ROWS });
+  const reacquire = webNodeReplayRowReacquire(run, { item: ROWS[1], parameters: PRESS, metadata: { callId: "pass.2" }, readRows });
+  assert.ok(reacquire);
+  const outcome = await webNodeDispatchWithRetries(run, { definitionId: "web.output.dom-click", effect: "mutate" }, { actionType: "web.dom.click", parameters: PRESS, metadata: { callId: "pass.2" } }, undefined, undefined, reacquire);
+  assert.equal(outcome.result.status, "succeeded");
+  assert.equal(outcome.attempts, 4);
+  assert.equal(outcome.reacquire, "found");
+  assert.equal(clicks, 4);
+  assert.equal(gestures, 1, "the three tied resolutions dispatched no lasting act");
+  assert.deepEqual(sent.map((command) => command.actionType), ["web.dom.click", "web.dom.click", "web.dom.click", READ, "web.dom.click"]);
+  assert.deepEqual(sent[3]!.parameters, { extractList: { handle: "list" } });
+  for (const command of sent.slice(0, 3)) assert.deepEqual(command.parameters, PRESS);
+  assert.deepEqual(((PRESS.element as JsonObject).context as { record: JsonObject }).record.values, ["Mara Quill", "Kayak trip on the north lake", "12 likes"], "the saved source identity is not overwritten");
 });
 
 test("a row no longer in the list is gone; a re-read that fails or reads nothing is unavailable", async () => {

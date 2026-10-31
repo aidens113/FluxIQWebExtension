@@ -56,9 +56,10 @@ function knownElement(element: unknown): boolean {
   const context = element.context;
   if (context.shadowHosts !== undefined && (!Array.isArray(context.shadowHosts)
     || context.shadowHosts.some((host) => typeof host !== "string" || host.trim() === ""))) return false;
-  if (context.dialog !== undefined) {
-    const dialog = screenedPageText(context.dialog);
-    if (dialog === undefined || isWithheldText(dialog)) return false;
+  for (const field of ["dialog", "landmark", "landmarkName"] as const) {
+    if (context[field] === undefined) continue;
+    const value = screenedPageText(context[field]);
+    if (value === undefined || isWithheldText(value)) return false;
   }
   return true;
 }

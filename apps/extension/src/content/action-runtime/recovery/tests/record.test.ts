@@ -71,6 +71,32 @@ test("a record with no `actual` of its own gains the account rather than a stray
   assert.equal(annotated.failure?.actual, "the execution recovered on attempt 2 after absorbing target_absent, waiting 250 ms");
 });
 
+test("annotation preserves original refusal controls, including an explicit no-retry and uncertain effect", () => {
+  const original = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  for (const controls of [
+    { ...original, retryable: false },
+    { ...original, effect: "ambiguous" as const },
+    { ...original, category: "auth_required" as const, stage: "execution" as const, retryable: false, effect: "ambiguous" as const }
+  ]) {
+    const before = { ...controls };
+    assert.notEqual(parseAutomationStudioFailureRecord(controls), null);
+    const annotated = recordRecovery(result({ status: "failed", failure: controls }), { ...RECOVERED, absorbed: ["target_ambiguous"] });
+    assert.deepEqual(controls, before, "the original failure object is not changed");
+    assert.notEqual(annotated.failure, controls);
+    assert.deepEqual(annotated.failure, { ...controls, actual: "the execution recovered on attempt 2 after absorbing target_ambiguous, waiting 250 ms" });
+    assert.deepEqual(parseAutomationStudioFailureRecord(annotated.failure), annotated.failure);
+  }
+});
+
+test("annotation cannot repair invalid original controls into a retryable code default", () => {
+  const invalid = { ...webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS), category: "auth_required" as const };
+  assert.equal(parseAutomationStudioFailureRecord(invalid), null, "auth_required cannot authorize retries");
+  const annotated = recordRecovery(result({ status: "failed", failure: invalid }), RECOVERED);
+  assert.equal(annotated.failure?.category, "auth_required");
+  assert.equal(annotated.failure?.retryable, true);
+  assert.equal(parseAutomationStudioFailureRecord(annotated.failure), null, "invalid controls still reach Core's strict refusal unchanged");
+});
+
 test("a validation already at its bound loses its own tail rather than the whole annotation", () => {
   const long = "x".repeat(1_100);
   const annotated = recordRecovery(result({ validation: { status: "passed", expected: "e", actual: long } }), RECOVERED);

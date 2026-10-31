@@ -109,3 +109,39 @@ test("readsWords with two stable non-word signals still finds changed current wo
   const fresh = { element: { tagName: "input", inputType: "text", testId: "sheet-total", visibleText: "9", selector: "#fresh" } };
   assert.deepEqual(webReacquireElement({ stale, candidates: [fresh] }), { outcome: "found", value: fresh });
 });
+
+test("source control refresh refuses footer, missing and differently named landmarks without proving gone", () => {
+  const base = { tagName: "a", implicitRole: "link", accessibleName: "Open workspace", testId: "open-workspace" };
+  const stale = { element: { ...base, context: { landmark: "navigation", landmarkName: "Primary menu" } } };
+  const source = { id: "find-control", definitionId: "web.output.dom-extract" };
+  for (const context of [{ landmark: "contentinfo", landmarkName: "Primary menu" }, { landmark: "navigation", landmarkName: "Other menu" }, { landmark: "navigation" }, {}]) {
+    const candidates = [{ element: { ...base, context } }];
+    const expected = { outcome: "unmatched", reason: "ambiguous" };
+    assert.deepEqual(webReacquireElement({ stale, candidates }), expected);
+    assert.deepEqual(webAutomationReacquireTarget({ lineage: { kind: "output", sourceNodeId: source.id, outputKey: "element" }, source, stale, candidates }), expected);
+  }
+  assert.deepEqual(webReacquireElement({ stale, candidates: [] }), { outcome: "unmatched", reason: "ambiguous" });
+});
+
+test("same named landmark and stable identity survive absent optional attributes and changed position", () => {
+  const base = { tagName: "a", implicitRole: "link", accessibleName: "Open workspace", testId: "open-workspace" };
+  const place = { landmark: "navigation", landmarkName: "Primary menu" };
+  const stale = { element: { ...base, id: "old-control", classNames: ["old-class"], context: { ...place, listPosition: { index: 1, total: 2 } } } };
+  const fresh = { handle: "t82", selector: "#fresh-control", element: { ...base, context: { ...place, listPosition: { index: 8, total: 9 } } } };
+  assert.deepEqual(webReacquireElement({ stale, candidates: [fresh] }), { outcome: "found", value: fresh });
+  assert.deepEqual(webReacquireElement({ stale, candidates: [fresh, structuredClone(fresh)] }), { outcome: "unmatched", reason: "ambiguous" });
+  for (const changed of [{ id: "different-control" }, { classNames: ["different-class"] }]) {
+    assert.equal(webReacquireElement({ stale, candidates: [{ ...fresh, element: { ...fresh.element, ...changed } }] }).outcome, "unmatched", "present contradictory identity remains a refusal");
+  }
+});
+
+test("no saved landmark invents no restriction, while malformed saved or current landmark claims fail closed", () => {
+  const base = { tagName: "button", accessibleName: "Open workspace" };
+  const footer = { element: { ...base, context: { landmark: "contentinfo" } } };
+  assert.deepEqual(webReacquireElement({ stale: { element: base }, candidates: [footer] }), { outcome: "found", value: footer });
+  for (const context of [{ landmark: 7 }, { landmark: "" }, { landmark: "navigation", landmarkName: [] }]) {
+    const malformed = { element: { ...base, context } };
+    assert.deepEqual(webReacquireElement({ stale: malformed, candidates: [footer] }), { outcome: "unmatched", reason: "unidentifiable" });
+    assert.deepEqual(webReacquireElement({ stale: { element: { ...base, context: { landmark: "navigation" } } }, candidates: [malformed] }), { outcome: "unmatched", reason: "ambiguous" });
+  }
+});

@@ -14,6 +14,7 @@ import {
   WEB_AUTOMATION_FAILURE_CODES,
   WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS,
   isWebAutomationFailureCode,
+  webAutomationFailureRecord,
   type WebAutomationFailureCode
 } from "@fluxiq-web-extension/domain/client";
 import { RECOVERY_FAULT_BY_CODE, RECOVERY_KNOWN_ACTION_TYPES, RECOVERY_OBSTRUCTION_FAULTS, faultNeedsInterference, recoverableFault, webActionReadsOnly } from "../fault";
@@ -30,7 +31,7 @@ function failed(actionType: string, code: WebAutomationFailureCode, actual?: str
     actionType,
     status: "failed",
     validation: { status: "failed", expected: "e", actual: "a" },
-    failure: { category: "action_failed", code, retryable: true, stage: "execution", ...(actual === undefined ? {} : { actual }) },
+    failure: webAutomationFailureRecord(code, { actual }),
     startedAt: 0,
     finishedAt: 1
   } as unknown as BrowserActionResult;
@@ -77,6 +78,37 @@ test("every verb absorbs a target that was not there, because nothing had been d
       "target_absent",
       `${actionType} refused to wait for a target that had not been drawn yet`
     );
+  }
+});
+
+test("target code defaults cannot override unsafe original controls before a mutating retry", () => {
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]) {
+    const base = failed("web.dom.click", code);
+    const failure = webAutomationFailureRecord(code);
+    const { effect: _effect, ...withoutEffect } = failure;
+    for (const actionType of ["web.dom.click", "web.dom.type", "web.dom.check", "web.dom.upload", "web.dom.extract_list"]) {
+      const action = command(actionType, actionType === "web.dom.extract_list" ? PAGED_LIST : undefined);
+      assert.notEqual(recoverableFault({ ...base, failure }, action), undefined, `${code}: factory proof stays eligible`);
+      assert.notEqual(recoverableFault({ ...base, failure: withoutEffect }, action), undefined, `${code}: legacy absence retains pre-dispatch proof`);
+      for (const unsafe of [
+        { ...failure, effect: "ambiguous" as const },
+        { ...failure, retryable: false },
+        { ...failure, stage: "execution" as const },
+        { ...failure, category: "action_failed" as const },
+        { ...failure, category: "action_failed" as const, stage: "execution" as const }
+      ]) assert.equal(recoverableFault({ ...base, failure: unsafe }, action), undefined, `${code}: ${actionType} must not repeat ${JSON.stringify(unsafe)}`);
+    }
+  }
+});
+
+test("pure reads retain retryable target faults while an explicit permanent original still stops them", () => {
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]) {
+    const base = failed("web.dom.extract", code);
+    const failure = webAutomationFailureRecord(code);
+    const read = command("web.dom.extract");
+    assert.notEqual(recoverableFault({ ...base, failure: { ...failure, effect: "ambiguous" } }, read), undefined);
+    assert.notEqual(recoverableFault({ ...base, failure: { ...failure, category: "action_failed", stage: "execution" } }, read), undefined);
+    assert.equal(recoverableFault({ ...base, failure: { ...failure, retryable: false } }, read), undefined);
   }
 });
 
@@ -130,9 +162,9 @@ test("a verb that only reads absorbs every transient fault the closed set names,
         .filter(isWebAutomationFailureCode)
         .filter((code) => RECOVERY_FAULT_BY_CODE[code] !== undefined)
         .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED && code !== WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT && code !== WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE)
-        .map((code) => recoverableFault(failed(actionType, code), command(actionType))),
+        .map((code) => recoverableFault({ ...failed(actionType, code), failure: webAutomationFailureRecord(code) }, command(actionType))),
       // `obstructed_target` is TARGET_NOT_SHOWN's, absorbed as the obstruction it always was.
-      ["obstructed_target", "target_absent", "output_not_observed", "page_changed", "timeout", "transport", "action_failed"]
+      ["obstructed_target", "target_absent", "target_ambiguous", "output_not_observed", "page_changed", "timeout", "transport", "action_failed"]
     );
   }
 });
@@ -165,7 +197,7 @@ test("a deterministic refusal is never retried, on any verb", () => {
     // then attempted, which is a different move and has its own rows below.
     .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG && code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED)
     .filter((code) => !WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code].retryable);
-  assert.ok(deterministic.includes(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS));
+  assert.ok(!deterministic.includes(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS));
   assert.ok(deterministic.includes(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER));
   // The permission refusal added for t163's finding 2: retried three times before
   // it had a code of its own, and the point of giving it one is that it is not.
@@ -175,6 +207,25 @@ test("a deterministic refusal is never retried, on any verb", () => {
       assert.equal(recoverableFault(failed(actionType, code), command(actionType)), undefined, `${actionType} retried ${code}, which cannot change`);
     }
   }
+});
+
+test("ambiguity waits for uniqueness only when the producer explicitly proves an unacted target refusal", () => {
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS);
+  const { effect: _effect, ...withoutEffect } = failure;
+  for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
+    const result = { ...failed(actionType, failure.code), failure };
+    assert.equal(recoverableFault(result, command(actionType)), "target_ambiguous", actionType);
+    for (const refused of [
+      { ...failure, effect: "ambiguous" as const },
+      withoutEffect,
+      { ...failure, retryable: false },
+      { ...failure, stage: "execution" as const },
+      { ...failure, category: "action_failed" as const }
+    ]) {
+      assert.equal(recoverableFault({ ...result, failure: refused }, command(actionType)), undefined, `${actionType}: ${JSON.stringify(refused)}`);
+    }
+  }
+  assert.equal(faultNeedsInterference("target_ambiguous"), false, "a tie must not be resolved by dismissing page controls");
 });
 
 test("a code outside the closed set is not a fault, so a hand-written record cannot open the loop", () => {

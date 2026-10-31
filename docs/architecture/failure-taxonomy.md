@@ -17,7 +17,12 @@ be weakened by the code's default row or a pre-dispatch stage inference.
 The host may annotate an already parsed `RATE_LIMITED` or classified
 `TRANSPORT_TRANSIENT` record with `transient: true`; shared browser-facing
 constructors do not emit that field. Temporary cause alone says nothing about
-whether an action occurred or may be repeated.
+whether an action occurred or may be repeated. Recovery-count annotation
+preserves valid original failure controls, including its explicit effect and
+retryability; it never replaces an ambiguous effect
+with the failure code's unacted default. Waiting for uniqueness uses the
+existing time and attempt bounds and stops if an uncertain effect is
+reported. A possibly landed lasting act is never repeated.
 
 Evidence tool results carry an optional control-only failure through exploration,
 replay and refusal paths. The public Core projection validates it and excludes
@@ -62,7 +67,7 @@ expected failure names.
 | `TARGET_NOT_ACTIONABLE` | `web.target.not_actionable` | `unexpected_state` | no | `execution` |
 | `TARGET_NOT_SHOWN` | `web.target.not_shown` | `target_not_found` | yes | `target_resolution` |
 | `TARGET_NOT_FOUND` | `web.target.not_found` | `target_not_found` | yes | `target_resolution` |
-| `TARGET_AMBIGUOUS` | `web.target.ambiguous` | `target_ambiguous` | no | `target_resolution` |
+| `TARGET_AMBIGUOUS` | `web.target.ambiguous` | `target_ambiguous` | yes | `target_resolution` |
 | `OUTPUT_NOT_OBSERVED` | `web.validation.output_not_observed` | `output_not_observed` | yes | `verification` |
 | `OPTION_NOT_OFFERED` | `web.validation.option_not_offered` | `output_not_observed` | no | `verification` |
 | `STATE_MISMATCH` | `web.validation.state_mismatch` | `unexpected_state` | no | `verification` |
@@ -102,12 +107,21 @@ six categories from ever being retryable —
 `auth_required` and `user_intervention_required` — so those rows have no
 choice, and it also allows `target_not_found` and `target_ambiguous` to name
 only the `target_resolution` stage. The rest are judged: a target that could
-not be found may appear once the page settles, while an ambiguous one stays
-ambiguous until the Flow says which it meant.
+not be found may appear once the page settles, and temporary duplicate
+controls may become unique after it settles. `TARGET_NOT_FOUND`,
+`TARGET_NOT_SHOWN` and `TARGET_AMBIGUOUS` are constructed before dispatch and
+carry an unacted default. Target recovery checks the original controls before
+any remedy: an explicit permanent refusal is retained, and incompatible
+category/stage or uncertain effect cannot authorize another mutating dispatch.
+Legacy missing effect is accepted only with the known safe pre-dispatch
+controls. Waiting for uniqueness never chooses one of the tied candidates. Persistent ambiguity exhausts the first attempt plus
+three retries and fails. A target with retained source lineage can use the
+existing source-step reacquisition rung before its remaining attempts.
 
 That flag does not by itself authorize a browser replay. Two layers apply
 side-effect safety. The page-side content recovery loop retries a mutating
-action only for a pre-dispatch `TARGET_NOT_FOUND`; read-only actions may retry
+action only for a safe pre-dispatch `TARGET_NOT_FOUND` or
+`TARGET_AMBIGUOUS`; read-only actions may retry
 the browser-retryable faults that reach that loop. `TRANSPORT_TRANSIENT` is
 instead classified by the background worker before the verb is reached, so the
 content loop does not see it in practice. When that failure reaches Core, the

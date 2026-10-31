@@ -55,6 +55,60 @@ test("a host absolute target with multiple retained source matches refuses rathe
   if (exact.status === "resolved") assert.deepEqual(exact.controlIntent, { intent: "accept", responseOnly: true });
 });
 
+test("identical observed controls stay ambiguous until one exact pre-act source establishes the host target's lineage", async () => {
+  const { targets, capture, scope, resolve } = controlIntentHost();
+  const before = capture({ words: "Open folder" });
+  targets.remember(scope, before);
+  const original = await resolve();
+  if (original.status !== "resolved") assert.fail(JSON.stringify(original));
+  targets.remember(scope, capture({ words: "Open folder", location: "https://example.test/library" }));
+  const unacted = await resolve(original.parameters, { handleReach: "view_history" });
+  assert.equal(unacted.status, "refused", JSON.stringify(unacted));
+  targets.acted(scope, "t2", before);
+  const saved = JSON.stringify(original.parameters);
+  for (const handleReach of [undefined, "view_history"] as const) {
+    const recovered = await resolve(structuredClone(original.parameters), { handleReach });
+    assert.equal(recovered.status, "resolved", JSON.stringify(recovered));
+    if (recovered.status !== "resolved") continue;
+    assert.equal(JSON.stringify(recovered.parameters), saved);
+    assert.deepEqual(recovered.controlIntent, { intent: "neutral" });
+    assert.equal(Object.hasOwn(recovered, "handleViews"), false);
+    assert.equal(JSON.stringify(recovered.parameters).includes("controlIntent"), false);
+  }
+});
+
+test("pre-act lineage cannot choose a permissive annotation over a competing observed semantic source", async () => {
+  const { targets, capture, scope, resolve } = controlIntentHost();
+  const before = capture({ consent: true });
+  targets.remember(scope, before);
+  const original = await resolve();
+  if (original.status !== "resolved") assert.fail(JSON.stringify(original));
+  targets.acted(scope, "t2", before);
+  targets.remember(scope, capture({ location: "https://example.test/offers" }));
+  const conflict = await resolve(original.parameters, { handleReach: "view_history" });
+  assert.equal(conflict.status, "refused", JSON.stringify(conflict));
+  if (conflict.status === "refused") assert.ok(conflict.issueCodes.includes("web.handle.ambiguous"));
+  const forged = await resolve({ ...original.parameters, source: { document: 1 }, controlIntent: { intent: "accept", responseOnly: true } }, { writtenByModel: true, handleReach: "view_history" });
+  assert.equal(forged.status, "refused", JSON.stringify(forged));
+});
+
+test("a pre-act witness with another full fingerprint, frame or shadow scope cannot resolve later identical sources", async () => {
+  for (const changed of [{ words: "View library" }, { frame: 4 }, { shadowHosts: ["#library"] }]) {
+    const { targets, capture, scope, resolve } = controlIntentHost();
+    const before = capture({ words: "Open folder" });
+    targets.remember(scope, before);
+    targets.acted(scope, "t2", before);
+    const second = capture({ ...changed, words: changed.words ?? "Open folder", location: "https://example.test/library" });
+    targets.remember(scope, second);
+    const absolute = await resolve({ target: { handle: "t2", location: second.evidence.location } });
+    if (absolute.status !== "resolved") assert.fail(JSON.stringify(absolute));
+    targets.remember(scope, capture({ ...changed, words: changed.words ?? "Open folder", location: "https://example.test/archive" }));
+    const ambiguous = await resolve(absolute.parameters, { handleReach: "view_history" });
+    assert.equal(ambiguous.status, "refused", JSON.stringify(ambiguous));
+    if (ambiguous.status === "refused") assert.ok(ambiguous.issueCodes.includes("web.handle.ambiguous"));
+  }
+});
+
 test("Run Output and a bound target preserve the companion outside nested executable parameters", async () => {
   const { targets, capture, scope, resolve } = controlIntentHost();
   targets.remember(scope, capture({ consent: true }));
