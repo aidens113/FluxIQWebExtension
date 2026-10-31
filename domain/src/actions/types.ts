@@ -5,6 +5,7 @@
 // background worker, and the content script.
 
 import type { ElementFingerprint } from "fluxiq/automation-studio";
+import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 // The result's `failure` is Core's record with `code` narrowed to the closed
 // set the browser path may produce. The two modules name each other -- the code
@@ -565,6 +566,8 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   actionType: WebAutomationActionType;
   status: WebAutomationActionStatus;
   validation: WebAutomationActionValidation;
+  /** An actual target measurement; gateway carriage stays inside its existing payload. */
+  actionability?: AutomationStudioTargetActionabilityRecord | undefined;
   message?: string | undefined;
   url?: string | undefined;
   title?: string | undefined;

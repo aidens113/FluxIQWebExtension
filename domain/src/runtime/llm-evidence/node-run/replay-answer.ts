@@ -100,6 +100,7 @@ type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; reason?: W
 export type WebNodeReplayFacts = {
   /** Already history-vetted host failure; projected before leaving toolExecution. */
   failure?: unknown;
+  actionability?: unknown;
   resultReason: WebLlmToolRejectionReason | undefined;
   nodeId: string | undefined;
   /**
@@ -122,7 +123,7 @@ export type WebNodeReplayFacts = {
  * checked step, which passed and did nothing.
  */
 export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject, changed?: string[], route?: "ended"): WebLlmEvidenceToolExecution {
-  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said: replaySaid(said, about), reason: about?.resultReason, found: undefined, notice: undefined, changed, readRows, route }) as unknown as JsonValue, acted, code, undefined, undefined, about, about?.failure);
+  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said: replaySaid(said, about), reason: about?.resultReason, found: undefined, notice: undefined, changed, readRows, route }) as unknown as JsonValue, acted, code, undefined, undefined, about, about?.failure, about?.actionability);
 }
 
 /** What a replayed Next page says it did, and the route it chose; see `webNodeReplayNextPage`. */
@@ -193,9 +194,9 @@ export function webNodeReplayAnswerOnPage(
     // still checked.
     const published: JsonObject = publishedWebLlmPage(page.evidence) as unknown as JsonObject;
     const value = { ...published, ...verdict } as unknown as JsonValue;
-    return replayStates(toolExecution(value, false, answer.code, undefined, undefined, answer.about, answer.about?.failure), page, answer.acted);
+    return replayStates(toolExecution(value, false, answer.code, undefined, undefined, answer.about, answer.about?.failure, answer.about?.actionability), page, answer.acted);
   }
-  return replayStates(toolExecution(verdict as unknown as JsonValue, false, answer.code, undefined, undefined, answer.about, answer.about?.failure), page, answer.acted);
+  return replayStates(toolExecution(verdict as unknown as JsonValue, false, answer.code, undefined, undefined, answer.about, answer.about?.failure, answer.about?.actionability), page, answer.acted);
 }
 
 /** The same, with the page taken now. */

@@ -32,6 +32,7 @@ import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { rejectionDetail, type WebLlmToolRejectionCode, type WebLlmToolRejectionDetail, type WebLlmToolRejectionReason } from "../tool-rejection";
 import { webActionReadShortfall, type WebActionReadShortfall } from "./read-shortfall";
 import type { WebFailedActionResult } from "./result";
+import { webActionabilityFromPayload } from "../../../actions/actionability";
 
 /** The refusal a failed action is reported to the model as: its code, and what it can say beyond it. */
 export type WebActionRefusal = {
@@ -204,7 +205,11 @@ export function webActionFailureRejectionCode(result: WebFailedActionResult): We
   if (result.status === "timed_out") return "action_timed_out";
   const code = result.failure?.code;
   if (code === WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED || code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE) {
-    return typeof result.failure?.actual === "string" && result.failure.actual.startsWith("covered:") ? "target_covered" : "target_not_actionable";
+    const actionability = webActionabilityFromPayload(result);
+    const covered = actionability === undefined
+      ? typeof result.failure?.actual === "string" && result.failure.actual.startsWith("covered:")
+      : !actionability.actionable && actionability.cause === "covered";
+    return covered ? "target_covered" : "target_not_actionable";
   }
   return typeof code === "string" && Object.prototype.hasOwnProperty.call(BY_FAILURE_CODE, code) ? BY_FAILURE_CODE[code]! : "action_failed";
 }

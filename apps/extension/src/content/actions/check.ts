@@ -35,6 +35,7 @@
 // nothing, otherwise one press at the point the gate judged, then the state
 // read back. Its result says "chosen" rather than "checked", and what showed it.
 
+import { portableActionability } from "../action-runtime/actionability/index";
 import type { ActionabilityReport } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -53,6 +54,7 @@ export async function checkAction(action: BrowserActionCommand, deps: ContentAct
       element: deps.describeElement(element),
       snapshot: deps.captureSnapshot(),
       resolution,
+      actionability: portableActionability(report),
       ...(report.point ? { blockedAt: report.point } : {}),
       target: element,
       // Refused by the gate before `setCheckedState`, so nothing was pressed;
@@ -63,8 +65,11 @@ export async function checkAction(action: BrowserActionCommand, deps: ContentAct
 
   const outcome = await deps.setCheckedState(element, requested, report.point);
   // Described after the attempt, so the evidence shows the state the page was left in.
-  const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
+  const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution, actionability: portableActionability(report) };
   if (!outcome.ok) {
+    // The setter measures disabled on its effective input/control before activation.
+    // Preserve the existing failure/effect policy; this is only the newer measurement.
+    if (outcome.code === "disabled") evidence.actionability = { actionable: false, cause: "disabled" };
     const code = outcome.code === "disabled" ? "disabled" : "not_checkable";
     return deps.rejected(action, startedAt, code, expected, outcome.reason, evidence);
   }

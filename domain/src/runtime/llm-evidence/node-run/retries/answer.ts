@@ -1,4 +1,5 @@
 import { readWebHostFailure } from "../../../host-failure";
+import { webActionabilityFromPayload } from "../../../../actions/actionability";
 // Which of a node's attempts answers for it once its retries are spent (t741 C1).
 //
 // Core's retries hand back the last attempt's answer. That is right whenever
@@ -57,6 +58,8 @@ function failureCode(answer: WebNodeDispatchResult): string | undefined {
 
 /** A control covered by a layer is still there, so its failure is not owed to the refusal (`covered:`, read as `../../action-failure/refusal.ts` reads it). */
 function covered(answer: WebNodeDispatchResult): boolean {
+  const actionability = webActionabilityFromPayload(answer);
+  if (actionability !== undefined) return !actionability.actionable && actionability.cause === "covered";
   const actual = answer.status === "succeeded" ? undefined : answer.failure?.actual;
   return typeof actual === "string" && actual.startsWith("covered:");
 }

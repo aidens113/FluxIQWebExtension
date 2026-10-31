@@ -1,4 +1,5 @@
 import { webHostFailure, webHostThrownFailure } from "../runtime/host-failure";
+import { webActionabilityFromPayload, webActionabilityProperty } from "../actions/actionability";
 import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
 import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
@@ -54,6 +55,9 @@ export async function dispatchWebAutomationOutput(
     // an invalid supplied record must never become a new temporary admission.
     const failure = status === "succeeded" || status === "cancelled" ? undefined : webHostFailure(reportedFailure) ?? reportedFailure;
     const succeeded = status === "succeeded";
+    const actionability = webActionabilityFromPayload(result);
+    const targetControls: Pick<OutputDispatchResult<JsonObject>, "actionability"> = {};
+    if (actionability !== undefined) targetControls.actionability = actionability;
     const message = interrupted?.message ?? stringValue(result.message);
     // A robot check that stood on the landed page and cleared by itself rides
     // the client's payload as `checkWait` (`actions/cleared-check-wait.ts`).
@@ -106,6 +110,7 @@ export async function dispatchWebAutomationOutput(
       outputId: request.outputId,
       metadata: { sessionId },
       status,
+      ...targetControls,
       payload: compact({ status, message, result: isRecord(result.payload) && (clearedLayers || obstruction) ? { ...result.payload, ...(clearedLayers ? { clearedLayers } : {}), ...(obstruction ? { obstruction } : {}) } : result.payload, route, skipped, toggle, clearedLayers, obstruction }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
@@ -120,6 +125,8 @@ export async function dispatchWebAutomationOutput(
     const result: OutputDispatchResult<JsonObject> = { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
     const failure = webHostThrownFailure(error);
     if (failure !== undefined) result.failure = failure;
+    const actionability = webActionabilityProperty(error);
+    if (actionability !== undefined) result.actionability = actionability;
     return result;
   }
 }

@@ -4,6 +4,8 @@
 // judgement of what the control looks like: the user's instruction is the
 // authority, and an act with a lasting consequence is a matter of permission
 // that Core will carry and put to the person (the seam is in `../press.ts`).
+// Core also receives the canonical action floor; the model's declaration
+// cannot lower it.
 // What the tool still does on its own is leave the page as it found it: a
 // ticked checkbox is ticked back, because a tick left behind would turn the
 // Flow's own tick of that row into an untick.
@@ -139,10 +141,11 @@ test("presses a row's menu and a row's link, under a test id full of the word or
 });
 
 // The controls the old rule refused on its own judgement of how they look. None
-// is refused on that now. What the model declares its own press does is asked
-// of Core, which answers from the person's instruction and permission: without that
-// authority the press is not made and Core's request goes to the person; with
-// it, the press is made. A press that declares nothing lasting asks nothing.
+// is refused on that now. Core receives the model's declared consequences and
+// the canonical action floor, then answers from the person's instruction and
+// permission: without that authority the press is not made and Core's request
+// goes to the person; with it, the press is made. An empty declaration still
+// carries the canonical commit floor.
 const PERMISSION_CASES = [
   ["Send reply", ["send_or_publish"]],
   ["Delete order", ["delete"]],
@@ -166,8 +169,14 @@ for (const [label, consequences] of PERMISSION_CASES) {
 
       const result = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get(label)! } }, consequences: [...consequences] }, permission });
 
-      // Core is asked with the words the model was shown and the model's own classes.
-      assert.deepEqual(asked, [{ consequences: [...consequences], control: { name: label, kind: "button" }, verb: "click", effect: "mutate" }], label);
+      // Core receives the shown control, declared classes and canonical floor.
+      assert.deepEqual(asked, [{
+        consequences: [...consequences],
+        control: { name: label, kind: "button" },
+        verb: "click",
+        effect: "mutate",
+        actionEffect: { effectClass: "commit", permissionConsequences: [] }
+      }], label);
       if (permitted) {
         assert.equal(result.resultCode, "web.action.succeeded", label);
         assert.equal(lab.clicked.length, 1, label);
@@ -188,11 +197,15 @@ test("a press that declares nothing lasting is still put to Core, and an unreada
 
   const opened = await runtime.executeTool({ ...BASE, callId: "call.open", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("New post")! } }, consequences: [] }, permission });
   assert.equal(opened.resultCode, "web.action.succeeded");
-  // Nothing is asked *for*, and Core is still told. Saying `[]` is the answer
-  // every press in four measured live builds gave, and it used to stop here:
-  // the check was never called, so what a permitted press had declared could
-  // only be deduced from the absence of a refusal.
-  assert.deepEqual(asked, [{ consequences: [], control: { name: "New post", kind: "button" }, verb: "click", effect: "mutate" }]);
+  // The empty semantic declaration is sent with the canonical commit floor;
+  // saying `[]` cannot remove the action's permission check or effect class.
+  assert.deepEqual(asked, [{
+    consequences: [],
+    control: { name: "New post", kind: "button" },
+    verb: "click",
+    effect: "mutate",
+    actionEffect: { effectClass: "commit", permissionConsequences: [] }
+  }]);
 
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.bad", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["spend_a_little"] }, permission });
   assert.equal(unreadable.resultCode, "web.action.rejected.invalid_input");

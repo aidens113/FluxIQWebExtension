@@ -31,6 +31,7 @@ import {
   COVER_DETAIL,
   dependencies,
   fakeCheckWatch,
+  fakeIgnoredWatch,
   fakeNoticeWatch,
   fakePage,
   fakeWatch,
@@ -48,6 +49,40 @@ import {
 const EXPECTED = `navigation to ${LINK_HREF} begins, or the page answers the click in place`;
 /** `IN_PLACE_WINDOW_MS` in the verb. */
 const WINDOW_MS = 5_000;
+
+test("click reports the actual pre-gate fact and preserves the local report", async (t) => {
+  installMouseEvent(t);
+  for (const code of ["hidden", "disabled", "covered"] as const) {
+    const page = fakePage({ link: false, prevent: false });
+    const report = notPressable(code);
+    const before = structuredClone(report);
+    const deps = dependencies(page.element, fakeWatch(undefined, page.events).make, fakeNoticeWatch(undefined, page.events), fakeCheckWatch(undefined, page.events), fakeIgnoredWatch([], page.events), true, code, () => report);
+    const result = await clickAction(CLICK, deps, 0);
+    assert.deepEqual(result.actionability, { actionable: false, cause: code });
+    assert.deepEqual(report, before);
+    assert.deepEqual(page.events, []);
+  }
+  const { result } = await click(t, { link: true, prevent: false }, undefined);
+  assert.deepEqual(result.actionability, { actionable: true });
+});
+
+test("a newer post-press measurement replaces positive without inventing an unacted effect", async (t) => {
+  for (const cause of ["hidden", "disabled", "covered"] as const) {
+    const { result, events } = await click(t, { link: false, prevent: false }, undefined, { ...CLICK }, undefined, undefined, 1_000, { seen: [], pressableAgain: false, againAs: cause });
+    assert.deepEqual(result.actionability, { actionable: false, cause });
+    assert.deepEqual(events.filter((event) => event === "click"), ["click"]);
+    assert.equal(result.failure?.effect, undefined);
+    assert.equal(result.status, cause === "covered" ? "failed" : "succeeded");
+  }
+});
+
+test("a measured click that then needs a person keeps both independent facts and presses once", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, { outcome: "person_only", afterMs: 1, waitedMs: 0 });
+  assert.deepEqual(result.actionability, { actionable: true });
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
+  assert.equal(result.failure?.effect, undefined);
+  assert.deepEqual(events.filter((event) => event === "click"), ["click"]);
+});
 
 test("a link the page cancelled and then answered by changing its content passes, and says so", async (t) => {
   const { result, watch } = await click(t, { link: true, prevent: true }, { kind: "content", afterMs: 202 });

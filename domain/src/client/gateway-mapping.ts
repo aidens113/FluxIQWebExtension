@@ -1,6 +1,7 @@
 import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { webActionabilityProperty } from "../actions/actionability";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationEventTypeForClientKind } from "../io/input-model";
 import { webAutomationActionTargetFromElement, webAutomationActionVisualTargetFromElement, type WebAutomationElementStateInput } from "../recording/web-state";
@@ -352,6 +353,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
+    actionability: webActionabilityProperty(result),
     validation: webAutomationSecretSafeValidation(result.validation, result.element),
     message: result.message,
     url: result.url,

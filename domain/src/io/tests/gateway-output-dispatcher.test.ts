@@ -65,6 +65,48 @@ function dispatch(
   return dispatchWebAutomationOutput(fluxiq, request);
 }
 
+test("accepted current actionability is lifted without changing raw wire results, status or failures", async () => {
+  for (const status of ["succeeded", "failed", "timed_out", "unknown", "cancelled"] as const) {
+    const actionability = { actionable: false, cause: "covered" } as const;
+    const raw: GatewayActionResult = { commandId: "measured", status, payload: { actionability, actual: "original payload" } };
+    const before = JSON.stringify(raw);
+    const result = await dispatch(raw);
+    assert.equal(result.status, status);
+    assert.equal(result.ok, status === "succeeded");
+    assert.deepEqual(result.actionability, actionability);
+    assert.notEqual(result.actionability, actionability);
+    assert.equal(JSON.stringify(raw), before);
+  }
+  const authority: AutomationStudioFailureRecord = { category: "auth_required", code: "web.action.rate_limited", retryable: false, effect: "ambiguous" };
+  const result = await dispatch({ commandId: "authority", status: "failed", failure: authority, payload: { actionability: { actionable: false, cause: "disabled" } } });
+  assert.deepEqual(result.failure, authority);
+  assert.deepEqual(result.actionability, { actionable: false, cause: "disabled" });
+});
+
+test("missing or malformed optional measurement never erases an executed IO call", async () => {
+  for (const payload of [{}, { actionability: { actionable: true, text: "private" } }]) {
+    const result = await dispatch({ commandId: "actual", status: "succeeded", payload });
+    assert.equal(result.status, "succeeded");
+    assert.equal(result.ok, true);
+    assert.equal(result.actionability, undefined);
+  }
+  let getters = 0;
+  const payload = Object.defineProperty({ actual: "kept" }, "actionability", {
+    get() {
+      getters += 1;
+      throw new Error("private");
+    }
+  });
+  const result = await dispatch({ commandId: "getter", status: "succeeded", payload });
+  assert.equal(result.ok, true);
+  assert.equal(result.actionability, undefined);
+  assert.equal(getters, 0);
+  const thrown = await dispatch(() => { throw Object.assign(new Error("acknowledgement missing"), { actionability: { actionable: false, cause: "covered" } }); });
+  assert.equal(thrown.ok, false);
+  assert.equal(thrown.failure, undefined, "negative target measurement supplies no failure/effect inference");
+  assert.deepEqual(thrown.actionability, { actionable: false, cause: "covered" });
+});
+
 test("a succeeded command dispatches to the paired client and reports ok with its status", async () => {
   executed.length = 0;
   const result = await dispatch({ commandId: "client.command.one", status: "succeeded", message: "Clicked Save.", payload: { clicked: true } });

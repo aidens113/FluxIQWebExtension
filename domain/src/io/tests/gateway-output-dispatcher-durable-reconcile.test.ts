@@ -54,6 +54,17 @@ test("an ordinary (not required) run on the same runtime path is reconciled too,
   assert.equal(run.asked, 1);
 });
 
+test("a kept durable result accepts actionability inside the old open payload without another press or raw mutation", async () => {
+  const actionability = Object.freeze({ actionable: false, cause: "covered" } as const);
+  const payload = Object.freeze({ clicked: true, actionability });
+  const before = JSON.stringify(payload);
+  const run = await lostFirstAnswerRun((commandId) => ({ state: "landed", result: { commandId, status: "succeeded", payload } }));
+  assert.equal(run.status, "succeeded", run.message);
+  assert.deepEqual(run.pressed, ["first", "second"]);
+  assert.equal(run.asked, 1);
+  assert.equal(JSON.stringify(payload), before);
+});
+
 /**
  * A required run (an ordinary one with `required` false) of `first -> second`,
  * each a press. The browser loses its answer to the first command it is sent

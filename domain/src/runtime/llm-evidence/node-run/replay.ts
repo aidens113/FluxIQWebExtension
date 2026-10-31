@@ -1,5 +1,6 @@
 import { webHostFailure } from "../../host-failure";
 import { webAutomationResolvedActionEffect } from "../../../actions/action-effect";
+import { webActionabilityFromPayload } from "../../../actions/actionability";
 // Running the draft again as the Flow will run it, with no model attached.
 //
 // Core decides that a draft must be replayed before it may be proposed
@@ -270,8 +271,9 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
   const parameters = { url: location, [WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER]: true };
   const result = await executeWebEvidenceAction(() => run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters, metadata: toolMetadata(run.request) }));
   assertActive(run.request.signal);
-  if (result.status === "succeeded") return answer(REPLAY_RESULT_CODES.replayed, "the page was put back", true);
-  const failed = answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back", false, { resultReason: undefined, nodeId: undefined, assumed: undefined, failure: webHostFailure(result.failure) });
+  const actionability = webActionabilityFromPayload(result);
+  if (result.status === "succeeded") return answer(REPLAY_RESULT_CODES.replayed, "the page was put back", true, { resultReason: undefined, nodeId: undefined, assumed: undefined, actionability });
+  const failed = answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back", false, { resultReason: undefined, nodeId: undefined, assumed: undefined, failure: webHostFailure(result.failure), actionability });
   // A reset that landed on a robot check is the person's to clear, exactly as
   // the step that first went there was (`./run.ts`). The replay code stays
   // Core's own; `personNeeded` says why, and proposes nothing.
@@ -372,6 +374,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // fresh, for its last retries (`./retries/replay-row-reacquire.ts`, t786).
   const reacquire = webNodeReplayRowReacquire(run, { item: value.item, parameters: ran, metadata: toolMetadata(run.request), readRows: flowRows });
   const { result, lastingAct, failure: controlFailure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), reacquire);
+  const actionability = webActionabilityFromPayload(result);
   assertActive(run.request.signal);
   // One the check showed landed counts as done, whatever its lost answer said.
   if (result.status !== "succeeded" && lastingAct !== "landed") {
@@ -386,7 +389,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // because its read came back empty was recorded identically to one that
     // failed because the browser would not script the page. The node's id still
     // says which step of the draft it was.
-    const about: WebNodeReplayFacts = { resultReason: refused.detail?.reason, nodeId: node.definitionId, assumed, failure: controlFailure };
+    const about: WebNodeReplayFacts = { resultReason: refused.detail?.reason, nodeId: node.definitionId, assumed, failure: controlFailure, actionability };
     // The one failure a page-level reset explains. A control that is simply not
     // there, on the very page the step worked on, is what a site that remembers
     // the step looks like -- a consent banner answered once stays answered --
@@ -432,7 +435,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   const moved = node.actionType === NEXT_PAGE_ACTION ? nextPageSaid(payload) : undefined;
   const changed = moved === undefined ? readChange(recordedProduced(value.produced), webNodeProduced(payload)) : undefined;
   if (changed !== undefined) {
-    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, changed, true, { resultReason: undefined, nodeId: node.definitionId, assumed });
+    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, changed, true, { resultReason: undefined, nodeId: node.definitionId, assumed, actionability });
   }
   // A step that replayed refuses nothing and tells nothing apart, so it says
   // neither of those; the answers above it are the ones a reader has to
@@ -448,7 +451,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   const said = moved?.said ?? readSaid(payload, where) ?? "the step ran again";
   // What it changed on the page it stayed on, as an exploration press says it (`./press-effect/page-changes.ts`).
   const after = before === undefined ? undefined : await replayPage(run, false);
-  const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
+  const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed, actionability }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
   // A read's outputs, on the ports the Flow's own node fills, for the test's later steps to read (D6, t646).
   const outputs = replayedReadOutputs(node.actionType, resolvedParameters, payload);
   // A list read's rows and command, so a later pass whose row went stale can read it again (`./retries/replayed-reads.ts`, t786).

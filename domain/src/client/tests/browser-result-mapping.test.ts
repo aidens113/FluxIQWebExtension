@@ -27,6 +27,36 @@ function statePathOf(value: unknown): unknown {
   return value && typeof value === "object" && "statePath" in value ? value.statePath : undefined;
 }
 
+test("actionability uses only the existing open payload and keeps legacy gateway keys unchanged", () => {
+  const legacy = browserResult({ message: "Clicked." });
+  const baseline = gatewayActionResultFromBrowserResult(legacy);
+  for (const actionability of [{ actionable: true }, { actionable: false, cause: "hidden" }, { actionable: false, cause: "disabled" }, { actionable: false, cause: "covered" }] as const) {
+    const original = browserResult({ ...legacy, actionability });
+    const wire = gatewayActionResultFromBrowserResult(original);
+    assert.deepEqual(Object.keys(wire).sort(), Object.keys(baseline).sort());
+    assert.equal("actionability" in wire, false);
+    assert.deepEqual(wire.payload?.actionability, actionability);
+    assert.notEqual(wire.payload?.actionability, actionability);
+    assert.equal(wire.status, baseline.status);
+    assert.equal(wire.failure, baseline.failure);
+    assert.equal(original.actionability, actionability);
+  }
+  assert.equal(baseline.payload?.actionability, undefined, "old browsers have no invented measurement");
+  const malformed = Object.assign(browserResult(), { actionability: { actionable: false, cause: "covered", text: "private_actionability" } });
+  const wire = gatewayActionResultFromBrowserResult(malformed);
+  assert.equal(wire.payload?.actionability, undefined);
+  assert.doesNotMatch(JSON.stringify(wire), /private_actionability/u);
+  let getters = 0;
+  const getter = Object.defineProperty(browserResult(), "actionability", {
+    get() {
+      getters += 1;
+      throw new Error("private");
+    }
+  });
+  assert.equal(gatewayActionResultFromBrowserResult(getter).status, "succeeded");
+  assert.equal(getters, 0);
+});
+
 const button: JsonObject = { tagName: "button", selector: "#buy", name: "Buy now", bounds: { x: 10, y: 20, width: 80, height: 30 } };
 
 test("a snapshot's structure detection reaches the gateway payload, copied without anything a producer added", () => {

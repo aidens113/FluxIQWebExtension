@@ -64,6 +64,7 @@ import {
   WEB_AUTOMATION_FAILURE_CODES,
   WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS,
   isWebAutomationFailureCode,
+  webActionabilityProperty,
   type WebAutomationActionType,
   type WebAutomationFailureCode
 } from "@fluxiq-web-extension/domain/client";
@@ -220,7 +221,10 @@ const DISABLED_REASON = "disabled";
 function disabledBeforeDispatch(code: WebAutomationFailureCode, result: BrowserActionResult): boolean {
   if (code !== WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE && code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return false;
   const failure = result.failure;
-  if (failure?.effect !== "unacted" || typeof failure.actual !== "string") return false;
+  if (failure?.effect !== "unacted") return false;
+  const measured = webActionabilityProperty(result);
+  if (measured) return !measured.actionable && measured.cause === "disabled";
+  if (typeof failure.actual !== "string") return false;
   return failure.actual.startsWith(`${DISABLED_REASON}:`);
 }
 
@@ -277,6 +281,8 @@ function obstructionFault(code: WebAutomationFailureCode, result: BrowserActionR
   if (fault === undefined) return undefined;
   // The two codes a gate refusal may carry (`../results.ts`): its reason word says which refusal it was.
   if (code !== WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE && code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return fault;
+  const measured = webActionabilityProperty(result);
+  if (measured) return !measured.actionable && OBSTRUCTION_REASONS.includes(measured.cause) ? fault : undefined;
   const actual = result.failure?.actual;
   if (typeof actual !== "string") return undefined;
   return OBSTRUCTION_REASONS.some((reason) => actual.startsWith(`${reason}:`)) ? fault : undefined;
@@ -332,9 +338,9 @@ export function webActionReadsOnly(action: Pick<BrowserActionCommand, "actionTyp
  * The fault this result may be retried on, or `undefined` for a result that is
  * finished -- succeeded, or failed for a reason retrying cannot change.
  *
- * Read off the failure record's code, and -- for ACTION_REJECTED alone -- the
- * closed reason token that code is written with. No sentence is read: a
- * decision taken from prose is a decision that changes when someone improves
+ * Read off the failure record's code, then the measured cause where the code
+ * needs a reason distinction. Older results fall back to the closed reason token.
+ * No sentence is read: a decision taken from prose is a decision that changes when someone improves
  * the wording, and this one decides whether a page gets pressed a second time.
  * The reason token is not prose. It is one of three members of
  * `ActionabilityRejectionCode`, written by the gate as the leading `word:` of

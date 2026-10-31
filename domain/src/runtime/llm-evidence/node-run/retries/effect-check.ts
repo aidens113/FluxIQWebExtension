@@ -87,6 +87,7 @@ function dispatchResult(outputId: string, result: WebNodeDispatchResult): Output
     error: result.error,
     domainId: undefined,
     failure: undefined,
+    actionability: undefined,
     clearedWait: undefined,
     metadata: undefined
   });
