@@ -1,3 +1,8 @@
+# P10 parent context preserved during P9 sync
+
+Historical exact incoming document, not active state. SHA256 484d8ec744761536182b5ef3448af1b213e8407c0a49068e1ffdb411a31f7e23; 22728 bytes. The source is fenced to retain its original relative link spellings.
+
+````````````````markdown
 # Framework Heavy-Lifting Plan
 
 Status: Active
@@ -247,3 +252,5 @@ Accepted dated ledger moved verbatim to [the runtime context archive](framework-
 6. **Can the list packet carry per-item values for every field?** Core P7's discriminating-field note needs them.
    Owner: W7.
 7. **Does `extractList` honour a `done when` end marker as the read's bound?** (mvskodlp F4; not verified.) Owner: W7.
+
+````````````````
