@@ -12,3 +12,4 @@ Do not run a full sweep. Report exact failures before fixes; inspect every comma
 Report: docs/working/framework-heavy-lifting-plan/reports/codex-1030/t811-result.md in downstream task tree.
 Finish with Outcome, Changed, Validation, Not verified, Report and Notes return contract.
 Approved follow-up: the combined candidate trial gate exceeds800lines; after the active frozen build ends, extract its retest-advice helper into an owning module, preserve old exports and behavior, add direct checks, then repeat narrow types/audit before the final library build. No budget exemption or cosmetic line removal.
+Approved test-only follow-up: packages/test-runner/src/tests/cli-llm.test.ts paired explicit DeepSeek with the newly Claude global default. Keep legacy cases on an explicit supported DeepSeek model and add a fake-key default-Claude dry run, rebuild with the owning script and rerun exact compiled CLI tests. No Core or production change.
