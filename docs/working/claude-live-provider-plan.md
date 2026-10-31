@@ -13,13 +13,15 @@ Related: [Framework continuation](framework-heavy-lifting-plan.md)
 
 The user requested Claude for every live model-backed test and explicitly asked that preference be recorded.
 Both repositories' AGENTS.md now hold it. Never silently fall back to DeepSeek. Provider-free tests remain provider-free.
-CLAUDE_API_KEY is present in the main downstream .env.local; its value was not printed, copied or committed.
+CLAUDE_API_KEY is present in the main downstream .env.local; its value was never printed or committed.
+Standard task provisioning copies ignored local environment into authoring worktrees; provider-free tests reject its credentials. Remove a new sweep's disposable copy before checks; preserve the main file.
 Anthropic originally appeared in the keys UI without runtime support. Core now implements the native provider, per-call encrypted-key resolution and matching model/settings controls; the Lab migration passed its owning checks.
 Paired task t816 is integrated: downstream fa99782d and Core61d29c1f, with Core library version0.9.0. No paid model call has run.
 Live default: claude-sonnet-5-5, provider anthropic, selected for agentic task quality and speed; explicit model selection remains available.
 The user raised Claude live tests to $5 per build on 2026-10-30. Main ignored `.env.local` now configures that ceiling;
 the Lab's Claude default and declared budget also use $5, while explicit lower limits and normal product defaults remain.
-Keep identical realistic task instructions/oracles and record model, verdict, calls, provider-reported usage/cost and runtime.
+Keep identical realistic task instructions/oracles and record both source commits, model, verdict, calls, provider-reported usage/cost and runtime.
+Historical DeepSeek runs predate these Core fixes, so comparison with them cannot isolate the provider's effect.
 No paid run is started by implementation or unit validation; existing supervised paid-launch requirements remain.
 
 ## Implementation
