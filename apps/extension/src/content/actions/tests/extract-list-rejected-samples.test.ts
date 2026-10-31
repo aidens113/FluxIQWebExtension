@@ -209,3 +209,12 @@ test("a playback lists a row two conditions both rejected after each one's alone
   // No value a condition read on it leaves the page.
   assert.deepEqual(wire?.rejectedObservations, [[witness(0, 2), null], [witness(1, 3), null]]);
 });
+
+test("a playback read sends the marks of every rejected row it sends: alone rows and rows two conditions rejected together (t810)", async () => {
+  const offer = [{ kind: "outside" as const, said: "Join club", entity: "Chess Circle" }];
+  const supplied: ListExtractionOutcome = { ...outcome(false), records: [], conditions: { applied: 3, kept: 0, rejected: [2, 1], alone: [1, 0], unfiltered: false }, rejectedSamples: [[{ name: "Record A" }, { name: "Record B" }], [{ name: "Record B" }]], rejectedSamplesAlone: [1, 0], rejectedMarks: [[null, offer], [offer]] };
+  const { evidence } = await run({ ...COMMAND, options: { extractList: {}, rejectedSamples: "alone" } }, supplied);
+  assert.deepEqual(evidence?.extraction?.rejectedMarks, [[null, offer], [offer]]);
+  const payload = webAutomationActionResultPayload({ commandId: COMMAND.commandId, actionType: COMMAND.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" }, ...(evidence?.extraction ? { extraction: evidence.extraction } : {}), startedAt: 1, finishedAt: 2 });
+  assert.deepEqual((payload.extraction as { rejectedMarks?: unknown } | undefined)?.rejectedMarks, [[null, offer], [offer]], "the domain's wire copy keeps the marks of the together row");
+});

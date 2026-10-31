@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: P6/W6 t799 independently verified and merged on both dev branches; t810, t811, t813 and t814 continue from the handoff. Paired t816 adds the user-requested Claude live provider with a five-dollar build allowance.
+Status detail: P6/W6 t799 and Claude/$5 live-test support t816 are verified, merged and pushed in both repositories; P5b t810 is verified and merged; t811, t813 and t814 continue through independent acceptance.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -13,14 +13,14 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 **Codex continuation, 2026-10-30.** Resumed from the handoff below. The lead independently verified t799 on its
 paired task trees after merging current `dev`; both sides are now merged. Workers are completing t811 and final C1
-validation in t813; t814 awaits lead acceptance. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
+validation in t813; t814 awaits final parent checks. Written briefs and reports are under `reports/codex-1030/`. Each lane owns its
 existing task trees; no paid run or panel management is authorised by this continuation. The user approved t810's
 fully-refuted rejection passing without a model yes on 2026-10-30, explicitly requiring a judge re-prompt with the
 evidence first; incomplete refutations must remain nonpassing.
 Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout.
 **Live provider switch, user 2026-10-30:** use Claude for every subsequent live model-backed test, reading
-`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Anthropic appears in the keys UI, but runtime and
-Lab routing were DeepSeek-only; paired t816 implements the missing support. Keep identical acceptance criteria and
+`CLAUDE_API_KEY` from `.env.local`, with no silent DeepSeek fallback. Paired t816 now supplies runtime, keys/settings UI and
+Lab support on both pushed dev branches; see `claude-live-provider-plan.md`. Keep identical acceptance criteria and
 record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
 The user set Claude live tests to $5 per build; main ignored `.env.local` and both agent instruction files record it.
 
@@ -62,13 +62,13 @@ in Core's and the hosted plans):
 lane's work as a "WIP at the 2026-10-30 handoff" commit on its task branch. Nothing is merged into `dev`, no lead
 acceptance check passed, and no paid run or model call happened.
 
-| Task | Work | State at the stop | To resume |
+| Task | Work | Latest continuation state | To resume |
 | --- | --- | --- | --- |
 | t799 (P6 + W6) | `clear_interference` rung, generic layer kinds, trial-close handlers, toggle `ensureState`, learned pace; web obstruction, rate limit, stateful state | Merged on both dev branches after lead acceptance: 235 Core, 40 domain and 29 extension tests, types/reference, native Chromium proof and final audits; Core merge gate passed 70 contract tests | First-loop-row direction and browser rung/pacing coverage remain separate follow-ups; no paid qualification claimed |
-| t810 (P5b) | Refute a judge's `asked_missing` and wrongly-kept rows from the run's own record (`outside_mark`, `cell_differs`, `not_kept`), one evidence re-ask, cited yes, provenance, `standingNo`; web `rejectedMarks` | Partial. Offline replay of the demo's final check now gives `answers` (`core.result.no_refuted_by_record`, 10 rows refuted) where it was `unsure`; the store false passes stay a Core no. Core WIP `300fc9ab` is **local only**: the pre-push audit refused it (4 `as never` casts in new tests, `build-test/tests/` and `candidate-trial/tests/` over 25 files, an import cycle through `computed-facts/computed-no.ts` and `located-defects/index.ts`); the downstream WIP is pushed | Fix the audit findings and the TS2375 at `located-defects/tests/row-refuted.test.ts:70`, re-pin `loop_verification` and `loop_verification_build_test`, add `located` to the t804 earlier-advice fixture (w4 report), fix the replay harness's 60-character match, then the acceptance set (report `reports/t810-p5b.md`) |
-| t811 (P1b) | `then` on `core.submit_subflow` (save / whole test / from-step; Core completes on a yes), `from` by script label (`stepLabels`), K5 callers, folded test lines, guidance, K7 defaults | Partial; WIP pushed (Core `fa07015e`, downstream `562f3082`). One known failure: `project-agents/dispatch/tests/whole-trial-port.test.ts` (patch in `reports/t811/wa-fold-green.md`); the headed decide-count spec is not written; `docs:reference` is likely stale | Apply the patch, write the spec, run the acceptance set (report `reports/t811-p1b.md`) |
-| t813 (hosted C1) | Workspace manager (`apps/web/src/lib/workspaces/`, layout v3 at `<host root>/workspaces/<id>/`), IAM `iam` options from the resolved profile, `BackgroundTasksService.close()` | Partial; WIP pushed (Core `4266af93`). Worker-reported passes only; `pnpm check`, the full web suite and the Next production build not run | Run the acceptance set; have a second agent review the manager for concurrency and key handling (report Core `hosted-production-plan/reports/t813-c1.md`) |
-| t814 (hosted E + D5) | `PanelProduct` registry, host loader, branding and assets route; downstream `apps/product/` | Partial; WIP pushed (Core `f45e5faf`, downstream `4eede8cd`). Two late test fixes not re-run | Re-run `pnpm check`, `pnpm test src/platform`, apps/web tests and tsc (report Core `hosted-production-plan/reports/t814-e-d5.md`) |
+| t810 (P5b) | Grounded no refutation, evidence-specific judge re-prompt, checked-cell citations, provenance and replay marks | All handoff defects fixed; integrated with Claude and shared output schema; lead119 Core +8 domain checks pass, final Core types/audit pass; worker RV1467/callers805/domain541/extension501 pass. Strict saved replay remains unsure for missing new replies, never fabricated acceptance | Merged downstream ad01bd0b and Core31713e1d; 70 merge-contract tests passed; no paid qualification claimed |
+| t811 (P1b) | Submit-then-test, label-based repair, Core completion and revision-aware retry/memo keys | Observer/forwarding/pending-repair/retry defects fixed;811 owning assertions and types/builds pass. Native photo repair passes; folded-vs-separate comparison reruns with isolated profiles | Wait for comparison, integrate current dev and lead-verify final source |
+| t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Adversarial review fixed await/close/delete/reload/audit races and invalid audit bounds; worker732 Core +123 web tests passed. Synced Claude dev; lead background9 pass | Final parent sync, package/web types and lead workspace/key-custody acceptance; narrow merge gates only |
+| t814 (hosted E + D5) | Product registry/host loader, branding/assets, downstream apps/product | Concurrent host loading fixed; worker web27/product11/types pass; Claude parent synced and lead32 panel tests pass | Final parent checks and lead web/product acceptance; later C2/C3-dependent wiring remains outside this unit |
 
 **User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
 after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
@@ -86,7 +86,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. t799 is merged; integrate t810 and t811 after verification. Complete the Claude provider switch before paid testing.
+1. t799 and the Claude provider switch are merged; integrate t810 and t811 after verification, then finish hosted C1/product acceptance.
 2. Fix the t799 known limit before the photo-social rerun: in a loop whose first row is already in the asked state, the
    toggle signature is learned reversed.
 3. Run the live round: photo-social newest likes, the everything-store gate, the social gate. Then the
@@ -417,6 +417,14 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Not verified: browser execution of Core clear-interference rung, learned pace, Firefox, first-loop-row direction or changed-source paid qualification. No full sweep was run.
 - Validation: `pnpm.cmd task finish t799` -> downstream structure gate passed and task merged; Core `pnpm.cmd task finish t799 --skip-checks` -> mandatory `70 contract tests passed`, narrow acceptance already observed, paired task merged.
 
+
+### 2026-10-30 - P5b continuation independently verified (t810)
+- Agent: Codex lead; worker resume_t813.
+- Changed: all recorded handoff defects fixed, mandatory evidence-specific rechecks enforced, shared Claude/DeepSeek checked-cell schema preserved; screened replay marks reach Core.
+- Validation: lead Core recheck/native/schema/pin batch -> `8 files, 119 passed`; `DOMAIN_TEST_BUILD_LABEL=t810-lead node scripts/test-domain.mjs runtime/llm-evidence/node-run/left-out-together` -> `8 passed`; Core typecheck -> content-matched exit0; final Core structure -> `failures: [], 473 warnings, 1144 baselined`.
+- Validation: worker owning tests -> Core1467 +805, domain541 and extension501 passed; affected source/test types, builds, docs/model-text/freshness passed. Full report: `framework-heavy-lifting-plan/reports/codex-1030/t810-result.md`.
+- Not verified: a newly observed live judge reply. Strict saved replay stays unsure without mandatory replies; scripted repeated replies are not historical acceptance. No paid calls, panel management or full sweep.
+- Outcome: Paired task finish passed; downstream structure gate and Core mandatory contract gate70 passed; both code branches integrated.
 
 ## Open Questions
 

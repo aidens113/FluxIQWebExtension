@@ -19,6 +19,7 @@ import { webAutomationExtractionConditionSeenValue, type WebAutomationExtraction
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { webAutomationExtractionListContinuesValue, type WebAutomationExtractionListContinues } from "./list-continues";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
+import { webAutomationExtractionRejectedMarksValue, type WebAutomationExtractionRejectedMarks } from "./rejected-marks";
 import { webAutomationExtractionRejectedSamplesAloneValue, webAutomationExtractionRejectedSamplesValue, webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectedRow, type WebAutomationExtractionRejectionObservation } from "./rejected-samples";
 
 export type WebAutomationExtractionSummary = {
@@ -79,6 +80,8 @@ export type WebAutomationExtractionSummary = {
   /** Per condition, how many leading rows of its `rejectedSamples` list it removed alone (`./rejected-samples.ts`); beside `rejectedSamples` only. */
   rejectedSamplesAlone?: number[] | undefined;
   rejectedObservations?: Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
+  /** Per condition, per rejected row, what the client read on that item that places the person outside it (`./rejected-marks.ts`, t810); beside `rejectedSamples` only. */
+  rejectedMarks?: WebAutomationExtractionRejectedMarks | undefined;
   /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;
   /** What `dedupe` and `sort` did, or absent for a read whose request named neither. */
@@ -348,6 +351,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   if (summary.rejectedSamplesAlone !== undefined && rejectedSamplesAlone === undefined) return undefined;
   const rejectedObservations = summary.rejectedObservations === undefined || rejectedSamples === undefined ? undefined : webAutomationExtractionRejectedObservationsValue(summary.rejectedObservations, rejectedSamples);
   if (summary.rejectedObservations !== undefined && rejectedObservations === undefined) return undefined;
+  // Marks add evidence and nothing else: unreadable ones are dropped, never the summary (`./rejected-marks.ts`).
+  const rejectedMarks = summary.rejectedMarks === undefined || rejectedSamples === undefined ? undefined : webAutomationExtractionRejectedMarksValue(summary.rejectedMarks, rejectedSamples);
   // Optional, so an extension build that predates it still sends a summary that
   // arrives whole; a word this side does not know drops the summary rather than
   // arriving as a half-understood fact.
@@ -405,6 +410,7 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(rejectedSamples !== undefined ? { rejectedSamples } : {}),
     ...(rejectedSamplesAlone !== undefined ? { rejectedSamplesAlone } : {}),
     ...(rejectedObservations !== undefined ? { rejectedObservations } : {}),
+    ...(rejectedMarks !== undefined ? { rejectedMarks } : {}),
     ...(paginationStop !== undefined ? { paginationStop } : {}),
     ...(order !== undefined ? { order } : {}),
     ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {}),

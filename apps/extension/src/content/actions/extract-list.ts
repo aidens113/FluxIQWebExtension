@@ -204,17 +204,21 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
  * (header, t655). A playback read whose page did not say the leads sends no
  * rows, since it cannot tell which were alone.
  */
-function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSummary, "rejectedSamples" | "rejectedSamplesAlone" | "rejectedObservations"> {
+function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSummary, "rejectedSamples" | "rejectedSamplesAlone" | "rejectedObservations" | "rejectedMarks"> {
   const samples = outcome.rejectedSamples;
   const leads = outcome.rejectedSamplesAlone;
   const observations = outcome.rejectedObservations;
+  // What the items offer (`extraction/item-offer/`, t810), aligned with the rows and sent with them wherever they go.
+  const marks = outcome.rejectedMarks;
+  const copiedMarks = (entry: NonNullable<typeof marks>[number][number] | undefined) => (entry ? entry.map((mark) => ({ ...mark })) : null);
   if (!samples) return {};
-  if (!aloneOnly) return { rejectedSamples: samples.map((rows) => rows.map((row) => ({ ...row }))), ...(leads ? { rejectedSamplesAlone: [...leads] } : {}), ...(observations ? { rejectedObservations: observations.map((entries) => entries.map((entry) => entry ? { ...entry } : null)) } : {}) };
+  if (!aloneOnly) return { rejectedSamples: samples.map((rows) => rows.map((row) => ({ ...row }))), ...(leads ? { rejectedSamplesAlone: [...leads] } : {}), ...(observations ? { rejectedObservations: observations.map((entries) => entries.map((entry) => entry ? { ...entry } : null)) } : {}), ...(marks ? { rejectedMarks: marks.map((entries) => entries.map(copiedMarks)) } : {}) };
   if (!leads) return {};
   const together = sharedRows(samples, leads);
   const kept = samples.map((rows, index) => {
     const lead = Math.min(leads[index] ?? 0, rows.length);
-    return { lead, rows: [...rows.slice(0, lead), ...rows.slice(lead).filter((row) => together.has(JSON.stringify(row)))] };
+    const places = rows.flatMap((row, at) => (at < lead || together.has(JSON.stringify(row)) ? [at] : []));
+    return { lead, rows: places.map((at) => rows[at]!), places };
   });
   return {
     rejectedSamples: kept.map(({ rows }) => rows.map((row) => ({ ...row }))),
@@ -222,7 +226,8 @@ function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSumma
     ...(observations ? { rejectedObservations: kept.map(({ lead, rows }, index) => rows.map((_row, at) => {
       const entry = at < lead ? observations[index]?.[at] : null;
       return entry ? { ...entry } : null;
-    })) } : {})
+    })) } : {}),
+    ...(marks ? { rejectedMarks: kept.map(({ places }, index) => places.map((at) => copiedMarks(marks[index]?.[at]))) } : {})
   };
 }
 
