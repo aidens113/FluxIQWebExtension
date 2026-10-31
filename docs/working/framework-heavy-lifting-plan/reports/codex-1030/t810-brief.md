@@ -13,6 +13,9 @@ Review matching replay harness prefix issue; offline replay only when original l
 Run owning result-verification/changed llm/service/domain/extraction tests and affected package typechecks,
 structure/model-text/docs checks. No full sweeps. Rebuild local Core library when downstream gate needs it.
 Coordinate heavy-check.lock with lead; don't remove another owner's lock. Use pnpm.cmd in PowerShell.
+Standing user rule: live tests use Claude via CLAUDE_API_KEY, $5 per whole build; no DeepSeek fallback.
+Your runs stay provider-free. Prior scratch replay harness: C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/b969a395-6436-4284-bccb-432f7f43683b/scratchpad/t810-w5/replay.mts.
+Lead has already fixed row-refuted TS2375 and merged current dev into both trees; preserve those changes.
 Do not claim old saved-run replay proves current-source live behavior. Update architecture for required recheck.
 Write report: main downstream docs/working/framework-heavy-lifting-plan/reports/codex-1030/t810-result.md.
 End: Outcome; Changed; Validation (exact command + observed result); Not verified; Report; Notes (3 lines max).
