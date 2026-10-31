@@ -116,8 +116,9 @@
 // on every descriptor the model is shown, and a record's words cut at 160
 // characters were a fragment of the row. A recording made before then carries
 // the cut form, so the comparison still accepts a record whose whole words
-// begin with it (`sameAsRecorded`).
+// begin with it (`webRecordedRecordValueMatches`).
 
+import { webRecordedRecordValueMatches } from "@fluxiq-web-extension/domain/client";
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { DomElementContext } from "../types";
@@ -140,12 +141,6 @@ export type RecordIdentity = NonNullable<DomElementContext["record"]>;
 
 /** How far up the tree a record may be. A control sits inside its own row's cell, not ten levels above it. */
 const MAX_RECORD_DEPTH = 12;
-/**
- * Where a recording made before t200 cut a record's text, and its key. Only
- * read to recognise such a recording: nothing is cut here any more.
- */
-const LEGACY_RECORD_TEXT_CUT = 160;
-const LEGACY_RECORD_KEY_CUT = 120;
 /** Nodes walked while reading a record's text. A record is a row, not a document. */
 const MAX_RECORD_NODES = 400;
 
@@ -363,24 +358,12 @@ export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, e
     const found = recorded.keyAttribute
       ? normalizedText(record.getAttribute(recorded.keyAttribute))
       : recordKey(record)?.key;
-    return sameAsRecorded(found, recorded.key, LEGACY_RECORD_KEY_CUT);
+    return webRecordedRecordValueMatches(found, recorded.key, "key");
   }
-  if (record && sameAsRecorded(recordText(record), recorded.text, LEGACY_RECORD_TEXT_CUT)) return true;
+  if (record && webRecordedRecordValueMatches(recordText(record), recorded.text, "text")) return true;
   // A row the page drew as plain markup was recorded by its words (t463); a
   // record's text that disagreed above may still be that row's.
   return recorded.text !== undefined && inNamedRow(element, recorded.text);
-}
-
-/**
- * Whether what the candidate's record says is what the recording said. Equal,
- * or -- for a recording made while keys and text were still cut -- a recorded
- * value exactly as long as that cut which the candidate's whole value begins
- * with, which is the only reading that cut value can have had.
- */
-function sameAsRecorded(found: string | undefined, recorded: string | undefined, legacyCut: number): boolean {
-  if (found === undefined || recorded === undefined) return false;
-  if (found === recorded) return true;
-  return recorded.length === legacyCut && found.length > legacyCut && found.slice(0, legacyCut) === recorded;
 }
 
 /** Characters of a record's text searched for a row's values. A card, however long its description, says which it is well before this. */

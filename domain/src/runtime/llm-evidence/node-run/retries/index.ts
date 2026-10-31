@@ -10,6 +10,7 @@ export { webNodeEffectCheck } from "./effect-check";
 export { webNodeLookUntilPresent } from "./look";
 // A stale target found again, once, before the last retries (t786).
 export { webNodeLookedUpReacquire } from "./looked-up-reacquire";
+export { webNodeScopedReacquire } from "./scoped-look";
 export { webNodeRetryReacquire, type WebNodeReacquire, type WebNodeReacquired } from "./reacquire";
 export { webNodeReplayRowReacquire } from "./replay-row-reacquire";
 export { webNodeReplayedReads, type WebNodeReplayedRead, type WebNodeReplayedReads } from "./replayed-reads";

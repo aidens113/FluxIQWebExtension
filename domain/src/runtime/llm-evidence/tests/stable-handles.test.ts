@@ -30,6 +30,23 @@ const PAGE_URL = "https://example.test/search";
 const OTHER_URL = "https://example.test/other";
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 
+test("restamping rekeys structured record provenance and carries private capture claims", () => {
+  const handles = createWebLlmStableTargetHandles();
+  const scope = { projectId: "record-project", flowId: "record-flow" };
+  handles.restamp(scope, sanitizeWebLlmSnapshotWithBindings({ url: PAGE_URL, interactiveElements: [{ tagName: "button", selector: "#earlier", accessibleName: "Earlier" }] }));
+  const original = sanitizeWebLlmSnapshotWithBindings({ url: PAGE_URL, interactiveElements: [{ tagName: "button", selector: "#open", accessibleName: "Open sheet", context: { record: { key: "sheet-A", keyAttribute: "data-sheet-id" } } }] });
+  original.captureProvenance = { scope: { kind: "single-frame", browserFrameId: 0 }, coverage: "unknown", includesHidden: false };
+  const oldHandle = original.evidence.elements[0]!.target;
+  const stamped = handles.restamp(scope, original);
+  const freshHandle = stamped.evidence.elements[0]!.target;
+  assert.notEqual(freshHandle, oldHandle);
+  assert.deepEqual(stamped.recordIdentities?.get(freshHandle), { key: "sheet-A", keyAttribute: "data-sheet-id" });
+  assert.equal(stamped.recordIdentities?.has(oldHandle), false);
+  assert.deepEqual(stamped.captureProvenance, original.captureProvenance);
+  assert.equal(original.recordIdentities?.has(oldHandle), true, "the source binding remains intact");
+  assert.doesNotMatch(JSON.stringify(stamped.evidence), /recordIdentities|captureProvenance|sheet-A/u);
+});
+
 const banner: JsonObject = { tagName: "button", selector: "#cookies", visibleText: "Got it" };
 const beds: JsonObject = { tagName: "select", selector: "#beds", accessibleName: "Bedrooms" };
 const band: JsonObject = { tagName: "select", selector: "#band", accessibleName: "Price band" };

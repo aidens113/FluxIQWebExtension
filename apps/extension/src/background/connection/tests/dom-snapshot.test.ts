@@ -214,6 +214,39 @@ test("a single-frame page is merged into exactly the evidence it reported", asyn
   assert.deepEqual(evidence, only.evidence);
 });
 
+test("merged hidden capture proof requires an applied boolean setting from every included frame", async () => {
+  for (const [topSetting, childSetting, expected] of [
+    [true, true, true], [true, false, false], [false, true, false], [false, false, false],
+    [true, undefined, undefined], [undefined, true, undefined], [undefined, undefined, undefined],
+    [true, "true", undefined]
+  ] as const) {
+    const top = topSnapshot();
+    const child = childSnapshot();
+    if (topSetting !== undefined) top.evidence!.captureOptions = { includeHidden: topSetting };
+    if (childSetting !== undefined) child.evidence!.captureOptions = { includeHidden: childSetting as boolean };
+    const evidence = await mergedEvidence([{ frameId: 0, snapshot: top }, { frameId: CHILD_FRAME_ID, snapshot: child }]);
+    assert.deepEqual(evidence.captureOptions, expected === undefined ? undefined : { includeHidden: expected });
+    if (expected === undefined) assert.equal("captureOptions" in evidence, false);
+  }
+});
+
+test("a frame contributing elements without page evidence cannot gain hidden capture proof from another frame", async () => {
+  for (const missingTop of [true, false]) {
+    const top = topSnapshot();
+    const child = childSnapshot();
+    top.evidence!.captureOptions = { includeHidden: true };
+    child.evidence!.captureOptions = { includeHidden: true };
+    delete (missingTop ? top : child).evidence;
+    const evidence = await mergedEvidence([{ frameId: 0, snapshot: top }, { frameId: CHILD_FRAME_ID, snapshot: child }]);
+    assert.equal(evidence.captureOptions, undefined);
+  }
+});
+
+test("requesting hidden elements does not invent producer capture proof on legacy replies", async () => {
+  const merged = await captureMergedTabSnapshot(transportFor(bothFrames), 7, undefined, undefined, { includeHidden: true });
+  assert.equal(merged?.evidence?.captureOptions, undefined);
+});
+
 test("a top frame that reports no evidence falls back to the only frame that did", async () => {
   const top = topSnapshot();
   delete top.evidence;

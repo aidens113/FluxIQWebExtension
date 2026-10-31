@@ -19,14 +19,16 @@
 //   is, what a field holds and so never names it, and what a secret control
 //   keeps (`element-fingerprint/build.ts`).
 //
-// Nothing the model is shown changes: the model names an element only by its
-// handle, and every string read here is one the packet already published.
+// Nothing the model is shown changes: it names an element only by its handle.
+// A selected saved identity may also carry its screened private record key,
+// through the same existing fingerprint contract the recorder already uses.
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { webElementFingerprint } from "../../../element-fingerprint";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
 import { attributeRecord } from "../attributes";
-import type { WebLlmEvidenceElement } from "../elements";
+import type { WebLlmEvidenceElement } from "..";
+import type { WebTargetRecordIdentity } from "../../target-reacquire/identity";
 import { present } from "../present";
 import { isWithheldText } from "../withheld";
 
@@ -44,7 +46,7 @@ type PacketContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "
  */
 export function webPacketElementFingerprint(
   element: WebLlmEvidenceElement,
-  input: { selector?: string | undefined; shadowHosts?: readonly string[] | undefined; dialog?: string | undefined; drawing?: string | undefined } = {}
+  input: { selector?: string | undefined; shadowHosts?: readonly string[] | undefined; dialog?: string | undefined; drawing?: string | undefined; recordIdentity?: WebTargetRecordIdentity | undefined } = {}
 ): WebAutomationElementFingerprint {
   const attributes = screenedAttributes(element.attributes);
   return webElementFingerprint({
@@ -60,7 +62,7 @@ export function webPacketElementFingerprint(
     href: undefined,
     attributes,
     drawing: input.drawing,
-    context: contextOf(element, input.shadowHosts, input.dialog),
+    context: contextOf(element, input.shadowHosts, input.dialog, input.recordIdentity),
     secret: isSensitiveFieldSignature({
       inputType: element.inputType,
       controlType: element.controlType,
@@ -82,7 +84,7 @@ function screenedAttributes(pairs: ReadonlyArray<[string, string]> | undefined):
  * landmark, its list and table position, the shadow hosts its handle's binding
  * kept, and its record. Nothing when the packet placed it nowhere.
  */
-function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[] | undefined, dialog: string | undefined): WebAutomationElementContext | undefined {
+function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[] | undefined, dialog: string | undefined, recordIdentity: WebTargetRecordIdentity | undefined): WebAutomationElementContext | undefined {
   const context = present<PacketContext>({
     formId: whole(element.form),
     landmark: element.landmark,
@@ -90,7 +92,7 @@ function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[
     listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
     tablePosition: element.cell === undefined ? undefined : present<NonNullable<PacketContext["tablePosition"]>>({ row: element.cell.row, column: element.cell.column, columnHeader: whole(element.cell.header) }),
     shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],
-    record: recordOf(element)
+    record: recordIdentity === undefined ? recordOf(element) : structuredClone(recordIdentity)
   });
   return Object.keys(context).length > 0 ? context : undefined;
 }
@@ -99,8 +101,8 @@ function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[
  * The record the packet named the element's row or card by, when it named one
  * whole: the record's words, less its controls' (`../elements.ts` `recordWords`),
  * published on exactly the elements a record tells apart. A record the page
- * keyed (`data-id`) publishes no words; its key lives in the binding's
- * `records`, which only `plan-resolution/target-packets.ts` holds.
+ * keyed (`data-id`) publishes no words; the caller supplies its screened
+ * structured identity from the private binding map instead.
  */
 function recordOf(element: WebLlmEvidenceElement): PacketContext["record"] {
   const text = whole(element.within);

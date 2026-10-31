@@ -36,6 +36,7 @@
 // row's words, which of them from the top (`look-alikes.ts`).
 
 import type { JsonObject } from "fluxiq/core";
+import type { WebTargetCaptureProvenance, WebTargetRecordIdentity } from "../target-reacquire/identity";
 import { sanitizedEvidenceElement, type DescribedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
 import { openDialogNameOf } from "./front-layer";
 import { joinWebLlmLayers, type WebLlmLayerSubject } from "./layers";
@@ -106,6 +107,10 @@ export type WebLlmSnapshotBinding = {
    * `stable-handles.ts` keys on both.
    */
   records: Map<string, string>;
+  /** Structured record provenance; private and optional on older or hand-built bindings. */
+  recordIdentities?: Map<string, WebTargetRecordIdentity>;
+  /** Private capture claims; absence proves neither completeness nor hidden-element coverage. */
+  captureProvenance?: WebTargetCaptureProvenance;
   /**
    * Opaque handle to the open shadow host chain of an element that sits inside
    * one (`elements.ts`), for those elements only. The other half of such an
@@ -206,6 +211,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const elements: WebLlmEvidenceElement[] = [];
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
+  const recordIdentities = new Map<string, WebTargetRecordIdentity>();
   const shadowHosts = new Map<string, readonly string[]>();
   const dialogNames = new Map<string, string>();
   const drawings = new Map<string, string>();
@@ -243,6 +249,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     // The one place a selector is written down, and it is not the packet.
     selectors.set(described.element.target, described.selector);
     if (described.record !== undefined) records.set(described.element.target, described.record);
+    if (described.recordIdentity !== undefined) recordIdentities.set(described.element.target, described.recordIdentity);
     if (described.shadowHosts !== undefined) shadowHosts.set(described.element.target, described.shadowHosts);
     if (described.dialog !== undefined) dialogNames.set(described.element.target, described.dialog);
     if (described.drawing !== undefined) drawings.set(described.element.target, described.drawing);
@@ -292,7 +299,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, drawings, subjects, pageSubject, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: undefined, shadowHosts, dialogNames, drawings, subjects, pageSubject, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
 /**

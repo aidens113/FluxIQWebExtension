@@ -23,6 +23,17 @@ import { createWebAutomationOutputNodeDefinition, webAutomationOutputNodeDefinit
 
 const nodes = webAutomationOutputNodeDefinitions;
 
+test("only canonical shared selector and element descriptors authorize target refresh", () => {
+  const singleControl = new Set(["web.dom.click", "web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.scroll", "web.dom.keypress", "web.dom.wait_for_selector", "web.dom.extract", "web.dom.check", "web.dom.assert", "web.dom.upload"]);
+  for (const node of nodes) {
+    const output = node.outputAction?.fixedOutputId ?? "";
+    assert.deepEqual(node.parameters.filter((parameter) => parameter.targetRefresh === true).map((parameter) => parameter.id).sort(), singleControl.has(output) ? ["element", "selector"] : [], output);
+    for (const parameter of node.parameters) {
+      if (parameter.id !== "selector" && parameter.id !== "element") assert.equal(parameter.targetRefresh, undefined, `${output}.${parameter.id} must retain its original scope, value, effect and authority`);
+    }
+  }
+});
+
 /** The outputs with catalog text of their own (`../definitions.ts`, `catalogTextByOutput`). */
 const CATALOG_TEXT_OUTPUTS: readonly WebAutomationActionType[] = ["web.dom.extract_list", "web.dom.next_page", "web.dom.extract"];
 

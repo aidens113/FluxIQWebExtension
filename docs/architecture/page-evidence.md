@@ -12,6 +12,17 @@ Element descriptors and the recording path around them are in
 [extension client architecture](extension-client.md#recording-evidence); what
 is withheld from a capture is in [sensitive values](sensitive-values.md).
 
+## Applied capture settings
+
+Raw `evidence.captureOptions.includeHidden` reports the boolean actually used
+by the element walker. It is optional for compatibility: sending a hidden-read
+request, an older capture, or a missing/malformed marker does not prove hidden
+coverage. A merged snapshot reports this setting only when every included
+component supplies a valid value; it reports true only when all say true.
+Unanswered frames remain separately reported, so this marker does not promise
+whole-tab completeness. Scoped identity recovery uses explicit addressed-frame
+captures and keeps this provenance privately, outside the model packet.
+
 ## Observed control states
 
 A resolved handle's CC9 `control` view distinguishes the actual readable

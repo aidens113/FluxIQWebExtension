@@ -217,6 +217,8 @@ async function capturedDetection(
     evidence: sanitized.evidence,
     selectors: sanitized.selectors,
     records: sanitized.records,
+    recordIdentities: sanitized.recordIdentities,
+    captureProvenance: sanitized.captureProvenance,
     shadowHosts: sanitized.shadowHosts,
     dialogNames: sanitized.dialogNames,
     drawings: sanitized.drawings,

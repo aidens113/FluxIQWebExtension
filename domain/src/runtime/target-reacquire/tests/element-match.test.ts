@@ -70,3 +70,42 @@ test("a saved stable record key identifies the same control after its record tex
   const other = { element: { tagName: "button", accessibleName: "View report", context: { record: { key: "report-b", keyAttribute: "data-report", text: "Quarterly report ready" } } } };
   assert.deepEqual(webReacquireElement({ stale, candidates: [other, fresh] }), { outcome: "found", value: fresh });
 });
+
+test("missing record provenance, text drift and another key attribute stay unmatched", () => {
+  const base = { tagName: "button", accessibleName: "Open sheet" };
+  const stale = { element: { ...base, context: { record: { key: "sheet-A", keyAttribute: "data-sheet-id" } } } };
+  const missing = { element: base };
+  const otherAttribute = { element: { ...base, context: { record: { key: "sheet-A", keyAttribute: "data-other-id" } } } };
+  assert.equal(webReacquireElement({ stale, candidates: [missing] }).outcome, "unmatched");
+  assert.equal(webReacquireElement({ stale, candidates: [otherAttribute] }).outcome, "unmatched");
+  const textOnly = { element: { ...base, context: { record: { text: "Sheet A waiting" } } } };
+  const changed = { element: { ...base, context: { record: { text: "Sheet A ready" } } } };
+  assert.equal(webReacquireElement({ stale: textOnly, candidates: [changed] }).outcome, "unmatched");
+});
+
+test("a generic control cannot move to another dialog or shadow root", () => {
+  const base = { tagName: "button", accessibleName: "Close sheet" };
+  const stale = { element: { ...base, context: { dialog: "Sheet preview", shadowHosts: ["sheet-widget"] } } };
+  for (const context of [{ dialog: "Other preview", shadowHosts: ["sheet-widget"] }, { dialog: "Sheet preview", shadowHosts: ["other-widget"] }, {}]) {
+    assert.equal(webReacquireElement({ stale, candidates: [{ element: { ...base, context } }] }).outcome, "unmatched");
+  }
+});
+
+test("readsWords with no usable second identity signal is unidentifiable, never gone", () => {
+  const weak: JsonObject[] = [
+    { tagName: "div", visibleText: "7", readsWords: true },
+    { tagName: "div", visibleText: "7", classNames: ["amount"], readsWords: true }
+  ];
+  for (const element of weak) {
+    const stale = { element };
+    const expected = { outcome: "unmatched", reason: "unidentifiable" };
+    assert.deepEqual(webReacquireElement({ stale, candidates: [] }), expected, "ignored value words cannot establish absence");
+    assert.deepEqual(webReacquireElement({ stale, candidates: [{ element: { tagName: "div", visibleText: "9", classNames: ["amount"] } }] }), expected, "a current candidate cannot supply the stale identity's missing signal");
+  }
+});
+
+test("readsWords with two stable non-word signals still finds changed current words", () => {
+  const stale = { element: { tagName: "input", inputType: "text", testId: "sheet-total", visibleText: "7", selector: "#old", readsWords: true } };
+  const fresh = { element: { tagName: "input", inputType: "text", testId: "sheet-total", visibleText: "9", selector: "#fresh" } };
+  assert.deepEqual(webReacquireElement({ stale, candidates: [fresh] }), { outcome: "found", value: fresh });
+});

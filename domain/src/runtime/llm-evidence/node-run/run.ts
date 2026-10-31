@@ -88,8 +88,9 @@ import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type We
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadCode, webListReadConditionAccount } from "./list-read";
-import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookedUpReacquire } from "./retries";
+import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
+import type { WebTargetScope } from "../../target-reacquire/identity";
 
 /** The shapes a handle is written in, as a refusal names them (`./handle-shape/` puts a bare one into the first). */
 const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'];
@@ -383,6 +384,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // A list read behind which a robot check stood still read its list (`./list-read/code.ts`).
       reads: webListReadCode(node.definitionId, current?.evidence.location, ran)
     };
+    const dispatchParameters = webNodeDispatchParameters(node, ran);
+    const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
     record.acted = true;
     // The look just taken is the page before the act; a capture after it is not compared with it (`../plan-resolution/self-changing/`).
     run.stores.targets.acting(buildOf(run));
@@ -390,7 +393,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
     // A lasting act whose answer was lost is checked against the step's own
     // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3); a control the page re-rendered is looked for again by its identity (t786).
-    const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), webNodeLookedUpReacquire(run, { definitionId: node.definitionId, handle: webPlanFirstTargetHandle(written), parameters: webNodeDispatchParameters(node, ran), look: () => readablePage(run, run.request) }));
+    const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), reacquire);
     actionability = webActionabilityFromPayload(result);
     assertActive(run.request.signal);
     // One the check showed landed counts as done, whatever its lost answer said.
@@ -769,9 +772,9 @@ async function currentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest):
 }
 
 /** The page as it stands, arrived or not; `undefined` only for the unreadable page of a build told its start location. */
-async function readablePage(run: WebNodeRun, request: WebLlmEvidenceToolRequest): Promise<WebLlmSnapshotBinding | undefined> {
+async function readablePage(run: WebNodeRun, request: WebLlmEvidenceToolRequest, options?: { includeHidden: true; scope: WebTargetScope }): Promise<WebLlmSnapshotBinding | undefined> {
   try {
-    return run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal));
+    return run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal, undefined, options));
   } catch (error) {
     if (run.request.startLocation !== undefined && error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
     throw error;

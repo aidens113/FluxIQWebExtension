@@ -1,0 +1,12 @@
+export type { WebTargetScope } from "./scope";
+export type { WebTargetCaptureProvenance } from "./provenance";
+export type { WebTargetObservation } from "./observation";
+export type { WebFreshTarget } from "./fresh-target";
+export type { WebTargetRecordIdentity } from "./record-identity";
+export type { WebTargetIdentityRefreshResult } from "./refresh-result";
+export { webTargetObservation } from "./classify-observation";
+export { webTargetCandidates } from "./candidates";
+export { webTargetReplacement } from "./replacement";
+export { webRefreshTargetIdentity } from "./refresh";
+export { webCapturedTargetObservation } from "./capture";
+export { createWebTargetPlaces } from "./places";

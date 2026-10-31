@@ -55,13 +55,13 @@ export function captureSnapshot(options: SnapshotCaptureOptions = {}): DomSnapsh
 }
 
 function captureSnapshotNow(options: SnapshotCaptureOptions): DomSnapshot {
-  const { entries, shown, counts } = snapshotElements(options);
+  const { entries, shown, counts, includeHidden } = snapshotElements(options);
   // Before the descriptors are read out: the evidence pass sets each one's
   // `changed` and `recentlyInteracted`, and the same objects go on the wire.
   // It is handed the rendered elements only, so a search's capture reports the
   // page a look reports, and the change record it keeps between captures
   // holds the same elements whichever of the two ran last.
-  const evidence = pageEvidence(shown, counts);
+  const evidence = pageEvidence(shown, counts, includeHidden);
   const snapshot: DomSnapshot = {
     url: location.href,
     title: document.title,
@@ -184,8 +184,10 @@ function snapshotElements(options: SnapshotCaptureOptions): {
   entries: SnapshotElementEntry[];
   shown: SnapshotElementEntry[];
   counts: SnapshotElementCounts;
+  includeHidden: boolean;
 } {
-  const { elements, walked, hidden } = renderedElements(document, { includeHidden: options.includeHidden === true });
+  const includeHidden = options.includeHidden === true;
+  const { elements, walked, hidden } = renderedElements(document, { includeHidden });
   const rendered = hidden ? elements.filter((element) => !hidden.has(element)) : elements;
   const repeats = repeatExemplars(rendered, touchedElements());
   const inFrontLayer = frontLayerTest();
@@ -197,7 +199,7 @@ function snapshotElements(options: SnapshotCaptureOptions): {
       : snapshotDescriptor(element, repeats.counts.get(element), inFrontLayer(element), parents[index])
   }));
   const shown = hidden ? entries.filter((entry) => !hidden.has(entry.element)) : entries;
-  return { entries, shown, counts: { scanned: walked, candidates: walked, matched: rendered.length } };
+  return { entries, shown, counts: { scanned: walked, candidates: walked, matched: rendered.length }, includeHidden };
 }
 
 /**

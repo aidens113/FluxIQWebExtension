@@ -390,14 +390,15 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const location = binding.evidence.location;
       const seen = targetsOf(binding);
+      const partial = binding.evidence.truncated === true || (binding.captureProvenance !== undefined && (binding.captureProvenance.scope.kind === "single-frame" || binding.captureProvenance.coverage !== "complete"));
       flow.selfChanging.captured(binding);
-      flow.steps.captured(location, dialogsOf(binding), flow.history.record(location, seen), seen, binding.evidence.truncated === true);
+      flow.steps.captured(location, dialogsOf(binding), flow.history.record(location, seen), seen, partial);
       printedBy(flow, binding);
       // A look that described every control says which have gone, as a shown
       // packet does; one the browser's capture cut short (`captureTruncated`)
       // cannot, so it only adds. Since t200 nothing else cuts a look.
       const before = flow.pages.get(location);
-      if (!binding.evidence.truncated) {
+      if (!partial) {
         markRenumbered(flow, binding, seen);
         keep(flow, location, acrossViews(before, seen));
         flow.partial.delete(location);
@@ -630,11 +631,11 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
-    const identity = webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target), binding.dialogNames?.get(element.target), binding.drawings?.get(element.target));
+    const identity = webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target), binding.dialogNames?.get(element.target), binding.drawings?.get(element.target), binding.recordIdentities?.get(element.target));
     const target: PageTarget = {
       selector,
-      frameId: element.frameId,
-      frameUrlPath: webLlmFrameUrlPath(element),
+      frameId: element.frameId ?? (binding.captureProvenance?.scope.kind === "single-frame" ? binding.captureProvenance.scope.browserFrameId : undefined),
+      frameUrlPath: webLlmFrameUrlPath(element) ?? (binding.captureProvenance?.scope.kind === "single-frame" ? binding.captureProvenance.scope.browserFrameUrlPath : undefined),
       element: identity,
       words: spacedName(identity, webPlanElementWords(element, identity)),
       shared: false,

@@ -7,6 +7,7 @@
 // a selector; and an attribute map keyed by name (`./attributes.ts`).
 
 import { webElementDrawing } from "../../element-fingerprint";
+import type { WebTargetRecordIdentity } from "../target-reacquire/identity";
 import { isSensitiveElementDescriptor } from "../../sensitivity";
 import { attributeRecord, publishedAttributes, rawAttributes, WEB_LLM_FRAME_ID_ATTRIBUTE } from "./attributes";
 import type { WebLlmLayerMarks } from "./layer-marks";
@@ -187,6 +188,8 @@ export type DescribedEvidenceElement = {
   element: WebLlmEvidenceElement;
   selector: string;
   record: string | undefined;
+  /** Screened structured identity, kept beside the opaque address and never published. */
+  recordIdentity?: WebTargetRecordIdentity | undefined;
   /** The record's own words, screened. Absent where the page keyed the record or it was not one of several. */
   within: string | undefined;
   /** Where the element starts on the page, when the capture measured it. */
@@ -331,6 +334,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     element,
     selector: addressed.selector,
     record: recordAddress(raw.context),
+    recordIdentity: structuredRecordIdentity(raw.context),
     within: recordWords(raw.context),
     // Document coordinates only: a viewport box is in another space, and one
     // look-alike measured in each would be put in the wrong order.
@@ -438,6 +442,25 @@ function elementSubject(context: unknown): string | undefined {
 function recordWords(context: unknown): string | undefined {
   if (!isJsonRecord(context) || !isJsonRecord(context.record)) return undefined;
   return screenedPageText(context.record.text);
+}
+
+/** The accepted descriptor's existing record shape, without withheld strings or a weaker fallback for a withheld key. */
+function structuredRecordIdentity(context: unknown): WebTargetRecordIdentity | undefined {
+  if (!isJsonRecord(context) || !isJsonRecord(context.record)) return undefined;
+  const raw = context.record;
+  const whole = (value: unknown): string | undefined => {
+    const screened = screenedPageText(value);
+    return screened === undefined || isWithheldText(screened) ? undefined : screened;
+  };
+  const key = whole(raw.key);
+  const keyAttribute = whole(raw.keyAttribute);
+  if ((raw.key !== undefined && key === undefined) || (raw.keyAttribute !== undefined && keyAttribute === undefined)) return undefined;
+  if (keyAttribute !== undefined && key === undefined) return undefined;
+  const text = whole(raw.text);
+  const values = Array.isArray(raw.values) ? raw.values.map(whole) : undefined;
+  if (values?.some((value) => value === undefined)) return undefined;
+  const identity = present<WebTargetRecordIdentity>({ key, keyAttribute, text, values: values as string[] | undefined });
+  return Object.keys(identity).length > 0 ? identity : undefined;
 }
 
 /** Where a measured box starts, or `undefined` for a box that is not one. */

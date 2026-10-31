@@ -320,6 +320,8 @@ export type WebAutomationPageEvidence = {
   elements: WebAutomationSnapshotElementTotals;
   loading: WebAutomationLoadingEvidence;
   navigation: WebAutomationNavigationEvidence;
+  /** Actual producer capture settings; missing on older captures, so hidden coverage is unknown. */
+  captureOptions?: { includeHidden: boolean } | undefined;
   dialogs?: WebAutomationDialogEvidence | undefined;
   overlays?: WebAutomationOverlayEvidence | undefined;
   regions?: WebAutomationRegionEvidence[] | undefined;
