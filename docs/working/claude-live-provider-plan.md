@@ -1,7 +1,7 @@
 # Claude Live Provider Plan
 
-Status: Active
-Status detail: Claude runtime, keys/settings and $5 Lab defaults validated; paired integration in progress.
+Status: Complete
+Status detail: Claude runtime, keys/settings and $5 live-test defaults validated and integrated in both repositories.
 Created: 2026-10-30
 Last updated: 2026-10-30
 Owner: Senior supervisor agent
@@ -14,8 +14,8 @@ Related: [Framework continuation](framework-heavy-lifting-plan.md)
 The user requested Claude for every live model-backed test and explicitly asked that preference be recorded.
 Both repositories' AGENTS.md now hold it. Never silently fall back to DeepSeek. Provider-free tests remain provider-free.
 CLAUDE_API_KEY is present in the main downstream .env.local; its value was not printed, copied or committed.
-Anthropic originally appeared in the keys UI without runtime support. Core now implements the native provider, per-call encrypted-key resolution and matching model/settings controls; the Lab migration is under acceptance.
-Paired task t816 implementation is complete and independently verified in isolated checkouts; integration is next.
+Anthropic originally appeared in the keys UI without runtime support. Core now implements the native provider, per-call encrypted-key resolution and matching model/settings controls; the Lab migration passed its owning checks.
+Paired task t816 is integrated: downstream fa99782d and Core61d29c1f, with Core library version0.9.0. No paid model call has run.
 Live default: claude-sonnet-5-5, provider anthropic, selected for agentic task quality and speed; explicit model selection remains available.
 The user raised Claude live tests to $5 per build on 2026-10-30. Main ignored `.env.local` now configures that ceiling;
 the Lab's Claude default and declared budget also use $5, while explicit lower limits and normal product defaults remain.
@@ -74,3 +74,10 @@ Messages schema output uses output_config.format; refusals and truncation requir
 - Validation: `node --test scripts/lab/live-campaign/tests/arguments.test.mjs scripts/lab/pair/tests/provider-key.test.mjs` -> `7 passed`; contract/default tests -> `11 passed`; `node scripts/check/model-text.mjs` -> `ok (208 scenario tokens, 412 model-facing Core files, 12444 string literals)`.
 - Finding: downstream full structure found only three credential-name references in the new source-only launcher registry; added that exact file with a boundary explanation. `node scripts/structure-audit.mjs --rule restricted-references` -> `passed, 0 warnings`; statement-packing -> `passed`. Core baseline update lowered4/removed8 entries and added none.
 - Not verified: a paid Claude request, browser key-entry roundtrip or performance comparison. No panel was managed, and no full sweep was run.
+
+### 2026-10-30 - Paired integration
+- Agent: lead
+- Validation: `pnpm.cmd task finish t816 'Claude live tests and five-dollar build allowance'` -> structure gate passed and task merged; final local branch deletion refused because the last parent-sync commit was newer than its backup. Pushing the final task tip and `git branch -d task/t816-claude-live-provider` both passed; remote backup retained.
+- Validation: Core `pnpm.cmd task finish t816 'Claude runtime and five-dollar live-test allowance' --skip-checks` -> mandatory contracts `3 files, 70 passed`, merged61d29c1f. Narrow types/tests/builds above replace a full sweep at this merge.
+- Validation: `git log -1 --oneline` -> downstream fa99782d and Core61d29c1f merge commits confirmed.
+- Not verified: main promotion and paid/browser Claude quality; existing supervised-launch requirements remain.
