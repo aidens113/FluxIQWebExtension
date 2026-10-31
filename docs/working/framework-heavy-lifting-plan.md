@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t823 shared date reference passes lead500 Core/89domain/12extension/27tooling tests and1realistic Chromium proof; affected types pass. Core0.16.0 paired integration pending. No paid calls; full-suite allowance exhausted; main held.
+Status detail: t823 merged on both dev branches (Core41adfa49/downstreamda2f4301); Core0.16.0 shared run clock passed focused acceptance, Chromium proof and70merge contracts. Next P8 runtime robustness. Full-suite allowance exhausted; no paid calls; main held.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Continuing, 2026-10-31:** t823 implements a fixed referenceNow across executor/native/runtime dispatch, trials, resumed/child runs, browser filtering/sorting, replay and final judging. Fresh execution captures its start; reused evidence retains it; live timers still advance. Core0.16.0 adds optional fields and preserves old exports after extracting graph options. Lead500 Core tests/89 domain/12 extension/27 tooling tests pass; Chromium134.0.6998.35 headless UTC job-board proof passes exact2 supplied-reference rows versus1 wall-clock row after midnight. Core/domain/extension types pass; Core full audit passes and downstream remaining targeted rule passes, final merge gate pending. Extension first check lacked fresh compiled domain/node; building only domain fixed it. Setup now offers downstream --skip-workspace-build with Core safety gates retained; both AGENTS files document it. Initial setup unexpectedly attempted a full workspace build and was refused after Core inputs changed; no further full command ran. Paired commits/merge next, then P8 runtime robustness discovery. Main needs a later permitted full sweep. No paid go/API calls or panel management.
+**Continuing, 2026-10-31:** t823 implements a fixed referenceNow across executor/native/runtime dispatch, trials, resumed/child runs, browser filtering/sorting, replay and final judging. Fresh execution captures its start; reused evidence retains it; live timers still advance. Core0.16.0 adds optional fields and preserves old exports after extracting graph options. Lead500 Core tests/89 domain/12 extension/27 tooling tests pass; Chromium134.0.6998.35 headless UTC job-board proof passes exact2 supplied-reference rows versus1 wall-clock row after midnight. Core/domain/extension types pass; Core full audit passes and downstream remaining targeted rule passes, final merge gate pending. Extension first check lacked fresh compiled domain/node; building only domain fixed it. Setup now offers downstream --skip-workspace-build with Core safety gates retained; both AGENTS files document it. Initial setup unexpectedly attempted a full workspace build and was refused after Core inputs changed; no further full command ran. Merged Core41adfa49/downstreamda2f4301 after final structure gates and70 Core merge-contract tests; next P8 runtime robustness discovery. Remote task backups retained. Main needs a later permitted full sweep. No paid go/API calls or panel management.
 
 **Current fix-forward, 2026-10-31:** t822 ended exit1 despite2488 registered domain passes: src/tests/domain.test.ts failed during module load. The same hidden failure existed in t821, so the earlier claim that its robot-watch assertion was the only failure was incomplete. Core had mistaken incidental 'Choose ensureState' help for selection capability. The fix uses declared node id/label/tags/output identities only; the web domain explicitly declares check/select, type/submit and tab/open. Original integration assertions now run as named tests, with denied-operation expectations strengthened. Lead275 Core plan and42 domain tests pass; both package type checks exit0. Final catalog consolidation30/30 passes. Paired dev integration completed: Core26973484/downstream2ec3dc42; final pushes follow this memory update. Both full structure audits pass; Core merge gate70/70 passed with the default full check explicitly skipped. Both Oct31 full-suite slots are used: narrow checks only; main needs a later permitted full sweep. Coreb72e4214's20683/7-skipped proof is historical and cannot qualify this classifier change. Claude/$5 is configured, but no paid go or calls occurred.
 
@@ -93,12 +93,11 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. t822 is merged and pushed after narrow acceptance; continue t823 shared run clock. Both 2026-10-31 full-suite slots are used; main remains held until a later permitted full sweep passes. No further full suite today.
+1. t823 shared clock is merged after narrow acceptance; continue P8 runtime robustness discovery. Both 2026-10-31 full-suite slots are used; main remains held until a later permitted full sweep passes. No further full suite today.
 2. t817 fixed the first-already-satisfied-row defect: paired before/after evidence and explicit grounded end-state choice now pass native oracle/saved-replay proof; no first/majority click inference.
 3. After the user's go, run the live round with Claude/$5: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
 4. Follow-ups:
-   - one shared run `now` across page, build test and run end (needs the executor; after t799);
    - a verbatim-cell fact;
    - the extension picker seen in a browser.
 5. Hosted:
@@ -487,7 +486,7 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed: optional fixed reference through runtime/replay/judge/browser; live timers unchanged. Validator moved to a light module, options contract extracted with compatibility exports, tests consolidated without weaker assertions/baselines. Task setup can skip full workspace build.
 - Validation: `pnpm.cmd --filter fluxiq exec vitest run @clockOwnerTests src/programs/automation-studio/runtime/result-verification/computed-facts/tests src/programs/automation-studio/runtime/result-verification/agreement/tests src/programs/automation-studio/runtime/result-verification/value-readings/tests --maxWorkers=2 --minWorkers=1` ->46files/500passed; clockOwnerTests was18changed owning files. Core check and filtered3libs ->exit0; full Core audit ->passed.
 - Validation: named domain clock4files ->38passed and native/adapter2files ->51passed; named order/date extension tests ->12passed; named task argument/CLI/start tests ->27passed. Domain/extension check ->exit0 after domain-only build supplied missing compiled domain/node. Focused test:content job-board date-reference ->1passed in headless Chromium134.0.6998.35 UTC; exact positive2vs1 rows. Logs ignored in test-runs/2026-10-31-t823-*.
-- Outcome: narrow acceptance passes; paired integration next. Source reports under downstream codex-1031/shared-clock-*. No paid/model calls, panel launch, full-suite rerun or main promotion; initial setup automatic build refusal is recorded above.
+- Outcome: accepted and merged Core41adfa49/downstreamda2f4301; Core finish --skip-checks passed70 mandatory contracts. Downstream structure gate passed; its finished tree removed and leftover merged local branch removed by task abandon after unmerged0/Core:null verification. Source reports under downstream codex-1031/shared-clock-*. No paid/model calls, panel launch, full-suite rerun or main promotion; initial setup automatic build refusal is recorded above.
 
 ## Open Questions
 
