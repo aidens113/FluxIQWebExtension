@@ -21,6 +21,9 @@ export type TopologyOptions = {
   runsDirectory?: string;
   runId?: string;
   seed?: number;
+  /** Caller context shared with run planning; omitted direct callers retain process defaults. */
+  environment?: NodeJS.ProcessEnv;
+  args?: readonly string[];
   startupTimeoutMs?: number;
   credentials?: FluxIQCredentials;
   prepareHost?: boolean;
@@ -130,7 +133,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
     });
     supervisor.start({
       name: "scenario-lab", command: executable("node"), args: [scenarioEntrypoint], cwd: repositoryRoot,
-      env: buildScenarioEnvironment(allocation, options.seed ?? 1), logPath: processLogPath(allocation.logsDir, "scenario-lab"),
+      env: buildScenarioEnvironment(allocation, options.seed ?? 1, options.environment), logPath: processLogPath(allocation.logsDir, "scenario-lab"),
     });
     const scenarioOrigin = `http://127.0.0.1:${allocation.scenarioPort}`;
     await dependencies.waitForHttp(`${scenarioOrigin}/__control/health`, {
@@ -142,7 +145,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
 
     supervisor.start(coreWebServerProcessSpec({
       name: "fluxiq-web", build: coreWebBuild, port: allocation.webPort,
-      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.modelProvidersEnabled === undefined ? {} : { modelProvidersEnabled: options.modelProvidersEnabled }), ...(options.buildCallLimit === undefined ? {} : { buildCallLimit: options.buildCallLimit }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}), ...(options.candidateTrialFixtureReset === undefined ? {} : { candidateTrialFixtureReset: options.candidateTrialFixtureReset }), ...(options.tracing === undefined ? {} : { tracing: options.tracing }) }),
+      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.modelProvidersEnabled === undefined ? {} : { modelProvidersEnabled: options.modelProvidersEnabled }), ...(options.buildCallLimit === undefined ? {} : { buildCallLimit: options.buildCallLimit }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}), ...(options.candidateTrialFixtureReset === undefined ? {} : { candidateTrialFixtureReset: options.candidateTrialFixtureReset }), ...(options.tracing === undefined ? {} : { tracing: options.tracing }) }, options.environment, options.args),
       logPath: processLogPath(allocation.logsDir, "core"),
     }));
     const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;
@@ -215,7 +218,7 @@ async function startExistingTopology(options: TopologyOptions, target: ExistingT
     });
     supervisor.start({
       name: "scenario-lab", command: executable("node"), args: [scenarioEntrypoint], cwd: repositoryRoot,
-      env: buildScenarioEnvironment(allocation, options.seed ?? 1), logPath: processLogPath(allocation.logsDir, "scenario-lab"),
+      env: buildScenarioEnvironment(allocation, options.seed ?? 1, options.environment), logPath: processLogPath(allocation.logsDir, "scenario-lab"),
     });
     const scenarioOrigin = `http://127.0.0.1:${allocation.scenarioPort}`;
     await dependencies.waitForHttp(`${scenarioOrigin}/__control/health`, {

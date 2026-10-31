@@ -33,6 +33,7 @@ const source = (relative: string) => readFile(path.join(sourceRoot, relative), "
  */
 const DIAGNOSE_TASK = ["--llm-profile", "deepseek-lab", "--llm-task", "diagnose"] as const;
 const CREATE_FLOW_TASK = ["--llm-profile", "lab-create-flow", "--llm-task", "create-flow", "--instruction-task", "catalog-first-page"] as const;
+const DEEPSEEK_MODEL = "deepseek-v4-pro";
 
 test("runCli refuses a live diagnose run, which ran only on the retired recording-built Flow lane, before anything starts", async () => {
   const result = await liveRun(["run", "company-website"], DIAGNOSE_TASK);
@@ -63,7 +64,7 @@ async function liveRun(argv: readonly string[], task: readonly string[] = CREATE
   process.stderr.write = ((chunk: string | Uint8Array) => { stderr.push(String(chunk)); return true; }) as typeof process.stderr.write;
   try {
     const code = await runCli([
-      ...argv, "--live-llm", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, ...task,
+      ...argv, "--live-llm", "--llm-provider", "deepseek", "--llm-model", DEEPSEEK_MODEL, ...task,
     ], { FLUXIQ_WEB_EXTENSION_ROOT: repositoryRoot, FLUXIQ_TEST_ENV_FILES: "none" });
     return { code, stderr: stderr.join("") };
   } finally {
@@ -79,7 +80,7 @@ async function liveRun(argv: readonly string[], task: readonly string[] = CREATE
  * scenario lab build, prints what it would do, and exits. A stub build stands
  * in for the scenario lab, so these read no real catalog and no real key.
  */
-const CREATE_FLOW = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "create-flow"];
+const CREATE_FLOW = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", DEEPSEEK_MODEL, "--llm-task", "create-flow"];
 const DUMMY_KEY = "dummy-provider-key-for-a-dry-run";
 /** The stub catalog scenario under a realistic scenario's id: a Lab run refuses any scenario outside the ten (`realistic-scenarios/index.ts`). */
 const REALISTIC = "everything-store";
@@ -129,6 +130,44 @@ test("a create-flow run fails closed before anything starts: no credential, or a
   await assert.rejects(access(path.join(lab.root, "test-runs")));
 });
 
+test("a default-Claude dry run honors the caller's model, purse, mode and fake key with zero provider calls", async (t) => {
+  const lab = await stubLab(t);
+  const args = [
+    "run", REALISTIC, "--live-llm", "--llm-profile", "lab-create-flow", "--llm-task", "create-flow",
+    "--instruction-task", "catalog-first-page", "--llm-cost-ceiling-usd", "0.05",
+    "--llm-max-cost-usd", "0.05", "--authoring-mode", "project", "--dry-run"
+  ];
+  const environment = { ...lab.env, CLAUDE_API_KEY: DUMMY_KEY, FLUXIQ_LLM_RUN_COST_CEILING_USD: "0.08" };
+  const result = await captureCli(args, environment);
+  assert.equal(result.code, 0, result.stderr);
+  const printed = JSON.parse(result.stdout) as Record<string, any>;
+  assert.equal(printed.status, "ready");
+  assert.equal(printed.providerCallCount, 0);
+  assert.equal(printed.live.provider, "anthropic");
+  assert.equal(printed.live.model, DEFAULT_LLM_MODEL);
+  assert.equal(printed.live.coreDefaultModel, DEFAULT_LLM_MODEL);
+  assert.equal(printed.live.coreAuthoringMode, "project");
+  assert.equal(printed.live.authorized.maxEstimatedCostUsd, 0.05);
+  assert.equal(printed.live.authorized.maxTotalEstimatedCostUsd, 0.05);
+  assert.match(printed.live.model, /^claude-/u);
+  assert.deepEqual(printed.live.credentialSource, { name: "CLAUDE_API_KEY", from: "the process environment" });
+  assert.equal(result.stdout.includes(DUMMY_KEY), false, "the dry run printed the credential");
+  await assert.rejects(access(path.join(lab.root, "test-runs")), "a dry run wrote no run");
+  const raised = await captureCli(args, { ...environment, FLUXIQ_LLM_RUN_COST_CEILING_USD: "0.04" });
+  assert.equal(raised.code, 1);
+  assert.match(raised.stderr, /cannot raise the configured Lab ceiling of \$0\.04/u);
+  const aboveMax = [...args];
+  aboveMax[aboveMax.indexOf("--llm-max-cost-usd") + 1] = "0.07";
+  const refusedMax = await captureCli(aboveMax, environment);
+  assert.equal(refusedMax.code, 1);
+  assert.match(refusedMax.stderr, /--llm-max-cost-usd 0\.07 is above the per-build cost ceiling of \$0\.05/u);
+  const lowerChatMax = [...args];
+  lowerChatMax[lowerChatMax.indexOf("--llm-max-cost-usd") + 1] = "0.04";
+  const refusedChatMax = await captureCli(lowerChatMax, environment);
+  assert.equal(refusedChatMax.code, 1);
+  assert.match(refusedChatMax.stderr, /cannot reach the Flow the chat makes/u);
+});
+
 test("a create-flow dry run resolves the task, plans the build and starts nothing", async (t) => {
   const lab = await stubLab(t);
   const env = { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY };
@@ -146,6 +185,8 @@ test("a create-flow dry run resolves the task, plans the build and starts nothin
   assert.equal(printed.request.variantId, "text-variant");
   assert.deepEqual(printed.request.judgement, { judgeBy: "expected-dataset", stepId: "extract-page-one", stepIndex: 1 });
   assert.equal(printed.live.purpose, "build_and_adapt");
+  assert.equal(printed.live.model, DEEPSEEK_MODEL);
+  assert.equal(printed.live.coreDefaultModel, DEEPSEEK_MODEL);
   assert.equal(printed.live.authorized.maxCalls, 26);
   assert.deepEqual(printed.live.authorized.tokenLimits, { maxInputTokens: 40_000, maxOutputTokens: 6_000, maxTotalTokens: 46_000 });
   assert.deepEqual(printed.live.credentialSource, { name: "DEEPSEEK_API_KEY", from: "the process environment" });
