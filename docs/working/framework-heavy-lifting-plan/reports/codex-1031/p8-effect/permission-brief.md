@@ -1,0 +1,13 @@
+Role: heavy worker gpt-6.1-sol max. t824 Core root C:/Users/osrs_/FluxStuff/fxwork/t824/!FluxIQ.
+Read MAIN p8-effect/{contract-runtime,core-discovery}.md and frozen node/action-effect types. Lead accepted contract24+27tests/types.
+Owned: runtime/action-permissions/** EXCEPT declaration.ts/consequences.ts; runtime/flow-bootstrap/action-permissions.ts and action-permissions/ helpers; llm/harness-options/plan-parameter-resolution.ts only trusted permission projection; owning tests. Ask before other source.
+Must not touch: executor/native/runtime-session/io-policy, shared contract/parser files, downstream, versions/exports/docs/git.
+ActionDeclaration.actionEffect?:AutomationStudioResolvedActionEffect is strict and separate from model consequences. Pure known consequence helpers now in model/action-consequences/; old runtime exports preserved.
+Union trusted client permissionConsequences with model classes BEFORE both gate paths' observe exemption, missing-class check, pending request, decision recording and saved plan-step permission projection. Never invent money/delete/etc from commit alone.
+Trusted state/commit must not be treated as observation merely because legacy/model effect says observe; a true observe/absent legacy declaration preserves existing read exemption/shape. Model classes may raise risk, cannot erase client minimum.
+Trace actual authoring/plan-step projection so canonical NodeDefinition.actionEffect is resolved from raw/preserved parameters and union survives approval/publication. Never promote model-authored metadata/actionEffect into trust. Web constructs client declarations from its trusted table.
+No new per-playback permission prompts: graph-options currently relies on authoring approval, keep that boundary. Do not weaken instructed authority, evidence/control grounding, declined approval, reset/witness or auth/grant checks.
+Resolved helper already forces commit for known client classes, validates unknowns and retains defaults conservatively. Do not modify its schema. If a shared union helper is needed add focused permission owner and coordinate with runtime worker.
+Add named tests for both gate entries, model observe/none with known client class, union and recorded requested classes, permitted/declined/unknown cases, truthful read/no-floor compatibility, and actual plan projection from canonical definition. Preserve nonempty/meaningful assertions.
+No builds/types/full suites/provider/browser/panel/git while peers edit. Named tests max2workers; budgeted files/directories, no new as-never/packed statements/deep imports/baseline changes.
+Report MAIN p8-effect/permission.md with exact paths/commands and unverified edges; return required contract.
