@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { PHOTO_SOCIAL_LIVE_TASKS } from "../../../../../scenario-lab/src/scenarios/photo-social/live-tasks.js";
+import { PHOTO_SOCIAL_LIVE_TASKS } from "../../../../../scenario-lab/src/scenarios/photo-social/index.js";
 import { newestLikesExpected } from "../../../../../scenario-lab/src/scenarios/photo-social/breadth/index.js";
 import { STUDIO, gridFor } from "../../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
 import { expect } from "../../../fixtures/extension-context";

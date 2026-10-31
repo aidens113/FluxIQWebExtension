@@ -19,7 +19,10 @@ export function groundedPhotoBuilder(installed: InstalledBuild) {
   let beforeRefusal: string[] = [], afterRefusal: string[] = [];
   let commandsBeforeRefusal = 0, commandsAfterRefusal = 0;
   let candidate: { revision: number; digest: string } | undefined;
-  const send = (id: string, answer: ScriptedAnswer) => { pending = id; return answer; };
+  const send = (id: string, answer: ScriptedAnswer) => {
+    pending = id;
+    return answer;
+  };
   const flow = (chosen?: JsonObject) => [
     "flow: Like the three most recent posts",
     "step profile: open the profile", "  node: web.browser.navigate", `  url: ${JSON.stringify(profile)}`,
@@ -37,7 +40,10 @@ export function groundedPhotoBuilder(installed: InstalledBuild) {
     const previous = pending;
     if (pending) answers[pending] = record([...turn.evidence].reverse().find(entry => entry.callId === pending)?.value);
     pending = "";
-    const done = () => { finished = true; return turn.complete({ subflowKey: "main", ...candidate }); };
+    const done = () => {
+      finished = true;
+      return turn.complete({ subflowKey: "main", ...candidate });
+    };
     if (finished) return done();
     switch (previous) {
       case "": return send("profile", turn.node("profile", "web.output.browser-navigate", { url: profile }));
@@ -79,7 +85,8 @@ export function groundedPhotoBuilder(installed: InstalledBuild) {
         afterRefusal = await likedPosts(installed.page);
         commandsAfterRefusal = installed.siteCommands().length;
         expect(issuesIn(answers[previous]).map(issue => issue.code)).toContain("candidate.toggle_state_required");
-        const refused = JSON.stringify(answers[previous]);
+        const issueValues = record(answers[previous]?.diagnostics).issues;
+        const refused = (Array.isArray(issueValues) ? issueValues : []).map(issue => String(record(issue).message ?? "")).join("\n");
         expect(refused).toContain(JSON.stringify(selected));
         expect(refused).toContain("before press");
         expect(afterRefusal).toEqual(beforeRefusal);

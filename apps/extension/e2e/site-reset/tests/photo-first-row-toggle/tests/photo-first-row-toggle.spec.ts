@@ -1,11 +1,8 @@
-import type { JsonObject } from "fluxiq/core";
-import { expect, test } from "../../fixtures/extension-context";
-import { canonicalJson, ensureStatesIn } from "../change-proof";
-import { bindScriptedProvider, keepDiagnostic, startInstalledBuild, trialCode } from "../index";
-import { bindDetectingRuntime } from "../photo-build";
-import { countPhotoProviderCallbacks, groundedPhotoBuilder, photoToggleScenario } from "./photo-first-row-toggle";
-
-const record = (value: unknown): JsonObject => typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonObject : {};
+import { expect, test } from "../../../../fixtures/extension-context";
+import { canonicalJson, ensureStatesIn } from "../../../change-proof";
+import { bindScriptedProvider, keepDiagnostic, startInstalledBuild } from "../../../index";
+import { bindDetectingRuntime } from "../../../photo-build";
+import { assertPhotoDataset, countPhotoProviderCallbacks, groundedPhotoBuilder, observePhotoActions, photoToggleScenario } from "../index";
 
 /** The first matching post already satisfies the task. Only the model's copied observed choice supplies polarity. */
 test("installed newest-likes build requires an observed state choice, preserves the initially liked post and replays with zero provider callbacks", async ({ extensionSession }, testInfo) => {
@@ -14,15 +11,7 @@ test("installed newest-likes build requires an observed state choice, preserves 
   const { page, service } = installed;
   let projectId = "", flowId = "";
   const counter = countPhotoProviderCallbacks(service, () => photoToggleScenario.assertFinal(page));
-  const actions: Array<{ action: string; skipped?: unknown; toggle?: unknown; toggleBefore?: unknown }> = [];
-  const execute = installed.fluxiq.programs.automationStudioClientGateway.executeAction.bind(installed.fluxiq.programs.automationStudioClientGateway);
-  installed.fluxiq.programs.automationStudioClientGateway.executeAction = async (...args) => {
-    const result = await execute(...args);
-    const payload = record(result.payload);
-    actions.push({ action: String(record(args[1]).actionType ?? ""), ...(payload.skipped ? { skipped: payload.skipped } : {}),
-      ...(payload.toggle ? { toggle: payload.toggle } : {}), ...(payload.toggleBefore ? { toggleBefore: payload.toggleBefore } : {}) });
-    return result;
-  };
+  const actions = observePhotoActions(installed);
   try {
     const initial = await photoToggleScenario.prepare(page, installed.origin);
     expect(initial.map(entry => entry.state)).toEqual(["Unlike", "Like", "Like"]);
@@ -49,15 +38,17 @@ test("installed newest-likes build requires an observed state choice, preserves 
       judge: script.judge.requests, actions, outcomes: observed.outcomes, receipts: provider.receipts, providerCallbacks: counter.calls(), gatewayErrors: installed.gatewayErrors });
     expect(result.status).toBe("proposed");
     if (result.status !== "proposed") throw new Error("diagnostic.grounded_build_not_proposed");
-    expect(trialCode(script.answers.trial)).toBe("yes");
-    expect(script.answers.trial?.trialRunId).toBeTruthy();
+    // A confirmed yes completes the brief; its public generation result retains the actual judged trial receipt.
+    expect(result.candidate?.trial.verdict).toBe("yes");
     expect(script.judge.requests).toHaveLength(2);
     for (const request of script.judge.requests) expect(ensureStatesIn(request)).toContain(canonicalJson(script.selected()));
     await photoToggleScenario.assertFinal(page);
-    const trialRunId = result.candidate!.trial.runId;
+    const trialRunId = result.candidate?.trial.runId;
+    if (typeof trialRunId !== "string" || !trialRunId) throw new Error("diagnostic.grounded_trial_run_missing");
     const table = await service.runDatasets.getRunDatasetPage({ projectId, runId: trialRunId, datasetId: photoToggleScenario.expected.step });
-    expect(table?.rows).toEqual(photoToggleScenario.expected.records);
-    expect(table?.rows).toHaveLength(photoToggleScenario.expected.count);
+    const trialDataset = assertPhotoDataset(table?.rows, installed.origin);
+    expect(photoToggleScenario.expected.count).toBe(3);
+    expect(table?.rows).toHaveLength(photoToggleScenario.expected.records!.length);
     const review = { projectId, flowId, adaptationId: result.adaptationId, actorId: "diagnostic" };
     await service.reviewFlowBootstrapAdaptation({ ...review, action: "approve" });
     await service.reviewFlowBootstrapAdaptation({ ...review, action: "apply" });
@@ -75,12 +66,12 @@ test("installed newest-likes build requires an observed state choice, preserves 
     const replayActions = actions.slice(actionsBefore);
     const replayTable = await service.runDatasets.getRunDatasetPage({ projectId, runId: replay.runId, datasetId: photoToggleScenario.expected.step });
     await keepDiagnostic(testInfo, "grounded-toggle-replay.json", { status: replay.status, trace: replay.trace, savedStates,
-      callbacksBefore, callbacksAfter, replayActions, table: replayTable, gatewayErrors: installed.gatewayErrors });
+      callbacksBefore, callbacksAfter, replayActions, table: replayTable, trialDataset, gatewayErrors: installed.gatewayErrors });
     expect(replay.status).toBe("succeeded");
     expect(callbacksAfter).toBe(callbacksBefore);
     expect(replayActions.filter(action => action.skipped === "already_in_state")).toHaveLength(3);
     expect(replayActions.filter(action => action.toggle !== undefined)).toEqual([]);
-    expect(replayTable?.rows).toEqual(photoToggleScenario.expected.records);
+    assertPhotoDataset(replayTable?.rows, installed.origin);
     await photoToggleScenario.assertFinal(page);
   } finally {
     counter.restore();
