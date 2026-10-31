@@ -1,6 +1,6 @@
 import type { JsonObject } from "fluxiq/core";
 import { STUDIO } from "../../../../scenario-lab/src/scenarios/photo-social/data/index.js";
-import { expect, test } from "../../fixtures/extension-context";
+import { closeExtensionSession, expect, launchExtensionSession, test, type ExtensionSession } from "../../fixtures/extension-context";
 import { bindInstrumentedRuntime, bindScriptedProvider, keepDiagnostic, projectBuild, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
 import { twoPartPlan } from "../offline-first-build";
 import { PHOTO_ROOT, openPhotoProfile } from "../photo-build";
@@ -20,10 +20,24 @@ const returned = (answer: JsonObject | undefined): JsonObject => record((answer?
  * whole once more. Both versions must finish automatically after a yes.
  * Neither run scrapes data or changes the fixture's lasting state.
  */
-test("installed folded submissions preserve repair, chat lines and completion while saving provider decisions", async ({ extensionSession }, testInfo) => {
+test("installed folded submissions preserve repair, chat lines and completion while saving provider decisions", async ({}, testInfo) => {
   test.setTimeout(600_000);
   const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
   const compare = async (folded: boolean) => {
+    const extensionSession = await launchExtensionSession(`photo-submit-${folded ? "folded" : "separate"}`);
+    try {
+      await testInfo.attach(`extension-build-${folded ? "folded" : "separate"}.json`, { body: Buffer.from(JSON.stringify(extensionSession.metadata, null, 2)), contentType: "application/json" });
+      return await runComparison(folded, extensionSession);
+    } finally {
+      try {
+        extensionSession.networkGuard.assertClean();
+        extensionSession.scenarioGuard.assertClean();
+      } finally {
+        await closeExtensionSession(extensionSession);
+      }
+    }
+  };
+  const runComparison = async (folded: boolean, extensionSession: ExtensionSession) => {
     const installed = await startInstalledBuild(extensionSession);
     const profile = new URL(`${PHOTO_ROOT}${STUDIO}/`, installed.origin).href;
     const wrong = new URL(`${PHOTO_ROOT}no-such-page/`, installed.origin).href;
