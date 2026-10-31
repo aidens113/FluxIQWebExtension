@@ -116,6 +116,24 @@ export const STEPS = Object.freeze({
     tsconfigs: ["tsconfig.json", "tsconfig.test.json"],
     env: ["NODE_ENV"]
   },
+  "product:build": {
+    package: "apps/product",
+    kind: "build",
+    command: "node scripts/build-host.mjs",
+    generated: ["dist"],
+    outputs: [{ path: "dist/host" }],
+    required: ["dist/host/platform.mjs"],
+    tsconfigs: [],
+    env: ["NODE_ENV"]
+  },
+  "product:check": {
+    package: "apps/product",
+    kind: "check",
+    command: checkProject("tsconfig.json", "check"),
+    generated: ["dist"],
+    tsconfigs: ["tsconfig.json"],
+    env: ["NODE_ENV"]
+  },
   "extension:build": {
     package: "apps/extension",
     kind: "build",

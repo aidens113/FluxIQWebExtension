@@ -6,8 +6,8 @@
   "description": "The FluxIQ product host module: the panel's product manifest and lifecycle hooks, inert until a hosted deployment lists it in FLUXIQ_HOST_MODULE after the domain's host module.",
   "fluxiqHostModule": "./dist/host/platform.mjs",
   "scripts": {
-    "build": "node ../../scripts/check/core-build.mjs && node scripts/build-host.mjs",
-    "check": "node ../../scripts/check/core-build.mjs && tsc -p tsconfig.json --noEmit",
+    "build": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs product:build -- \"node scripts/build-host.mjs\"",
+    "check": "node ../../scripts/check/core-build.mjs && node ../../scripts/build-cache/cli.mjs product:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
     "test": "node ../../scripts/check/core-build.mjs && node scripts/test-product.mjs"
   },
   "dependencies": {
