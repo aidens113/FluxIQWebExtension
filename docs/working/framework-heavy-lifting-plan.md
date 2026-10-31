@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: All resumed units and grounded toggle follow-up t817 are verified and merged in both repositories. Final isolated full sweep is next; paid Claude comparison still waits for the user's go.
+Status detail: Resumed units, t817 and Core0.14.1 provider fix are merged. Full sweep2 finished failed; every failed file now passes targeted checks after cache/fixture repairs. Corrected-source sweep next after daily reset; main held, paid Claude comparison still waits for user's go.
 Created: 2026-10-28
 Last updated: 2026-10-30
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -23,7 +23,7 @@ Preserve the unrelated `.clinerules/fluxiq.md` modification in the main checkout
 Lab support on both pushed dev branches; see `claude-live-provider-plan.md`. Keep identical acceptance criteria and
 record exact model, verdict, calls, billed cost and runtime for comparison. No credential value belongs in this record.
 The user set Claude live tests to $5 per build; main ignored `.env.local` and both agent instruction files record it.
-**Full sweep2 running, promotion held:** disposable paired t818 at Core803f3c81/downstream16dd9ad3; both builds passed. Core ordinary:14826 passed/six failed; SQL:1655 passed/27 failed; Core web group finished. Downstream check found two old DeepSeek expectations and domain found five saved-repair failures. Core t819 fix is merged/pushed3f5fe961; t820 exact fixture alignment mergedc7f33647 (push underway). Every previously failed file now passes narrowly:259 unique Core tests, seven downstream saved-repair tests and five Lab command tests, final Core types/both audits/three-library rebuild pass; storage's original15s timeout remains unexplained. Downstream extension tests are running. Copied env removed, provider secrets/FLUXIQ overrides stripped, temporary runtime roots. Logs/summary: ignored test-runs/2026-10-30-sweep-2. No paid calls; no promotion before a corrected-source sweep within the daily limit.
+**Full sweep2 finished failed, promotion held:** frozen Core803f3c81/downstream16dd9ad3 passed both builds and Core check; Core tests had six ordinary/27SQL failures; downstream check had five failures, units five domain/three demo failures. Core web3454 and extension3459 tests passed. Core t819/t820 are merged/pushed3f5fe961/c7f33647; all failed files now pass targeted checks (259 unique Core, seven domain saved-repair, five Lab arguments,16 registry/CLI and nine demo tests), final Core/test-runner/product types and product build pass. Product cache wrappers registered; Claude/$5 setup/CLI fixtures aligned. Main dependencies refreshed; original storage15s timeout unexplained. Disposable t818 was removed via task abandon after0/0 unmerged; main logs remain in ignored test-runs/2026-10-30-sweep-2. Corrected-source sweep next, with an early-launch date guard for local2026-10-31; no paid calls or main promotion before full acceptance.
 
 **Core owns this plan.** The findings, the responsibility map, every client contract (CC1-CC14, K1-K7), the phases
 P0-P10 and what not to do are in the owning document:
@@ -71,6 +71,7 @@ acceptance check passed, and no paid run or model call happened.
 | t813 (hosted C1) | Workspace manager/layout, profile IAM, background-task close/drain | Merged both repositories after lead9 background and123 web/key-custody tests, types,3libs, docs/audits; Core merge contract gate70 passed | C2/C3 caller migration and routing remain separate; no real tenant socket/browser qualification claimed |
 | t814 (hosted E + D5) | Product/brand/assets, host loading and owned default project | Lead panel32/web27/ownership36/product18 and types/builds pass; real service-IAM default ownership, retry/partial/concurrent/conflict cases covered | Merged downstream6c88f928/Core4a522cd8 with Core0.12.0;70 merge-contract tests pass; later lifecycle wiring remains separate |
 | t817 (first-row toggle) | Paired before/after evidence, explicit grounded ensureState, persistence and runtime guards | Lead Core204/domain37/extension9, types/libs/audits/docs pass. Native first-row oracle+saved replay15-to15callbacks/3skips/0transitions and obstruction4recoveries/handler/finalyes pass; lead JSON gates accepted and3files preserved | Merged Coreae354e9d/downstreamdf58a48e, Core0.14.0;70 merge contracts and downstream structure pass; final sweep pending |
+| t819/t820 | Provider-ID binding, model/key propagation and bootstrap fixture alignment | Core259 unique focused checks across both fixes/failure files, saved-repair7, types/audits/libs and each70 merge contracts pass; original storage timeout not reproduced | Merged/pushed Core3f5fe961/c7f33647, Core0.14.1; final corrected-source sweep pending |
 
 **User decision, 2026-10-30 (t810):** a judge's no that Core wholly refutes from its own record, and that still stands
 after one re-ask with the evidence, may pass with no model yes. The user explicitly chose "Allow a fully refuted
@@ -88,7 +89,7 @@ and verify as above. Re-dispatch only the missing part.
 - The run found the panel-build defect that the t812 guard now catches at merge.
 
 **Next, in order:**
-1. t799, t816, t810, t811, t813, t814 and t817 are merged. Finish isolated sweep2, trace and fix its failures narrowly; do not promote a failed sweep or exceed the two-sweeps-per-day rule.
+1. All resumed units plus t817/t819/t820 are merged. Sweep2 is complete; targeted repairs pass. Finish documenting/pushing the last downstream cache/fixture fixes, then run the corrected-source isolated sweep after local2026-10-31 begins; do not promote failed evidence or exceed two sweeps per day.
 2. t817 fixed the first-already-satisfied-row defect: paired before/after evidence and explicit grounded end-state choice now pass native oracle/saved-replay proof; no first/majority click inference.
 3. After the user's go, run the live round with Claude/$5: photo-social newest likes, the everything-store gate, the social gate. Then the
    recording-plus-instructions passes. Debug every failure.
@@ -453,6 +454,12 @@ Core's "What not to do" applies in full. Web-specific additions:
 - Changed: two Core bootstrap service assertions require actual saved Flow metadata/caller/provider; one Lab command fixture expects the requested Claude live default instead of historical DeepSeek. Production behavior and oracles are unchanged.
 - Validation: remaining seven Core failure files ->37 passed/two stale assertions failed, then14 generation/extend tests passed after exact fixture updates; five other files passed unchanged. Lead storage reseal-interruption ->3 passed with unchanged15s limit and703ms race; worker also3/3 twice, probes removed. `node --test scripts/lab/live-campaign/tests/lab-run-command.test.mjs` ->5 passed. `pnpm --filter @fluxiq-web-extension/domain test carried-service-repair carried-row-service-repair` with label t820-saved-repair ->7 passed, including all five original domain failures after the t819 library rebuild.
 - Outcome: Corec7f33647 merged after70 mandatory contract tests; original storage timeout cause unproven, no source fix justified. All previously failed files pass narrowly; final Core types, both full audits and three rebuilt Core libraries pass. Full extension unit run continues; corrected-source whole sweep required within daily quota. No paid calls.
+
+### 2026-10-30 - Complete sweep2 inventory and final narrow repairs
+- Validation: `node test-runs/2026-10-30-sweep-2/runner.mjs t818 803f3c81f25909b76a69b55a80cb68cc7c4724ba 16dd9ad3848acaa2c37f6dbe505ce29f95b58eed` ->both builds/Core check exit0; Core test1(six ordinary/27SQL), downstream check1(five), test1(five domain/three demo). Core web3454/extension3459 pass. t818 abandoned safely with unmerged0/0; evidence kept in main ignored test-runs.
+- Changed: product build/check now use registered shared cache steps without relaxing the registry test; old demo0.25/DeepSeek-only and campaign DeepSeek command expectations now require Claude/$5. The log review initially missed three early check failures; all five check failures are now enumerated and covered.
+- Validation: `node --test scripts/build-cache/tests/registry.test.mjs scripts/lab/live-campaign/tests/command-line.test.mjs` ->16 passed; filtered test-runner dependency build then two compiled demo files ->9 passed; product check/build and test-runner check ->exit0. Initial main stale contracts/Node type artifacts were rebuilt/reinstalled from the unchanged frozen lockfile, then checks passed. Existing saved-repair7 and Core259 passes remain valid.
+- Outcome: all failed files have observed narrow passes; corrected-source full acceptance remains pending. Date guard test ->early launch refused before summary creation. No paid calls, panel or browser run; main promotion held and original storage timeout cause remains unproven.
 
 ## Open Questions
 
