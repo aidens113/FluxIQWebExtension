@@ -1,6 +1,6 @@
 # Native saved-playback paging proof
 
-Status: Integrated/native provider-free accepted; dev publication and fresh Claude acceptance next. Shared Core16b5043c/SDK0.25.5 read-only.
+Status: Published/native provider-free accepted; fresh supervised Claude end-to-end active. Shared Core16b5043c/SDK0.25.5 read-only.
 
 ## Current State
 
@@ -54,3 +54,13 @@ Both October31 full-suite slots consumed; owning checks only. No fixture/task/or
 - Acceptance scope: native saved Flow full expected dataset and explicit zero accounting proven. Fresh Claude create/judged-whole/apply/replay acceptance remains next after publishing. No full sweep or main promotion; both Oct31 slots consumed.
 
 - Integration: `pnpm.cmd task finish t840 Preserve native loader retries across status UI rendering` ->exit0; normal plain structure gate passed; merged fe190feb90cdcde40ba93d8fd9badaf1c0338dda and removed private Down tree through lifecycle. Core unchanged16b5043c/SDK0.25.5; remote task backups retained. Parents fetched beforehand: Main dev/origin bothc63f1d57. User clinerules hash unchangedB052F0E6B0E6C6DE0BA973810C7632EDA04AADFDD5314EAAA73710EDD1101A8D. All own ignored validation/helper evidence archived in main test-runs/2026-10-31-t840-validation before cleanup. Dev publication follows this ledger commit; main promotion held by full-sweep allowance.
+
+- Publication: dev/origin bothd4dfcff587e097d6604d7b65423c098fda8785c9 after ledger push, exit0. Normal Lab pin --extdev/--coredev ->exit0/1.769s; pin Down matches published d4dfcff5, Core16b5043c/SDK0.25.5 unchanged. Main only preexisting clinerules edit before these live notes.
+- Fresh live preflight --dry-run ->exit0, no error markers/model calls; prelude13137ms reused artifacts. Lab .env byte-equals primary, CLAUDE_API_KEY field present, value never printed.
+- Fresh live command started under direct lead supervision (noted 2026-11-01T02:41:10.403304+00:00): unchanged company instruction/workflow/eight-by-four oracle, new isolated t840 workspace, legacy authoring, anthropic/claude-sonnet-5-5, both cost flags5USDwholebuild, required one zero-call replay, normal guards/no overrides. Source pins frozen. Actual outcome pending; prior104calls/$5.7159686 remains the completed total. Main ignored claude-live.log records launch.
+
+- Fresh run identified run-mvx83b7v-5eda5d6c, started2026-11-01T02:40:37.778Z, published Downd4dfcff5/Core16b5043c. Early monitor8completed Anthropic/claude-sonnet-5-5 calls/$0.3094573, all priced/no balance error, successful exploration actions and draft authoring; no target acquisition refusal. No judged or saved-playback verdict yet. Source pins frozen; paid launch remains under direct lead supervision.
+
+- Fresh run progress: 16 completed Anthropic/claude-sonnet-5-5 calls, all priced, USD0.8271614; whole trial read8/16/24/28/ended and two observed judge approvals with zero defects. Entry remains running; final saved playback, oracle and zero-call replay not yet accepted. No balance error; source frozen and lead supervising.
+
+- Final fresh run exit1/failed at2026-11-01T02:46:09.027Z:20Anthropic Sonnet5.5 calls/USD1.0382852, allpriced/no balanceerror;330795ms evaluation. Flowcreatedtrue/native statussucceeded/oraclepassed, but resultVerification and reportedVerdict unverified. Native genuine NO_EFFECT recovered and remaining read/end succeeded. Build judge pair52/53; later66-69 are runtime checks, not six identical build requests. No adaptation/replay attempted. Final verification cause under read-only investigation; no further paid launch. Completed total124calls/USD6.7542538.
