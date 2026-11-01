@@ -29,6 +29,7 @@ import {
 import type { WebAutomationNextPageFault } from "../../shared/protocol";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { loaderSettlement } from "../extraction/page-advance/loader-progress";
 
 const EXPECTED = "the list on its next page, or a list with no next page";
 
@@ -45,10 +46,10 @@ const FAULT_CODES = {
 class NextPageFault extends Error implements WebAutomationFailureCarrier {
   readonly failure: WebAutomationFailureRecord;
 
-  constructor(stop: WebAutomationNextPageFault, reason: string) {
+  constructor(stop: WebAutomationNextPageFault, reason: string, noEffect = false) {
     super(reason);
     this.name = "NextPageFault";
-    this.failure = webAutomationFailureRecord(FAULT_CODES[stop], { expected: EXPECTED, actual: `${stop}: ${reason}` });
+    this.failure = webAutomationFailureRecord(noEffect ? WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT : FAULT_CODES[stop], { expected: EXPECTED, actual: `${stop}: ${reason}` });
   }
 }
 
@@ -70,7 +71,7 @@ export async function nextPageAction(action: BrowserActionCommand, deps: Content
         return { ...result, nextPage: { outcome: "ended", stop: answer.stop }, route: "ended" };
       }
       case "failed":
-        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped);
+        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped, loaderSettlement.consume(answer, request));
       default:
         return deps.timedOut(action, startedAt, answer.reason, { status: "failed", expected: EXPECTED, actual: "the time ran out before the move finished" });
     }
@@ -79,7 +80,7 @@ export async function nextPageAction(action: BrowserActionCommand, deps: Content
   }
 }
 
-function failed(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number): BrowserActionResult {
+function failed(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number, noEffect = false): BrowserActionResult {
   const nextPage = stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed" as const, stop, filtersDropped } : { outcome: "failed" as const, stop };
-  return { ...deps.failure(action, new NextPageFault(stop, reason), startedAt), nextPage };
+  return { ...deps.failure(action, new NextPageFault(stop, reason, noEffect), startedAt), nextPage };
 }

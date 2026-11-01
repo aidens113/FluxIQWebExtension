@@ -1,0 +1,10 @@
+Role: Heavy read-only discovery; gpt-6.1-sol max.
+Goal: Trace next-page outcome_uncertain in the ACTIVE supervised Claude build, without disturbing it. Determine if all automatic retry/source-refresh/nonlasting safety rules are obeyed or a structural defect remains.
+Owned: only paging-discovery.md beside thisbrief. No source/docs/sharedstate/git/build/test/browser/provider/session mutations.
+Current active run central C:/Users/osrs_/FluxStuff/lab-runs/2026-10-31/run-mvx43ff7-ec829cb3; source pins Cored88010d8/Down6b685db3 in fxlab/t833-claude/{!FluxIQ,lab-ext}. Current main Source matches thosepins. Read actualsteps0039-test-core.run_node call/meta/result and predecessortrial/node receipts asneeded privately.
+Observed0039 node web.output.dom-next_page, replayfailed/outcome_uncertain, loopVerdictread. Earlier0022 was extract_list replaychanged/read, modelamended and reran fromstep. No new targetacquisition refusal observed. Active11calls/$0.510745 atlastmonitor; rootownsallpaidwatch/decisions.
+Prior run-mvx1t6il-3d751ec6 also had next-page replay outcome_uncertain, modelrepaired. No assumption that currentrunwillfail; letitcontinue underroot.
+Trace actual dispatched outcome/retryattemptcount, whyuncertain and exactlywhere converted, whether successfulpagechange couldhavehappened. Separate commandLedgerlostreceipt vs knownfirstclickswallowed vs retrygate/comparison issue. Use production source owning paths, not proseguessing.
+Standinguserpolicy: everyNode1attempt+3retries, waittargetfirst; source-step identityrefreshaftersecondfailedretry; onlylastingacts withuncertaineffect heldback. Nextpage ephemeralstate mustnotbe treatedaslasting byaccident; never suggestblindlastingrepeat.
+No rawmodel/page/selector/record/secret/token output; returnclosedcodes/counts/generalizedcause and exactsourcepath/line. No provider/browser/tests/reruns. If sourcefixwarranted proposeownership+providerfreeacceptance, otherwiseexplainlegitimatehold/repair.
+Report<=65lines, distinguishfacts/inference/unverified; finalstandardcontract. Do not modify existingreports or activepin/sourceheads. Rootwillreadreport whilecontinuing supervision.

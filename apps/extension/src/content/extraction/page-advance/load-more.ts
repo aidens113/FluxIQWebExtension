@@ -24,17 +24,12 @@
 // failed ten seconds later as a page that ignored it. A live control that
 // yields nothing in ten seconds fails the move, as `next` does.
 //
-// A press the page ignored outright is made once more, as the click verb makes
-// one (`../../actions/click.ts`, `../../action-runtime/ignored-press/`): the
-// press is watched for `IGNORED_PRESS_WINDOW_MS` for any sign the page answered
-// it -- a request begun, a change in the control's section, a navigation, a
-// focus move -- and only when none came, no new item showed and the control is
-// still there is it pressed again, once. Photo-social's comment thread swallows
-// the first press its Load more gets, as a list that has not hydrated does, so
-// a Next page on it failed `list_unchanged` ten seconds later where a person
-// would simply have pressed again (t755, `run-mvebbeom-a60886e1`). Any sign at
-// all means it is never pressed again: a second press on a press that began a
-// load would be a second load.
+// A normal loader command presses once. Its private original-list checkpoint,
+// settled-page look and healthy request/supported-work observers distinguish
+// a status-only no-effect result from progress or uncertainty. Core owns the
+// counted retries of a proven no-effect command. A pending or unsupported
+// observation never authorizes another blind press here. Page-offered Retry
+// controls and explicit pause/session recovery retain their existing bounds.
 //
 // Which control is pressed is decided on the page each time
 // (`./appending-control.ts`): the list's own load-more control found around it,
@@ -42,7 +37,6 @@
 // and it names no item of the list. A position saved while the control sat in
 // the fourteenth slot names a comment once a batch has loaded.
 
-import { pressAgain, watchIgnoredPress } from "../../action-runtime/ignored-press";
 import type { WebAutomationNextPageWay } from "../../../shared/protocol";
 import { waitUntil, type WaitOutcome } from "../list-wait";
 import { offeredLoadRetry } from "../load-retry";
@@ -56,6 +50,7 @@ import { loaderNoticeOf } from "../read-coverage";
 import { PaginationFault } from "./pagination-fault";
 import { scrollForMore } from "./scroll-for-more";
 import type { PageStep, PaginationProgress } from "./types";
+import { listGrowth, loadMoreContinuations, loaderSettlement } from "./loader-progress";
 
 /** How many times one load-more press may have its failure retried through the Retry the page offered. */
 const LOAD_RETRIES = 2;
@@ -65,11 +60,8 @@ const LOAD_RETRIES = 2;
  * settles a load, and one that has ended its list pays this once.
  */
 const HIDDEN_CONTROL_GRACE_MS = 1_000;
-/** How long a press is watched for any answer before it counts as ignored and is made once more: the click verb's window (header). */
-const IGNORED_PRESS_WINDOW_MS = 800;
-
 /** Presses the way's load-more control; `bound`, when there is one, is the pages the read may read. */
-export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mode: "loadMore" }>, progress: PaginationProgress, bound: number | undefined): Promise<PageStep> {
+export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mode: "loadMore" }>, progress: PaginationProgress, bound: number | undefined, observe: typeof loaderSettlement.watch = loaderSettlement.watch): Promise<PageStep> {
   const onPage = (): Element | null => loadMoreControlOnPage(document.querySelector(way.control), progress.shown) ?? null;
   let found = await renderedLoadMore(onPage, progress);
   if (found === "timed_out") return { outcome: "timed_out", stop: "deadline" };
@@ -90,8 +82,25 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   await clearCover(control, progress.deadline);
   if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
   await progress.beforeFollow?.("loadMore");
-  await pressHeard(control, progress);
-  let outcome = await waitForMoreItems(control, progress);
+  const binding = loadMoreContinuations.bind(control, progress.item, progress.shown);
+  const settlement = observe(binding, control, progress.deadline);
+  try {
+    control.click();
+    const settled = await settlement.settle();
+    if (settled === "advanced") return { outcome: "advanced", by: "loadMore" };
+    if (settled instanceof PaginationFault) throw settled;
+  } finally {
+    settlement.stop();
+  }
+  // Keep the original semantic checkpoint after observation stops. Pending
+  // placeholders or a detached control are not a completed appended page.
+  const hasNewItem = (): boolean => {
+    const state = settlement.state();
+    return state === undefined
+      ? progress.hasUnreadItem() && listGrowth.added(progress.item, progress.shown)
+      : state === "advanced";
+  };
+  let outcome = await waitForMoreItems(control, progress, hasNewItem);
   // A loader that answered the press with a notice to wait has paused the list; it has not ended (header).
   for (let pauses = 0, walls = 0; outcome === "unchanged" && control.isConnected; pauses += 1) {
     // A session check under the list is passed by its plain way on, not taken for the end (`./loader-pause/pass-session-wall.ts`, t765).
@@ -100,43 +109,24 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
     if (walled === "passed") {
       walls += 1;
       pauses -= 1;
-      if (progress.hasUnreadItem()) outcome = "changed";
-      else outcome = await waitForMoreItems(control, progress);
+      if (hasNewItem()) outcome = "changed";
+      else outcome = await waitForMoreItems(control, progress, hasNewItem);
       continue;
     }
     const paused = await waitOutLoaderPause(progress, pauses);
     if (paused === "timed_out") return { outcome: "timed_out", stop: "deadline" };
     if (paused === "clear") break;
-    if (progress.hasUnreadItem()) {
+    if (hasNewItem()) {
       outcome = "changed";
       break;
     }
-    if (paused !== "retried") await pressHeard(control, progress);
-    outcome = await waitForMoreItems(control, progress);
+    if (paused !== "retried") control.click();
+    outcome = await waitForMoreItems(control, progress, hasNewItem);
   }
   if (outcome === "unchanged") {
     throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(way.control)} for page ${progress.pagesRead + 1}.`);
   }
   return outcome === "changed" ? { outcome: "advanced", by: "loadMore" } : { outcome: "timed_out", stop: "deadline" };
-}
-
-/**
- * Presses `control`, and once more when the page did nothing whatever about the
- * first press (header). Nothing is waited for when the press already brought a
- * new item or took the control away.
- */
-async function pressHeard(control: HTMLElement, progress: PaginationProgress): Promise<void> {
-  const watch = watchIgnoredPress(control);
-  try {
-    control.click();
-    if (progress.hasUnreadItem() || !control.isConnected) return;
-    const windowMs = progress.deadline === undefined ? IGNORED_PRESS_WINDOW_MS : Math.max(0, Math.min(IGNORED_PRESS_WINDOW_MS, progress.deadline - Date.now()));
-    const answer = await watch.settle(windowMs);
-    if (!pressAgain(answer.seen, 0) || progress.hasUnreadItem() || !control.isConnected || pastDeadline(progress.deadline)) return;
-  } finally {
-    watch.stop();
-  }
-  control.click();
 }
 
 /**
@@ -171,17 +161,17 @@ function isRendered(control: Element): boolean {
  * (`../load-retry.ts`) has that Retry pressed, at most `LOAD_RETRIES` times,
  * and each press gets the full window again.
  */
-async function waitForMoreItems(control: HTMLElement, progress: PaginationProgress): Promise<WaitOutcome> {
+async function waitForMoreItems(control: HTMLElement, progress: PaginationProgress, hasNewItem: () => boolean): Promise<WaitOutcome> {
   let retried = 0;
   for (;;) {
     const offered: { retry: HTMLElement | undefined } = { retry: undefined };
     const outcome = await waitUntil(() => {
-      if (progress.hasUnreadItem() || !control.isConnected) return true;
+      if (hasNewItem()) return true;
       offered.retry = retried < LOAD_RETRIES ? offeredLoadRetry(control) : undefined;
       // The loader's notice to wait is the page's answer: no new item is coming for now (`./loader-pause/`).
       return offered.retry !== undefined || loaderNoticeOf(progress.shown) !== undefined;
     }, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
-    if (outcome === "changed" && !offered.retry && control.isConnected && !progress.hasUnreadItem()) return "unchanged";
+    if (outcome === "changed" && !offered.retry && !hasNewItem()) return "unchanged";
     if (outcome !== "changed" || !offered.retry) return outcome;
     retried += 1;
     offered.retry.click();

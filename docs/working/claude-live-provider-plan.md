@@ -3,7 +3,7 @@
 Status: Complete
 Status detail: Claude runtime, keys/settings and $5 live-test defaults validated and integrated in both repositories.
 Created: 2026-10-30
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 Owner: Senior supervisor agent
 Scope: Use CLAUDE_API_KEY for all live tests; implement real Claude provider, encrypted-key routing and model selection in Core, and provider-aware credential/default/accounting paths in the Lab.
 Paired document: ../!FluxIQ/docs/working/claude-live-provider-plan.md
@@ -16,12 +16,14 @@ Both repositories' AGENTS.md now hold it. Never silently fall back to DeepSeek. 
 CLAUDE_API_KEY is present in the main downstream .env.local; its value was never printed or committed.
 Standard task provisioning copies ignored local environment into authoring worktrees; provider-free tests reject its credentials. Remove a new sweep's disposable copy before checks; preserve the main file.
 Anthropic originally appeared in the keys UI without runtime support. Core now implements the native provider, per-call encrypted-key resolution and matching model/settings controls; the Lab migration passed its owning checks.
-Paired task t816 is integrated: downstream fa99782d and Core61d29c1f, with Core library version0.9.0. No paid model call has run.
+Paired task t816 is integrated: downstream fa99782d and Core61d29c1f, with Core library version0.9.0 at that integration point. Supervised Claude calls have since verified live authentication and routing; see the continuation below.
 Live default: claude-sonnet-5-5, provider anthropic, selected for agentic task quality and speed; explicit model selection remains available.
 The user raised Claude live tests to $5 per build on 2026-10-30. Main ignored `.env.local` now configures that ceiling;
 the Lab's Claude default and declared budget also use $5, while explicit lower limits and normal product defaults remain.
 Keep identical realistic task instructions/oracles and record both source commits, model, verdict, calls, provider-reported usage/cost and runtime.
 Historical DeepSeek runs predate these Core fixes, so comparison with them cannot isolate the provider's effect.
+As of the latest completed continuation, five live invocations (including one zero-call startup failure) record 80 Anthropic calls and $4.441185 total. The latest used claude-sonnet-5-5: 25 calls, $1.3721253, 645.092 seconds of evaluation; it failed at paging before judging, accepted Flow, oracle or zero-call replay. This is not end-to-end success. Task wording and oracle stayed unchanged. Details and source pins are in language-driven-flow-loop-plan/debugs/run-mvx43ff7-ec829cb3.md.
+The lead freshly reran Claude picker/key-edit/settings/readiness tests: three files, 39 passed in 12.45 seconds, no provider or panel startup. This verifies UI components and API payloads, not a new manual browser walkthrough of key management. The $5 allowance is for the entire build, never each provider call.
 No paid run is started by implementation or unit validation; existing supervised paid-launch requirements remain.
 
 ## Implementation

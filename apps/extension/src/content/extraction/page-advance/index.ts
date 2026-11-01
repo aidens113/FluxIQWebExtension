@@ -9,6 +9,7 @@
 
 export { movePage } from "./move-page";
 export { pageMoveFor } from "./continued-move";
+export { loaderSettlement } from "./loader-progress";
 export { PageMovePersonCheck } from "./person-check";
 export type { PageMove, PageMoveOptions, PageMoveOutcome } from "./move-outcome";
 

@@ -15,6 +15,8 @@ export { pressScope } from "./press-scope";
 export { markRequestStarts } from "./request-start-mark";
 export { scopeRoots } from "./scope-roots";
 export { lookUntilSettled } from "./settled-look";
+export { listenForPressAnswer } from "./page-press-listener";
+export { markPressWork } from "./work-mark";
 
 export type { IgnoredPressAnswer, IgnoredPressProbe, IgnoredPressWatch } from "./ignored-press-watch";
 export type { PressListener, PressPage } from "./page-press-listener";
