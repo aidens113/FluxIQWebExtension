@@ -81,6 +81,7 @@ test("a button that shows a brief busy state and then reverts, leaving the page 
   setTimeout(() => page.show(IDLE), 120);
   const started = Date.now();
   assert.equal(await look.settle(1_500), true);
+  assert.equal(look.rejection?.(), undefined);
   assert.ok(Date.now() - started >= 300, "read only once the section had been quiet");
   assert.ok(Date.now() - started < 1_200, "read as soon as it was quiet, not at the end of the window");
 });
@@ -93,6 +94,7 @@ test("a change in the section that stays is an answer, read once it has held sti
   const started = Date.now();
   // The window is long and the bound far inside it, so a loaded machine (the 2026-10-27 sweep took 2.5 s here against 0.9 s alone) cannot fail it while a read at the window's end still does.
   assert.equal(await look.settle(10_000), false);
+  assert.equal(look.rejection?.(), "not_restored");
   assert.ok(Date.now() - started < 5_000, "a press that opened something waits for it to hold still, not for the whole window");
 });
 
@@ -111,6 +113,7 @@ test("a section still busy when the window ends is not certain", async () => {
   const look = page.look();
   page.show(BUSY);
   assert.equal(await look.settle(400), false);
+  assert.equal(look.rejection?.(), "deadline");
 });
 
 test("a change anywhere outside the press's section is an answer, however the section settled", async () => {
@@ -122,6 +125,9 @@ test("a change anywhere outside the press's section is an answer, however the se
     page.show(IDLE);
   }, 120);
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "outside_change");
+  look.stop();
+  assert.equal(look.rejection?.(), "outside_change", "stopping preserves the diagnostic without exposing the changed node");
 });
 
 test("a request, a navigation or a focus move at any point is an answer, though the section came back", async () => {
@@ -134,6 +140,7 @@ test("a request, a navigation or a focus move at any point is an answer, though 
       page.show(IDLE);
     }, 120);
     assert.equal(await look.settle(1_500), false, signal);
+    assert.equal(look.rejection?.(), "non_change_signal");
   }
 });
 
@@ -146,11 +153,13 @@ test("a field whose held value changed is an answer, though its markup did not",
     page.show(IDLE);
   }, 120);
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "not_restored");
 });
 
 test("a page the look cannot read -- no document -- is never certain", async () => {
   const look = lookUntilSettled({} as Element);
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "unreadable");
 });
 
 test("a look stopped before it settles is not certain", async () => {
@@ -158,6 +167,7 @@ test("a look stopped before it settles is not certain", async () => {
   const look = page.look();
   look.stop();
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "stopped");
 });
 
 test("a change in an unrelated shadow root prevents a certain-no-effect answer", async () => {
@@ -165,6 +175,7 @@ test("a change in an unrelated shadow root prevents a certain-no-effect answer",
   const look = page.look();
   page.inOtherShadowRoot();
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "outside_change");
 });
 
 test("a look stopped during its settle cannot later claim certainty", async () => {
@@ -173,6 +184,7 @@ test("a look stopped during its settle cannot later claim certainty", async () =
   const settling = look.settle(1_500);
   look.stop();
   assert.equal(await settling, false);
+  assert.equal(look.rejection?.(), "stopped");
 });
 
 test("a shadow root attached after observation starts invalidates certainty even without a document mutation", async () => {
@@ -180,4 +192,5 @@ test("a shadow root attached after observation starts invalidates certainty even
   const look = page.look();
   page.attachOtherShadowRoot();
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "new_shadow");
 });

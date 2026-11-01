@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t839 published; live whole build judged yes, native saved playback failed Next/list_unchanged; compare execution paths and fix provider-free before paid continuation.
+Status detail: t840 active: reproduce installed native playback Next/list_unchanged after t839 judged build passed; no paid run active.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -10,6 +10,8 @@ Paired document: ../!FluxIQ/docs/working/framework-heavy-lifting-plan.md
 Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), debug notes in `language-driven-flow-loop-plan/debugs/`
 
 ## Current State
+
+**Active t840 native-paging-proof, 2026-10-31:** Isolated downstream task; shared Core16b5043c/SDK0.25.5 read-only. t839 paid run created Flow and two judges yes, but saved playback Next/list_unchanged failed after15reported actions. Successful trial nextPage JSON equals failed playback nextPage; native alone adds timeout30000. Generic10000ms failure means no custom positive no-effect fault was reported; missing condition unproven. Two read-only workers trace persisted native replay/actual DOM evidence and single-vs-isolated-world observation differences. Lead acceptance in reports/codex-1031/native-paging-proof/. No paid run active, no unchanged rerun. Total104calls/$5.7159686; both daily full sweeps used.
 
 **Integrated and provider-free qualified t839, 2026-10-31:** Downstream source 3531ca0d merged at 719299a3; normal task finish passed its plain structure gate and removed the isolated checkout. Remote task backup retained. Downstream dev/origin published at f092402b; normal Lab pin matches it with Core16b5043c. Provider-free production preflight passed (71.144s prelude/zero calls); supervised unchanged-task Claude continuation run-mvx64gvn-6781507e ended FAILED after369.511s evaluation:24calls/$1.2747836, no balance error. Whole build reached raw8/16/24/28/ended and both judges yes/zero defects; Flow created=true. Native saved playback then failed Next/list_unchanged after15successful actions; repair attempted but no applied adaptation or successful zero-call replay, oracle failed. Total104calls/$5.7159686 across6invocations. No paid run active or source changes during run; follow-up must reproduce installed saved playback provider-free and compare actual parameters/control/proof coverage, not unchanged paid rerun. Shared Core is current at 16b5043c / SDK 0.25.5 and stays read-only. The latest Claude run failed at a spinner-only loader after raw batches of 8, 16 and 24 cards: 25 calls, $1.3721253, no final judge, oracle or replay. Overall recorded total: 80 calls and $4.441185. Target-acquisition refusals did not recur in that run.
 

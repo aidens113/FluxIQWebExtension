@@ -1,0 +1,10 @@
+Role: Heavy read-only discovery; existing gpt-6.1-sol max; t840-native-paging-proof.
+Worktree C:/Users/osrs_/FluxStuff/fxwork/t840-native-paging-proof only; shared Core read-only.
+Goal: Trace positive loader no-effect observation differences between content harness (single JS world) and installed extension (isolated content + MAIN pageworld), especially fresh native navigation.
+Read native-paging-proof/lead-acceptance.md; t839 producer report; owned producer source loader-progress/{settlement,continuation,list-growth}; page-world/press-work and request-starts; content ignored-press/{work-mark,request-start-mark,settled-look,page-press-listener}; actual content harness versus installed manifest/init/network guard wiring only as needed.
+Owned: observer-discovery.md beside brief only. No source/test/shareddoc/Core/git edits, provider/browser execution or Lab controls yet.
+Facts: t839 content/pageworld providerfree proof2attempts/2clicks/24to28/exact8x4 passes. New paid run wholetrial raw8/16/24/28 ends and judgesyes; saved native Next fails generic list_unchanged10000ms after15successful actions. Same nextPage JSON; native timeout30000. Not the custom verified-noeffect fault. Determine concrete missing condition/observation from evidence, or propose minimal closed reason diagnostics + installed regression to establish it providerfree.
+Keep unsupported/opaque async limits, request health, private proof, first+3 and lasting uncertainty intact. Pageworld is observation, not hostile-page authentication. Do not relax all gates to get a pass or assume causal failure from two paths alone.
+No fixture-specific guidance/task/oracle changes, secrets or raw selector/page/model values in reports. Read artifacts privately if needed, locate finalized diagnose by kind after renumbering.
+Send findings with source path/lines immediately; distinguish proven cause from hypothesis and missing telemetry.
+Return Outcome/Changed/Validation(command->observed or notrun)/Not verified/Report/Notes.

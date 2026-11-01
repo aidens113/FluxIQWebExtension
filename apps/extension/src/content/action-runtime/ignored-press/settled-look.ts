@@ -71,6 +71,8 @@ export type SettledLook = {
    * t743); `false` otherwise. Stops the look.
    */
   settle(windowMs: number): Promise<boolean | "announced">;
+  /** A closed local diagnostic only; it grants no authority and survives stop. */
+  rejection?(): "unreadable" | "outside_change" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
   /** Stops without settling; safe to call more than once. */
   stop(): void;
 };
@@ -96,7 +98,7 @@ const FIELDS = "input, textarea, select";
 const LIVE_CANDIDATES = "[role], [aria-live]";
 
 /** A look that can never be certain: the page could not be read. */
-const UNCERTAIN: SettledLook = { settle: () => Promise.resolve(false), stop: () => undefined };
+const UNCERTAIN: SettledLook = { settle: () => Promise.resolve(false), rejection: () => "unreadable", stop: () => undefined };
 
 /** Starts looking, from just before the press on `pressed`, for whether the page settles exactly as it was. */
 export function lookUntilSettled(
@@ -115,13 +117,20 @@ export function lookUntilSettled(
   if (before === undefined) return UNCERTAIN;
 
   let answered = false;
+  let rejection: ReturnType<NonNullable<SettledLook["rejection"]>>;
   let lastChangeAt = Date.now();
   const listener = probe(pressed, (signal) => {
     if (signal === "change") lastChangeAt = Date.now();
-    else answered = true;
+    else {
+      answered = true;
+      rejection ??= "non_change_signal";
+    }
   });
   const noteElsewhere = (records: readonly MutationRecord[]): void => {
-    if (records.some((record) => !composedContains(scope, record.target) && !(notices && announces(record)))) answered = true;
+    if (records.some((record) => !composedContains(scope, record.target) && !(notices && announces(record)))) {
+      answered = true;
+      rejection ??= "outside_change";
+    }
   };
   const elsewhere = new Observer((records) => noteElsewhere(records));
   elsewhere.observe(root, OBSERVED);
@@ -145,7 +154,10 @@ export function lookUntilSettled(
     // attachShadow on an existing host need not mutate the document. A root
     // that appeared after observation started invalidates certainty, since its
     // initial answer could have been rendered before any observer was attached.
-    if (typeof root.querySelectorAll === "function" && openRootsWithin(root).some((shadow) => !pageRoots.includes(shadow))) answered = true;
+    if (typeof root.querySelectorAll === "function" && openRootsWithin(root).some((shadow) => !pageRoots.includes(shadow))) {
+      answered = true;
+      rejection ??= "new_shadow";
+    }
   };
   /** A live region now holds words it did not hold before the press (header, t743). */
   const announced = (): boolean => {
@@ -158,8 +170,10 @@ export function lookUntilSettled(
 
   return {
     stop,
+    rejection: () => rejection,
     settle(windowMs) {
       if (stopped || windowMs <= 0) {
+        rejection ??= stopped ? "stopped" : "deadline";
         stop();
         return Promise.resolve(false);
       }
@@ -169,9 +183,13 @@ export function lookUntilSettled(
           read();
           const now = Date.now();
           const quietMs = now - lastChangeAt;
-          const same = quietMs >= QUIET_MS && sectionState(scope, roots, notices) === before;
+          const current = quietMs >= QUIET_MS ? sectionState(scope, roots, notices) : undefined;
+          const same = quietMs >= QUIET_MS && current === before;
           const verdict = stopped || answered ? false : same ? (announced() ? "announced" : true) : quietMs >= HELD_MS || now >= deadline ? false : undefined;
           if (verdict === undefined) return;
+          if (verdict === false) {
+            rejection ??= stopped ? "stopped" : now >= deadline ? "deadline" : quietMs >= QUIET_MS && current === undefined ? "unreadable" : "not_restored";
+          }
           clearInterval(poll);
           stop();
           resolve(verdict);

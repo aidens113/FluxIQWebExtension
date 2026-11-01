@@ -124,7 +124,9 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
     outcome = await waitForMoreItems(control, progress, hasNewItem);
   }
   if (outcome === "unchanged") {
-    throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(way.control)} for page ${progress.pagesRead + 1}.`);
+    const diagnostic = settlement.rejection();
+    const reason = `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(way.control)} for page ${progress.pagesRead + 1}.`;
+    throw new PaginationFault("list_unchanged", `${reason}${diagnostic ? ` [loader-settlement:${diagnostic}]` : ""}`);
   }
   return outcome === "changed" ? { outcome: "advanced", by: "loadMore" } : { outcome: "timed_out", stop: "deadline" };
 }

@@ -1,4 +1,4 @@
-import { listenForPressAnswer, lookUntilSettled, markPressWork, markRequestStarts, type PressListener, type PressSignal } from "../../../action-runtime/ignored-press";
+import { listenForPressAnswer, lookUntilSettled, markPressWork, markRequestStarts, type PressListener, type PressSignal, type SettledLook } from "../../../action-runtime/ignored-press";
 import type { WebAutomationNextPageRequest } from "../../../../shared/protocol";
 import { isDisabled } from "../../pager-reading";
 import { layerOverControl } from "../covered-press";
@@ -7,11 +7,15 @@ import { loadMoreContinuations } from "./continuation";
 
 type Binding = ReturnType<typeof loadMoreContinuations.bind>;
 type Proof = { binding: Binding; document: Document; control: Element };
+type LookRejection = NonNullable<ReturnType<NonNullable<SettledLook["rejection"]>>>;
+type Rejection = "binding_unknown" | "request_probe_missing" | "request_probe_unhealthy" | "request_started"
+  | "work_probe_missing" | "work_unknown" | "work_pending" | "non_change_signal" | "origin_changed"
+  | "control_unsafe" | "look_unavailable" | `look_${LookRejection}` | "deadline" | "stopped";
 type Observers = {
   listen(control: Element, note: (signal: PressSignal) => void): PressListener;
   request: typeof markRequestStarts;
   work: typeof markPressWork;
-  look(control: Element): { settle(ms: number): Promise<boolean | "announced">; stop(): void };
+  look(control: Element): SettledLook | undefined;
   uncovered(control: Element): boolean;
 };
 const OBSERVERS: Observers = { listen: listenForPressAnswer, request: markRequestStarts, work: markPressWork,
@@ -39,33 +43,65 @@ export const loaderSettlement = {
       && control.getAttribute("hidden") === null && (typeof control.getClientRects !== "function" || control.getClientRects().length > 0)
       && observers.uncovered(control);
     let stopped = false;
+    let rejection: Rejection | undefined;
+    const reject = (reason: Rejection): undefined => {
+      rejection ??= reason;
+      return undefined;
+    };
     return {
       state,
+      /** Diagnostic only: never used to establish or consume the private proof. */
+      rejection: () => rejection,
       async settle(): Promise<"advanced" | PaginationFault | undefined> {
-        if (!known || !request || !work || !look) return undefined;
+        if (!known) return reject("binding_unknown");
+        if (!request) return reject("request_probe_missing");
+        if (!work) return reject("work_probe_missing");
+        if (!look) return reject("look_unavailable");
         const until = Math.min(startedAt + 10_000, deadline ?? Infinity);
+        let waiting: Rejection = "deadline";
         while (!stopped && Date.now() < until) {
           listener?.flush();
-          if (state() === "advanced") return "advanced";
-          if (proof.document !== document || request.healthy?.() !== true || request.begunSince()
-            || [...signals].some((signal) => signal !== "change") || work.state() === "unknown") return undefined;
-          if (Date.now() - startedAt >= MIN_OBSERVATION_MS && work.state() === "idle" && state() === "unchanged" && safe()) {
-            const remaining = Math.min(SETTLE_MS, until - Date.now());
-            if (remaining <= 0) return undefined;
-            const restored = await look.settle(remaining);
-            listener?.flush();
-            if (state() === "advanced") return "advanced";
-            if (restored !== false && work.state() === "idle" && request.healthy?.() === true && !request.begunSince()
-              && [...signals].every((signal) => signal === "change") && state() === "unchanged" && safe() && Date.now() < until) {
+          const origin = state();
+          if (origin === "advanced") return "advanced";
+          if (origin !== "unchanged") waiting = "origin_changed";
+          if (proof.document !== document) return reject("origin_changed");
+          if (request.healthy?.() !== true) return reject("request_probe_unhealthy");
+          if (request.begunSince()) return reject("request_started");
+          if ([...signals].some((signal) => signal !== "change")) return reject("non_change_signal");
+          const observedWork = work.state();
+          if (observedWork === "unknown") return reject("work_unknown");
+          if (observedWork === "pending") waiting = "work_pending";
+          if (Date.now() - startedAt >= MIN_OBSERVATION_MS) {
+            const readyWork = work.state();
+            if (readyWork !== "idle") waiting = readyWork === "pending" ? "work_pending" : "work_unknown";
+            else if (state() !== "unchanged") waiting = "origin_changed";
+            else if (!safe()) waiting = "control_unsafe";
+            else {
+              const remaining = Math.min(SETTLE_MS, until - Date.now());
+              if (remaining <= 0) return reject("deadline");
+              const restored = await look.settle(remaining);
+              listener?.flush();
+              if (state() === "advanced") return "advanced";
+              if (restored === false) {
+                const reason = look.rejection?.();
+                return reject(reason === undefined ? "look_not_restored" : `look_${reason}`);
+              }
+              const settledWork = work.state();
+              if (settledWork !== "idle") return reject(settledWork === "pending" ? "work_pending" : "work_unknown");
+              if (request.healthy?.() !== true) return reject("request_probe_unhealthy");
+              if (request.begunSince()) return reject("request_started");
+              if (![...signals].every((signal) => signal === "change")) return reject("non_change_signal");
+              if (state() !== "unchanged") return reject("origin_changed");
+              if (!safe()) return reject("control_unsafe");
+              if (!(Date.now() < until)) return reject("deadline");
               const fault = new PaginationFault("list_unchanged", "The detected list loader was pressed once; supported work settled with the original list and page unchanged apart from status notices, and no request or other effect was observed.");
               faults.set(fault, proof);
               return fault;
             }
-            return undefined;
           }
           await new Promise<void>((resolve) => setTimeout(resolve, POLL_MS));
         }
-        return undefined;
+        return reject(stopped ? "stopped" : waiting);
       },
       stop(): void {
         if (!stopped) {
