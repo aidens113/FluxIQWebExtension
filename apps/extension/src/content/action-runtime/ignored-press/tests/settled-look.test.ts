@@ -211,17 +211,17 @@ test("a shadow root attached after observation starts invalidates certainty even
   assert.equal(look.rejection?.(), "new_shadow");
 });
 
-test("a style mutation on a privately registered empty closed UI host remains a refusal with an owned diagnostic", async () => {
+test("a style mutation on the privately registered closed UI host does not masquerade as a page effect", async () => {
   const dom = fakeShadowDom();
   const host = dom.el("fluxiq-activity-overlay", { "data-fluxiq-activity": "" });
   ownedUiHosts.registerClosed(host, { host, mode: "closed" });
   const page = composer();
   const look = page.look();
   page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
-  assert.equal(await look.settle(1_500), false, "owned UI classification does not suppress the answer");
-  assert.equal(look.rejection?.(), "outside_owned_ui");
+  assert.equal(await look.settle(1_500), true);
+  assert.equal(look.rejection?.(), undefined);
   look.stop();
-  assert.equal(look.rejection?.(), "outside_owned_ui");
+  assert.equal(look.rejection?.(), undefined);
 });
 
 test("only private closed host identities classify UI-only added and removed nodes", async () => {
@@ -236,8 +236,8 @@ test("only private closed host identities classify UI-only added and removed nod
       addedNodes: movement === "added" ? [host] : [],
       removedNodes: movement === "removed" ? [host] : []
     });
-    assert.equal(await look.settle(1_500), false);
-    assert.equal(look.rejection?.(), "outside_owned_ui");
+    assert.equal(await look.settle(1_500), true);
+    assert.equal(look.rejection?.(), undefined);
   }
 });
 
@@ -279,7 +279,7 @@ test("mixed child-list changes and transient unowned light DOM cannot classify a
   }
 });
 
-test("a later genuine page mutation overrides the earlier owned-only classification permanently", async () => {
+test("a genuine page mutation remains a refusal before and after registered UI updates", async () => {
   const dom = fakeShadowDom();
   const host = dom.el("fluxiq-activity-overlay");
   ownedUiHosts.registerClosed(host, { host, mode: "closed" });
@@ -287,7 +287,7 @@ test("a later genuine page mutation overrides the earlier owned-only classificat
   const look = page.look();
   page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
   page.flushElsewhere();
-  assert.equal(look.rejection?.(), "outside_owned_ui");
+  assert.equal(look.rejection?.(), undefined);
   page.elsewhere();
   page.flushElsewhere();
   assert.equal(look.rejection?.(), "outside_change");
@@ -297,7 +297,7 @@ test("a later genuine page mutation overrides the earlier owned-only classificat
   assert.equal(look.rejection?.(), "outside_change");
 });
 
-test("a later request, navigation, focus or new open shadow overrides an earlier owned-only classification", async () => {
+test("a request, navigation, focus or new open shadow remains protected despite registered UI updates", async () => {
   const dom = fakeShadowDom();
   for (const cause of ["request", "navigation", "focus", "shadow"] as const) {
     const host = dom.el("fluxiq-activity-overlay");
@@ -306,7 +306,7 @@ test("a later request, navigation, focus or new open shadow overrides an earlier
     const look = page.look();
     page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
     page.flushElsewhere();
-    assert.equal(look.rejection?.(), "outside_owned_ui");
+    assert.equal(look.rejection?.(), undefined);
     if (cause === "shadow") page.attachOtherShadowRoot();
     else page.signal(cause);
     assert.equal(await look.settle(1_500), false, cause);

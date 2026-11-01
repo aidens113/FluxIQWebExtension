@@ -1,0 +1,9 @@
+Role: Heavy read-only trace discovery; existing gpt-6.1-sol max; t840.
+Worktree C:/Users/osrs_/FluxStuff/fxwork/t840-native-paging-proof only; shared Core read-only.
+Goal: Retrieve ONLY closed loader-settlement diagnostic from the retained gateway trace of provider-free replay replay-mvx6xw61-133d7b51 (pin ca2068ba), no new browser/provider run.
+Read existing replay discovery + result C:/Users/osrs_/FluxStuff/fxlab/t833-claude/lab-ext/test-runs/instances/t833-claude-company-website-slot-1/replays/replay-mvx6xw61-133d7b51.json.
+The result summary deliberately stores run.failure category/code only, so absence of suffix in report is not proof producer omitted it. Content dist definitely contains loader-settlement suffix. Trace id trace.85c65ffe-a16d-4834-af96-556c1a95d1d5, complete gateway server.execute_action/client.action_result retained. Inspection/parity117points allmatched. Need actual failed client action result body.
+Owned trace-observation.md besidebrief only. No production/test/shareddocs/git changes, browser/provider/panel startup or mutable store API/migrations. Prefer existing readonly trace CLI/public reader; bounded readonly SQLite/binary inspection allowed in run-owned closed workspace (no writes).
+Output/report ONLY final fixed [loader-settlement:<closed_code>], closed failure code/stage and source retrieval steps/paths. Never dump trace bodies, selectors, page/model data, tokens or credentials. Capture any raw CLI output only in ignored run-scoped log, parse closed code, do not print body.
+Find original workspace from creation-context.json; generated state is readonly. If needed method requires starting isolated Core, report exact missing seam to lead before doing so. No user panel or real-data access.
+Send measured reason immediately. Distinguish evidence absence from proof-gate state; do not add another model run. Return Outcome/Changed/Validation/Notverified/Report/Notes.

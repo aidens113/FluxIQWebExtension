@@ -36,6 +36,10 @@
 // serialisation of the section before the press and one per poll while
 // settling, and the document observer while the press is watched; nothing here
 // captures a snapshot, presses anything, or reports what the page wrote.
+// A registered closed extension UI host outside that section is not page
+// state: only its style and exclusive insertion/removal are excluded. Private
+// identity is required; clones, custom attributes and site light DOM remain
+// observed. A status pill updating itself must not block a page's safe retry.
 //
 // **A press the page answered with nothing but its own notice (t743).** Rerun
 // round 4's job trial pressed a save control; the control showed a busy state,
@@ -73,7 +77,7 @@ export type SettledLook = {
    */
   settle(windowMs: number): Promise<boolean | "announced">;
   /** A closed local diagnostic only; it grants no authority and survives stop. */
-  rejection?(): "unreadable" | "outside_change" | "outside_owned_ui" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
+  rejection?(): "unreadable" | "outside_change" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
   /** Stops without settling; safe to call more than once. */
   stop(): void;
 };
@@ -118,24 +122,21 @@ export function lookUntilSettled(
   if (before === undefined) return UNCERTAIN;
 
   let answered = false;
-  let outsideOwnedOnly = true;
   let rejection: ReturnType<NonNullable<SettledLook["rejection"]>>;
   let lastChangeAt = Date.now();
   const listener = probe(pressed, (signal) => {
     if (signal === "change") lastChangeAt = Date.now();
     else {
       answered = true;
-      if (rejection === undefined || rejection === "outside_owned_ui") rejection = "non_change_signal";
+      rejection ??= "non_change_signal";
     }
   });
   const noteElsewhere = (records: readonly MutationRecord[]): void => {
-    const outside = records.filter((record) => !composedContains(scope, record.target) && !(notices && announces(record)));
+    const outside = records.filter((record) => !composedContains(scope, record.target)
+      && !(notices && announces(record)) && !ownedUiMutation(record));
     if (outside.length === 0) return;
     answered = true;
-    outsideOwnedOnly &&= outside.every(ownedUiMutation);
-    if (rejection === undefined || rejection === "outside_owned_ui" || rejection === "outside_change") {
-      rejection = outsideOwnedOnly ? "outside_owned_ui" : "outside_change";
-    }
+    rejection ??= "outside_change";
   };
   const elsewhere = new Observer((records) => noteElsewhere(records));
   elsewhere.observe(root, OBSERVED);
@@ -161,7 +162,7 @@ export function lookUntilSettled(
     // initial answer could have been rendered before any observer was attached.
     if (typeof root.querySelectorAll === "function" && openRootsWithin(root).some((shadow) => !pageRoots.includes(shadow))) {
       answered = true;
-      if (rejection === undefined || rejection === "outside_owned_ui") rejection = "new_shadow";
+      rejection ??= "new_shadow";
     }
   };
   /** A live region now holds words it did not hold before the press (header, t743). */
@@ -277,7 +278,7 @@ function announces(record: MutationRecord): boolean {
   return moved.length > 0 && moved.every(isLiveRegion);
 }
 
-/** Private host identity classifies a refusal; it never suppresses an answer or establishes who wrote it. */
+/** Only the privately registered UI footprint is excluded; page content and custom attributes remain evidence. */
 function ownedUiMutation(record: MutationRecord): boolean {
   if (record.type === "attributes") return record.attributeName === "style" && ownedUiHosts.ownsHost(record.target);
   if (record.type !== "childList") return false;

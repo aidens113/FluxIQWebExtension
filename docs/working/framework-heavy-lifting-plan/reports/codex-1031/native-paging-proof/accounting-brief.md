@@ -1,0 +1,9 @@
+Role: Heavy read-only contract discovery; existing gpt-6.1-sol max; t840.
+Worktree C:/Users/osrs_/FluxStuff/fxwork/t840-native-paging-proof only; shared Core readonly.
+Goal: Determine why saved-flow replay model accounting is null on the failed native run, and whether a successful provider-disabled run should report explicit zero calls. No fix requested unless a real success-path defect is proven.
+Read native-paging-proof/lead-acceptance.md baseline notes; production packages/test-runner/src/saved-flow-replay/{replay-saved-flow,replay-browser}.ts and owning result/model-summary helper paths; actual public Core run analysis/accounting seam only as needed.
+Inputs baseline result C:/Users/osrs_/FluxStuff/fxlab/t833-claude/lab-ext/test-runs/instances/t833-claude-company-website-slot-1/replays/replay-mvx6mhg2-5f36a75e.json (modelProvidersEnabledfalse; interventions0; llmGate.invokedfalse; calls/accountedCalls/coreProviderCallCount null; actualFlowfailedNext). Keys preserved, environment provider variables stripped.
+Owned accounting-discovery.md besidebrief only. No production/tests/Core/shared docs/git/runtime state edits, no provider/browser/panel startup. Named unit tests beside owning contract allowed if useful, no full suite.
+Questions: do failed runs skip usage aggregation? what exact fields/evidence does verdict require for successful zero-call replay? Is factorydisablement strong but accounting separately unknown by design? If success still null, identify narrow owning source fix + meaningful acceptance needed, do not invent zeros or weaken verdict.
+No raw page/model/request/selector/token/credential/key values in report. Report closed codes/booleans/counts/types and paths only. Do not broaden into pricing/provider implementation.
+Return Outcome/Changed/Validation/Notverified/Report/Notes. Distinguish measured current baseline from inferred success behavior.
