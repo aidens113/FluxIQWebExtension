@@ -26,3 +26,6 @@ export const REQUEST_MARK_EVENT = "fluxiq:request-mark";
 
 /** Dispatched on the same element after the press; cancelled by the page world when the page has begun a request since the mark. */
 export const REQUEST_SINCE_EVENT = "fluxiq:request-since";
+
+/** Separate positive-proof query; legacy marks/since retain their best-effort behavior. */
+export const REQUEST_HEALTH_EVENT = "fluxiq:request-health";

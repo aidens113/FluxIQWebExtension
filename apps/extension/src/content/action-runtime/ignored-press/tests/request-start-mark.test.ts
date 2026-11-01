@@ -6,12 +6,12 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { REQUEST_MARK_EVENT, REQUEST_SINCE_EVENT } from "../../../../shared/request-start-event";
+import { REQUEST_HEALTH_EVENT, REQUEST_MARK_EVENT, REQUEST_SINCE_EVENT } from "../../../../shared/request-start-event";
 import { markRequestStarts } from "../request-start-mark";
 
 /** An element whose `dispatchEvent` is answered as the page world would: by counting requests and cancelling. */
 function pressedElement(pageWorld: boolean) {
-  const world = { begun: 0, mark: undefined as number | undefined, dispatched: [] as string[] };
+  const world = { begun: 0, mark: undefined as number | undefined, dispatched: [] as string[], healthy: false };
   const element = {
     dispatchEvent(event: Event) {
       world.dispatched.push(event.type);
@@ -22,6 +22,7 @@ function pressedElement(pageWorld: boolean) {
         return false;
       }
       if (event.type === REQUEST_SINCE_EVENT) return !(world.mark !== undefined && world.begun > world.mark);
+      if (event.type === REQUEST_HEALTH_EVENT) return !world.healthy;
       return true;
     }
   };
@@ -47,4 +48,14 @@ test("where no page world answers the mark, there is no mark, and requests are r
 
 test("an element that cannot dispatch events has no mark", () => {
   assert.equal(markRequestStarts({} as Element), undefined);
+});
+
+test("positive proof health is a separate query and a legacy acknowledgement alone remains insufficient", () => {
+  const { element, world } = pressedElement(true);
+  const mark = markRequestStarts(element);
+  assert.ok(mark?.healthy);
+  assert.equal(mark.healthy(), false);
+  world.healthy = true;
+  assert.equal(mark.healthy(), true);
+  assert.equal(mark.begunSince(), false);
 });

@@ -38,6 +38,7 @@ import { pageShownNow } from "./shown-page";
 import { stepPage } from "./step-page";
 import type { PageStep, PaginationProgress } from "./types";
 import { PageMovePersonCheck } from "./person-check";
+import { loaderSettlement } from "./loader-progress";
 
 /** How long the list's first item is waited for before the step: the read before it has normally drawn it already. */
 const LIST_WINDOW_MS = 5_000;
@@ -79,7 +80,9 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
     step = await stepPage(way, progress, undefined);
   } catch (error) {
     if (error instanceof PageMovePersonCheck) throw error;
-    return stoppedMove(paginationStopOf(error), error instanceof Error ? error.message : "Moving the list to its next page failed.", error instanceof PaginationFault ? error.filtersDropped : undefined);
+    const outcome = stoppedMove(paginationStopOf(error), error instanceof Error ? error.message : "Moving the list to its next page failed.", error instanceof PaginationFault ? error.filtersDropped : undefined);
+    loaderSettlement.transfer(error, outcome, request);
+    return outcome;
   }
   switch (step.outcome) {
     case "advanced": {

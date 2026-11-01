@@ -1,0 +1,43 @@
+# Paging uncertainty discovery — 2026-10-31
+
+Outcome: Done (read-only). The run was left under the lead's supervision; no source, session, browser, provider or git operation was changed.
+
+## Recorded facts
+
+- Pinned source: Core `d88010d8`, Downstream `6b685db3`. Paths below are relative to those repositories.
+- Trial 0034/0036/0038 reads returned 8/16/24 labels; Next succeeded on passes 1 and 2, then 0039 failed on pass 3 after 13011 ms: `core.replay.failed / outcome_uncertain`, underlying closed code `output_not_observed`. The authored mode was `loadMore`, consequences empty, no `expectedState`.
+- The 0039 page still contains all 24 prior labels and the fixture's specific stuck-loader status marker. The later exploration failure 0045 has the same status and `output_not_observed / outcome_uncertain`.
+- Final trial 0100/0102/0104 again returned 8/16/24; 0105 again failed on pass 3, `core.replay.failed / outcome_uncertain`, after 12707 ms, with no `expectedState`.
+- Final evaluation: `failed / runtime.behavior`, 25 calls, `flowCreated=false`, oracle null. **Evaluation `durationMs=645092`**; the lead's separately measured overall wall interval is longer. The lead reports $1.3721253 and no judges/oracle/replay.
+- The lead's complete ledger scan records four trial paging uncertainties (0039/0066/0089/0105), two exploration output-not-observed failures (0045/0095), 41 replay successes, five remembered results, one changed read and two routed-repeat refusals. Overall entry span: 645672 ms.
+- `pass: 3` is the loop's page pass, **not a retry count**. Replay 0039/0105 do not retain gateway attempt counts. Exploration 0045 omits `attempts`; its producer publishes this field only above one (`domain/src/runtime/llm-evidence/tool-rejection.ts:778–781`), so that later command dispatched once.
+
+## Cause and conversion
+
+- Fixture `apps/scenario-lab/src/scenarios/company-website/client/team-script.ts:62–69`: the first explicit loader press changes only spinner/status and returns without invoking the batch request; the next press starts the load. `data/team.ts:63,69` specifies batches of 8 and three automatic batches. This explains the repeated 24-row boundary and observed unique status marker; it is not a task/oracle problem.
+- Extension `apps/extension/src/content/extraction/page-advance/load-more.ts:93` presses the loader; `:128–139` watches it but suppresses its one extra press when **any** answer signal is seen (`:135`). `content/action-runtime/ignored-press/press-again.ts:35–36` rejects a second press after any signal; `ignored-press-watch.ts:63–65,83–87` records/resolves on section changes. The spinner is activity without semantic list progress.
+- `load-more.ts:118` throws `list_unchanged` when no new item arrived within the list-change window (`page-advance/list-change.ts:24`: 10000 ms). Next-page action `content/actions/next-page.ts:38–44` maps `list_unchanged` and `list_vanished` to `OUTPUT_NOT_OBSERVED`. The public replay receipt preserves the merged failure code, not that inner stop word; **list_unchanged is the source/evidence inference**, not an exposed stop field.
+- Domain `domain/src/actions/action-effect/table.ts:33` deliberately classifies **every** `web.dom.next_page` as `commit`; its header explains protection against lost acknowledgement/double advance. `runtime/lasting-act-statement.ts:79–80` therefore states post-dispatch verification failure as `effect: ambiguous`; the default output-not-observed row is retryable at verification (`runtime/failure/codes.ts:347`).
+- Core `packages/fluxiq/src/programs/automation-studio/runtime/executor/defensive/assess.ts:107–119,142–148` correctly applies its after-act/uncertainty gate to that trusted classification. `executor/outside-graph/retries.ts:150–153` runs the effect check and exits immediately on unknown, before another attempt.
+- Domain `runtime/llm-evidence/node-run/retries/effect-check.ts:44–45` checks only declared expected state and returns unknown when absent. `retries/uncertain-outcome.ts:25–29` changes the reason to `outcome_uncertain`; `node-run/replay.ts:376,413–414` renders it as an uncertain dispatched step.
+- **Primary cause is the known spinner-only swallowed loader press plus missing automatic semantic no-effect settlement.** The failure is a returned browser output-not-observed result; no command-ledger/lost-receipt code caused this conversion. A generic lost acknowledgement could genuinely conceal a move, so output-not-observed alone must never authorize blind repetition.
+
+## Retry policy assessment and bounded ownership
+
+- Core still configures first attempt +3 retries (`executor/retry-policy.ts:46`). Here the commit/unknown-effect gate intentionally suppresses retries at the first ambiguous failed attempt. Exact replay transport dispatch counts are not exposed; one must not claim four attempts or physically observed click counts.
+- Source refresh was not skipped after a qualifying stale-target failure: this is output verification, not target resolution. The refresh condition is checked before attempt 4 only for stale, unacted target failures (`executor/outside-graph/retries.ts:168`). The row-specific callback also requires an item and element target (`domain/.../retries/replay-row-reacquire.ts:33–34`), absent on this list-level move.
+- The gap is Downstream's conservative relative-move classification/producer evidence, not Core's shared retry count. **Do not replace Next with blanket observe/state or trust `loopVerdict: read`.** `apps/extension/src/content/extraction/page-advance/appending-control.ts:27–30` currently accepts an authored selector outside list items before detection; an arbitrary control could commit a lasting act.
+- A Down-only fix can preserve that conservative floor while adding browser-owned list-continuation intent/progress proof: bind the actual current list/control and origin checkpoint, distinguish semantic row/page growth from spinner/status activity, and produce the existing trusted unacted/certain-no-effect failure only when trusted evidence establishes no advance, no pending move and no possible lasting act. Feed this through the existing Core effect/retry seam; never use a model claim as the proof.
+- Minimum ownership: Extension `content/extraction/page-advance/{load-more,appending-control,move-outcome}.ts` and a focused progress/no-effect helper; `content/actions/next-page.ts` for the typed producer result; shared next-page protocol/Domain answer validation only if needed to carry proof; Domain `runtime/llm-evidence/node-run/retries/effect-check.ts` only if fresh semantic settlement is required. The static arbitrary-control commit floor and Core policy can remain intact.
+- Retain the same origin checkpoint across retries: a move already observed as landed must settle without another press, while a verified stalled loader gets the normal retries. Re-detect/rebind controls from trusted current list identity when needed, never old ordinal position. A merely timed-out/uncertain request remains protected; do not label it no-effect from elapsed time alone.
+
+## Provider-free acceptance before another paid run
+
+- Unit/integration: a genuine loader's first press creates only a spinner, no request and no new item; a verified no-effect receipt causes automatic retry and exactly one additional page, across exploration, draft trials and playback adapters.
+- Controls: delayed request/response, document replacement, already-advanced list and lost receipt must not advance twice or skip a page; arbitrary selectors aimed at a lasting act remain refused/protected; real lasting uncertainty still holds. Verify first+3 retries and source-identity refresh for a separate qualifying stale/unacted case.
+- Preserve task wording/oracle; use unrelated unit data, then the existing realistic company-site provider-free browser path when authorized. No fixture-specific guidance, weakened oracle, call-limit changes or paid rerun needed for diagnosis.
+
+Validation: read-only `rg -n` source tracing and Node JSON parsers over finalized step receipts → the closed codes, 8/16/24 counts, marker-presence booleans and final evaluation above. No tests, source probes that dispatch, provider/browser calls or active-run controls were invoked.
+
+Not verified: raw inner next-page stop, exact replay gateway/physical-click counts, request-start signals during those presses, a repaired path, browser end-to-end behavior or accepted Flow. The report does not infer those missing measurements.
+Report: `docs/working/framework-heavy-lifting-plan/reports/codex-1031/field-read-repair/paging-discovery.md`.
