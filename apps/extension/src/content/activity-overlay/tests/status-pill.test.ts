@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../../picker-host";
+import { ownedUiHosts } from "../../owned-ui";
 import { StatusPill } from "../status-pill";
 import type { OverlayTextMeasure } from "../text-measure";
 import type { ActivityOverlayView } from "../overlay-view";
@@ -33,6 +34,22 @@ function hostOf(surface: StatusPill): FakeNode {
   assert.ok(host, "the overlay is in the page");
   return host;
 }
+
+test("only the actual status pill host is registered as owned UI", () => {
+  withFakeDom(() => {
+    const surface = new StatusPill();
+    surface.update(view());
+    const host = surface.host();
+    assert.ok(host);
+    assert.equal(ownedUiHosts.ownsHost(host), true);
+
+    const lookalike = document.createElement(host.tagName);
+    lookalike.setAttribute(ACTIVITY_OVERLAY_HOST_ATTRIBUTE, "");
+    const copiedShadow = lookalike.attachShadow({ mode: "closed" });
+    copiedShadow.append(document.createElement("div"));
+    assert.equal(ownedUiHosts.ownsHost(lookalike), false, "matching markup and shadow structure do not grant ownership");
+  });
+});
 
 test("fifty updates leave the same host and the same nodes; only their text and attributes change", () => {
   withFakeDom((dom) => {

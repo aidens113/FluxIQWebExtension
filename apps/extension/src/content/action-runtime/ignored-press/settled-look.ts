@@ -57,6 +57,7 @@
 // and is looked at exactly as before.
 
 import { composedContains, openRootsWithin } from "../../shadow-dom";
+import { ownedUiHosts } from "../../owned-ui";
 import { isLiveRegion } from "./live-region";
 import { listenForPressAnswer, type PressListener } from "./page-press-listener";
 import type { PressSignal } from "./press-again";
@@ -72,7 +73,7 @@ export type SettledLook = {
    */
   settle(windowMs: number): Promise<boolean | "announced">;
   /** A closed local diagnostic only; it grants no authority and survives stop. */
-  rejection?(): "unreadable" | "outside_change" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
+  rejection?(): "unreadable" | "outside_change" | "outside_owned_ui" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
   /** Stops without settling; safe to call more than once. */
   stop(): void;
 };
@@ -117,19 +118,23 @@ export function lookUntilSettled(
   if (before === undefined) return UNCERTAIN;
 
   let answered = false;
+  let outsideOwnedOnly = true;
   let rejection: ReturnType<NonNullable<SettledLook["rejection"]>>;
   let lastChangeAt = Date.now();
   const listener = probe(pressed, (signal) => {
     if (signal === "change") lastChangeAt = Date.now();
     else {
       answered = true;
-      rejection ??= "non_change_signal";
+      if (rejection === undefined || rejection === "outside_owned_ui") rejection = "non_change_signal";
     }
   });
   const noteElsewhere = (records: readonly MutationRecord[]): void => {
-    if (records.some((record) => !composedContains(scope, record.target) && !(notices && announces(record)))) {
-      answered = true;
-      rejection ??= "outside_change";
+    const outside = records.filter((record) => !composedContains(scope, record.target) && !(notices && announces(record)));
+    if (outside.length === 0) return;
+    answered = true;
+    outsideOwnedOnly &&= outside.every(ownedUiMutation);
+    if (rejection === undefined || rejection === "outside_owned_ui" || rejection === "outside_change") {
+      rejection = outsideOwnedOnly ? "outside_owned_ui" : "outside_change";
     }
   };
   const elsewhere = new Observer((records) => noteElsewhere(records));
@@ -156,7 +161,7 @@ export function lookUntilSettled(
     // initial answer could have been rendered before any observer was attached.
     if (typeof root.querySelectorAll === "function" && openRootsWithin(root).some((shadow) => !pageRoots.includes(shadow))) {
       answered = true;
-      rejection ??= "new_shadow";
+      if (rejection === undefined || rejection === "outside_owned_ui") rejection = "new_shadow";
     }
   };
   /** A live region now holds words it did not hold before the press (header, t743). */
@@ -270,4 +275,12 @@ function announces(record: MutationRecord): boolean {
   if (record.type !== "childList") return false;
   const moved = [...Array.from(record.addedNodes ?? []), ...Array.from(record.removedNodes ?? [])];
   return moved.length > 0 && moved.every(isLiveRegion);
+}
+
+/** Private host identity classifies a refusal; it never suppresses an answer or establishes who wrote it. */
+function ownedUiMutation(record: MutationRecord): boolean {
+  if (record.type === "attributes") return record.attributeName === "style" && ownedUiHosts.ownsHost(record.target);
+  if (record.type !== "childList") return false;
+  const moved = [...Array.from(record.addedNodes ?? []), ...Array.from(record.removedNodes ?? [])];
+  return moved.length > 0 && moved.every((node) => ownedUiHosts.ownsHost(node));
 }
