@@ -1,6 +1,6 @@
 # Native saved-playback paging proof
 
-Status: Native provider-free accepted on t840; integration/publication next. Shared Core16b5043c/SDK0.25.5 read-only.
+Status: Integrated/native provider-free accepted; dev publication and fresh Claude acceptance next. Shared Core16b5043c/SDK0.25.5 read-only.
 
 ## Current State
 
@@ -52,3 +52,5 @@ Both October31 full-suite slots consumed; owning checks only. No fixture/task/or
 - Model factory disabled; coreProviderCallCount=0/accountedCalls=0/calls=0 explicitly, interventions0/harnessActivations0. This closes the prior failed-native path with no repair/model/graph change. Main ignored actual report/log retained in dedicated instance/replays and test-runs/2026-10-31-t840-validation/replay-ui-recovery.log.
 - Lead read-only retained-wire observation confirms one distinct authenticated Next failure: web.action.no_effect/action_failed/execution/effectunacted/certainNoEffecttrue, payload.nextPage failed and fixed detected-loader message. Native run then succeeded. Initial suffix-reader invocation returned missing/exit1 because successful recovery emits no unavailable-proof diagnostic; supplemental --wire-facts mode reads known typed facts only and exits0/count1. No stored trace/report/state edited. This verifies genuine Core retry, not a manual second click or harness action.
 - Acceptance scope: native saved Flow full expected dataset and explicit zero accounting proven. Fresh Claude create/judged-whole/apply/replay acceptance remains next after publishing. No full sweep or main promotion; both Oct31 slots consumed.
+
+- Integration: `pnpm.cmd task finish t840 Preserve native loader retries across status UI rendering` ->exit0; normal plain structure gate passed; merged fe190feb90cdcde40ba93d8fd9badaf1c0338dda and removed private Down tree through lifecycle. Core unchanged16b5043c/SDK0.25.5; remote task backups retained. Parents fetched beforehand: Main dev/origin bothc63f1d57. User clinerules hash unchangedB052F0E6B0E6C6DE0BA973810C7632EDA04AADFDD5314EAAA73710EDD1101A8D. All own ignored validation/helper evidence archived in main test-runs/2026-10-31-t840-validation before cleanup. Dev publication follows this ledger commit; main promotion held by full-sweep allowance.
