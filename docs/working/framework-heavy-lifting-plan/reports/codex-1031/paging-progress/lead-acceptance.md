@@ -1,6 +1,6 @@
 # t839 semantic paging recovery: lead record
 
-Status: Provider-free qualified; integration/publication next. Source pins from last failure are Core d88010d8 / Down 6b685db3; current doc-only parents Core16b5043c / Downf07b6c10.
+Status: Integrated and provider-free qualified; publication and normal Lab pin next. Source pins from last failure are Core d88010d8 / Down 6b685db3; current doc-only parents Core16b5043c / Downf07b6c10.
 
 ## Cause and stable seam
 
@@ -56,3 +56,5 @@ Keep Core policy and arbitrary-control/lasting/lost-ack protection intact. Only 
 - Validation: `git diff --check` -> exit 0 after removing exactly one trailing space in request-starts.ts. This trivia-only cleanup followed the completed qualification snapshot; no behavior changed. Runtime artifacts remain ignored. No full sweep/main promotion or paid launch in this task yet.
 
 - Validation: staged `git diff --cached --check` initially exposed 46 additional trailing spaces in eight newly added observer/test files (untracked files were not included in unstaged diff check). Trimmed only the reported added-line endings, re-staged those files; final check exit 0. Trivia-only cleanup, no semantic edits or extra test claim. Parents fetched: dev/origin/dev/HEAD all f07b6c10 before commit; no parent changes to integrate.
+
+- Git: source commit 3531ca0dc8bb70277c8e02dd9bf0eb8752bc446f pushed to task/t839-paging-semantic-progress (backup retained). `pnpm.cmd task finish t839 Recover stalled list loaders from verified browser evidence` -> exit 0; plain structure gate passed; merged 719299a35800b6da53a37001aca2df988e2c6856; isolated task tree removed by normal lifecycle. Core unchanged at 16b5043c / SDK 0.25.5. Downstream dev publication follows this ledger commit. Main has only the preexisting user .clinerules/fluxiq.md edit.

@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t839 provider-free qualified: semantic loader/no-effect recovery and observer safety; integrating dev before normal-pin Claude continuation.
+Status detail: t839 integrated and provider-free qualified: semantic loader/no-effect recovery; publishing dev before normal-pin Claude continuation.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Provider-free qualified t839, 2026-10-31:** Downstream-only `paging-semantic-progress` task in an isolated checkout. Shared Core is current at 16b5043c / SDK 0.25.5 and stays read-only. The latest Claude run failed at a spinner-only loader after raw batches of 8, 16 and 24 cards: 25 calls, $1.3721253, no final judge, oracle or replay. Overall recorded total: 80 calls and $4.441185. Target-acquisition refusals did not recur in that run.
+**Integrated and provider-free qualified t839, 2026-10-31:** Downstream source 3531ca0d merged at 719299a3; normal task finish passed its plain structure gate and removed the isolated checkout. Remote task backup retained; dev publication follows the ledger commit. Shared Core is current at 16b5043c / SDK 0.25.5 and stays read-only. The latest Claude run failed at a spinner-only loader after raw batches of 8, 16 and 24 cards: 25 calls, $1.3721253, no final judge, oracle or replay. Overall recorded total: 80 calls and $4.441185. Target-acquisition refusals did not recur in that run.
 
 The producer repair binds the detected non-form continuation and original list, compares semantic progress and settled page state, and requires healthy request-start and supported click-work observations before issuing existing `NO_EFFECT` (execution / unacted / certainNoEffect). Verification failure plus unacted does not bypass the safety gate. Pending or observed unsupported work stays uncertain. One press per command; Core owns first plus three attempts. Checkpoints stay inside one command; no Core retry-group token or model-written proof. The observer is bounded: opaque synchronous helpers can hide native async work, and it is not authentication against hostile page code or universal future-JavaScript certainty.
 
