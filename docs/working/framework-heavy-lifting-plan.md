@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t839 integrated and provider-free qualified: semantic loader/no-effect recovery; publishing dev before normal-pin Claude continuation.
+Status detail: t839 published; live whole build judged yes, native saved playback failed Next/list_unchanged; compare execution paths and fix provider-free before paid continuation.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
@@ -11,7 +11,7 @@ Related: [language-driven-flow-loop-plan](language-driven-flow-loop-plan.md), de
 
 ## Current State
 
-**Integrated and provider-free qualified t839, 2026-10-31:** Downstream source 3531ca0d merged at 719299a3; normal task finish passed its plain structure gate and removed the isolated checkout. Remote task backup retained; dev publication follows the ledger commit. Shared Core is current at 16b5043c / SDK 0.25.5 and stays read-only. The latest Claude run failed at a spinner-only loader after raw batches of 8, 16 and 24 cards: 25 calls, $1.3721253, no final judge, oracle or replay. Overall recorded total: 80 calls and $4.441185. Target-acquisition refusals did not recur in that run.
+**Integrated and provider-free qualified t839, 2026-10-31:** Downstream source 3531ca0d merged at 719299a3; normal task finish passed its plain structure gate and removed the isolated checkout. Remote task backup retained. Downstream dev/origin published at f092402b; normal Lab pin matches it with Core16b5043c. Provider-free production preflight passed (71.144s prelude/zero calls); supervised unchanged-task Claude continuation run-mvx64gvn-6781507e ended FAILED after369.511s evaluation:24calls/$1.2747836, no balance error. Whole build reached raw8/16/24/28/ended and both judges yes/zero defects; Flow created=true. Native saved playback then failed Next/list_unchanged after15successful actions; repair attempted but no applied adaptation or successful zero-call replay, oracle failed. Total104calls/$5.7159686 across6invocations. No paid run active or source changes during run; follow-up must reproduce installed saved playback provider-free and compare actual parameters/control/proof coverage, not unchanged paid rerun. Shared Core is current at 16b5043c / SDK 0.25.5 and stays read-only. The latest Claude run failed at a spinner-only loader after raw batches of 8, 16 and 24 cards: 25 calls, $1.3721253, no final judge, oracle or replay. Overall recorded total: 80 calls and $4.441185. Target-acquisition refusals did not recur in that run.
 
 The producer repair binds the detected non-form continuation and original list, compares semantic progress and settled page state, and requires healthy request-start and supported click-work observations before issuing existing `NO_EFFECT` (execution / unacted / certainNoEffect). Verification failure plus unacted does not bypass the safety gate. Pending or observed unsupported work stays uncertain. One press per command; Core owns first plus three attempts. Checkpoints stay inside one command; no Core retry-group token or model-written proof. The observer is bounded: opaque synchronous helpers can hide native async work, and it is not authentication against hostile page code or universal future-JavaScript certainty.
 
