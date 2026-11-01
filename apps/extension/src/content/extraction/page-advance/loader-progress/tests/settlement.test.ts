@@ -38,6 +38,12 @@ function catalogue() {
       row.parentElement = list;
       list.children.push(row);
     },
+    removeOrigin() {
+      const row = rows[0];
+      assert.ok(row);
+      list.children.splice(list.children.indexOf(row), 1);
+      row.parentElement = null;
+    },
     detach() {
       const parent = button.parentElement;
       if (parent) parent.children.splice(parent.children.indexOf(button), 1);
@@ -85,6 +91,7 @@ test("only genuine unchanged status-only settlement transfers a private single-u
     fixture.note("change");
     const fault = await watch.settle();
     assert.ok(fault instanceof PaginationFault);
+    assert.equal(watch.rejection(), undefined, "a genuine no-effect receipt has no rejection diagnostic");
     const request = { item: "#records > article.record" };
     const answer = { outcome: "failed", stop: "list_unchanged" };
     loaderSettlement.transfer(new PaginationFault("list_unchanged", fault.message), answer, request);
@@ -117,6 +124,10 @@ test("a late observed move settles the original checkpoint without authorizing a
 });
 
 test("unknown work, started requests, unhealthy hooks and non-status effects never issue no-effect", async () => {
+  const reasons = {
+    unknown: "work_unknown", request: "request_started", unhealthy: "request_probe_unhealthy",
+    navigation: "non_change_signal", focus: "non_change_signal", pending: "work_pending"
+  };
   for (const refusal of ["unknown", "request", "unhealthy", "navigation", "focus", "pending"] as const) {
     const fixture = catalogue();
     if (refusal === "unknown" || refusal === "pending") fixture.state.work = refusal;
@@ -124,11 +135,112 @@ test("unknown work, started requests, unhealthy hooks and non-status effects nev
     if (refusal === "unhealthy") fixture.state.healthy = false;
     const watch = loaderSettlement.watch(fixture.binding, fixture.control, Date.now() + 60, fixture.observers);
     if (refusal === "navigation" || refusal === "focus") fixture.note(refusal);
-    try { assert.equal(await watch.settle(), undefined, refusal); }
+    try {
+      assert.equal(await watch.settle(), undefined, refusal);
+      assert.equal(watch.rejection(), reasons[refusal]);
+    }
     finally {
+      watch.stop();
+      assert.equal(watch.rejection(), reasons[refusal], "cleanup retains the actual refusal, including pending at deadline");
+      fixture.restore();
+    }
+  }
+});
+
+test("unrecognized bindings and missing probes remain uncertain with closed diagnostics", async () => {
+  for (const refusal of ["binding", "request", "work", "look", "health"] as const) {
+    const fixture = catalogue();
+    const observers = { ...fixture.observers };
+    if (refusal === "request") observers.request = () => undefined;
+    if (refusal === "work") observers.work = () => undefined;
+    if (refusal === "look") observers.look = () => undefined;
+    if (refusal === "health") observers.request = () => ({ begunSince: () => false });
+    const binding = refusal === "binding" ? { control: fixture.control } : fixture.binding;
+    const expected = {
+      binding: "binding_unknown", request: "request_probe_missing", work: "work_probe_missing",
+      look: "look_unavailable", health: "request_probe_unhealthy"
+    };
+    const watch = loaderSettlement.watch(binding, fixture.control, undefined, observers);
+    try {
+      assert.equal(await watch.settle(), undefined);
+      assert.equal(JSON.stringify({ rejection: watch.rejection() }), JSON.stringify({ rejection: expected[refusal] }), "only a fixed code is exposed, without list or control data");
+    } finally {
       watch.stop();
       fixture.restore();
     }
+  }
+});
+
+test("changed origins and unsafe current controls retain their uncertainty at the command deadline", async (context) => {
+  let clock = 0;
+  context.mock.method(Date, "now", () => clock);
+  for (const refusal of ["origin", "control"] as const) {
+    const fixture = catalogue();
+    const observers = { ...fixture.observers, uncovered: () => refusal !== "control" };
+    const watch = loaderSettlement.watch(fixture.binding, fixture.control, clock + 1_000, observers);
+    if (refusal === "origin") fixture.removeOrigin();
+    clock += 900;
+    const timer = setTimeout(() => { clock += 101; }, 5);
+    try {
+      assert.equal(await watch.settle(), undefined);
+      assert.equal(watch.rejection(), refusal === "origin" ? "origin_changed" : "control_unsafe");
+    } finally {
+      clearTimeout(timer);
+      watch.stop();
+      fixture.restore();
+    }
+  }
+});
+
+test("a rejected settled-page look exposes its closed reason without issuing a private no-effect proof", async (context) => {
+  let clock = 0;
+  context.mock.method(Date, "now", () => clock);
+  for (const reason of ["outside_change", "new_shadow", "unreadable", "not_restored", "deadline"] as const) {
+    const fixture = catalogue();
+    const observers = { ...fixture.observers, look: () => ({
+      settle: async () => false,
+      rejection: () => reason,
+      stop: () => undefined
+    }) };
+    const watch = loaderSettlement.watch(fixture.binding, fixture.control, undefined, observers);
+    clock += 900;
+    try {
+      assert.equal(await watch.settle(), undefined);
+      assert.equal(watch.rejection(), `look_${reason}`);
+      const request = { item: "#records > article.record" };
+      const answer = { outcome: "failed", stop: "list_unchanged" };
+      loaderSettlement.transfer(new PaginationFault("list_unchanged", `[loader-settlement:${watch.rejection()}]`), answer, request);
+      assert.equal(loaderSettlement.consume(answer, request), false, "a diagnostic string cannot mint the private proof");
+    } finally {
+      watch.stop();
+      assert.equal(watch.rejection(), `look_${reason}`);
+      fixture.restore();
+    }
+  }
+});
+
+test("the actual unchanged fallback reports a fixed reason after one physical press", async (context) => {
+  let clock = 0;
+  context.mock.method(Date, "now", () => clock);
+  const fixture = catalogue();
+  fixture.state.work = "unknown";
+  let presses = 0;
+  Object.defineProperty(fixture.control, "click", { value: () => { presses += 1; } });
+  const timer = setTimeout(() => { clock = 10_001; }, 5);
+  try {
+    await assert.rejects(pressLoadMore({ mode: "loadMore", control: "#loader" }, {
+      item: "#records > article.record", shown: fixture.rows, pagesRead: 1, scrolls: 0, deadline: undefined,
+      hasUnreadItem: () => false
+    }, undefined, (binding, control, deadline) => loaderSettlement.watch(binding, control, deadline, fixture.observers)), (error) => {
+      assert.ok(error instanceof PaginationFault);
+      assert.equal(error.stop, "list_unchanged");
+      assert.match(error.message, /\[loader-settlement:work_unknown\]$/u);
+      return true;
+    });
+    assert.equal(presses, 1);
+  } finally {
+    clearTimeout(timer);
+    fixture.restore();
   }
 });
 

@@ -36,6 +36,10 @@
 // serialisation of the section before the press and one per poll while
 // settling, and the document observer while the press is watched; nothing here
 // captures a snapshot, presses anything, or reports what the page wrote.
+// A registered closed extension UI host outside that section is not page
+// state: only its style and exclusive insertion/removal are excluded. Private
+// identity is required; clones, custom attributes and site light DOM remain
+// observed. A status pill updating itself must not block a page's safe retry.
 //
 // **A press the page answered with nothing but its own notice (t743).** Rerun
 // round 4's job trial pressed a save control; the control showed a busy state,
@@ -57,6 +61,7 @@
 // and is looked at exactly as before.
 
 import { composedContains, openRootsWithin } from "../../shadow-dom";
+import { ownedUiHosts } from "../../owned-ui";
 import { isLiveRegion } from "./live-region";
 import { listenForPressAnswer, type PressListener } from "./page-press-listener";
 import type { PressSignal } from "./press-again";
@@ -71,6 +76,8 @@ export type SettledLook = {
    * t743); `false` otherwise. Stops the look.
    */
   settle(windowMs: number): Promise<boolean | "announced">;
+  /** A closed local diagnostic only; it grants no authority and survives stop. */
+  rejection?(): "unreadable" | "outside_change" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
   /** Stops without settling; safe to call more than once. */
   stop(): void;
 };
@@ -96,7 +103,7 @@ const FIELDS = "input, textarea, select";
 const LIVE_CANDIDATES = "[role], [aria-live]";
 
 /** A look that can never be certain: the page could not be read. */
-const UNCERTAIN: SettledLook = { settle: () => Promise.resolve(false), stop: () => undefined };
+const UNCERTAIN: SettledLook = { settle: () => Promise.resolve(false), rejection: () => "unreadable", stop: () => undefined };
 
 /** Starts looking, from just before the press on `pressed`, for whether the page settles exactly as it was. */
 export function lookUntilSettled(
@@ -115,13 +122,21 @@ export function lookUntilSettled(
   if (before === undefined) return UNCERTAIN;
 
   let answered = false;
+  let rejection: ReturnType<NonNullable<SettledLook["rejection"]>>;
   let lastChangeAt = Date.now();
   const listener = probe(pressed, (signal) => {
     if (signal === "change") lastChangeAt = Date.now();
-    else answered = true;
+    else {
+      answered = true;
+      rejection ??= "non_change_signal";
+    }
   });
   const noteElsewhere = (records: readonly MutationRecord[]): void => {
-    if (records.some((record) => !composedContains(scope, record.target) && !(notices && announces(record)))) answered = true;
+    const outside = records.filter((record) => !composedContains(scope, record.target)
+      && !(notices && announces(record)) && !ownedUiMutation(record));
+    if (outside.length === 0) return;
+    answered = true;
+    rejection ??= "outside_change";
   };
   const elsewhere = new Observer((records) => noteElsewhere(records));
   elsewhere.observe(root, OBSERVED);
@@ -145,7 +160,10 @@ export function lookUntilSettled(
     // attachShadow on an existing host need not mutate the document. A root
     // that appeared after observation started invalidates certainty, since its
     // initial answer could have been rendered before any observer was attached.
-    if (typeof root.querySelectorAll === "function" && openRootsWithin(root).some((shadow) => !pageRoots.includes(shadow))) answered = true;
+    if (typeof root.querySelectorAll === "function" && openRootsWithin(root).some((shadow) => !pageRoots.includes(shadow))) {
+      answered = true;
+      rejection ??= "new_shadow";
+    }
   };
   /** A live region now holds words it did not hold before the press (header, t743). */
   const announced = (): boolean => {
@@ -158,8 +176,10 @@ export function lookUntilSettled(
 
   return {
     stop,
+    rejection: () => rejection,
     settle(windowMs) {
       if (stopped || windowMs <= 0) {
+        rejection ??= stopped ? "stopped" : "deadline";
         stop();
         return Promise.resolve(false);
       }
@@ -169,9 +189,13 @@ export function lookUntilSettled(
           read();
           const now = Date.now();
           const quietMs = now - lastChangeAt;
-          const same = quietMs >= QUIET_MS && sectionState(scope, roots, notices) === before;
+          const current = quietMs >= QUIET_MS ? sectionState(scope, roots, notices) : undefined;
+          const same = quietMs >= QUIET_MS && current === before;
           const verdict = stopped || answered ? false : same ? (announced() ? "announced" : true) : quietMs >= HELD_MS || now >= deadline ? false : undefined;
           if (verdict === undefined) return;
+          if (verdict === false) {
+            rejection ??= stopped ? "stopped" : now >= deadline ? "deadline" : quietMs >= QUIET_MS && current === undefined ? "unreadable" : "not_restored";
+          }
           clearInterval(poll);
           stop();
           resolve(verdict);
@@ -252,4 +276,12 @@ function announces(record: MutationRecord): boolean {
   if (record.type !== "childList") return false;
   const moved = [...Array.from(record.addedNodes ?? []), ...Array.from(record.removedNodes ?? [])];
   return moved.length > 0 && moved.every(isLiveRegion);
+}
+
+/** Only the privately registered UI footprint is excluded; page content and custom attributes remain evidence. */
+function ownedUiMutation(record: MutationRecord): boolean {
+  if (record.type === "attributes") return record.attributeName === "style" && ownedUiHosts.ownsHost(record.target);
+  if (record.type !== "childList") return false;
+  const moved = [...Array.from(record.addedNodes ?? []), ...Array.from(record.removedNodes ?? [])];
+  return moved.length > 0 && moved.every((node) => ownedUiHosts.ownsHost(node));
 }

@@ -68,6 +68,7 @@
 
 import { ACTIVITY_DONE_VISIBLE_MS } from "../../shared/activity";
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../picker-host";
+import { ownedUiHosts } from "../owned-ui";
 import { fitLine, fitLines } from "./fit";
 import { inertElement } from "./inert-element";
 import type { ActivityOverlayView } from "./overlay-view";
@@ -358,6 +359,7 @@ function buildNodes(): Nodes {
   host.setAttribute("aria-hidden", "true");
   host.setAttribute("inert", "");
   const root = host.attachShadow({ mode: "closed" });
+  ownedUiHosts.registerClosed(host, root);
   const surface = inertElement("div", {
     display: "flex",
     "flex-direction": "column",

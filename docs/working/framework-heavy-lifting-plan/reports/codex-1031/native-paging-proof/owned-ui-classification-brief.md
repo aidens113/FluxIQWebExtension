@@ -1,0 +1,12 @@
+Role: Heavy worker; existing gpt-6.1-sol max; t840.
+Worktree C:/Users/osrs_/FluxStuff/fxwork/t840-native-paging-proof only.
+Goal: Classify the measured outside-change refusal against PRIVATE owned UI identity, without changing any existing verdict/safety/retry/press policy yet.
+Facts: retained installed gateway result has [loader-settlement:look_outside_change], code output_not_observed/stageverification. Exact saved graph providerfree failure reproduced twice. Need distinguish real extension status host from page change, no guess.
+STABLE interface root owns: content/owned-ui barrel exports ownedUiHosts.registerClosed(host, root Pick<ShadowRoot,host|mode>) and ownsHost(node:Node):boolean. Private WeakSet identity, only closed matching host, empty light DOM; DOM markers/clones do not grant ownership. Root wrote module; UI worker registers actual StatusPill buildNodes host before append. Don't edit UI files/registry production without asking root.
+Owned: content/action-runtime/ignored-press/settled-look.ts and owning tests; content/owned-ui/tests/hosts.test.ts (new registry behavior tests), report owned-ui-classification.md besidebrief.
+Must not touch other production/Domain/Core/manifests/Lab/git/shared docs or run browser/providers/full suites. No policy suppression or markup stripping in this phase.
+Add closed look rejection outside_owned_ui only when ALL offending outside mutations are attribute/target edits on registered empty hosts, or childList add/remove consisting solely of registered empty closed hosts. Mixed/page/unregistered/cloned/host-with-light-DOM edits must remain ordinary outside_change; if later genuine page edit follows own one, reason must reflect page edit. answered remains true in all cases.
+Update closed optional rejection union; loader settlement derives union and suffix automatically. No raw tag names/attributes/callback/page text/values in diagnostics. Do not trust attribute-based picker-host helper for ownership.
+Test registry exact identity/closed roots/copies/open/wrong hosts/lightDOM refusal, and classifier real/mixed/unregistered mutation decisions. Use existing typed fake helpers; no new doublecasts/suppressions/baseline increases/packed/trailing lines.
+Run owning narrow tests only, freeze and send exact result. Root owns types/audit/normal experimental pin and providerfree actual saved-Flow replay.
+Return Outcome/Changed/Validation/Notverified/Report/Notes.

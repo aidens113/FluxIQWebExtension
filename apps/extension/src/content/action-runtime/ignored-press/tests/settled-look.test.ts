@@ -12,6 +12,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { lookUntilSettled } from "../settled-look";
 import type { PressSignal } from "../press-again";
+import { ownedUiHosts } from "../../../owned-ui";
+import { fakeShadowDom } from "../../../extraction/tests/fake-shadow-dom";
 
 type FakeElement = {
   tagName: string;
@@ -20,6 +22,14 @@ type FakeElement = {
   getAttribute(name: string): string | null;
   outerHTML?: string;
   querySelectorAll?(selector: string): unknown[];
+};
+
+type OutsideRecord = {
+  target: unknown;
+  type?: MutationRecordType;
+  attributeName?: string | null;
+  addedNodes?: readonly Node[];
+  removedNodes?: readonly Node[];
 };
 
 const IDLE = '<div role="dialog"><form><div contenteditable="true">Lunch at noon</div></form><div class="foot"><div role="button" aria-label="Post">Post</div></div></div>';
@@ -45,12 +55,16 @@ function composer() {
     note = onSignal;
     return { flush: () => queued.splice(0).forEach((signal) => note?.(signal)), stop: () => undefined };
   };
-  const pending: Array<{ target: unknown }> = [];
+  const pending: OutsideRecord[] = [];
+  let reportMutations: ((records: OutsideRecord[]) => void) | undefined;
   const observed = new Set<unknown>();
   const shadow = { nodeType: 11, host: body, querySelectorAll: () => [] };
   const shadowHosts = [{ shadowRoot: shadow }];
   html.querySelectorAll = () => shadowHosts;
   class DocumentObserver {
+    constructor(report: (records: OutsideRecord[]) => void) {
+      reportMutations = report;
+    }
     observe(target: unknown) { observed.add(target); }
     takeRecords() {
       return pending.splice(0);
@@ -69,6 +83,8 @@ function composer() {
     signal: (signal: PressSignal) => queued.push(signal),
     /** Something outside the dialog changed: a toast added to the body. */
     elsewhere: () => pending.push({ target: body }),
+    outsideRecord: (record: OutsideRecord) => pending.push(record),
+    flushElsewhere: () => reportMutations?.(pending.splice(0)),
     inOtherShadowRoot: () => { if (observed.has(shadow)) pending.push({ target: shadow }); },
     attachOtherShadowRoot: () => shadowHosts.push({ shadowRoot: { nodeType: 11, host: body, querySelectorAll: () => [] } })
   };
@@ -81,6 +97,7 @@ test("a button that shows a brief busy state and then reverts, leaving the page 
   setTimeout(() => page.show(IDLE), 120);
   const started = Date.now();
   assert.equal(await look.settle(1_500), true);
+  assert.equal(look.rejection?.(), undefined);
   assert.ok(Date.now() - started >= 300, "read only once the section had been quiet");
   assert.ok(Date.now() - started < 1_200, "read as soon as it was quiet, not at the end of the window");
 });
@@ -93,6 +110,7 @@ test("a change in the section that stays is an answer, read once it has held sti
   const started = Date.now();
   // The window is long and the bound far inside it, so a loaded machine (the 2026-10-27 sweep took 2.5 s here against 0.9 s alone) cannot fail it while a read at the window's end still does.
   assert.equal(await look.settle(10_000), false);
+  assert.equal(look.rejection?.(), "not_restored");
   assert.ok(Date.now() - started < 5_000, "a press that opened something waits for it to hold still, not for the whole window");
 });
 
@@ -111,6 +129,7 @@ test("a section still busy when the window ends is not certain", async () => {
   const look = page.look();
   page.show(BUSY);
   assert.equal(await look.settle(400), false);
+  assert.equal(look.rejection?.(), "deadline");
 });
 
 test("a change anywhere outside the press's section is an answer, however the section settled", async () => {
@@ -122,6 +141,9 @@ test("a change anywhere outside the press's section is an answer, however the se
     page.show(IDLE);
   }, 120);
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "outside_change");
+  look.stop();
+  assert.equal(look.rejection?.(), "outside_change", "stopping preserves the diagnostic without exposing the changed node");
 });
 
 test("a request, a navigation or a focus move at any point is an answer, though the section came back", async () => {
@@ -134,6 +156,7 @@ test("a request, a navigation or a focus move at any point is an answer, though 
       page.show(IDLE);
     }, 120);
     assert.equal(await look.settle(1_500), false, signal);
+    assert.equal(look.rejection?.(), "non_change_signal");
   }
 });
 
@@ -146,11 +169,13 @@ test("a field whose held value changed is an answer, though its markup did not",
     page.show(IDLE);
   }, 120);
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "not_restored");
 });
 
 test("a page the look cannot read -- no document -- is never certain", async () => {
   const look = lookUntilSettled({} as Element);
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "unreadable");
 });
 
 test("a look stopped before it settles is not certain", async () => {
@@ -158,6 +183,7 @@ test("a look stopped before it settles is not certain", async () => {
   const look = page.look();
   look.stop();
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "stopped");
 });
 
 test("a change in an unrelated shadow root prevents a certain-no-effect answer", async () => {
@@ -165,6 +191,7 @@ test("a change in an unrelated shadow root prevents a certain-no-effect answer",
   const look = page.look();
   page.inOtherShadowRoot();
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "outside_change");
 });
 
 test("a look stopped during its settle cannot later claim certainty", async () => {
@@ -173,6 +200,7 @@ test("a look stopped during its settle cannot later claim certainty", async () =
   const settling = look.settle(1_500);
   look.stop();
   assert.equal(await settling, false);
+  assert.equal(look.rejection?.(), "stopped");
 });
 
 test("a shadow root attached after observation starts invalidates certainty even without a document mutation", async () => {
@@ -180,4 +208,108 @@ test("a shadow root attached after observation starts invalidates certainty even
   const look = page.look();
   page.attachOtherShadowRoot();
   assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "new_shadow");
+});
+
+test("a style mutation on the privately registered closed UI host does not masquerade as a page effect", async () => {
+  const dom = fakeShadowDom();
+  const host = dom.el("fluxiq-activity-overlay", { "data-fluxiq-activity": "" });
+  ownedUiHosts.registerClosed(host, { host, mode: "closed" });
+  const page = composer();
+  const look = page.look();
+  page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
+  assert.equal(await look.settle(1_500), true);
+  assert.equal(look.rejection?.(), undefined);
+  look.stop();
+  assert.equal(look.rejection?.(), undefined);
+});
+
+test("only private closed host identities classify UI-only added and removed nodes", async () => {
+  const dom = fakeShadowDom();
+  for (const movement of ["added", "removed"] as const) {
+    const host = dom.el("fluxiq-activity-overlay");
+    ownedUiHosts.registerClosed(host, { host, mode: "closed" });
+    const page = composer();
+    const look = page.look();
+    page.outsideRecord({
+      type: "childList", target: page.post.ownerDocument.documentElement,
+      addedNodes: movement === "added" ? [host] : [],
+      removedNodes: movement === "removed" ? [host] : []
+    });
+    assert.equal(await look.settle(1_500), true);
+    assert.equal(look.rejection?.(), undefined);
+  }
+});
+
+test("markers, copied markup, non-presentation attributes and host light DOM remain ordinary page refusals", async () => {
+  const dom = fakeShadowDom();
+  for (const kind of ["unregistered", "copy", "custom_attribute", "light_dom"] as const) {
+    const attributes = { "data-fluxiq-activity": "" };
+    const host = dom.el("fluxiq-activity-overlay", attributes);
+    if (kind !== "unregistered") ownedUiHosts.registerClosed(host, { host, mode: "closed" });
+    if (kind === "light_dom") host.append("page content");
+    const target = kind === "copy" ? dom.el("fluxiq-activity-overlay", attributes) : host;
+    const page = composer();
+    const look = page.look();
+    page.outsideRecord({ type: "attributes", attributeName: kind === "custom_attribute" ? "data-page-state" : "style", target });
+    assert.equal(await look.settle(1_500), false, kind);
+    assert.equal(look.rejection?.(), "outside_change", kind);
+  }
+});
+
+test("mixed child-list changes and transient unowned light DOM cannot classify as owned UI", async () => {
+  const dom = fakeShadowDom();
+  for (const kind of ["mixed", "transient"] as const) {
+    const host = dom.el("fluxiq-activity-overlay");
+    ownedUiHosts.registerClosed(host, { host, mode: "closed" });
+    const site = dom.el("div", {}, "page content");
+    const page = composer();
+    const look = page.look();
+    if (kind === "mixed") {
+      page.outsideRecord({ type: "childList", target: page.post.ownerDocument.documentElement, addedNodes: [host, site] });
+    } else {
+      host.append(site);
+      host.replaceChildren();
+      assert.equal(ownedUiHosts.ownsHost(host), true, "the light DOM is empty again before observer delivery");
+      page.outsideRecord({ type: "childList", target: host, addedNodes: [site] });
+      page.outsideRecord({ type: "childList", target: host, removedNodes: [site] });
+    }
+    assert.equal(await look.settle(1_500), false, kind);
+    assert.equal(look.rejection?.(), "outside_change", kind);
+  }
+});
+
+test("a genuine page mutation remains a refusal before and after registered UI updates", async () => {
+  const dom = fakeShadowDom();
+  const host = dom.el("fluxiq-activity-overlay");
+  ownedUiHosts.registerClosed(host, { host, mode: "closed" });
+  const page = composer();
+  const look = page.look();
+  page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
+  page.flushElsewhere();
+  assert.equal(look.rejection?.(), undefined);
+  page.elsewhere();
+  page.flushElsewhere();
+  assert.equal(look.rejection?.(), "outside_change");
+  page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
+  page.flushElsewhere();
+  assert.equal(await look.settle(1_500), false);
+  assert.equal(look.rejection?.(), "outside_change");
+});
+
+test("a request, navigation, focus or new open shadow remains protected despite registered UI updates", async () => {
+  const dom = fakeShadowDom();
+  for (const cause of ["request", "navigation", "focus", "shadow"] as const) {
+    const host = dom.el("fluxiq-activity-overlay");
+    ownedUiHosts.registerClosed(host, { host, mode: "closed" });
+    const page = composer();
+    const look = page.look();
+    page.outsideRecord({ type: "attributes", attributeName: "style", target: host });
+    page.flushElsewhere();
+    assert.equal(look.rejection?.(), undefined);
+    if (cause === "shadow") page.attachOtherShadowRoot();
+    else page.signal(cause);
+    assert.equal(await look.settle(1_500), false, cause);
+    assert.equal(look.rejection?.(), cause === "shadow" ? "new_shadow" : "non_change_signal", cause);
+  }
 });

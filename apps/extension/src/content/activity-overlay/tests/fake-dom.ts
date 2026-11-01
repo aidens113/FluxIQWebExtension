@@ -39,6 +39,8 @@ export class FakeNode {
   readonly attributes = new Map<string, string>();
   readonly animations: FakeAnimation[] = [];
   shadow: FakeNode | undefined;
+  host: FakeNode | null = null;
+  mode: string | undefined;
   textWrites = 0;
   private text = "";
 
@@ -59,6 +61,10 @@ export class FakeNode {
   get isConnected(): boolean {
     for (let node: FakeNode | undefined = this; node; node = node.parent) if (node === this.dom.documentElement) return true;
     return false;
+  }
+
+  get firstChild(): FakeNode | null {
+    return this.children[0] ?? null;
   }
 
   setAttribute(name: string, value: string): void {
@@ -87,10 +93,12 @@ export class FakeNode {
     this.parent = undefined;
   }
 
-  attachShadow(init: { mode: string }): FakeNode {
+  attachShadow(init: { mode: "open" | "closed" }): FakeNode {
     if (this.shadow) throw new Error("already a shadow host");
     const root = new FakeNode(this.dom, `#shadow-root(${init.mode})`);
     root.parent = this;
+    root.host = this;
+    root.mode = init.mode;
     this.shadow = root;
     return root;
   }
