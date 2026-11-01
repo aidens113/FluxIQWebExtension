@@ -31,6 +31,19 @@ function listDefinition(overrides: Record<string, unknown> = {}): Record<string,
   };
 }
 
+test("a semantic definition term survives recording without its value or an aliased anchor", () => {
+  const anchor = { term: "Edition", part: "value", sample: SAMPLE };
+  const recorded = webAutomationRecordedExtraction(listDefinition({
+    request: { item: "article", fields: { edition: { kind: "text", definition: anchor, sampleValue: SAMPLE } } },
+    fieldLabels: { edition: "Edition" }
+  }));
+  assert.ok(recorded?.form === "list");
+  assert.deepEqual(recorded.request.fields.edition, { kind: "text", definition: { term: "Edition", part: "value" } });
+  anchor.term = "changed";
+  assert.equal((recorded.request.fields.edition as { definition: { term: string } }).definition.term, "Edition");
+  assert.equal(JSON.stringify(recorded).includes(SAMPLE), false);
+});
+
 test("a sample value planted beside the definition is dropped", () => {
   const definition = webAutomationRecordedExtraction(listDefinition({
     samples: [{ name: SAMPLE, price: SAMPLE }],

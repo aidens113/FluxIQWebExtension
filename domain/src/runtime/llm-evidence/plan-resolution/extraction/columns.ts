@@ -304,6 +304,7 @@ function readColumn(entry: unknown, ownKey: string | undefined, detected: Detect
       selector: spec.selector,
       attribute: spec.attribute,
       header: spec.header,
+      definition: spec.definition === undefined ? undefined : { term: spec.definition.term, part: spec.definition.part },
       required: entry.required as boolean,
       handling: spec.handling,
       lines: spec.lines,
@@ -330,7 +331,7 @@ function namedColumn(name: string, attributeGiven: string | undefined, detected:
   const spec = detected[found.key]!;
   if (attribute === undefined) return { ok: true, key: found.key, field: structuredClone(spec), assumed };
   // A column read by its table header, or kept in the string grammar, has no one element whose attribute could be read.
-  if (!ATTRIBUTE_NAME.test(attribute) || typeof spec === "string" || spec.kind === "column") return { ok: false, issue: "web.handle.malformed", path };
+  if (!ATTRIBUTE_NAME.test(attribute) || typeof spec === "string" || spec.kind === "column" || spec.definition !== undefined) return { ok: false, issue: "web.handle.malformed", path };
   return {
     ok: true,
     key: found.key,
@@ -339,6 +340,7 @@ function namedColumn(name: string, attributeGiven: string | undefined, detected:
       selector: spec.selector,
       attribute,
       header: undefined,
+      definition: undefined,
       required: spec.required,
       handling: undefined,
       // An attribute is read off the container itself, never line by line.

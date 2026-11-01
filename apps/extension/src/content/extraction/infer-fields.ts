@@ -65,9 +65,9 @@
 // sensitive control (D2), so a field proposed `include` there would refuse the
 // whole extraction rather than read one column.
 //
-// No label is a value read inside an item (decision D3). A label is a test id, a
-// column header -- page structure, not a sample value (D16) -- an attribute
-// name, the path from the item down to the element, or an icon badge's
+// No label is a record value (decision D3). A label is a test id, a column
+// header or semantic definition term -- page structure, not a sample value
+// (D16) -- an attribute name, an element's path, or an icon badge's
 // accessible name when every item that has the badge gives it the same one,
 // which makes it chrome like a button's caption rather than any record's value
 // (`badge-name.ts`). The key is derived from
@@ -141,18 +141,21 @@ import { statedAttributes } from "./stated-name";
 import { separateKinds } from "./template-kind";
 import { valueShape } from "./value-shape";
 import { statedMoreTightly } from "./value-statement";
+import { definitionAssociations, definitionFieldSources } from "./definition-field";
 
 /**
  * One place a record's value comes from, before it is keyed and measured. The
  * label and every selector here are page structure; no field of this type ever
- * holds text read inside an item.
+ * holds a record value. A semantic definition term names its association.
  */
 export type FieldSource = {
   kind: WebAutomationExtractFieldKind;
-  /** What the picker shows for the field. Never a value read inside an item; a badge's constant accessible name is chrome, not a value (`badge-name.ts`). */
+  /** What the picker shows: structural naming, including definition terms and a badge's constant accessible name; never a record value. */
   label: string;
   /** Where inside the item the value is read; absent, the item itself. Not used by `column`. */
   selector?: string | undefined;
+  /** Exact structural definition term and whether this field reads the term or its associated value. */
+  definition?: WebAutomationExtractionProposalFieldSpec["definition"];
   /** The attribute an `attribute` field reads. */
   attribute?: string | undefined;
   /** The header text a `column` field reads under. */
@@ -253,7 +256,8 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
 function describedLabel(source: FieldSource, run: readonly Element[]): string {
   if (source.accessibleName === true) return badgeLabel(source, run);
   if (source.kind !== "text" || source.pathLabel !== true || source.sensitive) return source.label;
-  const reader = { kind: "text" as const, ...(source.selector === undefined ? {} : { selector: source.selector }), required: false };
+  const reader = { kind: "text" as const, ...(source.selector === undefined ? {} : { selector: source.selector }),
+    ...(source.definition === undefined ? {} : { definition: { term: source.definition.term, part: source.definition.part } }), required: false };
   const samples = run.slice(0, MAX_SHAPE_SAMPLES).map((item) => readField(item, source.label, reader) ?? "");
   const shape = valueShape(samples);
   return shape === undefined ? source.label : `${source.label} (${shape})`;
@@ -270,6 +274,7 @@ export function proposedFieldSpec(source: FieldSource, coverage: number): WebAut
     ...(source.attribute === undefined ? {} : { attribute: source.attribute }),
     ...(source.header === undefined ? {} : { header: source.header }),
     ...(source.lines === true ? { lines: true } : {}),
+    ...(source.kind === "text" && source.definition !== undefined ? { definition: { term: source.definition.term, part: source.definition.part } } : {}),
     ...(source.mark === undefined || source.sensitive ? {} : { mark: source.mark }),
     required: coverage >= 1,
     ...(source.sensitive ? { handling: "exclude" as const } : {})
@@ -306,7 +311,9 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
   for (const candidate of [...peers, ...run.filter((other) => !peers.includes(other))]) {
     const voting = peers.includes(candidate);
     if (!voting) {
-      const shape = itemShape(candidate);
+      // Equal markup can carry different semantic terms; those are different
+      // record fields even beyond the initial label-voting sample.
+      const shape = JSON.stringify([itemShape(candidate), definitionAssociations(candidate).map((pair) => pair.term)]);
       if (walkedShapes.has(shape)) continue;
       walkedShapes.add(shape);
     }
@@ -314,7 +321,8 @@ function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
     const offered: FieldSource[] = [...ownLinkSources(candidate), ...itemAttributeSources(candidate, run), ...elementSources(candidate, peers)];
     for (const source of offered) {
       position += 1;
-      const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true ? "lines" : ""].join("\u0000");
+      const identity = JSON.stringify([source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? "", source.lines === true,
+        source.definition?.term, source.definition?.part]);
       const seen = collected.get(identity);
       if (seen) {
         if (voting) seen.labels.set(source.label, (seen.labels.get(source.label) ?? 0) + 1);
@@ -380,12 +388,18 @@ function columnSources(item: Element): FieldSource[] {
 /** What the item's descendants offer, in document order, one source per element but for an image. */
 function elementSources(item: Element, peers: readonly Element[]): FieldSource[] {
   const sources: FieldSource[] = [];
+  const definitions = definitionFieldSources(item);
   // Each container of positional lines met in this item, with the selector it
   // is offered by, or `undefined` once it is known not to be offered.
   const containers = new Map<Element, string | undefined>();
   for (const element of item.querySelectorAll("*")) {
     if (sources.length >= MAX_CANDIDATE_FIELDS) break;
     const tag = element.tagName.toLowerCase();
+    // Definition-list text belongs to its semantic pair. Offering its leaves
+    // again by an ordinal path would let a later row substitute another term.
+    const definition = definitions.sources.get(element);
+    if (definition !== undefined) sources.push(definition);
+    if (definitions.owns(element)) continue;
     // What is inside a form control belongs to the control: a `<select>`'s
     // options are what its value may be rather than values of the record, and
     // the control itself is already a `value` source below. Scanning the whole
@@ -766,6 +780,9 @@ function coverageOf(source: FieldSource, run: readonly Element[]): number {
  * an element with no words still gives the record an empty string.
  */
 function resolvesIn(source: FieldSource, item: Element): boolean {
+  if (source.kind === "text" && source.definition !== undefined) {
+    return definitionAssociations(item, source.selector).some((pair) => pair.term === source.definition!.term);
+  }
   if (source.kind === "column") {
     const cells = (item as HTMLTableRowElement).cells;
     return source.columnIndex !== undefined && cells !== undefined && cells[source.columnIndex] !== undefined;

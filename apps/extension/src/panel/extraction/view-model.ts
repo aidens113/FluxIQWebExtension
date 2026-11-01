@@ -35,6 +35,8 @@ export type ExtractionFieldRow = {
   header?: string | undefined;
   /** `true` when the proposal reads this column's element line by line; kept only while the column reads text. */
   lines?: boolean | undefined;
+  /** Kept in the draft while another kind is selected; only text confirms this association. */
+  definition?: WebAutomationExtractFieldSpec["definition"];
   /** What kind of marker the column reads, when it reads one: its cell is empty on an item that does not carry it. */
   mark?: WebAutomationExtractFieldSpec["mark"] | undefined;
   required?: boolean | undefined;
@@ -115,6 +117,7 @@ function fieldRow(field: WebAutomationExtractionProposalField): ExtractionFieldR
     attribute: field.spec.attribute,
     header: field.spec.header,
     lines: field.spec.lines,
+    ...(field.spec.definition === undefined ? {} : { definition: { term: field.spec.definition.term, part: field.spec.definition.part } }),
     mark: field.spec.mark,
     required: field.spec.required,
     handling: sensitive ? "exclude" : "include",

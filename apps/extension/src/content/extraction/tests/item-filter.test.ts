@@ -25,6 +25,24 @@ const ITEM = {} as Element;
 
 const FIELDS = { name: ".name", price: ".price", badge: ".badge" };
 
+test("a private condition reads the exact definition term on reordered rows and reports absence rather than another credential", () => {
+  const dom = fakeShadowDom();
+  const row = (pairs: ReadonlyArray<readonly [string, string]>) => dom.el("article", {}, dom.el("dl", {},
+    ...pairs.map(([term, value]) => dom.el("div", {}, dom.el("dt", {}, term), dom.el("dd", {}, value)))));
+  const rejects = itemFilterFor({ item: "article", fields: { name: ".name" }, where: [
+    { read: { kind: "text", definition: { term: "Print size", part: "term" } }, equals: "Print size" },
+    { read: { kind: "text", definition: { term: "Print size", part: "value" } }, equals: "A5" }
+  ] });
+  const reordered = row([["Paper", "Ivory"], ["Binding", "Thread"], ["Print size", "A5"]]);
+  const seen: (string | null)[] = [null, null];
+  assert.deepEqual(rejects!(reordered, {}, seen), []);
+  assert.deepEqual(seen, ["Print size", "A5"]);
+  const observations: WebAutomationExtractionRejectionObservation[] = [];
+  assert.deepEqual(rejects!(row([["Paper", "A5"]]), {}, undefined, { observations, page: 1, item: 14 }), [0, 1]);
+  assert.ok(observations.every(({ state, value }) => state === "absent" && value === undefined));
+  assert.deepEqual(rejects!(row([["Print size", "A5"], ["Print size", "A4"]]), {}), [0, 1]);
+});
+
 test("an executable condition's own text read refuses an unexpanded field rather than filtering on partial text", () => {
   const dom = fakeShadowDom();
   const item = dom.el("p", {}, "Partial… ", dom.el("button", {}, "Read more"));

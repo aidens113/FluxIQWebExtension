@@ -10,6 +10,7 @@ import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { screenedPageText } from "../../withheld";
 import { webLlmSelectedWithin } from "./chain";
 import { webLlmCompoundMatcher } from "./compound";
+import { webLlmDefinitionElements } from "./definition";
 import { webLlmPageTree, type WebLlmPageTree, type WebLlmTreeNode } from "./tree";
 
 /** The capture's tree, the run's items in it in list order, and how a field's elements are found in one of them. */
@@ -39,6 +40,7 @@ export function webLlmCaptureWalk(proposal: WebAutomationExtractionProposal, det
     tree,
     items: listItems(tree, proposal),
     elementsOf(item, spec) {
+      if (spec.definition !== undefined) return webLlmDefinitionElements(tree, item, spec);
       if (spec.selector !== undefined) return webLlmSelectedWithin(tree, item, spec.selector);
       if (spec.header === undefined) return [item];
       const header = screenedPageText(spec.header);

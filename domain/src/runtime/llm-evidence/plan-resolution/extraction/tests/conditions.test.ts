@@ -28,6 +28,7 @@ import {
   type WebLlmRepeatingStructure
 } from "../../..";
 import { CAPTURED_DETECTIONS } from "../../../structure/tests/captured-detections";
+import { keptWebExtractionConditions } from "../conditions";
 
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
@@ -40,6 +41,18 @@ const PRICE = { kind: "text", selector: '[data-testid="product-price"]', require
 const LINK = { kind: "link", selector: '[data-testid="product-link"]', required: true } satisfies JsonObject;
 /** A detected column as a read keeps it: the detection's coverage-derived `required` is not carried (`../columns.ts`, `unrequired`). A condition's own read keeps the detected spec. */
 const asKept = (spec: JsonObject): JsonObject => ({ ...spec, required: false });
+
+test("an unprojected definition term remains an exact independent predicate read", () => {
+  const definition = { term: "Edition", part: "term" as const };
+  const result = keptWebExtractionConditions([{ field: "edition_term", equals: "Edition" }], {
+    detected: { edition_term: { kind: "text", definition, required: false } }, kept: { title: "h3" }
+  }, ["where"]);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.where, [{ read: { kind: "text", definition: { term: "Edition", part: "term" }, required: false }, equals: ["Edition"] }]);
+  definition.term = "changed";
+  assert.equal((result.where[0]?.read as { definition: { term: string } }).definition.term, "Edition");
+});
 
 function runtime(): WebAutomationLlmEvidenceRuntime {
   return createWebAutomationLlmEvidenceRuntime({

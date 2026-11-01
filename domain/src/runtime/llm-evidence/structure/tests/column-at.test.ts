@@ -18,6 +18,8 @@ import {
   type WebLlmRepeatingStructure
 } from "../..";
 import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { splitDetectedStructure } from "../packet";
+import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
 const URL_ = "http://127.0.0.1:4173/scenarios/social-network-feed/friends/requests/";
@@ -210,4 +212,40 @@ test("a column the first item lacks carries the handle of its element in the fir
   // at is that one item's own element, and what to act on for the rows kept.
   assert.match(packet.atNote ?? "", /that item's own element, so acting on it acts on that item only/u);
   assert.match(packet.atNote ?? "", /to act on the rows a listing keeps, use the control inside one of the rows it keeps/u);
+});
+
+test("definition columns publish the exact term and value handles and preserve a private independent binding", () => {
+  const elements: JsonObject[] = [
+    { tagName: "ul", selector: "ul" },
+    { tagName: "li", selector: "ul > li", parent: 0 },
+    { tagName: "dl", selector: "ul > li > dl", parent: 1 },
+    { tagName: "dt", selector: "ul > li > dl > dt:nth-of-type(1)", parent: 2, visibleText: "Format" },
+    { tagName: "dd", selector: "ul > li > dl > dd:nth-of-type(1)", parent: 2, visibleText: "Digital" },
+    { tagName: "dt", selector: "ul > li > dl > dt:nth-of-type(2)", parent: 2, visibleText: "Edition" },
+    { tagName: "dd", selector: "ul > li > dl > dd:nth-of-type(2)", parent: 2, visibleText: "Fourth" }
+  ];
+  const binding = sanitizeWebLlmSnapshotWithBindings({ url: "https://archive.test/catalogue", interactiveElements: elements });
+  const definition = { term: "Edition", part: "value" as const };
+  const split = splitDetectedStructure({
+    detection: { ok: true, proposal: { container: "ul", item: "ul > li", itemCount: 1, confidence: 1, fields: [
+      { key: "edition", label: "Edition", coverage: 1, spec: { kind: "text", definition } },
+      { key: "edition_term", label: "Edition term", coverage: 1, spec: { kind: "text", definition: { term: "Edition", part: "term" } } }
+    ] } }, handle: "extraction.1", recordHandle: undefined, location: binding.evidence.location,
+    target: undefined, frameId: undefined, frameUrlPath: undefined, firstItem: { detected: binding, shown: binding, frameId: undefined }
+  });
+  assert.ok(split);
+  const value = split.packet.fields.find((candidate) => candidate.key === "edition");
+  const term = split.packet.fields.find((candidate) => candidate.key === "edition_term");
+  assert.equal(value?.at, binding.evidence.elements.find((element) => element.text === "Fourth")?.target);
+  assert.equal(term?.at, binding.evidence.elements.find((element) => element.text === "Edition")?.target);
+  assert.equal(value?.sample, "Fourth");
+  assert.equal(term?.sample, "Edition");
+  assert.equal(Object.hasOwn(value!, "definition"), false);
+  const kept = split.binding.extractList.fields.edition;
+  assert.notEqual(typeof kept, "string");
+  if (typeof kept === "string" || kept === undefined) return;
+  assert.deepEqual(kept.definition, definition);
+  assert.notEqual(kept.definition, definition);
+  definition.term = "changed after binding";
+  assert.equal(kept.definition?.term, "Edition");
 });

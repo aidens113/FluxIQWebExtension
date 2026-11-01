@@ -57,7 +57,7 @@ type ExtractFieldSpec = Exclude<ExtractField, string>;
 
 /** What one included field reads inside each item, and whether a record may lack it. */
 export type ExtractFieldReader =
-  | { kind: "text"; selector?: string; required: boolean; lines?: true; mark?: "badge" | "state" }
+  | { kind: "text"; selector?: string; required: boolean; lines?: true; definition?: { term: string; part: "term" | "value" }; mark?: "badge" | "state" }
   | { kind: "link"; selector?: string; required: boolean; identity?: "tracking-free" }
   | { kind: "value"; selector?: string; required: boolean }
   | { kind: "attribute"; selector?: string; attribute: string; required: boolean; mark?: FieldMark }
@@ -123,8 +123,17 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
   if (spec.mark !== undefined && !FIELD_MARKS.has(spec.mark)) throw new Error(`The extract_list field ${JSON.stringify(name)} reads a mark the page does not know.`);
   const mark = spec.mark;
   switch (kind) {
-    case "text":
-      return { kind, ...where, required, ...(spec.lines === true ? { lines: true as const } : {}), ...(mark === "badge" || mark === "state" ? { mark } : {}) };
+    case "text": {
+      const definition = spec.definition;
+      if (definition !== undefined && (definition === null || typeof definition !== "object" || Array.isArray(definition)
+        || typeof definition.term !== "string" || normalizeText(definition.term) === ""
+        || (definition.part !== "term" && definition.part !== "value") || spec.lines === true)) {
+        throw new Error(`The extract_list field ${JSON.stringify(name)} names an invalid definition field.`);
+      }
+      return { kind, ...where, required, ...(spec.lines === true ? { lines: true as const } : {}),
+        ...(definition === undefined ? {} : { definition: { term: normalizeText(definition.term), part: definition.part } }),
+        ...(mark === "badge" || mark === "state" ? { mark } : {}) };
+    }
     case "link":
       if (spec.identity !== undefined && spec.identity !== "tracking-free") throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a link identity the page does not know.`);
       return { kind, ...where, required, ...(spec.identity === "tracking-free" ? { identity: spec.identity } : {}) };

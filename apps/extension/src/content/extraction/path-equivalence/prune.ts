@@ -22,6 +22,7 @@ export function pruneEquivalentFieldPaths(sources: readonly FieldSource[], peers
 function sameReading(left: FieldSource, right: FieldSource): boolean {
   return left.kind === right.kind && left.attribute === right.attribute && left.header === right.header
     && left.lines === right.lines && Boolean(left.lineOf) === Boolean(right.lineOf)
+    && left.definition?.term === right.definition?.term && left.definition?.part === right.definition?.part
     && left.accessibleName === right.accessibleName && left.sensitive === right.sensitive;
 }
 

@@ -245,3 +245,37 @@ test("link identity mode is explicit, validated and never silently applied to an
   assert.equal(make({ kind: "attribute", selector: "a", attribute: "href", identity: "tracking-free" }), undefined);
   assert.equal(make({ kind: "text", identity: "tracking-free" }), undefined);
 });
+
+test("definition identity is normalized and copied for fields and predicate reads", () => {
+  const definition = { term: "  Archive\n code  ", part: "value", sample: "untrusted record contents" };
+  const request = webAutomationExtractListRequestWhole({
+    item: "article", fields: { code: { kind: "text", selector: "dl.catalogue", definition } },
+    where: [{ read: { kind: "text", definition: { ...definition, part: "term" } }, is: "present" }]
+  });
+  assert.ok(request);
+  assert.deepEqual(request.fields.code, { kind: "text", selector: "dl.catalogue", definition: { term: "Archive code", part: "value" } });
+  assert.deepEqual(request.where, [{ read: { kind: "text", definition: { term: "Archive code", part: "term" } }, is: "present" }]);
+  definition.term = "changed after parsing";
+  assert.equal((request.fields.code as { definition: { term: string } }).definition.term, "Archive code");
+  assert.equal(JSON.stringify(request).includes("untrusted record contents"), false);
+});
+
+test("a malformed or ambiguous active definition refuses the field instead of reading the item", () => {
+  const definitions: unknown[] = [null, [], "Edition", {}, { term: "", part: "value" }, { term: " \n ", part: "term" }, { term: 3, part: "value" }, { term: "Edition" }, { term: "Edition", part: "first" }];
+  for (const definition of definitions) {
+    assert.equal(webAutomationExtractListRequestValue({ item: "article", fields: { edition: { kind: "text", definition } } }), undefined, JSON.stringify(definition));
+    const predicate = webAutomationExtractListRequestRead({ ...BASE, where: [{ read: { kind: "text", definition }, is: "present" }] });
+    assert.deepEqual(predicate.dropped, ["where.0"], JSON.stringify(definition));
+    assert.equal(webAutomationExtractListRequestWhole({ ...BASE, where: [{ read: { kind: "text", definition }, is: "present" }] }), undefined);
+  }
+  const definition = { term: "Edition", part: "value" };
+  assert.equal(webAutomationExtractListRequestValue({ item: "article", fields: { edition: { kind: "text", definition, lines: true } } }), undefined);
+  assert.ok(webAutomationExtractListRequestValue({ item: "article", fields: { edition: { kind: "text", definition, lines: false } } }));
+});
+
+test("a definition member on another read kind is inactive, like a stray header", () => {
+  for (const field of [{ kind: "link", selector: "a" }, { kind: "attribute", attribute: "title" }, { kind: "value" }, { kind: "column", header: "Edition" }]) {
+    const request = webAutomationExtractListRequestWhole({ item: "article", fields: { cell: { ...field, definition: { malformed: true } } } });
+    assert.deepEqual(request?.fields.cell, field);
+  }
+});

@@ -61,6 +61,8 @@ import { recordControlType } from "./record-control";
 import { tightestStatedValue } from "./value-statement";
 import { trackingFreeLinkIdentity } from "./link-identity";
 import { assertTextDisclosed } from "./text-disclosure";
+import { definitionAssociations } from "./definition-field";
+import { normalizeExtractField } from "./field-spec";
 
 type ElementFieldReader = Exclude<ExtractFieldReader, { kind: "column" }>;
 
@@ -71,7 +73,15 @@ export function readField(item: Element, name: string, reader: ExtractFieldReade
 }
 
 function readElement(item: Element, name: string, reader: ElementFieldReader, completeness: "visible" | "complete"): string | undefined {
-  const element = reader.selector ? item.querySelector(reader.selector) : item;
+  let element: Element | undefined | null;
+  if (reader.kind === "text" && reader.definition !== undefined) {
+    // Content commands also reach this reader directly. Validate active metadata
+    // before selecting anything, so a malformed anchor can never read the item.
+    const normalized = normalizeExtractField(name, reader);
+    if (normalized?.kind !== "text" || normalized.definition === undefined) return undefined;
+    const association = definitionAssociations(item, normalized.selector).find((pair) => pair.term === normalized.definition!.term);
+    element = normalized.definition.part === "term" ? association?.name : association?.value;
+  } else element = reader.selector ? item.querySelector(reader.selector) : item;
   if (!element) return undefined;
   if (isWithinSensitiveControl(element)) throw sensitiveFieldRefusal(name);
   switch (reader.kind) {

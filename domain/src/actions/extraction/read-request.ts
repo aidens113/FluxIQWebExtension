@@ -376,6 +376,10 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   // member is left behind like a stray `header`. Only `true` is kept, so a
   // field that says `false` is the plain field it always was.
   const lines = kind === "text" ? optionalValue(spec.lines, booleanValue) : undefined;
+  const definition = kind === "text" && spec.definition !== undefined ? jsonObject(spec.definition) : undefined;
+  const term = typeof definition?.term === "string" ? definition.term.replace(/\s+/gu, " ").trim() : "";
+  const part = definition?.part;
+  if (kind === "text" && spec.definition !== undefined && (!definition || term === "" || (part !== "term" && part !== "value") || lines === true)) return undefined;
   const identity = optionalValue(spec.identity, (entry) => entry === "tracking-free" ? entry : undefined);
   // A mark is kept on a kind that reads it and left behind on any other, like a stray `header`.
   const mark = optionalValue(spec.mark, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_MARKS));
@@ -386,6 +390,7 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
     ...(selector !== undefined ? { selector } : {}),
     ...(attribute !== undefined ? { attribute } : {}),
     ...(header !== undefined ? { header } : {}),
+    ...(definition !== undefined ? { definition: { term, part: part as "term" | "value" } } : {}),
     ...(required !== undefined ? { required } : {}),
     ...(handling !== undefined ? { handling } : {}),
     ...(lines === true ? { lines } : {}),

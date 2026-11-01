@@ -38,6 +38,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { isEligibleWebSession } from "../web-sessions";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
+import { webDefinitionFieldCapabilityRefusal } from "../definition-fields";
 import {
   assertActive,
   captureEvidence,
@@ -561,7 +562,11 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
   fluxiq.programs.automationStudio.bindLlmEvidenceRuntime(createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => eligibleWebSessionIds(fluxiq),
     structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
-    executeAction: (sessionId, command) => fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command),
+    executeAction: async (sessionId, command) => {
+      const session = fluxiq.programs.clientGateway.snapshot().sessions.find((candidate) => candidate.sessionId === sessionId);
+      return webDefinitionFieldCapabilityRefusal(command.actionType, command.parameters, session)
+        ?? await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
+    },
   }, webAutomationClearedWayOutsOf(fluxiq), webAutomationBuildStateSource(fluxiq)));
 }
 

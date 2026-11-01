@@ -25,6 +25,23 @@ function field(draft: ReturnType<typeof extractionDraftFromProposal>, sourceKey:
   return found;
 }
 
+test("the draft retains a detached exact definition association through rename, exclusion and kind changes", () => {
+  const proposal = proposalFixture();
+  const definition = { term: "Print size", part: "value" as const };
+  proposal.fields[0] = { key: "size", label: "Print size", coverage: 1, spec: { kind: "text", definition } };
+  let draft = extractionDraftFromProposal(proposal, "Prints");
+  assert.deepEqual(field(draft, "size").definition, definition);
+  assert.notEqual(field(draft, "size").definition, definition);
+  definition.term = "Changed after copying";
+  draft = renameExtractionField(draft, "size", "Sheet size");
+  draft = setExtractionFieldHandling(draft, "size", "exclude");
+  draft = setExtractionFieldKind(draft, "size", "link");
+  draft = setExtractionFieldKind(draft, "size", "text");
+  assert.deepEqual(field(draft, "size").definition, { term: "Print size", part: "value" });
+  assert.equal(field(draft, "size").label, "Sheet size");
+  assert.equal(field(draft, "size").stale, true);
+});
+
 test("a field the picker marked sensitive opens excluded, and says why", () => {
   const draft = extractionDraftFromProposal(proposalFixture(), "Products");
   const card = field(draft, "card");

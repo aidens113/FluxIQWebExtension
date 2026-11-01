@@ -165,6 +165,7 @@ function proposedColumns(proposal: WebAutomationExtractionProposal): ExtractionC
     ...(field.spec.attribute !== undefined ? { attribute: field.spec.attribute } : {}),
     ...(field.spec.header !== undefined ? { header: field.spec.header } : {}),
     ...(field.spec.lines === true ? { lines: true } : {}),
+    ...(field.spec.definition !== undefined ? { definition: { term: field.spec.definition.term, part: field.spec.definition.part } } : {}),
     ...(field.spec.mark !== undefined ? { mark: field.spec.mark } : {}),
     ...(field.spec.required !== undefined ? { required: field.spec.required } : {}),
     handling: field.spec.handling ?? "include"
@@ -182,7 +183,7 @@ function proposedColumns(proposal: WebAutomationExtractionProposal): ExtractionC
  */
 function fieldSpec(
   kind: WebAutomationExtractFieldKind,
-  source: { selector?: string | undefined; attribute?: string | undefined; header?: string | undefined; lines?: boolean | undefined; mark?: WebAutomationExtractFieldSpec["mark"] | undefined; required?: boolean | undefined },
+  source: { selector?: string | undefined; attribute?: string | undefined; header?: string | undefined; lines?: boolean | undefined; definition?: WebAutomationExtractFieldSpec["definition"]; mark?: WebAutomationExtractFieldSpec["mark"] | undefined; required?: boolean | undefined },
   handling: WebAutomationExtractFieldHandling
 ): WebAutomationExtractFieldSpec {
   return {
@@ -191,6 +192,8 @@ function fieldSpec(
     ...(kind === "attribute" && source.attribute !== undefined ? { attribute: source.attribute } : {}),
     ...(kind === "column" && source.header !== undefined ? { header: source.header } : {}),
     ...(kind === "text" && source.lines === true ? { lines: true } : {}),
+    ...(kind === "text" && source.definition !== undefined ? { definition: source.definition && typeof source.definition === "object"
+      ? { term: source.definition.term, part: source.definition.part } : source.definition } : {}),
     ...(source.mark !== undefined ? { mark: source.mark } : {}),
     ...(source.required !== undefined ? { required: source.required } : {}),
     handling

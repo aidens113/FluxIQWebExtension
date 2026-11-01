@@ -56,3 +56,14 @@ test("the executed filter reads a lone string as its one-item list", () => {
     assert.deepEqual(lone?.where, [{ field: "name", [key]: ["case"] }], key);
   }
 });
+
+test("the field and predicate metadata declare the same exact definition association", () => {
+  const schema = webAutomationExtractListSchema({});
+  const properties = schema.properties as JsonObject;
+  const fields = ((properties.fields as JsonObject).metadata as JsonObject).fieldSpec as JsonObject;
+  const predicate = ((((properties.where as JsonObject).items as JsonObject).metadata as JsonObject).read as JsonObject);
+  const definition = (fields.properties as JsonObject).definition as JsonObject;
+  assert.deepEqual(definition, (predicate.properties as JsonObject).definition);
+  assert.deepEqual(definition.required, ["term", "part"]);
+  assert.deepEqual(((definition.properties as JsonObject).part as JsonObject).enum, ["term", "value"]);
+});

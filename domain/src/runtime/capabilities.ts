@@ -8,6 +8,11 @@ import { WEB_AUTOMATION_INPUT_IDS } from "../io/input-model";
 /** The gateway capability a client declares when its snapshot answers `detectStructure`. */
 export const WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
 
+/** Exact semantic definition-term field reads; a feature declaration grants no action authority. */
+export const WEB_AUTOMATION_DEFINITION_FIELDS_CAPABILITY_ID = "web.extract.definition";
+
+const DEFINITION_FIELDS_CAPABILITY_METADATA = { domainId: WEB_AUTOMATION_DOMAIN_ID, version: 1 };
+
 /**
  * The gateway capability a client declares when it answers the batched,
  * zero-wait fact check (plan B1, Core C9) under
@@ -63,6 +68,13 @@ export type WebAutomationClientGatewayCapability = ClientGatewayCapability & {
 
 export const webAutomationRuntimeCapabilities: FluxIQRuntimeCapability[] = [
   {
+    id: WEB_AUTOMATION_DEFINITION_FIELDS_CAPABILITY_ID,
+    label: "Definition field reads",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: DEFINITION_FIELDS_CAPABILITY_METADATA
+  },
+  {
     id: "web.actions",
     label: "Web actions",
     kind: "action",
@@ -108,6 +120,13 @@ export const webAutomationRuntimeCapabilities: FluxIQRuntimeCapability[] = [
 ];
 
 export const webAutomationGatewayCapabilities: WebAutomationClientGatewayCapability[] = [
+  {
+    id: WEB_AUTOMATION_DEFINITION_FIELDS_CAPABILITY_ID,
+    label: "Definition field reads",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: DEFINITION_FIELDS_CAPABILITY_METADATA
+  },
   {
     id: "web.context.state",
     label: "Web context state",
