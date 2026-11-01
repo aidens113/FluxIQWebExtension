@@ -1,6 +1,6 @@
 # Native saved-playback paging proof
 
-Status: Active t840; downstream only. Shared Core16b5043c/SDK0.25.5 read-only.
+Status: Native provider-free accepted on t840; integration/publication next. Shared Core16b5043c/SDK0.25.5 read-only.
 
 ## Current State
 
@@ -47,3 +47,8 @@ Both October31 full-suite slots consumed; owning checks only. No fixture/task/or
 - Zero-accounting discovery: clean fresh succeeded runs receive complete zero provider ledger and replay waits for it, projecting all three explicit counts0. Failed training-mode gate plus no verification intentionally remains unknown/null. No successful-path defect measured or accounting relaxation proposed.
 
 - Final fix qualification: structure audit --json exit0/zero failures/583baseline unchanged; Extension all3targets build exit0/27778ms,22verified files each. Existing Firefox add-on placeholder-ID warning only. Owning123cases/types already pass above. Source remains isolated on t840 until exact installed saved replay succeeds. Next experimental pin carries actual private-UI exclusion rather than classifier-only behavior.
+
+- Actual fixed installed replay ACCEPTED: replay-mvx7qx7k-cff1c1b5 on d0759644e4e828530cdfba28c8f6982631fd06b6 ->exit0/verdictpassed, native run succeeded/playbackGoalHeldtrue. Total58796ms/topology16329/browser1696/run38545/teardown533/traceinspection2294. Exact original model Flow and executable graph before=after. Expected8/observed8/compared8/matched8 records; all32expected fields present,0unexpected,0nonstring. Dataset8records, accumulated raw reads76 (8+16+24+28) deduped/filtered correctly. Installed Chromium/e2e-Chromium on unchanged company fixture, seed4519, same saved Flow.
+- Model factory disabled; coreProviderCallCount=0/accountedCalls=0/calls=0 explicitly, interventions0/harnessActivations0. This closes the prior failed-native path with no repair/model/graph change. Main ignored actual report/log retained in dedicated instance/replays and test-runs/2026-10-31-t840-validation/replay-ui-recovery.log.
+- Lead read-only retained-wire observation confirms one distinct authenticated Next failure: web.action.no_effect/action_failed/execution/effectunacted/certainNoEffecttrue, payload.nextPage failed and fixed detected-loader message. Native run then succeeded. Initial suffix-reader invocation returned missing/exit1 because successful recovery emits no unavailable-proof diagnostic; supplemental --wire-facts mode reads known typed facts only and exits0/count1. No stored trace/report/state edited. This verifies genuine Core retry, not a manual second click or harness action.
+- Acceptance scope: native saved Flow full expected dataset and explicit zero accounting proven. Fresh Claude create/judged-whole/apply/replay acceptance remains next after publishing. No full sweep or main promotion; both Oct31 slots consumed.

@@ -1,6 +1,6 @@
 # Debug: run-mvx64gvn-6781507e
 
-Status: Recorded. Whole-build judging passed; saved native playback failed. Reproduce the execution-path difference provider-free before another paid run.
+Status: Original run failed; cause and fix established in t840. Unchanged saved native Flow now passes provider-free with explicit zero calls; fresh live acceptance follows publication.
 Source: Downstream f092402b73daaca3aa24b70cd3afd8c63bfbecaa (t839 source3531ca0d, merge719299a3); Core 16b5043c5b986cb5a31b71bbabf4d4c11c289819 / SDK 0.25.5.
 Task: unchanged company-website gas-engineers instruction/workflow and exact eight-record/four-column oracle; isolated t839 workspace, legacy authoring, one zero-call replay required.
 Provider: Anthropic claude-sonnet-5-5 via CLAUDE_API_KEY, $5 whole-build allowance, normal guards, no fallback or override.
@@ -26,3 +26,11 @@ Final artifact aggregation renumbers interleaved runtime/provider events: the in
 Replay the actual persisted model-built Flow provider-free on the unchanged realistic company fixture through the installed gateway, with a fresh document that still has its first loader press pending. Establish the failing guard or mapping with bounded closed diagnostics if artifacts cannot answer it. Fix the owning layer, preserve unknown/lasting-act protection, exact target identity, normal first-plus-three retries and source refresh rules. No new model-written proof, blind repeat, weakened oracle or fixture-specific guidance. Then qualify owning tests/types/build/audit and installed whole playback before publishing and repinning for supervised Claude continuation.
 
 Both October 31 full-suite slots are used. Main user .clinerules edit remains preserved. Paid work ended naturally; source pins were frozen during it. Cumulative live record: 104 calls / $5.7159686 over six invocations, one startup invocation zero calls. Raw page/model/request/profile data and captures remain ignored; no secrets or values copied here.
+
+## Resolution in t840
+
+The intended loader was reached and pressed. Its harmless first status response could not produce a no-effect receipt because FluxIQ status-pill host presentation changed outside the control scope. A closed diagnostic first measured look_outside_change, then private host classification measured look_outside_owned_ui in the actual retained failed gateway result. No model or page marker was allowed to grant that ownership.
+
+The fix registers actual closed status UI hosts privately and excludes only their style changes and exclusive insertion/removal outside the page-control scope. Page clones, custom attributes, site light DOM, mixed changes and request/navigation/focus/new-shadow effects remain protected. No selector/threshold or generic action permission/retry policy was weakened.
+
+Exact saved model Flow replay-mvx7qx7k-cff1c1b5 passed on t840 source d0759644 after 58.796 seconds. Flow and executable graph hashes stayed unchanged, all eight records and 32 expected field values matched in order, and all three provider counters were explicitly zero, with zero interventions/harness actions. Its retained wire contains one genuine Next NO_EFFECT/execution/unacted/certain result before native success. Original run verdict remains failed; this is a separate verified replay after the fix.
