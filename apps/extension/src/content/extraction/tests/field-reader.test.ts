@@ -21,6 +21,68 @@ import { fakeShadowDom } from "./fake-shadow-dom";
 const dom = fakeShadowDom();
 const TEXT = { kind: "text", required: true } as const;
 
+test("exact definition reads follow the term across reorder, insert and removal and retain all four requested values", () => {
+  const row = (pairs: ReadonlyArray<readonly [string, string]>) => dom.el("article", {}, dom.el("h3", {}, "Pocket atlas"),
+    dom.el("dl", {}, ...pairs.flatMap(([name, value]) => [dom.el("dt", {}, name), dom.el("dd", {}, value)])));
+  const first = row([["Print size", "A5"], ["Paper", "Cream"], ["Binding", "Thread"]]);
+  const later = row([["Edition", "Second"], ["Binding", "Spiral"], ["Paper", "White"], ["Print size", "A4"]]);
+  const fields: Record<string, Parameters<typeof readField>[2]> = {
+    title: { ...TEXT, selector: "h3" },
+    size: { ...TEXT, definition: { term: "Print size", part: "value" } },
+    paper: { ...TEXT, definition: { term: "Paper", part: "value" } },
+    binding: { ...TEXT, definition: { term: "Binding", part: "value" } }
+  };
+  assert.deepEqual([first, later].map((item) => Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, readField(item, key, field)]))), [
+    { title: "Pocket atlas", size: "A5", paper: "Cream", binding: "Thread" },
+    { title: "Pocket atlas", size: "A4", paper: "White", binding: "Spiral" }
+  ]);
+  assert.equal(readField(row([["Print size", "A6"]]), "size", fields.size!), "A6");
+  assert.equal(readField(later, "size-label", { ...TEXT, definition: { term: " Print\n size ", part: "term" } }), "Print size");
+  assert.equal(readField(later, "size", { ...TEXT, definition: { term: "print size", part: "value" } }), undefined);
+});
+
+test("an exact definition scope cannot turn into an ordinal or whole-row fallback", () => {
+  const row = dom.el("article", {}, dom.el("dl", { class: "front" }, dom.el("dt", {}, "Ink"), dom.el("dd", {}, "Blue")),
+    dom.el("dl", { class: "back" }, dom.el("dt", {}, "Ink"), dom.el("dd", {}, "Black")));
+  const reader = { ...TEXT, definition: { term: "Ink", part: "value" as const } };
+  assert.equal(readField(row, "ink", reader), undefined);
+  assert.equal(readField(row, "ink", { ...reader, selector: "dl.back" }), "Black");
+  assert.equal(readField(row, "ink", { ...reader, selector: "dt" }), undefined);
+  assert.equal(readField(row, "ink", { ...reader, selector: ".missing", required: false }), null);
+  const ambiguous = dom.el("dl", {}, dom.el("dt", {}, "Ink"), dom.el("dd", {}, "Blue"), dom.el("dd", {}, "Black"));
+  assert.equal(readField(ambiguous, "ink", reader), undefined);
+  assert.equal(readField(ambiguous, "label", { ...reader, definition: { term: "Ink", part: "term" } }), undefined);
+});
+
+test("active definition metadata is validated and cloned before any read, and inactive metadata is left behind", () => {
+  const definition = { term: " Print\n size ", part: "value" as const };
+  const reader = normalizeExtractField("size", { kind: "text", selector: " dl ", definition });
+  assert.deepEqual(reader, { kind: "text", selector: "dl", definition: { term: "Print size", part: "value" }, required: false });
+  assert.ok(reader?.kind === "text");
+  assert.notEqual(reader.definition, definition);
+  definition.term = "Changed";
+  assert.equal(reader.definition?.term, "Print size");
+  const malformed = [null, [], "Print size", {}, { term: " ", part: "value" }, { term: "Print size", part: "first" }, { term: 2, part: "term" }];
+  for (const invalid of malformed) {
+    const spec = { kind: "text", definition: invalid } as unknown as ExtractField;
+    assert.throws(() => normalizeExtractField("size", spec), /invalid definition/u);
+    assert.throws(() => readField({} as Element, "size", { ...spec as object, required: false } as Parameters<typeof readField>[2]), /invalid definition/u);
+    assert.deepEqual(normalizeExtractField("link", { kind: "link", definition: invalid } as ExtractField), { kind: "link", required: false });
+    assert.equal(normalizeExtractField("excluded", { ...spec as object, handling: "exclude" } as ExtractField), undefined);
+  }
+  assert.throws(() => normalizeExtractField("size", { kind: "text", definition: { term: "Print size", part: "value" }, lines: true }), /invalid definition/u);
+  assert.throws(() => readField({} as Element, "size", { ...TEXT, definition: { term: "Print size", part: "value" }, lines: true }), /invalid definition/u);
+});
+
+test("definition reads leave hidden and sensitive fields unread without accessing their value text", () => {
+  for (const attributes of [{ hidden: "" }, { "aria-hidden": "true" }, { "data-sensitive": "true" }]) {
+    const value = dom.el("dd", attributes, "PRIVATE-VALUE");
+    Object.defineProperty(value, "textContent", { get: () => { throw new Error("screened value read"); } });
+    const item = dom.el("article", {}, dom.el("dl", {}, dom.el("dt", {}, "Ink"), value));
+    assert.equal(readField(item, "ink", { ...TEXT, definition: { term: "Ink", part: "value" } }), undefined);
+  }
+});
+
 test("a selected text field with a disclosure refuses partial text, while a sibling control does not", () => {
   const partial = dom.el("p", {}, "Partial text… ", dom.el("button", {}, "Read more"));
   assert.equal(readField(partial, "description", TEXT), "Partial text… Read more");

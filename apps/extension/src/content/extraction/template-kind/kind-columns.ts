@@ -13,6 +13,7 @@ export type KindSource = {
   attribute?: string | undefined;
   lines?: true | undefined;
   lineOf?: string | undefined;
+  definition?: { term: string; part: "term" | "value" } | undefined;
   sensitive: boolean;
 };
 
@@ -54,7 +55,7 @@ export function separateKinds<T extends KindSource>(sources: readonly T[], run: 
   const rewritten = new Set<T>();
   for (const source of sources) {
     const selector = source.selector;
-    if (!result.includes(source) || source.lines === true || selector === undefined || !POSITIONAL.test(selector)) continue;
+    if (!result.includes(source) || source.definition !== undefined || source.lines === true || selector === undefined || !POSITIONAL.test(selector)) continue;
     const groups = kindGroups(items, selector);
     if (groups.length < 2) continue;
     const readable = groups.filter((group) => group.entries.some(({ element }) => resolves(source, element)));
@@ -153,7 +154,8 @@ function resolves(source: KindSource, element: Element): boolean {
 
 /** Whether two sources read an element the same way, so one can stand for the other. */
 function sameRead(left: KindSource, right: KindSource): boolean {
-  return left.kind === right.kind && left.attribute === right.attribute && (left.lines === true) === (right.lines === true);
+  return left.kind === right.kind && left.attribute === right.attribute && (left.lines === true) === (right.lines === true)
+    && left.definition?.term === right.definition?.term && left.definition?.part === right.definition?.part;
 }
 
 /** The element the source gives a value from in the item, or `null`. */

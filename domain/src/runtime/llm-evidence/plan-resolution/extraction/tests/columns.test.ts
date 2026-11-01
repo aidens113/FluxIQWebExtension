@@ -65,3 +65,26 @@ test("the detection's own columns are not changed by a read that names them", ()
   keptWebExtractionColumns({ name: "name" }, DETECTED, ["fields"]);
   assert.deepEqual(DETECTED.name, { kind: "text", selector: ".card > a", required: true });
 });
+
+test("definition identity survives exact, default and required column copies without aliasing", () => {
+  for (const fields of [undefined, { edition: "edition" }, { edition: { key: "edition", required: true } }]) {
+    const definition = { term: "Edition", part: "value" as const };
+    const detected: Record<string, WebAutomationExtractField> = { edition: { kind: "text", selector: "dl", definition, required: true } };
+    const result = keptWebExtractionColumns(fields, detected, ["fields"]);
+    assert.equal(result.ok, true);
+    if (!result.ok) continue;
+    const field = result.fields.edition;
+    assert.notEqual(typeof field, "string");
+    if (typeof field === "string" || field === undefined) continue;
+    assert.deepEqual(field.definition, { term: "Edition", part: "value" });
+    assert.notEqual(field.definition, definition);
+    definition.term = "changed";
+    assert.equal(field.definition?.term, "Edition");
+  }
+});
+
+test("an attribute override cannot erase a text definition's field identity", () => {
+  const detected: Record<string, WebAutomationExtractField> = { edition: { kind: "text", definition: { term: "Edition", part: "value" } } };
+  const result = keptWebExtractionColumns({ edition: "edition@title" }, detected, ["fields"]);
+  assert.deepEqual(result, { ok: false, issue: "web.handle.malformed", path: ["fields", "edition"] });
+});

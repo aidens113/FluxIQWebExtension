@@ -12,6 +12,7 @@ import { webAutomationClearedWayOutsOf, type WebAutomationClearedWayOutFlow } fr
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
 import { pickWebAutomationSession } from "../runtime/web-sessions";
+import { webDefinitionFieldCapabilityRefusal } from "../runtime/definition-fields";
 
 export async function dispatchWebAutomationOutput(
   fluxiq: FluxIQ,
@@ -22,8 +23,14 @@ export async function dispatchWebAutomationOutput(
 ): Promise<OutputDispatchResult<JsonObject>> {
   const required = Object.hasOwn(request, "commandContext");
   if (required) ClientGatewayRequiredCommandContext.assertRequired(request.commandContext!);
-  const sessionId = targetSessionId(fluxiq, request.metadata);
+  const session = targetSession(fluxiq, request.metadata);
+  const sessionId = session?.sessionId;
   if (!sessionId) { if (required) await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.no_selected_session"); return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." }; }
+  const unsupported = webDefinitionFieldCapabilityRefusal(request.outputId, request.payload, session);
+  if (unsupported !== undefined) {
+    if (required) await ClientGatewayRequiredCommandContext.stop(request.commandContext!, unsupported.failure.code);
+    return { ok: false, outputId: request.outputId, metadata: { sessionId }, status: unsupported.status, error: unsupported.message, payload: { status: unsupported.status, message: unsupported.message }, failure: unsupported.failure };
+  }
   try {
     const target = outputTargetFromPayload(request.payload);
     const command: { actionType: string; parameters: JsonObject; target?: JsonObject; timeoutMs?: number } = {
@@ -197,8 +204,8 @@ function unansweredResult(outputId: string): OutputDispatchResult<JsonObject> {
 }
 
 /** The session an output is sent to: the requested one when it is eligible, else the only eligible one (`../runtime/web-sessions/pick-web-session.ts`). */
-function targetSessionId(fluxiq: FluxIQ, metadata: JsonObject | undefined): string | undefined {
-  return pickWebAutomationSession(fluxiq.programs.clientGateway.snapshot().sessions, stringValue(metadata?.sessionId) || undefined)?.sessionId;
+function targetSession(fluxiq: FluxIQ, metadata: JsonObject | undefined) {
+  return pickWebAutomationSession(fluxiq.programs.clientGateway.snapshot().sessions, stringValue(metadata?.sessionId) || undefined);
 }
 
 function compact(value: Record<string, unknown>): JsonObject {

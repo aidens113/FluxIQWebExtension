@@ -11,7 +11,7 @@
 // their own is a record's controls or decorations (its action links, its
 // rating stars, its variant chips), not the records a person asks for.
 //
-// What counts: a field with a selector inside the item, or a table column.
+// What counts: a field with a selector, semantic definition association, or table column inside the item.
 // What does not: a group of lines read whole (`infer-fields.ts`), whose lines
 // are each counted already, so offering it changes no run's worth; the item's
 // own `data-*` attributes (a statement *about* the
@@ -28,6 +28,6 @@ export function contentFieldCount(fields: readonly WebAutomationExtractionPropos
     field.spec.handling !== "exclude"
     && field.spec.kind !== "value"
     && field.spec.lines !== true
-    && (field.spec.kind === "column" || field.spec.selector !== undefined)
+    && (field.spec.kind === "column" || field.spec.selector !== undefined || field.spec.definition !== undefined)
     && field.coverage >= minCoverage).length;
 }

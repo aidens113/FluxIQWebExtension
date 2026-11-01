@@ -338,6 +338,31 @@ stated no date Core can read. A condition's bounds are all numbers or all
 dates, so the plan resolver's key-by-key copy of a condition carries a date
 bound whole.
 
+### Definition-list fields
+
+A text field may name `definition: {term, part: "term" | "value"}`. The term
+is an exact, whitespace-normalized semantic `dt` label; `selector`, if present,
+scopes the definition lists inside the record. The reader finds that term's
+associated term or value rather than a numbered sibling pair. Inserting or
+reordering other definitions therefore preserves the field's meaning. The live
+reader, inferred coverage and captured-page field evidence use the same
+association rules. Missing or duplicated terms, ambiguous values and nested
+lists that do not own the term never fall back to another definition or the
+whole record. Existing fields retain their behavior.
+
+Real definition terms are structural labels, like table headers. Definition
+values and arbitrary neighboring record text remain excluded from proposals;
+hidden, sensitive and excluded fields retain the normal disclosure boundaries.
+The association survives detection handles, predicate reads, confirmation and
+recording. An attribute override of a definition text field is refused rather
+than silently discarding its association.
+
+The extension declares `web.extract.definition` version 1. A definition read
+requires that negotiated client capability before either normal Flow dispatch
+or live authoring/replay sends a command. An older or unversioned client is
+refused with a capability failure instead of interpreting the new spec as an
+ordinary text read. Existing fields require no new capability.
+
 ### Partial and wide list answers
 
 A valid authored record schema determines column presentation order while

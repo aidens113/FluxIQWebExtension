@@ -44,6 +44,15 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       selector: { type: "string", label: "Selector inside the item" },
       attribute: { type: "string", label: "Attribute" },
       header: { type: "string", label: "Column header" },
+      definition: {
+        type: "object",
+        label: "Definition field",
+        required: ["term", "part"],
+        properties: {
+          term: { type: "string", label: "Exact definition term" },
+          part: { type: "string", label: "Reads", enum: ["term", "value"] }
+        }
+      },
       required: { type: "boolean", label: "Required" },
       // `encrypt` is reserved (D13) and refused at dispatch until it is built.
       handling: { type: "string", label: "Column", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS] },

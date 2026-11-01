@@ -13,9 +13,10 @@
 // which are page values. The picker attaches a fingerprint when the user
 // records the extraction, not when it proposes one.
 //
-// A column header's text is page structure rather than a sample value (D16), so
-// it may be a label or a spec's `header`. The text inside an item may not be a
-// label.
+// A column header or semantic definition term is page structure rather than a
+// sample value (D16), so it may name its column. A term names only the exact
+// HTML definition association its spec reads; arbitrary neighboring text and
+// definition values remain record data and may not become proposed labels.
 
 import type { WebAutomationExtractFieldSpec, WebAutomationExtractListPagination } from "../actions/extraction";
 
@@ -25,7 +26,7 @@ export type WebAutomationExtractionProposalFieldSpec = Omit<WebAutomationExtract
 export type WebAutomationExtractionProposalField = {
   /** The record field key (D16), from `webAutomationExtractionFieldKey`. */
   key: string;
-  /** What the picker shows for the field: a test id, a column header, an attribute name. Never text read inside an item. */
+  /** What the picker shows for the field: a test id, a column header, a semantic definition term or an attribute name. Never a record value. */
   label: string;
   spec: WebAutomationExtractionProposalFieldSpec;
   /** The share of the run's items that have the field, from 0 to 1. */

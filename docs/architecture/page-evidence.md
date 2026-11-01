@@ -745,6 +745,16 @@ or a detection with no shown page, has no `at`. No value or selector is added. A
 `extractList`, and the node is built from what the handle keeps
 (`plan-resolution/extraction/slot.ts`).
 
+Definition-list columns retain an exact semantic term and whether they read
+that term or its associated value. Their keys, coverage and stored readers do
+not identify a numbered pair. The first-item capture walk follows the same
+row-owned `dl`/`dt`/`dd` association as the live reader; ambiguous or unavailable
+terms have no `at`, rather than pointing to another pair or the whole item.
+Structural terms may label proposals, while definition values and unrelated
+record text remain screened out of proposals. Confirmation and saved
+extractions retain the association, including private condition readers for
+detected columns that are not projected into the output.
+
 A list may have one item, so a single record is read as a one-row table
 (t195). The page answers in one of three forms:
 

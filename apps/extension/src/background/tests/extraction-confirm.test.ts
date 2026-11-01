@@ -14,7 +14,7 @@ import test from "node:test";
 
 import { isWebAutomationExtractFieldKey, webAutomationExtractListTimeoutMs, type WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 import { EXTRACTION_CONTENT_MESSAGES, EXTRACTION_PICKED_MESSAGE, EXTRACTION_RUNTIME_MESSAGES } from "../../shared/extraction-messages";
-import { handleExtractionControl, type ExtractionConfirmField, type ExtractionControlDeps } from "../extraction";
+import { extractionPreviewRequest, handleExtractionControl, recordedListExtraction, runnableExtractListRequest, type ExtractionConfirmField, type ExtractionControlDeps } from "../extraction";
 import {
   AUTOMATION_TAB,
   PAGE_SENTINEL,
@@ -27,6 +27,56 @@ import {
   sidepanel,
   startAndPick
 } from "./extraction-harness";
+
+test("definition associations survive default proposal, preview, confirmation and executable request copies", () => {
+  const definition = { term: "Print size", part: "value" as const };
+  const detected = { ...proposal, fields: [
+    { key: "size", label: "Print size", coverage: 1, spec: { kind: "text" as const, selector: "dl.details", definition } },
+    { key: "private", label: "Private", coverage: 1, spec: { kind: "text" as const, definition: { term: "Private", part: "value" as const }, handling: "exclude" as const } }
+  ] };
+  const preview = extractionPreviewRequest(detected, undefined);
+  assert.ok(preview);
+  assert.deepEqual(Object.keys(preview.request.fields), ["size"]);
+  const previewField = preview.request.fields.size;
+  assert.ok(previewField && typeof previewField === "object");
+  assert.deepEqual(previewField.definition, definition);
+  assert.notEqual(previewField.definition, definition);
+  const defaultColumns = { label: "Prints", item: detected.item, itemCount: 8 } as Parameters<typeof recordedListExtraction>[1];
+  const recorded = recordedListExtraction(detected, defaultColumns, "unit");
+  assert.ok(recorded);
+  const spec = recorded.request.fields.size;
+  assert.ok(typeof spec === "object");
+  assert.deepEqual(spec.definition, definition);
+  assert.notEqual(spec.definition, definition);
+  assert.equal(spec.selector, "dl.details");
+  const request = runnableExtractListRequest(recorded);
+  const runnable = request?.fields.size;
+  assert.ok(runnable && typeof runnable === "object");
+  assert.deepEqual(runnable.definition, definition);
+  assert.notEqual(runnable.definition, spec.definition);
+  definition.term = "Changed after copying";
+  assert.equal(spec.definition?.term, "Print size");
+  assert.equal(runnable.definition?.term, "Print size");
+});
+
+test("explicit confirmation clones active definition metadata and refuses malformed combinations", () => {
+  const definition = { term: "Print size", part: "value" as const };
+  const column: ExtractionConfirmField = { key: "size", label: "Print size", kind: "text", definition, handling: "include" };
+  const confirm = (field: ExtractionConfirmField) => recordedListExtraction(proposal, { label: "Prints", item: proposal.item, fields: [field], itemCount: 8 }, "unit");
+  const recorded = confirm(column);
+  assert.ok(recorded);
+  const spec = recorded.request.fields.size;
+  assert.ok(typeof spec === "object");
+  assert.deepEqual(spec.definition, definition);
+  assert.notEqual(spec.definition, definition);
+  assert.equal(confirm({ ...column, lines: true }), undefined);
+  assert.equal(confirm({ ...column, definition: { term: " ", part: "value" } }), undefined);
+  assert.equal(confirm({ ...column, definition: null } as unknown as ExtractionConfirmField), undefined);
+  const inactive = confirm({ ...column, kind: "link" });
+  const inactiveSpec = inactive?.request.fields.size;
+  assert.ok(inactiveSpec && typeof inactiveSpec === "object");
+  assert.equal(inactiveSpec.definition, undefined);
+});
 
 test("confirm records well-formed keys, runs the read, and puts no page value in the recording", async () => {
   const h = harness();

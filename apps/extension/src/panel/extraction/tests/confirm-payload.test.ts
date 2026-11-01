@@ -24,6 +24,22 @@ function payloadField(request: ReturnType<typeof extractionConfirmPayload>, key:
   return found;
 }
 
+test("confirmation copies exact definition identity independently of display renames and drops it for another kind", () => {
+  const proposal = proposalFixture();
+  const definition = { term: "Print size", part: "value" as const };
+  proposal.fields[0] = { key: "size", label: "Print size", coverage: 1, spec: { kind: "text", selector: "dl.details", definition } };
+  let draft = renameExtractionField(extractionDraftFromProposal(proposal, "Prints"), "size", "Sheet size");
+  const request = extractionConfirmPayload(draft);
+  const confirmed = payloadField(request, "sheet_size");
+  assert.equal(confirmed.selector, "dl.details");
+  assert.deepEqual(confirmed.definition, definition);
+  assert.notEqual(confirmed.definition, draft.fields[0]!.definition);
+  draft.fields[0]!.definition!.term = "Changed after confirming";
+  assert.equal(confirmed.definition?.term, "Print size");
+  draft = setExtractionFieldKind(draft, "size", "link");
+  assert.equal(payloadField(extractionConfirmPayload(draft), "sheet_size").definition, undefined);
+});
+
 test("record keys are derived from the labels the user settled on", () => {
   const draft = renameExtractionField(extractionDraftFromProposal(proposalFixture(), "Products"), "name", "Product name");
   const request = extractionConfirmPayload(draft);

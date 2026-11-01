@@ -12,6 +12,9 @@ import { normalizeExtractField } from "../field-spec";
 import { inferFields, proposedFieldSpec, type FieldSource } from "../infer-fields";
 import { itemFilterFor } from "../item-filter";
 import { fakeShadowDom } from "./fake-shadow-dom";
+import { contentFieldCount } from "../content-fields";
+import { pruneEquivalentFieldPaths } from "../path-equivalence";
+import { separateKinds } from "../template-kind";
 
 const PRICE: FieldSource = { kind: "text", label: "product-price", selector: '[data-testid="product-price"]', sensitive: false };
 
@@ -95,14 +98,82 @@ test("an element with no words in its light DOM or its shadow root is not propos
 // change breaks.
 
 /** Reads a proposed field off an item, as a list read does. */
-function read(item: Element, field: { key: string; spec: { kind: string; selector?: string | undefined } }): string | null | undefined {
-  return readField(item, field.key, { kind: "text", ...(field.spec.selector === undefined ? {} : { selector: field.spec.selector }), required: false });
+function read(item: Element, field: { key: string; spec: Exclude<WebAutomationExtractField, string> }): string | null | undefined {
+  const reader = normalizeExtractField(field.key, { ...field.spec, required: false });
+  return reader === undefined ? undefined : readField(item, field.key, reader);
 }
 
 /** The proposed text fields that read exactly `values` off `run`, item for item. */
 function holding(fields: ReturnType<typeof inferFields>, run: readonly Element[], values: readonly string[]): ReturnType<typeof inferFields> {
   return fields.filter((field) => field.spec.kind === "text" && run.every((item, index) => read(item, field) === values[index]));
 }
+
+function printRow(entries: ReadonlyArray<readonly [string, string]>): Element {
+  return dom.el("article", {}, dom.el("dl", {}, ...entries.map(([term, value]) =>
+    dom.el("div", { class: "pair" }, dom.el("dt", {}, term), dom.el("dd", {}, dom.el("span", {}, value))))));
+}
+
+test("semantic fields replace ordinal term/value leaves and keep identical markup with distinct terms", () => {
+  const run = [printRow([["Paper", "Cream"], ["Print size", "A5"]]), printRow([["Print size", "A4"], ["Paper", "White"]])];
+  const fields = inferFields(run[0]!, run);
+  assert.equal(fields.length, 4);
+  assert.equal(new Set(fields.map((field) => field.key)).size, 4);
+  assert.ok(fields.every((field) => field.spec.selector === undefined && field.spec.definition !== undefined && field.coverage === 1));
+  assert.equal(contentFieldCount(fields), 4, "semantic fields remain record content without an ordinal selector");
+  assert.equal(holding(fields, run, ["A5", "A4"]).length, 1);
+  assert.equal(holding(fields, run, ["Cream", "White"]).length, 1);
+  assert.equal(JSON.stringify(fields).includes("Cream"), false);
+  assert.equal(JSON.stringify(fields).includes("White"), false);
+  const value = fields.find((field) => field.spec.definition?.term === "Print size" && field.spec.definition.part === "value")!;
+  const term = fields.find((field) => field.spec.definition?.term === "Print size" && field.spec.definition.part === "term")!;
+  const unseen = printRow([["Binding", "Spiral"], ["Paper", "Ivory"], ["Print size", "A3"]]);
+  assert.equal(read(unseen, value), "A3");
+  assert.equal(read(unseen, term), "Print size");
+  assert.equal(read(printRow([["Print size", "A6"]]), value), "A6");
+  assert.equal(read(printRow([["Paper", "A5"]]), value), null, "a matching value in another term is never substituted");
+});
+
+test("coverage and reads use the same exact association, including later rows and ambiguous terms", () => {
+  const run = Array.from({ length: 14 }, (_, index) => printRow([["Paper", `Stock ${index}`], ["Print size", `Size ${index}`]]));
+  run[12] = printRow([["Binding", "Cloth"], ["Paper", "Stock 12"], ["Print size", "Size 12"]]);
+  run[13] = printRow([["Finish", "Smooth"], ["Print size", "Size 13"]]);
+  run.push(printRow([["Print size", "A5"], ["Print size", "A6"]]), printRow([["Paper", "Only stock"]]));
+  const fields = inferFields(run[0]!, run);
+  const size = fields.filter((field) => field.spec.definition?.term === "Print size");
+  assert.equal(size.length, 2);
+  for (const field of size) {
+    assert.equal(field.coverage, 0.88);
+    assert.equal(field.spec.required, false);
+    assert.deepEqual(run.map((row) => read(row, field) !== null), [...Array.from({ length: 14 }, () => true), false, false]);
+  }
+  assert.equal(fields.filter((field) => field.spec.definition?.term === "Binding").length, 2, "a new semantic term past the sample remains discoverable");
+  assert.equal(fields.filter((field) => field.spec.definition?.term === "Finish").length, 2, "later same-markup terms have distinct discovery identity");
+});
+
+test("path equivalence and positional kind rewriting cannot conflate semantic terms", () => {
+  const run = [true, false].map((selected) => dom.el("article", {}, dom.el("section", selected ? { class: "selected" } : {},
+    dom.el("dl", {}, dom.el("dt", {}, "Width"), dom.el("dd", {}, "24 cm")))));
+  const width: FieldSource = { kind: "text", label: "Width", selector: ":scope > section.selected > dl", definition: { term: "Width", part: "value" }, sensitive: false };
+  const height: FieldSource = { kind: "text", label: "Height", selector: ":scope > section > dl", definition: { term: "Height", part: "value" }, sensitive: false };
+  assert.deepEqual(pruneEquivalentFieldPaths([width, height], run), [width, height]);
+  const scoped = { ...width, selector: ":scope > dl:nth-of-type(1)" };
+  const layouts = ["compact", "wide"].map((className) => dom.el("article", {}, dom.el("dl", { class: className },
+    dom.el("dt", {}, "Width"), dom.el("dd", {}, "24 cm"))));
+  assert.deepEqual(separateKinds([scoped], layouts, () => "definition list"), [scoped]);
+});
+
+test("inference never labels or keys a definition field from hidden, sensitive, control or record values", () => {
+  const secretTerm = dom.el("dt", { "data-sensitive": "true" }, "PRIVATE-TERM");
+  Object.defineProperty(secretTerm, "textContent", { get: () => { throw new Error("sensitive term read"); } });
+  const row = dom.el("article", {}, dom.el("dl", {},
+    dom.el("div", {}, secretTerm, dom.el("dd", {}, "PRIVATE-VALUE")),
+    dom.el("div", {}, dom.el("dt", {}, "Hidden"), dom.el("dd", { hidden: "" }, "PRIVATE-VALUE")),
+    dom.el("div", {}, dom.el("dt", {}, "Control"), dom.el("dd", {}, dom.el("button", {}, "PRIVATE-VALUE"))),
+    dom.el("div", {}, dom.el("dt", {}, "Safe"), dom.el("dd", {}, "PUBLIC-RECORD-VALUE"))));
+  const fields = inferFields(row, [row]);
+  assert.deepEqual(fields.map((field) => field.spec.definition?.term), ["Safe", "Safe"]);
+  assert.doesNotMatch(JSON.stringify(fields), /PRIVATE|PUBLIC-RECORD-VALUE/u);
+});
 
 function documentCard(team: string, selected: boolean, marked: boolean): Element {
   return dom.el("li", {}, dom.el("article", { class: selected ? "panel focus" : "panel" },

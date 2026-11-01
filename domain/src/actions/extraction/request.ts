@@ -43,6 +43,15 @@ export type WebAutomationExtractFieldSpec = {
   /** The header text a `column` field reads under. Required by that kind and refused on every other. */
   header?: string | undefined;
   /**
+   * A semantic definition-list field, on a `text` read only. The exact term
+   * identifies a pair inside the item, independent of the pair's position.
+   * `selector`, when present, scopes the definition lists searched; absent,
+   * the item's definition lists are searched. A missing or duplicate term,
+   * or a value with no unique associated definition, is unreadable rather
+   * than falling back to a sibling position or another pair.
+   */
+  definition?: { term: string; part: "term" | "value" } | undefined;
+  /**
    * `true` marks the field required: a record the page cannot read it from fails
    * the read's post-condition. Absent, or `false`, the field is optional and such
    * a record carries `null` for it instead (D16) -- which is what the string

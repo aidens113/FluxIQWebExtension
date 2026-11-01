@@ -450,6 +450,7 @@ function readableSpec(spec: WebAutomationExtractFieldSpec): WebAutomationExtract
     selector: spec.selector,
     attribute: spec.attribute,
     header: spec.header,
+    definition: spec.definition === undefined ? undefined : { term: spec.definition.term, part: spec.definition.part },
     required: spec.required,
     handling: undefined,
     lines: spec.lines,

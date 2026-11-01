@@ -260,6 +260,8 @@ export type ExtractionConfirmField = {
   /** The column's name: a header, a test id, or what the user renamed it to. Never text read inside an item. */
   label: string;
   kind: WebAutomationExtractFieldKind;
+  /** Exact definition-list association retained from detection. Active only for text. */
+  definition?: WebAutomationExtractFieldSpec["definition"];
   /** Where inside an item the value is read; absent, the item itself. */
   selector?: string | undefined;
   attribute?: string | undefined;
