@@ -35,10 +35,10 @@ test("task and worktree scripts build nothing except through pnpm build, pnpm ch
   assert.deepEqual(offending, []);
 });
 
-test("task start builds the worktree with pnpm build and Core with buildCore; task finish runs pnpm check only on --full-check", () => {
-  const start = readFileSync(path.join(SCRIPTS, "task", "start.mjs"), "utf8");
-  assert.match(start, /runPnpm\(created\.root, \["build"\]/u);
-  assert.match(start, /await buildCore\(created\.coreRoot/u);
+// start.test.mjs exercises paired/shared Core preparation and workspace build
+// selection through the injected operations. Its behavior does not depend on
+// whether start.mjs invokes those operations directly or through `prepare`.
+test("shared Core moves and full task validation use cached build entry points", () => {
   assert.match(readFileSync(path.join(SCRIPTS, "worktree", "apply-move.mjs"), "utf8"), /runBuild = buildCore/u);
   assert.match(readFileSync(path.join(SCRIPTS, "task", "finish.mjs"), "utf8"), /runPnpm\(workRoot, \["check"\]/u);
 });
