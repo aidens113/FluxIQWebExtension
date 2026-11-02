@@ -5,7 +5,7 @@ import { RunnerFailure } from "../../../failure.js";
 import { createdFlowSecretInputs } from "../../creation/index.js";
 import { runLiveRepairLane, type LiveRepairLaneInput } from "../run-repair-lane.js";
 import type { ProveLiveRepairControl } from "../prove-repair.js";
-import { resetProducerResponse } from "../../tests/reset-producer-response.js";
+import { resetProducerResponse } from "../../tests/support/index.js";
 import { RUN_ADAPTATION_SNAPSHOT } from "../../../run-evaluation/adaptation/index.js";
 
 /**

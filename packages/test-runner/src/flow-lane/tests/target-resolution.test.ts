@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executeRecordedFlowRun } from "../../persisted-flow-run.js";
-import { attempt, control } from "../support/index.js";
+import { executeRecordedFlowRun } from "../persisted-flow-run.js";
+import { attempt, control } from "./support/index.js";
 
 /**
  * `L-replay` Defect 4: Core records how it resolved each target, the Core store
