@@ -3,6 +3,7 @@ import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { AutomationStudioImporterImplementationBundle, AutomationStudioImporterSdkManifest, AutomationStudioNativeNodeImplementation } from "fluxiq/components/automation/importer";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import { createWebElementMatcher } from "../element-fingerprint";
+import { normalizeWebRecordingCandidateParameters } from "../target-normalization";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationCheckWaitParameters } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
@@ -48,6 +49,7 @@ export function createWebAutomationOutputNodeImplementationBundle(
     // model wrote is refused before anything runs rather than at dispatch.
     parameterContracts: { ...webAutomationOutputNodeParameterContracts },
     elementMatcher: webElementMatcher,
+    recordingCandidateParameterNormalizer: normalizeWebRecordingCandidateParameters,
     ...extension
   };
 }

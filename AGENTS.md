@@ -180,6 +180,8 @@ for the worker result and verify it before integration.
 
 ## Repository Boundaries
 
+**Automation Studio end state (user, 2026-11-02).** "the automation studio program should just be a UI panel to control the framework." Core owns execution, authoring, verification, persistence, project/policy/recording ownership and orchestration in framework packages; Studio retains panel UI and thin control adapters. Backend compatibility locations inside Studio are temporary and do not satisfy completion. Web/browser behavior remains downstream through explicit trusted ports; enforce these boundaries mechanically.
+
 This repository is the downstream FluxIQ web-automation implementation. It is
 not FluxIQ Core. `apps/extension` owns browser APIs, DOM access, recorder UI,
 and browser-side execution; `domain` owns web-automation FluxIQ contracts,

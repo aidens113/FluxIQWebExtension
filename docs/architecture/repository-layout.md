@@ -38,6 +38,7 @@ domain/
   src/client/       Gateway mappings and client capability declarations
   src/io/           Registered FluxIQ inputs, outputs, and gateway bridges
   src/output-nodes/ Web output node definitions and dispatch adapters
+  src/target-normalization/ Web target/recording parameter interpretation, supplied to Core through the trusted SDK bundle
   src/page-evidence/  The page-evidence wire contract, declared once
   src/recording/    Events, reducers, observations, and web state conversion
   src/recording/proposals/  Nodes a recording proposes beyond its actions: a wait before a late click target
@@ -873,6 +874,18 @@ under its contrast floor, so the
 light accents are a deeper amber and the brand amber `#f5b83d` is used only in
 the dark set. `pnpm --filter @fluxiq-web-extension/product build` bundles the
 module with `fluxiq` external; `test` and `check` run beside it.
+
+## Recording target interpretation
+
+`domain/src/target-normalization` owns browser target and recorded-parameter
+interpretation. The real output-node implementation bundle supplies
+`recordingCandidateParameterNormalizer` through Core's public importer SDK;
+Core binds the original function and original bundle receiver for that registered
+domain. The callback is executable host code, never manifest metadata. Its Core
+imports are passive wire types only; no Core browser-normalizer implementation
+is called. Canonical Core mapping shallow-copies parameters when no adapter is
+registered. Downstream recordings use the registered web adapter to preserve
+target precedence, identity aliases, selection, bounds and metadata withholding.
 
 ## FluxIQ Core Linkage
 
