@@ -185,7 +185,8 @@ test("a switch that matches no open tab is target_not_found, naming the tab it w
     retryable: true,
     stage: "target_resolution",
     expected: "tab 11 active",
-    actual: "no open tab matched"
+    actual: "no open tab matched",
+    effect: "unacted"
   });
 });
 

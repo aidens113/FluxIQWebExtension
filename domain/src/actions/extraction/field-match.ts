@@ -18,7 +18,7 @@
 // the budget being told.
 //
 // So resolution is **Core's**, not a second implementation of it
-// (`automationStudioMatchName` in `fluxiq/automation-studio/nodes`): exact, then
+// (`automationStudioMatchName` in `fluxiq/components/automation`): exact, then
 // equal after folding case and separators, then the nearest name above Core's
 // measured score floor of 0.25. `productName` finds `name`, `Price` finds
 // `price`, `ratng` finds `rating`, and `sponsored` finds nothing when the request

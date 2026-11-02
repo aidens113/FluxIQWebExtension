@@ -2,7 +2,7 @@ import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStud
 import type { WebAutomationRequestPolicy, WebAutomationRequestPolicyInput } from "./contracts";
 
 // Core owns whether direct requests may be turned on at all (its
-// recording-capture policy, `fluxiq/automation-studio/nodes`). A request
+// recording-capture policy, `fluxiq/components/automation`). A request
 // policy asking for `enabled: true` is still validated whole -- an enabled
 // policy needs an exact HTTPS origin -- but comes out enabled only when Core's
 // clamp allows direct requests. Core's default does not, so without a policy

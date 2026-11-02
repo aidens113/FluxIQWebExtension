@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  AutomationStudioNativeNodeRuntime, checkAutomationStudioFlowBootstrapPlanCompletion,
-  type AutomationStudioFlowDraftStep
-} from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/runtime/native-execution";
+import { checkAutomationStudioFlowBootstrapPlanCompletion, type AutomationStudioFlowDraftStep } from "fluxiq/automation-studio";
 import {
   createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle,
   outputTargetFromPayload, WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS

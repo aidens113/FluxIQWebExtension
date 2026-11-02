@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/runtime/native-execution";
 import { createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle } from "../../../output-nodes";
 import { resolveAutomationStudioNodeActionEffect } from "fluxiq/components/automation/action-effect";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../../types";

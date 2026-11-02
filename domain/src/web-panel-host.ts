@@ -1,6 +1,7 @@
 import { readHostBuildIdentity } from "./host-build-identity";
 import type { FluxIQ } from "fluxiq";
-import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/runtime/native-execution";
+import { type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/components/automation/importer";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationCheckWaitNode } from "./actions/check-wait";
 import { webAutomationExtractListTimeoutMs, webAutomationRecordedExtraction } from "./actions/extraction";

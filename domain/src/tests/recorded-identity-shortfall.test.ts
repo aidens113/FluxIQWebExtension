@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
+import type { AutomationStudioRecordingMapperObservation } from "fluxiq/components/automation/importer";
 import { WEB_AUTOMATION_DOMAIN_ID } from "..";
 import { createWebAutomationRecordingEvent } from "../client";
 import { mapWebRecordingObservation } from "../web-panel-host";

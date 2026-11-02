@@ -153,12 +153,21 @@ test("a chat build's per-build ceiling is Core's own, and a lower one that canno
   assert.throws(() => lowered.assertChatBuildable(), (error: unknown) => error instanceof Error && error.message.includes(`held to FluxIQ's per-build ceiling of $${ceiling}, and --llm-max-cost-usd ${ceiling / 2} cannot reach the Flow the chat makes`));
 });
 
-// The chat build is held to the ceiling the Lab gave the run's Core
-// (`--llm-cost-ceiling-usd`), not to the default the Lab's own process loaded.
-test("a chat build passes at whatever ceiling the Lab started its Core with", () => {
-  const raised = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }, LAB_CEILING_USD * 3), CREDENTIAL);
-  raised.assertChatBuildable();
-  assert.equal(raised.describe().authorized.maxTotalEstimatedCostUsd, LAB_CEILING_USD * 3);
+// The explicit Core ceiling may lower the profile's whole-build allowance.
+// It can never raise the Lab's declared budget.
+test("a chat build passes at the lower ceiling the Lab started its Core with", () => {
+  const ceiling = Math.min(LAB_CEILING_USD, DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd) / 2;
+  const lowered = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }, ceiling), CREDENTIAL);
+  lowered.assertChatBuildable();
+  assert.equal(lowered.describe().authorized.maxTotalEstimatedCostUsd, ceiling);
+});
+
+test("a higher Core ceiling never raises the Lab's declared whole-build allowance", () => {
+  const declared = DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd;
+  const ceiling = declared * 3;
+  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }, ceiling), CREDENTIAL);
+  assert.equal(run.describe().authorized.maxTotalEstimatedCostUsd, declared);
+  assert.throws(() => run.assertChatBuildable(), (error: unknown) => error instanceof RunnerFailure && error.message.includes(`held to FluxIQ's per-build ceiling of $${ceiling}, and --llm-max-cost-usd ${declared} cannot reach the Flow the chat makes`));
 });
 
 test("a create-flow run's Flow repairs with the exploring intent, so its repair can be tried, applied and replayed", () => {

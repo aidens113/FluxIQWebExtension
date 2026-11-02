@@ -18,7 +18,7 @@
 // `expectedConfirmation` either: Core refuses a source input that is not
 // action-role, and a wait has no echo to confirm.
 
-import type { AutomationStudioRecordingMapperCandidate } from "fluxiq/automation-studio";
+import type { AutomationStudioRecordingMapperCandidate } from "fluxiq/components/automation/importer";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationRecordedAction } from "../../io/input-model";
 

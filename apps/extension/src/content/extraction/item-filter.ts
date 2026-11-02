@@ -16,7 +16,7 @@
 // prose, which is the guess this repository deleted on 2026-09-18.
 //
 // **What may be said about the value is not decided here**, and deliberately so:
-// Core's `automationStudioRecordConditionHolds` (`fluxiq/automation-studio/nodes`)
+// Core's `automationStudioRecordConditionHolds` (`fluxiq/components/automation`)
 // is the one judge of whether a value satisfies a condition, and the plan
 // resolver that accepts a model's condition, and Core's own dataset processing,
 // are held to the same function. A blank or whitespace-only value is one the

@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import {
-  AutomationStudioFlowCandidateSubmissionController,
-  AutomationStudioNativeNodeRuntime,
-  automationStudioFlowBootstrapActionPermissions
-} from "fluxiq/automation-studio";
+import { AutomationStudioFlowCandidateSubmissionController, automationStudioFlowBootstrapActionPermissions } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/runtime/native-execution";
 import {
   createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle,
   WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS

@@ -1,5 +1,5 @@
 // Reading the recording-capture policy Core answers `get-recording-capture-policy`
-// with. Core owns the policy (`fluxiq/automation-studio/nodes`); this only checks
+// with. Core owns the policy (`fluxiq/components/automation`); this only checks
 // that what arrived has its shape, so a malformed answer is never mistaken for
 // a policy and the caller keeps the one it had.
 

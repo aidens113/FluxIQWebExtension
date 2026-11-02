@@ -276,7 +276,7 @@ export {
 } from "./extraction";
 
 // Whether a condition holds of a value, and the number a value states, are
-// Core's (`fluxiq/automation-studio/nodes`): the page, the resolver and Core's
+// Core's (`fluxiq/components/automation`): the page, the resolver and Core's
 // dataset processing run the one reader. These names stay for the callers that
 // reach them through `domain/client`; they are the Core functions themselves,
 // not copies. A blank or whitespace-only value is absent under Core's rule.

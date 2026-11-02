@@ -31,7 +31,7 @@
 //
 // What each phrase *means* -- the comparisons, the reading of a number, the
 // pattern a `matches` compiles to -- is Core's (`automationStudioRecordCondition*`
-// in `fluxiq/automation-studio/nodes`), which the page, the resolver and Core's
+// in `fluxiq/components/automation`), which the page, the resolver and Core's
 // own dataset processing all run, so a condition reads one way everywhere. What
 // stays here is the lenient reading of how a model *writes* one.
 //

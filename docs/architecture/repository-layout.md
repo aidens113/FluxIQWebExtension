@@ -71,6 +71,25 @@ fingerprint matching under `domain/src/element-fingerprint/`, using Core's neutr
 `fluxiq/runtime/target-matching` contracts and aggregation. Its matcher is explicitly registered
 for importer, resolver, recording and policy dispatch contexts.
 
+Web SDK consumers use `fluxiq/components/automation/importer`, and native host
+binding uses `fluxiq/runtime/native-execution`. Core owns the actual importer,
+binding, environment, run-control, resource, output-dispatch and compiled/composite
+mechanisms. Web target preparation and browser semantics are supplied by trusted
+domain adapters; they cannot replace the registered action or its authorization.
+State and recording foundations share `@fluxiq/contracts/state` and
+`@fluxiq/contracts/recording`. Studio-specific persistence services continue through
+their program APIs. This paired extraction requires Core `fluxiq@0.27.0` and
+`@fluxiq/contracts@0.7.0` builds.
+
+Core also owns recording index/link/lookup mechanisms and draft amendment,
+binding and replay bookkeeping. Reference interpretation and browser presentation
+remain adapters. The public draft API is `fluxiq/runtime/flow-authoring`; it
+requires explicit typed presentation rather than embedding browser instructions.
+
+The full ownership audit is still active. After its Core and downstream refactors
+finish, the required separate Core chat-stream UI package will supply a reusable
+standard widget. Browser APIs, pairing and extension host bindings remain here.
+
 The extension is a browser-side client. It captures browser presence and
 recording evidence, sends state and domain events through FluxIQ's generic
 WebSocket gateway, executes authorized browser actions, and retains only

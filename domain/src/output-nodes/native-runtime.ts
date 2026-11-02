@@ -1,10 +1,6 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import type {
-  AutomationStudioImporterImplementationBundle,
-  AutomationStudioImporterSdkManifest,
-  AutomationStudioNativeNodeImplementation
-} from "fluxiq/automation-studio";
+import type { AutomationStudioImporterImplementationBundle, AutomationStudioImporterSdkManifest, AutomationStudioNativeNodeImplementation } from "fluxiq/components/automation/importer";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import { createWebElementMatcher } from "../element-fingerprint";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";

@@ -13,6 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationFailureRecord } from "../../../failure";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -34,9 +35,9 @@ test("a replayed step whose target is gone from the page it acted on is remember
   assert.equal(answered.resultCode, "core.replay.remembered");
   assert.equal((answered.evidence as JsonObject).ok, true);
   assert.equal(answered.resultReason, undefined);
-  // The press went out and found nothing: nothing was done to the page.
+  // Every attempt stopped at target resolution: the initial request and three retries did nothing to the page.
   assert.equal(answered.effectApplied, false);
-  assert.equal(site.commands.filter((command) => command.actionType === "web.dom.click").length, 1);
+  assert.equal(site.commands.filter((command) => command.actionType === "web.dom.click").length, 4);
 });
 
 test("a replayed step whose target is gone while the page is elsewhere, or where it was is unknown, is unreproducible", async () => {
@@ -133,7 +134,7 @@ function stub(start: string, elements?: JsonObject[]) {
         at = String(command.parameters.url);
         return { status: "succeeded", payload: {} };
       }
-      if (command.actionType === "web.dom.click") return { status: "failed", failure: { code: "web.target.not_found" }, error: "no" };
+      if (command.actionType === "web.dom.click") return { status: "failed", failure: webAutomationFailureRecord("web.target.not_found") as unknown as JsonObject, error: "no" };
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
