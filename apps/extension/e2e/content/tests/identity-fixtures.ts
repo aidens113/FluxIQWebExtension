@@ -44,8 +44,8 @@ type ActionOptions = NonNullable<ActionCommand["options"]>;
 export type Descriptor = NonNullable<Awaited<ReturnType<ContentHarness["runAction"]>>["element"]>;
 export type Rect = { x: number; y: number; width: number; height: number };
 
-/** The closed set's record for an ambiguous target, exactly as Core stores it. */
-export const TARGET_AMBIGUOUS = { category: "target_ambiguous", code: "web.target.ambiguous", retryable: false, stage: "target_resolution" };
+/** An unacted ambiguity can become unique while the existing target wait polls. */
+export const TARGET_AMBIGUOUS = { category: "target_ambiguous", code: "web.target.ambiguous", retryable: true, stage: "target_resolution", effect: "unacted" };
 /** And for one that could not be found at all. */
 export const TARGET_NOT_FOUND = { category: "target_not_found", code: "web.target.not_found", retryable: true, stage: "target_resolution" };
 

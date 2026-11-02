@@ -1,4 +1,4 @@
-import type { AutomationNodeParameter } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeParameter } from "fluxiq/components/automation";
 import { WEB_AUTOMATION_EXTRACT_READ_EXAMPLE, WEB_AUTOMATION_EXTRACT_READ_GRAMMAR } from "./catalog-text";
 
 /**

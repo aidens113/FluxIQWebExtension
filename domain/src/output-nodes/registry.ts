@@ -1,4 +1,4 @@
-import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioNodeDefinition } from "fluxiq/components/automation";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
 
 export function listWebAutomationOutputNodeDefinitions(): AutomationStudioNodeDefinition[] {

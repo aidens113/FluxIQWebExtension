@@ -283,7 +283,7 @@ export {
 export {
   automationStudioRecordConditionHolds as webAutomationExtractConditionHolds,
   readAutomationStudioRecordNumber as webAutomationExtractConditionNumber
-} from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
 
 // `web.dom.next_page`'s request and answer (contract C1) live in `./next-page`
 // and are re-exported here for the reason the extraction's are: `domain/client`

@@ -79,8 +79,8 @@ import {
   automationStudioRecordConditionPattern,
   readAutomationStudioRecordConditionDateBound,
   readAutomationStudioRecordConditionWithin
-} from "fluxiq/automation-studio/nodes";
-import type { AutomationStudioRecordCondition } from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
+import type { AutomationStudioRecordCondition } from "fluxiq/components/automation";
 import type { WebAutomationExtractConditionValue, WebAutomationExtractItemCondition } from "./request";
 
 /** Everything a condition says about its value, which is every part of one but the key that names it. */

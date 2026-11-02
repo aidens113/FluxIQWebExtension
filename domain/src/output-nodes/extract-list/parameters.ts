@@ -1,4 +1,4 @@
-import type { AutomationNodeParameter } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeParameter } from "fluxiq/components/automation";
 import { WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS } from "../../actions/extraction";
 import { WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR } from "./catalog-text";
 

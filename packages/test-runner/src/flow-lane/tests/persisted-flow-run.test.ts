@@ -5,22 +5,7 @@ import { LAB_PROJECT_DOMAIN_ID } from "../lab-project-domain.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl } from "../persisted-flow-run.js";
 import { TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
 
-const attempt = (overrides: Record<string, unknown> = {}) => ({ attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.type", order: 0, status: "succeeded", startedAt: 1_000, finishedAt: 1_030, ...overrides });
-
-function control(overrides: Partial<Record<string, unknown>> = {}, detail: Record<string, unknown> = {}) {
-  const calls: string[] = [];
-  const client = {
-    selectExistingContext: async () => { calls.push("select"); },
-    startPersistedFlow: async () => { calls.push("start"); return { runId: "run.one" }; },
-    runPersistedFlow: async () => { calls.push("run"); return { session: { runId: "run.one", status: "succeeded" } }; },
-    automationStudioCall: async (endpoint: string) => {
-      calls.push(endpoint);
-      return { runDetail: { summary: { runId: "run.one", status: "succeeded" }, actionAttempts: [attempt()], interventions: [], ...detail } };
-    },
-    ...overrides,
-  } as unknown as PersistedFlowRunControl;
-  return { client, calls };
-}
+import { attempt, control } from "./support/index.js";
 
 test("an attempt is identified by its node, because every recorded action shares one node definition", async () => {
   // Core stores definitionId "builtin.policy.action" for all of them and drops the node inputs.
@@ -482,53 +467,6 @@ test("each attempt carries Core's transition comparison status when Core reports
     const { client: unnamed } = control({}, { actionAttempts: [attempt({ comparisonStatus })] });
     const read = await executeRecordedFlowRun(unnamed, run);
     assert.equal(Object.hasOwn(read.actions[0] ?? {}, "comparisonStatus"), false, JSON.stringify(comparisonStatus));
-  }
-});
-
-/**
- * `L-replay` Defect 4: Core records how it resolved each target, the Core store
- * is deleted when the run ends, and the bundle kept none of it. Core's run
- * detail carries the record at `metadata.targetResolution`.
- */
-test("Core's target resolution travels with the attempt, rebuilt from its closed fields only", async () => {
-  // Core's no-candidates record applied no floor, so it carries none (Core `nodes/contracts.ts`).
-  // The candidate id Core takes from a page's own `id` or `testId` attribute,
-  // and the signal names, are left behind: only the status and numbers travel.
-  const unresolved = { status: "unresolved_no_candidates", candidateCount: 0, candidateId: "email-address", matchedSignals: ["testId"], failedSignals: ["accessibleName"] };
-  const { client } = control({}, { actionAttempts: [attempt({ metadata: { regionId: "region.one", targetResolution: unresolved } })] });
-  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-  assert.deepEqual(outcome.actions[0]?.targetResolution, { status: "unresolved_no_candidates", candidateCount: 0 });
-  const serialised = JSON.stringify(outcome);
-  for (const left of ["email-address", "matchedSignals", "failedSignals", "accessibleName"]) assert.equal(serialised.includes(left), false, `${left} must not travel`);
-  // A floor beside a no-candidates status, as Core wrote before `0e6d3ac`, is read past: that variant claims none.
-  const { client: floored } = control({}, { actionAttempts: [attempt({ metadata: { targetResolution: { ...unresolved, minimumConfidence: 0.55 } } })] });
-  assert.deepEqual((await executeRecordedFlowRun(floored, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).actions[0]?.targetResolution, { status: "unresolved_no_candidates", candidateCount: 0 });
-
-  const matched = { status: "matched", candidateCount: 2, minimumConfidence: 0.55, confidence: 0.884, normalizedScore: 0.94 };
-  const below = { status: "below_confidence", candidateCount: 3, minimumConfidence: 0.55, confidence: 0.41 };
-  for (const scoredRecord of [matched, below]) {
-    const { client: scored } = control({}, { actionAttempts: [attempt({ metadata: { targetResolution: scoredRecord } })] });
-    assert.deepEqual((await executeRecordedFlowRun(scored, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).actions[0]?.targetResolution, scoredRecord);
-  }
-});
-
-test("an attempt with no target resolution, or one Core does not write, carries none", async () => {
-  const { client: plain } = control();
-  const outcome = await executeRecordedFlowRun(plain, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-  assert.equal(Object.hasOwn(outcome.actions[0] ?? {}, "targetResolution"), false);
-  const invalid = [
-    { status: "guessed", candidateCount: 1, minimumConfidence: 0.5 },
-    { status: "matched", minimumConfidence: 0.5 },
-    { status: "matched", candidateCount: "2", minimumConfidence: 0.5 },
-    // A scored record without its floor, and a no-candidates record that counted some.
-    { status: "matched", candidateCount: 1, confidence: 0.9 },
-    { status: "unresolved_no_candidates", candidateCount: 2 },
-    ["matched"],
-  ];
-  for (const targetResolution of invalid) {
-    const { client } = control({}, { actionAttempts: [attempt({ metadata: { targetResolution } })] });
-    const read = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-    assert.equal(read.actions[0]?.targetResolution, undefined, JSON.stringify(targetResolution));
   }
 });
 

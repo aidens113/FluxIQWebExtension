@@ -1,4 +1,4 @@
-import type { AutomationNodeParameter } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeParameter } from "fluxiq/components/automation";
 
 /** Absence means ordinary typing; unresolved values cannot establish that. */
 export const WEB_AUTOMATION_SUBMIT_PARAMETER: AutomationNodeParameter = Object.freeze({

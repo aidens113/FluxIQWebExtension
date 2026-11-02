@@ -1,4 +1,4 @@
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { WebAutomationRequestPolicy, WebAutomationRequestPolicyInput } from "./contracts";
 
 // Core owns whether direct requests may be turned on at all (its

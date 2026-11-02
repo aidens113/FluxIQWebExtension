@@ -10,6 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { captured } from "./host/captured";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../output-nodes";
@@ -62,7 +63,7 @@ test("a web attempt gets a sanitized state ref sourced from web.dom.capture_snap
   (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#note", inputType: "text", value: "Leave at the door" });
   const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot } } }]);
   const boundary = createWebAutomationHostRuntime(seam);
-  const ref = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
+  const ref = await captured(boundary, captureInput(CLICK_NODE_ID));
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
@@ -94,7 +95,7 @@ test("a web attempt gets a sanitized state ref sourced from web.dom.capture_snap
 test("a state ref carries the page's own address as the token a reset navigates to", async () => {
   const location = "https://shop.test/s?k=wireless+earbuds&page=1#results";
   const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot: pageSnapshot(location, ["#next"]) } } }]);
-  const ref = await createWebAutomationHostRuntime(seam).captureStateSnapshot!(captureInput(CLICK_NODE_ID));
+  const ref = await captured(createWebAutomationHostRuntime(seam), captureInput(CLICK_NODE_ID));
 
   assert.deepEqual(ref.from, { location });
   assert.equal(ref.summary?.location, location);
@@ -103,7 +104,7 @@ test("a state ref carries the page's own address as the token a reset navigates 
 test("a state ref carries no reset token when the page's address holds something withheld", async () => {
   for (const url of ["https://shop.test/cart?token=leaked-token", "https://shop.test/account#access_token=abc", "https://user:pass@shop.test/"]) {
     const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot: pageSnapshot(url, ["#pay"]) } } }]);
-    const ref = await Promise.resolve(createWebAutomationHostRuntime(seam).captureStateSnapshot!(captureInput(CLICK_NODE_ID))).catch(() => undefined);
+    const ref = await Promise.resolve(captured(createWebAutomationHostRuntime(seam), captureInput(CLICK_NODE_ID))).catch(() => undefined);
     assert.equal(ref?.from, undefined, url);
     assert.doesNotMatch(JSON.stringify(ref ?? {}), /leaked-token|access_token=abc|user:pass/u, url);
   }
@@ -113,7 +114,7 @@ test("a recorded action, Core's policy node naming web.dom.click, gets a state r
   const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
   const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload }]);
   const boundary = createWebAutomationHostRuntime(seam);
-  const ref = await boundary.captureStateSnapshot!(captureInput(POLICY_ACTION_ID, "before_action", { outputId: "web.dom.click", selector: "#pay" }));
+  const ref = await captured(boundary, captureInput(POLICY_ACTION_ID, "before_action", { outputId: "web.dom.click", selector: "#pay" }));
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
@@ -137,7 +138,7 @@ test("a policy node naming no web output, or a web output on another node, is de
     captureInput("builtin.code.run", "before_action", { outputId: "web.dom.click" })
   ];
   for (const input of declined) {
-    await assert.rejects(async () => boundary.captureStateSnapshot!(input), /does not act on a page/u);
+    assert.deepEqual(await boundary.captureStateSnapshot!(input), { kind: "unavailable", reason: "unsupported_node" });
   }
   assert.equal(calls.length, 0);
 });
@@ -167,8 +168,8 @@ test("two summaries the boundary captured diff into the lines that came and went
   const after = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/thanks", ["#edit", "#receipt"]) } };
   const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: before }, { ok: true, status: "succeeded", payload: after }]);
   const boundary = createWebAutomationHostRuntime(seam);
-  const was = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
-  const now = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const was = await captured(boundary, captureInput(CLICK_NODE_ID));
+  const now = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
   const diff = await boundary.inspectStateDiff!({ before: was, after: now, node: { id: "node.1", definitionId: CLICK_NODE_ID }, attemptId: "a" });
   assert.equal(diff.locationChanged, true);
   assert.equal(diff.added, "button \"receipt\"");
@@ -188,9 +189,9 @@ test("a summary carries the document's identity beside the view, never in it, an
   const unusable = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/p?size=12", ["#six"], navigation("https://shop.test/p?size=12", "1759000000123.4")) } };
   const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: before }, { ok: true, status: "succeeded", payload: after }, { ok: true, status: "succeeded", payload: unusable }]);
   const boundary = createWebAutomationHostRuntime(seam);
-  const was = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
-  const now = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
-  const odd = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const was = await captured(boundary, captureInput(CLICK_NODE_ID));
+  const now = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
+  const odd = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
 
   assert.equal(was.summary?.documentTimeOrigin, origin);
   assert.doesNotMatch(String(was.summary?.page), /1759000000123/u);
@@ -206,8 +207,8 @@ test("each capture gets its own id, so a retry does not reuse the previous attem
   const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
   const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload }, { ok: true, status: "succeeded", payload }]);
   const boundary = createWebAutomationHostRuntime(seam);
-  const first = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
-  const second = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const first = await captured(boundary, captureInput(CLICK_NODE_ID));
+  const second = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
   assert.notEqual(first.stateSnapshotId, second.stateSnapshotId);
   assert.notEqual(first.stateRef, second.stateRef);
 });
@@ -215,10 +216,7 @@ test("each capture gets its own id, so a retry does not reuse the previous attem
 test("a node that never touches the page is declined without a gateway round trip", async () => {
   const { gateway: seam, calls } = gateway([]);
   const boundary = createWebAutomationHostRuntime(seam);
-  await assert.rejects(
-    () => Promise.resolve(boundary.captureStateSnapshot!(captureInput("builtin.llm.generate"))),
-    /does not act on a page/u
-  );
+  assert.deepEqual(await boundary.captureStateSnapshot!(captureInput("builtin.llm.generate")), { kind: "unavailable", reason: "unsupported_node" });
   assert.equal(calls.length, 0);
 });
 
@@ -331,9 +329,9 @@ function capturedPage(): Partial<OutputDispatchResult<JsonObject>> {
 test("the page the last step ended on, offered back at the next step's start, is answered without a second read", async () => {
   const { gateway: seam, calls } = gateway([capturedPage()]);
   const boundary = createWebAutomationHostRuntime(seam);
-  const ended = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const ended = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
   const next = { ...captureInput(POLICY_ACTION_ID, "before_action", { outputId: "web.dom.extract_list" }), attemptId: "node.2.attempt.1", previousStateRef: ended };
-  const started = await boundary.captureStateSnapshot!(next);
+  const started = await captured(boundary, next);
 
   assert.equal(calls.length, 1);
   // The same snapshot, every key a later reader uses with it: the view, `from`, the capture time.
@@ -344,18 +342,18 @@ test("the page the last step ended on, offered back at the next step's start, is
 test("an offered page is read again when it is not a step's start or not this host's snapshot, and a non-page node is still declined", async () => {
   const { gateway: seam, calls } = gateway(Array.from({ length: 4 }, capturedPage));
   const boundary = createWebAutomationHostRuntime(seam);
-  const ended = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const ended = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
   assert.equal(calls.length, 1);
 
-  const after = await boundary.captureStateSnapshot!({ ...captureInput(CLICK_NODE_ID, "after_action"), previousStateRef: ended });
+  const after = await captured(boundary, { ...captureInput(CLICK_NODE_ID, "after_action"), previousStateRef: ended });
   assert.notEqual(after, ended);
-  const foreign = await boundary.captureStateSnapshot!({ ...captureInput(CLICK_NODE_ID), previousStateRef: { stateSnapshotId: "other.1", stateRef: "other.1@x", capturedAt: 1, summary: {} } });
+  const foreign = await captured(boundary, { ...captureInput(CLICK_NODE_ID), previousStateRef: { stateSnapshotId: "other.1", stateRef: "other.1@x", capturedAt: 1, summary: {} } });
   assert.notEqual(foreign.stateSnapshotId, "other.1");
   const { summary: _view, ...viewlessRef } = ended;
-  const viewless = await boundary.captureStateSnapshot!({ ...captureInput(CLICK_NODE_ID), previousStateRef: viewlessRef });
+  const viewless = await captured(boundary, { ...captureInput(CLICK_NODE_ID), previousStateRef: viewlessRef });
   assert.notEqual(viewless, ended);
   assert.equal(calls.length, 4);
-  await assert.rejects(async () => boundary.captureStateSnapshot!({ ...captureInput("builtin.code.run"), previousStateRef: ended }), /does not act on a page/u);
+  assert.deepEqual(await boundary.captureStateSnapshot!({ ...captureInput("builtin.code.run"), previousStateRef: ended }), { kind: "unavailable", reason: "unsupported_node" });
   assert.equal(calls.length, 4);
 });
 
@@ -374,14 +372,14 @@ test("one web step's state captures take one page read where they took two", asy
     }
   };
   const boundary = createWebAutomationHostRuntime(seam);
-  const lastEnded = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const lastEnded = await captured(boundary, captureInput(CLICK_NODE_ID, "after_action"));
   const step = (offered: boolean) => ({ ...captureInput(CLICK_NODE_ID), attemptId: "node.2.attempt.1", ...(offered ? { previousStateRef: lastEnded } : {}) });
 
   async function timed(offered: boolean): Promise<{ ms: number; reads: number }> {
     const readsBefore = reads.count;
     const startedAt = performance.now();
-    await boundary.captureStateSnapshot!(step(offered));
-    await boundary.captureStateSnapshot!({ ...step(false), point: "after_action" });
+    await captured(boundary, step(offered));
+    await captured(boundary, { ...step(false), point: "after_action" });
     return { ms: performance.now() - startedAt, reads: reads.count - readsBefore };
   }
   const before = await timed(false);

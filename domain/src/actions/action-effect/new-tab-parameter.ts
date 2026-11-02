@@ -1,4 +1,4 @@
-import type { AutomationNodeParameter } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeParameter } from "fluxiq/components/automation";
 
 /** Ordinary navigation reuses its tab; an unresolved new-tab request may open one. */
 export const WEB_AUTOMATION_NEW_TAB_PARAMETER: AutomationNodeParameter = Object.freeze({

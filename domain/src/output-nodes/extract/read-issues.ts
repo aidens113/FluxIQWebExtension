@@ -26,7 +26,7 @@
 // refused; `attribute` may be bound when the mode is `attribute`, since Core
 // resolves it before the dispatch reads it.
 
-import { isAutomationNodeParameterStateBinding as isBinding } from "fluxiq/automation-studio/nodes";
+import { isAutomationNodeParameterStateBinding as isBinding } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_EXTRACT_READ_MODES, webAutomationExtractReadValue, type WebAutomationExtractRead } from "../../actions/extraction";
 

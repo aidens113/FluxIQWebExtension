@@ -8,7 +8,7 @@
 // depending on which of the two produced it.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { validateAutomationStudioRecords, type AutomationStudioRecordSchema } from "fluxiq/automation-studio/nodes";
+import { validateAutomationStudioRecords, type AutomationStudioRecordSchema } from "fluxiq/components/automation";
 import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue, type WebAutomationExtractionItemMark, type WebAutomationExtractionRejectionObservation } from "../../../actions/extraction";
 import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
 import { webAutomationExtractListDispatch } from "../../../output-nodes";

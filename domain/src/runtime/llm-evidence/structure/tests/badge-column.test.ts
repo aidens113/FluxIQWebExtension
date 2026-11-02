@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import { webAutomationExtractListRequestValue } from "../../../../actions/extraction";
 import { webAutomationStructureDetectionValue } from "../../../../extraction";
 import { splitDetectedStructure } from "../packet";

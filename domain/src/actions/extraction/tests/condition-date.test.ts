@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_RECORD_CONDITION_DATE_CASES, automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_RECORD_CONDITION_DATE_CASES, automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import { webAutomationExtractConditionSayingValue } from "../condition-grammar";
 import { webAutomationExtractListRequestRead } from "../read-request";
 

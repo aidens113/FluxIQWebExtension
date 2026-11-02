@@ -1,4 +1,4 @@
-import type { AutomationStudioResolvedActionEffect } from "fluxiq/automation-studio/action-effect";
+import type { AutomationStudioResolvedActionEffect } from "fluxiq/components/automation/action-effect";
 // Asking Core whether an action the model declared may be taken.
 //
 // The consequence classes are what the model says its own action does -- the

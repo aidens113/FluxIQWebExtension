@@ -6,7 +6,7 @@
 // The ids are the old settings drawer's, kept so nothing that found a field by
 // id has to change with the words.
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY as POLICY } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY as POLICY } from "fluxiq/components/automation";
 import type { ExtensionCaptureAllowed, FluxIQSettings } from "../../shared/protocol";
 
 /** The `disabled` mark for a switch the policy does not allow; nothing for one it does. */

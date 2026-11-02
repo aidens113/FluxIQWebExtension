@@ -53,7 +53,7 @@ import {
   automationStudioNameEditDistance,
   automationStudioNameTokenCredit,
   normalizeAutomationStudioName
-} from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
 
 /**
  * Whether `column` is `written` with a part swapped for another (header):

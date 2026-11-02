@@ -25,7 +25,7 @@
 // nothing structural to go on, and no type is a refusal of anything: Core reads
 // an absent type as unknown.
 
-import { readAutomationStudioRecordDate, readAutomationStudioRecordNumber } from "fluxiq/automation-studio/nodes";
+import { readAutomationStudioRecordDate, readAutomationStudioRecordNumber } from "fluxiq/components/automation";
 import type { WebAutomationExtractionProposalFieldSpec } from "../../../extraction";
 
 /** The types a column may be said to hold (CC1), Core's domain-neutral words. */

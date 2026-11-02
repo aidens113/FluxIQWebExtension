@@ -29,7 +29,7 @@
 // it quotes nothing the rows beside it do not already quote, and it is bounded:
 // at most `NAMED_ROWS` rows, each label cut to `LABEL_CHARACTERS`.
 
-import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, readAutomationStudioRecordNumber } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, readAutomationStudioRecordNumber } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationExtractItemCondition } from "../../../actions/extraction";
 import { isWithheldText } from "../withheld";

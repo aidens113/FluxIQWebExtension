@@ -30,3 +30,5 @@ export * from "./close-opened-tabs-parameter";
 export * from "./interrupted-action";
 export * from "./reconcile";
 export { webActionabilityProperty } from "../actions/actionability";
+
+export { createWebElementMatcher, WEB_ELEMENT_FINGERPRINT_WEIGHTS, type WebElementFingerprint, type WebElementFingerprintScore } from "../element-fingerprint";

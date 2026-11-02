@@ -1,4 +1,4 @@
-import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/components/automation";
 import { WEB_AUTOMATION_NEXT_PAGE_EXAMPLE, WEB_AUTOMATION_NEXT_PAGE_GRAMMAR } from "./catalog-text";
 
 /**

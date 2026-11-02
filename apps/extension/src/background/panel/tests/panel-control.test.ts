@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings, PanelRelayResponse } from "../../../shared/protocol";

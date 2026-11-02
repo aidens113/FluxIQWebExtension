@@ -16,7 +16,7 @@ import {
   type ClientGatewayOutboxBinding,
   type ClientGatewayOutboxContext
 } from "@fluxiq/client-gateway-websocket";
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../shared/protocol";
 import { effectiveSettings } from "../../capture-policy/index";

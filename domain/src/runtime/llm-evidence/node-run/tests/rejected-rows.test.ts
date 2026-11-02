@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListDispatch } from "../../../../output-nodes/extract-list";
 import type { WebAutomationExtractItemCondition } from "../../../../actions/extraction";
