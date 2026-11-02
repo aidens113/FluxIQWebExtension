@@ -41,7 +41,7 @@ import { DEFAULT_CORE_API_URL, MAX_EVENT_QUEUE_SIZE } from "../shared/constants"
 import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { ClientGatewayOutbox } from "@fluxiq/client-gateway-websocket";
-import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { allowedCapture, CapturePolicySource, effectiveSettings } from "./capture-policy/index";
 import { reportSavedStateRepair, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are

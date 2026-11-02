@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { captured } from "./host/captured";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../output-nodes";
@@ -41,7 +42,7 @@ const LIBRARY: JsonObject[] = [
 ];
 
 test("a snapshot's summary carries each option group and the page's result count beside the view", async () => {
-  const ref = await createWebAutomationHostRuntime(seam(snapshot(LIBRARY))).captureStateSnapshot!({ node: { id: "node.1", definitionId: CLICK_NODE_ID, parameterValues: {} }, attemptId: "a.1", inputs: {}, point: "after_action" });
+  const ref = await captured(createWebAutomationHostRuntime(seam(snapshot(LIBRARY))), { node: { id: "node.1", definitionId: CLICK_NODE_ID, parameterValues: {} }, attemptId: "a.1", inputs: {}, point: "after_action" });
   assert.deepEqual(ref.summary?.groups, [{ name: "Format", options: [{ words: "Hardcover", count: 40, chosen: true }, { words: "Paperback", count: 12, chosen: false }] }]);
   assert.equal(ref.summary?.resultCount, 40);
   assert.equal(typeof ref.summary?.page, "string");
@@ -49,7 +50,7 @@ test("a snapshot's summary carries each option group and the page's result count
 
 test("a page that shows no group and states no count adds neither key", async () => {
   const plain = [raw("a", "#home", 0, { accessibleName: "Home", visibleText: "Home", href: "https://library.test/" }, { landmark: "main" })];
-  const ref = await createWebAutomationHostRuntime(seam(snapshot(plain))).captureStateSnapshot!({ node: { id: "node.1", definitionId: CLICK_NODE_ID, parameterValues: {} }, attemptId: "a.1", inputs: {}, point: "after_action" });
+  const ref = await captured(createWebAutomationHostRuntime(seam(snapshot(plain))), { node: { id: "node.1", definitionId: CLICK_NODE_ID, parameterValues: {} }, attemptId: "a.1", inputs: {}, point: "after_action" });
   assert.equal(Object.hasOwn(ref.summary ?? {}, "groups"), false);
   assert.equal(Object.hasOwn(ref.summary ?? {}, "resultCount"), false);
 });

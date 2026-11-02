@@ -4,8 +4,9 @@ import type {
   AutomationStudioImporterImplementationBundle,
   AutomationStudioImporterSdkManifest,
   AutomationStudioNativeNodeImplementation
-} from "fluxiq/automation-studio/nodes";
-import type { AutomationNodeExecutionResult } from "fluxiq/automation-studio/nodes";
+} from "fluxiq/automation-studio";
+import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
+import { createWebElementMatcher } from "../element-fingerprint";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationCheckWaitParameters } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
@@ -16,6 +17,8 @@ import { webAutomationExtractListDispatch } from "./extract-list";
 import { webAutomationNextPageDispatch } from "./next-page";
 import { webAutomationOutputNodeParameterContracts } from "./parameter-contracts";
 import { webAutomationScopedToRow } from "./targets";
+
+const webElementMatcher = createWebElementMatcher();
 
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -48,6 +51,7 @@ export function createWebAutomationOutputNodeImplementationBundle(
     // Core checks these when a Flow is planned, so a malformed extraction a
     // model wrote is refused before anything runs rather than at dispatch.
     parameterContracts: { ...webAutomationOutputNodeParameterContracts },
+    elementMatcher: webElementMatcher,
     ...extension
   };
 }

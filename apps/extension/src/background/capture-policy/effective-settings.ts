@@ -4,7 +4,7 @@
 // the policy allows them and the person turned them on. The person's stored
 // preference is left as it is, so a policy that relaxes later restores it.
 
-import { clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { FluxIQSettings } from "../../shared/protocol";
 
 export function effectiveSettings(settings: FluxIQSettings, policy: AutomationStudioRecordingCapturePolicy): FluxIQSettings {

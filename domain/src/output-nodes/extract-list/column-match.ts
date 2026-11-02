@@ -98,7 +98,7 @@ import {
   automationStudioRecordConditionComparesDates,
   type AutomationStudioNameMatch,
   type AutomationStudioNameValueShape
-} from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
 import type { WebAutomationExtractConditionSaying, WebAutomationExtractField } from "../../actions/extraction";
 import { webExtractionNameSwapsPart } from "./swapped-name";
 

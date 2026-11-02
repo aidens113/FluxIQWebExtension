@@ -63,6 +63,14 @@ The testing packages are described in
 
 ## Responsibility Boundaries
 
+Core's executable graph, neutral node pack and graph engine are framework capabilities,
+separate from Automation Studio's editor/project services. New web-domain and browser imports
+use `fluxiq/components/automation` (including its `action-effect` subpath);
+legacy Studio imports remain compatibility exports. The web domain owns calibrated browser
+fingerprint matching under `domain/src/element-fingerprint/`, using Core's neutral
+`fluxiq/runtime/target-matching` contracts and aggregation. Its matcher is explicitly registered
+for importer, resolver, recording and policy dispatch contexts.
+
 The extension is a browser-side client. It captures browser presence and
 recording evidence, sends state and domain events through FluxIQ's generic
 WebSocket gateway, executes authorized browser actions, and retains only

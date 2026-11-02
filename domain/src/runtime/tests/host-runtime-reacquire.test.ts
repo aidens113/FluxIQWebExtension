@@ -6,9 +6,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { captured } from "./host/captured";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
-import type { AutomationStudioHostStateSnapshotRef, AutomationStudioUnboundTargetReacquireRequest } from "fluxiq/automation-studio";
+import type { AutomationStudioHostStateSnapshotRef, AutomationStudioUnboundTargetReacquireRequest } from "fluxiq/runtime/automation-host";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
 
@@ -99,7 +100,7 @@ function identityRequest(beforeAction: AutomationStudioHostStateSnapshotRef | un
 }
 
 async function identityBefore(boundary: ReturnType<typeof createWebAutomationHostRuntime>, node = identityNode()) {
-  return boundary.captureStateSnapshot!({ node, attemptId: "apply.attempt.1", inputs: {}, point: "before_action" });
+  return captured(boundary, { node, attemptId: "apply.attempt.1", inputs: {}, point: "before_action" });
 }
 
 test("native identity recovery uses the actual prior session/tab/frame and returns only selector and element sets", async () => {
@@ -215,9 +216,9 @@ test("unknown, failed and partial child provenance cannot be inferred from an un
 test("a reused top ref preserves top provenance and obtains a fresh child prior for the current attempt", async () => {
   const page = identityBrowser();
   const boundary = createWebAutomationHostRuntime(page.gateway);
-  const ended = await boundary.captureStateSnapshot!({ node: identityNode(), attemptId: "previous.attempt", inputs: {}, point: "after_action" });
+  const ended = await captured(boundary, { node: identityNode(), attemptId: "previous.attempt", inputs: {}, point: "after_action" });
   const node = identityNode({ browserFrameId: 4, browserFrameUrlPath: "/editor" });
-  const before = await boundary.captureStateSnapshot!({ node, attemptId: "apply.attempt.1", inputs: {}, point: "before_action", previousStateRef: ended });
+  const before = await captured(boundary, { node, attemptId: "apply.attempt.1", inputs: {}, point: "before_action", previousStateRef: ended });
   assert.equal(before, ended);
   assert.equal(page.sent.length, 2, "reuse saves the top read while retaining the actual child read");
   assert.equal(before.summary?.documentTimeOrigin, 10);
@@ -325,7 +326,7 @@ test("reacquireTarget finds a pass's row by the read's declared identity", async
 test("returnToSourcePlace stays when the page is where the source ran, and says so without moving", async () => {
   const page = browser(FEED);
   const boundary = createWebAutomationHostRuntime(page.gateway);
-  await boundary.captureStateSnapshot!({ node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "before_action" });
+  await captured(boundary, { node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "before_action" });
   assert.equal(await boundary.returnToSourcePlace!({ node: like, source: read, sourceAttempt }), "same_place");
   assert.equal(page.sent.filter((command) => command.outputId === "web.browser.navigate").length, 0);
 });
@@ -333,10 +334,10 @@ test("returnToSourcePlace stays when the page is where the source ran, and says 
 test("returnToSourcePlace navigates back to the recorded location when the page moved", async () => {
   const page = browser(FEED);
   const boundary = createWebAutomationHostRuntime(page.gateway);
-  await boundary.captureStateSnapshot!({ node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "before_action" });
+  await captured(boundary, { node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "before_action" });
   // A later capture of the same attempt on another page does not move where it ran.
   page.moveTo(PROFILE);
-  await boundary.captureStateSnapshot!({ node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "after_action" });
+  await captured(boundary, { node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "after_action" });
   assert.equal(await boundary.returnToSourcePlace!({ node: like, source: read, sourceAttempt }), "returned");
   assert.deepEqual(page.sent.at(-1), { outputId: "web.browser.navigate", payload: { url: FEED } });
 });
@@ -344,7 +345,7 @@ test("returnToSourcePlace navigates back to the recorded location when the page 
 test("returnToSourcePlace is unavailable when the move fails, and same_place with nothing recorded", async () => {
   const page = browser(FEED, true);
   const boundary = createWebAutomationHostRuntime(page.gateway);
-  await boundary.captureStateSnapshot!({ node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "before_action" });
+  await captured(boundary, { node: read, attemptId: sourceAttempt.attemptId, inputs: {}, point: "before_action" });
   page.moveTo(PROFILE);
   assert.equal(await boundary.returnToSourcePlace!({ node: like, source: read, sourceAttempt }), "unavailable");
   assert.equal(await boundary.returnToSourcePlace!({ node: like, source: read, sourceAttempt: { ...sourceAttempt, attemptId: "other.attempt.1" } }), "same_place");

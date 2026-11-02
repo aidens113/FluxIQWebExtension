@@ -9,7 +9,7 @@
 // policy allows direct requests (`requestsChoice`); otherwise it is kept as the
 // person set it, and effective settings keep requests off where they are used.
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { FluxIQSettings } from "../../shared/protocol";
 import { requestsChoice } from "../capture-policy/index";
 

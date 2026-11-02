@@ -203,7 +203,7 @@ through failures and retries. A thrown gateway acknowledgement becomes a typed
 unknown result without exposing exception text; an uncertain committing action
 is checked and held rather than blindly repeated. Proven unacted/not-landed
 actions retain automatic retries. The browser-safe helper imports only Core's
-`fluxiq/automation-studio/action-effect` public subpath.
+`fluxiq/components/automation/action-effect` public subpath.
 
 Core 0.17.1 also uses that floor for optional absent steps. A known commit is
 recorded as `notDone` when skipped, including a click with a dismissal label;

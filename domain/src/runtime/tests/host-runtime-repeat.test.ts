@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { captured } from "./host/captured";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../output-nodes";
@@ -31,7 +32,7 @@ function host(pages: JsonObject[], sources: string[] = [], sessions: string[] = 
   const runtime = createWebAutomationHostRuntime(gateway);
   async function capture(node = read, point: "before_action" | "after_action" = "before_action") {
     const input = { node, inputs: {}, attemptId: `attempt.${commands}`, point };
-    const stateRef = await runtime.captureStateSnapshot!(input);
+    const stateRef = await captured(runtime, input);
     return { ...input, stateRef } as ObserveInput;
   }
   return { runtime, capture, commands: () => commands };
@@ -159,7 +160,7 @@ test("accepted previous state reuse retains private proof while forged and evict
   const h = host([snapshot()]);
   const first = await h.capture();
   const before = await h.runtime.observeRuntimeRepeat!(first);
-  const reused = await h.runtime.captureStateSnapshot!({ ...first, previousStateRef: first.stateRef });
+  const reused = await captured(h.runtime, { ...first, previousStateRef: first.stateRef });
   assert.equal(reused, first.stateRef);
   assert.deepEqual(await h.runtime.observeRuntimeRepeat!({ ...first, stateRef: reused }), before);
   assert.equal(h.commands(), 1);

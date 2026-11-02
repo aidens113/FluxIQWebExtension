@@ -190,6 +190,10 @@ test.describe("the Level 1 veto: a fast answer is still checked before it is act
     // No authored name either, so the name query does not fire before the class
     // set does.
     expect(recorded.name).toBeUndefined();
+    // Isolate corroboration for a legacy recording without place context. A
+    // current recording's banner would reject the moved control even earlier.
+    const { context, ...legacy } = recorded;
+    expect(context?.landmark).toBe("banner");
 
     // The rebuild, the site's `phone-quotes` mode: both quote buttons are
     // gone, and a call button drawn by the header's component -- an icon with
@@ -221,7 +225,7 @@ test.describe("the Level 1 veto: a fast answer is still checked before it is act
     const reply = await harness.runAction({
       commandId: "veto:uncorroborated-class-set",
       actionType: "web.dom.click",
-      options: recordedElement(recorded)
+      options: recordedElement(legacy)
     });
 
     expect(reply).toMatchObject({

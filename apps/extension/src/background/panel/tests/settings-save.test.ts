@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultSettings } from "../../../shared/browser";
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY } from "fluxiq/components/automation";
 import { mergeSettings } from "../settings-save";
 
 test("under Core's default a save never changes the stored request choice, while ordinary switches still save", () => {

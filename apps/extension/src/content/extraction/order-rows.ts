@@ -45,7 +45,7 @@ import {
   countAutomationStudioRecordUnsortableRows,
   sortAutomationStudioRecordRows,
   type AutomationStudioRecordSortKey
-} from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
 import type { WebAutomationExtractListRequest } from "../types";
 
 type Row = Readonly<Record<string, string | null>>;

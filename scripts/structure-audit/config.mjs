@@ -18,7 +18,28 @@ export const CONFIG = {
   testRootDirNames: ["tests", "e2e"],
 
   // Import specifiers that must never appear in this repository's sources.
-  forbiddenImports: [],
+  forbiddenImports: [
+    {
+      from: "domain/src",
+      pattern: /^fluxiq\/automation-studio\/(?:nodes|action-effect)$/,
+      reason: "The neutral node pack is framework-owned. Import fluxiq/components/automation or its action-effect subpath."
+    },
+    {
+      from: "apps/extension/src",
+      pattern: /^fluxiq\/automation-studio\/(?:nodes|action-effect)$/,
+      reason: "Browser clients consume framework-owned nodes through fluxiq/components/automation."
+    },
+    {
+      from: "domain/src",
+      pattern: /^(?:fluxiq|@fluxiq\/[^/]+)\/(?:src|dist)(?:\/|$)|(?:^|\/)!FluxIQ\/packages\//,
+      reason: "The web domain consumes only public Core package exports, never its source or build internals."
+    },
+    {
+      from: "apps/extension/src",
+      pattern: /^(?:fluxiq|@fluxiq\/[^/]+)\/(?:src|dist)(?:\/|$)|(?:^|\/)!FluxIQ\/packages\//,
+      reason: "Browser clients consume only public Core package exports, never its source or build internals."
+    }
+  ],
 
   // Directory-scoped import boundaries: files under `from` must not import
   // anything resolving under `to`. AGENTS.md: domain code must not depend on

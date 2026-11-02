@@ -1,4 +1,4 @@
-import type { AutomationStudioNodeActionEffect } from "fluxiq/automation-studio/action-effect";
+import type { AutomationStudioNodeActionEffect } from "fluxiq/components/automation/action-effect";
 import type { WebAutomationActionType } from "../types";
 
 /** Trusted verb floors, independent of permission-declaration requirements.

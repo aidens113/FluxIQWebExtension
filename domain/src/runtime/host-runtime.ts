@@ -21,9 +21,8 @@
 //    A web node is a web output node (`web.output.*`), or a recorded action:
 //    Core runs those as `builtin.policy.action` and names the web output in
 //    `parameterValues.outputId`, so such a node is recognised only by the
-//    `outputId` Core passes with it. The seam has no way to say "not this one"
-//    other than to throw, and Core catches, which is why declining looks like a
-//    rejection here.
+//    `outputId` Core passes with it. Other nodes return an explicit
+//    unsupported-node outcome; gateway and malformed snapshot failures remain errors.
 //  - **A diff needs a snapshot on both sides.** With one side missing, every
 //    element on the other would read as added or removed, a claim about a page
 //    nobody observed, so `inspectStateDiff` declines instead.
@@ -84,7 +83,7 @@
 
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQ } from "fluxiq";
-import type { AutomationStudioHostResourcePort } from "fluxiq/automation-studio";
+import type { AutomationStudioHostResourcePort, AutomationStudioHostRuntimeBoundary, AutomationStudioHostStateSnapshotRef } from "fluxiq/runtime/automation-host";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
@@ -111,11 +110,9 @@ import { webCapturedTargetObservation, createWebTargetPlaces, type WebTargetScop
 import { createWebRuntimeRepeatMemo } from "./runtime-repeat";
 
 /**
- * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
- * its public entry, so it is read off the method that consumes it rather than
- * restated here, where a copy would silently drift.
+ * Core's public host port, shared by the engine and domain adapters.
  */
-export type WebAutomationHostRuntimeBoundary = Parameters<FluxIQ["programs"]["automationStudio"]["bindHostRuntime"]>[0];
+export type WebAutomationHostRuntimeBoundary = AutomationStudioHostRuntimeBoundary;
 
 /**
  * The boundary plus what Core's interface does not declare yet: `factEvaluator`
@@ -192,7 +189,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
   let captures = 0;
   const beforeAction = async (
     input: Parameters<NonNullable<WebAutomationHostRuntimeBoundary["captureStateSnapshot"]>>[0],
-    state: Awaited<ReturnType<NonNullable<WebAutomationHostRuntimeBoundary["captureStateSnapshot"]>>>
+    state: AutomationStudioHostStateSnapshotRef
   ): Promise<{ kind: "captured" | "absent" | "unreadable" | "rejected" }> => {
     if (input.point !== "before_action") return { kind: "absent" };
     targetPlaces.bind(input.attemptId, state);
@@ -230,7 +227,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
     hostResources: createWebAutomationHostResourcePort({ sessions }),
     async captureStateSnapshot(input) {
       if (!actsOnPage(input.node)) {
-        throw new Error(`Node ${input.node.definitionId} does not act on a page, so no web state was captured.`);
+        return { kind: "unavailable", reason: "unsupported_node" };
       }
       // The page the previous step ended on, which Core offers only when no
       // step started since and it arrived moments ago: the same page, so it is
@@ -254,9 +251,8 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
         }
       });
       if (!result.ok) throw new Error(result.error ?? "The web state snapshot was not captured.");
-      // Throws when the client answered without a snapshot, which is the honest
-      // outcome: Core catches it and the attempt carries no state ref, rather
-      // than a ref pointing at nothing.
+      // A client answer without a snapshot is a capture failure. No state ref
+      // is fabricated for it; this differs from an unsupported Core node.
       // The page as the model reads every page (t223): Core returns this summary
       // to a recovery model as `core.state_snapshot`, and diffs two of them.
       // Beside the view, never in it: the document's identity, so the diff can

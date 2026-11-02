@@ -23,3 +23,5 @@ export * from "./client/capabilities";
 export * from "./client/gateway-mapping";
 // The tab message a DOM action travels in, for a host that runs the content code outside the extension (the offline snapshot page).
 export { executeActionMessage, type ExecuteActionMessage } from "./client";
+
+export { createWebElementMatcher, WEB_ELEMENT_FINGERPRINT_WEIGHTS } from "./element-fingerprint";

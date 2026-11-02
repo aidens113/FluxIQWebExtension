@@ -25,7 +25,7 @@
 // rows with every value empty never merged. A `{by}` naming a subset is kept as
 // written.
 
-import type { AutomationStudioRecordOutput } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioRecordOutput } from "fluxiq/components/automation";
 import { isWebAutomationExtractFieldRead, type WebAutomationExtractListRequest } from "../../actions/extraction";
 
 /** A record output's post-processing: Core's `AutomationStudioRecordProcessing`. */

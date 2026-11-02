@@ -30,6 +30,7 @@ import { TARGET_AMBIGUOUS, describe, quoteDrawer, trackClicks } from "./identity
 const HEADER = "header button[data-open-quote]";
 const HERO = "main button[data-open-quote]";
 const BOTH = "button[data-open-quote]";
+const AMBIGUITY_WAIT = "; the execution did not recover within its 5 attempts after absorbing target_ambiguous, target_ambiguous, target_ambiguous, target_ambiguous, target_ambiguous, waiting 3750 ms";
 
 test.describe("company-website's two Get a free quote buttons: a tie is reported, not guessed", () => {
   test("an ambiguous selector fails TARGET_AMBIGUOUS and names what tied", async ({ openHarness, page }) => {
@@ -61,7 +62,7 @@ test.describe("company-website's two Get a free quote buttons: a tie is reported
     });
     expect(ambiguous).toMatchObject({
       status: "failed",
-      failure: { ...TARGET_AMBIGUOUS, expected: "one element matching element fingerprint", actual: '2 elements matched: button "Get a free quote" (1.00), button "Get a free quote" (1.00)' },
+      failure: { ...TARGET_AMBIGUOUS, expected: "one element matching element fingerprint", actual: '2 elements matched: button "Get a free quote" (1.00), button "Get a free quote" (1.00)' + AMBIGUITY_WAIT },
       resolution: { strategy: "fingerprint", candidateCount: 2 }
     });
 
@@ -77,7 +78,7 @@ test.describe("company-website's two Get a free quote buttons: a tie is reported
     });
     expect(withClass).toMatchObject({
       status: "failed",
-      failure: { ...TARGET_AMBIGUOUS, actual: '2 elements matched: button "Get a free quote" (1.00), button "Get a free quote" (0.86)' },
+      failure: { ...TARGET_AMBIGUOUS, actual: '2 elements matched: button "Get a free quote" (1.00), button "Get a free quote" (0.86)' + AMBIGUITY_WAIT },
       resolution: { strategy: "fingerprint", candidateCount: 2 }
     });
     expect(await clicks()).toEqual([]);

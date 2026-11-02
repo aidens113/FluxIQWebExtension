@@ -72,7 +72,7 @@
 // never more of the item.
 
 import { WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
-import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";

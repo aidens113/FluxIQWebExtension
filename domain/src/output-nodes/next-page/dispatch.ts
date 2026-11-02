@@ -17,7 +17,7 @@
 // is sent in both places.
 
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import type { AutomationNodeExecutionResult } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationNextPageRequestValue } from "../../actions/next-page";
 import { WEB_AUTOMATION_NEXT_PAGE_TIMEOUT_MS } from "./parameters";

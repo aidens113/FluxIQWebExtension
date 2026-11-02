@@ -46,7 +46,7 @@
 // which Core carries without reading and hands back here for a replay -- where
 // it is resolved through this same function, and so corrected again.
 
-import { automationStudioMatchName, type AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import { automationStudioMatchName, type AutomationStudioNodeDefinition } from "fluxiq/components/automation";
 import { webAutomationActionEffect } from "../../../actions/effect";
 import { WEB_AUTOMATION_ACTION_SAFETY } from "../../../actions/safety";
 import type { WebAutomationActionType } from "../../../actions/types";

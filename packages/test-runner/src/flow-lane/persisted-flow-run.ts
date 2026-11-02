@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type LlmActionConsequence, type RunActionTiming, type RunExtractionRead, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
-import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeTargetResolution } from "fluxiq/components/automation";
 import { RunnerFailure } from "../failure.js";
 import { comparisonStatusOf } from "./comparison-status.js";
 import { extractionReadOf } from "./extraction-read.js";
@@ -237,7 +237,7 @@ type PersistedTargetResolutionField = "status" | "candidateCount" | "minimumConf
 /** Narrows each variant separately, so a variant keeps only the fields it defines. */
 type PersistedFieldsOf<Variant> = Variant extends unknown ? Pick<Variant, Extract<keyof Variant, PersistedTargetResolutionField>> : never;
 
-type ScoredTargetResolutionStatus = Exclude<AutomationNodeTargetResolution["status"], "unresolved_no_candidates">;
+type ScoredTargetResolutionStatus = Exclude<AutomationNodeTargetResolution["status"], "unresolved_no_candidates" | "unresolved_no_matcher">;
 
 /**
  * Every status Core scores a candidate under, keyed by Core's own statuses, so
@@ -718,6 +718,12 @@ function targetResolutionOf(attempt: Record<string, unknown>): PersistedTargetRe
   const record = optionalRecord(optionalRecord(attempt.metadata)?.targetResolution);
   if (!record) return undefined;
   if (record.status === "unresolved_no_candidates") return record.candidateCount === 0 ? { status: "unresolved_no_candidates", candidateCount: 0 } : undefined;
+  if (record.status === "unresolved_no_matcher") {
+    const candidateCount = record.candidateCount;
+    return isFiniteNumber(candidateCount) && Number.isSafeInteger(candidateCount) && candidateCount >= 0
+      ? { status: "unresolved_no_matcher", candidateCount }
+      : undefined;
+  }
   const { status, candidateCount, minimumConfidence, confidence, normalizedScore } = record;
   if (!isScoredStatus(status) || !isFiniteNumber(candidateCount) || !isFiniteNumber(minimumConfidence)) return undefined;
   return {

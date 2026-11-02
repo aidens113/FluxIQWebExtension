@@ -2,7 +2,7 @@
 // panel needs to disable a switch Core forbids. Only `allowed` crosses to the
 // panel: defaults are applied by Core's clamp here in the background.
 
-import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { ExtensionCaptureAllowed } from "../../shared/protocol";
 
 export function allowedCapture(policy: AutomationStudioRecordingCapturePolicy): ExtensionCaptureAllowed {

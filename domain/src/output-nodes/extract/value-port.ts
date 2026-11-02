@@ -1,4 +1,4 @@
-import type { AutomationNodePort } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodePort } from "fluxiq/components/automation";
 
 /**
  * Where in `web.dom.extract`'s dispatched answer the value it read lies: the

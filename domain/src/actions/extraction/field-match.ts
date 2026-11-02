@@ -40,7 +40,7 @@
 // that grammar (`content/extraction/field-spec.ts`) and a second parser of it
 // here would disagree with the first about which selectors carry an attribute.
 
-import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, automationStudioMatchName } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, automationStudioMatchName } from "fluxiq/components/automation";
 import type { WebAutomationExtractConditionSaying } from "./condition-grammar";
 import type { WebAutomationExtractField } from "./request";
 

@@ -1,4 +1,4 @@
-import { resolveAutomationStudioNodeActionEffect, type AutomationStudioResolvedActionEffect } from "fluxiq/automation-studio/action-effect";
+import { resolveAutomationStudioNodeActionEffect, type AutomationStudioResolvedActionEffect } from "fluxiq/components/automation/action-effect";
 import { WEB_AUTOMATION_NODE_ACTION_EFFECT } from "./table";
 import { WEB_AUTOMATION_SUBMIT_PARAMETER } from "./submit-parameter";
 import { WEB_AUTOMATION_NEW_TAB_PARAMETER } from "./new-tab-parameter";
