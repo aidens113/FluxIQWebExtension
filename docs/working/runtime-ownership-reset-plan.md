@@ -11,13 +11,13 @@ Related: [existing record](runtime-ownership-refactor.md)
 
 ## Current State
 
-The user authorized plan execution on 2026-11-02 ("Ok follow the plan") and additionally requested the fastest safe approach. The [Core plan](../../../!FluxIQ/docs/working/runtime-ownership-reset-plan.md) owns active SQL, callback-guard and bounded stall briefs, and the parallel time-reduction investigation.
+The user authorized plan execution on 2026-11-02 ("Ok follow the plan") and additionally requested the fastest safe approach. The paired Core plan (`../!FluxIQ/docs/working/runtime-ownership-reset-plan.md`, relative to this repository root) owns active SQL, callback-guard and bounded stall briefs, and the parallel time-reduction investigation.
 
 Authoring pair remains t843. Audit recommendation: retain coherent migrations and review added behavior separately. Existing source WIP is preserved. No paid/browser/panel run is started; normal rebuilt-package integration passed at the first coordinated Core freeze. Complete runtime acceptance and remaining ownership/chat milestones remain required.
 
 ## Authoritative Plan
 
-The [paired Core reset plan](../../../!FluxIQ/docs/working/runtime-ownership-reset-plan.md) owns the shared milestones, lane partition, defect gates and execution contract.
+The paired Core reset plan (`../!FluxIQ/docs/working/runtime-ownership-reset-plan.md`, relative to this repository root) owns the shared milestones, lane partition, defect gates and execution contract.
 
 Downstream required batches:
 
@@ -54,3 +54,8 @@ Review the paired migration/defect split before any implementation resumes.
 - Validation: with DOMAIN_TEST_BUILD_LABEL=t843-reset-foundation, selected target-normalization/target-preparation/native-runtime/opaque-target/manifest tests -> 82 passed, zero failed/cancelled/skipped, 11.518s.
 - Validation: `pnpm.cmd --filter @fluxiq-web-extension/extension check` -> exit 0; extension `build` -> exit 0, Chrome/Firefox/e2e-Chromium verified 22 files each. Existing placeholder Firefox add-on ID warning remains; no live browser/provider/panel run.
 - Outcome: paired public-package checkpoint validated; task backup only, not whole runtime/ownership acceptance. No full sweep consumed; dev/main unchanged.
+
+### 2026-11-02 - Portable paired-document reference correction
+- Agent: Codex senior supervisor.
+- Validation: `git push origin HEAD` -> stopped by pre-push before upload: two paired Markdown links resolved outside this repository. Replaced the links with the portable sibling path already defined in paired metadata; no product source changed.
+- Outcome: documentation gate rerun before retrying the normal task-branch push; Core checkpoint already pushed.
