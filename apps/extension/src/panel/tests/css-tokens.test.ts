@@ -12,6 +12,15 @@ import { fileURLToPath } from "node:url";
 // of the t342 round 2 UI review, run-muylu4pp-f9cb2121). The stylesheets type-
 // check and bundle either way, so the source is scanned.
 
+// The chat's stylesheets and the design tokens live in `@fluxiq/ui-components`
+// (the panel's `theme/tokens.css` imports the tokens from it, and the chat
+// imports `chat.css`), so they are read from the linked package.
+const PACKAGE_STYLESHEETS = ["src/theme/tokens.css", "src/chat/chat.css"];
+
+function packageRoot(panel: string): string {
+  return path.join(panel, "..", "..", "node_modules", "@fluxiq", "ui-components");
+}
+
 function panelRoot(): string {
   // The test runs from a bundle under `.test-build-scratch/<label>/`, so the
   // package is found by walking up to its manifest rather than by a fixed depth.
@@ -35,8 +44,12 @@ function stylesheets(directory: string): string[] {
 }
 
 test("every custom property the panel's stylesheets read is defined, or has a fallback", () => {
-  const sheets = stylesheets(panelRoot()).map((file) => ({ file, text: readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
+  const panel = panelRoot();
+  const files = [...stylesheets(panel), ...PACKAGE_STYLESHEETS.map((sheet) => path.join(packageRoot(panel), sheet))];
+  const sheets = files.map((file) => ({ file, text: readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
   assert.ok(sheets.length > 3, "the panel's stylesheets were found");
+  assert.ok(sheets.some(({ text }) => /--canvas\s*:/.test(text)), "the package's tokens were found");
+  assert.ok(sheets.some(({ text }) => /\.chat-panel\b/.test(text)), "the package's chat stylesheet was found");
   const defined = new Set(sheets.flatMap(({ text }) => [...text.matchAll(/(--[\w-]+)\s*:/g)].map((match) => match[1]!)));
   const undefinedReads = sheets.flatMap(({ file, text }) => [...text.matchAll(/var\(\s*(--[\w-]+)\s*\)/g)]
     .filter((match) => !defined.has(match[1]!))

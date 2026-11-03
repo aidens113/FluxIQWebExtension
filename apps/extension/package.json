@@ -15,6 +15,7 @@
   "dependencies": {
     "@fluxiq/client-gateway-websocket": "link:../../../!FluxIQ/packages/client-gateway-websocket",
     "@fluxiq-web-extension/domain": "workspace:*",
+    "@fluxiq/ui-components": "link:../../../!FluxIQ/packages/ui-components",
     "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
   },
   "devDependencies": {

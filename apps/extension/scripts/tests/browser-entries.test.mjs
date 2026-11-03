@@ -61,3 +61,8 @@ test("a Core with no browser entries declared is drift", () => {
   assert.equal(drift.length, 1);
   assert.match(drift[0], /declares no browserBundles\.entries/u);
 });
+
+test("a stylesheet Core ships is not an entry: it holds no import the rule could walk", () => {
+  const stylesheet = path.join(coreRoot, "packages/ui-components/src/chat/chat.css");
+  assert.deepEqual(browserEntryDrift({ ...base, metafiles: [bundle({ [content]: [stylesheet] })] }), []);
+});

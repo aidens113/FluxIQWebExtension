@@ -15,7 +15,7 @@ test("a Core whose every library build its cache would reuse is current", async 
   const { asked, decide } = answers({});
   const verdict = await coreBuildCurrency("C:/core", { decide, env: {} });
   assert.deepEqual(verdict, { stale: false, steps: [], message: null });
-  assert.deepEqual(asked.map((item) => item.step), ["contracts:build", "fluxiq:build", "client-gateway-websocket:build"]);
+  assert.deepEqual(asked.map((item) => item.step), ["contracts:build", "fluxiq:build", "client-gateway-websocket:build", "ui-components:build"]);
   assert.ok(asked.every((item) => item.options.repoRoot === "C:/core"));
 });
 
