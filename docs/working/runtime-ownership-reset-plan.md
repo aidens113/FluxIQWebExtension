@@ -1,7 +1,7 @@
 # Runtime Ownership Refactor: Reset Plan
 
-Status: Active
-Status detail: User authorized execution after salvage audit; Core foundation and defect batches active.
+Status: Superseded
+Status detail: Replaced on 2026-11-02 by studio-controller-plan.md on task t845, which restarts the moves from dev with a path-only tool. Kept as the record of t843; do not resume from it.
 Created: 2026-11-02
 Last updated: 2026-11-02
 Owner: Senior supervisor
