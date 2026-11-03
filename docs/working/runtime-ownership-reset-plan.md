@@ -45,7 +45,7 @@ Known Core runtime defects are named explicitly in the paired plan; no downstrea
 
 ## Open Questions
 
-Review the paired migration/defect split before any implementation resumes.
+Execution is authorized. Remaining Core ownership/composed gates and downstream boundary/chat acceptance remain required; no new permission is needed to continue the plan.
 
 ### 2026-11-02 - First resumed foundation public-package validation
 - Agent: Codex senior supervisor.
@@ -59,3 +59,9 @@ Review the paired migration/defect split before any implementation resumes.
 - Agent: Codex senior supervisor.
 - Validation: `git push origin HEAD` -> stopped by pre-push before upload: two paired Markdown links resolved outside this repository. Replaced the links with the portable sibling path already defined in paired metadata; no product source changed.
 - Outcome: documentation gate rerun before retrying the normal task-branch push; Core checkpoint already pushed.
+
+### 2026-11-02 - Continued parallel Core execution
+- Agent: Codex senior supervisor with file-owned Core workers.
+- Changed: Core complete rich Flow/session/evidence contracts, admission proof reuse and actual admission SQL owners implemented; remaining guards/router entry in progress. Downstream source unchanged.
+- Validation: normal downstream task push succeeded after portable documentation reference correction; latest paired task backups Core bfd3ee47e/downstream ef842b99. Lead Core rich/performance selection ->50 cases passed; whole-build speedup and new combined public-package acceptance remain unverified.
+- Outcome: continued task work, no dev/main advance, no provider/browser/panel/full sweep. Core shared plan contains exact manifests and held gates.
