@@ -1,7 +1,7 @@
 # Framework Heavy-Lifting Plan
 
 Status: Active
-Status detail: t841 assigned: retain measured processing-filter witnesses for runtime verification; no paid run active.
+Status detail: t841 integrated 2026-11-03: filtered-out rows carry measured evidence; a fresh judge on it is proven by the next live round.
 Created: 2026-10-28
 Last updated: 2026-10-31
 Owner: framework-heavy-lifting sub-supervisor (for the lead supervisor)
