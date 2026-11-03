@@ -1,22 +1,6 @@
-// T1 coverage of the selection policy that sits on top of Core's element
-// matcher (Phase 1.3 step 3, Level 2).
-//
-// Only the policy is covered here: which recorded signals are handed to Core,
-// the floor, the margin, and that the confidence reported is Core's own number
-// rather than one invented downstream. The scoring itself is Core's and is
-// covered by Core's own tests -- a second copy of those assertions here would be
-// the second scorer this module exists to avoid.
-//
-// The import that makes this file run is itself part of what is proven. The
-// extension's test runner leaves `fluxiq/*` external, so Node resolves
-// `fluxiq/automation-studio/fingerprinting` through the package's `exports` map
-// at run time. Before Wave 3 that subpath did not exist and this file could not
-// have been loaded; the top-level `fluxiq/automation-studio` barrel it would
-// have had to use reaches `node:crypto` and `node:perf_hooks`, which is exactly
-// why a content script could not use the matcher at all.
-//
-// `score.ts` never touches the DOM, so the candidates below carry a stand-in
-// element: the module uses it only to hand back the winner, by identity.
+// Calibration coverage for the web selection policy above the domain matcher.
+// All original score, floor, margin and refusal assertions remain unchanged.
+// Candidates use stand-in elements because this module does not touch the DOM.
 
 import assert from "node:assert/strict";
 import test from "node:test";

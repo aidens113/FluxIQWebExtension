@@ -1,6 +1,6 @@
 import { WEB_AUTOMATION_NODE_ACTION_EFFECT, WEB_AUTOMATION_SUBMIT_PARAMETER, WEB_AUTOMATION_NEW_TAB_PARAMETER } from "../actions/action-effect";
-import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
-import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/components/automation";
+import type { AutomationStudioNodeDefinition } from "fluxiq/components/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION } from "../actions/consequence-declaration";
 import { webAutomationActionDefinitions } from "../actions/schemas";
@@ -130,7 +130,7 @@ const valuePortsByOutput: Partial<Record<WebAutomationActionType, readonly Autom
  *
  * The literal stands in for Core's constant until Core's built output exports
  * it; then this line becomes an import of that name from
- * `fluxiq/automation-studio`.
+ * `fluxiq/automation`.
  */
 const VERIFIES_STATE_METADATA_KEY = "verifiesState";
 

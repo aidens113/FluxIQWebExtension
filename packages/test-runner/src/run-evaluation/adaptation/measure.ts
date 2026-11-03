@@ -8,7 +8,7 @@ import {
   type AdaptationRecordStatus, type RunAdaptationConfidence, type RunAdaptationCost, type RunAdaptationMeasurements, type RunAdaptationRecord,
   type RunAdaptationResume, type RunAdaptationReuse, type ValidationResult,
 } from "@fluxiq-web-extension/test-contracts";
-import { automationStudioNodeAdaptationIds, decideAutomationStudioChangeConfidence } from "fluxiq/automation-studio";
+import { automationStudioNodeAdaptationIds, decideAutomationStudioChangeConfidence } from "fluxiq/automation";
 
 type JsonRecord = Record<string, unknown>;
 

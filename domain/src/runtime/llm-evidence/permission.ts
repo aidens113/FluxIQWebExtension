@@ -1,4 +1,4 @@
-import type { AutomationStudioResolvedActionEffect } from "fluxiq/automation-studio/action-effect";
+import type { AutomationStudioResolvedActionEffect } from "fluxiq/components/automation/action-effect";
 // Asking Core whether an action the model declared may be taken.
 //
 // The consequence classes are what the model says its own action does -- the
@@ -47,8 +47,8 @@ import type { AutomationStudioResolvedActionEffect } from "fluxiq/automation-stu
 // given (`./press.ts`, `./tool-rejection.ts`), so neither the model nor a trace
 // has to guess which of them happened.
 
-import type { AutomationStudioActionConsequence, AutomationStudioActionDeclaration, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
-import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence, AutomationStudioActionDeclaration, AutomationStudioActionPermissionCheck } from "fluxiq/automation";
+import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation";
 import { present } from "./present";
 
 /**

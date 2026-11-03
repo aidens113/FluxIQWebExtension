@@ -1,4 +1,4 @@
-import { automationStudioLlmRerunCapture, automationStudioLlmRerunExecution } from "fluxiq/automation-studio";
+import { automationStudioLlmRerunCapture, automationStudioLlmRerunExecution } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webNodeBuildOf, webNodeBuildSlot } from "../build-state";
 import { webRunnableNode } from "../catalog";

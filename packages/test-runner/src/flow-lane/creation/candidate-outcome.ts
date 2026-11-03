@@ -36,7 +36,7 @@
 // stand. Each reader takes the run's mode and records it on the outcome, so a
 // debug and the Lab comparison (A8) can tell the two apart; nothing else differs.
 
-import { automationStudioConversationCandidateDraftSaid, parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioCandidateAuthoringResult, type AutomationStudioCandidateTrialOutcomeVerdict, type AutomationStudioFlowBootstrapCandidateKept } from "fluxiq/automation-studio";
+import { automationStudioConversationCandidateDraftSaid, parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioCandidateAuthoringResult, type AutomationStudioCandidateTrialOutcomeVerdict, type AutomationStudioFlowBootstrapCandidateKept } from "fluxiq/automation";
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowTrialAuthoringMode } from "./readiness.js";
 

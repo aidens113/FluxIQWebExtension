@@ -14,8 +14,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateStateSnapshot } from "fluxiq/automation-studio";
-import type { StateSnapshot, StateValue } from "fluxiq/automation-studio";
+import { validateStateSnapshot } from "fluxiq/automation";
+import type { StateSnapshot, StateValue } from "fluxiq/automation";
 import { WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS } from "../element";
 import { createWebAutomationStateFromSnapshot } from "../snapshot";
 

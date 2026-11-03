@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { ClientGatewayOutbox, clientGatewayMemoryArea, createClientGatewayMessage, type ClientGatewayOutboxState } from "@fluxiq/client-gateway-websocket";
 import { gatewayActionResultFromBrowserResult, type WebAutomationActionResult } from "@fluxiq-web-extension/domain/client";
-import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import { extensionOutboxStore } from "../index";
 
 const OUTBOX_STORAGE_KEY = "fluxiq.outbox";

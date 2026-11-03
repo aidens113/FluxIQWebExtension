@@ -1,6 +1,6 @@
 ﻿import assert from "node:assert/strict";
 import test from "node:test";
-import { runAutomationStudioLlmEvidenceLoop, type AutomationStudioLlmEvidenceLoopInput } from "fluxiq/automation-studio";
+import { runAutomationStudioLlmEvidenceLoop, type AutomationStudioLlmEvidenceLoopInput } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { TYPE } from "./harness";
 import { pairedHost } from "./paired-host";

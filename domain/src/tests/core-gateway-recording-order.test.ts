@@ -21,7 +21,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { AutomationStudioClientGatewayBridge, AutomationStudioNativeNodeRuntime, AutomationStudioService } from "fluxiq/automation-studio";
+import { AutomationStudioClientGatewayBridge, AutomationStudioNativeNodeRuntime, AutomationStudioService } from "fluxiq/automation";
 import { CLIENT_GATEWAY_PROTOCOL_VERSION, ClientGatewayService, type ClientGatewayClientMessage } from "fluxiq/client-gateway";
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry } from "fluxiq/io";

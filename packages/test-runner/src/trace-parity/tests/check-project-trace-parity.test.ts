@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import { ClientGatewayTraceMemoryStore, type ClientGatewayTraceEvent } from "fluxiq/client-gateway";
 import { checkProjectTraceParity } from "../index.js";
 import { recordFixtureTrace } from "../../trace-inspection/tests/trace-fixtures.js";

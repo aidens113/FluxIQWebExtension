@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_FAILURE_CODES as C, webAutomationFailureRecord } from "../../failure";
 import { readWebHostFailure, webHostFailure, webHostThrownFailure, webHostAttemptFailure } from "..";
 

@@ -1,4 +1,4 @@
-import type { RecordingDomainObservationExtractor } from "fluxiq/automation-studio";
+import type { RecordingDomainObservationExtractor } from "fluxiq/automation";
 
 export const webAutomationObservationExtractor: RecordingDomainObservationExtractor = ({ event }) => ({
   observationType: event.eventType,

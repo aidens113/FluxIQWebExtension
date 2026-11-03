@@ -17,7 +17,7 @@
 // depends on how it was invoked is not a check.
 //
 // The bundle step exists because a type check cannot see the browser. On
-// 2026-09-16 a web-domain module value-imported `fluxiq/automation-studio`,
+// 2026-09-16 a web-domain module value-imported `fluxiq/automation`,
 // whose barrel reaches `node:crypto`; the domain client barrel carried it into
 // the content script, `pnpm check` passed, and only `test:e2e:build` noticed.
 // The import type-checks -- what fails is loading it in a browser. So each

@@ -10,7 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "..", "..");
 const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
 const fluxiqClientGatewayContracts = path.join(fluxiqRoot, "packages", "fluxiq", "src", "client-gateway", "contracts.ts");
-const fluxiqFingerprinting = path.join(fluxiqRoot, "packages", "fluxiq", "src", "programs", "automation-studio", "fingerprinting", "index.ts");
+const fluxiqFingerprinting = path.join(fluxiqRoot, "packages", "fluxiq", "src", "runtime", "target-matching", "fingerprinting", "index.ts");
 const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client", "index.ts");
 // FLUXIQ_LAB_EXTENSION_BUILD_ROOT sends `build/` and `dist/` somewhere this
 // build owns, so a concurrent Lab instance cannot delete the unpacked
@@ -69,7 +69,7 @@ export const EXTENSION_BUNDLE_SOURCES = Object.freeze({
   aliases: Object.freeze({
     "@fluxiq-web-extension/domain/client": webAutomationDomainClient,
     "fluxiq/client-gateway": fluxiqClientGatewayContracts,
-    "fluxiq/automation-studio/fingerprinting": fluxiqFingerprinting
+    "fluxiq/automation/fingerprinting": fluxiqFingerprinting
   })
 });
 
@@ -181,7 +181,7 @@ const GUARD_LOOKAHEAD = Object.freeze({ nodeOnlyImportGuard: "lookahead" });
  * naming the file that imports it -- which is deep inside a dependency's
  * compiled output, not the line in this repository that pulled that dependency
  * in. That line is what a developer has to change: on 2026-09-16 a web-domain
- * module value-imported `fluxiq/automation-studio`, whose barrel reaches
+ * module value-imported `fluxiq/automation`, whose barrel reaches
  * `node:crypto`, and the domain client barrel carried it into the content
  * script. So every resolved import is recorded against the first file that
  * imported it, and the refusal walks that record back to the entry.
@@ -262,7 +262,7 @@ function nodeOnlyImportMessage(entryName, builtin, chain) {
     ...shown.map((line) => `  ${line}`),
     `  -> ${builtin}`,
     "Find the first file in this chain that belongs to this repository and change its import: take a browser-safe subpath",
-    "(for example fluxiq/automation-studio/nodes rather than fluxiq/automation-studio), or make the import type-only.",
+    "(for example fluxiq/automation/nodes rather than fluxiq/automation), or make the import type-only.",
     "Other Node-only modules reached through the same import are not listed again."
   ].join("\n");
 }
@@ -275,7 +275,7 @@ function nodeOnlyImportMessage(entryName, builtin, chain) {
  * is the gateway service, which reaches Node built-ins, and only the contracts
  * module inside it is browser-safe.
  *
- * `fluxiq/automation-studio/fingerprinting` is different, and the difference is
+ * `fluxiq/automation/fingerprinting` is different, and the difference is
  * worth stating. That subpath is browser-safe as published -- its compiled graph
  * is three files with no imports at all, proven by a Core test -- so esbuild
  * would resolve it through the package `exports` map with no help from here. It
@@ -296,7 +296,7 @@ function browserSafeWorkspacePlugin() {
         path: EXTENSION_BUNDLE_SOURCES.aliases["fluxiq/client-gateway"]
       }));
       buildContext.onResolve({ filter: /^fluxiq\/automation-studio\/fingerprinting$/ }, () => ({
-        path: EXTENSION_BUNDLE_SOURCES.aliases["fluxiq/automation-studio/fingerprinting"]
+        path: EXTENSION_BUNDLE_SOURCES.aliases["fluxiq/automation/fingerprinting"]
       }));
     }
   };

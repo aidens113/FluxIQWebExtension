@@ -22,7 +22,7 @@ import { webActionabilityProperty } from "../actions/actionability";
 import { createHash } from "node:crypto";
 import type { FluxIQRuntimeAdapter, FluxIQRuntimeCommand, FluxIQRuntimeCommandResult, FluxIQRuntimeCommandStatus, FluxIQRuntimeExecutionContext } from "fluxiq/runtime";
 import type { FluxIQ } from "fluxiq";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";

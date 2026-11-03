@@ -16,8 +16,8 @@
 // captured; after any scroll they point at whatever has since moved into that
 // spot, which is how a click lands on a sticky header.
 //
-// Scored selection: Core's element matcher ships to the browser from
-// `fluxiq/automation-studio/fingerprinting`, and the resolver hands it the
+// Scored selection: the web domain's calibrated matcher ships to the browser
+// through its client entry, and the resolver hands it the
 // candidates whenever an exact answer is not one. It resolves the winner only
 // when the winner clears the floor and beats the runner-up by a margin. What
 // scoring does *not* do is guess: company-website's `redesigned-quote-submit`
@@ -37,7 +37,7 @@
 
 import type { Page } from "@playwright/test";
 import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
 import {
@@ -165,7 +165,7 @@ test.describe("a replayed action finds the control the drift left", () => {
   });
 });
 
-test.describe("scored selection: Core's matcher decides what an exact strategy could not", () => {
+test.describe("scored selection: the web matcher decides what an exact strategy could not", () => {
   const CART_BOXES = '[aria-label="Active Items"] input[type="checkbox"]';
   for (const line of [1, 2] as const) {
     test(`everything-store cart: the recorded line ${line}'s box wins the tie its selector could not break`, async ({ openHarness, page }) => {
@@ -179,15 +179,22 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
       const recorded = await describe(harness, `${CART_BOXES.replace(" input", ` > div:nth-child(${line}) input`)}`);
       expect(recorded.accessibleName).toMatch(/^Select /u);
 
+      // A current recording's row identifies its own box before scoring.
+      const scoped = await harness.runAction({ commandId: `scoped-line:${line}`, actionType: "web.dom.extract", selector: CART_BOXES, options: recordedElement(recorded) });
+      expect(scoped, scoped.message).toMatchObject({ status: "succeeded", element: { accessibleName: recorded.accessibleName }, resolution: { strategy: "selector", candidateCount: 1 } });
+      const { context, ...legacy } = recorded;
+      expect(context?.record).toBeDefined();
+
       // The selector matches both lines' boxes and the gate prefers neither:
       // both are visible, enabled and of the recorded tag, with the same hashed
-      // class. Each box is named for its line, and the recorded name decides.
-      const reply = await harness.runAction({ commandId: `scored-tie:${line}`, actionType: "web.dom.click", selector: CART_BOXES, options: recordedElement(recorded) });
+      // class. A legacy recording has no place context; its name decides.
+      const reply = await harness.runAction({ commandId: `scored-tie:${line}`, actionType: "web.dom.click", selector: CART_BOXES, options: recordedElement(legacy) });
       expect(reply, reply.message).toMatchObject({ status: "succeeded", element: { accessibleName: recorded.accessibleName } });
-      // Measured: the selector's strategy answers with the winner's score, at
-      // a confidence a Flow can read as well short of an exact match.
-      expect(reply.resolution).toMatchObject({ strategy: "selector", candidateCount: 2 });
+      // The selector leaves both candidates; the family ranking decides at a
+      // confidence a Flow can read as well short of an exact match.
+      expect(reply.resolution).toMatchObject({ strategy: "scored-candidate", candidateCount: 2 });
       expect(reply.resolution?.bestScore).toBeCloseTo(0.727, 3);
+      expect(reply.resolution?.runnerUpScore).toBeCloseTo(0.145, 3);
       expect(reply.resolution?.confidence).toBeCloseTo(0.64, 2);
       // The site re-renders the cart from the server: only the recorded line flipped.
       await expect
@@ -226,7 +233,7 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
   // point is acted on, and a tie is reported as one. everything-store's
   // checkout draws "Place your order" twice, in the main column and in the
   // order summary, with the same class and the same words.
-  test("everything-store checkout: recorded bounds on one of the two Place your order buttons fail TARGET_AMBIGUOUS, not an order", async ({ openHarness }) => {
+  test("everything-store checkout: legacy recorded bounds on one of the two Place your order buttons fail TARGET_AMBIGUOUS, not an order", async ({ openHarness, page }) => {
     const harness = await openHarness("everything-store");
     await labMutate(harness, "consent", { choice: "decline" });
     await labMutate(harness, "dismiss-nudge", { nudge: "app-banner" });
@@ -237,12 +244,22 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     const recorded = await describe(harness, summary);
     const documentBounds = await documentRect(harness, summary);
 
-    // The point and the recording, as the Flow lane sends them; no selector.
-    const reply = await harness.runAction({ commandId: "cs1d-checkout", actionType: "web.dom.click", visualTarget: visualTarget({ documentBounds }), options: recordedElement(recorded) });
+    // A current recording names the summary landmark and resolves that exact
+    // control. Read through the same resolver to verify it without ordering.
+    const point = visualTarget({ documentBounds });
+    const scoped = await harness.runAction({ commandId: "cs1d-checkout:scoped", actionType: "web.dom.extract", visualTarget: point, options: recordedElement(recorded) });
+    expect(scoped, scoped.message).toMatchObject({ status: "succeeded", element: { selector: recorded.selector }, resolution: { strategy: "visual-target", candidateCount: 1 } });
+    const { context, ...legacy } = recorded;
+    expect(context?.landmark).toBe("complementary");
+    const clicks = await trackClicks(page);
+
+    // Older recordings carry the point and fingerprint without place context.
+    const reply = await harness.runAction({ commandId: "cs1d-checkout", actionType: "web.dom.click", visualTarget: point, options: recordedElement(legacy) });
 
     // Scoring decided, over a point that did land: the failure names the point among what was tried.
     expect(reply).toMatchObject({ status: "failed", failure: { ...TARGET_AMBIGUOUS, expected: expect.stringContaining("visual target") }, resolution: { strategy: "scored-candidate" } });
     expect(reply.failure?.actual).toContain('button "Place your order" (0.80), button "Place your order" (0.79)');
+    expect(await clicks()).toEqual([]);
     expect(await state(harness)).toMatchObject({ orders: [] });
   });
 
@@ -281,6 +298,9 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     await quoteDrawer.toStep(page, 3);
     const recorded = await describe(harness, byId(ids.send));
     const bounds = await documentRect(harness, byId(ids.send));
+    // The recorded place keeps unrelated page controls out of this refusal's
+    // ranking; the legacy full-family ranking is exercised above.
+    expect(recorded.context).toBeDefined();
 
     // Measured with Core's matcher as it now stands, and the same on both
     // paths: "Save and finish later" in the old slot is refused at -0.13, and
@@ -296,7 +316,7 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
       expect(reply, `${shape}: ${reply.message}`).toMatchObject({
         status: "failed",
         failure: TARGET_NOT_FOUND,
-        resolution: { strategy: "fingerprint", candidateCount: 6, confidence: 0 }
+        resolution: { strategy: "fingerprint", candidateCount: 4, confidence: 0 }
       });
       expect(reply.resolution?.bestScore).toBeCloseTo(-0.073, 3);
       expect(reply.resolution?.runnerUpScore).toBeCloseTo(-0.099, 3);

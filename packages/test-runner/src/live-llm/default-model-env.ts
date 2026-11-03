@@ -14,10 +14,10 @@
 // Provider-free runs set no model. This is the developer's and the Lab's knob, not the
 // product's model setting.
 
-import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation";
 import { DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmModelForProvider, isLlmProvider } from "@fluxiq-web-extension/test-contracts";
 
-/** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV`). */
+/** The variable Core reads (`fluxiq/automation` `AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV`). */
 export const LAB_DEFAULT_MODEL_ENV = "FLUXIQ_LLM_DEFAULT_MODEL";
 
 /** The flag that sets it for one run: the same `--llm-model` the run's profile names its model with. */

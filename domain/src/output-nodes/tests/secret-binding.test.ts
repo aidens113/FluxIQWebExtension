@@ -5,7 +5,7 @@
 // that a value supplied to the run reaches the node's parameters, and that no
 // value supplied means the node fails and names what was missing. Both are
 // decided by `resolveAutomationNodeParameterValues`
-// (`fluxiq/automation-studio/nodes`), which is what the tests below call. A
+// (`fluxiq/automation/nodes`), which is what the tests below call. A
 // domain-local copy of that logic would pass while the real path did anything
 // at all.
 //
@@ -17,7 +17,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveAutomationNodeParameterValues } from "fluxiq/automation-studio/nodes";
+import { resolveAutomationNodeParameterValues } from "fluxiq/components/automation";
 import type { JsonValue } from "fluxiq/core";
 import { webAutomationOutputPayload } from "../payloads";
 import {

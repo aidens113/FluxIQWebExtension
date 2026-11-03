@@ -50,7 +50,7 @@
 // and the count contract above stays as the fallback.
 
 import type { OutputDispatchResult } from "fluxiq";
-import type { AutomationNodeExpectationEvaluation, AutomationNodeExpectationEvaluationContext, AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationNodeExpectationEvaluation, AutomationNodeExpectationEvaluationContext, AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { isWebAutomationFailureCode, WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../failure";

@@ -20,7 +20,7 @@ import { executeWebEvidenceAction } from "../../action-failure";
 // - `unmatched` and `unavailable`: the retries run on as before. A finder that
 //   throws is `unavailable`, never a failed node.
 
-import { AUTOMATION_STUDIO_TARGET_GONE_CODE, type AutomationStudioFailureRecord, type AutomationStudioNodeRetryReacquire } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_TARGET_GONE_CODE, type AutomationStudioFailureRecord, type AutomationStudioNodeRetryReacquire } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebNodeRun } from "../context";
 import type { WebNodeDispatchResult } from "./dispatch";

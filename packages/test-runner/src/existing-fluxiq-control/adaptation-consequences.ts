@@ -14,7 +14,7 @@
 // kept as Core left it -- already withheld unless it appears in evidence the
 // model was shown.
 
-import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation-studio/action-permissions";
+import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation/action-permissions";
 import { array, integer, invalid, optionalRecord, record, stringArray, text, type JsonRecord } from "./api-readings.js";
 
 /** Core's cap on the declarations one gate keeps (`AUTOMATION_STUDIO_ACTION_DECLARATIONS_MAX`); more than that is not a record Core wrote. */

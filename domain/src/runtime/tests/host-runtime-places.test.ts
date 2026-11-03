@@ -6,9 +6,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { captured } from "./host/captured";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime } from "../llm-evidence";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";
@@ -42,8 +43,8 @@ const capture = (point: "before_action" | "after_action", attemptId = "save.atte
 
 test("a step's diff names its control's spot and the line it added, and no summary carries either", async () => {
   const boundary = createWebAutomationHostRuntime(seam([box(["Oat porridge", "Pea soup"]), box(["Oat porridge", "Pea soup", "Rye loaf"])]));
-  const before = await boundary.captureStateSnapshot!(capture("before_action"));
-  const after = await boundary.captureStateSnapshot!(capture("after_action"));
+  const before = await captured(boundary, capture("before_action"));
+  const after = await captured(boundary, capture("after_action"));
   const diff = await boundary.inspectStateDiff!({ before, after, node, attemptId: "save.attempt.1" });
 
   const spot = diff.spot as { item?: string };
@@ -61,11 +62,11 @@ test("a step's diff names its control's spot and the line it added, and no summa
 
 test("the page the previous step ended on keeps its places, a move to another document names no items, and an unknown ref names neither key", async () => {
   const boundary = createWebAutomationHostRuntime(seam([box(["Oat porridge", "Pea soup"]), box(["Oat porridge"], "https://recipes.test/recipes/rye-loaf", ORIGIN + 9)]));
-  const ended = await boundary.captureStateSnapshot!(capture("after_action", "open.attempt.1"));
+  const ended = await captured(boundary, capture("after_action", "open.attempt.1"));
   // Offered back at the next step's start, it is answered as it is (t480), and its places with it.
-  const started = await boundary.captureStateSnapshot!({ ...capture("before_action"), previousStateRef: ended });
+  const started = await captured(boundary, { ...capture("before_action"), previousStateRef: ended });
   assert.equal(started, ended);
-  const moved = await boundary.captureStateSnapshot!(capture("after_action"));
+  const moved = await captured(boundary, capture("after_action"));
   const diff = await boundary.inspectStateDiff!({ before: started, after: moved, node, attemptId: "save.attempt.1" });
   assert.equal(diff.documentChanged, true);
   assert.match(String((diff.spot as { item?: string }).item), /^i:/u);
@@ -87,15 +88,15 @@ test("trial and exploration scopes agree on trusted session/tab identity and nev
   const answer = (sourceId: string): JsonObject => ({ ok: true, metadata: { sessionId: "session.one" }, payload: { result: { snapshot, sourceId } } });
   const boundary = createWebAutomationHostRuntime(seam([answer("tab:1:frame:0"), answer("tab:1:frame:0"), answer("tab:2:frame:0"), answer("tab:2:frame:0")]));
   const ownNode = { ...node, parameterValues: { selector: "#remove" } };
-  const first = await boundary.captureStateSnapshot!({ ...capture("before_action"), node: ownNode });
-  const second = await boundary.captureStateSnapshot!({ ...capture("after_action"), node: ownNode });
+  const first = await captured(boundary, { ...capture("before_action"), node: ownNode });
+  const second = await captured(boundary, { ...capture("after_action"), node: ownNode });
   const diff = await boundary.inspectStateDiff!({ before: first, after: second, node: ownNode, attemptId: "save.attempt.1" });
   const exploration = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => ["session.one"], executeAction: async () => ({ status: "succeeded", payload: { snapshot, sourceId: "tab:1:frame:0" } }) });
   const observed = await exploration.startState!({ projectId: "project", flowId: "flow", callId: "look", permission: automationStudioActionPermissionDenied });
   assert.equal((diff.spot as JsonObject).scope, observed!.collections![0]!.scope);
   assert.match(String((diff.spot as JsonObject).scope), /^p:[0-9a-f]{32}$/u);
-  const third = await boundary.captureStateSnapshot!({ ...capture("before_action", "another"), node: ownNode });
-  const fourth = await boundary.captureStateSnapshot!({ ...capture("after_action", "another"), node: ownNode });
+  const third = await captured(boundary, { ...capture("before_action", "another"), node: ownNode });
+  const fourth = await captured(boundary, { ...capture("after_action", "another"), node: ownNode });
   const other = await boundary.inspectStateDiff!({ before: third, after: fourth, node: ownNode, attemptId: "another" });
   assert.notEqual((other.spot as JsonObject).scope, (diff.spot as JsonObject).scope);
   assert.doesNotMatch(JSON.stringify(first.summary), /session\.one|tab:1:frame:0|sourceId|resetResource|p:[0-9a-f]{32}/u);
@@ -119,8 +120,8 @@ test("a loop pass's diff places its control in the pass row the attempt's inputs
   };
   const boundary = createWebAutomationHostRuntime(seam([cards(), cards()]));
   const pass = { ...node, parameterValues: { selector: "#card-1 > button", element: { selector: "#card-1 > button", context: { record: { keyAttribute: "data-recipe-id", key: "recipe-1" } } } } };
-  const before = await boundary.captureStateSnapshot!({ ...capture("before_action"), node: pass });
-  const after = await boundary.captureStateSnapshot!({ ...capture("after_action"), node: pass });
+  const before = await captured(boundary, { ...capture("before_action"), node: pass });
+  const after = await captured(boundary, { ...capture("after_action"), node: pass });
   const recorded = await boundary.inspectStateDiff!({ before, after, node: pass, attemptId: "save.attempt.1" });
   const second = await boundary.inspectStateDiff!({ before, after, node: pass, attemptId: "save.attempt.1", inputs: { item: { title: "Pea soup", cook: "Ben Cook" } } });
   const own = await boundary.inspectStateDiff!({ before, after, node: { ...node, parameterValues: { selector: "#card-2 > button" } }, attemptId: "save.attempt.1" });

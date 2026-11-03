@@ -17,7 +17,7 @@
 // lines are reordered, and once its line's words are gone from the page.
 
 import type { JsonObject } from "fluxiq/core";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import type { Page } from "@playwright/test";
 import {
   createWebAutomationLlmEvidenceRuntime,

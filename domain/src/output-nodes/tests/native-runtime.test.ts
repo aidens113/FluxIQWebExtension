@@ -9,12 +9,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioFailureRecord, parseAutomationStudioRecordOutput } from "fluxiq/automation-studio";
-import type { AutomationNodeExecutionResult, AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
+import { parseAutomationStudioFailureRecord, parseAutomationStudioRecordOutput } from "fluxiq/automation";
+import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
+import type { AutomationStudioNativeNodeContext } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "../extract-list";
 import { createWebAutomationOutputNodeImplementationBundle } from "../native-runtime";
+import { webRecordingTargetPolicy } from "../../target-normalization";
 import { WEB_AUTOMATION_CHECK_WAIT_MS } from "../../actions/check-wait";
 import { webActionFailureRefusal } from "../../runtime/llm-evidence/action-failure";
 
@@ -30,6 +32,21 @@ async function execute(outputId: WebAutomationActionType, parameters: Record<str
 test("every web automation action type has a bound implementation", () => {
   assert.deepEqual(Object.keys(bundle.implementations).sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort());
   assert.equal(bundle.packageId, "@fluxiq-web-extension/domain");
+});
+
+test("the web bundle installs its recording policy, and an explicitly absent one stays absent", () => {
+  assert.equal(bundle.recordingTargetPolicy, webRecordingTargetPolicy);
+  const explicitMissing = Object.defineProperty({}, "recordingTargetPolicy", { value: undefined, enumerable: true });
+  assert.equal(createWebAutomationOutputNodeImplementationBundle(explicitMissing).recordingTargetPolicy, undefined);
+});
+
+test("the web importer explicitly registers its calibrated domain matcher", () => {
+  const matcher = bundle.elementMatcher;
+  assert.ok(matcher);
+  const score = matcher.bestCandidate({ selector: "#saved-control" }, [{ candidateId: "wrong", selector: "#other" }, { candidateId: "saved", selector: "#saved-control" }] as Parameters<typeof matcher.bestCandidate>[1]);
+  assert.equal(score?.candidateId, "saved");
+  assert.equal(score?.normalizedScore, 1);
+  assert.deepEqual(score?.matchedSignals, ["selector"]);
 });
 
 test("an implementation emits exactly one dispatch effect naming its own output", async () => {

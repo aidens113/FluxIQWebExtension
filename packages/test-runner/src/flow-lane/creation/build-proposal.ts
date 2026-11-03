@@ -1,7 +1,7 @@
 import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { createdFlowCandidateDraft } from "./candidate-draft.js";
 import { createdFlowCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion, type CreatedFlowCandidateOutcome } from "./candidate-outcome.js";
-import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation";
 // The one paid step of a created-Flow run: give Core the task's instruction,
 // ready the Flow's LLM settings, and ask Core to explore the live page and
 // propose a Flow -- the calls the web panel's "Explore and create proposal"
@@ -13,7 +13,7 @@ import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringR
 // it fails on the refusal.
 
 import type { LlmActionConsequence } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS, parseAutomationStudioFlowBootstrapFailureDiagnostic } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS, parseAutomationStudioFlowBootstrapFailureDiagnostic } from "fluxiq/automation";
 import type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationDeclaredAction, ExistingFlowAdaptation, ExistingFlowAdaptationSummary, FlowBootstrapGenerationEnvelope } from "../../existing-fluxiq-control.js";
 import { publishableStepFields, type PublishableStepValue } from "../../existing-fluxiq-control/index.js";
 import { RunnerFailure } from "../../failure.js";

@@ -1,4 +1,4 @@
-import type { RecordingDomainDefinition } from "fluxiq/automation-studio";
+import type { RecordingDomainDefinition } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_SCHEMA_VERSION } from "../constants";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { webAutomationRecordingEvents } from "./events";

@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_TARGET_GONE_CODE, parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_TARGET_GONE_CODE, parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../../../capture";
 import { captureEvidence } from "../../../capture";

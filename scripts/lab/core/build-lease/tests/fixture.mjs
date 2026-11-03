@@ -45,7 +45,7 @@ export async function fixture(t) {
   await writeFile(path.join(root, ".gitignore"), "node_modules/\ndist/\nstate/\n");
   await writeFile(path.join(root, "pnpm-workspace.yaml"), 'packages:\n  - "packages/*"\n');
   await writeFile(path.join(root, "package.json"), '{"type":"module"}');
-  for (const [dir, name] of [["contracts", "@fluxiq/contracts"], ["fluxiq", "fluxiq"], ["client-gateway-websocket", "@fluxiq/client-gateway-websocket"]]) {
+  for (const [dir, name] of [["contracts", "@fluxiq/contracts"], ["fluxiq", "fluxiq"], ["client-gateway-websocket", "@fluxiq/client-gateway-websocket"], ["ui-components", "@fluxiq/ui-components"]]) {
     const pkg = path.join(root, "packages", dir);
     await mkdir(path.join(pkg, "src"), { recursive: true });
     await writeFile(path.join(pkg, "package.json"), JSON.stringify({ name, scripts: { build: "node ../../scripts/build-cache/cli.mjs" } }));

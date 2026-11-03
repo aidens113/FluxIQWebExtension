@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runAutomationStudioGraph, type AutomationStudioFlowDocument, type AutomationStudioFlowNode, type AutomationStudioGraphExecutionOptions, type AutomationStudioGraphExecutionTrace } from "fluxiq/automation-studio";
+import { runAutomationStudioGraph, type AutomationStudioFlowDocument, type AutomationStudioFlowNode, type AutomationStudioGraphExecutionOptions, type AutomationStudioGraphExecutionTrace } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../failure";
 import { createWebAutomationHostRuntime } from "../host-runtime";

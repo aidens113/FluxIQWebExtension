@@ -9,7 +9,7 @@ import { RunnerFailure } from "../../../failure.js";
 import type { CreatedFlowLaneControl } from "../lane.js";
 import { PAGE_ONE_RECORDS } from "./scenario-fixture.js";
 import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation";
 
 export const PROJECT_ID = "project.lab";
 export const FLOW_ID = "flow.created";

@@ -33,7 +33,7 @@
 
 import type { FluxIQ } from "fluxiq";
 import type { WebAutomationLlmEvidenceRuntime } from "./runtime-contract";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { isEligibleWebSession } from "../web-sessions";

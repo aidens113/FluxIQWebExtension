@@ -54,7 +54,7 @@ export const webAutomationManifestOutputs = webAutomationActionDefinitions.map((
 function manifestMetadata(action: WebAutomationActionDefinition): { metadata?: JsonObject } {
   const recordsPath = outputNodeRecordsPath(action.actionType);
   const metadata: JsonObject = {
-    ...(requiresElementTarget(action.parameterSchema) ? { elementTarget: true } : {}),
+    ...(requiresElementTarget(action.parameterSchema) ? { elementTarget: true, outputTargetPreparationRequired: true } : {}),
     ...(recordsPath ? { recordsPath } : {})
   };
   return Object.keys(metadata).length > 0 ? { metadata } : {};

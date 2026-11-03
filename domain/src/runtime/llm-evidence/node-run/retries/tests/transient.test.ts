@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runAutomationStudioLlmEvidenceLoop, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { runAutomationStudioLlmEvidenceLoop, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
 import { WEB_AUTOMATION_FAILURE_CODES as C, webAutomationFailureRecord } from "../../../../failure";

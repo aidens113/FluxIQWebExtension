@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertAutomationStudioLlmDomainSystemInstructions } from "fluxiq/automation-studio";
+import { assertAutomationStudioLlmDomainSystemInstructions } from "fluxiq/automation";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "../instructions";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../../tools";

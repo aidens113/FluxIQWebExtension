@@ -1350,9 +1350,9 @@ the capitalised names and phrases in the string literals of the ten scenarios'
 own fixture data (sites, brands, stores, products, people, groups) that belong
 to one scenario and are not ordinary English (Core writes the word in lower case
 elsewhere), minus the reviewed `scripts/check/model-text/allow-list.mjs`, then
-scans the string and template literals (parsed with the TypeScript compiler, so comments never count) of Core's model-facing text (the automation-studio
-runtime's `llm/`, `flow-bootstrap/plan/` and its instruction, words, description,
-prompt and catalog modules) and fails with file:line and the token. The
+scans the string and template literals (parsed with the TypeScript compiler, so comments never count) of Core's model-facing text (the model loop's
+`runtime/llm/`, the Flow plan's `runtime/flow-authoring/bootstrap/plan/` and the instruction, words, description,
+prompt and catalog modules in the runtime) and fails with file:line and the token. The
 sibling Core is resolved as `core-mirror.mjs` resolves it. It catches names, not
 a task's shape written in common words; examples still need review to use a
 different kind of site. `--vocabulary` prints the token list.
@@ -1796,7 +1796,7 @@ A project build runs a supervisor and several builders, trials and resets, and
 Core bounds it whole: `AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS`, thirty
 minutes from the start of the supervisor's run, everything it does counted,
 and the last five minutes kept for its reset and recorded ending (Core
-`loop-limits/project-build-duration.ts`). The Lab waits that bound in place of
+`runtime/loop-limits/project-build-duration.ts`). The Lab waits that bound in place of
 the 600 s, with the same steps around it (1,995 s), read from Core and pinned
 to it by `chat/tests/build-deadline.test.ts`, so it keeps no copy. A build
 whose result has not arrived by then ends `no_result` with
@@ -2048,7 +2048,7 @@ An optional step (a popup, a banner or a consent prompt written `optional: yes`,
 or a node marked sometimes-present) is only sometimes there to be done. When
 one fails, Core's ladder takes the step's way on, normally to the Merge a build
 joins it at. This is "what the Flow says to do, not a recovery" (Core
-`executor/step-skip/optional-step.ts`), and Core's trial gate reads it that way.
+`engine/automation/step-skip/optional-step.ts`), and Core's trial gate reads it that way.
 The Flow lane reads it the same way (`flow-lane/optional-bypass/`). An attempt
 counts as bypassed only when two things hold. Core's selected ladder candidate
 on that attempt (`metadata.recoverySelected`) must carry the mark Core's ladder
@@ -4033,7 +4033,7 @@ and its summary reads, for example,
 `the runtime consulted state: no_match (matching_steps_already_acted; refused repeats_lasting_act at node.s4)`.
 
 The routing record's `reason` sentence is never written. Core's run detail
-drops it on purpose (`service/summaries/state-routing.ts`, because it repeats
+drops it on purpose (`framework/automation-service/service/summaries/state-routing.ts`, because it repeats
 the host's words).
 
 A step whose action closed layers over the page while it ran (the extension's

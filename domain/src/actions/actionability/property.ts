@@ -1,4 +1,4 @@
-import { parseAutomationStudioTargetActionabilityRecord, type AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import { parseAutomationStudioTargetActionabilityRecord, type AutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import { webOwnDataProperty } from "./own-data";
 
 /** The current producer's optional exact-target control, without invoking accessors. */

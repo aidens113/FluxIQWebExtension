@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio";
+import { parseAutomationStudioRecordOutput } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS, webAutomationExtractListRequestValue } from "../../../actions/extraction";
 import { webAutomationExtractListAloneRowsAsked, webAutomationExtractListDispatch } from "../dispatch";

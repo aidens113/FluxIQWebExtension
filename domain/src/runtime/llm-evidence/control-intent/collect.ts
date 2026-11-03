@@ -1,4 +1,4 @@
-import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 import type { WebLlmControlIntentCollector } from "./contracts";
 import { controlAncestry } from "./context";
 import { belongsToConsent } from "./membership";

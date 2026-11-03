@@ -5,7 +5,7 @@
 // Opening a store applies Core's migrations to it, so point this at a copy no
 // Core is writing (`test-runs/`), never at a live workspace.
 
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import type { ClientGatewayTraceManifest } from "fluxiq/client-gateway";
 
 export type StoreTraceManifest = Readonly<{ manifest: ClientGatewayTraceManifest; events: number; artifacts: number }>;

@@ -4,12 +4,12 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER, LLM_AB
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP, AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP, AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation";
 import { liveLlmBuildCostCeilingUsd } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
 import { RunnerFailure } from "../../failure.js";
-import { AUTOMATION_STUDIO_ANTHROPIC_DEFAULT_MODEL, AUTOMATION_STUDIO_ANTHROPIC_MODELS, AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS } from "fluxiq/automation-studio/llm-models";
+import { AUTOMATION_STUDIO_ANTHROPIC_DEFAULT_MODEL, AUTOMATION_STUDIO_ANTHROPIC_MODELS, AUTOMATION_STUDIO_ANTHROPIC_MODEL_LIMITS } from "fluxiq/automation/llm-models";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 
 /** Core's per-build ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
@@ -195,7 +195,7 @@ test("the build's ceiling is Core's resolved value, and the Lab contract's bound
   // mirror that drifted would let an operator type a number Core could never
   // allow, or refuse one a configured ceiling allows.
   assert.equal(LLM_LAB_MAX_ESTIMATED_COST_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
-  // The default declares no lower number, so an unset --llm-max-cost-usd plans the ceiling itself.
+  // An unset --llm-max-cost-usd declares this: a lower Core ceiling holds the build lower, and a higher one does not raise it.
   assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, 5);
   // The call cap mirrors Core's runaway backstop the same way. Three 64s once drifted apart from it (t576, t583): the
   // Lab refused a run Core would take, and Core refused the settings of a Flow the Lab had just built.

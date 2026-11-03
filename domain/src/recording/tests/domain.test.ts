@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { RecordingDomainEventReducerContext, StateSnapshot } from "fluxiq/automation-studio";
+import type { RecordingDomainEventReducerContext, StateSnapshot } from "fluxiq/automation";
 import type { WebAutomationPageEvidence } from "../../page-evidence";
 import { webAutomationRecordingDomain } from "../domain";
 import { webAutomationStateReducer } from "../reducers";

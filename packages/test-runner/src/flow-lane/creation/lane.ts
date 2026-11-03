@@ -6,7 +6,7 @@
 // repair its playback may make, and the lane decides only when each is used.
 
 import type { AuthoredFlowGraph, AuthoredFlowNode, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
-import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { RunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";

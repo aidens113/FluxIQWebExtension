@@ -1,4 +1,4 @@
-import type { EvidenceAnchor, StateBounds } from "fluxiq/automation-studio";
+import type { EvidenceAnchor, StateBounds } from "fluxiq/automation";
 import type { WebAutomationRect } from "./types";
 
 // Browser rects reach us from a live page, so a rect can carry NaN, Infinity or

@@ -31,7 +31,7 @@
 //
 // What each phrase *means* -- the comparisons, the reading of a number, the
 // pattern a `matches` compiles to -- is Core's (`automationStudioRecordCondition*`
-// in `fluxiq/automation-studio/nodes`), which the page, the resolver and Core's
+// in `fluxiq/automation/nodes`), which the page, the resolver and Core's
 // own dataset processing all run, so a condition reads one way everywhere. What
 // stays here is the lenient reading of how a model *writes* one.
 //
@@ -79,8 +79,8 @@ import {
   automationStudioRecordConditionPattern,
   readAutomationStudioRecordConditionDateBound,
   readAutomationStudioRecordConditionWithin
-} from "fluxiq/automation-studio/nodes";
-import type { AutomationStudioRecordCondition } from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
+import type { AutomationStudioRecordCondition } from "fluxiq/components/automation";
 import type { WebAutomationExtractConditionValue, WebAutomationExtractItemCondition } from "./request";
 
 /** Everything a condition says about its value, which is every part of one but the key that names it. */

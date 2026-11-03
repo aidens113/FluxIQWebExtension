@@ -19,3 +19,6 @@ export {
 export { webElementIdentitySignals, type WebElementIdentitySignal } from "./signals";
 export type { WebElementFingerprintSource } from "./source";
 export { webRecordedRecordValueMatches, webRecordedRecordMatches } from "./record";
+
+export { createWebElementMatcher, WEB_ELEMENT_FINGERPRINT_WEIGHTS } from "./matcher";
+export type { WebElementFingerprint, WebElementFingerprintCandidate, WebElementFingerprintScore, WebElementMatcher } from "./matcher-contracts";

@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioFlowBootstrapRecordOutputIssues, type AutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import { automationStudioFlowBootstrapRecordOutputIssues, type AutomationStudioActionConsequence } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationStructureDetection } from "../../../../../extraction";
 import { webAutomationExtractListDispatch, webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../../../../../output-nodes";

@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY } from "fluxiq/automation";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../failure";
 import { shownHandle } from "../../../page-view/tests/shown-page-lines";

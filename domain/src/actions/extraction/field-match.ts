@@ -18,7 +18,7 @@
 // the budget being told.
 //
 // So resolution is **Core's**, not a second implementation of it
-// (`automationStudioMatchName` in `fluxiq/automation-studio/nodes`): exact, then
+// (`automationStudioMatchName` in `fluxiq/automation/nodes`): exact, then
 // equal after folding case and separators, then the nearest name above Core's
 // measured score floor of 0.25. `productName` finds `name`, `Price` finds
 // `price`, `ratng` finds `rating`, and `sponsored` finds nothing when the request
@@ -40,7 +40,7 @@
 // that grammar (`content/extraction/field-spec.ts`) and a second parser of it
 // here would disagree with the first about which selectors carry an attribute.
 
-import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, automationStudioMatchName } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_RECORD_CONDITION_BOUNDS, automationStudioMatchName } from "fluxiq/components/automation";
 import type { WebAutomationExtractConditionSaying } from "./condition-grammar";
 import type { WebAutomationExtractField } from "./request";
 

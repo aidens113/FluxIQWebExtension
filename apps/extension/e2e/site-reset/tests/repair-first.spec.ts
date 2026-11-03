@@ -29,11 +29,11 @@ type ActivityEvent = { label?: string; subject?: { projectId?: string }; detail?
 /**
  * Subscribes to Core's activity stream: the chat's rows, where Core says why a build ended (`service/project-build/run.ts`,
  * `ENDED_WORDS`). A kept draft is not promoted, so the build's run resolves and only this row and the build record say who
- * ended it; the record is not on the public surface. The hub is Core's public one (`fluxiq/automation-studio`), the same
+ * ended it; the record is not on the public surface. The hub is Core's public one (`fluxiq/automation`), the same
  * module instance the running Core publishes to.
  */
 async function subscribeActivity(listener: (event: ActivityEvent) => void): Promise<() => void> {
-  const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
+  const { automationStudioActivityHub } = await import("fluxiq/automation");
   return automationStudioActivityHub.subscribe((event) => listener(event as ActivityEvent));
 }
 

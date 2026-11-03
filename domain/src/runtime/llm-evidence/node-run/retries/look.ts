@@ -1,7 +1,7 @@
 // Looking at the page again, under Core's default retries, before a decision
 // taken on one look (t355). See `./dispatch.ts` for the rule and the two layers.
 
-import { automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../../../failure";
 import type { WebNodeRun } from "../context";
 import { webNodeRetryWait } from "./wait";

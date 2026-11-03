@@ -1,109 +1,16 @@
-// Which of the candidates on the page is the control that was recorded.
+// Which DOM candidate is the control that was recorded. The web domain owns
+// the calibrated signal weights and comparisons; Core only aggregates those
+// measurements into the shared score/confidence contract. This module filters
+// stale identifiers and signals candidates cannot emit, applies the calibrated
+// floor and winner margin, and requires corroborating identity.
 //
-// `candidates.ts` builds the pool; this module decides. The deciding is not
-// done here: it is delegated to Core's element matcher
-// (`fluxiq/automation-studio/fingerprinting`), which owns the signal weights,
-// the per-signal comparisons and the confidence formula. A second scorer
-// downstream would drift from Core's within a release and give two different
-// answers to the same question, so this module contributes exactly four things
-// Core cannot know about a browser: which recorded signals are worth comparing,
-// how good is good enough, how much better than the runner-up counts as an
-// answer rather than a tie, and -- through `corroboration.ts` -- which of Core's
-// agreements makes a winner the recorded control rather than a neighbour that
-// merely shares its words.
-//
-// **Which signals.** Only the ones a live candidate can also produce. A
-// recorded descriptor carries an xpath, an attribute map and viewport bounds;
-// `candidateFingerprint` produces none of the first two, and the bounds it
-// produces are this instant's while the recorded ones are the capture's. Handing
-// Core a signal no candidate can answer costs every candidate the same penalty,
-// which moves every score down without telling the resolver anything -- and it
-// drags the whole pool under the floor, turning a clear winner into a refusal.
-//
-// **And only the ones that still mean something.** An id a rendering generated
-// -- React's `useId`, a build seed, a component library's counter
-// (`../selector/volatile-identifier.ts`) -- is not an identity: it is a token
-// drawn fresh each time, so the page that regenerated it has not named a
-// different control, it has renamed the same one. Core cannot see that. It has
-// two answers for an identifier, agreement at +1 and contradiction at -0.8, and
-// it charges the second against weight 26, which is more than any two agreeing
-// words can repay. So a generated id, and a selector addressed through one, are
-// left out -- unless a candidate in the pool carries that very token, which
-// means the rendering did not regenerate it after all and the comparison is
-// real. This is what makes a Flow built before the anchor rule existed scorable
-// at all: its selector reads `#\:r13b8o\: > div > div:nth-of-type(2) >
-// button:nth-of-type(1)` (`test-runs/run-muesyox4-930bef98`), and the token in
-// it belongs to one rendering of one page.
-//
-// **And a token no element carries means nothing, whatever its shape.** The
-// shape rule is a first filter, not a complete one: the crossborder item page
-// mints its quantity box's id as `fb` and a hash on every load, and
-// `fb1l6ufkg` -- two digits in nine, and a run "ufkg" that reads as a word --
-// is not judged generated, nor are 1053 of the scenario's 1960 such ids. R4a
-// (`run-mv2nlh9l-52e476da`) addressed the box by it, the trial's reset drew a
-// new one, and the stale id was charged as a contradiction at -0.8 x 26 against
-// a box whose only other signals are a label and a class: best score 0.27,
-// `web.target.not_found`. So a recorded id, and a recorded selector quoting an
-// identifier, that no element on the current page carries is dropped from
-// scoring outright (`page-tokens.ts`); it neither supports nor contradicts any
-// candidate. A token some element does carry -- the recorded control's, or a
-// neighbour's that now holds it -- keeps exactly the meaning it had, so a
-// different control wearing the recorded id is still contradicted. What was
-// dropped, and why, rides on the selection as `dropped`, so a failure can say
-// the recording's id was set aside rather than leaving a reader to guess.
-//
-// **The floor and the margin.** Core reports `normalizedScore` in [-1, 1]: the
-// share of the compared weight that agreed, minus the share that disagreed. The
-// floor is the point below which a candidate is not the recorded control but
-// merely the least-wrong thing on the page, and the margin is what separates an
-// answer from a tie. Both are measured against the identity-drift and
-// ambiguous-targets fixtures rather than guessed. The margin's numbers are in
-// reports/w3-matcher-packaging.md; the floor's are in
-// reports/v-matcher-calibration.md, which supersedes them -- the original floor
-// was calibrated against scores that Level 1 resolves before this module runs.
-//
-// **And what a wordless control draws** (`./drawing.ts`, lane 4 t567). Core's
-// matcher has no picture signal, so the drawing goes to Core in its
-// `attributes` slot (`./drawing-attribute.ts`), the one slot nothing else here
-// fills, at `DRAWING_WEIGHT` instead of the slot's default 6: a control with no
-// words is told apart by its picture as a worded one is by its label. And it is
-// handed over only for a candidate whose drawing *agrees*. A candidate that
-// draws nothing, or draws something else, is compared without it -- the
-// drawing neither supports nor contradicts it -- because a picture changes for
-// reasons a control does not: a state that swaps the icon file, a card whose
-// photo is its row's. So a matching drawing lifts the recorded icon above its
-// row's other icons, and a mismatch costs nothing a recording without one
-// would not have cost. Scoring each candidate against its own comparison means
-// Core is asked once per candidate, and the ranking is put in Core's own order
-// (`coreOrder`) rather than a new one.
-//
-// **And the words a read step reads** (`./read-words.ts`, t743 D2b). A target
-// marked `readsWords` is ranked without the words it reads -- an earlier step
-// of its Flow may have changed them -- and the words come back only to break a
-// tie among candidates that otherwise score exactly equally, or to confirm a
-// winner nothing else it named agrees with exactly. Equal, not within the
-// margin: measured on a loan summary, the paragraph the read's selector named
-// scored 1 and its neighbour showing the read's old words 0.86, and a margin
-// tie-break chose the neighbour. They never lower
-// a candidate. Only when that settles nothing is the target scored with its
-// words, as before, and that answer taken only if it resolves to the element
-// the ranking without them put first: words that still agree may lift the
-// read's own element over the floor, words that changed then cost nothing the
-// answer without them had not already refused, and old words never choose
-// another element over the one the selector and the rest chose. A read
-// whose identity says nothing but its family and its words is scored that way
-// too: there is nothing else to tell one paragraph from the next.
-//
-// Nothing here invents a confidence. What the resolver reports is Core's own
-// `confidence` for the candidate it chose, so a Flow deciding whether to trust a
-// resolution is reading the same number Core would have produced had it scored
-// the candidates itself.
+// Drawing evidence is adapted into the matcher's attributes slot only when the
+// drawing agrees. Read-word evidence breaks exact ties without letting old text
+// choose a different element. The selection retains dropped-token diagnostics.
+// Existing calibration reports remain reports/w3-matcher-packaging.md and
+// reports/v-matcher-calibration.md; moving ownership changes no web score.
 
-import {
-  createAutomationStudioElementMatcher,
-  type ElementFingerprint,
-  type ElementFingerprintScore
-} from "fluxiq/automation-studio/fingerprinting";
+import { createWebElementMatcher, type WebElementFingerprint as ElementFingerprint, type WebElementFingerprintScore as ElementFingerprintScore } from "@fluxiq-web-extension/domain/client";
 import { isVolatileIdentifier, quotedAnchors, selectorQuotesVolatileIdentifier } from "../selector";
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
@@ -112,7 +19,7 @@ import { pageTokens, type PageTokens } from "./page-tokens";
 import { recordedPlaceRefusal, type RecordedPlace } from "./place";
 import { readWordsOf } from "./read-words";
 
-/** A candidate and what Core made of it. */
+/** A candidate and what the domain matcher measured. */
 export type ScoredCandidate = {
   element: Element;
   score: ElementFingerprintScore;
@@ -239,7 +146,7 @@ export const TARGET_SCORE_MARGIN = 0.2;
  */
 const DRAWING_WEIGHT = 20;
 
-const matcher = createAutomationStudioElementMatcher({ weights: { attributes: DRAWING_WEIGHT } });
+const matcher = createWebElementMatcher({ weights: { attributes: DRAWING_WEIGHT } });
 
 /**
  * Ranks the pool against the recorded control and says whether one of them is
@@ -461,7 +368,7 @@ function withAgreeingDrawing(fingerprint: ElementFingerprint, drawing: string | 
   return { ...fingerprint, attributes: { [DRAWING_ATTRIBUTE]: drawing } };
 }
 
-/** Core's own ranking order (`scoreElementFingerprintCandidates`): total, then normalized score, then candidate id. */
+/** the domain matcher's own ranking order (`scoreElementFingerprintCandidates`): total, then normalized score, then candidate id. */
 function coreOrder(left: ScoredCandidate, right: ScoredCandidate): number {
   return right.score.totalScore - left.score.totalScore
     || right.score.normalizedScore - left.score.normalizedScore

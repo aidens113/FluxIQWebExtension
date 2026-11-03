@@ -38,7 +38,7 @@ test("task and worktree scripts build nothing except through pnpm build, pnpm ch
 test("task start builds the worktree with pnpm build and Core with buildCore; task finish runs pnpm check only on --full-check", () => {
   const start = readFileSync(path.join(SCRIPTS, "task", "start.mjs"), "utf8");
   assert.match(start, /runPnpm\(created\.root, \["build"\]/u);
-  assert.match(start, /await buildCore\(created\.coreRoot/u);
+  assert.match(start, /prepare\.buildCore\(created\.coreRoot/u);
   assert.match(readFileSync(path.join(SCRIPTS, "worktree", "apply-move.mjs"), "utf8"), /runBuild = buildCore/u);
   assert.match(readFileSync(path.join(SCRIPTS, "task", "finish.mjs"), "utf8"), /runPnpm\(workRoot, \["check"\]/u);
 });

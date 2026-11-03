@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import { validateAutomationStudioNodeDefinition } from "fluxiq/components/automation";
 import {
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,

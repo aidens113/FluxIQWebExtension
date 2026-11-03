@@ -12,7 +12,7 @@ import test from "node:test";
 import { FIRST_LIVE_CREATION_LIMITS, buildApproveApplyCreationViaUi, readProviderFreeGenerationReadiness } from "../index.js";
 import { readCreateUiBuildOutput } from "./module-source.js";
 import { TESTING_LAB_DEEPSEEK_KEY_NAME, TESTING_LAB_LLM_KEY_NAME } from "../../secret-keys-ui.js";
-import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation";
 import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 test("Phase 3 UI driver pins exact one-call limits and explicit review actions", async () => {

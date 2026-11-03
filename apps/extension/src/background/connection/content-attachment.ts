@@ -1,7 +1,7 @@
 // Getting the content script into a tab and telling it whether to record.
 // Every message name here is part of the background/content contract.
 
-import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { FluxIQSettings } from "../../shared/protocol";
 import { unsupportedPageForUrl } from "./browser-state";
 

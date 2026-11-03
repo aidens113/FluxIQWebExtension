@@ -5,7 +5,7 @@ import {
   automationStudioLlmRerunCapture,
   automationStudioLlmRerunExecution,
   type AutomationStudioLlmEvidenceLoopInput
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import {
   createWebAutomationOutputNodeManifest,

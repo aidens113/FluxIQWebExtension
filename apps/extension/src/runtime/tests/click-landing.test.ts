@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { sendClickCheckingLanding as sendWithAccess } from "../click-landing";
 import type { LandedTabAccess } from "../landed-check-wait";

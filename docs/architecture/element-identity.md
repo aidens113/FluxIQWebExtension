@@ -21,7 +21,7 @@ returns the element **and** the measurement that chose it, and throws
   page has not changed.
 - **Level 2 — scoring.** When no exact strategy answers, or when one answers
   several times, enumerate the controls that could plausibly be the recorded
-  one and ask Core's element matcher which of them it is.
+  one and ask the web domain's element matcher which of them it is.
 
 Level 1 takes precedence, and its answer is gated, counted, and vetoed before
 it is acted on.
@@ -161,14 +161,10 @@ Each candidate is described as Core's `ElementFingerprintCandidate` by the
 same `identity/` modules `describe-element.ts` uses, so a candidate and a
 recorded descriptor are built from one set of rules.
 
-**Scoring** (`identity/score.ts`) delegates to Core's element matcher,
-imported from the `fluxiq/automation-studio/fingerprinting` subpath Core
-publishes for browser bundles. Core owns the signal weights, the per-signal
-comparisons and the confidence formula. This side contributes four things
-Core cannot know about a browser:
+**Scoring** (`identity/score.ts`) delegates to the web domain's browser-safe `createWebElementMatcher`, exported through `@fluxiq-web-extension/domain/client`. The domain owns calibrated signal weights, browser comparisons and browser snapshot projection; Core supplies neutral score aggregation through `fluxiq/runtime/target-matching`. Core's importer/runtime contexts receive the explicitly registered domain matcher. The extension adds these browser constraints:
 
 - **which semantic place is eligible**: record, dialog and recorded landmark
-  are browser-side constraints, applied before Core compares descriptive
+  are browser-side constraints, applied before the web matcher compares descriptive
   signals; another landmark cannot become the winner because it kept old
   words or classes;
 - **which recorded signals are comparable** — only the ones a live candidate
@@ -245,7 +241,7 @@ handles are renumbered, positional selectors move. After the step's second
 failed retry on a target failure that never acted, FluxIQ Core re-runs the
 source step read-only and asks the web host which of its fresh answers is the
 same item. Core owns the lineage, the trigger, the re-run and the rebinding
-(`fluxiq` `runtime/executor/target-reacquire/`); the web domain owns the
+(`fluxiq` `framework/automation-service/executor/target-reacquire/`); the web domain owns the
 matching, in `domain/src/runtime/target-reacquire/`. Matching is by identity,
 exact after spacing and case are set aside, never fuzzy and never by position.
 

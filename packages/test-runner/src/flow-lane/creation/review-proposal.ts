@@ -5,7 +5,7 @@
 // candidate whose trial was judged a confirmed yes, and only a Core
 // `./readiness.ts` admitted is reviewed at all.
 
-import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import type { ExistingFlowAdaptation } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";

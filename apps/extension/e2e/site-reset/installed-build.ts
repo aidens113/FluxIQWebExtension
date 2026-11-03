@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { FluxIQ } from "fluxiq";
-import { AutomationStudioNativeNodeRuntime, automationStudioGatewayTraceServiceStore } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime, automationStudioGatewayTraceServiceStore } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { registerWebAutomationDomain, createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle, WEB_AUTOMATION_RUNTIME_PERMISSIONS, WEB_AUTOMATION_RUNTIME_CAPABILITIES } from "@fluxiq-web-extension/domain";
 import { startScenarioLab } from "../../../scenario-lab/src/server.js";

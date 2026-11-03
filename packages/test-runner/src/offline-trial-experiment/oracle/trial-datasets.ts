@@ -8,7 +8,7 @@
 // endpoint from the store instead of an HTTP Core. Point it at a copy.
 
 import { WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/node";
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectRunDatasetStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectRunDatasetStore } from "fluxiq/automation";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetControl } from "../../flow-lane/index.js";
 
 const PAGE_ENDPOINT = "get-run-dataset-page";

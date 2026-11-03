@@ -2,7 +2,7 @@ import type { FluxIQ } from "fluxiq";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { bindWebAutomationLlmEvidenceRuntime, type WebAutomationLlmEvidenceRuntime } from "../../..";
 
 test("production binding carries a passive result reader while ordinary snapshots remain rendered-only", async () => {

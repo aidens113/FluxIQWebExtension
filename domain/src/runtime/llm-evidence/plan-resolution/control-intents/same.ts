@@ -1,4 +1,4 @@
-import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 
 /** Missing and classified are different observations; a known disagreement cannot fall back to omission. */
 export function sameWebPlanControlIntent(left: AutomationStudioResolvedControlIntent | undefined, right: AutomationStudioResolvedControlIntent | undefined): boolean {

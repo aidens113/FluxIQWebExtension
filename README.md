@@ -37,6 +37,7 @@ apps/
     src/content/      DOM recorder, snapshotter, action executor
     src/popup/        connection and recording controls
     src/sidepanel/    compact live status view
+    src/panel/chat/   thin adapter over FluxIQ Core's shared chat UI (@fluxiq/ui-components)
     src/shared/       protocol, constants, browser-facing helpers
 domain/
   src/                FluxIQ domain manifest, registered inputs/outputs, recording contracts, actions

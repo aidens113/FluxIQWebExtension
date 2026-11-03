@@ -20,7 +20,7 @@
 // when Core answers without starting work (`activity/send-start.ts`). Opening
 // a thread alone is not a message and does not.
 
-import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings, PanelHandBackRunRequest, PanelStopRunRequest, PanelTakeOverRunRequest } from "../../shared/protocol";

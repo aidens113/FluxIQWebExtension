@@ -1,4 +1,4 @@
-import type { AutomationStudioLlmProvider } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmProvider } from "fluxiq/automation";
 import type { InstalledBuild } from "../../index";
 
 /** Counts actual provider callbacks while leaving the scripted provider and every answer intact. */

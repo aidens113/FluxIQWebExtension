@@ -22,9 +22,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "../../target-normalization";
 import type { JsonObject } from "fluxiq/core";
-import type { AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioNativeNodeContext } from "fluxiq/automation";
 import { adaptedTargetSupersedesRecording, createWebAutomationOutputNodeImplementationBundle, elementFingerprint, outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
 import { createWebAutomationRecordingEvent, webAutomationActionFromGatewayCommand } from "../gateway-mapping";
 

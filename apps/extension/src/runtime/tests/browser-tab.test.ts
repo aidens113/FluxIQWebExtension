@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_FAILURE_CODES, isWebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
@@ -185,7 +185,8 @@ test("a switch that matches no open tab is target_not_found, naming the tab it w
     retryable: true,
     stage: "target_resolution",
     expected: "tab 11 active",
-    actual: "no open tab matched"
+    actual: "no open tab matched",
+    effect: "unacted"
   });
 });
 

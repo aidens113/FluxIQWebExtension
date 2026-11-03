@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import { createWebNodeBuildMemory, createWebNodeBuildStatePersistence, webNodeBuildOf, type WebNodeBuildKey } from "..";
 import { coreBuildStateStore } from "./core-store";

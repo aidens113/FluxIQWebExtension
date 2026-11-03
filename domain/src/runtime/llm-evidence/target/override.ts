@@ -65,7 +65,7 @@ import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 
 /**
  * Match proposed handles and action semantics against the sanitized

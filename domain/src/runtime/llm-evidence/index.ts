@@ -144,3 +144,5 @@ export { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 export { WEB_FLOW_SCRIPT_EXAMPLES } from "./script-examples";
 
 export { observeWebLlmResult } from "./result-observation";
+// What Core's step log writes to `page.txt`, given to it through the implementation bundle.
+export { webLlmEvidencePageText, webLlmEvidenceSummary } from "./evidence-summary";

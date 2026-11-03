@@ -10,7 +10,7 @@
 // beside it, so the set is exhaustive by construction and a code that is added
 // here cannot fail to appear in the set a consumer derives.
 
-import { AUTOMATION_STUDIO_LLM_RUN_NODE_TOOL_ID } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_RUN_NODE_TOOL_ID } from "fluxiq/automation";
 import { WEB_LLM_TOOL_REJECTION_CODES, type WebLlmToolRejectionCode } from "./tool-rejection";
 
 /**

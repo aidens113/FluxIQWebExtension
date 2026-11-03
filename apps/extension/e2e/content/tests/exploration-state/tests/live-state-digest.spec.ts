@@ -24,7 +24,7 @@ import {
   type AutomationStudioAdaptationPolicy,
   type AutomationStudioFlowRunDetail,
   type AutomationStudioLlmProvider
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_RECOVERY_PRESS_OPTION_ID,

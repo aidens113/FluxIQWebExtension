@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FluxIQ, OutputDispatchResult } from "fluxiq";
-import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { webAutomationClearedWayOutsOf } from "../../cleared-way-outs";

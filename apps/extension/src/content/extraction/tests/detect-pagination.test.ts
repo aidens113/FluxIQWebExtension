@@ -178,6 +178,29 @@ test("a pager whose Next is a plain div and whose numbers carry no aria-current 
   }
 });
 
+// Run `run-mw0jw263-0251c104`: Next pinned on page two, where Previous is a link and Next the only
+// div, is `... > div`, which on page one names the disabled Previous. This pager's Next is a plain div
+// no control selector finds, and it marks its page only by a class, so the step said the list had no
+// next page while the pager showed two more.
+test("an authored control that names Previous, on a pager marking its page by style alone, is followed by the next number", () => {
+  const { list, cards } = results();
+  const numbers = [
+    pageEl("a", { class: "pagerItem pagerCurrent", href: "/search?page=1" }, "1"),
+    pageEl("a", { class: "pagerItem", href: "/search?page=2" }, "2"),
+    pageEl("a", { class: "pagerItem", href: "/search?page=3" }, "3")
+  ];
+  const previous = pageEl("div", { class: "pagerItem pagerDisabled" }, "‹ Previous");
+  const pager = pageEl("div", { class: "pager" }, [previous, ...numbers, pageEl("div", { class: "pagerItem" }, "Next ›")]);
+  const stood = page(pageEl("body", {}, [pageEl("div", { class: "content" }, [list, pager])]));
+  try {
+    const found = nextControlOnPage(previous as unknown as Element, pageElements(cards));
+    assert.equal(found?.by, "number");
+    assert.equal(found?.control, numbers[1]);
+  } finally {
+    stood.restore();
+  }
+});
+
 test("numbers that each sit alone in a list item are named through the item", () => {
   const { list, cards } = results();
   const numbers = [

@@ -14,8 +14,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAutomationStudioFlowBootstrapContext } from "fluxiq/automation-studio";
-import { AutomationStudioNodeRegistry } from "fluxiq/automation-studio/nodes";
+import { buildAutomationStudioFlowBootstrapContext } from "fluxiq/automation";
+import { AutomationStudioNodeRegistry } from "fluxiq/components/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../..";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "../../runtime/llm-evidence/system-instructions";
 import { listWebAutomationOutputNodeDefinitions, WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS } from "..";

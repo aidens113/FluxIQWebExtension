@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { chooseFrame, FRAME_APPEAR_WAIT_MS, waitForFrameChoice, type FrameWaitInputs, type ListedFrame } from "../frame-address";
 
 const TOP: ListedFrame = { frameId: 0, url: "http://127.0.0.1:4173/scenarios/iframe-checkout/" };
@@ -51,10 +51,11 @@ test("several child frames at the path and no tie-break is target_ambiguous, nam
     failure: {
       category: "target_ambiguous",
       code: "web.target.ambiguous",
-      retryable: false,
+      retryable: true,
       stage: "target_resolution",
       expected: `one child frame at ${PAY_PATH}`,
-      actual: `2 child frames are at ${PAY_PATH}, and none is frame 4`
+      actual: `2 child frames are at ${PAY_PATH}, and none is frame 4`,
+      effect: "unacted"
     }
   });
   assert.deepEqual(parseAutomationStudioFailureRecord(choice.refused.failure), choice.refused.failure);
@@ -71,7 +72,8 @@ test("no child frame at the path is target_not_found, naming paths and never a f
     retryable: true,
     stage: "target_resolution",
     expected: `a child frame at ${PAY_PATH}`,
-    actual
+    actual,
+    effect: "unacted"
   });
   assert.equal(choice.refused.message, `The action is addressed to the frame at ${PAY_PATH}, which this tab does not have.`);
   const wire = JSON.stringify(chooseFrame([TOP, PAY], 4, "/scenarios/iframe-checkout/missing"));

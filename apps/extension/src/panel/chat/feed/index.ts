@@ -1,12 +1,6 @@
-// The chat's live-activity feed: the background relay's state, read and
-// pushed, and when it should make the chat read the thread again.
-export {
-  createActivityFeed,
-  type ActivityFeed,
-  type ActivityFeedDeps,
-  type ActivityFeedReach,
-  type ActivityFeedSnapshot,
-  type ActivityPushListener
-} from "./activity-feed";
+// The chat's live-activity feed over the extension's background: the package's
+// feed (`@fluxiq/ui-components`) built from `request` and the runtime's broadcast.
+export type { ActivityFeed, ActivityFeedReach, ActivityFeedSnapshot } from "@fluxiq/ui-components";
+export { threadRefreshWanted } from "@fluxiq/ui-components";
+export { createActivityFeed, type ExtensionActivityFeedDeps } from "./activity-feed";
 export { listenToRuntime } from "./runtime-listener";
-export { threadRefreshWanted, type ThreadRefreshDecision } from "./thread-refresh";

@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import { webAutomationExtractConditionSayingValue } from "../condition-grammar";
 import { webAutomationExtractListRequestRead } from "../read-request";
 

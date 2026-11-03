@@ -3,7 +3,7 @@ import test from "node:test";
 import { validateWebRuntimeTargetOverrideEvidence, WEB_LLM_WITHHELD_TEXT } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import type { WebLlmPageEvidence } from "../../sanitize";
-import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
+import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 
 // Whether the control a model named is the failed action's own, as far as the

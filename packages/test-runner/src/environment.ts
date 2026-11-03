@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation";
 import type { RunAllocation } from "./allocation.js";
 import { createdFlowTrialsCandidates } from "./flow-lane/index.js";
 import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labAuthoringModeValue, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";

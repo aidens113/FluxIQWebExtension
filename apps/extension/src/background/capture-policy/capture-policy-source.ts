@@ -8,7 +8,7 @@
 // extension did before Core owned it: every capture switch as the person set
 // it, direct requests off. A later failed read keeps the last policy Core gave.
 
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import type { PanelRelayResponse } from "../../shared/protocol";
 import { readCapturePolicy } from "./read-capture-policy";
 

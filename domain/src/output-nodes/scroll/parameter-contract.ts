@@ -1,4 +1,4 @@
-import { isAutomationNodeParameterStateBinding as isBinding } from "fluxiq/automation-studio/nodes";
+import { isAutomationNodeParameterStateBinding as isBinding } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationScrollRequestIssues } from "../../actions/scroll-request-issues";
 

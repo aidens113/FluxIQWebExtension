@@ -1,4 +1,4 @@
-import type { StateSnapshot } from "fluxiq/automation-studio";
+import type { StateSnapshot } from "fluxiq/automation";
 import { createWebAutomationInitialState } from "../state";
 import { putStateValue } from "./state-values";
 import type { WebAutomationTabStateInput } from "./types";

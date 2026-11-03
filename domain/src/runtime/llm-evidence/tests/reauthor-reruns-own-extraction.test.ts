@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
 import type { WebLlmRepeatingStructure } from "../structure";

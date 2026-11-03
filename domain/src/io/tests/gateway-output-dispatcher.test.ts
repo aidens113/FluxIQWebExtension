@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { FluxIQ } from "fluxiq";
 import { ClientGatewayCommandContext } from "fluxiq/client-gateway";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { dispatchWebAutomationOutput } from "../gateway-output-dispatcher";

@@ -47,7 +47,7 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 
 import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
 import { captureSettings } from "./capture-settings";
-import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { setRecordingState } from "./recorder";
 import { actionFailure, captureSnapshotForResponse, challengeIn, executeAction, robotCheckIn } from "./action-runtime";
 import { inferListFromElement } from "./extraction";

@@ -16,7 +16,7 @@
 // prose, which is the guess this repository deleted on 2026-09-18.
 //
 // **What may be said about the value is not decided here**, and deliberately so:
-// Core's `automationStudioRecordConditionHolds` (`fluxiq/automation-studio/nodes`)
+// Core's `automationStudioRecordConditionHolds` (`fluxiq/automation/nodes`)
 // is the one judge of whether a value satisfies a condition, and the plan
 // resolver that accepts a model's condition, and Core's own dataset processing,
 // are held to the same function. A blank or whitespace-only value is one the
@@ -72,7 +72,7 @@
 // never more of the item.
 
 import { WEB_AUTOMATION_EXTRACT_CONDITION_KEPT_VALUES_MOST, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
-import { automationStudioRecordConditionHolds } from "fluxiq/automation-studio/nodes";
+import { automationStudioRecordConditionHolds } from "fluxiq/components/automation";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";

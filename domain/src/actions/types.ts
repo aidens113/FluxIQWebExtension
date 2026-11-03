@@ -4,8 +4,8 @@
 // keeping a copy, so the wire shape cannot drift between the domain, the
 // background worker, and the content script.
 
-import type { ElementFingerprint } from "fluxiq/automation-studio";
-import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import type { ElementFingerprint } from "fluxiq/automation";
+import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 // The result's `failure` is Core's record with `code` narrowed to the closed
 // set the browser path may produce. The two modules name each other -- the code
@@ -276,14 +276,14 @@ export {
 } from "./extraction";
 
 // Whether a condition holds of a value, and the number a value states, are
-// Core's (`fluxiq/automation-studio/nodes`): the page, the resolver and Core's
+// Core's (`fluxiq/automation/nodes`): the page, the resolver and Core's
 // dataset processing run the one reader. These names stay for the callers that
 // reach them through `domain/client`; they are the Core functions themselves,
 // not copies. A blank or whitespace-only value is absent under Core's rule.
 export {
   automationStudioRecordConditionHolds as webAutomationExtractConditionHolds,
   readAutomationStudioRecordNumber as webAutomationExtractConditionNumber
-} from "fluxiq/automation-studio/nodes";
+} from "fluxiq/components/automation";
 
 // `web.dom.next_page`'s request and answer (contract C1) live in `./next-page`
 // and are re-exported here for the reason the extraction's are: `domain/client`

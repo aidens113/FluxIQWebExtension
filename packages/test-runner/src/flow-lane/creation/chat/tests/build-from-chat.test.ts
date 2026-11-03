@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
-import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
+import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult } from "fluxiq/automation";
 import type { ExistingFlowAdaptation } from "../../../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../../../failure.js";
-import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS } from "fluxiq/automation";
 import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatControl } from "../build-from-chat.js";
 
 /**

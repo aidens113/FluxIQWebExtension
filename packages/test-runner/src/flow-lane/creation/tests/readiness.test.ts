@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation";
 import { RunnerFailure } from "../../../failure.js";
 import { assertCreatedFlowVerificationReady, assertLabModelResetOnlyApplies, createdFlowTrialsCandidates, createdFlowVerificationReady, labCandidateTrialFixtureReset, labCandidateTrialReadiness, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
 

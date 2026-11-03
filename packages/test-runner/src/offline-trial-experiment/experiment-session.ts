@@ -9,7 +9,7 @@
 // migrations. No model is called and no browser is reached.
 
 import path from "node:path";
-import { automationStudioCandidateFingerprint } from "fluxiq/automation-studio";
+import { automationStudioCandidateFingerprint } from "fluxiq/automation";
 import { jsonRecord } from "./json-record.js";
 import { readLabSubflowSteps } from "./lab-subflow-steps.js";
 import { loadOracleExpectation, type OracleExpectation, type OracleTask } from "./oracle/index.js";

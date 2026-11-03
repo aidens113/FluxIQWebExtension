@@ -1,4 +1,4 @@
-import type { AutomationStudioHostStateSnapshotRef } from "fluxiq/automation-studio";
+import type { AutomationStudioHostStateSnapshotRef } from "fluxiq/automation";
 import type { WebTargetCaptureProvenance } from "./provenance";
 import type { WebTargetScope } from "./scope";
 

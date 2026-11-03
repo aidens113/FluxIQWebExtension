@@ -21,7 +21,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
 import { webAutomationOutputNodeId } from "../../../../../output-nodes";

@@ -1,4 +1,4 @@
-import type { AutomationStudioLlmRerunDispatchAttempt } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmRerunDispatchAttempt } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { readWebHostFailure } from "../../../../host-failure";
 import { present } from "../../../present";

@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveAutomationNodeParameterValues } from "fluxiq/automation-studio/nodes";
+import { resolveAutomationNodeParameterValues } from "fluxiq/components/automation";
 import { webAutomationOutputPayload } from "../payloads";
 import { webAutomationSecretBinding } from "../secret-binding";
 import {

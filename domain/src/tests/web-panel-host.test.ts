@@ -21,7 +21,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
+import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry, createEnvelope } from "fluxiq/io";
 import { WEB_AUTOMATION_DOMAIN_ID } from "..";

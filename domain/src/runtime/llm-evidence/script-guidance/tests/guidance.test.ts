@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { assertAutomationStudioFlowScriptGuidance, renderAutomationStudioFlowScriptFormat } from "fluxiq/automation-studio";
+import { assertAutomationStudioFlowScriptGuidance, renderAutomationStudioFlowScriptFormat } from "fluxiq/automation";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../../tools";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../../script-examples";

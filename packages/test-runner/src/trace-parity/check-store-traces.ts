@@ -14,7 +14,7 @@
 // Run it only against a store no Core is writing. Opening a store applies
 // Core's migrations to it, so point it at a copy.
 
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import { replayClientGatewayTrace, type ClientGatewayTraceManifest } from "fluxiq/client-gateway";
 import { TRACE_PARITY_DEFAULT_DEADLINE_MS } from "./check-project-trace-parity.js";
 import { deliveryTail } from "./delivery-tail.js";

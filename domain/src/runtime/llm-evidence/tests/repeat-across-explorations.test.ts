@@ -18,7 +18,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";

@@ -44,7 +44,7 @@
 // read the same column twice under two keys. So the second pass looks only among
 // the columns the first pass did not take.
 
-import type { AutomationStudioNameValueShape } from "fluxiq/automation-studio/nodes";
+import type { AutomationStudioNameValueShape } from "fluxiq/components/automation";
 import {
   isWebAutomationExtractFieldKey,
   type WebAutomationExtractField,

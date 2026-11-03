@@ -27,7 +27,7 @@ import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 const root = process.argv[2];
-const { AutomationStudioService } = await import(pathToFileURL(path.join(root, 'packages/fluxiq/dist/programs/automation-studio/runtime/service.js')));
+const { AutomationStudioService } = await import(pathToFileURL(path.join(root, 'packages/fluxiq/dist/framework/automation-service/service.js')));
 const { registerRuntimeIdentityEndpoint } = await import(pathToFileURL(path.join(root, 'packages/fluxiq/dist/programs/automation-studio/api/handlers/diagnostics/runtime-identity.js')));
 const service = new AutomationStudioService({ seedFixture: false });
 let endpoint, dispatches = 0;

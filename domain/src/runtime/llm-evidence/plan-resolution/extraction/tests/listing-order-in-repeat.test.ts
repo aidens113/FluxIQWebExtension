@@ -17,8 +17,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkAutomationStudioFlowBootstrapCompletion } from "fluxiq/automation-studio";
-import { AutomationStudioNodeRegistry } from "fluxiq/automation-studio/nodes";
+import { checkAutomationStudioFlowBootstrapCompletion } from "fluxiq/automation";
+import { AutomationStudioNodeRegistry } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../../constants";
 import type { WebAutomationStructureDetection } from "../../../../../extraction";
@@ -26,12 +26,11 @@ import {
   WEB_AUTOMATION_RUNTIME_CAPABILITIES,
   WEB_AUTOMATION_RUNTIME_PERMISSIONS,
   webAutomationOutputNodeDefinitions,
-  webAutomationOutputNodeId,
   webAutomationOutputNodeParameterContracts
 } from "../../../../../output-nodes";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, type WebAutomationLlmEvidenceRuntime, type WebLlmRepeatingStructure } from "../../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime, type WebLlmRepeatingStructure } from "../../..";
+import { shownHandle } from "../../../page-view/tests/shown-page-lines";
 
-const EXTRACT_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
 const CODE = "record_output.process_order_in_repeat";
 const resolution = {
@@ -61,26 +60,30 @@ const DETECTION: WebAutomationStructureDetection = {
   }
 } as unknown as WebAutomationStructureDetection;
 
-async function detected(): Promise<{ runtime: WebAutomationLlmEvidenceRuntime; handle: string }> {
+async function detected(): Promise<{ runtime: WebAutomationLlmEvidenceRuntime; handle: { listing: string; done: string } }> {
   const shown = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
-      const snapshot: JsonObject = { url: "http://127.0.0.1:4173/tasks/", title: "Tasks", interactiveElements: [] };
+      const snapshot: JsonObject = {
+        url: "http://127.0.0.1:4173/tasks/", title: "Tasks",
+        interactiveElements: [{ tagName: "button", selector: ".done", visibleText: "Mark done" }]
+      };
       return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: structuredClone(DETECTION) as unknown as JsonValue } };
     }
   });
   const result = await shown.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
   assert.equal(result.resultCode, "web.structure.detected");
-  return { runtime: shown, handle: (result.evidence as WebLlmRepeatingStructure).extraction };
+  const looked = await shown.executeTool({ ...SCOPE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {} } });
+  return { runtime: shown, handle: { listing: (result.evidence as WebLlmRepeatingStructure).extraction, done: shownHandle(looked.evidence, "Mark done") } };
 }
 
 /** The listing's lines a script carries beside its handle and record output, keyed by what they set. */
 type ListingLines = Map<string, string>;
 
 /** The script: open the list, read it (this domain resolves it), and a lasting press repeated over the first three rows. */
-function script(handle: string, listing: ListingLines): string {
+function script(handle: { listing: string; done: string }, listing: ListingLines): string {
   const fields = JSON.stringify(Object.fromEntries(COLUMNS.map((name) => [name, keyOf(name)])));
   return [
     "flow: Mark the first three unmarked tasks as done",
@@ -89,25 +92,25 @@ function script(handle: string, listing: ListingLines): string {
     "  url: http://127.0.0.1:4173/tasks/",
     "step tasks: list the unmarked tasks",
     "  node: web.dom.extract_list",
-    `  extractList: {"handle": "${handle}", "fields": ${fields}}`,
+    `  extractList: {"handle": "${handle.listing}", "fields": ${fields}}`,
     // The record output first: a dotted `recordOutput.process:` line below sets a key inside it.
     "  recordOutput: {\"datasetId\": \"done-tasks\", \"writeMode\": \"replace\"}",
     ...[...listing].map(([key, value]) => `  ${key}: ${value}`),
     "step: mark the task as done",
     "  node: web.dom.click",
-    "  selector: .done",
+    `  target: {"handle": "${handle.done}"}`,
     "  consequences: modify_existing",
     "  repeat over: tasks",
     "  repeat most: 3"
   ].join("\n");
 }
 
-/** Core's completion check, with this domain resolving the listing and nothing else changed. */
+/** Core's completion check, with this domain resolving and checking each step's declared permission. */
 async function check(runtime: WebAutomationLlmEvidenceRuntime, flow: string) {
   return await checkAutomationStudioFlowBootstrapCompletion({
     result: { summary: "tasks", flow }, ...SCOPE, registry: registry(), resolution,
     binding: {
-      resolvePlanNodeParameters: async (request) => request.nodeDefinitionId === EXTRACT_NODE ? await runtime.resolvePlanNodeParameters(request) : { status: "unchanged" }
+      resolvePlanNodeParameters: async (request) => await runtime.resolvePlanNodeParameters(request)
     },
     permissionFor: () => async () => ({ permitted: true })
   });

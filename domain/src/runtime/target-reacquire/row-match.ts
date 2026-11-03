@@ -21,8 +21,8 @@
 // another, the same floor a saved control is held to
 // (`element-fingerprint/shortfall.ts`).
 
-import type { AutomationStudioTargetReacquireAnswer } from "fluxiq/automation-studio";
-import { automationStudioRecordRowIdentity } from "fluxiq/automation-studio";
+import type { AutomationStudioTargetReacquireAnswer } from "fluxiq/automation";
+import { automationStudioRecordRowIdentity } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS } from "../../element-fingerprint";
 import { webReacquireText } from "./text";

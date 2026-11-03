@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { type WebAutomationFailureCarrier } from "../carrier";
 import { classifyWebAutomationFailure, type WebAutomationActionOutcome } from "../classify";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode, type WebAutomationFailureRecord } from "../codes";

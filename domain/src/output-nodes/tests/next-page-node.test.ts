@@ -7,8 +7,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
-import type { AutomationNodeExecutionResult, AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
+import { validateAutomationStudioNodeDefinition } from "fluxiq/components/automation";
+import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
+import type { AutomationStudioNativeNodeContext } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import { webAutomationActionEffect } from "../../actions/effect";
 import { WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER, WEB_AUTOMATION_ACTION_TYPES } from "../../actions/types";

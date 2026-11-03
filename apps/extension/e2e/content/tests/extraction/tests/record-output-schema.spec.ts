@@ -26,7 +26,7 @@ import {
   type WebAutomationExtractListRequest,
   type WebAutomationStructureDetection
 } from "@fluxiq-web-extension/domain/client";
-import { parseAutomationStudioRecordOutput, validateAutomationStudioRecords } from "fluxiq/automation-studio";
+import { parseAutomationStudioRecordOutput, validateAutomationStudioRecords } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";

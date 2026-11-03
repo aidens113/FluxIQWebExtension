@@ -1,5 +1,5 @@
-import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { parseAutomationStudioTargetActionabilityRecord, type AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation";
+import { parseAutomationStudioTargetActionabilityRecord, type AutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import type { WebLlmToolRejectionCode, WebLlmToolRejectionDetail } from "../tool-rejection";
 

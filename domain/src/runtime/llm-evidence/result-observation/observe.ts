@@ -1,6 +1,6 @@
 // A result check's fresh, passive page: includes non-rendered state while
 // retaining no handles, selectors, action targets or reusable bindings.
-import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmSnapshotBinding } from "../sanitize";

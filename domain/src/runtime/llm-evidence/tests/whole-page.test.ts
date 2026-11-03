@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { screenAutomationStudioLlmEvidence } from "fluxiq/automation-studio";
+import { screenAutomationStudioLlmEvidence } from "fluxiq/automation";
 import { sanitizeWebLlmSnapshot, WEB_LLM_DENIED_EVIDENCE_KEYS, WEB_LLM_WITHHELD_TEXT } from "..";
 import { secretParameterName } from "../location";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";

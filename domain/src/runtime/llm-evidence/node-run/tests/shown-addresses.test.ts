@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import type { WebLlmSnapshotBinding } from "../../sanitize";

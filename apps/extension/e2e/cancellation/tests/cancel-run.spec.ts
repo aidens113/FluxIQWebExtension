@@ -4,7 +4,7 @@ import type { Socket } from "node:net";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AutomationStudioService, AutomationStudioNativeNodeRuntime, automationStudioActivityHub, AUTOMATION_STUDIO_IMPORTER_SDK_VERSION, type AutomationStudioNodeDefinition } from "fluxiq/automation-studio";
+import { AutomationStudioService, AutomationStudioNativeNodeRuntime, automationStudioActivityHub, AUTOMATION_STUDIO_IMPORTER_SDK_VERSION, type AutomationStudioNodeDefinition } from "fluxiq/automation";
 import { expect, restartServiceWorker, test } from "../../fixtures/extension-context";
 
 test("the real sidepanel Stop cancels a running Core executor before its next node", async ({ extensionSession }) => {

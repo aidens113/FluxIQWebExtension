@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioActionDeclaration } from "fluxiq/automation-studio";
+import type { AutomationStudioActionDeclaration } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { webControlSpotToken, webResetResource } from "..";

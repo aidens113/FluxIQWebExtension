@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioProjectSingleSubflowRebuild } from "fluxiq/automation-studio";
+import { automationStudioProjectSingleSubflowRebuild } from "fluxiq/automation";
 import { rebuildSubflowCandidate, type RebuildContext } from "../rebuild-candidate.js";
 import type { UnresolvedStep } from "../../types.js";
 import { fakeContext, fakeRebuild } from "./rebuild-fakes.js";

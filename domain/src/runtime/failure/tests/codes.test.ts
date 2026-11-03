@@ -14,7 +14,7 @@ import {
   buildAutomationStudioRuntimeDeterministicDiagnosis,
   parseAutomationStudioFailureRecord,
   type AutomationStudioNodeAttemptTrace
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import { WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH } from "../../../actions/types";
 import {
   WEB_AUTOMATION_FAILURE_CODES,

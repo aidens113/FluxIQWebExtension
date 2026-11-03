@@ -8,7 +8,7 @@
 // (`./build-cost-ceiling.ts`), so the chat-build check compares the run's model
 // with what its Core was actually given rather than with a constant.
 
-import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_DEFAULT_MODEL_ENV, resolveAutomationStudioLlmDefaultModel } from "fluxiq/automation";
 import { labDefaultModelValue } from "./default-model-env.js";
 
 /**

@@ -6,7 +6,7 @@
 // disabled and reads off, so the request it sends is ignored rather than
 // overwriting the choice a later policy may allow again.
 
-import { clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/automation-studio/nodes";
+import { clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 
 export function requestsChoice(stored: boolean, requested: unknown, policy: AutomationStudioRecordingCapturePolicy): boolean {
   if (typeof requested !== "boolean") return stored;

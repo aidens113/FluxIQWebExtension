@@ -21,7 +21,3 @@ export function relayState(recent: ClientGatewayActivity[], fields: Partial<Exte
   return { current: recent[recent.length - 1] ?? null, display: null, recent, overlay: "expanded", live: true, ...fields };
 }
 
-/** The time `activityEvent(sequence)` carries, in ms. */
-export function eventTime(sequence: number): number {
-  return Date.UTC(2026, 8, 29, 12, 0, sequence);
-}

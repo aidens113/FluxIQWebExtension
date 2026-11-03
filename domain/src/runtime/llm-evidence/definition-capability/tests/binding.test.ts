@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { FluxIQ } from "fluxiq";
-import { parseAutomationStudioFailureRecord, type AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord, type AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import type { ClientGatewayActionCommand, ClientGatewayActionResult, ClientGatewayCapability } from "fluxiq/client-gateway";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_DEFINITION_FIELDS_CAPABILITY_ID, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID, WEB_AUTOMATION_FAILURE_CODES } from "../../../../client";

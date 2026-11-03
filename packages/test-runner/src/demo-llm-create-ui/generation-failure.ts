@@ -12,7 +12,7 @@
 // spell; every other code is counted and dropped (see `admittedIssueCodes`).
 
 import type { Response } from "@playwright/test";
-import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_PHASE_FAILURE_CODES, AUTOMATION_STUDIO_PLAN_PARAMETER_ISSUE_CODES, parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioFlowBootstrapFailureStage, type AutomationStudioFlowBootstrapPhaseFailureCode } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_PHASE_FAILURE_CODES, AUTOMATION_STUDIO_PLAN_PARAMETER_ISSUE_CODES, parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioFlowBootstrapFailureStage, type AutomationStudioFlowBootstrapPhaseFailureCode } from "fluxiq/automation";
 import { WEB_LLM_EVIDENCE_RESULT_CODES, WEB_LLM_EVIDENCE_TOOL_IDS, WEB_PLAN_HANDLE_ISSUE_CODES } from "@fluxiq-web-extension/domain/node";
 import { hasExactEnvelope } from "./json-shapes.js";
 

@@ -13,7 +13,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, automationStudioAssessAttemptFault, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, automationStudioAssessAttemptFault, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../failure";
