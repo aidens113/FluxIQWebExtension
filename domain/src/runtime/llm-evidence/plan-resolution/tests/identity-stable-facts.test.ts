@@ -28,7 +28,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "../../../../target-normalization";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { elementFingerprint, outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";

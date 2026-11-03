@@ -65,8 +65,8 @@ test("the manifest declares element targeting for exactly the outputs that canno
 });
 
 test("the manifest and the output nodes declare element targeting for the same outputs", () => {
-  // Two registries, one rule. The node definition is inert for this purpose —
-  // Core reads the manifest — but a disagreement between them means one of the
+  // Two registries, one rule. The node definition is inert for this purpose â€”
+  // Core reads the manifest â€” but a disagreement between them means one of the
   // two derivations has drifted from the action schema, which is the defect
   // this test exists to catch.
   for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
@@ -136,5 +136,14 @@ test("the manifest and the output nodes name the same records path", () => {
       nodeDefinition(outputId).metadata?.recordsPath,
       `${outputId}: the manifest output and the output node must name the same records path`
     );
+  }
+});
+
+// The generic Core gate reads this deny-only prerequisite from the registered output.
+test("exactly the element-targeted registered outputs require their domain preparation hook", () => {
+  const actual = WEB_AUTOMATION_ACTION_TYPES.filter(outputId => manifestOutput(outputId).metadata?.outputTargetPreparationRequired === true).sort();
+  assert.deepEqual(actual, [...ELEMENT_TARGETED_OUTPUTS].sort());
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    if (!ELEMENT_TARGETED_OUTPUTS.includes(outputId)) assert.equal(manifestOutput(outputId).metadata?.outputTargetPreparationRequired, undefined);
   }
 });

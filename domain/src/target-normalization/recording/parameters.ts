@@ -1,6 +1,6 @@
 import type { AutomationStudioRecordingCandidateParameterNormalizer } from "fluxiq/components/automation/importer";
 import type { JsonObject } from "fluxiq/core";
-import { normalizeWebElementTarget } from "./normalize";
+import { normalizeWebElementTarget } from "../normalize";
 
 export const normalizeWebRecordingCandidateParameters: AutomationStudioRecordingCandidateParameterNormalizer = (_domainId, parameters, _context) => {
   const target = normalizeWebElementTarget(parameters.element ? parameters : parameters.target, { source: "mapper" })

@@ -1,16 +1,11 @@
+import { hasFingerprintSignal } from "./fingerprint-signal";
+import { isSensitiveKey } from "./sensitive-key";
+import { isWebElementTarget as isAutomationStudioElementTarget } from "./is";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { AutomationStudioElementTarget, AutomationStudioElementTargetSource, AutomationStudioElementTargetFingerprint, AutomationStudioElementTargetCandidate, AutomationStudioElementTargetSelection, StateBounds, StatePath } from "fluxiq/automation-studio";
 
 // Legacy wire DTOs round-trip through Core; the web domain owns their interpretation.
-function isAutomationStudioElementTarget(value: unknown): value is AutomationStudioElementTarget {
-  return Boolean(value)
-    && typeof value === "object"
-    && !Array.isArray(value)
-    && (value as Record<string, unknown>).kind === "element"
-    && Boolean((value as Record<string, unknown>).fingerprint)
-    && typeof (value as Record<string, unknown>).fingerprint === "object"
-    && !Array.isArray((value as Record<string, unknown>).fingerprint);
-}
+
 
 export function normalizeWebElementTarget(value: unknown, options: { source?: AutomationStudioElementTargetSource } = {}): AutomationStudioElementTarget | null {
   if (isAutomationStudioElementTarget(value)) return sanitizeElementTarget(value, options.source);
@@ -70,9 +65,7 @@ function normalizeFingerprint(value: unknown, readsText = true): AutomationStudi
   });
 }
 
-function hasFingerprintSignal(fingerprint: AutomationStudioElementTargetFingerprint): boolean {
-  return Boolean(fingerprint.visibleText || fingerprint.accessibleName || fingerprint.label || fingerprint.id || fingerprint.testId || fingerprint.automationId || fingerprint.entityId || fingerprint.statePath || fingerprint.selector || fingerprint.xpath || fingerprint.queryPath || fingerprint.bounds);
-}
+
 
 function compactSelection(selection: AutomationStudioElementTargetSelection): AutomationStudioElementTargetSelection | undefined {
   if (!safeString(selection.candidateId)) return undefined;
@@ -158,9 +151,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isSensitiveKey(key: string): boolean {
-  return /password|passwd|passcode|secret|token|credential|authorization|cookie|session|csrf/i.test(key);
-}
+
 
 const promotedFingerprintMetadataKeys = new Set(["visibleText", "accessibleName", "ariaLabel", "label", "id", "testId", "dataTestId", "automationId", "entityId", "entityKind", "tagName", "role", "selector", "xpath", "queryPath", "statePath", "url", "classNames", "bounds", "attributes", "drawing"]);
 

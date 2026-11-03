@@ -1,7 +1,7 @@
 # Runtime Ownership And Web Boundary Refactor
 
 Status: Active
-Status detail: task checkpoint backed up; SQL/router/permission/producer/whole-candidate units accepted; R5 capture/mapping, partial trials and remaining audit/UI phases active.
+Status detail: framework owners and domain target hooks migrated in source; native/composed checkpoint has bounded failures under repair; full remaining ownership/scoped recording/log lifecycle and final UI phases remain active.
 Created: 2026-11-01
 Last updated: 2026-11-02
 Owner: Senior supervisor agent
@@ -11,12 +11,16 @@ Related: [repository layout](../architecture/repository-layout.md)
 
 ## Current State
 
+Latest verified checkpoint (2026-11-02): normal Core package typecheck and complete-context structure audit exit0, with baseline1095 reduced to1072 and no new exemptions. Downstream whole structure audit exits0 with583 entries unchanged. Core libraries are rebuilding after the public compatibility projection export; guarded downstream package checks/tests are next. Three downstream test-contract corrections preserve every existing oracle. Source-local tests do not substitute for the rebuilt public package gate.
+The full Service positive remains unverified. Fourteen backend ownership groups still need migration, and the separately required shared chat package has not started. The earlier rolling completion estimates were unreliable; progress is recorded as observed gates and explicit remaining ownership work.
+
 The complete Core/downstream ownership audit and refactor remains Active. The user also requires a separate reusable standardized chat-stream/widget package, tentatively `@fluxiq/ui-components`, AFTER both full audits/refactors finish. That final UI phase is recorded in both repositories and has not started.
 The user reaffirmed that Automation Studio is ONLY a UI panel controlling the framework. Execution, authoring, verification, persistence, project/policy/recording ownership and orchestration must all move to framework packages. Studio keeps UI/view state and thin control adapters; current backend/receipt/composition locations are temporary compatibility scaffolding. Earlier proposed permanent Studio persistence/composition exceptions are superseded.
 
 Actual authoring checkouts are C:/Users/osrs_/FluxStuff/fxwork/t843/!FluxIQ and its sibling !FluxIQWebExtension, both on task/t843-runtime-foundations. They share the original repositories' actual Git histories. The first t842 capability group is already merged/pushed to BOTH original dev branches; main has not moved. Original downstream user changes remain untouched.
 Local Core checkpoint9c9a0de8c saves the validated native/generic log extraction. It is not pushed yet: the task's structure gate waits ongoing original-copy/native implementation work. Other current migrations remain uncommitted while their coherent validation is pending.
-Current task-branch backups are Corecafe96dde/downstream5d9add7a, committed and pushed through normal hooks. They include the verified runtime/storage/permission/capture/verification foundations and paired domain adapters; dev/main have not moved beyond the earlier t842 integration. These are WIP backups, not a coherent dev/main release: the actual instruction reader still requires model-provider and spend acknowledgements. The new unconsumed instruction-observation prototype and next three acknowledgement units remain work in progress. No hook bypass, force push, PR, registry publishing or main promotion occurred.
+Remote task backups remain Corecafe96dde/downstream5d9add7a, pushed through normal hooks; newer local log/document checkpoints are Core9c9a0de8c/downstream3a34ac58. Dev/main have not moved beyond the earlier t842 integration. Shared instruction/provider/spend acknowledgement mechanisms now pass focused acceptance; actual composed Service and production native secret/log completion remain required. These are task checkpoints, not a coherent dev/main release. No hook bypass, force push, PR, registry publishing or main promotion occurred.
+Latest lead checks: native secret/canonical26 +legacy74all pass; durable SQL6all pass with no unhandled errors; target dispatch/recording projection/graph options15pass; trusted recording scope16 +raw domain-ingress6pass. Documented Core check found3fixture type errors and structure found9barrel imports; corrections saved, common rerun pending. C's port family10passes, but full Service still has no passing positive verdict. Actual scoped recording start/storage/capture integration and moving final Core browser validators/assertions downstream are active. The full backend map has14remaining feature groups; framework project SQL design is ready, shared UI extraction remains after the complete refactor.
 
 Lead independently accepted these current source units:
 - A2 durable SQL/sole command bridge:10files90tests. Gateway original-child completion reader amendment:2files9tests. Historical unknown/lost ACK stays pending across reopen; original required observer and handling remain sole authorities.
@@ -52,6 +56,29 @@ The public package must expose the widget, message/stream contracts, styles and 
 Migrate the extension to the package and exercise a second real client integration to prove reuse. Preserve streaming, activity/results, user interactions, accessibility and existing visual behavior; keep extension-specific approvals/routing/browser bindings in its adapter. Document standalone client setup and verify the browser bundle boundary.
 
 ## Work Ledger
+
+### 2026-11-02 - Guarded public package acceptance
+- Validation: `pnpm.cmd --filter @fluxiq-web-extension/domain check` ->exit0; `pnpm.cmd --filter @fluxiq-web-extension/domain build` ->exit0/2,028outputs. Both normal guards confirm current rebuilt Core.
+- Validation: with DOMAIN_TEST_BUILD_LABEL=t843-r8, `pnpm.cmd --filter @fluxiq-web-extension/domain test target-normalization/tests output-nodes/target-preparation/tests output-nodes/tests/native-runtime tests/opaque-target-execution io/tests/manifest-definitions` ->16passed/0assertion failures/66cancelled. First graph retry awaits an intentionally unreferenced Core timer; B corrects only the migrated node:test fixture's test delay, preserving retries/oracles.
+- Changed: Root migrated six remaining content-e2e normalizer imports to the downstream implementation. Core browser audit entry list now covers the actual core/index bundle input. Normal extension check/build rerun active; no live browser/provider/panel started.
+- State: Core typecheck/structure pass and baseline1072; actual composed positive and remaining backend owners are still required before the final reusable chat package.
+
+### Common Core prerequisite checkpoint
+- Latest source: final Core target interpreter module independently contains7passive type aliases/0runtime declarations;14complete browser scenarios moved Down with original oracles. New scoped capture worker55passes and Core approved-scope/decoder lead34passes; full composed Service tests remain pending.
+- Review exposed real delayed Stop/failed-append same-ID cross-project races (B repairing complete family), late confidence rejection before snapshot/object writes (Root shared raw guard fixed), and missing direct-create initial-state guard (Root fixed). Actual source integration remains under validation, not a finished boundary claim.
+- Validation: lead pure-browser entrypoints7/0forbidden; actual Down recording policy23inputs0forbidden/externals19,514bytes, no polyfills. Source-local proof only; normal rebuilt Core currency/downstream integration still required.
+- Follow-up validation: lead native secret/canonical lane ->5files26passed/7.95s; legacy compatibility lane ->8files74passed/42.49s after bounded corrections. Lead output-preparation/recording-projection/graph-options ->3files15passed. These are source-local provider-free checks; normal rebuilt paired integration is still required.
+- Core common readers finished before bounded repairs resumed. A owns actual SQL same-file concurrency and target fixture types; B owns native secret cleanup/copied receiver and inherited legacy authorization; C owns the real Service first-trial admission failure. Root fixed the optional native-runtime access. No passing composed Service verdict is claimed.
+- Validation: `node .fluxiq/refactor/lead-native-secret-tests.cjs native` in Core ->24passed/2failed; compatibility lane ->73passed/1failed. Durable SQL plus actual dispatch selection ->13passed/1failed,2unhandled errors; dispatch9/9passed. Actual Service progressed through exploration/submission, then refused its first trial.
+- Validation: Core combined strict ->524roots/5,755modules/4errors before assigned fixes. `node .fluxiq/refactor/lead-target-browser.cjs` ->4pure public entrypoints/0forbidden edges. Normal rebuilt paired integration remains pending.
+- Outcome: Partial. Full ownership audit/refactor, scoped authenticated recording policy, native log lifecycle and reusable chat package remain required. No new dev/main integration, paid test or panel start.
+
+### 2026-11-02 - Actual target interpretation moving into the domain
+- Agent: senior supervisor
+- Changed: actual output target preparer/recording target projection and full guards/validator are saved downstream; SDK code hooks select original per-domain receiver/function. Root Core generic dispatch honors only registered deny-only preparation requirements, and recording composition selects from the original stored recording domain under its lock. Paired public browser preparation/policy seams replace server aggregate imports.
+- Validation: Core SQL40distinct scoped cases accepted, native-log helpers20accepted with real original byte comparisons; native Secret Keys/common Service integration still pending. Root generic dispatch7, recording projection4before additive mutation case, shared undefined-only JSON compatibility1pass. Pure public preparation/policy/recording/core browser builds0Node/forbidden edges.
+- Finding: output and recording compaction differ: recording drops undefined ONLY and retains empty arrays. Domain recording hook now uses the actual promoted Core compactDefinedJsonObject; output keeps its original helper. Pending actual domain body/byte/import checks and normal public Core/downstream guarded integration.
+- State: Core executable target validation/ingress functions still require authenticated domain policy migration before removal. Neither complete audit nor final reusable chat package is claimed finished. Current authoring pair remains t843, not the older IDE t842 tab.
 
 ### 2026-11-02 - Further actual Core owners and data prerequisites
 - Agent: senior supervisor

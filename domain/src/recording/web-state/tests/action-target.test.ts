@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "../../../target-normalization";
 import { webAutomationActionTargetFromElement, type WebAutomationActionTargetMetadata } from "../action-target";
 import type { WebAutomationElementIdentitySignal, WebAutomationElementStateInput } from "../types";
 

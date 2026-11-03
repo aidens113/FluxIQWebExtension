@@ -1,2 +1,5 @@
 export { normalizeWebElementTarget } from "./normalize";
-export { normalizeWebRecordingCandidateParameters } from "./recording-parameters";
+
+export { isWebElementTarget } from "./is";
+export { validateWebElementTarget } from "./validate";
+export * from "./recording";

@@ -37,7 +37,7 @@
 
 import type { Page } from "@playwright/test";
 import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
 import {

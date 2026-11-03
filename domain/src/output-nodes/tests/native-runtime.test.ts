@@ -15,7 +15,8 @@ import type { AutomationStudioNativeNodeContext } from "fluxiq/components/automa
 import type { JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "../extract-list";
-import { createWebAutomationOutputNodeImplementationBundle } from "../native-runtime";
+import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../native-runtime";
+import { webRecordingTargetPolicy } from "../../target-normalization";
 import { WEB_AUTOMATION_CHECK_WAIT_MS } from "../../actions/check-wait";
 import { webActionFailureRefusal } from "../../runtime/llm-evidence/action-failure";
 
@@ -31,6 +32,16 @@ async function execute(outputId: WebAutomationActionType, parameters: Record<str
 test("every web automation action type has a bound implementation", () => {
   assert.deepEqual(Object.keys(bundle.implementations).sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort());
   assert.equal(bundle.packageId, "@fluxiq-web-extension/domain");
+});
+
+test("the actual web bundle installs its original recording policy and the manifest requires one", () => {
+  assert.equal(createWebAutomationOutputNodeManifest().recordingTargetPolicyRequired, true);
+  assert.equal(bundle.recordingTargetPolicy, webRecordingTargetPolicy);
+  for (const key of ["accepts", "commandTarget", "targetIssues", "parameterIssues"] as const) assert.equal(Object.getOwnPropertyDescriptor(bundle.recordingTargetPolicy!, key)?.value, webRecordingTargetPolicy[key]);
+  const explicitMissing = Object.defineProperty({}, "recordingTargetPolicy", { value: undefined, enumerable: true });
+  assert.equal(createWebAutomationOutputNodeImplementationBundle(explicitMissing).recordingTargetPolicy, undefined);
+  const required = Object.defineProperty({}, "recordingTargetPolicyRequired", { value: undefined, enumerable: true });
+  assert.equal(createWebAutomationOutputNodeManifest(required).recordingTargetPolicyRequired, true);
 });
 
 test("the web importer explicitly registers its calibrated domain matcher", () => {

@@ -28,7 +28,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "../../../../target-normalization";
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, WEB_LLM_WITHHELD_TEXT, type WebAutomationLlmEvidenceRuntime } from "../..";

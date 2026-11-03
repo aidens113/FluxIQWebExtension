@@ -56,6 +56,23 @@ docs/working/       Investigation and implementation working documents
 scripts/            Repository-level FluxIQ panel launcher and Lab launcher
 ```
 
+The domain implementation bundle supplies `outputTargetPreparer` and
+`recordingEntryTargetPreparer`. Core pins their original functions and receiver
+per registered domain; the domain owns browser target interpretation. Targeted
+registered outputs declare `outputTargetPreparationRequired`, so a missing
+adapter fails before dispatch. Import neutral preparation helpers through
+`fluxiq/runtime/output-dispatch/preparation`; browser bundles must not import
+Core's Node runtime to obtain them. These source changes require the matching
+Core package rebuild before the normal downstream build guard can accept them.
+
+The bundle also supplies `recordingTargetPolicy`, required by the manifest's
+deny-only `recordingTargetPolicyRequired` declaration. Core selects its original
+registered methods from approved client/project scope at start and the original
+addressed recording during capture/storage. Raw batches are validated before
+normalization or writes; wire metadata cannot choose another policy. Browser
+target guards and validation algorithms live in this domain package. Rebuilt
+public-package integration remains an explicit gate for the paired migration.
+
 `domain/src/page-evidence/` and `domain/src/sensitivity/` sit at the top of
 the package rather than under `recording/` or `runtime/` because both of those
 read them, and putting either under one would make the other depend on it.

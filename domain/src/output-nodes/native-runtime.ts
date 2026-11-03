@@ -3,7 +3,9 @@ import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { AutomationStudioImporterImplementationBundle, AutomationStudioImporterSdkManifest, AutomationStudioNativeNodeImplementation } from "fluxiq/components/automation/importer";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import { createWebElementMatcher } from "../element-fingerprint";
-import { normalizeWebRecordingCandidateParameters } from "../target-normalization";
+import { normalizeWebRecordingCandidateParameters, prepareWebRecordingEntryTarget, webRecordingTargetPolicy } from "../target-normalization";
+import { ExecutionCallbackPolicies } from "fluxiq/runtime/execution-observation/policies";
+import { createWebOutputTargetPreparer, pinDefaultWebElementMatcher } from "./target-preparation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationCheckWaitParameters } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
@@ -16,6 +18,7 @@ import { webAutomationOutputNodeParameterContracts } from "./parameter-contracts
 import { webAutomationScopedToRow } from "./targets";
 
 const webElementMatcher = createWebElementMatcher();
+const preparedWebElementMatcher = pinDefaultWebElementMatcher(webElementMatcher);
 
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -32,14 +35,18 @@ export function createWebAutomationOutputNodeManifest(
     packageVersion: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     nodes: webAutomationOutputNodeDefinitions,
-    ...extension
+    ...extension,
+    recordingTargetPolicyRequired: true
   };
 }
 
 export function createWebAutomationOutputNodeImplementationBundle(
   extension: Partial<Omit<AutomationStudioImporterImplementationBundle, "packageId" | "packageVersion" | "implementations">> = {}
 ): AutomationStudioImporterImplementationBundle {
-  return {
+  const overrides = { ...extension };
+  const matcher = Object.hasOwn(overrides, "elementMatcher") ? overrides.elementMatcher : webElementMatcher;
+  const outputTargetPreparer = createWebOutputTargetPreparer(matcher === webElementMatcher ? preparedWebElementMatcher : matcher);
+  const bundle: AutomationStudioImporterImplementationBundle = {
     packageId: WEB_AUTOMATION_IMPORTER_PACKAGE_ID,
     packageVersion: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
     implementations: Object.fromEntries(
@@ -50,8 +57,14 @@ export function createWebAutomationOutputNodeImplementationBundle(
     parameterContracts: { ...webAutomationOutputNodeParameterContracts },
     elementMatcher: webElementMatcher,
     recordingCandidateParameterNormalizer: normalizeWebRecordingCandidateParameters,
-    ...extension
+    outputTargetPreparer,
+    recordingEntryTargetPreparer: prepareWebRecordingEntryTarget,
+    recordingTargetPolicy: webRecordingTargetPolicy,
+    ...overrides
   };
+  if (bundle.outputTargetPreparer === outputTargetPreparer && (matcher === webElementMatcher || matcher === undefined)) ExecutionCallbackPolicies.remember(bundle, outputTargetPreparer, "pure");
+  if (bundle.recordingEntryTargetPreparer === prepareWebRecordingEntryTarget) ExecutionCallbackPolicies.remember(bundle, prepareWebRecordingEntryTarget, "pure");
+  return bundle;
 }
 
 /**
