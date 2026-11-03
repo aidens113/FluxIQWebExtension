@@ -405,7 +405,7 @@ per condition, `kept` (the items asked about less the ones it rejected),
 model was shown contains it. When the model reruns that read unchanged, the
 refusal names any condition that left out no row and quotes what it read,
 instead of pointing at the act after the read
-(`AS/runtime/llm/repeat-guard/narrowed-nothing.ts`). Run
+(`runtime/llm/repeat-guard/narrowed-nothing.ts`). Run
 `run-mvbr0w7e-6a01c05b`'s repair resent such a condition six times.
 
 **What a left-out item offers (t810).** A row a condition left out is sent with
@@ -732,7 +732,7 @@ key, a scroll a coordinate, and a check a known state.
   `evidence.layerCleared: { signature, control }`
   (`node-run/press-effect/cleared-layer.ts`): the layer's and control's tag,
   role, kind and name, with no selector, and the handle the press used. Core
-  makes it a handler of the submitted Flow (`flow-bootstrap/explored-interruptions.ts`).
+  makes it a handler of the submitted Flow (`runtime/flow-authoring/bootstrap/explored-interruptions.ts`).
 - A key press on a `<select>` whose only effect is the value change — an arrow,
   Home, End, Page Up/Down, or any single character — is evidence, because the
   recorder already reports that change as its own event.

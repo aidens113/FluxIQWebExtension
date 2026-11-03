@@ -241,7 +241,7 @@ handles are renumbered, positional selectors move. After the step's second
 failed retry on a target failure that never acted, FluxIQ Core re-runs the
 source step read-only and asks the web host which of its fresh answers is the
 same item. Core owns the lineage, the trigger, the re-run and the rebinding
-(`fluxiq` `runtime/executor/target-reacquire/`); the web domain owns the
+(`fluxiq` `framework/automation-service/executor/target-reacquire/`); the web domain owns the
 matching, in `domain/src/runtime/target-reacquire/`. Matching is by identity,
 exact after spacing and case are set aside, never fuzzy and never by position.
 

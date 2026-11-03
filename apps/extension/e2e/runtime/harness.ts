@@ -59,7 +59,7 @@ async function buildBundle(): Promise<string> {
           path: path.join(fluxiqRoot, "packages", "fluxiq", "src", "client-gateway", "contracts.ts")
         }));
         context.onResolve({ filter: /^fluxiq\/automation-studio\/fingerprinting$/ }, () => ({
-          path: path.join(fluxiqRoot, "packages", "fluxiq", "src", "programs", "automation-studio", "fingerprinting", "index.ts")
+          path: path.join(fluxiqRoot, "packages", "fluxiq", "src", "runtime", "target-matching", "fingerprinting", "index.ts")
         }));
       }
     }]

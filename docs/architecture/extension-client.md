@@ -147,13 +147,13 @@ pairing token in the URL.
 | `shell/` | `mountPanel`, the top bar, the one `PanelStore`, and which screen shows (`screen-state.ts`, pure). |
 | `state/` | The one `PanelStore`: a single `getStatus` on mount plus the `statusChanged` subscription, and `request`, which never throws. Every failure comes back as a `PanelResult` sentence, including a service worker that did not answer. Also the sticky error every screen uses. |
 | `getting-started/` | The numbered steps as data (`startGuide`, pure) and their screen. |
-| `settings/` | The settings screen, the connection form, its unsaved draft (`fluxiq.ui.connectionDraft`), Save's plan, Report a problem and Forget this pairing. The on-page status choice is the chat's (`chat/settings/`), mounted here. |
+| `settings/` | The settings screen, the connection form, its unsaved draft (`fluxiq.ui.connectionDraft`), Save's plan, Report a problem and Forget this pairing. The on-page status choice is the adapter's (`chat/settings/`), mounted here. |
 | `automations/` | The automations tab, the open automation's strip, and the controller and readers behind them. |
 | `recording/` | The record button, the recording bar, the "New automation" section and the review after a recording. |
 | `open-fluxiq/` | The Open FluxIQ button and its failure line. |
-| `chat/` | The chat ([Live Activity](#live-activity)). |
+| `chat/` | A thin adapter over the shared chat package: `chat-panel.ts` (`createChatPanel`), the extension's `transport/` (the background messages behind the package's `ChatTransport`), the live-activity `feed/`, the owner context, the on-page status setting and host status. The chat itself is `@fluxiq/ui-components` ([Live Activity](#live-activity)). |
 | `copy/` | Every sentence about the connection, a step and an error, as pure functions of the status. The panel shows no selectors, ids or URLs other than a hostname. |
-| `dom/` | `createElement`. Screens build their own DOM through `textContent`; nothing parses HTML. |
+| `dom/`, `icons/` | Re-exports of the package's `createElement` and `lucideIcon`. Screens build their own DOM through `textContent`; nothing parses HTML. |
 | `theme/tokens.css` | The light and dark colour tokens. Every stylesheet reads colours from them. |
 | `extraction/` | The extraction sheet ([Defining An Extraction](#defining-an-extraction)). `mountExtractionPanel(host)` builds the entry button and the sheet into a host, keeping every `#extraction*` id the Lab drives. |
 
@@ -395,7 +395,7 @@ person's turn says "FluxIQ did not answer your message within 40 seconds. It
 may still be working on it, so wait for its answer here before sending it
 again." in place of "Couldn't send that. Try again." The thread is then read,
 and once Core's own record of the message shows, it replaces the panel's turn
-and the sentence goes with it (`panel/chat/conversation/controller.ts`). Before
+and the sentence goes with it (`ui-components/src/chat/conversation/controller.ts`). Before
 t613 the send waited the full two minutes, so a Core waiting on a stalled
 model left the chat on "Sending your message" past the Lab's 60 s.
 
@@ -661,7 +661,7 @@ pacer keeps what Core says and changes how often it is said:
   A project build its supervisor ended says why (`SupervisorEnding`, Core's
   `ui/activity-status/supervisor-ending.ts`, t649); the toast said it ended and never why. Core's last row says it
   itself: the failure carries the supervisor's screened reason
-  (`endedBecause`, set in Core's `service/project-build/run.ts`), and Core's
+  (`endedBecause`, set in Core's `framework/automation-service/service/project-build/run.ts`), and Core's
   `progress.ts` says it after the ending ("Build failed: the supervisor ended
   it because it could not finish the Flow: the item can't be had this way").
   That row's title is cut at 160 characters, so its text, Core's whole
@@ -871,17 +871,24 @@ the display's outcome is `waiting`: a paused run, a question, or a check on
 the page. REC wins over "!", and "!" wins over "...". `ActivityRelay`'s
 `onDisplay` hook re-evaluates it when waiting starts or stops.
 
-**The panel's chat** (`panel/chat/`) fills the panel and has no header. It
-shows Core's thread (the latest, one automation's, or the thread a build or a
+**The panel's chat** fills the panel and has no header. It is
+`@fluxiq/ui-components`, Core's chat package: plain DOM and CSS behind ports, so
+the extension and Core's web panel draw one chat and it is updated in one place.
+The extension's `panel/chat/` supplies what only it can: a `ChatTransport` over
+the background messages (`transport/`), the live-activity feed and the
+`chrome.runtime` listener (`feed/`), the owner context, the on-page status
+setting and its Open FluxIQ control; `createChatPanel` is the panel's one call.
+Paths beginning `ui-components/` in this section are in Core's
+`packages/ui-components`. The chat shows Core's thread (the latest, one automation's, or the thread a build or a
 run asked its question in) and FluxIQ's work in one stream, like a chat app:
 
 - The person's turns are bubbles on the right; FluxIQ's answers are
   full-width formatted text, never showing a bracket that holds only Core's
-  codes ("(flow_bootstrap.blank_target_required)": `format/raw-codes.ts`, U1
+  codes ("(flow_bootstrap.blank_target_required)": `ui-components/src/chat/format/raw-codes.ts`, U1
   of `run-muw60unq-591e23bd`). A question's turn carries its choices as buttons
-  (`conversation/ask-copy.ts`): the person-needed ask shows "Continue" and
+  (`ui-components/src/chat/conversation/ask-copy.ts`): the person-needed ask shows "Continue" and
   "Stop", which send `choice` with `person_done` or `person_stop`.
-- **What the person asked a build is their message** (`stream/stream-items.ts`),
+- **What the person asked a build is their message** (`ui-components/src/chat/stream/stream-items.ts`),
   however the build was started. A build says the person's own words on its
   activity once it has read its instructions (`ClientGatewayActivity.request`,
   Core's `activity/build.ts`), and the chat shows them as the person's bubble
@@ -889,7 +896,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   the person (a request typed into this chat is not shown twice). Live runs 34
   and 35 were built from an instruction no chat showed.
 - **Every step is its own FluxIQ message**, in order, with its reason
-  (`stream/step/messages.ts`, `view/step-message-view.ts`): each explained
+  (`ui-components/src/chat/stream/step/messages.ts`, `ui-components/src/chat/view/step-message-view.ts`): each explained
   decision reads "**Clicking “Get a free quote”** — The quote form is behind
   this button, so I'm opening it.", and each repair gives its diagnosis. A
   note is words only, and a note with no words is no message: Core's own look
@@ -899,7 +906,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   model's answer could not be used, or its provider did not answer) is a
   note with Core's sentence, headed in the present tense, never a decision of the model's, and the actions
   after it start their own message (since t378, `isModelThought`). There are no folds, disclosures or step counts,
-  and no raw tool or node id is shown (`stream/step/words.ts`).
+  and no raw tool or node id is shown (`ui-components/src/chat/stream/step/words.ts`).
 - **A build with several agents** (automation-project-agents-plan, since
   t539). Core stamps each event of a build with a project supervisor with its
   author, `agent: { role, briefId?, subflowName? }` (`supervisor`, `builder`,
@@ -908,7 +915,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   `brief`, `return`, `receipt`). Core's `activityAgent` and `projectCard`
   (`fluxiq/ui`, Core's `ui/activity-status/project/`) read both in the
   contract's shape only. Each card is a
-  `project` message of its own (`stream/step/project-message.ts`, words in
+  `project` message of its own (`ui-components/src/chat/stream/step/project-message.ts`, words in
   `project-words.ts`): the plan as "Planned 2 subflows" with a card
   "Plan · 3 parts, 2 subflows / Budget $0.18, $0.07 kept back" and its parts
   and each subflow with its purpose, allowance and starting cases listed
@@ -926,7 +933,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   dispatched while another is out waits for that one ("Waits for its turn"
   when several are out). The return reads "Built Search" (or "Partly built",
   "Couldn't build") with the builder's reason, which Core says in a person's
-  words (`runtime/activity/project/return-words.ts`): "It starts after
+  words (`runtime/automation-activity/project/return-words.ts`): "It starts after
   Search, which couldn't be built, so it was never started", "The builder
   couldn't finish: it kept trying without getting any further, so it was
   stopped", the builder's own words kept. The extension says an older Core's
@@ -949,8 +956,8 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   "Supervisor"), except right after a brief, which just did. The project
   cards carry no `actions`, so no repeat, retry or done-again fold ever
   merges two of them.
-- **Every action is a card** (`stream/step/action-card.ts`,
-  `view/action-card-view.ts`). The actions Core took for a decision (the
+- **Every action is a card** (`ui-components/src/chat/stream/step/action-card.ts`,
+  `ui-components/src/chat/view/action-card-view.ts`). The actions Core took for a decision (the
   `tool` events after its `thought`, until something else opens a message)
   are that message's cards, in order. An action with no decision before it, a
   result check, a question to the person and a run's step are each a message
@@ -958,7 +965,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   (`activityActionOf`, `ACTIVITY_ACTION_ICONS` and `ACTIVITY_ACTION_NAMES` from
   `fluxiq/ui`), so the extension and Core's web panel draw the same card:
   - **Mark.** The icon Core pins for the kind, drawn from lucide's node data
-    by `panel/icons/` (`lucideIcon`, inline SVG in the current colour), in a
+    by the package's icons (`lucideIcon`, inline SVG in the current colour), in a
     28 px round mark. The mark is tinted by the outcome: accent while
     working, success when done, danger when failed, warning while waiting,
     and neutral once settled.
@@ -984,7 +991,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     `run-muwansvz-a2b4a987`: renamed to fit, one list had three names); when
     it is longer than the head holds, the card marks it `data-whole="true"`
     and the stylesheet wraps it at its spaces.
-  - **Outcome line** (`stream/step/card-words.ts`). "Done", or "Done: 13 rows
+  - **Outcome line** (`ui-components/src/chat/stream/step/card-words.ts`). "Done", or "Done: 13 rows
     from 5 pages" when the card carries what the action came to (`result`,
     Core's `ActivityAction.result`; a test step shows its own words, a dash,
     then the result); "Didn't work: it
@@ -1023,7 +1030,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     and repeats one shown since anything new happened (same unit, kind,
     target, test mark and words) is folded into that card, which says how many
     times: "Not done (3 times): ...", "Didn't work (3 times): ..."
-    (`stream/step/card-repeats.ts`). Words of FluxIQ's or a card that did
+    (`ui-components/src/chat/stream/step/card-repeats.ts`). Words of FluxIQ's or a card that did
     anything are new and start the count afresh, as does a card new to the
     stretch after one of its cards repeated, so A B A B A B reads A (3 times)
     and B (3 times), and A B A C A reads A (2 times), B, C, A (U-8 of
@@ -1035,7 +1042,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     five identical "Read list · ... / Done" cards (R3-U-5 of
     `run-mux6naez-6c20f26e`); another row count is another result, and done,
     failed, done stays three cards. A step tried again and then done reads
-    as one card (since t378, `stream/step/retried.ts`): a done card takes in
+    as one card (since t378, `ui-components/src/chat/stream/step/retried.ts`): a done card takes in
     the failed card just before it in its unit of work when both are the
     same act (kind, name, target with its row, test mark) on a named target,
     both are steps a run or a test of the Flow ran, and only the run's own
@@ -1056,7 +1063,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     unit still waiting on the person. An action that never said it ended
     shows no outcome once the work moved on. A wait Core never settled keeps
     "Waiting for you", even after its unit of work ends.
-  - **Questions to the person** (`stream/step/messages.ts`). A robot-check or
+  - **Questions to the person** (`ui-components/src/chat/stream/step/messages.ts`). A robot-check or
     permission card is over only when Core says so: the ask row that settles
     the wait carries the same ask id (`activityActionKey` from `fluxiq/ui`,
     `ask:<ref>`) and a `detail.resolution`, and the card is marked from it in
@@ -1091,7 +1098,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   reads "Starting…", the background's starting status, or "Sending your
   message" when no session is live to carry activity. The starting status is
   no event of Core's, so it shows in every chat, a project's and an
-  automation's too (`stream/target-activity.ts`): a project's chat, which
+  automation's too (`ui-components/src/chat/stream/target-activity.ts`): a project's chat, which
   shows only a display some event of its project carries, said "Sending your
   message" while the overlay said "Starting…" (R2-U-5 of
   `run-muwansvz-a2b4a987`). While the work waits for
@@ -1099,7 +1106,7 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   holding the question when it is not on screen.
 - New content is followed only while the person is at the bottom of the
   stream; scrolled up, it stays put and "Jump to latest" shows. Only the
-  person ends following (`view/scroll-follower.ts`): a scroll that leaves the
+  person ends following (`ui-components/src/chat/view/scroll-follower.ts`): a scroll that leaves the
   bottom while they turn the wheel, touch, press a scroll key or drag the
   scroll bar. A scroll the browser makes on its own goes back to the bottom:
   Chrome's scroll anchoring moves the view up when a card above the view
@@ -1107,22 +1114,22 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   ResizeObserver fires), and before t174-w117 that parked the chat above the
   hand-off question and the build's ending with nobody touching it (D16).
 
-**The empty latest chat is the onboarding** (`view/empty-state-model.ts`):
+**The empty latest chat is the onboarding** (`ui-components/src/chat/view/empty-state-model.ts`):
 the title "What can FluxIQ do for you?", a concept paragraph that ends "You
 can stop it, or take over the page, at any time.", two starts and the
 fill-only examples. Describe focuses the composer and sends nothing; Extract
 switches to Automations and presses "Extract Data From This Page" (or
 focuses it beside the line saying why it is unavailable). Model readiness is
 read once each time the connected, empty latest chat appears
-(`onboarding/model-readiness.ts`, through `modelReadiness`); only when no key
+(`ui-components/src/chat/onboarding/model-readiness.ts`, through `modelReadiness`); only when no key
 is enabled does a key line show, with Open FluxIQ. A failed read shows no key
 line. Automation, question and project chats have no starts.
 
 The composer sends typed instructions through `panelConversationSend`. The
 box and its kept draft empty the moment the message is sent
-(`panel/chat/conversation/composer.ts`), and the message shows at once in the
+(`ui-components/src/chat/conversation/composer.ts`), and the message shows at once in the
 stream as the person's turn, a local one the controller adds
-(`conversation/controller.ts`), so a first message never shows the welcome
+(`ui-components/src/chat/conversation/controller.ts`), so a first message never shows the welcome
 screen. If the send fails, that turn stays in the thread with the error under
 it ("Couldn't send that. Try again."; the composer shows no error of its own),
 and the words come back to the box only when nothing has touched it since:
@@ -1137,7 +1144,7 @@ the starting status on the page and in the live line (Live Activity, above).
 The thread is re-read 300 ms after an event that names a conversation or ends
 the work. The 4 s poll stays as the fallback.
 
-**A described recording can ride with a message** (`panel/chat/attachment/`). "Attach a recording" beside Send lists the chat's project's finished recordings that have a description (newest first, at most 10; the list is `listRecordings`, Core's `description` kept apart from `title`, filtered by project in the panel). The pick shows as a "Recording: <description>" chip with "Remove attached recording"; one per message. Send adds `onScreen.recordingId` beside any `flowId` or `runId`, the chip clears once the send went and stays when it failed, and it is not kept in the draft. The review after a stop offers "Attach to my next message", which attaches the newest finished, described recording of the project. Core links the recording to the Flow the chat creates.
+**A described recording can ride with a message** (`ui-components/src/chat/attachment/`). "Attach a recording" beside Send lists the chat's project's finished recordings that have a description (newest first, at most 10; the list is `listRecordings`, Core's `description` kept apart from `title`, filtered by project in the panel). The pick shows as a "Recording: <description>" chip with "Remove attached recording"; one per message. Send adds `onScreen.recordingId` beside any `flowId` or `runId`, the chip clears once the send went and stays when it failed, and it is not kept in the draft. The review after a stop offers "Attach to my next message", which attaches the newest finished, described recording of the project. Core links the recording to the Flow the chat creates.
 
 Chat can also hold an explicit project scope, independently of the browser recording session. Its list/get/send/answer requests use that project through the existing authenticated conversation relay. Switching projects clears the displayed thread and ignores late reads for the old target; an empty authorized thread list is ready for the first message. Send stays disabled while that scope loads or fails. Question/back navigation preserves the selected project, and activity from another project is excluded. An unsent draft from another project remains behind the existing adoption controls.
 
@@ -1339,7 +1346,7 @@ is skipped, and Level 2 adds the recorded tag's elements to the candidate pool
 exactly the path it took before. **Cross-repository contract (t748):** Core's
 trial feedback reads the mark too. A marked step is named to the model and the
 judge by the words it read in that trial (its `value` output), or by nothing,
-never by the saved words (Core `service/candidate-trial/step-control.ts`).
+never by the saved words (Core `framework/automation-service/service/candidate-trial/step-control.ts`).
 Renaming `readsWords` here silently names read steps by their old words again.
 
 **A press the page answers only with a notice fails (t743).** The click's
@@ -2685,7 +2692,7 @@ calls Core's `cancel-flow-bootstrap`; a run still uses `cancel-runtime-session`.
 Supplying both target IDs is refused. No target retains the legacy active-run
 scan. Cancellation does not promise rollback of actions already sent to a page.
 
-While a run works, the hold control (`panel/chat/hold-control.ts`) shows
+While a run works, the hold control (`ui-components/src/chat/controls/hold-control.ts`) shows
 **Take over**. While the run is paused it says "You have the page. FluxIQ
 continues from step N when you hand back." and shows **Hand back**, with Stop
 beside it. Builds never show it. A press reads "Taking over…" or "Handing
@@ -2707,7 +2714,7 @@ the paired project. Only the named fields are sent. A missing or blank
 accepts the pairing token on `pause-runtime-session`,
 `resume-runtime-session` and `get-runtime-run-control`.
 
-When the panel follows a run (`stream/run-target.ts`), the chat keeps the
+When the panel follows a run (`ui-components/src/chat/stream/run-target.ts`), the chat keeps the
 thread on screen if it already shows the run; otherwise it opens the Flow's
 automation thread, then the latest chat, when that shows the run, and
 otherwise the run's own thread ("Run of <name>"). It waits while the person

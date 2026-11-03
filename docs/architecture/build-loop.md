@@ -392,7 +392,7 @@ code; a read whose command met a robot check carries the code it would have
 sent. The dry-run replay builds no draft statement and sends none. Core
 compares codes for equality only and refuses a read joining the Flow with the
 code of a kept read when no kept step changed anything between them
-(`AS/runtime/flow-draft/second-copy.ts`, live run `run-muq4oaof-464f5bce`).
+(`runtime/flow-authoring/draft/second-copy.ts`, live run `run-muq4oaof-464f5bce`).
 
 ## What A Press Changed
 
@@ -412,7 +412,7 @@ read, a refusal, a robot-check standing step and a written step send none.
 Core withholds a line whose words the call's evidence never showed (so a line
 past the outcome's eight that went is usually withheld) and keeps the rest on
 the step, where it reads which step did an act from what the step changed
-rather than from the model's label (`AS/runtime/flow-draft/step.ts`,
+rather than from the model's label (`runtime/flow-authoring/draft/step.ts`,
 `changed`; week report W1, run `run-muqiho5c-e830ce01`). A checked rerun given
 a new argument clears it with `toggle` and `reads`.
 
@@ -510,7 +510,7 @@ no historical execution proof; whole-Flow testing remains required.
   lead, the rows it shares with another condition's list, each with a `null`
   observation (`apps/extension/src/content/actions/extract-list.ts`); a row in
   one list only is not sent. Core admits a playback's as
-  `conditions.togetherRows` (its `service/summaries/extraction-summary.ts`).
+  `conditions.togetherRows` (its `framework/automation-service/service/summaries/extraction-summary.ts`).
 - **`rowContextKeys`.** The domain declares to Core the keys under which a
   step's argument carries the row its control was found in, `["record"]`
   (`WEB_LLM_ROW_CONTEXT_KEYS`,
@@ -526,7 +526,7 @@ no historical execution proof; whole-Flow testing remains required.
   judge as that step's `observed`, at most three lines of 160 characters, the
   step's own control first and a changed text second, counting the rest and
   the domain's `and N more changes` line as not shown (Core's
-  `llm-flow-bootstrap.md`, `build-test/change-lines.ts`).
+  `llm-flow-bootstrap.md`, `runtime/result-verification/build-test/change-lines.ts`).
 
 ## What A Build Remembers
 
@@ -580,7 +580,7 @@ by typing the search into the site's own search field and submitting it, never
 by writing the page's address.
 
 The memories also outlive the process. Core owns a durable, size-bounded
-domain build state (`runtime/domain-build-state/`, exported from
+domain build state (`runtime/flow-authoring/domain-build-state/`, exported from
 `fluxiq/automation`) that keeps values opaque under the Flow; the domain
 reaches it with `automationStudioDomainBuildState(fluxiq, "web-automation")`
 (`domain/src/cleared-way-outs/build-state-source.ts`, asked lazily). Each memory writes

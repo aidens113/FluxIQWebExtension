@@ -21,12 +21,12 @@ export const CONFIG = {
   forbiddenImports: [
     {
       from: "domain/src",
-      pattern: /^fluxiq\/automation-studio\/(?:nodes|action-effect)$/,
+      pattern: /^fluxiq\/automation\/(?:nodes|action-effect)$/,
       reason: "The neutral node pack is framework-owned. Import fluxiq/components/automation or its action-effect subpath."
     },
     {
       from: "apps/extension/src",
-      pattern: /^fluxiq\/automation-studio\/(?:nodes|action-effect)$/,
+      pattern: /^fluxiq\/automation\/(?:nodes|action-effect)$/,
       reason: "Browser clients consume framework-owned nodes through fluxiq/components/automation."
     },
     {

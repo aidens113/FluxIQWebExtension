@@ -10,7 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "..", "..");
 const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
 const fluxiqClientGatewayContracts = path.join(fluxiqRoot, "packages", "fluxiq", "src", "client-gateway", "contracts.ts");
-const fluxiqFingerprinting = path.join(fluxiqRoot, "packages", "fluxiq", "src", "programs", "automation-studio", "fingerprinting", "index.ts");
+const fluxiqFingerprinting = path.join(fluxiqRoot, "packages", "fluxiq", "src", "runtime", "target-matching", "fingerprinting", "index.ts");
 const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client", "index.ts");
 // FLUXIQ_LAB_EXTENSION_BUILD_ROOT sends `build/` and `dist/` somewhere this
 // build owns, so a concurrent Lab instance cannot delete the unpacked

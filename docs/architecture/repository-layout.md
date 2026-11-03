@@ -63,10 +63,12 @@ The testing packages are described in
 
 ## Responsibility Boundaries
 
-Core's executable graph, neutral node pack and graph engine are framework capabilities,
-separate from Automation Studio's editor/project services. New web-domain and browser imports
-use `fluxiq/components/automation` (including its `action-effect` subpath);
-legacy Studio imports remain compatibility exports. The web domain owns calibrated browser
+Core's executable graph, neutral node pack and graph engine are framework capabilities.
+Automation Studio is a thin controller of Core: `fluxiq/automation` is the automation
+runtime, `fluxiq/automation-studio` is only the controller, and
+`fluxiq/automation-studio/dsl` is the Flow source language (it keeps its name because saved
+Flow source contains that import). Web-domain and browser imports use
+`fluxiq/components/automation` (including its `action-effect` subpath). The web domain owns calibrated browser
 fingerprint matching under `domain/src/element-fingerprint/`, using Core's neutral
 `fluxiq/runtime/target-matching` contracts and aggregation. Its matcher is explicitly registered
 for importer, resolver, recording and policy dispatch contexts.
@@ -83,10 +85,28 @@ Studio, and long-running orchestration.
 - `domain` owns web-automation-specific FluxIQ contracts, manifests, state
   reducers, input/output mappings, action interfaces, and runtime adapters.
 - Generic gateway and framework behavior belongs in FluxIQ Core, not here.
+- Web semantics reach Core only through hooks the domain registers on its
+  implementation bundle: the output target preparer, the recording entry target
+  preparer and policy, the recording parameter normalizer and the model-evidence
+  page-text summary (`domain/src/target-normalization/`,
+  `domain/src/output-nodes/target-preparation/`,
+  `domain/src/runtime/llm-evidence/evidence-summary/`, registered in
+  `domain/src/output-nodes/native-runtime.ts`). An element output refuses
+  dispatch without its preparer (`output.target_preparer_missing`), so
+  `createWebAutomationFluxIQ` (`domain/src/host.ts`) binds the web bundle when
+  nothing else is bound. FluxIQ Core's `docs/architecture/runtime-ownership.md`
+  lists the hooks and the five browser-field readers Core still keeps.
 - Durable project, policy, and recording ownership belongs in FluxIQ Core, not
   extension-local storage.
 - The extension may import domain contracts. Domain code must not depend on
   extension UI or browser implementation modules.
+- The chat UI is Core's `@fluxiq/ui-components` (plain DOM and CSS behind
+  ports), shared with Core's own panel. `apps/extension/src/panel/chat/` is a
+  thin adapter: `createChatPanel`, the `transport/` over the background
+  messages, the live-activity `feed/`, the owner context and the on-page
+  status setting. Chat rendering, stream models and styles change in the
+  package, never here; `panel/dom/` and `panel/icons/` re-export the package's
+  DOM builder and icons.
 
 ## Generated Data And Tracking Policy
 
@@ -297,8 +317,8 @@ would be the working Core checkout. Otherwise it:
 - checks each side out detached;
 - installs (`--frozen-lockfile`, offline first, then online) only when the
   target lockfile differs from the one last installed there;
-- rebuilds Core's `contracts`, `fluxiq` and `client-gateway-websocket`
-  packages whenever they were last built at another commit (`--build-core`
+- rebuilds Core's `contracts`, `fluxiq`, `client-gateway-websocket` and
+  `ui-components` packages whenever they were last built at another commit (`--build-core`
   forces it), because the Lab reads their `dist`; the build goes through the
   [build cache](#build-and-check-cache), so a Core another tree already built
   is restored rather than recompiled. The Lab builds the extension side and
@@ -530,8 +550,8 @@ FLUXIQ_BUILD_CACHE_DIR=off pnpm build    # no store: stamps only, per tree
   stale, because the repository staleness guard runs after the build phase.
 - **`pnpm task start`** runs `pnpm build` in the new worktree, so every step
   whose inputs another tree has already built is restored from the store, and
-  `scripts/worktree/core-build.mjs` builds Core's `contracts`, `fluxiq` and
-  `client-gateway-websocket` libraries through the same fingerprint and store
+  `scripts/worktree/core-build.mjs` builds Core's `contracts`, `fluxiq`,
+  `client-gateway-websocket` and `ui-components` libraries through the same fingerprint and store
   (`@fluxiq/web` is not cached). For narrow work, use
   `pnpm task start <slug> --worktree --skip-workspace-build`: Core preparation,
   installation and currency guards still run, while the full downstream build
@@ -739,7 +759,7 @@ pnpm task sync-core --to <rev>     # or to another revision
 ```
 
 It moves the Core this checkout's `domain/package.json` actually links, never a
-configured one, and builds it with Core's own full `build` (the three libraries
+configured one, and builds it with Core's own full `build` (the four libraries
 and the web panel), so every worktree beside it gets a usable Core. It refuses,
 before changing anything:
 
@@ -859,7 +879,9 @@ module with `fluxiq` external; `test` and `check` run beside it.
 
 
 Workspace packages link to FluxIQ Core packages in the sibling Core checkout
-via `link:` dependencies declared in `domain/package.json`. Core
+via `link:` dependencies declared in `domain/package.json` and
+`apps/extension/package.json` (the extension also links
+`@fluxiq/ui-components`, which it bundles into the panel). Core
 source edits are therefore visible here immediately, but a Core package that
 resolves through a build output must be rebuilt before type checks here mean
 anything. The web panel host resolves `fluxiq/*` through the same link at

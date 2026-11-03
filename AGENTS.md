@@ -190,6 +190,13 @@ import domain contracts; domain code must not depend on extension UI or
 browser modules. Full structure is in
 [repository layout and commands](docs/architecture/repository-layout.md).
 
+The extension's chat renders from Core's `@fluxiq/ui-components`, so other clients
+share it and it is updated centrally (user, 2026-11-02). `apps/extension/src/panel/chat`
+is a thin adapter: approvals, routing, extension storage and `chrome.*` stay here behind
+the package's ports, and rendering, stream models and styles change in Core. The
+automation runtime is imported as `fluxiq/automation`; `fluxiq/automation-studio` is only
+Core's panel controller.
+
 Workspace packages link to FluxIQ Core in the sibling `!FluxIQ` checkout
 (`C:\Users\osrs_\FluxStuff\!FluxIQ` on this machine; the copies under `F:\` are stale).
 Changes there are allowed when needed to complete work here. Before the first
