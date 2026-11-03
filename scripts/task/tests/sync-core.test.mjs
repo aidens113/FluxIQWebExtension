@@ -31,6 +31,7 @@ const LIBRARIES = [
   { name: "@fluxiq/contracts", directory: "packages/contracts" },
   { name: "fluxiq", directory: "packages/fluxiq" },
   { name: "@fluxiq/client-gateway-websocket", directory: "packages/client-gateway-websocket" },
+  { name: "@fluxiq/ui-components", directory: "packages/ui-components" },
   { name: "@fluxiq/web", directory: "apps/web" },
 ];
 
@@ -102,7 +103,7 @@ test("sync-core moves and builds a shared Core that predates the shared tooling,
     assert.equal(coreGit("-C", coreRoot, "rev-parse", "HEAD"), target);
     // Built by the moved Core's own scripts, every package of Core's root build, in order.
     const built = (await readFile(path.join(coreRoot, "built-steps.txt"), "utf8")).trim().split(/\r?\n/u);
-    assert.deepEqual(built, ["contracts:build", "fluxiq:build", "client-gateway-websocket:build", "web:build"]);
+    assert.deepEqual(built, ["contracts:build", "fluxiq:build", "client-gateway-websocket:build", "ui-components:build", "web:build"]);
     assert.equal((await readFile(path.join(coreRoot, "node_modules", ".lab-pair-built-commit"), "utf8")).trim(), target);
   });
 });

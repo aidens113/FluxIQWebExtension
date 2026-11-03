@@ -8,7 +8,7 @@
 import type { ActivityOverlayPreference } from "../../../shared/activity/index";
 import { createElement } from "../../dom";
 import type { PanelStore } from "../../state";
-import { createActivityFeed, listenToRuntime, type ActivityFeedDeps } from "../feed";
+import { createActivityFeed, listenToRuntime, type ExtensionActivityFeedDeps } from "../feed";
 import { onPageStatusModel } from "./on-page-status-model";
 
 /** The mounted setting. */
@@ -19,7 +19,7 @@ export type OnPageStatusSetting = {
 };
 
 /** Creates the setting; `listen` defaults to the extension runtime's messages. */
-export function createOnPageStatusSetting(request: PanelStore["request"], listen: ActivityFeedDeps["listen"] = listenToRuntime): OnPageStatusSetting {
+export function createOnPageStatusSetting(request: PanelStore["request"], listen: ExtensionActivityFeedDeps["listen"] = listenToRuntime): OnPageStatusSetting {
   const feed = createActivityFeed({ request, listen }, () => render());
   const buttons = new Map<ActivityOverlayPreference, HTMLButtonElement>();
   const group = createElement("div", { className: "chat-setting-choice", attrs: { role: "group", "aria-label": "Status on the page" } });

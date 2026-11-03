@@ -29,6 +29,9 @@ importers:
       '@fluxiq/client-gateway-websocket':
         specifier: link:../../../!FluxIQ/packages/client-gateway-websocket
         version: link:../../../!FluxIQ/packages/client-gateway-websocket
+      '@fluxiq/ui-components':
+        specifier: link:../../../!FluxIQ/packages/ui-components
+        version: link:../../../!FluxIQ/packages/ui-components
       fluxiq:
         specifier: link:../../../!FluxIQ/packages/fluxiq
         version: link:../../../!FluxIQ/packages/fluxiq
