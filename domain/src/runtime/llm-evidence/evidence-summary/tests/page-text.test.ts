@@ -59,9 +59,9 @@ test("a registered web bundle is what gives Core's step log its page.txt", async
   try {
     const bundle = createWebAutomationOutputNodeImplementationBundle();
     assert.equal(bundle.llmEvidenceSummary, webLlmEvidenceSummary);
-    new AutomationStudioNativeNodeRuntime().register(createWebAutomationOutputNodeManifest(), bundle);
+    const runtime = new AutomationStudioNativeNodeRuntime().register(createWebAutomationOutputNodeManifest(), bundle);
     const evidence = { ok: true, value: { page: { schemaVersion: "web-llm-page.v3", page: PAGE } } };
-    const run = automationStudioLlmStepLogTool(async (_request: { callId: string; toolId: string }) => ({ kind: "llm_evidence_tool_execution" as const, evidence, effectApplied: false, resultCode: "web.inspect.succeeded" }), { FLUXIQ_LLM_STEP_LOG_DIR: directory });
+    const run = automationStudioLlmStepLogTool(async (_request: { callId: string; toolId: string }) => ({ kind: "llm_evidence_tool_execution" as const, evidence, effectApplied: false, resultCode: "web.inspect.succeeded" }), { FLUXIQ_LLM_STEP_LOG_DIR: directory }, runtime.stepLogPageText);
     await run({ callId: "c1", toolId: "core:run_node" });
     const step = readdirSync(directory).find((name) => /^\d{4}-tool-/u.test(name));
     assert.ok(step);
