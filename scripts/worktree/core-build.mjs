@@ -2,7 +2,7 @@
 //
 // Core's `dist/` is gitignored, so a fresh Core worktree has source and no
 // types, and anything type-checking against it fails with
-// `TS2307: Cannot find module '@fluxiq/contracts/automation-studio'` until
+// `TS2307: Cannot find module '@fluxiq/contracts/automation'` until
 // these are built. Measured 2026-09-17: this is 12.8s of a 52.6s worktree
 // setup, on top of 35.8s to install Core.
 //
