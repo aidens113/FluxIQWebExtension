@@ -44,6 +44,6 @@ test("a Next pinned on page two, played back from page one, moves on by the page
   const reply = first?.responded ? first.response as BrowserActionResult : await arrived(harness, { ...message, extraction: { token: "pinned-next", resume: { by: "next" } } });
   const said = JSON.stringify({ nextPage: reply.nextPage, validation: reply.validation });
   expect(reply.status, said).toBe("succeeded");
-  expect(reply.validation?.actual, said).toMatch(/^moved/u);
+  expect(reply.nextPage?.outcome, said).toBe("moved");
   expect(new URL(page.url()).searchParams.get("page"), said).toBe("2");
 });
