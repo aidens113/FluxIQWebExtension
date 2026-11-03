@@ -614,7 +614,7 @@ frame.
 ## The Model's Instructions
 
 The rules that hold for every domain are Core's, in Core's task prose
-(`packages/fluxiq/src/programs/automation-studio/runtime/llm/deepseek/system-prompt.ts`),
+(`packages/fluxiq/src/runtime/agents/llm/deepseek/system-prompt.ts`),
 placed only in the task kinds that act or write steps. Repetitive work is a
 loop, not a sequence: list the items with a `where` that keeps only the ones to
 act on, do or write the act once on one kept item, state `repeat`, never do it

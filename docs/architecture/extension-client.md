@@ -1840,7 +1840,7 @@ or `starting` owner wins, and the loser sends no competing Start.
 
 FluxIQ Core keeps the same order on its side, in its Automation Studio client
 gateway bridge (Core's
-`packages/fluxiq/src/programs/automation-studio/client-gateway/bridge.ts`):
+`packages/fluxiq/src/runtime/recording/client-gateway/bridge.ts`):
 - a client's later messages wait for its start to settle, so they meet the
   recording it opens, or its refusal;
 - a message the client sent before the start never lands in that recording;
@@ -2458,7 +2458,7 @@ The rule depends on the order the two entries are stored in:
   ([Recording Evidence](#recording-evidence));
 - Core stores one client's recording messages in the order it received them,
   although its WebSocket host handles one socket's frames concurrently (Core's
-  `packages/fluxiq/src/programs/automation-studio/client-gateway/client-recording-write-order.ts`).
+  `packages/fluxiq/src/runtime/recording/client-gateway/client-recording-write-order.ts`).
 
 Without both, the click could be stored before the addition that revealed it, and
 no wait would be proposed. `domain/src/tests/core-gateway-recording-order.test.ts`

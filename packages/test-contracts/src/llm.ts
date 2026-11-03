@@ -6,7 +6,7 @@ export * from "./llm-models/index.js";
  * The most a single request may carry: the model's own context window, input
  * and output together. FluxIQ Core holds it as `contextTokens` in
  * `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`
- * (`packages/fluxiq/src/programs/automation-studio/runtime/llm/deepseek/models.ts`),
+ * (`packages/fluxiq/src/runtime/agents/llm/deepseek/models.ts`),
  * 1,000,000 tokens for both `deepseek-flash` and `deepseek-v4-pro`; it is
  * mirrored here because this package depends only on Core's public contracts.
  *

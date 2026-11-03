@@ -7,7 +7,7 @@ import { browserEntryDrift } from "../browser-entries.mjs";
 const repoRoot = path.resolve("/work/!FluxIQWebExtension");
 const coreRoot = path.resolve("/work/!FluxIQ");
 const workingDirectory = path.join(repoRoot, "apps", "extension");
-const NODES_SOURCE = "packages/fluxiq/src/programs/automation-studio/nodes/index.ts";
+const NODES_SOURCE = "packages/fluxiq/src/framework/automation-service/nodes/index.ts";
 
 // Metafile paths are relative to the bundler's working directory, as esbuild writes them.
 const rel = (absolute) => path.relative(workingDirectory, absolute);
@@ -17,8 +17,8 @@ const bundle = (edges) => ({
 
 const content = path.join(repoRoot, "apps/extension/src/content/index.ts");
 const domainClient = path.join(repoRoot, "domain/src/client/index.ts");
-const nodesDist = path.join(coreRoot, "packages/fluxiq/dist/programs/automation-studio/nodes/index.js");
-const parkingDist = path.join(coreRoot, "packages/fluxiq/dist/programs/automation-studio/runtime/parking/index.js");
+const nodesDist = path.join(coreRoot, "packages/fluxiq/dist/framework/automation-service/nodes/index.js");
+const parkingDist = path.join(coreRoot, "packages/fluxiq/dist/runtime/parking/automation/index.js");
 
 const base = {
   workingDirectory, repoRoot, coreRoot,
@@ -35,7 +35,7 @@ test("lists that match the bundle report nothing, and Core's internal edges are 
 test("a bundle that enters Core through a module Core does not list is drift, named as source", () => {
   const drift = browserEntryDrift({ ...base, metafiles: [bundle({ [content]: [domainClient], [domainClient]: [nodesDist, parkingDist] })] });
   assert.equal(drift.length, 1);
-  assert.ok(drift[0].includes("packages/fluxiq/src/programs/automation-studio/runtime/parking/index.ts"), drift[0]);
+  assert.ok(drift[0].includes("packages/fluxiq/src/runtime/parking/automation/index.ts"), drift[0]);
   assert.ok(drift[0].includes("domain/src/client/index.ts"), "names the importer");
 });
 
