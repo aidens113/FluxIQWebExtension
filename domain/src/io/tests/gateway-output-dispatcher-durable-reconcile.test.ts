@@ -17,6 +17,8 @@ import test from "node:test";
 import { FluxIQ } from "fluxiq";
 import { CLIENT_GATEWAY_PROTOCOL_VERSION, type ClientGatewayClientMessage, type ClientGatewayReconcileAnswer } from "fluxiq/client-gateway";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
+import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../../output-nodes";
 import { createWebAutomationDomainIo } from "../web-automation-io";
 import { createWebAutomationRuntimeAdapter } from "../../runtime";
 
@@ -86,6 +88,7 @@ async function lostFirstAnswerRun(reply: (commandId: string) => ReconcileReply, 
   let asked = 0;
   try {
     fluxiq.io.register(createWebAutomationDomainIo(fluxiq));
+    fluxiq.programs.automationStudio.bindNativeNodeRuntime(new AutomationStudioNativeNodeRuntime().register(createWebAutomationOutputNodeManifest(), createWebAutomationOutputNodeImplementationBundle()));
     // The runtime path, which a web Flow run takes: it sends the node's own timeout as the command's and bounds the wait itself.
     fluxiq.runtime.registerAdapter(createWebAutomationRuntimeAdapter({ fluxiq }));
     const answer = (sessionId: string, message: Pick<ClientGatewayClientMessage, "type" | "payload">) => {

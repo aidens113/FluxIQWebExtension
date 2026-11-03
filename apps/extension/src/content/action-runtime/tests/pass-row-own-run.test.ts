@@ -18,7 +18,7 @@
 
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { accessibleNameFor } from "../../identity";
+import { accessibleNameFor, elementContext } from "../../identity";
 import { el, installStubDocument, stubDocument, type StubElement } from "../../tests/stub-dom";
 import type { BrowserActionCommand } from "../../types";
 import { resolveTarget } from "../resolve-target";
@@ -100,6 +100,8 @@ test("a pass whose tile is not on the page fails as not found, and never opens a
 
 test("an icon button in a run of icon buttons is the same control on every pass", (t) => {
   const gallery = installGallery(t);
+  assert.equal(elementContext(gallery.keep)?.dialog, "Recipe");
+  assert.equal(elementContext(gallery.keep)?.landmark, undefined, "a dialog is captured separately from landmarks");
   const selector = '[role="dialog"] > section > div:nth-of-type(1)';
   const command = {
     commandId: "cmd-keep",
@@ -108,7 +110,7 @@ test("an icon button in a run of icon buttons is the same control on every pass"
     element: {
       tagName: "div", role: "button", accessibleName: "Keep", classNames: ["icon"],
       attributes: { "aria-label": "Keep", role: "button" }, selector,
-      context: { landmark: "dialog", record: rowOf(dish(2)) }
+      context: { dialog: "Recipe", record: rowOf(dish(2)) }
     }
   } as unknown as BrowserActionCommand;
   assert.equal(resolveTarget(command).element, gallery.keep);

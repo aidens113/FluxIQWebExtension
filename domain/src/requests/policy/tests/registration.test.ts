@@ -43,7 +43,7 @@ test("valid host registration keeps ordinary runtime binding and inherits immuta
     domains: { maybeGet: () => ({}) }, ioSnapshot: () => ({ inputs: [{}] }),
     runtime: { adaptersList: () => adapters, registerAdapter: (adapter: unknown) => { adapters.push(adapter); calls.push("adapter"); } },
     programs: { automationStudio: {
-      listRecordingDomains: () => [{ domainId: "web-automation" }],
+      listRecordingDomains: () => [{ domainId: "web-automation" }], nativeRuntimeSummary: () => ({ bound: true }),
       bindRuntimeService: () => calls.push("runtime"), bindHostRuntime: () => calls.push("host"), bindLlmEvidenceRuntime: () => calls.push("evidence")
     } }
   } as unknown as FluxIQ;

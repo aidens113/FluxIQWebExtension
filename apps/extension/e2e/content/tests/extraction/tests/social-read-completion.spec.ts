@@ -3,7 +3,8 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
-import { acceptAutomationStudioFlowBootstrapResult, AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, AutomationStudioNodeRegistry, normalizeAutomationStudioElementTarget, runAutomationStudioGraph, type AutomationStudioFlowDocument } from "fluxiq/automation-studio";
+import { acceptAutomationStudioFlowBootstrapResult, AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, AutomationStudioNodeRegistry, runAutomationStudioGraph, type AutomationStudioFlowDocument } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import type { AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, createWebAutomationOutputNodeImplementationBundle, webAutomationOutputNodeDefinitions, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "@fluxiq-web-extension/domain";

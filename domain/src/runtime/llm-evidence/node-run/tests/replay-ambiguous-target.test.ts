@@ -31,6 +31,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../failure";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_RUN_NODE_TOOL_ID,
@@ -42,7 +43,7 @@ const CLICK = "web.output.dom-click";
 const START = "https://example.test/start";
 const PERMITTED = async () => ({ permitted: true as const });
 
-test("actual replay reports ambiguity truthfully at either location without another acting command", async () => {
+test("actual replay reports ambiguity truthfully at either location after the unacted retries", async () => {
   for (const from of [START, "https://example.test/other"]) {
     const actions: string[] = [];
     const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith(
@@ -63,12 +64,12 @@ test("actual replay reports ambiguity truthfully at either location without anot
     for (const privateText of ["PRIVATE_CANDIDATE", ".private-selector", "PRIVATE_EXCEPTION"]) {
       assert.equal(JSON.stringify(replayed).includes(privateText), false);
     }
-    assert.deepEqual(actions, ["web.dom.click"]);
+    assert.deepEqual(actions, Array(4).fill("web.dom.click"));
   }
 });
 
 for (const [from, expected] of [[START, "core.replay.remembered"], ["https://example.test/other", "core.replay.unreproducible"]] as const) {
-  test(`genuine missing target retains ${expected} without ambiguity or another action`, async () => {
+  test(`genuine missing target retains ${expected} after the unacted retries without ambiguity`, async () => {
     const actions: string[] = [];
     const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith("web.target.not_found", undefined, actions));
     const replayed = await runtime.executeTool({
@@ -79,7 +80,7 @@ for (const [from, expected] of [[START, "core.replay.remembered"], ["https://exa
     assert.equal(replayed.effectApplied, false);
     assert.equal((replayed.evidence as JsonObject).reason, undefined);
     assert.notEqual(replayed.resultReason, "target_ambiguous");
-    assert.deepEqual(actions, ["web.dom.click"]);
+    assert.deepEqual(actions, Array(4).fill("web.dom.click"));
   });
 }
 
@@ -112,8 +113,8 @@ test("a replayed step whose target is absent stays unreproducible", async () => 
   assert.equal(replayed.resultCode, "core.replay.unreproducible");
 });
 
-function gatewayFailingClickWith(code: string, actual?: string, actions?: string[]): WebLlmEvidenceGateway {
-  const failure = actual === undefined ? { code } : { code, actual };
+function gatewayFailingClickWith(code: WebAutomationFailureCode, actual?: string, actions?: string[]): WebLlmEvidenceGateway {
+  const failure = webAutomationFailureRecord(code, { actual }) as unknown as JsonObject;
   return {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {

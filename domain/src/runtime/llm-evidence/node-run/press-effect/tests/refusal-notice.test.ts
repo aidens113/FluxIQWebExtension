@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { WEB_AUTOMATION_FAILURE_CODES } from "../../../../failure";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../failure";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
 import { shownHandle } from "../../../page-view/tests/shown-page-lines";
 
@@ -79,7 +79,7 @@ async function press(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRu
 }
 
 /** A product page whose Add to cart the page refuses with `code`, writing `notice` beside it. */
-function stub(code: string, notice: string | undefined) {
+function stub(code: WebAutomationFailureCode, notice: string | undefined) {
   let written: string | undefined;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -87,7 +87,7 @@ function stub(code: string, notice: string | undefined) {
       if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(written) } };
       if (command.actionType === "web.dom.click") {
         written = notice;
-        return { status: "failed", error: "refused", failure: { code, expected: "the page accepts the press", actual: "the page answered" } };
+        return { status: "failed", error: "refused", failure: webAutomationFailureRecord(code, { expected: "the page accepts the press", actual: "the page answered" }) as unknown as JsonObject };
       }
       return { status: "succeeded", payload: { value: "ok" } };
     }

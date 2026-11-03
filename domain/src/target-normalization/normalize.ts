@@ -1,0 +1,172 @@
+import { hasFingerprintSignal } from "./fingerprint-signal";
+import { isSensitiveKey } from "./sensitive-key";
+import { isWebElementTarget as isAutomationStudioElementTarget } from "./is";
+import type { JsonObject, JsonValue } from "fluxiq/core";
+import type { AutomationStudioElementTarget, AutomationStudioElementTargetSource, AutomationStudioElementTargetFingerprint, AutomationStudioElementTargetCandidate, AutomationStudioElementTargetSelection, StateBounds, StatePath } from "fluxiq/automation-studio";
+
+// Legacy wire DTOs round-trip through Core; the web domain owns their interpretation.
+
+
+export function normalizeWebElementTarget(value: unknown, options: { source?: AutomationStudioElementTargetSource } = {}): AutomationStudioElementTarget | null {
+  if (isAutomationStudioElementTarget(value)) return sanitizeElementTarget(value, options.source);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  const target = isObject(input.target) ? input.target : input;
+  if (isAutomationStudioElementTarget(target)) return sanitizeElementTarget(target, options.source);
+  const fingerprint = isObject(input.element) ? actionParametersFingerprint(target, input.element) : normalizeFingerprint(target);
+  if (!hasFingerprintSignal(fingerprint)) return null;
+  return compactElementTarget({
+    kind: "element",
+    fingerprint,
+    ...(options.source ? { source: options.source } : {})
+  });
+}
+
+function sanitizeElementTarget(target: AutomationStudioElementTarget, source: AutomationStudioElementTargetSource | undefined): AutomationStudioElementTarget {
+  return compactElementTarget({
+    kind: "element",
+    fingerprint: normalizeFingerprint(target.fingerprint),
+    candidates: target.candidates?.map((candidate) => compactCandidate({ ...normalizeFingerprint(candidate), candidateId: safeString(candidate.candidateId), visualFrameId: safeString(candidate.visualFrameId), visualLayerId: safeString(candidate.visualLayerId), isVisibleOnViewport: typeof candidate.isVisibleOnViewport === "boolean" ? candidate.isVisibleOnViewport : undefined })).filter((candidate) => candidate.candidateId),
+    selectedCandidate: target.selectedCandidate ? compactSelection(target.selectedCandidate) : undefined,
+    source: source ?? target.source,
+    metadata: sanitizeJsonObject(target.metadata)
+  });
+}
+
+function actionParametersFingerprint(parameters: Record<string, unknown>, element: Record<string, unknown>): AutomationStudioElementTargetFingerprint {
+  return { ...normalizeFingerprint(element), ...normalizeFingerprint(parameters, false) };
+}
+
+function normalizeFingerprint(value: unknown, readsText = true): AutomationStudioElementTargetFingerprint {
+  if (!isObject(value)) return {};
+  const metadata = isObject(value.metadata) ? value.metadata : {};
+  const visualTarget = isObject(value.visualTarget) ? value.visualTarget : {};
+  return compactFingerprint({
+    visibleText: safeString(value.visibleText) ?? safeString(metadata.visibleText) ?? (readsText ? safeString(value.text) : undefined),
+    accessibleName: safeString(value.accessibleName) ?? safeString(metadata.accessibleName) ?? safeString(metadata.ariaLabel),
+    label: safeString(value.label) ?? safeString(metadata.label),
+    id: safeString(value.id) ?? safeString(value.elementId) ?? safeString(metadata.id),
+    testId: safeString(value.testId) ?? safeString(value.dataTestId) ?? safeString(metadata.testId) ?? safeString(metadata.dataTestId),
+    automationId: safeString(value.automationId) ?? safeString(metadata.automationId),
+    entityId: safeString(value.entityId) ?? safeString(metadata.entityId) ?? safeString(visualTarget.entityId),
+    entityKind: safeString(value.entityKind) ?? safeString(metadata.entityKind) ?? safeString(visualTarget.entityKind),
+    tagName: safeString(value.tagName) ?? safeString(metadata.tagName),
+    role: safeString(value.role) ?? safeString(metadata.role) ?? safeString(value.implicitRole),
+    selector: safeString(value.selector) ?? safeString(metadata.selector),
+    xpath: safeString(value.xpath) ?? safeString(metadata.xpath),
+    queryPath: safeString(value.queryPath) ?? safeString(metadata.queryPath),
+    statePath: readStatePath(value.statePath) ?? readStatePath(metadata.statePath) ?? readStatePath(visualTarget.statePath),
+    url: safeString(value.url) ?? safeString(metadata.url),
+    classNames: readStringArray(value.classNames) ?? readStringArray(metadata.classNames),
+    bounds: readBounds(value.bounds) ?? readBounds(metadata.bounds),
+    attributes: sanitizeAttributes(value.attributes) ?? sanitizeAttributes(metadata.attributes),
+    drawing: readDrawing(value.drawing) ?? readDrawing(metadata.drawing),
+    metadata: sanitizeJsonObject(metadata, promotedFingerprintMetadataKeys)
+  });
+}
+
+
+
+function compactSelection(selection: AutomationStudioElementTargetSelection): AutomationStudioElementTargetSelection | undefined {
+  if (!safeString(selection.candidateId)) return undefined;
+  return compactSelectionObject({
+    candidateId: safeString(selection.candidateId),
+    confidence: Number.isFinite(selection.confidence) ? Math.max(0, Math.min(1, selection.confidence)) : 0,
+    matchedSignals: selection.matchedSignals.filter((item) => item.trim()),
+    failedSignals: selection.failedSignals.filter((item) => item.trim()),
+    metadata: sanitizeJsonObject(selection.metadata)
+  });
+}
+
+function readStatePath(value: unknown): AutomationStudioElementTargetFingerprint["statePath"] | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (!isObject(value)) return undefined;
+  const namespace = safeString(value.namespace);
+  const path = safeString(value.path);
+  return namespace && path ? { namespace, path } : undefined;
+}
+
+const MAX_DRAWING_LENGTH = 64;
+
+function readDrawing(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const token = value.trim();
+  return token.length > 0 && token.length <= MAX_DRAWING_LENGTH && /^[!-~]+$/u.test(token) ? token : undefined;
+}
+
+function readBounds(value: unknown): StateBounds | undefined {
+  if (!isObject(value)) return undefined;
+  const bounds = { x: Number(value.x), y: Number(value.y), width: Number(value.width), height: Number(value.height) };
+  return Object.values(bounds).every(Number.isFinite) && bounds.width > 0 && bounds.height > 0 ? bounds : undefined;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const values = value.flatMap((item) => safeString(item) ? [safeString(item)!] : []);
+    return values.length ? values : undefined;
+  }
+  if (typeof value === "string" && value.trim()) return value.split(/\s+/).filter(Boolean);
+  return undefined;
+}
+
+function sanitizeAttributes(value: unknown): Record<string, string> | undefined {
+  if (!isObject(value)) return undefined;
+  const entries = Object.entries(value).flatMap(([key, item]) => {
+    if (isSensitiveKey(key) || typeof item !== "string" || !item.trim()) return [];
+    return [[key, truncate(item)] as const];
+  });
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function sanitizeJsonObject(value: unknown, omitKeys: ReadonlySet<string> = new Set()): JsonObject | undefined {
+  if (!isObject(value)) return undefined;
+  const entries = Object.entries(value).flatMap(([key, item]) => {
+    if (omitKeys.has(key) || isSensitiveKey(key)) return [];
+    const sanitized = sanitizeJsonValue(item);
+    return sanitized === undefined ? [] : [[key, sanitized] as const];
+  });
+  return entries.length ? Object.fromEntries(entries) as JsonObject : undefined;
+}
+
+function sanitizeJsonValue(value: unknown): JsonValue | undefined {
+  if (typeof value === "string") return truncate(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "boolean" || value === null) return value;
+  if (Array.isArray(value)) return value.flatMap((item) => {
+    const sanitized = sanitizeJsonValue(item);
+    return sanitized === undefined ? [] : [sanitized];
+  });
+  return sanitizeJsonObject(value);
+}
+
+function safeString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? truncate(value.trim()) : undefined;
+}
+
+function truncate(value: string, max = 1_000): string {
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+
+
+const promotedFingerprintMetadataKeys = new Set(["visibleText", "accessibleName", "ariaLabel", "label", "id", "testId", "dataTestId", "automationId", "entityId", "entityKind", "tagName", "role", "selector", "xpath", "queryPath", "statePath", "url", "classNames", "bounds", "attributes", "drawing"]);
+
+function compactFingerprint(value: Record<string, unknown>): AutomationStudioElementTargetFingerprint {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && (!Array.isArray(item) || item.length > 0))) as AutomationStudioElementTargetFingerprint;
+}
+
+function compactCandidate(value: Record<string, unknown>): AutomationStudioElementTargetCandidate {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && (!Array.isArray(item) || item.length > 0))) as AutomationStudioElementTargetCandidate;
+}
+
+function compactElementTarget(value: Record<string, unknown>): AutomationStudioElementTarget {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && (!Array.isArray(item) || item.length > 0))) as AutomationStudioElementTarget;
+}
+
+function compactSelectionObject(value: Record<string, unknown>): AutomationStudioElementTargetSelection {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && (!Array.isArray(item) || item.length > 0))) as AutomationStudioElementTargetSelection;
+}
