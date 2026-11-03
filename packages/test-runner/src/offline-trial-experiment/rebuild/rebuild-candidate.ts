@@ -17,6 +17,7 @@
 // (`./recorded-resolution-binding.ts`, or the harvest's pairing binding).
 
 import { automationStudioProjectSingleSubflowRebuild, type AutomationStudioProjectSingleSubflowRebuildInput } from "fluxiq/automation";
+import { webActivityControlReader, webControlWordsReader } from "@fluxiq-web-extension/domain/node";
 import { jsonRecord } from "../json-record.js";
 import type { CandidateRebuild, UnresolvedStep } from "../types.js";
 import type { WebAuthoringSurroundings } from "./web-authoring-surroundings.js";
@@ -64,6 +65,8 @@ export async function rebuildSubflowCandidate(context: RebuildContext, request: 
     baseDependencyDigest: candidate.baseDependencyDigest as string, startLocation: context.startLocation, handleReach: "view_history" as const,
   } as unknown as AutomationStudioProjectSingleSubflowRebuildInput["submission"];
   const rebuilt = await (context.rebuild ?? automationStudioProjectSingleSubflowRebuild)({
+    // The script checks a rebuild runs name a control by this domain's reading; here no build is around them to supply it.
+    domainReadings: { activityControlReader: webActivityControlReader, controlWordsReader: webControlWordsReader },
     record: context.record as unknown as AutomationStudioProjectSingleSubflowRebuildInput["record"],
     briefId: request.briefId,
     script: request.script,

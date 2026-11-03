@@ -86,16 +86,27 @@ Studio, and long-running orchestration.
   reducers, input/output mappings, action interfaces, and runtime adapters.
 - Generic gateway and framework behavior belongs in FluxIQ Core, not here.
 - Web semantics reach Core only through hooks the domain registers on its
-  implementation bundle: the output target preparer, the recording entry target
-  preparer and policy, the recording parameter normalizer and the model-evidence
-  page-text summary (`domain/src/target-normalization/`,
-  `domain/src/output-nodes/target-preparation/`,
-  `domain/src/runtime/llm-evidence/evidence-summary/`, registered in
-  `domain/src/output-nodes/native-runtime.ts`). An element output refuses
-  dispatch without its preparer (`output.target_preparer_missing`), so
+  implementation bundle, in `domain/src/output-nodes/native-runtime.ts`.
   `createWebAutomationFluxIQ` (`domain/src/host.ts`) binds the web bundle when
-  nothing else is bound. FluxIQ Core's `docs/architecture/runtime-ownership.md`
-  lists the hooks and the five browser-field readers Core still keeps.
+  nothing else is bound, because without these Core answers on the closed side
+  and an element output refuses dispatch. FluxIQ Core's
+  `docs/architecture/runtime-ownership.md` says what Core does with each one and
+  with none.
+
+  | Hook | The web domain's | What it reads |
+  | --- | --- | --- |
+  | `outputTargetPreparer` | `domain/src/output-nodes/target-preparation/` | An output action's target |
+  | `recordingEntryTargetPreparer`, `recordingTargetPolicy`, `recordingCandidateParameterNormalizer` | `domain/src/target-normalization/` | A recording's targets and a mapper's parameters |
+  | `llmEvidenceSummary` | `domain/src/runtime/llm-evidence/evidence-summary/` | The page text for the step log |
+  | `recordedStepReader` | `domain/src/recording/recorded-step-reader.ts` | A recorded event: where its control lives, `implicitRole`, a `password`-typed field, its name and label |
+  | `stateElementKindReader` | `domain/src/recording/state-element-kind.ts` | A state path's `selector`, `testid` and `test_id` |
+  | `controlWordsReader` | `domain/src/output-nodes/control-words.ts` | A control's `accessibleName`, `visibleText`, `label`, `placeholder`, from `element` or `target`; `readsWords` |
+  | `controlParameterKeys` | `domain/src/output-nodes/control-parameter-keys.ts` | `target`, `selector`, `element` |
+  | `activityControlReader` | `domain/src/output-nodes/activity-control.ts` | A card's name and box-or-option words: `label`, `accessibleName`, `visibleText`, `role`, `inputType` |
+
+  Each is a module constant, because Core refuses a second, different hook for a
+  domain. A browser-field reader added to Core fails Core's structure audit, so a
+  new reading of a browser field belongs here behind a hook.
 - Durable project, policy, and recording ownership belongs in FluxIQ Core, not
   extension-local storage.
 - The extension may import domain contracts. Domain code must not depend on

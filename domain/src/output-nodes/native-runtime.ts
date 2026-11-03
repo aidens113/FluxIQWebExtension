@@ -12,6 +12,7 @@ import { webStateElementKindReader } from "../recording/state-element-kind";
 import { webLlmEvidenceSummary } from "../runtime/llm-evidence/evidence-summary";
 import { normalizeWebRecordingCandidateParameters, prepareWebRecordingEntryTarget, webRecordingTargetPolicy } from "../target-normalization";
 import { webActivityControlReader } from "./activity-control";
+import { webControlWordsReader } from "./control-words";
 import { WEB_CONTROL_PARAMETER_KEYS } from "./control-parameter-keys";
 import { createWebOutputTargetPreparer } from "./target-preparation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
@@ -69,6 +70,7 @@ export function createWebAutomationOutputNodeImplementationBundle(
     recordedStepReader: webRecordedStepReader,
     stateElementKindReader: webStateElementKindReader,
     activityControlReader: webActivityControlReader,
+    controlWordsReader: webControlWordsReader,
     controlParameterKeys: WEB_CONTROL_PARAMETER_KEYS,
     ...extension
   };

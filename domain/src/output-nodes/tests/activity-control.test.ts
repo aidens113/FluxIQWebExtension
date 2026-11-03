@@ -4,11 +4,12 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioActivityAction, automationStudioActivityToolCall, runWithAutomationStudioActivityControlReader } from "fluxiq/automation";
+import { automationStudioActivityAction, automationStudioActivityToolCall, runWithAutomationStudioDomainReadings } from "fluxiq/automation";
 import { webActivityControlReader } from "../activity-control";
 import { createWebAutomationOutputNodeImplementationBundle } from "../native-runtime";
 
-const said = (input: Parameters<typeof automationStudioActivityAction>[0]) => runWithAutomationStudioActivityControlReader(webActivityControlReader, () => automationStudioActivityAction(input));
+const inWeb = <T>(fn: () => T): T => runWithAutomationStudioDomainReadings({ activityControlReader: webActivityControlReader }, fn);
+const said = (input: Parameters<typeof automationStudioActivityAction>[0]) => inWeb(() => automationStudioActivityAction(input));
 
 test("the bundle gives Core this reading", () => {
   assert.equal(createWebAutomationOutputNodeImplementationBundle().activityControlReader, webActivityControlReader);
@@ -56,7 +57,7 @@ test("a step skipped as not shown names its control", () => {
 
 test("a model's call is named the same way, from the parameters it carries", () => {
   const call = { callId: "c1", toolId: "core.run_node", value: { node: "web.output.dom-click", parameters: { element: { accessibleName: "Get a free quote" } } } };
-  const title = runWithAutomationStudioActivityControlReader(webActivityControlReader, () => automationStudioActivityToolCall(call).title);
+  const title = inWeb(() => automationStudioActivityToolCall(call).title);
   assert.equal(title, "Clicking “Get a free quote”");
   assert.equal(automationStudioActivityToolCall(call).title, "Clicking on the page");
 });
