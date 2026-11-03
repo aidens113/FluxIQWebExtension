@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptAutomationStudioFlowBootstrapResult, parseAutomationStudioFlowScript } from "fluxiq/automation-studio";
+import { acceptAutomationStudioFlowBootstrapResult, parseAutomationStudioFlowScript } from "fluxiq/automation";
 import { exampleSupport } from "./support";
 
 const { sections, blocks, registry, resolution } = exampleSupport;

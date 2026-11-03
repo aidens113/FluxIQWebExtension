@@ -164,7 +164,7 @@
 // has bounds of its own (`view-history.ts`).
 
 import type { JsonObject } from "fluxiq/core";
-import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 import { collectWebLlmControlIntents } from "../control-intent";
 import { sameWebPlanControlIntent, webPlanAbsoluteControlIntent, webPlanControlIntentSource } from "./control-intents";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";

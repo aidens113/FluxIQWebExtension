@@ -20,7 +20,7 @@
 //    page that never answered, or held conditions beside ones nobody judged. A
 //    missing acknowledgement is never read as "did not happen".
 
-import type { AutomationNodeExpectationEvaluation, AutomationStudioLastingActCheck } from "fluxiq/automation-studio";
+import type { AutomationNodeExpectationEvaluation, AutomationStudioLastingActCheck } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { OutputDispatchResult } from "fluxiq";
 import { createWebAutomationExpectationEvaluator } from "../../../expectation";

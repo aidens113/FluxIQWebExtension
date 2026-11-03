@@ -8,7 +8,7 @@ import {
   AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY,
   type AutomationStudioFlowDocument,
   type AutomationStudioFlowNode
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import {
   createWebAutomationHostRuntime,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
-import type { AutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation-studio";
+import type { AutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation";
 import { webElementIdentityShortfall } from "../../../../element-fingerprint";
 import { elementFingerprint } from "../../../../output-nodes/targets";
 

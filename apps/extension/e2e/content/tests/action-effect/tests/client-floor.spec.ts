@@ -6,7 +6,7 @@ import {
   runAutomationStudioGraph,
   type AutomationStudioGraphExecutionOptions,
   type AutomationStudioFlowDocument
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import {
   createWebAutomationOutputNodeManifest,
   createWebAutomationOutputNodeImplementationBundle,

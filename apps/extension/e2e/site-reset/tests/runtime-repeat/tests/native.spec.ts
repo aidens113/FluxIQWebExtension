@@ -1,6 +1,6 @@
 // Real installed browser/native runtime proof. No model, replacement dispatch,
 // fabricated receipt, or fabricated host observation participates in either run.
-import type { AutomationStudioFlowDocument, AutomationStudioFlowEdge, AutomationStudioFlowNode } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowDocument, AutomationStudioFlowEdge, AutomationStudioFlowNode } from "fluxiq/automation";
 import {
   createWebAutomationHostRuntime,
   WEB_AUTOMATION_DOMAIN_ID

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { acceptAutomationStudioFlowBootstrapResult, automationStudioFlowBootstrapWrittenPlanBindingIssues } from "fluxiq/automation-studio";
+import { acceptAutomationStudioFlowBootstrapResult, automationStudioFlowBootstrapWrittenPlanBindingIssues } from "fluxiq/automation";
 import { exampleSupport } from "./support";
 const { registry, resolution: EXAMPLE_RESOLUTION, blocks: exampleBlocks } = exampleSupport;
 const AUTOMATION_STUDIO_FLOW_SCRIPT_LOOP_FORMAT = exampleSupport.sections.loop;

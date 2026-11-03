@@ -1,5 +1,5 @@
 import type { PlatformHookPayloads } from "fluxiq/platform/panel";
-import { recordAutomationStudioCreatedProjectOwner, type AutomationStudioService } from "fluxiq/automation-studio";
+import { recordAutomationStudioCreatedProjectOwner, type AutomationStudioService } from "fluxiq/automation";
 
 export const DEFAULT_PROJECT_NAME = "My automations";
 

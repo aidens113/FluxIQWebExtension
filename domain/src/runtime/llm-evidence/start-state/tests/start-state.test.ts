@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webStartStateFromEvidence, WEB_START_STATE_SCHEMA_VERSION } from "..";
 import { createWebAutomationLlmEvidenceRuntime } from "../..";

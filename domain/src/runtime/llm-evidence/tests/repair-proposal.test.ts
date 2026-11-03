@@ -15,7 +15,7 @@ import {
   type AutomationStudioAdaptationPolicy,
   type AutomationStudioFlowDocument,
   type AutomationStudioRuntimeTargetOverrideTarget
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 
 const target = (handles: Record<string, string>): AutomationStudioRuntimeTargetOverrideTarget => ({ handles });
 const NOT_REPAIRABLE = { status: "absent", reason: "action_not_repairable" } as const;

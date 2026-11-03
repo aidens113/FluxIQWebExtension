@@ -79,7 +79,7 @@ test("dead owners recover and acquisition exceptions release every acquired lock
   assert.notEqual(JSON.parse(await readFile(f.lockPath(), "utf8")).token, "dead");
   await recovered.release();
   await assert.rejects(acquireCoreBuildLease(f.root, { onAcquired() { throw new Error("probe failure"); } }), /probe failure/u);
-  for (const step of ["contracts:build", "fluxiq:build", "client-gateway-websocket:build"]) assert.equal(existsSync(f.lockPath(step)), false);
+  for (const step of ["contracts:build", "fluxiq:build", "client-gateway-websocket:build", "ui-components:build"]) assert.equal(existsSync(f.lockPath(step)), false);
 });
 
 test("explicit process exit cleans up owned locks synchronously", async (t) => {
@@ -88,14 +88,14 @@ test("explicit process exit cleans up owned locks synchronously", async (t) => {
   await until(() => lease.messages.includes("held"));
   lease.send("exit");
   assert.equal(await lease.done, 7, lease.errors);
-  for (const step of ["contracts:build", "fluxiq:build", "client-gateway-websocket:build"]) assert.equal(existsSync(f.lockPath(step)), false);
+  for (const step of ["contracts:build", "fluxiq:build", "client-gateway-websocket:build", "ui-components:build"]) assert.equal(existsSync(f.lockPath(step)), false);
 });
 
 test("heartbeat loss is reported, and release never deletes another owner's lock", async (t) => {
   const f = await fixture(t);
   let lost = null;
   const lease = await acquireCoreBuildLease(f.root, { heartbeatMs: 20, onLost: (error) => { lost = error; } });
-  for (const step of ["contracts:build", "fluxiq:build", "client-gateway-websocket:build"]) {
+  for (const step of ["contracts:build", "fluxiq:build", "client-gateway-websocket:build", "ui-components:build"]) {
     assert.equal(JSON.parse(await readFile(f.lockPath(step), "utf8")).pid, process.pid);
   }
   await writeFile(f.lockPath(), JSON.stringify({ pid: process.pid, token: "replacement" }));

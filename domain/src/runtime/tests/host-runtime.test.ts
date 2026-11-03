@@ -143,6 +143,25 @@ test("a policy node naming no web output, or a web output on another node, is de
   assert.equal(calls.length, 0);
 });
 
+test("the page a navigation leaves need not be readable, so a Flow can start from a blank tab", async () => {
+  const navigations = [captureInput("web.output.browser-navigate"), captureInput(POLICY_ACTION_ID, "before_action", { outputId: "web.browser.navigate" })];
+  const unreadable: Array<Parameters<typeof gateway>[0][number]> = [{ ok: false, error: "The tab cannot be scripted." }, { ok: true, payload: { result: {} } }];
+  for (const input of navigations) {
+    for (const answer of unreadable) {
+      const boundary = createWebAutomationHostRuntime(gateway([answer]).gateway);
+      assert.deepEqual(await boundary.captureStateSnapshot!(input), { kind: "unavailable", reason: "page_left_by_navigation" });
+    }
+  }
+});
+
+test("a page that cannot be read is still a fault after a navigation and before any other step", async () => {
+  const faults = [captureInput("web.output.browser-navigate", "after_action"), captureInput(CLICK_NODE_ID), captureInput(CLICK_NODE_ID, "after_action")];
+  for (const input of faults) {
+    const boundary = createWebAutomationHostRuntime(gateway([{ ok: false, error: "The tab cannot be scripted." }]).gateway);
+    await assert.rejects(Promise.resolve(boundary.captureStateSnapshot!(input)), /The tab cannot be scripted\./);
+  }
+});
+
 test("a diff with a side missing is declined, so no diff claims every element appeared or left", async () => {
   const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
   const summary = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", elements: [{ selector: "#pay" }] };

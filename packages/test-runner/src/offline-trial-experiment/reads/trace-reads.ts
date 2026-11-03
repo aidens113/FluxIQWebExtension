@@ -9,7 +9,7 @@
 // reads; a read whose segment holds no single readable result keeps `request:
 // null`.
 
-import { AUTOMATION_STUDIO_OFFLINE_TRIAL_READER_CONTRACTS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_OFFLINE_TRIAL_READER_CONTRACTS } from "fluxiq/automation";
 import { admitClientGatewayTraceForMatching, clientGatewayTraceReevaluationRequest, type ClientGatewayTraceStore } from "fluxiq/client-gateway";
 import { isObservingAction } from "./observing-action.js";
 import { recordedPage } from "./recorded-page.js";

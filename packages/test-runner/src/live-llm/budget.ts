@@ -52,7 +52,7 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
   // Every itemized call is held to the per-call caps, the calls that gathered
   // evidence as much as the diagnosis and the patch. A call's cost cap is the
   // plan's, the declared number held to Core's ceiling, so an unset
-  // `--llm-max-cost-usd` (the contract's $10 bound) does not loosen it. A figure the provider did
+  // `--llm-max-cost-usd` (the Lab's $5 default) does not loosen it. A figure the provider did
   // not report is not checked here rather than read as zero; Core's run totals
   // above still bound it.
   for (const [index, call] of usage.observedCalls.entries()) {

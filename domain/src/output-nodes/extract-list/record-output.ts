@@ -35,7 +35,7 @@
 // the same constant (`./records-path.ts`), so naming it here would be a second
 // place for the key to drift.
 
-import type { AutomationStudioRecordField, AutomationStudioRecordOutput, AutomationStudioRecordValueType } from "fluxiq/automation-studio";
+import type { AutomationStudioRecordField, AutomationStudioRecordOutput, AutomationStudioRecordValueType } from "fluxiq/automation";
 import type { WebAutomationRecordedListExtraction } from "../../actions/extraction";
 
 /** A record output with no path, which is the shape a mapper candidate proposes. */

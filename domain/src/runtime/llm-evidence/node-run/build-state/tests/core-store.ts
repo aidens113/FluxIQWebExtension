@@ -3,7 +3,7 @@
 // One store stands for one host's storage, so a second runtime made over it is
 // that host restarted.
 
-import { automationStudioDomainBuildState, AutomationStudioDomainBuildStateStore, type AutomationStudioDomainBuildState } from "fluxiq/automation-studio";
+import { automationStudioDomainBuildState, AutomationStudioDomainBuildStateStore, type AutomationStudioDomainBuildState } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../../constants";
 
 /** What a FluxIQ instance with the web domain registered carries for the store, and nothing else. */

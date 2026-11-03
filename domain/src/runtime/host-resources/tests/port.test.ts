@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
-import { AutomationStudioHostResourceScheduler, type AutomationStudioHostResourceGrant } from "fluxiq/automation-studio";
+import { AutomationStudioHostResourceScheduler, type AutomationStudioHostResourceGrant } from "fluxiq/automation";
 import { createWebAutomationHostRuntime } from "../../host-runtime";
 import { createWebAutomationHostResourcePort, WEB_AUTOMATION_HOST_RESOURCE_CAPACITY, webAutomationHostResourceKey } from "..";
 

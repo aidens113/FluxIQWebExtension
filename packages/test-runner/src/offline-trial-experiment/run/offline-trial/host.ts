@@ -18,7 +18,7 @@
 
 import { registerFluxIQHost, WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/node";
 import { FluxIQ } from "fluxiq";
-import { automationStudioGatewayTraceServiceStore, type AutomationStudioService } from "fluxiq/automation-studio";
+import { automationStudioGatewayTraceServiceStore, type AutomationStudioService } from "fluxiq/automation";
 import type { ClientGatewayService, ClientGatewayTraceStore } from "fluxiq/client-gateway";
 
 const TRACE_ENV = "FLUXIQ_CLIENT_GATEWAY_TRACE";

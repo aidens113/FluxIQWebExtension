@@ -15,7 +15,7 @@
 // exploration, and keeping them apart is also what holds each file inside the
 // exported-value budget.
 
-import type { AutomationStudioExplorationStopReason } from "fluxiq/automation-studio";
+import type { AutomationStudioExplorationStopReason } from "fluxiq/automation";
 import { webLlmToolRejectionResultCode } from "../vocabulary";
 
 /**

@@ -8,7 +8,7 @@
 // failed or the current page could not be read (a page that cannot be read
 // cannot be re-read either). Locations compare as whole addresses.
 
-import type { AutomationStudioSourcePlaceAnswer, AutomationStudioSourcePlaceRequest } from "fluxiq/automation-studio";
+import type { AutomationStudioSourcePlaceAnswer, AutomationStudioSourcePlaceRequest } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import type { WebSourcePlaces } from "./source-places";

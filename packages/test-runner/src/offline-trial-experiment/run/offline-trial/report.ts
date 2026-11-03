@@ -6,7 +6,7 @@
 // trial's feedback is reduced separately (`./trial-observation.ts`); the
 // matcher's free-text delivery notes are counted, not copied.
 
-import type { AutomationStudioOfflineCandidateTrialOutcome } from "fluxiq/automation-studio";
+import type { AutomationStudioOfflineCandidateTrialOutcome } from "fluxiq/automation";
 
 export type OfflineTrialReport =
   | Readonly<{ status: "refused"; reasonCode: string; detail: string }>

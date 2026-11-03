@@ -6,12 +6,12 @@ import { afterEach, beforeEach, test } from "node:test";
 import { pathSpellings, resolveCoreLibrary } from "../../build-cache/index.mjs";
 import { buildCore, CORE_PACKAGES, FULL_CORE_PACKAGES } from "../core-build.mjs";
 
-// A scratch Core with the three library packages (fluxiq and the websocket
-// gateway depend on contracts) and the web app. The injected pnpm "builds" a
+// A scratch Core with the four library packages (fluxiq, the websocket
+// gateway and the chat package depend on contracts or fluxiq) and the web app. The injected pnpm "builds" a
 // library by writing its source, followed by its dependencies' output, into
 // dist/, so a change to contracts' source changes what its dependants read.
 
-const DEPENDS_ON = { contracts: [], fluxiq: ["contracts"], "client-gateway-websocket": ["contracts"] };
+const DEPENDS_ON = { contracts: [], fluxiq: ["contracts"], "client-gateway-websocket": ["contracts"], "ui-components": ["fluxiq"] };
 const BUILD = "tsc -b tsconfig.build.json --clean && tsc -b tsconfig.build.json && node ../../scripts/rewrite-declaration-imports.mjs dist";
 
 let cores;
@@ -88,11 +88,11 @@ test("a contracts edit rebuilds contracts and every library that reads its dist"
   await put(cores[0], "packages/contracts/src/index.ts", 'export const name = "contracts, edited";\n');
   const calls = [];
   await build(cores[0], calls);
-  assert.deepEqual(calls, ["@fluxiq/contracts", "fluxiq", "@fluxiq/client-gateway-websocket"]);
+  assert.deepEqual(calls, ["@fluxiq/contracts", "fluxiq", "@fluxiq/client-gateway-websocket", "@fluxiq/ui-components"]);
   await put(cores[0], "packages/fluxiq/src/index.ts", 'export const name = "fluxiq, edited";\n');
   const only = [];
   await build(cores[0], only);
-  assert.deepEqual(only, ["fluxiq"]);
+  assert.deepEqual(only, ["fluxiq", "@fluxiq/ui-components"]);
 });
 
 test("a second Core checkout at another path restores all three from the store", async () => {
@@ -210,9 +210,9 @@ test("delegation is decided per package script and per Core checkout", async () 
   const steps = [];
   await buildWithSpy(cores[0], calls, notes, steps);
   assert.deepEqual(calls, CORE_PACKAGES.map((item) => item.filter));
-  assert.deepEqual(steps, ["pnpm --filter fluxiq build", "pnpm --filter @fluxiq/client-gateway-websocket build"]);
+  assert.deepEqual(steps, ["pnpm --filter fluxiq build", "pnpm --filter @fluxiq/client-gateway-websocket build", "pnpm --filter @fluxiq/ui-components build"]);
   const cache = Object.fromEntries(notes.filter((line) => line.step === "build-core-package").map((line) => [line.package, line["build-cache"]]));
-  assert.deepEqual(cache, { "@fluxiq/contracts": "delegated", fluxiq: "build", "@fluxiq/client-gateway-websocket": "build" });
+  assert.deepEqual(cache, { "@fluxiq/contracts": "delegated", fluxiq: "build", "@fluxiq/client-gateway-websocket": "build", "@fluxiq/ui-components": "build" });
   const other = [];
   await buildWithSpy(cores[1], [], [], other);
   assert.equal(other.length, CORE_PACKAGES.length, "the other checkout, without Core's cache, is not delegated");

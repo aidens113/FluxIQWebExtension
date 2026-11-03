@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_ARRIVAL_STEP_KEY, automationStudioCandidateFingerprint } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ARRIVAL_STEP_KEY, automationStudioCandidateFingerprint } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { harvestRecordedResolutions } from "../recorded-resolutions.js";
 import { fakeContext, fakeRebuild, type FakeQuestion } from "./rebuild-fakes.js";

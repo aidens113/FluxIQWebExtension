@@ -7,7 +7,7 @@
 // parser might refuse.
 
 import assert from "node:assert/strict";
-import { AutomationStudioActionPermissionGate, automationStudioActionDeclarationCrossCheck } from "fluxiq/automation-studio";
+import { AutomationStudioActionPermissionGate, automationStudioActionDeclarationCrossCheck } from "fluxiq/automation";
 import { adaptationConsequences } from "../../../existing-fluxiq-control/index.js";
 import type { ExistingFlowAdaptation } from "../../../existing-fluxiq-control.js";
 

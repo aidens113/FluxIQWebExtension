@@ -17,7 +17,7 @@ import {
   resolveAutomationStudioFlowBootstrapPlanParameters,
   type AutomationStudioActionConsequence,
   type AutomationStudioFlowBootstrapPlan
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationStructureDetection } from "../../../../../extraction";
 import { webAutomationExtractListDispatch, webAutomationOutputNodeId } from "../../../../../output-nodes";

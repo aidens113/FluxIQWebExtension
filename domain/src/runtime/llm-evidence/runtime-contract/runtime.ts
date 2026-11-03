@@ -8,7 +8,7 @@ import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolExecution, WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmCallWords } from "../node-run";

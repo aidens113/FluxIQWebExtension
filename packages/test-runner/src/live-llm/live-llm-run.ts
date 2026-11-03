@@ -232,7 +232,7 @@ export class LiveLlmRun {
     }
     const ceiling = this.plan.buildCostCeilingUsd;
     if (this.plan.maxTotalEstimatedCostUsd !== ceiling) {
-      throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat is held to FluxIQ's per-build ceiling of $${ceiling}, and --llm-max-cost-usd ${this.plan.maxTotalEstimatedCostUsd} cannot reach the Flow the chat makes. Leave --llm-max-cost-usd out, ${direct}`);
+      throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat is held to FluxIQ's per-build ceiling of $${ceiling}, and --llm-max-cost-usd ${this.plan.maxTotalEstimatedCostUsd} cannot reach the Flow the chat makes. Pass --llm-max-cost-usd ${ceiling} or --llm-cost-ceiling-usd ${this.plan.maxTotalEstimatedCostUsd}, ${direct}`);
     }
   }
 

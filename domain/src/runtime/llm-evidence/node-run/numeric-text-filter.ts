@@ -6,7 +6,7 @@
 // `mutual matches /(?:[5-9]|[1-9][0-9]+) mutual/` rather than `atLeast: 5`. The
 // regex dropped Jonas Weber, whose line reads "Aisha Khan and 4 other mutual
 // friends": five, by the reading every numeric condition uses
-// (Core's `readAutomationStudioRecordNumber`, `fluxiq/automation-studio/nodes`),
+// (Core's `readAutomationStudioRecordNumber`, `fluxiq/automation/nodes`),
 // but no digit run a pattern over the text can see. The rejected row was shown;
 // what the model lacked was that a bound reads the number the page means and a
 // pattern does not.

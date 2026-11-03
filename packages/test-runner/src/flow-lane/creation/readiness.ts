@@ -49,7 +49,7 @@
 // verdict, a model's answer or any mode other than Core's exact spelling never
 // admits.
 
-import { AUTOMATION_STUDIO_ENDPOINTS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, parseAutomationStudioFlowBootstrapGenerationReadiness, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ENDPOINTS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, parseAutomationStudioFlowBootstrapGenerationReadiness, type AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { RunnerFailure } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import { retriedRead } from "./retried-read.js";

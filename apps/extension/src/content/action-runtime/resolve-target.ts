@@ -120,7 +120,7 @@
 // narrow them to one, and when every strategy missed. Both hand the candidates
 // to Core's element matcher through `identity/score.ts` -- the same matcher
 // Core would score them with itself, published for a browser since Wave 3 as
-// `fluxiq/automation-studio/fingerprinting`. A candidate wins by clearing the
+// `fluxiq/automation/fingerprinting`. A candidate wins by clearing the
 // floor, beating the runner-up by a margin, and agreeing exactly on something
 // that says which control it is; otherwise the tie is reported rather than
 // broken by document order, or the target is reported not found. The

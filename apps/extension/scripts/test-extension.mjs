@@ -18,7 +18,8 @@ import { build } from "esbuild";
 // without a label they go to `default`. Every label directory sits under the
 // ignored `.test-build-scratch/`, inside the package, so the bare `fluxiq` and
 // `@fluxiq/client-gateway-websocket` imports left external resolve through the
-// package's node_modules.
+// package's node_modules. `@fluxiq/ui-components` (the chat) is bundled, not
+// external: its compiled `dist/` imports only `fluxiq/*`, which stays external.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = path.join(root, "src");
 const label = process.env.EXTENSION_TEST_BUILD_LABEL ?? "default";

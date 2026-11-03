@@ -26,7 +26,7 @@ import type {
   AutomationStudioHostResourceGrant,
   AutomationStudioHostResourceLease,
   AutomationStudioHostResourcePort
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import { WEB_AUTOMATION_HOST_RESOURCE_CAPACITY } from "./capacity";
 import { webAutomationLeasableSession } from "./leasable-session";
 import { webAutomationHostResourceKey } from "./resource-key";

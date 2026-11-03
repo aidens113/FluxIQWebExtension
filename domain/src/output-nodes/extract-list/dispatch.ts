@@ -94,7 +94,7 @@
 // The value comes from the narrow `nodes` entry point: this module is bundled
 // into the browser extension, and Core's whole `automation-studio` entry point
 // reaches Node-only modules (`node:crypto`) that a browser bundle cannot load.
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { parseAutomationStudioRecordOutput } from "fluxiq/components/automation";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";

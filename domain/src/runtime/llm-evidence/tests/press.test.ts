@@ -20,7 +20,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioActionPermissionVerdict } from "fluxiq/automation-studio";
+import type { AutomationStudioActionPermissionVerdict } from "fluxiq/automation";
 import type { WebLlmEvidenceGateway } from "../capture";
 import { pressControl, type WebControlPress } from "../press";
 import { RecoverableToolRejection } from "../tool-rejection";

@@ -5,7 +5,7 @@
 // Core's strict parser might refuse.
 
 import assert from "node:assert/strict";
-import { AutomationStudioActionPermissionGate, flowBootstrapPermissionRequiredFailure } from "fluxiq/automation-studio";
+import { AutomationStudioActionPermissionGate, flowBootstrapPermissionRequiredFailure } from "fluxiq/automation";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 /**

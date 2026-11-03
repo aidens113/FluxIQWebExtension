@@ -19,7 +19,7 @@
 // Only a one-subflow plan is paired; any other refuses, since its order across
 // subflows is not one this has checked.
 
-import { AUTOMATION_STUDIO_ARRIVAL_STEP_KEY } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ARRIVAL_STEP_KEY } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { jsonRecord } from "../json-record.js";
 import { rebuildSubflowCandidate, type RebuildContext } from "./rebuild-candidate.js";

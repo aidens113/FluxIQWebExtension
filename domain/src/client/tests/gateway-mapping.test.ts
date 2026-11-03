@@ -3,7 +3,7 @@
 // action-type normalization for commands coming back from the gateway.
 
 import assert from "node:assert/strict";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionResult, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "../../constants";
 import { outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";

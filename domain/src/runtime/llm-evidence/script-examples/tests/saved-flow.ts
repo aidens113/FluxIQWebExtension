@@ -4,7 +4,7 @@ import {
   validateAutomationStudioFlow,
   validateAutomationStudioFlowBootstrapPlan,
   type AutomationStudioFlowBootstrapPlan
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import { exampleSupport } from "./support";
 import { resolveExampleEvidence } from "./resolve-evidence";
 

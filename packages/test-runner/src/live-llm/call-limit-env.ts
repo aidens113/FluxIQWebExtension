@@ -1,4 +1,4 @@
-import { AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation";
 
 /** Gives only this owned Core child the already-resolved Lab build allowance. */
 export function labBuildCallLimitEnvironment(limit: number | undefined): NodeJS.ProcessEnv {

@@ -16,7 +16,7 @@
 // Rows are chosen by feed position, so the spec names no post, author or text
 // of the fixture (the pattern of `social-kept-row-disclosure.spec.ts`).
 
-import { verifyAutomationStudioRunResult, type AutomationStudioLlmProvider, type AutomationStudioRunResultSummary } from "fluxiq/automation-studio";
+import { verifyAutomationStudioRunResult, type AutomationStudioLlmProvider, type AutomationStudioRunResultSummary } from "fluxiq/automation";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
 

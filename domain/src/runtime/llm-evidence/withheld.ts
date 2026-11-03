@@ -28,7 +28,7 @@
 // marker there says a comparison was withheld because an action ran on a
 // secret-holding control, which is not what happened to a page string.
 
-import { automationStudioWithoutCardNumbers, screenAutomationStudioLlmEvidence } from "fluxiq/automation-studio";
+import { automationStudioWithoutCardNumbers, screenAutomationStudioLlmEvidence } from "fluxiq/automation";
 import { pageText } from "./untrusted-json";
 
 /** What a published string says instead of itself when it is shaped like a credential. */

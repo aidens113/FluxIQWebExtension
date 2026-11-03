@@ -7,7 +7,7 @@
 // Anything else -- a bare string, a number -- carries no identity beyond
 // itself, and is `unidentifiable`. Pure: no page is read here.
 
-import type { AutomationStudioTargetReacquireAnswer, AutomationStudioTargetReacquireRequest } from "fluxiq/automation-studio";
+import type { AutomationStudioTargetReacquireAnswer, AutomationStudioTargetReacquireRequest } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webReacquireElement } from "./element-match";
 import { webReacquireRowKeyColumns } from "./row-key-columns";

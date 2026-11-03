@@ -3,10 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  AutomationStudioService, AutomationStudioNativeNodeRuntime,
-  createAutomationStudioSessionKeyProviderResolver, automationNodeStateBinding
-} from "fluxiq/automation-studio";
+import { AutomationStudioService, createAutomationStudioSessionKeyProviderResolver, automationNodeStateBinding } from "fluxiq/automation";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { IoRegistry, defineDomainIo, defineOutput } from "fluxiq/io";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "../llm-evidence";
@@ -17,6 +15,7 @@ import {
 } from "../../output-nodes";
 import { webAutomationManifestOutputs } from "../../io/manifest-definitions";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { currentPageLines } from "./current-page";
 
 const EXTRACT = "web.output.dom-extract_list";
 const TYPE = "web.output.dom-type";
@@ -180,14 +179,7 @@ async function fixture(root: string) {
       if (decisions === 1) {
         assert.equal(typeof faulty?.step, "number", "saved type must seed the real extend draft");
         // Read the same published control line the provider was actually shown.
-        const field = loop.evidence.map(record).flatMap((entry) => {
-          if (!isRecord(entry.value)) return [];
-          const page = typeof entry.value.page === "string" ? entry.value.page : isRecord(entry.value.page) && typeof entry.value.page.page === "string" ? entry.value.page.page : "";
-          return page.split("\n").flatMap((line) => {
-            const match = /^(t[1-9][0-9]*) field(?::[\w-]+|\[search\])?(?: |$)/u.exec(line);
-            return match?.[1] ? [match[1]] : [];
-          });
-        }).at(-1);
+        const field = currentPageLines(loop.evidence.map(record)).filter((line) => line.kind === "field").at(-1)?.target;
         assert.ok(field, "seed observation must actually show the message field");
         decision = { kind: "tool_call", callId: "fixture.replacement", toolId: "core.run_node", input: {
           node: TYPE, write: true, parameters: { target: { handle: field }, text: { $input: "message", test: "right" } }, consequences: []

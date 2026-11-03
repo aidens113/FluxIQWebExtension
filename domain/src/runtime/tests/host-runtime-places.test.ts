@@ -9,7 +9,7 @@ import test from "node:test";
 import { captured } from "./host/captured";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime } from "../llm-evidence";
 import { createWebAutomationHostRuntime, type WebAutomationHostRuntimeGateway } from "../host-runtime";

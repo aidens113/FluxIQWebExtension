@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateStateSnapshot } from "fluxiq/automation-studio";
+import { validateStateSnapshot } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { createWebAutomationInitialState } from "../../state";
 import { webAutomationActionVisualTargetFromElement } from "../action-target";

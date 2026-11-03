@@ -7,7 +7,7 @@
 // and refuses every command, so nothing here can reach a browser.
 
 import { createWebAutomationLlmEvidenceRuntime, WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/node";
-import type { AutomationStudioNodeRegistry, AutomationStudioNodeRegistryResolution } from "fluxiq/automation-studio";
+import type { AutomationStudioNodeRegistry, AutomationStudioNodeRegistryResolution } from "fluxiq/automation";
 import { webNodeRuntime } from "../../recovery-matrix/index.js";
 
 export type WebAuthoringSurroundings = Readonly<{

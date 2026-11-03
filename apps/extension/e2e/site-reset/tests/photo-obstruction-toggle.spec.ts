@@ -26,7 +26,7 @@ const handlerSlice = (request: string): string | null => {
 type ActivityEvent = { label?: string; nodeId?: string; subject?: { projectId?: string }; detail?: { kind?: string; title?: string; text?: string; status?: string; recovery?: JsonObject } };
 /** Core's activity stream: the chat's rows (`runtime/activity`). */
 async function subscribeActivity(listener: (event: ActivityEvent) => void): Promise<() => void> {
-  const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
+  const { automationStudioActivityHub } = await import("fluxiq/automation");
   return automationStudioActivityHub.subscribe(event => listener(event as ActivityEvent));
 }
 

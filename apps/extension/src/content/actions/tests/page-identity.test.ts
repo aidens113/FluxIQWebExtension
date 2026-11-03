@@ -30,7 +30,7 @@
 
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import { executeContentAction } from "../execute";
 import { observePageIdentity, reportPageChange } from "../page-identity";

@@ -1,4 +1,4 @@
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { WEB_AUTOMATION_DEFINITION_FIELDS_CAPABILITY_ID } from "../capabilities";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../failure";

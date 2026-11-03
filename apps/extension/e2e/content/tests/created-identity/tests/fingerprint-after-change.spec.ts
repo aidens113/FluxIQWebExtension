@@ -21,7 +21,7 @@
 // as it did live, so the row shows the other signals are what find the box.
 
 import type { JsonObject } from "fluxiq/core";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import type { Page } from "@playwright/test";
 import {
   createWebAutomationLlmEvidenceRuntime,

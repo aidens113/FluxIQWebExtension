@@ -4,7 +4,7 @@
 // the lane publishes kept for the test to read. Shared by `lane.test.ts` and
 // `lane-candidate.test.ts`.
 
-import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { resolveScenarioWorkflow, type LlmActionConsequence, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";

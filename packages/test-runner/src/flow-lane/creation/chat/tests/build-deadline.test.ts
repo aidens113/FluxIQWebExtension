@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS } from "fluxiq/automation";
 import { createdFlowChatBuildDeadlineMs } from "../build-deadline.js";
 
 // A8 launch 7 lost three of four project builds to the chat's deadline, sized

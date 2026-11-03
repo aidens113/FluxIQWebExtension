@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FluxIQ } from "fluxiq";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { FluxIQRuntimeCommand, FluxIQRuntimeCommandResult } from "fluxiq/runtime";
 import { createWebAutomationRuntimeAdapter } from "../adapter";

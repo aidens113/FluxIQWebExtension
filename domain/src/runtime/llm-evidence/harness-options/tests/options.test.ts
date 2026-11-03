@@ -5,7 +5,7 @@ import {
   resolveAutomationStudioExplorationBudget,
   runAutomationStudioRuntimeExploration,
   type AutomationStudioHarnessOptionResolution
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../constants";
 import type { WebLlmEvidenceGateway } from "../../capture";

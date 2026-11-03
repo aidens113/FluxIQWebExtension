@@ -33,8 +33,8 @@
 // refusal must never become a side channel for the page content the refusal was
 // protecting, which is what `../tool-rejection.ts` bounds.
 
-import type { AutomationStudioExplorationScopePolicy, AutomationStudioHarnessOptionExecution, AutomationStudioHarnessOptionImplementation } from "fluxiq/automation-studio";
-import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
+import type { AutomationStudioExplorationScopePolicy, AutomationStudioHarnessOptionExecution, AutomationStudioHarnessOptionImplementation } from "fluxiq/automation";
+import { automationStudioExplorationScopeAllows } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { enterWebField } from "../enter-field";
 import {

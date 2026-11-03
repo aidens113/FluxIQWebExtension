@@ -10,7 +10,7 @@
 // and navigating lost their retries after an ambiguous failure there and kept
 // them in playback: two definitions of a lasting act.
 
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationResolvedActionEffect } from "../actions/action-effect";

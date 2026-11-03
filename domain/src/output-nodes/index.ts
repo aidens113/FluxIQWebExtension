@@ -12,3 +12,5 @@ export * from "./secret-binding";
 export * from "./targets";
 export * from "./upload-binding";
 export * from "./url-path";
+
+export { createWebOutputTargetPreparer } from "./target-preparation";

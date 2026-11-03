@@ -60,7 +60,7 @@
 // page as it now stands (`page`): the page as an inspection returns it, the
 // compact view (`web-llm-page.v3`, `./page-view/`), never the structured packet.
 
-import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation";
 import { publishedWebLlmPage, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import { webLlmRejectionNext, webLlmRejectionNextWithWait } from "./rejection-next";

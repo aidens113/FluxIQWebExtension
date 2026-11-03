@@ -14,7 +14,7 @@
 // `--llm-max-cost-usd` may only lower it, and nothing multiplies it by a call
 // count.
 
-import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation";
 import { LAB_COST_CEILING_SCOPE_ENV, labCostCeilingValue } from "./cost-ceiling-env.js";
 
 /**

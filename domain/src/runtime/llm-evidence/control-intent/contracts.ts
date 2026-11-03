@@ -1,4 +1,4 @@
-import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 
 /** Classify actual retained capture controls once per binding, by its own handles. */

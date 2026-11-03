@@ -3,7 +3,7 @@ import {
   AutomationStudioFlowCandidateSubmissionController,
   AutomationStudioNativeNodeRuntime,
   automationStudioFlowBootstrapActionPermissions
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import {
   createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle,
   WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS

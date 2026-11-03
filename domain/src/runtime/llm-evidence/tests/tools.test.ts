@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_FLOW_CONDITION_RULES, automationStudioHarnessOptionIssues, automationStudioHarnessOptionRegistry } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_CONDITION_RULES, automationStudioHarnessOptionIssues, automationStudioHarnessOptionRegistry } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import {
   bindWebAutomationLlmEvidenceRuntime,

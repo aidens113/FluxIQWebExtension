@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioRecordOutput, validateAutomationStudioRecords } from "fluxiq/automation-studio";
+import { parseAutomationStudioRecordOutput, validateAutomationStudioRecords } from "fluxiq/automation";
 import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { webAutomationRecordOutput } from "../record-output";
 import { webAutomationReconciledRecordOutput } from "../reconciled-record-output";

@@ -39,8 +39,8 @@
 // it belongs here -- and that is one candidate attachment point for the
 // permission a lasting press will need on this recovery path.
 
-import type { AutomationStudioHarnessOption, AutomationStudioHarnessOptionBundle } from "fluxiq/automation-studio";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
+import type { AutomationStudioHarnessOption, AutomationStudioHarnessOptionBundle } from "fluxiq/automation";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { webRecoveryHarnessImplementations, WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";

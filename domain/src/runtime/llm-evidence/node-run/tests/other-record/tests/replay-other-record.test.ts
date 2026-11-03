@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationFailureRecord } from "../../../../../failure";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../../..";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -23,7 +24,7 @@ function site(resolution: JsonObject | undefined): WebLlmEvidenceGateway {
       if (command.actionType === "web.dom.capture_snapshot") {
         return { status: "succeeded", payload: { snapshot: { url: ORDERS, title: "Orders", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: [{ tagName: "button", selector: "#other", visibleText: "Refresh" }] } } };
       }
-      if (command.actionType === "web.dom.click") return { status: "failed", failure: { code: "web.target.not_found" }, error: "no", payload: resolution ? { resolution } : {} };
+      if (command.actionType === "web.dom.click") return { status: "failed", failure: webAutomationFailureRecord("web.target.not_found") as unknown as JsonObject, error: "no", payload: resolution ? { resolution } : {} };
       return { status: "succeeded", payload: {} };
     }
   };

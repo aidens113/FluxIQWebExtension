@@ -370,7 +370,7 @@ nobody can see is a step that is not available, and the user's runtime rule is
 that such a step is found by page state: Core routes by state, or takes a
 sometimes-present step's skip, only for a failed attempt in that category
 (Core `runtime/executor/state-routing/could-not-run.ts`,
-`runtime/executor/step-skip/absent-step.ts`). Under `TARGET_NOT_ACTIONABLE` a
+`engine/automation/step-skip/absent-step.ts`). Under `TARGET_NOT_ACTIONABLE` a
 chat card's close button, hidden until the card opened or after the site
 remembered its dismissal, went to the recovery ladder instead (live run
 `run-murwdp4f-35f976d2`). It is retryable and at `target_resolution` for the
@@ -449,7 +449,7 @@ check on this page, then press Continue", with the choices Continue and Stop.
   handed to a repair model: the recovery gate reads it as `manual_intervention`.
 - **Repairing a failed run.** A check met while the recovery explores the page
   is handled as in a build, through the same Core wrapper
-  (`runtime/parking/person-needed-tool-calls.ts`). Every recovery option marks
+  (`runtime/automation-parking/person-needed-tool-calls.ts`). Every recovery option marks
   such a call `personNeeded` (`domain/src/runtime/llm-evidence/harness-options/execute.ts`),
   and Core asks the person through the run's thread, at stage `recovery`,
   instead of showing the repair model the check. On Continue the exploration

@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { OutputDispatchResult } from "fluxiq";
-import { getAutomationNodeDefinition, parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { getAutomationNodeDefinition, parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "../evaluate";

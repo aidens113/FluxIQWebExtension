@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioFlowCandidate } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowCandidate } from "fluxiq/automation";
 import { offlineTrialRequest } from "../offline-trial-request.js";
 import type { CandidateRebuild, TracedRevision } from "../types.js";
 

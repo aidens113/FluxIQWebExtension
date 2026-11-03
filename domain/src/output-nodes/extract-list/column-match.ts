@@ -24,7 +24,7 @@
 //
 // ## Resolution is Core's, at Core's floor
 //
-// `automationStudioMatchName` (`fluxiq/automation-studio/nodes`): the id
+// `automationStudioMatchName` (`fluxiq/automation/nodes`): the id
 // verbatim, then equal after folding case, separators and camel-case humps,
 // then the nearest name above Core's measured score floor of 0.25. Not a second
 // implementation and not a second floor, so a column name and a node id are

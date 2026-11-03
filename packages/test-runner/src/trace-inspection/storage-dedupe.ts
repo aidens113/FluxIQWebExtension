@@ -4,7 +4,7 @@
 // The distinct chunks come from Core's store (`measureTraceChunks`), never
 // from its tables.
 
-import type { AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import type { AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import type { TraceStorageDedupe, TraceStoredBytes } from "./types.js";
 
 /** Over several traces: each distinct chunk once, so chunks two traces share are stored once. */

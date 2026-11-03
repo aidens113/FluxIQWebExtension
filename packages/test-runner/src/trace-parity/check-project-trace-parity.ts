@@ -9,7 +9,7 @@
 // Run it only against a store no Core is writing: the Lab calls it after the
 // replay's Core has stopped.
 
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import { replayClientGatewayTrace, type ClientGatewayTraceManifest, type ClientGatewayTraceParityClass } from "fluxiq/client-gateway";
 import { replayWithDeadline } from "./replay-with-deadline.js";
 import { emptyClassCounts, summarizeTraceParity } from "./summarize-parity.js";

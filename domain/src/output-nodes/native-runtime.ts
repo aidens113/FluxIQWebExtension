@@ -1,12 +1,15 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import type {
   AutomationStudioImporterImplementationBundle,
   AutomationStudioImporterSdkManifest,
   AutomationStudioNativeNodeImplementation
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import { createWebElementMatcher } from "../element-fingerprint";
+import { webLlmEvidenceSummary } from "../runtime/llm-evidence/evidence-summary";
+import { normalizeWebRecordingCandidateParameters, prepareWebRecordingEntryTarget, webRecordingTargetPolicy } from "../target-normalization";
+import { createWebOutputTargetPreparer } from "./target-preparation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationCheckWaitParameters } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
@@ -42,6 +45,8 @@ export function createWebAutomationOutputNodeManifest(
 export function createWebAutomationOutputNodeImplementationBundle(
   extension: Partial<Omit<AutomationStudioImporterImplementationBundle, "packageId" | "packageVersion" | "implementations">> = {}
 ): AutomationStudioImporterImplementationBundle {
+  // A host's matcher is the one its target preparation scores with; an explicitly absent one stays absent.
+  const matcher = Object.hasOwn(extension, "elementMatcher") ? extension.elementMatcher : webElementMatcher;
   return {
     packageId: WEB_AUTOMATION_IMPORTER_PACKAGE_ID,
     packageVersion: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
@@ -52,6 +57,11 @@ export function createWebAutomationOutputNodeImplementationBundle(
     // model wrote is refused before anything runs rather than at dispatch.
     parameterContracts: { ...webAutomationOutputNodeParameterContracts },
     elementMatcher: webElementMatcher,
+    outputTargetPreparer: createWebOutputTargetPreparer(matcher),
+    recordingEntryTargetPreparer: prepareWebRecordingEntryTarget,
+    recordingCandidateParameterNormalizer: normalizeWebRecordingCandidateParameters,
+    recordingTargetPolicy: webRecordingTargetPolicy,
+    llmEvidenceSummary: webLlmEvidenceSummary,
     ...extension
   };
 }

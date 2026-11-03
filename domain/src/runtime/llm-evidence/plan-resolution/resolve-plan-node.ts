@@ -111,7 +111,7 @@
 // (`target-packets.ts` `resolveOn`); a slot's key written dotted beside it is
 // read as its own (`dotted-keys.ts`, W2).
 
-import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck, AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck, AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { webAutomationCheckWaitNode, webAutomationCommandWaitsOutChecks } from "../../../actions/check-wait";

@@ -23,6 +23,11 @@
 //    `parameterValues.outputId`, so such a node is recognised only by the
 //    `outputId` Core passes with it. Other nodes return an explicit
 //    unsupported-node outcome; gateway and malformed snapshot failures remain errors.
+//  - **A navigation may start from a page nothing can read.** A Flow's first step is
+//    usually a navigation, and a new tab holds `about:blank`, where no content script
+//    runs. Nothing depends on the page a navigation leaves, so before one a capture
+//    that fails is declined rather than failing the run. After it the page matters,
+//    and every other step reads the page it acts on, so those stay faults.
 //  - **A diff needs a snapshot on both sides.** With one side missing, every
 //    element on the other would read as added or removed, a claim about a page
 //    nobody observed, so `inspectStateDiff` declines instead.
@@ -159,6 +164,7 @@ const WEB_AUTOMATION_OUTPUT_IDS: ReadonlySet<string> = new Set(WEB_AUTOMATION_AC
 
 /** Core's node definition for a recorded action. Core exports no constant for it. */
 const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
+const NAVIGATE_OUTPUT_ID = "web.browser.navigate";
 
 /**
  * What this host can answer, in Core's capability vocabulary.
@@ -222,6 +228,67 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       return { kind: "unreadable" };
     }
   };
+  const readPageState = async (input: Parameters<NonNullable<WebAutomationHostRuntimeBoundary["captureStateSnapshot"]>>[0]) => {
+    // The page the previous step ended on, which Core offers only when no
+    // step started since and it arrived moments ago: the same page, so it is
+    // answered rather than read a second time (t480).
+    const ended = input.point === "before_action" ? input.previousStateRef : undefined;
+    if (ended?.summary !== undefined && ended.stateSnapshotId.startsWith(STATE_SNAPSHOT_ID_PREFIX)) {
+      sourcePlaces.keep(input.attemptId, input.point, ended.from);
+      await beforeAction(input, ended);
+      return ended;
+    }
+    const result = await gateway.dispatch({
+      outputId: SNAPSHOT_OUTPUT_ID,
+      payload: {},
+      timeoutMs: HOST_STATE_COMMAND_TIMEOUT_MS,
+      metadata: {
+        source: HOST_RUNTIME_SOURCE,
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        nodeId: input.node.id,
+        attemptId: input.attemptId,
+        point: input.point
+      }
+    });
+    if (!result.ok) throw new Error(result.error ?? "The web state snapshot was not captured.");
+    // A client answer without a snapshot is a capture failure. No state ref
+    // is fabricated for it; this differs from an unsupported Core node.
+    // The page as the model reads every page (t223): Core returns this summary
+    // to a recovery model as `core.state_snapshot`, and diffs two of them.
+    // Beside the view, never in it: the document's identity, so the diff can
+    // tell an address rewritten in place from a new document (run
+    // `run-muw5zv4m-52d83027`). Put here rather than in `publishedWebLlmPage`,
+    // which is every page a model is shown.
+    const snapshot = actionSnapshot(result.payload);
+    const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
+    const action = result.payload?.result;
+    const resetResource = webResetResource(result.metadata?.sessionId, isRecord(action) ? action.sourceId : undefined);
+    if (resetResource !== undefined) binding.resetResource = resetResource;
+    const packet = binding.evidence;
+    const documentTimeOrigin = packet.navigation?.timeOrigin;
+    // Its option groups and result count, as data beside the view (header, t655).
+    const groups = webLlmPageOptionGroups(packet);
+    const resultCount = webLlmPageResultCount(packet);
+    const summary = {
+      ...publishedWebLlmPage(packet),
+      ...(documentTimeOrigin === undefined ? {} : { documentTimeOrigin }),
+      ...(groups.length ? { groups } : {}),
+      ...(resultCount === undefined ? {} : { resultCount })
+    } as unknown as JsonObject;
+    captures += 1;
+    const stateSnapshotId = `${STATE_SNAPSHOT_ID_PREFIX}${captures}`;
+    const from = resetToken(snapshot);
+    const stateRef = `${stateSnapshotId}@${input.attemptId}:${input.point}`;
+    // Beside the summary, never on it (header, t609).
+    places.keep(stateRef, webStateSnapshotPlaces(binding));
+    sourcePlaces.keep(input.attemptId, input.point, from);
+    const state = { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
+    repeatCaptures.keep(state, snapshot, binding, result.metadata?.sessionId, isRecord(action) ? action.sourceId : undefined, result.status === undefined || result.status === "succeeded");
+    const captured = webCapturedTargetObservation({ snapshot, page: binding, sessionId: result.metadata?.sessionId, sourceId: isRecord(action) ? action.sourceId : undefined, requested: { kind: "merged", browserFrameId: 0 } });
+    if (captured.kind === "observed") targetPlaces.keep(state, captured.observation);
+    await beforeAction(input, state);
+    return state;
+  };
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
     hostResources: createWebAutomationHostResourcePort({ sessions }),
@@ -229,65 +296,12 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       if (!actsOnPage(input.node)) {
         return { kind: "unavailable", reason: "unsupported_node" };
       }
-      // The page the previous step ended on, which Core offers only when no
-      // step started since and it arrived moments ago: the same page, so it is
-      // answered rather than read a second time (t480).
-      const ended = input.point === "before_action" ? input.previousStateRef : undefined;
-      if (ended?.summary !== undefined && ended.stateSnapshotId.startsWith(STATE_SNAPSHOT_ID_PREFIX)) {
-        sourcePlaces.keep(input.attemptId, input.point, ended.from);
-        await beforeAction(input, ended);
-        return ended;
+      try {
+        return await readPageState(input);
+      } catch (error) {
+        if (input.point === "before_action" && leavesPage(input.node)) return { kind: "unavailable", reason: "page_left_by_navigation" };
+        throw error;
       }
-      const result = await gateway.dispatch({
-        outputId: SNAPSHOT_OUTPUT_ID,
-        payload: {},
-        timeoutMs: HOST_STATE_COMMAND_TIMEOUT_MS,
-        metadata: {
-          source: HOST_RUNTIME_SOURCE,
-          domainId: WEB_AUTOMATION_DOMAIN_ID,
-          nodeId: input.node.id,
-          attemptId: input.attemptId,
-          point: input.point
-        }
-      });
-      if (!result.ok) throw new Error(result.error ?? "The web state snapshot was not captured.");
-      // A client answer without a snapshot is a capture failure. No state ref
-      // is fabricated for it; this differs from an unsupported Core node.
-      // The page as the model reads every page (t223): Core returns this summary
-      // to a recovery model as `core.state_snapshot`, and diffs two of them.
-      // Beside the view, never in it: the document's identity, so the diff can
-      // tell an address rewritten in place from a new document (run
-      // `run-muw5zv4m-52d83027`). Put here rather than in `publishedWebLlmPage`,
-      // which is every page a model is shown.
-      const snapshot = actionSnapshot(result.payload);
-      const binding = sanitizeWebLlmSnapshotWithBindings(snapshot);
-      const action = result.payload?.result;
-      const resetResource = webResetResource(result.metadata?.sessionId, isRecord(action) ? action.sourceId : undefined);
-      if (resetResource !== undefined) binding.resetResource = resetResource;
-      const packet = binding.evidence;
-      const documentTimeOrigin = packet.navigation?.timeOrigin;
-      // Its option groups and result count, as data beside the view (header, t655).
-      const groups = webLlmPageOptionGroups(packet);
-      const resultCount = webLlmPageResultCount(packet);
-      const summary = {
-        ...publishedWebLlmPage(packet),
-        ...(documentTimeOrigin === undefined ? {} : { documentTimeOrigin }),
-        ...(groups.length ? { groups } : {}),
-        ...(resultCount === undefined ? {} : { resultCount })
-      } as unknown as JsonObject;
-      captures += 1;
-      const stateSnapshotId = `${STATE_SNAPSHOT_ID_PREFIX}${captures}`;
-      const from = resetToken(snapshot);
-      const stateRef = `${stateSnapshotId}@${input.attemptId}:${input.point}`;
-      // Beside the summary, never on it (header, t609).
-      places.keep(stateRef, webStateSnapshotPlaces(binding));
-      sourcePlaces.keep(input.attemptId, input.point, from);
-      const state = { stateSnapshotId, stateRef, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
-      repeatCaptures.keep(state, snapshot, binding, result.metadata?.sessionId, isRecord(action) ? action.sourceId : undefined, result.status === undefined || result.status === "succeeded");
-      const captured = webCapturedTargetObservation({ snapshot, page: binding, sessionId: result.metadata?.sessionId, sourceId: isRecord(action) ? action.sourceId : undefined, requested: { kind: "merged", browserFrameId: 0 } });
-      if (captured.kind === "observed") targetPlaces.keep(state, captured.observation);
-      await beforeAction(input, state);
-      return state;
     },
     observeRuntimeRepeat: (input) => repeatCaptures.observe(input),
     // What a Router's `state.*` conditions test, observed on the page the run
@@ -396,6 +410,12 @@ function actsOnPage(node: { definitionId: string; parameterValues?: JsonObject }
   if (WEB_AUTOMATION_NODE_IDS.has(node.definitionId)) return true;
   const outputId = node.parameterValues?.outputId;
   return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
+}
+
+/** Whether this node navigates away, so the page it starts on is not one it reads. */
+function leavesPage(node: { definitionId: string; parameterValues?: JsonObject }): boolean {
+  if (node.definitionId === webAutomationOutputNodeId(NAVIGATE_OUTPUT_ID)) return true;
+  return node.definitionId === POLICY_ACTION_DEFINITION_ID && node.parameterValues?.outputId === NAVIGATE_OUTPUT_ID;
 }
 
 function isRecord(value: unknown): value is JsonObject {

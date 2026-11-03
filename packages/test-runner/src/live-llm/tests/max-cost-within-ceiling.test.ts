@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD } from "fluxiq/automation";
 import { RunnerFailure } from "../../failure.js";
 import { assertLlmMaxCostWithinCeiling, beginLiveLlmRun, LAB_COST_CEILING_ENV, LAB_COST_CEILING_FLAG, liveLlmBuildCostCeilingUsd } from "../index.js";
 

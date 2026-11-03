@@ -17,7 +17,7 @@ const list = (value: unknown): JsonObject[] => Array.isArray(value) ? value.map(
 type ActivityEvent = { label?: string; subject?: { projectId?: string }; detail?: { title?: string; text?: string; status?: string } };
 /** Core's activity stream: the chat's rows, where the build's ending is said (`service/project-build/run.ts`). */
 async function subscribeActivity(listener: (event: ActivityEvent) => void): Promise<() => void> {
-  const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
+  const { automationStudioActivityHub } = await import("fluxiq/automation");
   return automationStudioActivityHub.subscribe((event) => listener(event as ActivityEvent));
 }
 

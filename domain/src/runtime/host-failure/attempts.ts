@@ -1,4 +1,4 @@
-import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import { readWebHostFailure } from "./read";
 import { webHostFailure } from "./annotate";
 

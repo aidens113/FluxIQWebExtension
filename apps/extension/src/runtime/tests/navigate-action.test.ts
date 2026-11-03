@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { runBrowserActionCommand } from "../action-runner";
 import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
 import { OriginPace, PAGE_LOAD_PACE_SETTINGS } from "../../background/page-pace";

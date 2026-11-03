@@ -52,6 +52,8 @@ export function browserEntryDrift({ metafiles, workingDirectory, repoRoot, coreR
         if (edge.external) continue;
         const target = path.resolve(workingDirectory, edge.path);
         if (!inside(coreRoot, target)) continue;
+        // A stylesheet holds no import the rule could walk, and cannot load Node-only code.
+        if (target.endsWith(".css")) continue;
         const source = coreSource(posixRelative(coreRoot, target));
         if (coreDeclared.has(source) || reported.has(source)) continue;
         reported.add(source);

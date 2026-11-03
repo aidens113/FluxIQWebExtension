@@ -4,7 +4,7 @@
 // is touched, so an incompatible panel costs nothing and reports why.
 
 import type { Page } from "@playwright/test";
-import { AUTOMATION_STUDIO_ENDPOINTS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, parseAutomationStudioFlowBootstrapGenerationReadiness } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ENDPOINTS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, parseAutomationStudioFlowBootstrapGenerationReadiness } from "fluxiq/automation";
 import type { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { hasExactEnvelope } from "./json-shapes.js";
 import { fail } from "./runner-fail.js";

@@ -20,8 +20,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence } from "fluxiq/automation";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "../../../../target-normalization";
 import { resolveAutomationNodeParameterValues } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";

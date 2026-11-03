@@ -2,14 +2,14 @@
 //
 // Core's `dist/` is gitignored, so a fresh Core worktree has source and no
 // types, and anything type-checking against it fails with
-// `TS2307: Cannot find module '@fluxiq/contracts/automation-studio'` until
+// `TS2307: Cannot find module '@fluxiq/contracts/automation'` until
 // these are built. Measured 2026-09-17: this is 12.8s of a 52.6s worktree
 // setup, on top of 35.8s to install Core.
 //
 // Two lists, because two callers need different amounts of Core.
 //
-// `CORE_PACKAGES` is what a worktree needs to compile and to run: the three
-// libraries the domain and the runner import. A task worktree and the Lab's
+// `CORE_PACKAGES` is what a worktree needs to compile and to run: the four
+// libraries the domain, the runner and the extension import. A task worktree and the Lab's
 // checkout pair build these and stop, which is what keeps a second worktree at
 // seconds rather than minutes.
 //
@@ -25,7 +25,7 @@
 // duplicate web builds four worktrees were each running are stopped by sharing
 // that cache, not by this.
 //
-// The three libraries go through the build cache (scripts/build-cache): each is
+// The four libraries go through the build cache (scripts/build-cache): each is
 // fingerprinted over its own sources, Core's lockfiles and the `dist/` of the
 // Core packages it depends on (`resolve-core-library.mjs`), reused when its
 // stamp still stands, restored from the shared store when another Core
@@ -60,7 +60,8 @@ import { noteProgress } from "./progress-note.mjs";
 export const CORE_PACKAGES = [
   { filter: "@fluxiq/contracts", directory: "contracts" },
   { filter: "fluxiq", directory: "fluxiq" },
-  { filter: "@fluxiq/client-gateway-websocket", directory: "client-gateway-websocket" }
+  { filter: "@fluxiq/client-gateway-websocket", directory: "client-gateway-websocket" },
+  { filter: "@fluxiq/ui-components", directory: "ui-components" }
 ];
 
 /** Core's own root `build` script: the libraries above, then the web panel. */

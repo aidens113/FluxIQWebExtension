@@ -1,4 +1,4 @@
-import type { AutomationStudioLlmRerunCaptureSnapshot, AutomationStudioLlmRerunExecutionAccess } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmRerunCaptureSnapshot, AutomationStudioLlmRerunExecutionAccess } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationCheckWaitParameters } from "../../../../../actions/check-wait";
 import { createWebLlmTargetPackets } from "../../../plan-resolution";

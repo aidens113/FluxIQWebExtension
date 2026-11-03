@@ -51,7 +51,7 @@ import {
   type AutomationStudioActionDeclaration,
   type AutomationStudioActionPermissionCheck,
   type AutomationStudioInstructedConsequence
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";

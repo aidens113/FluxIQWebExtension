@@ -9,7 +9,7 @@
 
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import { freshStoreCopy } from "../run/index.js";
 import { openTier2Reevaluation } from "../tier2/index.js";
 import { parseReadsArguments, READS_USAGE } from "./reads-arguments.js";

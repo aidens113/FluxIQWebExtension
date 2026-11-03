@@ -22,7 +22,7 @@ const returned = (answer: JsonObject | undefined): JsonObject => record((answer?
  */
 test("installed folded submissions preserve repair, chat lines and completion while saving provider decisions", async ({}, testInfo) => {
   test.setTimeout(600_000);
-  const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
+  const { automationStudioActivityHub } = await import("fluxiq/automation");
   const compare = async (folded: boolean) => {
     const extensionSession = await launchExtensionSession(`photo-submit-${folded ? "folded" : "separate"}`);
     try {

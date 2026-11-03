@@ -12,6 +12,7 @@ export * from "./actions/fact-check";
 export * from "./extraction";
 export * from "./io/web-automation-io";
 export * from "./output-nodes";
+export * from "./target-normalization";
 export * from "./runtime";
 export * from "./sensitivity";
 export * from "./page-evidence";

@@ -4,7 +4,7 @@ import type { Socket } from "node:net";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AutomationStudioService, automationStudioActivityHub } from "fluxiq/automation-studio";
+import { AutomationStudioService, automationStudioActivityHub } from "fluxiq/automation";
 import { expect, restartServiceWorker, test } from "../../fixtures/extension-context";
 
 test("the real sidepanel Stop cancels an actual Core build and refuses its late provider result", async ({ extensionSession }) => {

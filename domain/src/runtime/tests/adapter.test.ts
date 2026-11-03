@@ -22,11 +22,11 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import type { FluxIQ } from "fluxiq";
 import { ClientGatewayCommandContext } from "fluxiq/client-gateway";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import {
   parseAutomationStudioFailureRecord,
   sanitizeAutomationStudioLlmFailureEvidence
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { FluxIQRuntimeCommand, FluxIQRuntimeCommandResult } from "fluxiq/runtime";
 import { createWebAutomationRuntimeAdapter } from "../adapter";

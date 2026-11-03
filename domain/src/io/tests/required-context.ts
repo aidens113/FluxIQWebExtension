@@ -5,6 +5,8 @@ import path from "node:path";
 import { FluxIQ } from "fluxiq";
 import { CLIENT_GATEWAY_PROTOCOL_VERSION, ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
+import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../../output-nodes";
 import { createWebAutomationDomainIo } from "../web-automation-io";
 import { createWebAutomationRuntimeAdapter } from "../../runtime";
 
@@ -20,6 +22,7 @@ export async function exerciseRequiredWebDispatch(mode: "io" | "runtime"): Promi
   const fluxiq = create(), gateway = fluxiq.programs.clientGateway, contexts: ClientGatewayCommandContext[] = [], sends: unknown[] = [];
   try {
     fluxiq.io.register(createWebAutomationDomainIo(fluxiq));
+    fluxiq.programs.automationStudio.bindNativeNodeRuntime(new AutomationStudioNativeNodeRuntime().register(createWebAutomationOutputNodeManifest(), createWebAutomationOutputNodeImplementationBundle()));
     if (mode === "runtime") fluxiq.runtime.registerAdapter(createWebAutomationRuntimeAdapter({ fluxiq }));
     const bridge = fluxiq.programs.automationStudioClientGateway, execute = bridge.executeAction.bind(bridge);
     Object.defineProperty(bridge, "executeAction", { value: async (...args: unknown[]) => {

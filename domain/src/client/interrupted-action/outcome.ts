@@ -20,7 +20,7 @@
 // (`io/gateway-output-dispatcher.ts`), so the dispatcher's answer is the one
 // Core acts on even if the two ever disagreed.
 
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../../runtime/failure";
 
 /** The wire status, record and words for an interrupted command. */

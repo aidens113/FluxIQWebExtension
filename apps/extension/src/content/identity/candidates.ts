@@ -25,7 +25,7 @@
 // resolver then reported the page as holding no such control. See
 // `MAX_SCANNED` below and `reports/x-scan-cap.md` for the measurement.
 
-import type { ElementFingerprintCandidate } from "fluxiq/automation-studio";
+import type { ElementFingerprintCandidate } from "fluxiq/automation";
 import type { LookupRoot } from "../selector";
 // Past `../evidence`'s barrel on purpose: it leads back to this directory's (`evidence/controls.ts`).
 import { ownPressCursor } from "../evidence/press-cursor";
@@ -215,7 +215,7 @@ function pageMadePressable(element: Element): boolean {
  * exactly what separates row 7's Edit button from row 8's -- so their absence
  * from both sides of the comparison looks like an oversight. It is not, and the
  * reason is Core's, measured on 2026-09-12 against
- * `fluxiq/automation-studio/fingerprinting`:
+ * `fluxiq/automation/fingerprinting`:
  *
  * - `ElementFingerprint` has no positional field, and `ElementFingerprintWeights`
  *   names nineteen signals of which none is positional. There is nothing to

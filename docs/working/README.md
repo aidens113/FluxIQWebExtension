@@ -31,6 +31,7 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | [node-catalog-plan.md](./node-catalog-plan.md) | Senior supervisor agent | 114 | A full audit of the web extension's node catalog — every existing node's contract, implementation, tests and live failures — then fixes and extensions so each node is robust, and new nodes for what the realistic sites need. It does not cover the general tools (script, request; `structural-agent-plan.md` stage 1) except where a node would replace a script use the Lab reports. | `none (web domain and extension; Core control nodes are referenced, not owned)` |
 | [runtime-ownership-refactor.md](./runtime-ownership-refactor.md) | Senior supervisor agent | 112 | Separate framework runtime from Automation Studio ownership and audit all downstream web boundaries. | `runtime-ownership-refactor.md` |
 | [state-aware-recovery-plan.md](./state-aware-recovery-plan.md) | Senior supervisor agent | 582 | State-aware subflows (Call Subflow, entries, checkpoints), scoped lifecycle handlers (On Start, On Before, On Retry, On Fail, On Before Next), the integrated recovery ladder with safe state routing, smallest-unit repair, and the browser side that serves them (fact checks, interruption facts, in-flight command reconciliation, chat cards, Lab perturbations), with the schedule, acceptance matrix and briefs. The domain-neutral contracts are owned by the Core paired document; this document does not restate them. | `state-aware-recovery-plan.md` |
+| [studio-controller-plan.md](./studio-controller-plan.md) | Senior supervisor | 35 | Downstream consumers of the Studio moves, web semantics that belong in this repository, and the extension's move onto the shared chat package. | `studio-controller-plan.md` |
 
 ## Paused
 
@@ -83,5 +84,5 @@ detail`. Retained for evidence. Do not plan current work from them.
 | [bootstrap-no-proposal-investigation.md](./bootstrap-no-proposal-investigation.md) | Senior supervisor agent | 278 | Diagnose and fix the first closed boundary that turns a successful model-backed Flow bootstrap request into zero durable proposals, then rerun that same live UI path before focused tests. | none |
 | [llm-production-automation-plan.md](./llm-production-automation-plan.md) | root coordination agent | 1577 ⚠ | Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository. | none |
 
-⚠ marks documents over the 800-line compaction threshold (2 of 43 here).
+⚠ marks documents over the 800-line compaction threshold (2 of 44 here).
 Compact them the next time work touches them; do not schedule a bulk rewrite.

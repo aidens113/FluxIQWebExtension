@@ -32,7 +32,7 @@
 // past them is named), six list items beside the list's `count`, and sixteen
 // withheld paths a node.
 
-import { automationStudioEvidenceKey } from "fluxiq/automation-studio";
+import { automationStudioEvidenceKey } from "fluxiq/automation";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 type JsonObject = { [key: string]: JsonValue };

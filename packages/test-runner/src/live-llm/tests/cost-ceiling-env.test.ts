@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { LAB_COST_CEILING_ENV, labCostCeilingValue } from "../cost-ceiling-env.js";
 
 test("Claude live tests default to five dollars for the whole build and preserve lower explicit limits", () => {
@@ -67,6 +68,17 @@ test("the default ceiling cannot be raised by a flag and invalid configured amou
   try {
     assert.throws(() => labCostCeilingValue(root, ["node", "cli", "--llm-cost-ceiling-usd", "0.30"], {}), /cannot raise/u);
     assert.throws(() => labCostCeilingValue(root, ["node", "cli", "--llm-cost-ceiling-usd", "0.04"], { [LAB_COST_CEILING_ENV]: "invalid" }), /FLUXIQ_LLM_RUN_COST_CEILING_USD/u);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// The fence every other env-file reader already has: a ceiling in a checkout's
+// file is this machine's configuration, and that file holds its provider key.
+test("a test is refused a ceiling from an env file outside the temporary directory, and needs none when the environment sets it", () => {
+  const root = mkdtempSync(path.join(fileURLToPath(new URL(".", import.meta.url)), "not-temporary-"));
+  try {
+    writeFileSync(path.join(root, ".env.local"), `${LAB_COST_CEILING_ENV}=0.30\n`);
+    assert.throws(() => labCostCeilingValue(root, ["node", "cli"], {}), /A test may read \.env\.local only from a temporary directory/u);
+    assert.equal(labCostCeilingValue(root, ["node", "cli"], { [LAB_COST_CEILING_ENV]: "0.20" }), "0.2");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -1,6 +1,6 @@
-import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { projectAutomationStudioFailureControlRecord, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import { webHostFailure } from "../host-failure";
-import { parseAutomationStudioTargetActionabilityRecord, type AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import { parseAutomationStudioTargetActionabilityRecord, type AutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import { webActionabilityFromPayload } from "../../actions/actionability";
 // Taking one sanitized look at the whole page, and acting on it first when the
 // look needs an action to be worth taking.
@@ -18,7 +18,7 @@ import { webActionabilityFromPayload } from "../../actions/actionability";
 // the packet is now the whole page whatever the call, and Core no longer sends
 // the number.
 
-import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import type { WebAutomationClearedCheckWait } from "../../actions/cleared-check-wait";

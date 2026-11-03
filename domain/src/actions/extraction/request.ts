@@ -135,7 +135,7 @@ export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
  *
  * What may be said about that value, and what each phrase means, is
  * `./condition-grammar.ts` and Core's `automationStudioRecordConditionHolds`
- * (`fluxiq/automation-studio/nodes`). In short:
+ * (`fluxiq/automation/nodes`). In short:
  *
  * - `is` tests whether the page has the value at all, which is the whole of
  *   what a mark says: `absent` keeps the items that do not carry it;

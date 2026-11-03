@@ -19,7 +19,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { StateSnapshot, StateValue } from "fluxiq/automation-studio";
+import type { StateSnapshot, StateValue } from "fluxiq/automation";
 import { createWebAutomationStateFromSnapshot } from "../../snapshot";
 
 /** A value a producer was supposed to have withheld. Rows that plant one assert its absence. */

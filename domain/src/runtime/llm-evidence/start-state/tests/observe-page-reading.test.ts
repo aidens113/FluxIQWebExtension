@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime } from "../..";
 import type { WebLlmEvidenceGateway } from "../../capture";

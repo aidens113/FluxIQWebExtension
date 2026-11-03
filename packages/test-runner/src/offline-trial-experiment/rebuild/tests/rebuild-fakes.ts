@@ -5,7 +5,7 @@
 // not hold. What it exercises is the experiment's own wiring: pairing, the
 // seam, the digest comparison and the refusal's mapping.
 
-import type { AutomationStudioFlowCandidate, AutomationStudioNodeRegistry, AutomationStudioNodeRegistryResolution } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowCandidate, AutomationStudioNodeRegistry, AutomationStudioNodeRegistryResolution } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { RebuildContext, SubflowRebuild } from "../rebuild-candidate.js";
 

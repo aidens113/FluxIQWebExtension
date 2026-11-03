@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { findTokens, formatModelTextReport, namesInStrings, runModelTextCheck } from "../index.mjs";
 
-const RUNTIME = "packages/fluxiq/src/programs/automation-studio/runtime";
+const RUNTIME = "packages/fluxiq/src/runtime";
 
 async function write(root, file, content) {
   await mkdir(path.dirname(path.join(root, file)), { recursive: true });
@@ -20,6 +20,7 @@ async function fixture({ coreText }) {
   const scenario = "apps/scenario-lab/src/scenarios/job-board/data.ts";
   await write(ext, scenario, 'export const COMPANY = "Quillmark Labs";\nexport const NOTE = "Remote roles";\n');
   await write(core, `${RUNTIME}/llm/instructions.ts`, coreText);
+  await write(core, `${RUNTIME}/flow-authoring/bootstrap/plan/catalog.ts`, "export const c = 'a plan';\n");
   await write(core, `${RUNTIME}/other/plain.ts`, "export const w = 'remote roles are listed';\n");
   return { ext, core, base };
 }
@@ -87,4 +88,10 @@ test("a token the allow list holds does not enter the vocabulary", async () => {
   } finally {
     await rm(base, { recursive: true, force: true });
   }
+});
+
+test("a Core whose model-facing directories are gone fails, rather than passing by reading no text", async () => {
+  const { modelFacingFiles } = await import("../targets.mjs");
+  const core = await mkdtemp(path.join(tmpdir(), "model-text-empty-"));
+  await assert.rejects(() => modelFacingFiles(core), /model-facing directories were not found/);
 });

@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { FluxIQ } from "fluxiq";
 import { CLIENT_GATEWAY_PROTOCOL_VERSION, type ClientGatewayActionResult } from "fluxiq/client-gateway";
-import { AutomationStudioNativeNodeRuntime, parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime, parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../client";
 import { createWebAutomationDomainIo, createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle, WEB_AUTOMATION_RUNTIME_PERMISSIONS, WEB_AUTOMATION_RUNTIME_CAPABILITIES } from "../../../../index";

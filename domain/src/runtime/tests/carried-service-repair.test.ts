@@ -3,10 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  AutomationStudioService, AutomationStudioNativeNodeRuntime,
-  createAutomationStudioSessionKeyProviderResolver, automationNodeStateBinding
-} from "fluxiq/automation-studio";
+import { AutomationStudioService, createAutomationStudioSessionKeyProviderResolver, automationNodeStateBinding } from "fluxiq/automation";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { IoRegistry, defineDomainIo, defineOutput } from "fluxiq/io";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "../llm-evidence";
@@ -17,6 +15,7 @@ import {
 } from "../../output-nodes";
 import { webAutomationManifestOutputs } from "../../io/manifest-definitions";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { currentPageLines } from "./current-page";
 
 const CLICK = "web.output.dom-click";
 const TYPE = "web.output.dom-type";
@@ -88,10 +87,11 @@ async function fixture(root: string, options: { missingDeclaration?: true; missi
   };
   const host: WebAutomationHostRuntimeGateway = {
     dispatch: async ({ outputId, payload, metadata }) => {
-      // The actual native host capture is incomplete; the independent evidence
-      // gateway can still publish the page and admit a checked replacement.
+      // The native host captures a valid page whose address contains a private
+      // component, so it publishes the state without a replay reset token.
+      // The independent evidence gateway can still admit a checked replacement.
       if (options.missingStart && phase === "saved-run" && outputId === "web.dom.capture_snapshot") {
-        const { url: _url, ...captured } = snapshot();
+        const captured = { ...snapshot(), url: `${LOCATION}?token=fixture-only-private-start` };
         return { ok: true, outputId, domainId: WEB_AUTOMATION_DOMAIN_ID, payload: { result: { snapshot: captured } } };
       }
       const result = await command(ACTOR.actorSessionId, { actionType: outputId, parameters: payload, metadata: metadata ?? {} });
@@ -157,14 +157,7 @@ async function fixture(root: string, options: { missingDeclaration?: true; missi
       if (decisions === 1) {
         assert.equal(typeof faulty?.step, "number", "saved type must seed the real extend draft");
         // Read the same published control line the provider was actually shown.
-        const field = loop.evidence.map(record).flatMap((entry) => {
-          if (!isRecord(entry.value)) return [];
-          const page = typeof entry.value.page === "string" ? entry.value.page : isRecord(entry.value.page) && typeof entry.value.page.page === "string" ? entry.value.page.page : "";
-          return page.split("\n").flatMap((line) => {
-            const match = /^(t[1-9][0-9]*) field(?::[\w-]+|\[search\])?(?: |$)/u.exec(line);
-            return match?.[1] ? [match[1]] : [];
-          });
-        }).at(-1);
+        const field = currentPageLines(loop.evidence.map(record)).find((line) => line.kind === "field")?.target;
         assert.ok(field, "seed observation must actually show the message field");
         decision = { kind: "tool_call", callId: "fixture.replacement", toolId: "core.run_node", input: {
           node: TYPE, write: true, parameters: { target: { handle: field }, text: { $input: "message", test: "right" } }, consequences: []
@@ -296,8 +289,8 @@ test("actual saved repair refuses a missing declaration before full-test actions
   }
 });
 
-// A saved run whose host capture had no URL captured no start for the Flow's
-// first step. Since Core t688 (`flow-draft/starts-where-it-stands.ts`) the whole
+// A saved run whose host capture withheld its reset address captured no start
+// for the Flow's first step. Since Core t688 (`flow-draft/starts-where-it-stands.ts`) the whole
 // test of an unchanged carried first step runs from where the target stands, as
 // the saved Flow's own playback starts it: no reset is invented, and the run
 // still never claims a start token it did not capture.
@@ -322,15 +315,22 @@ test("actual saved repair without a captured start tests the carried Flow where 
     assert.equal(run.status, "succeeded");
     assert.equal(harness.text(), "right");
     // The saved run's attempts are the ones before its result was judged; the
-    // repaired Flow's later playback is captured through the evidence page,
-    // which carries its URL, so only the saved attempts are URL-less.
+    // repaired Flow's later playback uses the public evidence-page address,
+    // so only the saved attempts withhold their reset token.
     const attempts = detail?.actionAttempts ?? [];
     const judged = attempts.findIndex((attempt) => attempt.nodeId === "result-verification");
     assert.ok(judged > 0, "the saved run's result must actually be judged");
+    assert.ok(attempts.slice(0, judged).some((attempt) => {
+      const refs = attempt.metadata?.stateRefs;
+      const before = isRecord(refs) ? refs.beforeAction : undefined;
+      return attempt.nodeId === "open" && isRecord(before) && typeof before.stateSnapshotId === "string"
+        && isRecord(before.summary) && before.summary.location === `${LOCATION}?token=(withheld)`;
+    }), "the saved opener must carry its actual captured state with the reset address withheld");
+    assert.doesNotMatch(JSON.stringify(attempts.slice(0, judged).map((attempt) => attempt.metadata?.stateRefs)), /fixture-only-private-start/u);
     assert.equal(attempts.slice(0, judged).some((attempt) => {
       const refs = attempt.metadata?.stateRefs;
       return isRecord(refs) && isRecord(refs.beforeAction) && isRecord(refs.beforeAction.from);
-    }), false, "URL-less actual host captures must not invent a start token");
+    }), false, "actual host captures with a withheld address must not invent a start token");
   } finally {
     await harness?.service.close();
     assert.equal(path.dirname(path.resolve(root)), path.resolve(os.tmpdir()));

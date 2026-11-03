@@ -22,7 +22,7 @@
 // answered from the trace's recorded page snapshot; without one, every changed
 // command is the matcher's gap (tier 1).
 
-import { runAutomationStudioOfflineCandidateTrial, type AutomationStudioFlowCandidate, type AutomationStudioOfflineCandidateTrialOutcome } from "fluxiq/automation-studio";
+import { runAutomationStudioOfflineCandidateTrial, type AutomationStudioFlowCandidate, type AutomationStudioOfflineCandidateTrialOutcome } from "fluxiq/automation";
 import { isClientGatewayTraceLive, type ClientGatewayTraceReevaluator } from "fluxiq/client-gateway";
 import path from "node:path";
 import { readStoreTraceManifests } from "../store-trace-manifests.js";

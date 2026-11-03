@@ -1,4 +1,4 @@
-import type { RecordingDomainEventDefinition, RecordingEventJsonSchema } from "fluxiq/automation-studio";
+import type { RecordingDomainEventDefinition, RecordingEventJsonSchema } from "fluxiq/automation";
 import { WEB_AUTOMATION_EVENTS } from "../constants";
 import { webAutomationObservationExtractor } from "./observations";
 import { webAutomationStateReducer } from "./reducers";

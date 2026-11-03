@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES as coreFailureClasses } from "@fluxiq/contracts/automation-studio";
+import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES as coreFailureClasses } from "@fluxiq/contracts/automation";
 import { ContractValidationError, assertWebScenario, expectedActionOutcomes, parseWebScenarioJson, resolveScenarioWorkflow, runActionStatuses, scenarioPageFactSchedule, AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, scenarioExtractPaginationModes, scenarioStepOperations, validateWebScenario, webScenarioJsonSchema } from "../dist/index.js";
 
 const validScenario = {
