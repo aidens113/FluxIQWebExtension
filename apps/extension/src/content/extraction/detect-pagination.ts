@@ -62,6 +62,7 @@ import { accessibleNameFor } from "../identity";
 import { selectorFor } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import { generalizedItemSelector } from "./item-selector";
+import { currentPageNumber } from "./pager-reading";
 
 /** What a control offers, when its label says. */
 export type PaginationControlKind = "next" | "loadMore";
@@ -235,8 +236,12 @@ function isNumberLabelled(control: Element): boolean {
 // list is asked for its own way forward: the control labelled Next or carrying
 // `rel="next"`, a disabled one included, so a last page still ends on
 // `control_disabled`; or, where the pager labels none, the numbered control
-// after the one marked `aria-current`. Labels are read here only to recognize a
-// control, as in detection (decision D3); none leaves the page.
+// after the current page. That page is the one marked `aria-current`, or among
+// the pager's numbered controls the one `./pager-reading` decides on, so this
+// never disagrees with what the step reports: run `run-mw0jw263-0251c104`'s pager
+// draws Next as a plain div and marks its page only by a class, and the step
+// said the list had no next page with two more showing. Labels are read here
+// only to recognize a control, as in detection (decision D3); none leaves the page.
 
 /** How a `next` read found the control it follows: the authored selector, the pager's Next label, or the page number after the current one. */
 export type NextControlSource = "selector" | "label" | "number";
@@ -321,14 +326,15 @@ function shownNumber(element: Element): number | undefined {
 }
 
 /**
- * The enabled control numbered one more than the page marked `aria-current` at
- * this level, or `undefined` when nothing there is marked or nothing follows it.
- * Only a marked page counts: a number merely drawn as text could be anything a
- * page shows beside its list.
+ * The enabled control numbered one more than the current page at this level, or
+ * `undefined` when nothing there says which that is or nothing follows it. A page
+ * marked `aria-current` says so; failing that, the current page among this level's
+ * numbered controls (see the header). A number merely drawn as text does not
+ * count: it could be anything a page shows beside its list.
  */
 function numberedAfterCurrent(level: Element, controls: readonly Element[], outsideRun: (element: Element) => boolean): Element | undefined {
-  const current = Array.from(level.querySelectorAll("[aria-current]")).find((element) => outsideRun(element) && isMarkedCurrent(element) && shownNumber(element) !== undefined);
-  const number = current === undefined ? undefined : shownNumber(current);
+  const marked = Array.from(level.querySelectorAll("[aria-current]")).find((element) => outsideRun(element) && isMarkedCurrent(element) && shownNumber(element) !== undefined);
+  const number = marked === undefined ? currentPageNumber(numberedControls(controls)?.controls ?? []) : shownNumber(marked);
   if (number === undefined) return undefined;
   return controls.find((control) => shownNumber(control) === number + 1 && control.getAttribute("aria-disabled") !== "true");
 }
