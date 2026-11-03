@@ -307,7 +307,8 @@ test("an action naming a frame the tab does not have fails as target_not_found, 
     retryable: true,
     stage: "target_resolution",
     expected: "frame 7 in the tab",
-    actual: "the tab has frame 0, frame 3"
+    actual: "the tab has frame 0, frame 3",
+    effect: "unacted"
   });
   // Core drops a record it refuses whole, taking the failure with it.
   assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
@@ -373,10 +374,11 @@ test("two child frames at the path, neither with the recorded id, fail as target
   assert.deepEqual(run.result.failure, {
     category: "target_ambiguous",
     code: "web.target.ambiguous",
-    retryable: false,
+    retryable: true,
     stage: "target_resolution",
     expected: `one child frame at ${PAY_PATH}`,
-    actual: `2 child frames are at ${PAY_PATH}, and none is frame 4`
+    actual: `2 child frames are at ${PAY_PATH}, and none is frame 4`,
+    effect: "unacted"
   });
   assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
   assert.equal(run.frameId, 4);
@@ -396,7 +398,8 @@ test("no child frame at the path fails as target_not_found, naming paths and nev
     retryable: true,
     stage: "target_resolution",
     expected: `a child frame at ${receipt}`,
-    actual: "the tab has frame 6 at /scenarios/iframe-checkout/shipping, frame 7 at /scenarios/iframe-checkout/pay"
+    actual: "the tab has frame 6 at /scenarios/iframe-checkout/shipping, frame 7 at /scenarios/iframe-checkout/pay",
+    effect: "unacted"
   });
   assert.doesNotMatch(JSON.stringify(run.result), /127\.0\.0\.1|session=|synthetic-token/u);
 });
@@ -461,7 +464,8 @@ test("a child frame that cannot be given a content script fails as target_not_fo
     retryable: true,
     stage: "target_resolution",
     expected: "frame 3 to be running the FluxIQ content script",
-    actual: "Cannot access contents of the page."
+    actual: "Cannot access contents of the page.",
+    effect: "unacted"
   });
   assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
 });

@@ -27,7 +27,7 @@ const profile: LlmExecutionProfile = {
   retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1, budget: { ...DEFAULT_LLM_LAB_BUDGET },
 };
 
-const core = (args: readonly string[], base: NodeJS.ProcessEnv = {}) => buildFluxIQEnvironment(allocation, { repositoryRoot: path.resolve("."), fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, base, args);
+const core = (args: readonly string[], base: NodeJS.ProcessEnv = {}) => buildFluxIQEnvironment(allocation, { repositoryRoot: path.resolve("runs/run-a/no-checkout"), fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, base, args);
 
 test("Core's own variable, read through Core, and the Lab's own default, whatever Core's is", () => {
   assert.equal(LAB_AUTHORING_MODE_ENV, "FLUXIQ_AUTHORING_MODE");

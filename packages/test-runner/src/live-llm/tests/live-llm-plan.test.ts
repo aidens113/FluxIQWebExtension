@@ -195,7 +195,7 @@ test("the build's ceiling is Core's resolved value, and the Lab contract's bound
   // mirror that drifted would let an operator type a number Core could never
   // allow, or refuse one a configured ceiling allows.
   assert.equal(LLM_LAB_MAX_ESTIMATED_COST_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD);
-  // The default declares no lower number, so an unset --llm-max-cost-usd plans the ceiling itself.
+  // An unset --llm-max-cost-usd declares this: a lower Core ceiling holds the build lower, and a higher one does not raise it.
   assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, 5);
   // The call cap mirrors Core's runaway backstop the same way. Three 64s once drifted apart from it (t576, t583): the
   // Lab refused a run Core would take, and Core refused the settings of a Flow the Lab had just built.

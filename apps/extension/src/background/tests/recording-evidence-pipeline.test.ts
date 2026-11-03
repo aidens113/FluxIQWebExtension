@@ -164,8 +164,9 @@ test("nothing typed into the payment iframe appears anywhere in the projected st
 // own frame-local snapshot and the merged one is recovered a line later; before
 // the two are swapped, an ordinary single-frame page has to be provably
 // unaffected, because the swap changes what goes on the wire for every recorded
-// event. This is the frame-local half of that comparison, so a later change can
-// be measured against it rather than argued about.
+// event. A seeded capture cannot attest to topology from before its snapshot,
+// so the expected local event explicitly carries that unavailable coverage.
+// Every other byte remains part of the comparison.
 test("on a single-frame page the merged snapshot builds a byte-identical recording event", async () => {
   const only = topFrameSnapshot();
   const merged = await captureMergedTabSnapshot(transportFor({ 0: only }), TAB_ID, only as never, 0);
@@ -177,7 +178,10 @@ test("on a single-frame page the merged snapshot builds a byte-identical recordi
     eventTimestampMs: 900,
     element: { tagName: "button", selector: "button.pay", text: "Pay" }
   } as unknown as RecordingEventPayload;
-  const frameLocal = gatewayRecordingEventFromPayload({ ...payload, snapshot: only as never }, TAB_ID, 0, "rec-1");
+  const frameCoverage = { mode: "all_frames", enumeration: "unavailable", frameIds: [0], capturedFrameIds: [0] };
+  assert.deepEqual(merged?.evidence?.frameCoverage, frameCoverage);
+  const expected = { ...only, evidence: { ...only.evidence, frameCoverage } };
+  const frameLocal = gatewayRecordingEventFromPayload({ ...payload, snapshot: expected as never }, TAB_ID, 0, "rec-1");
   const tabMerged = gatewayRecordingEventFromPayload({ ...payload, snapshot: merged as never }, TAB_ID, 0, "rec-1");
   assert.equal(JSON.stringify(tabMerged), JSON.stringify(frameLocal));
 });

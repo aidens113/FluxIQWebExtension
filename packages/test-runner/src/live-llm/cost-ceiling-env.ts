@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation";
 import { CLAUDE_LIVE_BUILD_COST_USD, DEFAULT_LLM_PROVIDER } from "@fluxiq-web-extension/test-contracts";
+import { assertTestMayReadEnvFile } from "../env-files/index.js";
 
 /** The variable Core reads (`fluxiq/automation` `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV`). */
 export const LAB_COST_CEILING_ENV = "FLUXIQ_LLM_RUN_COST_CEILING_USD";
@@ -51,6 +52,8 @@ export function labCostCeilingValue(repositoryRoot: string, args: readonly strin
     for (const file of FILES) {
       const full = path.join(repositoryRoot, file);
       if (!existsSync(full)) continue;
+      // A test reads only an env file it wrote; a checkout's holds this machine's configuration and key.
+      assertTestMayReadEnvFile(repositoryRoot, file);
       const value = dotenvValue(readFileSync(full, "utf8"), LAB_COST_CEILING_ENV);
       if (value !== undefined && value.trim() !== "") found = value;
     }

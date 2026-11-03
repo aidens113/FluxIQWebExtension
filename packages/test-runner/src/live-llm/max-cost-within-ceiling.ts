@@ -6,8 +6,8 @@
 // two builds stopped on a ceiling nobody had typed.
 //
 // Read from the run's own arguments, not the parsed profile, because the
-// profile gives an unset flag the Lab contract's largest amount and so cannot
-// tell "not typed" from "typed high". An unusable value is the command
+// profile gives an unset flag the Lab's default allowance and so cannot tell
+// "not typed" from "typed". An unusable value is the command
 // parser's to refuse (`../commands.ts`).
 
 import { RunnerFailure } from "../failure.js";

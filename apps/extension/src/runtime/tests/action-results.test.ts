@@ -150,7 +150,8 @@ test("a builder's record is the code's row in the table, not the call site's opi
     retryable: true,
     stage: "target_resolution",
     expected: "tab 11 active",
-    actual: "no open tab matched"
+    actual: "no open tab matched",
+    effect: "unacted"
   });
   assert.deepEqual(workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "tab close to succeed", "No tab with id 11."), {
     // `action_failed`, not `ambiguous_or_unknown`: the action ran, and the
