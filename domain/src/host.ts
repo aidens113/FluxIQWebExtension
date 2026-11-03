@@ -1,6 +1,8 @@
 import { FluxIQ, type FluxIQOptions } from "fluxiq";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
 import { webAutomationDomain } from "./manifest";
 import { createWebAutomationDomainIo } from "./io/web-automation-io";
+import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest, WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS } from "./output-nodes";
 import { webAutomationRecordingDomain } from "./recording/domain";
 import { registerWebAutomationRuntime } from "./runtime/service";
 import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "./requests";
@@ -17,6 +19,10 @@ export function registerWebAutomationDomain(fluxiq: FluxIQ, requestPolicy?: WebA
     fluxiq.programs.automationStudio.registerRecordingDomain(webAutomationRecordingDomain);
   }
   registerWebAutomationRuntime(fluxiq);
+  // Core reads no target: an element output needs this domain's reading of one, so a host with the outputs has the bundle too.
+  if (!fluxiq.programs.automationStudio.nativeRuntimeSummary().bound) {
+    fluxiq.programs.automationStudio.bindNativeNodeRuntime(new AutomationStudioNativeNodeRuntime({ permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS, runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES }).register(createWebAutomationOutputNodeManifest(), createWebAutomationOutputNodeImplementationBundle()));
+  }
   return fluxiq;
 }
 

@@ -70,7 +70,7 @@ export type RecordedIdentitySignals = Nothing<Exclude<WebAutomationElementIdenti
 /**
  * The recorded element as the recording envelope's `target`.
  *
- * This is not a display shape. Core reads it: `normalizeAutomationStudioElementTarget`
+ * This is not a display shape. This domain reads it: `normalizeWebElementTarget`
  * builds an `AutomationStudioElementTarget` out of it and its
  * `normalizeFingerprint` reads `metadata.testId`, `metadata.accessibleName`,
  * `metadata.label`, `metadata.role`, `metadata.visibleText`, `metadata.id`,

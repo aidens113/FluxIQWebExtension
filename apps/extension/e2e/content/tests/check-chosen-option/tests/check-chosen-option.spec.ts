@@ -12,7 +12,7 @@
 
 import type { Page } from "@playwright/test";
 import type { JsonObject } from "fluxiq/core";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { normalizeWebElementTarget as normalizeAutomationStudioElementTarget } from "@fluxiq-web-extension/domain";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "@fluxiq-web-extension/domain";
 import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputNodeId } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../../../../../src/shared/protocol.js";

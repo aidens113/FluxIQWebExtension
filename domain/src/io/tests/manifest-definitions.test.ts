@@ -127,6 +127,15 @@ test("the extract_list output Core reads declares where its records are, and no 
   }
 });
 
+// The generic Core gate reads this deny-only prerequisite from the registered output.
+test("exactly the element-targeted registered outputs require their domain preparation hook", () => {
+  const actual = WEB_AUTOMATION_ACTION_TYPES.filter(outputId => manifestOutput(outputId).metadata?.outputTargetPreparationRequired === true).sort();
+  assert.deepEqual(actual, [...ELEMENT_TARGETED_OUTPUTS].sort());
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    if (!ELEMENT_TARGETED_OUTPUTS.includes(outputId)) assert.equal(manifestOutput(outputId).metadata?.outputTargetPreparationRequired, undefined);
+  }
+});
+
 test("the manifest and the output nodes name the same records path", () => {
   // The manifest takes the path from the output node, so the authoring surface
   // and the registration Core reads can never point a Flow at different keys.
