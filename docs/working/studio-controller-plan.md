@@ -13,11 +13,11 @@ Related: [repository layout](../architecture/repository-layout.md)
 
 The paired Core plan (`../!FluxIQ/docs/working/studio-controller-plan.md`, relative to this repository root) owns the goals, the lanes, the measurements behind the restart and the branch audit. It replaces the t843 reset plan.
 
-**Downstream work**
+**Downstream work is done** and merged into `task/t845-studio-controller`: t845's imports retargeted to the public entries, t847's web semantics behind hooks on the implementation bundle, and t846's extension chat from `@fluxiq/ui-components`. Approvals, routing and extension storage stay here behind adapters.
 
-1. t845: the move tool rewrites paths named here, such as `apps/extension/scripts/tests/browser-entries.test.mjs`. About 1,500 `fluxiq/automation-studio` imports are then retargeted to the framework's public entry points.
-2. t847: port t843's target and recording ownership to this repository without the admission system, and move page-text extraction out of Core's step log.
-3. t846: the extension renders chat from the shared package. Approvals, routing and extension storage stay here behind adapters.
+**Live:** both tasks pass from the extension chat: `run-mw0jgf2o-478d13da` and `run-mw0l0e9y-a7d8ae51`. The Core plan's ledger has the full record, and `language-driven-flow-loop-plan/debugs/` the notes.
+
+**Next:** the final sweep, then merge after Core's paired task, as the Core plan says.
 
 **Blockers:** none.
 
