@@ -1,4 +1,4 @@
-import type { AutomationStudioElementTarget } from "fluxiq/automation-studio";
+import type { AutomationStudioElementTarget } from "fluxiq/automation";
 import { normalizeWebElementTarget } from "../../target-normalization";
 import { compactJsonObject, matchOutputTarget, outputDispatchFailure, outputTargetMinimumConfidence, type OutputTargetPreparer } from "fluxiq/runtime/output-dispatch/preparation";
 import type { ElementMatcher } from "fluxiq/runtime/target-matching";

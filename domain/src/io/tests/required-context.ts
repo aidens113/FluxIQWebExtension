@@ -5,7 +5,7 @@ import path from "node:path";
 import { FluxIQ } from "fluxiq";
 import { CLIENT_GATEWAY_PROTOCOL_VERSION, ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
-import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../../output-nodes";
 import { createWebAutomationDomainIo } from "../web-automation-io";
 import { createWebAutomationRuntimeAdapter } from "../../runtime";

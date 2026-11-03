@@ -23,9 +23,9 @@
 // (`LiveLlmPlan.coreAuthoringMode`, `snapshots/live-llm.json`) is the mode its
 // Core was started in.
 
-import { AUTOMATION_STUDIO_AUTHORING_MODE_ENV, resolveAutomationStudioAuthoringMode, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_AUTHORING_MODE_ENV, resolveAutomationStudioAuthoringMode, type AutomationStudioAuthoringMode } from "fluxiq/automation";
 
-/** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_AUTHORING_MODE_ENV`). */
+/** The variable Core reads (`fluxiq/automation` `AUTOMATION_STUDIO_AUTHORING_MODE_ENV`). */
 export const LAB_AUTHORING_MODE_ENV = AUTOMATION_STUDIO_AUTHORING_MODE_ENV;
 
 /** The flag that sets it for one run. */

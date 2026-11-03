@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation";
 import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, TERMINAL_DETAIL_POLL_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
 
 test("one node's allowance is every attempt's readiness ceiling plus every retry's backoff, as Core defines them", () => {

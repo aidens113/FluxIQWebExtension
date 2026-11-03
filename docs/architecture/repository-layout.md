@@ -248,7 +248,7 @@ writes under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT` instead, so the shared
 An instance's output lives **inside the package that produced it**, not in one
 directory at the repository root. The compiled scenario lab imports
 `@fluxiq-web-extension/test-contracts` and the host bundle imports
-`fluxiq/automation-studio`, both as bare specifiers, and Node resolves those by
+`fluxiq/automation`, both as bare specifiers, and Node resolves those by
 walking up from the importing file. Only a directory under the owning package
 reaches that package's `node_modules`; a root-level instance directory resolves
 nothing, because pnpm hoists neither name to the repository root.
@@ -818,11 +818,11 @@ register the web-automation domain, its IO, its recording domain, and its
 native output-node runtime. `domain/scripts/build-web-panel-host.mjs` bundles
 it as an ES module with every FluxIQ package external. The host therefore
 reaches Core only through public entry points (`fluxiq`, `fluxiq/core`,
-`fluxiq/automation-studio`), never through a deep `dist` path. Core's panel
+`fluxiq/automation`), never through a deep `dist` path. Core's panel
 imports the file named by `FLUXIQ_HOST_MODULE` with a native `import()` once at
 startup. The host must be an ES module because FluxIQ packages are ESM-only:
 their exports declare only the `import` condition, so a CommonJS host cannot
-resolve `fluxiq/automation-studio`.
+resolve `fluxiq/automation`.
 
 The host's path is declared once, as `fluxiqHostModule` in
 `domain/package.json`, relative to the domain package. The host build writes
@@ -848,7 +848,7 @@ service, so repeated or simultaneous events cannot duplicate the seed. A retry
 repairs incomplete ownership; a different recorded creator or ambiguous
 matching names is refused. Brand assets live in `apps/product/assets/` and are served at
 `/product/assets/<name>`; the built module finds them two directories above
-itself. The package uses Core's public `fluxiq/automation-studio` ownership seam
+itself. The package uses Core's public `fluxiq/automation` ownership seam
 and `fluxiq/platform/panel`, which validates the manifest and refuses accents
 under its contrast floor, so the
 light accents are a deeper amber and the brand amber `#f5b83d` is used only in

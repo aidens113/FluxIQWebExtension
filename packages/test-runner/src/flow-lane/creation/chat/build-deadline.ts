@@ -13,7 +13,7 @@
 // to `lab.chat_build_unfinished` while they were still working (social
 // `run-mv8cam5t-436efa46`).
 
-import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS, type AutomationStudioAuthoringMode } from "fluxiq/automation";
 
 const CANDIDATE_DEADLINE_MS = 60_000 + 600_000 + 15_000 + 120_000;
 const PROJECT_DEADLINE_MS = 60_000 + AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS + 15_000 + 120_000;

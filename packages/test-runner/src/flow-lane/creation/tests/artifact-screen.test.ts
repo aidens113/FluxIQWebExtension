@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "@fluxiq-web-extension/domain/node";
-import { automationStudioScreenedNodeParameters } from "fluxiq/automation-studio";
+import { automationStudioScreenedNodeParameters } from "fluxiq/automation";
 import { createdFlowArtifactScreen } from "../artifact-screen.js";
 
 type ScreenInput = Parameters<typeof automationStudioScreenedNodeParameters>[0];

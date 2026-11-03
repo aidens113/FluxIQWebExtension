@@ -1,5 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
-import type { AutomationStudioLlmProvider, AutomationStudioLlmTaskRequest } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmProvider, AutomationStudioLlmTaskRequest } from "fluxiq/automation";
 import { expect, test } from "../../fixtures/extension-context";
 import { bindInstrumentedRuntime, keepDiagnostic, startInstalledBuild } from "../index";
 

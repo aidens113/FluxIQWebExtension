@@ -60,7 +60,7 @@ import type { WebAutomationElementContext, WebAutomationElementFingerprint } fro
 import { adaptedTargetSupersedesRecording, elementFingerprint, objectValue } from "../../../output-nodes/targets";
 import { type WebLlmEvidenceElement } from "../elements";
 import { elementFillsRepairableParameter, type WebRepairableParameterRole } from "../repairable-parameters";
-import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
+import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation";
 import { evidenceNames, NAME_CONJUNCTIONS, nameWords, namesAgree, recordedNames } from "./control-names";
 import { webControlPlace } from "./control-place";
 import { webRenamedControlVerdict } from "./renamed-control";

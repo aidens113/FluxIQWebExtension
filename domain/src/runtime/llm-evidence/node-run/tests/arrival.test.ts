@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioHarnessOptionRegistry, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { automationStudioHarnessOptionRegistry, runWithAutomationStudioEvidenceBuildScope } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../constants";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
@@ -328,7 +328,7 @@ test("a builder on its prepared entry opens, through Core's registry, with the l
 // `llm/harness-options/evidence-build-scope.ts`); this sets it through a second
 // copy of that module, as the panel's bundled one.
 test("a builder on its prepared entry has arrived when Core's frame is set by another copy of Core, as the web panel's", async () => {
-  const panelUrl = new URL(import.meta.resolve("fluxiq/automation-studio/evidence-build-scope"));
+  const panelUrl = new URL(import.meta.resolve("fluxiq/automation/evidence-build-scope"));
   panelUrl.searchParams.set("copy", "panel");
   const panel = await import(panelUrl.href) as { runWithAutomationStudioEvidenceBuildScope: typeof runWithAutomationStudioEvidenceBuildScope };
   assert.notEqual(panel.runWithAutomationStudioEvidenceBuildScope, runWithAutomationStudioEvidenceBuildScope);

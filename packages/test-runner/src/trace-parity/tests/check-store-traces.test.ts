@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import { ClientGatewayTraceMemoryStore, type ClientGatewayTraceEvent, type ClientGatewayTraceJsonValue } from "fluxiq/client-gateway";
 import { checkStoreTraces, listStoreProjects } from "../index.js";
 import { SESSION_PAYLOAD_MARKER, recordGatewaySession } from "./gateway-session.js";

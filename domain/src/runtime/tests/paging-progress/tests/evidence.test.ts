@@ -2,7 +2,7 @@
 // provenance and readiness are the separate Extension/browser acceptance.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioFailureRecord, type AutomationStudioActionPermissionCheck, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord, type AutomationStudioActionPermissionCheck, type AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode } from "../../../../client";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";

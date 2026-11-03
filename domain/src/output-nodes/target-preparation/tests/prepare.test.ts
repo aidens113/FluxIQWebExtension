@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { OutputTargetPreparer } from "fluxiq/runtime/output-dispatch/preparation";
-import type { AutomationStudioElementTarget } from "fluxiq/automation-studio";
+import type { AutomationStudioElementTarget } from "fluxiq/automation";
 import { createWebElementMatcher } from "../../../element-fingerprint";
 import { createWebOutputTargetPreparer } from "../index";
 

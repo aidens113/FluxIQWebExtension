@@ -19,7 +19,7 @@
 // running": it reports the run's failure, which is a product verdict this
 // facility never observed.
 
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation";
 import { RunnerFailure } from "../failure.js";
 import { everyNodeRan, type NodeAttempt } from "./node-recovery.js";
 

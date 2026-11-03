@@ -2802,7 +2802,7 @@ sandbox is the trace plan's P6 decision; today only the test runner does.
 FluxIQ Core owns the policy that decides which recording-capture switches a
 person may turn on and whether direct requests are allowed at all. The
 policy, its default and the clamp are browser-safe and imported from
-`fluxiq/automation-studio/nodes` (never the `fluxiq/automation-studio`
+`fluxiq/automation/nodes` (never the `fluxiq/automation`
 barrel, which pulls in `node:crypto`):
 `AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY`,
 `clampAutomationStudioRecordingCaptureSettings` and the types

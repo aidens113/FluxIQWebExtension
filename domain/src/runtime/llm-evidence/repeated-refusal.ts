@@ -48,7 +48,7 @@
 // The reason a repeat is filed under is Core's (`AUTOMATION_STUDIO_REPEATED_ANSWER_REASON`),
 // because Core reads it back off its trace rows.
 
-import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_REPEATED_ANSWER_REASON } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import type { WebLlmEvidenceToolExecution } from "./capture";
 import {

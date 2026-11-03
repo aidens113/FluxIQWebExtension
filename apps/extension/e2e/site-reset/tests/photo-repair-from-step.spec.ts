@@ -53,7 +53,7 @@ test("installed gateway project build repairs a failed step by running from it b
   const completions: Array<{ brief: string; after: string }> = [];
   const dispatches: Record<string, JsonObject> = {};
   let coreCompletions = 0;
-  const { automationStudioActivityHub } = await import("fluxiq/automation-studio");
+  const { automationStudioActivityHub } = await import("fluxiq/automation");
   const unsubscribe = automationStudioActivityHub.subscribe(event => {
     if (event.detail?.text?.includes("Core finished this part of the task because the latest version passed its test, so nothing was left to decide.")) coreCompletions++;
   });

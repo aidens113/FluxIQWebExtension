@@ -430,7 +430,7 @@ cells but conflicting marks carry no outside evidence for the grouped row.
 **What a condition means, how a value reads as a number or date, a row's
 identity and the sort order are Core's.** The domain and the content script
 call Core's record-process functions from the browser-safe
-`fluxiq/automation-studio/nodes` (re-exported from
+`fluxiq/automation/nodes` (re-exported from
 `@fluxiq/contracts/automation`, `record-sets/process/`), the same code
 Core runs over collected rows, so a page-side filter or order never disagrees
 with Core's: `automationStudioRecordConditionHolds` (the `where` judge; a

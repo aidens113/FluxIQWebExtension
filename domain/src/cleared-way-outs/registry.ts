@@ -24,7 +24,7 @@
 // process's copy still answers.
 
 import { randomUUID } from "node:crypto";
-import { AutomationStudioDomainBuildStateRefusal, type AutomationStudioDomainBuildState, type AutomationStudioDomainBuildStateScope } from "fluxiq/automation-studio";
+import { AutomationStudioDomainBuildStateRefusal, type AutomationStudioDomainBuildState, type AutomationStudioDomainBuildStateScope } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import type { WebAutomationClearedWayOut } from "../actions/cleared-layers";
 

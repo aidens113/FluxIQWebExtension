@@ -1,5 +1,5 @@
 // A stale target found again by its identity (t786): the web host's half of
-// Core's re-acquire (`fluxiq/automation-studio` `target-reacquire/`). Core owns
+// Core's re-acquire (`fluxiq/automation` `target-reacquire/`). Core owns
 // the lineage, the trigger, the read-only re-run of the source step and the
 // rebinding; this module owns how one web item is the same item again -- a
 // read's row (`row-match.ts`, `row-key-columns.ts`, `volatile-text.ts`) or a

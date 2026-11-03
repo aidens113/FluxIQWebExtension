@@ -1,7 +1,7 @@
 // The actual content bundle on a realistic store: a new line's subject reaches
 // the passive reset witness and disappears when only that new line is removed.
 import type { JsonObject } from "fluxiq/core";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "@fluxiq-web-extension/domain";
 import { expect, test } from "../../../index.js";
 import { STORE_PATHS, TIDEWELL_KETTLES } from "../../../../../../scenario-lab/src/scenarios/everything-store/catalog/index.js";
@@ -30,10 +30,10 @@ test("new-line removal and an existing-line transfer restore every baseline valu
   const request = { projectId: "reset", flowId: "reset", callId: "baseline", permission: automationStudioActionPermissionDenied };
   // Node-side private test seams exercise the same ledger/permission/placement
   // route as a builder. No private Core export or browser contract is added.
-  const core = import.meta.resolve("fluxiq/automation-studio");
-  const { AutomationStudioSiteResetLedger } = await import(new URL("runtime/flow-bootstrap/site-reset/ledger.js", core).href);
-  const { automationStudioSiteResetPlacedCall } = await import(new URL("runtime/flow-bootstrap/site-reset/act-places.js", core).href);
-  const { automationStudioFlowBootstrapActionPermissions } = await import(new URL("runtime/flow-bootstrap/action-permissions.js", core).href);
+  const core = import.meta.resolve("fluxiq/automation");
+  const { AutomationStudioSiteResetLedger } = await import(new URL("../../../runtime/flow-authoring/bootstrap/site-reset/ledger.js", core).href);
+  const { automationStudioSiteResetPlacedCall } = await import(new URL("../../../runtime/flow-authoring/bootstrap/site-reset/act-places.js", core).href);
+  const { automationStudioFlowBootstrapActionPermissions } = await import(new URL("../../../runtime/flow-authoring/bootstrap/action-permissions.js", core).href);
   const ledger = new AutomationStudioSiteResetLedger();
   const permissions = automationStudioFlowBootstrapActionPermissions({
     permittedConsequences: ["create_new", "modify_existing"], instructionIds: [], siteReset: ledger,

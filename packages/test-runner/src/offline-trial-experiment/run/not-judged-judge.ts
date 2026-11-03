@@ -5,7 +5,7 @@
 // What it was asked about is counted, never kept: the summary holds page
 // content.
 
-import type { AutomationStudioOfflineCandidateTrialInput } from "fluxiq/automation-studio";
+import type { AutomationStudioOfflineCandidateTrialInput } from "fluxiq/automation";
 
 export const NOT_JUDGED_WHY = "offline-trial experiment: no model is called, so the trial is not judged";
 

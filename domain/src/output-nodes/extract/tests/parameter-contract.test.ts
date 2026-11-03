@@ -7,7 +7,7 @@ import {
   automationStudioFlowBootstrapIssueFeedback,
   validateAutomationStudioFlowBootstrapPlan,
   type AutomationStudioFlowBootstrapPlan
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import { AutomationStudioNodeRegistry } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";

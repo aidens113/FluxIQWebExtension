@@ -2,7 +2,7 @@ import { hasFingerprintSignal } from "./fingerprint-signal";
 import { isSensitiveKey } from "./sensitive-key";
 import { isWebElementTarget as isAutomationStudioElementTarget } from "./is";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import type { AutomationStudioElementTarget, AutomationStudioElementTargetSource, AutomationStudioElementTargetFingerprint, AutomationStudioElementTargetCandidate, AutomationStudioElementTargetSelection, StateBounds, StatePath } from "fluxiq/automation-studio";
+import type { AutomationStudioElementTarget, AutomationStudioElementTargetSource, AutomationStudioElementTargetFingerprint, AutomationStudioElementTargetCandidate, AutomationStudioElementTargetSelection, StateBounds, StatePath } from "fluxiq/automation";
 
 // Legacy wire DTOs round-trip through Core; the web domain owns their interpretation.
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { ActionEntry } from "fluxiq/automation-studio";
-import { validateRecordingSession } from "fluxiq/automation-studio";
+import type { ActionEntry } from "fluxiq/automation";
+import { validateRecordingSession } from "fluxiq/automation";
 import { normalizeWebElementTarget, validateWebElementTarget, webRecordingTargetPolicy } from "../index";
 
 describe("automation studio element targets", () => {

@@ -1,4 +1,4 @@
-import type { ActionTarget } from "fluxiq/automation-studio";
+import type { ActionTarget } from "fluxiq/automation";
 import type { WebAutomationActionVisualTarget } from "../../actions/types";
 import { isSensitiveElementDescriptor } from "../../sensitivity";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "../state";

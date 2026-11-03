@@ -1,4 +1,4 @@
-import type { StateSnapshot, StateVisualFrame } from "fluxiq/automation-studio";
+import type { StateSnapshot, StateVisualFrame } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "../state";
 import { compactJsonObject } from "./compact-json-object";

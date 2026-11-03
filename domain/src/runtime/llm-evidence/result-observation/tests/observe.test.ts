@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioActionPermissionDenied } from "fluxiq/automation-studio";
+import { automationStudioActionPermissionDenied } from "fluxiq/automation";
 import { observeWebLlmResult } from "..";
 import { captureEvidence, selectSession, type WebLlmEvidenceGateway } from "../../capture";
 

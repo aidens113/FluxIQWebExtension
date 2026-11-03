@@ -202,7 +202,7 @@ export type PersistedFlowAction = {
 /**
  * Core's own record of how it resolved an action's element target before
  * dispatch: `AutomationNodeTargetResolution`, imported from Core's public
- * `fluxiq/automation-studio/nodes` export. `nodeAttemptFromResult` puts it on
+ * `fluxiq/automation/nodes` export. `nodeAttemptFromResult` puts it on
  * the attempt and the run detail carries it at `metadata.targetResolution`
  * (Core `service/summaries/conversions.ts`). The run bundle kept none of it,
  * and Core's store is deleted when the run ends, so a finished run could not

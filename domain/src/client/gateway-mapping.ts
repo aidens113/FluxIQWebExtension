@@ -1,5 +1,5 @@
 import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webActionabilityProperty } from "../actions/actionability";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";

@@ -24,7 +24,7 @@
 //
 // A call with no build (`./build-key.ts`) keeps nothing durable.
 
-import { AutomationStudioDomainBuildStateRefusal, type AutomationStudioDomainBuildState, type AutomationStudioDomainBuildStateScope } from "fluxiq/automation-studio";
+import { AutomationStudioDomainBuildStateRefusal, type AutomationStudioDomainBuildState, type AutomationStudioDomainBuildStateScope } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import { webNodeBuildSlot, type WebNodeBuildKey } from "./build-key";
 

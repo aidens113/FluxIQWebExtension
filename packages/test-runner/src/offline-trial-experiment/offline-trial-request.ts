@@ -9,7 +9,7 @@
 // exported (`./cli.ts`). The candidate carries its full plan, which holds page
 // content: a request is written only under `test-runs/`, never printed.
 
-import type { AutomationStudioFlowCandidate } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowCandidate } from "fluxiq/automation";
 import type { CandidateRebuild, TracedRevision } from "./types.js";
 
 export type OfflineTrialRequest = Readonly<{

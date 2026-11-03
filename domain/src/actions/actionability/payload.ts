@@ -1,4 +1,4 @@
-import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import type { AutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import { webOwnDataProperty } from "./own-data";
 import { webActionabilityProperty } from "./property";
 

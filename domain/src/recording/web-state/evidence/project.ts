@@ -37,7 +37,7 @@
 // projection unbounded. Trimming is a plain slice in declaration order: the
 // same snapshot trims the same way twice.
 
-import type { StateSnapshot, StateValue, StateValueType } from "fluxiq/automation-studio";
+import type { StateSnapshot, StateValue, StateValueType } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type {
   PageEvidenceWire,

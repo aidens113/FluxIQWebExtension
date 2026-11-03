@@ -11,7 +11,7 @@
 // replay's Core has stopped. Opening the store applies its migrations, so a
 // project that never traced gains the empty trace tables and reads as none.
 
-import { AUTOMATION_STUDIO_OBJECT_THRESHOLD_BYTES, AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_OBJECT_THRESHOLD_BYTES, AutomationStudioProjectDatabasePool, AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import type { ClientGatewayTraceArtifactPresence, ClientGatewayTraceManifest } from "fluxiq/client-gateway";
 import { traceArtifactDedupe } from "./artifact-dedupe.js";
 import { holdsAnySecret } from "./holds-any-secret.js";

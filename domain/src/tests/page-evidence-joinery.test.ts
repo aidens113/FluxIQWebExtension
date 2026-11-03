@@ -48,7 +48,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { StateSnapshot, StateValue } from "fluxiq/automation-studio";
+import type { StateSnapshot, StateValue } from "fluxiq/automation";
 import {
   WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES,
   type WebAutomationPageEvidence,

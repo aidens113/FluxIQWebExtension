@@ -1,4 +1,4 @@
-import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { createdFlowVerificationReady, failedCreatedFlowBuild, buildCreatedFlowFromChat, LAB_PROJECT_DOMAIN_ID, type CreatedFlowChatBuild } from "../../flow-lane/index.js";
 import { labAuthoringModeValue } from "../../live-llm/index.js";
 import type { ExistingFluxIQControlClient } from "../../existing-fluxiq-control.js";

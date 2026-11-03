@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioRecordOutput, validateAutomationStudioRecords } from "fluxiq/automation-studio";
+import { parseAutomationStudioRecordOutput, validateAutomationStudioRecords } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationExtractListRequestValue, type WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { webAutomationDeclaredColumnsRead } from "../declared-columns";

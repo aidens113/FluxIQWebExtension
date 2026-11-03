@@ -26,7 +26,7 @@ import type { FlowNodeRecord } from "../flow-action-types.js";
 // whole of each parameter but its secrets and locators. A run artifact may
 // carry less, so `createdFlowArtifactScreen` then holds what Core's screen
 // carried to the artifact's own envelope (URL origins, closed words, bounds).
-import { automationStudioScreenedNodeParameters } from "fluxiq/automation-studio";
+import { automationStudioScreenedNodeParameters } from "fluxiq/automation";
 import { createdFlowArtifactScreen } from "./artifact-screen.js";
 import { flowIdentifier } from "./document-identifier.js";
 

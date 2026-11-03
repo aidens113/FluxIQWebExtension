@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation";
 import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/components/automation";
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry } from "fluxiq/io";

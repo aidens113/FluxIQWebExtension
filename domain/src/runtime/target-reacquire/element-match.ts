@@ -24,7 +24,7 @@
 // A candidate is a fingerprint, or an object carrying one under `element` (a
 // resolved step's parameters, a look-up's answer).
 
-import type { AutomationStudioTargetReacquireAnswer } from "fluxiq/automation-studio";
+import type { AutomationStudioTargetReacquireAnswer } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../actions/types";
 import { WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS, webElementIdentitySignals, webRecordedRecordMatches, type WebElementIdentitySignal } from "../../element-fingerprint";

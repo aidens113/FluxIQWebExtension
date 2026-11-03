@@ -1,4 +1,4 @@
-import type { StateSnapshot, StateValue, StateValueType } from "fluxiq/automation-studio";
+import type { StateSnapshot, StateValue, StateValueType } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_SCHEMA_VERSION } from "../../constants";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "../state";

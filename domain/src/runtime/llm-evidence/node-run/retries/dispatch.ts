@@ -57,7 +57,7 @@ import { webAutomationResolvedActionEffect } from "../../../../actions/action-ef
 // after the second failed retry on a target failure that never acted, and the
 // remaining attempts go to what it found. Its outcome is on the answer.
 
-import { AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioLastingActCheck, type AutomationStudioNodeRetryReading } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioLastingActCheck, type AutomationStudioNodeRetryReading } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../../../actions/types";
 import { webLastingActStatement } from "../../../lasting-act-statement";

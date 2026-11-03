@@ -3,7 +3,7 @@ import { it } from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry, defineOutput } from "fluxiq/io";
 import { createElementMatcher } from "fluxiq/runtime/target-matching";
-import { createIoPolicyEffectDispatcher, runAutomationStudioGraph } from "fluxiq/automation-studio";
+import { createIoPolicyEffectDispatcher, runAutomationStudioGraph } from "fluxiq/automation";
 import { createWebOutputTargetPreparer } from "../index";
 
 it("matches canonical element targets before output dispatch", async () => {

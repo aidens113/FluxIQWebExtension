@@ -47,7 +47,7 @@
 // that clicks a different action and says it succeeded. The measured cost is in
 // reports/g-resolver-corroboration.md.
 
-import type { ElementFingerprintScore } from "fluxiq/automation-studio/fingerprinting";
+import type { ElementFingerprintScore } from "fluxiq/automation/fingerprinting";
 
 /** Core's exact rung: `compareTextSignal` calls a similarity at or above this "text matched exactly". */
 const EXACT_SIMILARITY = 0.92;

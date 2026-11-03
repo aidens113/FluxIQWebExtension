@@ -5,7 +5,7 @@ import path from "node:path";
 import type { TestContext } from "node:test";
 import { FluxIQ, initializeFluxIQStorage } from "fluxiq";
 import { IdentityAccessService } from "fluxiq/auth";
-import { AUTOMATION_STUDIO_ENDPOINTS, type AutomationStudioProject } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ENDPOINTS, type AutomationStudioProject } from "fluxiq/automation";
 import { SQLiteRepository } from "fluxiq/database-manager";
 import { createPlatformServices, iamPrincipalFrn, MemoryEmailSender, MemoryIamAuditSink } from "fluxiq/platform";
 import type { PlatformHookPayloads } from "fluxiq/platform/panel";

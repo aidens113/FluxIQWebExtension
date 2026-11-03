@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AutomationStudioActionPermissionGate } from "fluxiq/automation-studio";
+import { AutomationStudioActionPermissionGate } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   createWebAutomationLlmEvidenceRuntime,

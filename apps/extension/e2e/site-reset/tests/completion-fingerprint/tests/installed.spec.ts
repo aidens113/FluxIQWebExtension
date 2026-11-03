@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { cp, writeFile } from "node:fs/promises";
 import { createWebAutomationLlmEvidenceRuntime } from "@fluxiq-web-extension/domain";
-import type { AutomationStudioLlmProvider } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmProvider } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { expect, test } from "../../../../fixtures/extension-context";
 import { bindScriptedProvider, startInstalledBuild, trialCode, type BuilderTurn } from "../../../index";

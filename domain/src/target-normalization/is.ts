@@ -1,4 +1,4 @@
-import type { AutomationStudioElementTarget } from "fluxiq/automation-studio";
+import type { AutomationStudioElementTarget } from "fluxiq/automation";
 
 export function isWebElementTarget(value: unknown): value is AutomationStudioElementTarget {
   return Boolean(value)

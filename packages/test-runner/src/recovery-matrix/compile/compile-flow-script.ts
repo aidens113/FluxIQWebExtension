@@ -16,7 +16,7 @@
 // started afterwards reads the saved Flow from its own storage.
 
 import { FluxIQ } from "fluxiq";
-import { acceptAutomationStudioFlowBootstrapResult, automationStudioFlowBootstrapSizeLimitsOf, validateAutomationStudioFlowBootstrapPlan } from "fluxiq/automation-studio";
+import { acceptAutomationStudioFlowBootstrapResult, automationStudioFlowBootstrapSizeLimitsOf, validateAutomationStudioFlowBootstrapPlan } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID, webAutomationDomain } from "@fluxiq-web-extension/domain/node";
 import { RunnerFailure } from "../../failure.js";
 import { planEvidenceHandles, type PlanEvidenceHandle } from "./evidence-handles.js";

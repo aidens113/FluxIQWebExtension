@@ -9,9 +9,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioFailureRecord, parseAutomationStudioRecordOutput } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord, parseAutomationStudioRecordOutput } from "fluxiq/automation";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
-import type { AutomationStudioNativeNodeContext } from "fluxiq/automation-studio";
+import type { AutomationStudioNativeNodeContext } from "fluxiq/automation";
 import type { JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "../extract-list";

@@ -1,4 +1,4 @@
-import type { ActionTarget, AutomationStudioRecordingEntryTargetPreparer } from "fluxiq/automation-studio";
+import type { ActionTarget, AutomationStudioRecordingEntryTargetPreparer } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { normalizeWebElementTarget } from "../normalize";
 

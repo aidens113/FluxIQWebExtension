@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
 import { chooseFrame, FRAME_APPEAR_WAIT_MS, waitForFrameChoice, type FrameWaitInputs, type ListedFrame } from "../frame-address";
 
 const TOP: ListedFrame = { frameId: 0, url: "http://127.0.0.1:4173/scenarios/iframe-checkout/" };

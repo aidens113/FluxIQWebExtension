@@ -28,7 +28,7 @@
 // visible as one rather than looking like page order that happened to be right.
 //
 // **How a value is read, compared and identified is Core's**
-// (`fluxiq/automation-studio/nodes`): `automationStudioRecordRowIdentity` is the
+// (`fluxiq/automation/nodes`): `automationStudioRecordRowIdentity` is the
 // dedupe identity, `sortAutomationStudioRecordRows` the order and
 // `countAutomationStudioRecordUnsortableRows` the count, the same functions
 // Core's dataset processing runs over collected rows, so a list read sorted on

@@ -17,7 +17,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkAutomationStudioFlowBootstrapCompletion } from "fluxiq/automation-studio";
+import { checkAutomationStudioFlowBootstrapCompletion } from "fluxiq/automation";
 import { AutomationStudioNodeRegistry } from "fluxiq/components/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../../constants";

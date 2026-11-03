@@ -27,7 +27,7 @@ import {
   automationStudioHarnessOptionRegistry,
   type AutomationStudioAdaptationPolicy,
   type AutomationStudioRuntimeTargetOverrideEvidenceValidation
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { createWebAutomationLlmEvidenceRuntime, type WebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "..";

@@ -1,4 +1,4 @@
-import type { AutomationStudioLlmRerunCaptureAccess, AutomationStudioLlmRerunExecutionAccess, AutomationStudioLlmRerunExecutionInput, AutomationStudioLlmRerunExecutionRefused } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmRerunCaptureAccess, AutomationStudioLlmRerunExecutionAccess, AutomationStudioLlmRerunExecutionInput, AutomationStudioLlmRerunExecutionRefused } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebTargetScope } from "../../../target-reacquire/identity";
 import type { WebLlmEvidenceGateway } from "../../capture";

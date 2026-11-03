@@ -10,7 +10,7 @@
 // that is not a FluxIQ carrying the store -- a test double -- has none, and
 // every memory then lives in this process alone, as before t728.
 
-import { automationStudioDomainBuildState, AutomationStudioDomainBuildStateRefusal, type AutomationStudioDomainBuildState } from "fluxiq/automation-studio";
+import { automationStudioDomainBuildState, AutomationStudioDomainBuildStateRefusal, type AutomationStudioDomainBuildState } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 
 /** What the store is read off: a FluxIQ instance, by shape, so a double without it is simply not one. */

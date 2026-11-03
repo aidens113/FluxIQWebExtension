@@ -29,7 +29,7 @@
 // ignored `write` and acted would produce an ordinary recorded step, never a
 // false "written".
 
-import { isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import { isAutomationStudioActionConsequence } from "fluxiq/automation";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import { toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";

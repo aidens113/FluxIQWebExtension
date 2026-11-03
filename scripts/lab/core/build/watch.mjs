@@ -2,7 +2,7 @@
 //
 // Every Lab run loads FluxIQ Core from the sibling `F:\!FluxIQ` checkout: the
 // isolated web workspace junctions Core's `packages` into place, the host
-// bundle imports `fluxiq/automation-studio`, and the runner itself imports
+// bundle imports `fluxiq/automation`, and the runner itself imports
 // `fluxiq`. Core's build cleans and re-emits `dist`, so a rebuild started
 // while a run is in flight deletes files the run is about to import. That is
 // not hypothetical: a four-run bench died in under a second on "Cannot find

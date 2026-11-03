@@ -9,7 +9,7 @@
 // rows names no read node in its datasets, so the count comes from here.
 
 import { webAutomationOutputNodeId } from "@fluxiq-web-extension/domain/node";
-import { acceptAutomationStudioFlowBootstrapResult } from "fluxiq/automation-studio";
+import { acceptAutomationStudioFlowBootstrapResult } from "fluxiq/automation";
 import type { WebAuthoringSurroundings } from "./web-authoring-surroundings.js";
 
 const EXTRACT_NODE = webAutomationOutputNodeId("web.dom.extract_list");

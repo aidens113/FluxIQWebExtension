@@ -4,7 +4,7 @@
 // (`domain/src/web-panel-host.ts`) and the one the domain's own service tests
 // bind, so a script that assembles here assembles in the Core that runs it.
 
-import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import {
   createWebAutomationOutputNodeImplementationBundle,
   createWebAutomationOutputNodeManifest,

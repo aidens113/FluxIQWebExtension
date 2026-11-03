@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_PLAN_PARAMETER_ISSUE_CODES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_PLAN_PARAMETER_ISSUE_CODES } from "fluxiq/automation";
 import { WEB_PLAN_HANDLE_ISSUE_CODES } from "@fluxiq-web-extension/domain/node";
 import { readSanitizedGenerationFailure } from "../index.js";
 

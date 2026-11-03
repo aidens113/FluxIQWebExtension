@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { resolveAutomationStudioFlowBootstrapPlanParameters, type AutomationStudioFlowBootstrapPlan } from "fluxiq/automation-studio";
+import { resolveAutomationStudioFlowBootstrapPlanParameters, type AutomationStudioFlowBootstrapPlan } from "fluxiq/automation";
 import type { WebAutomationExtractListRequest } from "../../../../actions/extraction";
 import { createWebLlmTargetPackets, resolveWebPlanNodeParameters } from "../../plan-resolution";
 import { createWebLlmExtractionHandles } from "../../structure";

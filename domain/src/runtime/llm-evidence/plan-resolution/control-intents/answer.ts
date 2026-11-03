@@ -1,4 +1,4 @@
-import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation-studio";
+import type { AutomationStudioResolvedControlIntent } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebPlanHandleView, WebPlanNodeResolution } from "../resolve-plan-node";
 import type { WebLlmTargetReach } from "../target-packets";

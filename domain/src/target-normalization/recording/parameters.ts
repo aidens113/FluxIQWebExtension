@@ -1,4 +1,4 @@
-import type { AutomationStudioRecordingCandidateParameterNormalizer } from "fluxiq/automation-studio";
+import type { AutomationStudioRecordingCandidateParameterNormalizer } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { normalizeWebElementTarget } from "../normalize";
 

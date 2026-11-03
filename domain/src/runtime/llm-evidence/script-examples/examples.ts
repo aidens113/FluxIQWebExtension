@@ -1,4 +1,4 @@
-import type { AutomationStudioFlowScriptExamples } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowScriptExamples } from "fluxiq/automation";
 import { WEB_FLOW_SCRIPT_FORMAT_EXAMPLES } from "./format";
 import { WEB_FLOW_SCRIPT_ACT_EXAMPLES } from "./act";
 import { WEB_FLOW_SCRIPT_LOOP_EXAMPLES } from "./loop";

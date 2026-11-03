@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AutomationStudioNativeNodeRuntime, validateRecordingSession, type AutomationStudioElementTarget, type RecordingSession } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime, validateRecordingSession, type AutomationStudioElementTarget, type RecordingSession } from "fluxiq/automation";
 import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../../output-nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { webRecordingTargetPolicy } from "../index";

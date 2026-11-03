@@ -53,7 +53,7 @@ import { webAutomationResolvedActionEffect } from "../../../actions/action-effec
 // own row as shown: the row the model saw, not whichever row a run binds. A
 // step with no target handle declares none.
 
-import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationActionDeclarationRequired } from "../../../actions/consequence-declaration";
 import { webAutomationActionEffect } from "../../../actions/effect";

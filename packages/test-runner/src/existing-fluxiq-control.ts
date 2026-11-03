@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { harnessPatchPermissionOutcomes, harnessRecoveryRungs, type HarnessPatchPermissionOutcome, type HarnessRecoveryRung } from "@fluxiq-web-extension/test-contracts";
-import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation-studio/action-permissions";
+import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation/action-permissions";
 import { RunnerFailure } from "./failure.js";
 import {
   adaptationConsequences, adaptationEvidenceLoop, array, boolean, enumeration, finite, flowSpendReading, integer, invalid, nullableText, nullableUrl, optionalRecord, positiveInteger, record, stringArray, text,

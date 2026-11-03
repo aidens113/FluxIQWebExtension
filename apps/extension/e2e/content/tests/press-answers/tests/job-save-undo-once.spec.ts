@@ -19,7 +19,7 @@
 //   save -- and the board's stored saved list, then the list as it loads again.
 
 import type { JsonObject } from "fluxiq/core";
-import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import { createWebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "@fluxiq-web-extension/domain";
 import { postingById } from "../../../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
 import { expect, test } from "../../../index.js";

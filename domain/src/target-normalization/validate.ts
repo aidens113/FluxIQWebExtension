@@ -1,6 +1,6 @@
 import { hasFingerprintSignal } from "./fingerprint-signal";
 import { isSensitiveKey } from "./sensitive-key";
-import type { AutomationStudioElementTarget, AutomationStudioElementTargetFingerprint, AutomationStudioElementTargetValidationIssue, AutomationStudioElementTargetValidationResult } from "fluxiq/automation-studio";
+import type { AutomationStudioElementTarget, AutomationStudioElementTargetFingerprint, AutomationStudioElementTargetValidationIssue, AutomationStudioElementTargetValidationResult } from "fluxiq/automation";
 
 export function validateWebElementTarget(target: AutomationStudioElementTarget, path = "target"): AutomationStudioElementTargetValidationResult {
   const issues: AutomationStudioElementTargetValidationIssue[] = [];

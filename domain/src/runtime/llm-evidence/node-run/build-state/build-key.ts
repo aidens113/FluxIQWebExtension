@@ -18,7 +18,7 @@
 // directly, or a host that binds none -- has no build: it is keyed by its
 // project and Flow alone, never opens anything, and keeps nothing durable.
 
-import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { automationStudioEvidenceBuildScope } from "fluxiq/automation";
 
 /** How Core's opening call of a round stands to its build: starting it, or continuing a Flow its draft already holds. */
 export type WebNodeOpening = "fresh" | "continuing";

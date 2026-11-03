@@ -1,4 +1,4 @@
-import type { AutomationStudioLlmRerunExecutionAccess } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmRerunExecutionAccess } from "fluxiq/automation";
 import { createWebNodeDispatchRecorder, webNodeFrozenRefreshedParameters } from "./dispatch";
 import { webNodeFrozenJson } from "./json";
 import type { WebNodeFrozenCall, WebNodeFrozenSelection } from "./types";

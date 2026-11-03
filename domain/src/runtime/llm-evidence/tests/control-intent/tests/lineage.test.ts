@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   AutomationStudioNativeNodeRuntime, checkAutomationStudioFlowBootstrapPlanCompletion,
   type AutomationStudioFlowDraftStep
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import {
   createWebAutomationOutputNodeManifest, createWebAutomationOutputNodeImplementationBundle,
   outputTargetFromPayload, WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS

@@ -1,4 +1,4 @@
-import type { AutomationStudioLlmEvidenceSummary } from "fluxiq/automation-studio";
+import type { AutomationStudioLlmEvidenceSummary } from "fluxiq/automation";
 import { webLlmEvidencePageText } from "./page-text";
 
 export { webLlmEvidencePageText };

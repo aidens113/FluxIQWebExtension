@@ -16,7 +16,7 @@
 // The domain's resolution of each step is the binding the caller hands in
 // (`./recorded-resolution-binding.ts`, or the harvest's pairing binding).
 
-import { automationStudioProjectSingleSubflowRebuild, type AutomationStudioProjectSingleSubflowRebuildInput } from "fluxiq/automation-studio";
+import { automationStudioProjectSingleSubflowRebuild, type AutomationStudioProjectSingleSubflowRebuildInput } from "fluxiq/automation";
 import { jsonRecord } from "../json-record.js";
 import type { CandidateRebuild, UnresolvedStep } from "../types.js";
 import type { WebAuthoringSurroundings } from "./web-authoring-surroundings.js";

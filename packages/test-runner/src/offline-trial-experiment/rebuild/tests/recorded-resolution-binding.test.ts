@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioCandidateFingerprint } from "fluxiq/automation-studio";
+import { automationStudioCandidateFingerprint } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import { keptWebExtractionConditions, type WebExtractionConditionColumns } from "@fluxiq-web-extension/domain/node";
 import { recordedResolutionBinding, type ExtractionConditionsReader, type ResolutionRequest } from "../recorded-resolution-binding.js";

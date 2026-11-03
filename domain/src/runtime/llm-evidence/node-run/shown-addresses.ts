@@ -86,7 +86,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";
-import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DOMAIN_BUILD_STATE_LIMITS } from "fluxiq/automation";
 import { createWebNodeBuildMemory, webNodeStoredPrefix, type WebNodeBuildKey, type WebNodeBuildStatePersistence } from "./build-state";
 import type { WebRunnableNode } from "./catalog";
 import { WEB_NAVIGATION_ACTION } from "./start-location";

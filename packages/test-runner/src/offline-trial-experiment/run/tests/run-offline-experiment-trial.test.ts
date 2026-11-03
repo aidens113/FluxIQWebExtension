@@ -14,7 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/node";
 import { FluxIQ } from "fluxiq";
-import { runAutomationStudioOfflineCandidateTrial, type AutomationStudioFlowCandidate } from "fluxiq/automation-studio";
+import { runAutomationStudioOfflineCandidateTrial, type AutomationStudioFlowCandidate } from "fluxiq/automation";
 import { notJudgedJudge } from "../not-judged-judge.js";
 import { offlineTrialPorts, openOfflineTrialHost } from "../offline-trial/index.js";
 import { runOfflineExperimentTrial } from "../run-offline-experiment-trial.js";

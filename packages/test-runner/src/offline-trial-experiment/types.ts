@@ -4,7 +4,7 @@
 // can be written down and shared.
 
 import type { JsonObject } from "fluxiq/core";
-import type { AutomationStudioFlowCandidate } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowCandidate } from "fluxiq/automation";
 
 /** One `core.submit_subflow` Core accepted, as the Lab's step files hold it (`steps/<NNNN>-tool-core.submit_subflow/`). */
 export type LabSubflowSubmission = Readonly<{

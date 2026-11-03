@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { automationStudioCandidateExploredLayerHandlers, validateAutomationStudioFlowBootstrapPlan, type AutomationStudioFlowBootstrapPlan } from "fluxiq/automation-studio";
+import { automationStudioCandidateExploredLayerHandlers, validateAutomationStudioFlowBootstrapPlan, type AutomationStudioFlowBootstrapPlan } from "fluxiq/automation";
 import { AutomationStudioNodeRegistry } from "fluxiq/components/automation";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";

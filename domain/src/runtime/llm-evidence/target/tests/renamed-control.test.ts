@@ -3,7 +3,7 @@ import test from "node:test";
 import { validateWebRuntimeTargetOverrideEvidence } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import type { WebLlmPageEvidence } from "../../sanitize";
-import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
+import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 
 // A control the site renamed (t446), and the same words standing elsewhere.

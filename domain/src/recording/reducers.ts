@@ -23,7 +23,7 @@
 // value is dropped when the result's own element is sensitive (D2), because the
 // last action result is folded into the same recorded state as `forms.*`.
 
-import type { RecordingDomainEventReducer, StateSnapshot } from "fluxiq/automation-studio";
+import type { RecordingDomainEventReducer, StateSnapshot } from "fluxiq/automation";
 import { isSensitiveElementDescriptor } from "../sensitivity";
 import { withWebStateValue } from "./state";
 import { createWebAutomationStateFromSnapshot, type WebAutomationDomSnapshotInput } from "./web-state";

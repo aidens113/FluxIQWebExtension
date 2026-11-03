@@ -13,7 +13,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { RecordingDomainEventReducerContext, StateSnapshot } from "fluxiq/automation-studio";
+import type { RecordingDomainEventReducerContext, StateSnapshot } from "fluxiq/automation";
 import { WEB_AUTOMATION_EVENTS } from "../../constants";
 import { webAutomationStateReducer } from "../reducers";
 import { createWebAutomationInitialState } from "../state";

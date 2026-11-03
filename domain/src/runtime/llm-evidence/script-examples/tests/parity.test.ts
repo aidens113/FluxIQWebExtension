@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   automationStudioEvidenceFlowBootstrapCompletionSchema,
   renderAutomationStudioFlowScriptFormat
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
 import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";
 

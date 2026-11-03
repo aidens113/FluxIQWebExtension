@@ -16,7 +16,7 @@
 // answers it in the chat (`person-simulation/`), by the task's permission
 // point, as the person sitting at the panel would.
 
-import { parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import { parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { RunnerFailure } from "../../../failure.js";
 import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, type CreatedFlowCandidateTrialReadiness, type CreatedFlowTrialAuthoringMode } from "../readiness.js";
 import { createdFlowChatCandidateDraftOutcome, createdFlowFailedCandidateOutcome } from "../candidate-outcome.js";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { createWebElementMatcher } from "../../../element-fingerprint";
 import { normalizeWebRecordingCandidateParameters, prepareWebRecordingEntryTarget, webRecordingTargetPolicy } from "../../../target-normalization";

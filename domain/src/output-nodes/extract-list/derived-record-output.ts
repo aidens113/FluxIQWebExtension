@@ -27,7 +27,7 @@
 // author chose and the key rule bounds (D16). An excluded column's key is left
 // out of it, because Core keeps excluded field ids out of the stored dataset.
 
-import type { AutomationStudioRecordOutput } from "fluxiq/automation-studio";
+import type { AutomationStudioRecordOutput } from "fluxiq/automation";
 import type { WebAutomationExtractField, WebAutomationExtractListRequest } from "../../actions/extraction";
 import { webAutomationDatasetId } from "../../extraction";
 import { webAutomationRecordOutput } from "./record-output";

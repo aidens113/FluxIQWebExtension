@@ -1,4 +1,4 @@
-import type { AutomationStudioFlowScriptGuidance } from "fluxiq/automation-studio";
+import type { AutomationStudioFlowScriptGuidance } from "fluxiq/automation";
 import { WEB_FLOW_SCRIPT_CONTROL_OPERATIONS } from "./act";
 
 /** Host-authored operation advice, independent of examples and system instructions. */

@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { screenAutomationStudioLlmEvidence } from "fluxiq/automation-studio";
+import { screenAutomationStudioLlmEvidence } from "fluxiq/automation";
 import { sanitizeWebLlmSnapshot } from "../sanitize";
 import { isWithheldText, screenedText, WEB_LLM_WITHHELD_TEXT } from "../withheld";
 

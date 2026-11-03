@@ -13,7 +13,7 @@
 // that is not named here has no way onto the wire from the browser path. Adding
 // one is a deliberate edit to this file, not a string written at a call site.
 
-import type { AutomationStudioAdaptiveFailureClass, AutomationStudioFailureRecord, AutomationStudioFailureStage } from "fluxiq/automation-studio";
+import type { AutomationStudioAdaptiveFailureClass, AutomationStudioFailureRecord, AutomationStudioFailureStage } from "fluxiq/automation";
 import { WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH } from "../../actions/types";
 
 /**

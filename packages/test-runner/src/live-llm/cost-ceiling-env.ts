@@ -8,10 +8,10 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation";
 import { CLAUDE_LIVE_BUILD_COST_USD, DEFAULT_LLM_PROVIDER } from "@fluxiq-web-extension/test-contracts";
 
-/** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV`). */
+/** The variable Core reads (`fluxiq/automation` `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV`). */
 export const LAB_COST_CEILING_ENV = "FLUXIQ_LLM_RUN_COST_CEILING_USD";
 
 /** Opt in only the Core child process owned by this Lab run. */

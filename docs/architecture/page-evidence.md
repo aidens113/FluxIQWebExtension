@@ -894,7 +894,7 @@ What still never reaches a model:
   millisecond timestamp, one in ten of which passes Luhn by chance, as the
   page wrote them. Core's screen reports such a run as `secretShaped`, and
   `automationStudioWithoutCardNumbers(text, marker)` (from
-  `fluxiq/automation-studio`) replaces each run with a marker and keeps every
+  `fluxiq/automation`) replaces each run with a marker and keeps every
   other character. `withheld.ts` calls that helper with `WEB_LLM_WITHHELD_TEXT`
   **before** the credential screen, so a card costs only its own digits; run
   after, the screen would withhold the whole string.

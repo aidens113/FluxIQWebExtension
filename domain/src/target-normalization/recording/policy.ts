@@ -1,4 +1,4 @@
-import type { AutomationStudioRecordingTargetPolicy } from "fluxiq/automation-studio";
+import type { AutomationStudioRecordingTargetPolicy } from "fluxiq/automation";
 import { isWebElementTarget } from "../is";
 import { validateWebElementTarget } from "../validate";
 

@@ -8,9 +8,9 @@
 // become Flow settings Core's loop budget enforces, and the only thing the
 // operator still allows is a consequence (`--llm-permit`).
 
-import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, defaultLlmModelForProvider, isLlmModel, isLlmModelForProvider, isLlmProvider, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmProvider, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation";
 import { RunnerFailure } from "../failure.js";
 
 /**

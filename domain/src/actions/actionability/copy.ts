@@ -1,4 +1,4 @@
-import { parseAutomationStudioTargetActionabilityRecord } from "fluxiq/automation-studio/actionability";
+import { parseAutomationStudioTargetActionabilityRecord } from "fluxiq/automation/actionability";
 import type { JsonObject } from "fluxiq/core";
 import { webOwnDataProperty } from "./own-data";
 

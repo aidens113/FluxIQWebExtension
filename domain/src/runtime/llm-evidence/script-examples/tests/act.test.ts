@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { acceptAutomationStudioFlowBootstrapResult, automationStudioEvidenceFlowBootstrapCompletionSchema } from "fluxiq/automation-studio";
+import { acceptAutomationStudioFlowBootstrapResult, automationStudioEvidenceFlowBootstrapCompletionSchema } from "fluxiq/automation";
 import { exampleSupport } from "./support";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
 import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";

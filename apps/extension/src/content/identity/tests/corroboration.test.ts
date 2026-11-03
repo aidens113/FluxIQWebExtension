@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ElementFingerprintScore } from "fluxiq/automation-studio/fingerprinting";
+import type { ElementFingerprintScore } from "fluxiq/automation/fingerprinting";
 import type { TargetCandidate } from "../candidates";
 import { corroboratesExactly } from "../corroboration";
 import { TARGET_SCORE_FLOOR, scoreTargetCandidate, type RecordedIdentity } from "../score";

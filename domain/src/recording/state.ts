@@ -1,5 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
-import type { StateSnapshot, StateValue } from "fluxiq/automation-studio";
+import type { StateSnapshot, StateValue } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_SCHEMA_VERSION } from "../constants";
 
 export const WEB_AUTOMATION_STATE_NAMESPACE = "web";

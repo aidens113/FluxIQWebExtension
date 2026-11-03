@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { RecoverableToolRejection } from "..";
 import { RecoverableToolRejection as ExistingImport } from "../../tool-rejection";
 

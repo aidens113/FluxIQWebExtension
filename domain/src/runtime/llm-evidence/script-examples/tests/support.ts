@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {
   AutomationStudioNodeRegistry,
   renderAutomationStudioFlowScriptFormat
-} from "fluxiq/automation-studio";
+} from "fluxiq/automation";
 import { listWebAutomationOutputNodeDefinitions } from "../../../../output-nodes";
 import { WEB_FLOW_SCRIPT_EXAMPLES } from "../index";
 import { WEB_FLOW_SCRIPT_GUIDANCE } from "../../script-guidance";

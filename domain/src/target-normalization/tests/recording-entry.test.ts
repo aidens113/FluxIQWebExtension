@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AutomationStudioImporterImplementationBundle } from "fluxiq/automation-studio";
-import type { AutomationStudioElementTarget } from "fluxiq/automation-studio";
+import type { AutomationStudioImporterImplementationBundle } from "fluxiq/automation";
+import type { AutomationStudioElementTarget } from "fluxiq/automation";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AutomationStudioNativeNodeRuntime, AutomationStudioService } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime, AutomationStudioService } from "fluxiq/automation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../../output-nodes";
 import { prepareWebRecordingEntryTarget } from "../index";

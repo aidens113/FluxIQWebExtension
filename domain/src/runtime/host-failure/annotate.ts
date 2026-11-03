@@ -1,4 +1,4 @@
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../failure";
 import { readWebHostFailure } from "./read";
 

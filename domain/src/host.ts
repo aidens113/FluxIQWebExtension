@@ -1,5 +1,5 @@
 import { FluxIQ, type FluxIQOptions } from "fluxiq";
-import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation";
 import { webAutomationDomain } from "./manifest";
 import { createWebAutomationDomainIo } from "./io/web-automation-io";
 import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest, WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS } from "./output-nodes";

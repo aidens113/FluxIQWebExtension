@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { AutomationStudioNativeNodeRuntime, automationStudioLlmStepLogTool } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime, automationStudioLlmStepLogTool } from "fluxiq/automation";
 import { createWebAutomationOutputNodeImplementationBundle, createWebAutomationOutputNodeManifest } from "../../../../output-nodes";
 import { webLlmEvidencePageText, webLlmEvidenceSummary } from "../index";
 

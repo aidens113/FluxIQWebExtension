@@ -47,8 +47,8 @@ import type { AutomationStudioResolvedActionEffect } from "fluxiq/components/aut
 // given (`./press.ts`, `./tool-rejection.ts`), so neither the model nor a trace
 // has to guess which of them happened.
 
-import type { AutomationStudioActionConsequence, AutomationStudioActionDeclaration, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
-import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence, AutomationStudioActionDeclaration, AutomationStudioActionPermissionCheck } from "fluxiq/automation";
+import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation";
 import { present } from "./present";
 
 /**

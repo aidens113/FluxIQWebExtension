@@ -537,7 +537,7 @@ continued Flow already holds (`node-run/held-literals/`), and the layers its
 own presses opened (`node-run/own-layers/`). Core, not the domain, says which
 build a call belongs to and whether it starts that build afresh. Inside every
 `executeTool` the domain reads `automationStudioEvidenceBuildScope()` (from
-`fluxiq/automation-studio`; Core's
+`fluxiq/automation`; Core's
 `runtime/llm/harness-options/evidence-build-scope.ts`), which gives
 `projectId`, `flowId`, `buildId`, `callScope` (present only when project briefs
 run side by side for the same Flow), `opening`: `"fresh"` on an opening
@@ -553,7 +553,7 @@ frame for this project and Flow (a direct call or a test) is keyed by project
 and Flow alone, never reset and never stored. Repeated refusals
 (`repeated-refusal.ts`) start over on any opening, per build and brief, and
 their reason, `AUTOMATION_STUDIO_REPEATED_ANSWER_REASON`, is Core's
-(`fluxiq/automation-studio`).
+(`fluxiq/automation`).
 
 **Shown addresses belong to the build (t743).** The address rule exists to stop
 the model navigating to addresses it made up, and an address the site showed to
@@ -581,7 +581,7 @@ by writing the page's address.
 
 The memories also outlive the process. Core owns a durable, size-bounded
 domain build state (`runtime/domain-build-state/`, exported from
-`fluxiq/automation-studio`) that keeps values opaque under the Flow; the domain
+`fluxiq/automation`) that keeps values opaque under the Flow; the domain
 reaches it with `automationStudioDomainBuildState(fluxiq, "web-automation")`
 (`domain/src/cleared-way-outs/build-state-source.ts`, asked lazily). Each memory writes
 through to scope `{ projectId, flowId, buildId }` under `web.arrival`,

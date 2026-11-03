@@ -10,7 +10,7 @@
 // - there is no `prepareStart`: the offline runner runs no start hook and no
 //   site reset for a trace environment (Decision 6).
 
-import { automationStudioServiceWholeTrialPorts, type AutomationStudioCandidateTrialPorts, type AutomationStudioService } from "fluxiq/automation-studio";
+import { automationStudioServiceWholeTrialPorts, type AutomationStudioCandidateTrialPorts, type AutomationStudioService } from "fluxiq/automation";
 
 /** The candidate trial's ports, as Core's runner takes them. */
 export type OfflineTrialPorts = AutomationStudioCandidateTrialPorts;

@@ -5,7 +5,7 @@
 // this by name (`AutomationStudioProjectGatewayTraceStore.measureTrace`), so
 // the Lab never opens Core's trace tables and survives a change to their layout.
 
-import type { AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation-studio";
+import type { AutomationStudioProjectGatewayTraceStore } from "fluxiq/automation";
 import type { TraceStoredBytes } from "./types.js";
 
 /** Stored bytes of one trace's events, from Core's own measure. */

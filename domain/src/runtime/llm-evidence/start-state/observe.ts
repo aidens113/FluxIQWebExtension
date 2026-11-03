@@ -5,7 +5,7 @@
 // answers where it read (`location`), so Core can come back to an act's own
 // page and look for what the act changed there (t471).
 
-import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmSnapshotBinding } from "../sanitize";

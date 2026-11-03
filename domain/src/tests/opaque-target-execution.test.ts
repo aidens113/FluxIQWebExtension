@@ -1,8 +1,8 @@
 // Original complete repair/write/execute/read/match scenarios now use the actual web owners.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { executeAutomationStudioRuntimePatch, isAutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation-studio";
-import type { AutomationStudioAdaptationPolicy, AutomationStudioFlowDocument, AutomationStudioFlowNode, AutomationStudioNodeAttemptTrace, AutomationStudioHostRuntimeBoundary } from "fluxiq/automation-studio";
+import { executeAutomationStudioRuntimePatch, isAutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation";
+import type { AutomationStudioAdaptationPolicy, AutomationStudioFlowDocument, AutomationStudioFlowNode, AutomationStudioNodeAttemptTrace, AutomationStudioHostRuntimeBoundary } from "fluxiq/automation";
 import { normalizeWebElementTarget, validateWebElementTarget } from "../target-normalization";
 import { createWebElementMatcher } from "../element-fingerprint";
 

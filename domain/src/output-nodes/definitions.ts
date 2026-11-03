@@ -130,7 +130,7 @@ const valuePortsByOutput: Partial<Record<WebAutomationActionType, readonly Autom
  *
  * The literal stands in for Core's constant until Core's built output exports
  * it; then this line becomes an import of that name from
- * `fluxiq/automation-studio`.
+ * `fluxiq/automation`.
  */
 const VERIFIES_STATE_METADATA_KEY = "verifiesState";
 

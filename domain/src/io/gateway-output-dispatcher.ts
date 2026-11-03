@@ -2,7 +2,7 @@ import { webHostFailure, webHostThrownFailure } from "../runtime/host-failure";
 import { webActionabilityFromPayload, webActionabilityProperty } from "../actions/actionability";
 import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
-import { automationStudioEvidenceBuildScope } from "fluxiq/automation-studio";
+import { automationStudioEvidenceBuildScope } from "fluxiq/automation";
 import { ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
