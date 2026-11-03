@@ -64,8 +64,11 @@ The testing packages are described in
 
 ## Responsibility Boundaries
 
-Core's executable graph, neutral node pack and graph engine are framework capabilities,
-separate from Automation Studio's editor/project services. New web-domain and browser imports
+Core's executable graph, neutral node pack and graph engine are framework capabilities.
+Automation Studio's end state is a UI panel with view state and thin framework
+controls. Project, persistence, authoring and execution services belong to Core's
+framework packages; remaining Studio backend paths are temporary migration locations.
+New web-domain and browser imports
 use `fluxiq/components/automation` (including its `action-effect` subpath);
 legacy Studio imports remain compatibility exports. The web domain owns calibrated browser
 fingerprint matching under `domain/src/element-fingerprint/`, using Core's neutral
@@ -78,8 +81,9 @@ binding, environment, run-control, resource, output-dispatch and compiled/compos
 mechanisms. Web target preparation and browser semantics are supplied by trusted
 domain adapters; they cannot replace the registered action or its authorization.
 State and recording foundations share `@fluxiq/contracts/state` and
-`@fluxiq/contracts/recording`. Studio-specific persistence services continue through
-their program APIs. This paired extraction requires Core `fluxiq@0.27.0` and
+`@fluxiq/contracts/recording`. Legacy Studio persistence APIs remain compatibility
+entry points while their actual owners migrate into framework packages.
+This paired extraction requires Core `fluxiq@0.27.0` and
 `@fluxiq/contracts@0.7.0` builds.
 
 Core also owns recording index/link/lookup mechanisms and draft amendment,

@@ -15,7 +15,8 @@ The complete Core/downstream ownership audit and refactor remains Active. The us
 The user reaffirmed that Automation Studio is ONLY a UI panel controlling the framework. Execution, authoring, verification, persistence, project/policy/recording ownership and orchestration must all move to framework packages. Studio keeps UI/view state and thin control adapters; current backend/receipt/composition locations are temporary compatibility scaffolding. Earlier proposed permanent Studio persistence/composition exceptions are superseded.
 
 Actual authoring checkouts are C:/Users/osrs_/FluxStuff/fxwork/t843/!FluxIQ and its sibling !FluxIQWebExtension, both on task/t843-runtime-foundations. They share the original repositories' actual Git histories. The first t842 capability group is already merged/pushed to BOTH original dev branches; main has not moved. Original downstream user changes remain untouched.
-Accepted remote task checkpoints: Core6a871e62/downstreamed155444. Later documentation commits Corecbbfc05e/downstream2f16c2a2 remain local: normal pre-push structure checks refused the active tree. No hook bypass, force push, PR, registry publishing or main promotion occurred. Current implementation remains uncommitted until coherent acceptance.
+Local Core checkpoint9c9a0de8c saves the validated native/generic log extraction. It is not pushed yet: the task's structure gate waits ongoing original-copy/native implementation work. Other current migrations remain uncommitted while their coherent validation is pending.
+Current task-branch backups are Corecafe96dde/downstream5d9add7a, committed and pushed through normal hooks. They include the verified runtime/storage/permission/capture/verification foundations and paired domain adapters; dev/main have not moved beyond the earlier t842 integration. These are WIP backups, not a coherent dev/main release: the actual instruction reader still requires model-provider and spend acknowledgements. The new unconsumed instruction-observation prototype and next three acknowledgement units remain work in progress. No hook bypass, force push, PR, registry publishing or main promotion occurred.
 
 Lead independently accepted these current source units:
 - A2 durable SQL/sole command bridge:10files90tests. Gateway original-child completion reader amendment:2files9tests. Historical unknown/lost ACK stays pending across reopen; original required observer and handling remain sole authorities.
@@ -51,6 +52,56 @@ The public package must expose the widget, message/stream contracts, styles and 
 Migrate the extension to the package and exercise a second real client integration to prove reuse. Preserve streaming, activity/results, user interactions, accessibility and existing visual behavior; keep extension-specific approvals/routing/browser bindings in its adapter. Document standalone client setup and verify the browser bundle boundary.
 
 ## Work Ledger
+
+### 2026-11-02 - Further actual Core owners and data prerequisites
+- Agent: senior supervisor
+- Changed: six generic log formatting/index modules and their original single index cache moved to framework/observability/exchange-log, with exact legacy aliases. Domain-specific page interpretation remains outside that generic move. Complete adaptation/change-patch records are now canonical pure data, unblocking actual trial/evidence extraction.
+- Validation: log29originaldeclarations/115literals unchanged; isolated37roots/286modules strict0/foreign0;43file scoped audit0;14actual alias identities pass. Adaptation records2fullbodies unchanged,24-module canonical type closure0diagnostics/Studio/build,5file scoped0.
+- State: native SQL/SecretKeys and actual callback receiver/copy repairs run on disjoint Core files; no broad reader runs against their mutable closure. The final shared chat package remains unstarted and required after both audits/refactors.
+
+### 2026-11-02 - Core current strict/build pass; runtime composition still open
+- Agent: senior supervisor
+- Validation: Core combined strict328roots/5,435modules -> 0errors; corrected permission wrapper21/21 and configured trial environment8/8 pass. Normal Core library build exit0, fluxiq182.691s/21,707outputs.
+- Validation: actual Service positive still fails at unmanaged offlineFirst after initial actions/submission; isolated test missed the real dispatch receiver forwarding. Real Service source binding already precedes the factory. Whole Core structure audit has6 real object-rest/private-companion losses; repair is required, no baseline additions.
+- Assigned: C repairs actual callback receiver forwarding and six copy sites after all readers ended. A/B native-secret/SQL implementations now run on disjoint files, with Root actual composition wiring. Current guarded downstream check waits the resulting coherent Core snapshot.
+- Outcome: Partial; complete backend/web ownership and final shared chat package remain required. No current dev/main release.
+
+### 2026-11-02 - Current Core integration reaches trial selection
+- Agent: senior supervisor
+- Validation: Core `node .fluxiq/refactor/lead-ack-followup.cjs service` -> 1 failed, 3 skipped; actual first actions and submission now complete, then an unverified offlineFirst wrapper correctly blocks the next trial reservation. Core parent checks -> 89 passed, 1 new diagnostic failure; held/composed checks -> 12 files, 97 passed. Combined strict -> 324 roots, 4 narrow alias/test-probe errors.
+- Assigned: A fixes original alias/JSON guard placement, B fixes only new test diagnostics, C closes the actual trial-selection producer. Current normal Core rebuild and guarded downstream acceptance remain pending.
+- Outcome: Partial. Remaining backend/web ownership and the final shared chat package are still required; neither complete audit nor dev/main release is claimed.
+
+### 2026-11-02 - Further actual Core owners moved
+- Agent: senior supervisor
+- Changed: real project record Store/Documents/parser/cache and70 rich project/plan data declarations moved to canonical Core owners; server store has its own public subpath. Native log writer/screen/numbering/metadata scopes moved with exact old aliases. Actual change-trial evaluator observation preserves original host identity.
+- Validation: lead closed project-record12subjects120passed; engine6subjects39passed; native log isolated27-root strict0/scoped0 and screening+alias3passed. Shared guard now rejects object rest stripping before the helper;26 tests pass in each repo and all74 mirrored audit files match Core. Full Service/native integration and current Core library build remain pending.
+
+### 2026-11-02 - Joint current-source checkpoint
+- Agent: senior supervisor
+- Validation: Core model/provider focused24subjects ->219passed/4failed; Studio focused13subjects ->90passed/2failed. Real native pending-ACK fallback and already-settled recheck defects plus actual old budget adapter dropping context identified; bounded fixes assigned after all readers ended. New fixture/type errors also identified. Full Service success remains unverified.
+- Validation: all7 real memory/file/SQL spend/held-prefix/lostACK/reopen/unsupported-callback cases pass; path owner identity/rootless3 pass. Core strict99roots reports15errors; Core structure4 new test-packing findings, downstream structure exit0. No full sweep, paid provider or panel run.
+
+### 2026-11-02 - Current Core shared completion regression
+- Agent: senior supervisor
+- Validation: lead selected Core callback-observation/unknown/backend/async-receipt/original-Promise subjects ->5files24passed,3.27s,exit0. Actual imported production/tests were explicitly frozen; model provider/spend edits remain outside that closed value graph. No broad type/package/Service success claim and no full suite used.
+
+### 2026-11-02 - Core instruction ownership prerequisite
+- Agent: senior supervisor
+- Changed: Core now owns the complete instruction record/scope/tag/requirement data under flows/authoring/instruction; old Studio types are exact aliases. Public fluxiq/flows/authoring and mechanical no-program dependency guards added. This supports the next real project-store migration; it does not complete the runtime refactor.
+- Validation: Core lead original/canonical type-token comparison ->4 complete types identical after explicit alias renames,0 emitted runtime imports. New runtime composition and dependency checks await the joint stable snapshot.
+
+### 2026-11-02 - Panel-only ownership reaffirmed
+- Agent: senior supervisor
+- Decision: user reaffirmed Automation Studio is only the UI panel controlling the framework. Core architecture text now removes earlier permanent persistence/composition exceptions. Backend owners still under Studio remain unfinished migration work; reusable chat UI extraction remains required after both audits/refactors.
+- Changed: Core Service harness and original build wrapper forward a separate internal execution option; three workers close original model/provider, instruction-reader and actual queued spend-write acknowledgement. No observation data enters model requests or raw provider payloads.
+- Validation: new source edits await a coordinated stable-tree strict/behavior checkpoint; previous normal build stamps are no longer current. Neither full audit/refactor nor actual composed Service success is claimed.
+
+### 2026-11-02 - Paired task backups pushed; next acknowledgement lanes executing
+- Agent: senior supervisor
+- Git: explicit task-owned manifests staged1,321Core changed files and14downstream paths;9 task report EOF-only blanks corrected, staged diff checks clean. Commits Corecafe96dde/downstream5d9add7a pushed successfully to BOTH task/t843-runtime-foundations branches through normal hooks. The2 unconsumed instruction-observation prototype leaves were deliberately excluded. No dev/main merge, remote deletion or package publication.
+- State: normal Core libraries and guarded downstream domain types passed on the backed-up source. Source edit window reopened for disjoint model/harness ACK (B), instruction authority/current-scope adapter (C), and actual queued spend checkpoint (writer). Exact briefs/contracts are recorded; original Promise/callback/hold/persist identity is required. The later edits will invalidate this build stamp and require fresh narrow acceptance.
+- Validation: `git diff --cached --check` ->clean after trimming EOF-only task-report blanks; both `git push origin task/t843-runtime-foundations` ->exit0. Normal pre-push hooks were retained.
 
 ### 2026-11-02 - Normal library checkpoint and guarded downstream acceptance
 - Agent: senior supervisor
@@ -366,7 +417,7 @@ Node implementation: node-ownership. Additional web audit: fingerprint-boundary.
 - Existing Studio-prefixed names and persisted discriminator strings remain compatible.
 - Framework execution consumers exist downstream; Studio naming does not establish program ownership.
 - Executable graph types belong in flows/executable; neutral nodes in components/automation; executor in engine/automation.
-- Studio retains editor/project APIs, persistence and product-specific authoring composition; shared execution support moves with its kernel.
+- Studio retains UI/view state and thin framework control/API adapters. Framework areas own persistence, project state, authoring and orchestration; remaining Studio backend paths are temporary migration facades.
 - Framework owners must not import Studio, including type dependencies; the structure gate enforces the cut.
 - Browser DOM producers and concrete web behavior remain downstream; generic web-panel rendering/HTTP transport are Core host concerns.
 
