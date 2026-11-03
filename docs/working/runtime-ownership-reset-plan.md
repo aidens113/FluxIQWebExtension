@@ -1,4 +1,5 @@
 # Runtime Ownership Refactor: Reset Plan
+
 Status: Active
 Status detail: Planning only after the user's explicit stop; no implementation release.
 Created: 2026-11-02
@@ -9,6 +10,10 @@ Paired document: ../!FluxIQ/docs/working/runtime-ownership-reset-plan.md
 Related: [existing record](runtime-ownership-refactor.md)
 
 ## Current State
+
+The user authorized a read-only salvage-versus-restart audit on 2026-11-02. The [Core audit](../../../!FluxIQ/docs/working/runtime-ownership-reset-plan.md#restart-audit) recommends retaining coherent migrations and reviewing added behavior separately; no source reset, restoration or implementation was performed. Audit reports are under Core's `runtime-ownership-reset-plan/reports/`.
+
+Today's downstream dev (`d6e5448c`) already includes t842. Its first parent (`c9056f1a`) is the immediate pre-t842 baseline. Resetting to dev would discard t843 only. Lead source comparisons verified nineteen moved normalization function bodies against their original Core dev implementation; hook registration and completion-policy behavior still require paired runtime acceptance. Core's read-only structure audit exposed unfinished SQL source gates; this audit does not certify the current paired runtime.
 
 All workers stopped and all runtime/test/build processes ended. Current authoring pair is t843, not the older IDE t842 checkout.
 Latest pushed task backups: Corec0dee9bbe/downstream460a5af6. Dev/main unchanged for this unit. Normal guarded domain tests82/82, domain check/build and extension check/build passed at that checkpoint. That does not establish complete Core runtime acceptance.
@@ -35,6 +40,12 @@ Known Core runtime defects are named explicitly in the paired plan; no downstrea
 - Changed: recorded the downstream plan and worker freeze. No source changes during planning.
 - Validation: reviewed stop reports and git status only; no tests/builds/providers/browser operations.
 - Outcome: planning pending review; earlier rolling estimates do not constitute a delivery commitment.
+
+### 2026-11-02 - User-authorized salvage audit
+- Agent: Codex senior supervisor, with three read-only audit workers.
+- Changed: paired reset-plan documentation; source untouched.
+- Validation: `git status --short` -> downstream clean before audit documentation; `git merge-base dev HEAD` -> `d6e5448c`; `git diff --shortstat dev...HEAD` -> 105 files, 2,845 insertions and 174 deletions including tests/docs. TypeScript comparisons -> nineteen normalization function bodies preserved after whitespace/public-name normalization.
+- Outcome: retain downstream normalization/preparation and tests; review paired hook/override/completion behavior separately. No tests/builds/browser/provider runs, reset or source restoration performed.
 
 ## Open Questions
 
