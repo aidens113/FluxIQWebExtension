@@ -18,7 +18,7 @@ The result check no longer tests "not an ad" on the `title` column, and it ran h
 
 ## What this run did not exercise
 
-It met its checks in test steps and playback, which carry no draft, so a call stopped by a check while exploring is proven by `person-needed.test.ts` only. The Next fallback is proven in a real browser by `crossborder-next-page-pinned.spec.ts`, which fails without the fix with this task's original `ended: control_absent`.
+It met its checks in test steps and playback, which carry no draft, so a call stopped by a check while exploring is proven by `person-needed.test.ts` only. The Next fallback is proven in a real browser by `crossborder-pinned-next-page.spec.ts`, which fails without the fix with this task's original `ended: control_absent`.
 
 ## Next action
 
