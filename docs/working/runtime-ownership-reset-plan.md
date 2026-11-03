@@ -1,7 +1,7 @@
 # Runtime Ownership Refactor: Reset Plan
 
 Status: Active
-Status detail: Planning only after the user's explicit stop; no implementation release.
+Status detail: User authorized execution after salvage audit; Core foundation and defect batches active.
 Created: 2026-11-02
 Last updated: 2026-11-02
 Owner: Senior supervisor
@@ -11,13 +11,9 @@ Related: [existing record](runtime-ownership-refactor.md)
 
 ## Current State
 
-The user authorized a read-only salvage-versus-restart audit on 2026-11-02. The [Core audit](../../../!FluxIQ/docs/working/runtime-ownership-reset-plan.md#restart-audit) recommends retaining coherent migrations and reviewing added behavior separately; no source reset, restoration or implementation was performed. Audit reports are under Core's `runtime-ownership-reset-plan/reports/`.
+The user authorized plan execution on 2026-11-02 ("Ok follow the plan") and additionally requested the fastest safe approach. The [Core plan](../../../!FluxIQ/docs/working/runtime-ownership-reset-plan.md) owns active SQL, callback-guard and bounded stall briefs, and the parallel time-reduction investigation.
 
-Today's downstream dev (`d6e5448c`) already includes t842. Its first parent (`c9056f1a`) is the immediate pre-t842 baseline. Resetting to dev would discard t843 only. Lead source comparisons verified nineteen moved normalization function bodies against their original Core dev implementation; hook registration and completion-policy behavior still require paired runtime acceptance. Core's read-only structure audit exposed unfinished SQL source gates; this audit does not certify the current paired runtime.
-
-All workers stopped and all runtime/test/build processes ended. Current authoring pair is t843, not the older IDE t842 checkout.
-Latest pushed task backups: Corec0dee9bbe/downstream460a5af6. Dev/main unchanged for this unit. Normal guarded domain tests82/82, domain check/build and extension check/build passed at that checkpoint. That does not establish complete Core runtime acceptance.
-Newer Core SQL/descriptor/log scaffolding is local and unvalidated in aggregate. Preserve it. Implementation stays stopped pending plan review.
+Authoring pair remains t843. Audit recommendation: retain coherent migrations and review added behavior separately. Existing source WIP is preserved. No paid/browser/panel run is started; normal rebuilt-package integration passed at the first coordinated Core freeze. Complete runtime acceptance and remaining ownership/chat milestones remain required.
 
 ## Authoritative Plan
 
@@ -50,3 +46,11 @@ Known Core runtime defects are named explicitly in the paired plan; no downstrea
 ## Open Questions
 
 Review the paired migration/defect split before any implementation resumes.
+
+### 2026-11-02 - First resumed foundation public-package validation
+- Agent: Codex senior supervisor.
+- Changed: paired execution status only; downstream product source unchanged. Core owns the SQL and first callback guard batches, with remaining ownership/composed/chat gates open.
+- Validation: `pnpm.cmd --filter @fluxiq-web-extension/domain check` -> exit 0/current-Core guard, 35.830s; domain `build` -> exit 0/2,028 emitted outputs, 30.509s.
+- Validation: with DOMAIN_TEST_BUILD_LABEL=t843-reset-foundation, selected target-normalization/target-preparation/native-runtime/opaque-target/manifest tests -> 82 passed, zero failed/cancelled/skipped, 11.518s.
+- Validation: `pnpm.cmd --filter @fluxiq-web-extension/extension check` -> exit 0; extension `build` -> exit 0, Chrome/Firefox/e2e-Chromium verified 22 files each. Existing placeholder Firefox add-on ID warning remains; no live browser/provider/panel run.
+- Outcome: paired public-package checkpoint validated; task backup only, not whole runtime/ownership acceptance. No full sweep consumed; dev/main unchanged.
