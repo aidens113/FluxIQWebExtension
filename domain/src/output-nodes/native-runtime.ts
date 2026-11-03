@@ -7,8 +7,12 @@ import type {
 } from "fluxiq/automation";
 import type { AutomationNodeExecutionResult } from "fluxiq/components/automation";
 import { createWebElementMatcher } from "../element-fingerprint";
+import { webRecordedStepReader } from "../recording/recorded-step-reader";
+import { webStateElementKindReader } from "../recording/state-element-kind";
 import { webLlmEvidenceSummary } from "../runtime/llm-evidence/evidence-summary";
 import { normalizeWebRecordingCandidateParameters, prepareWebRecordingEntryTarget, webRecordingTargetPolicy } from "../target-normalization";
+import { webActivityControlReader } from "./activity-control";
+import { WEB_CONTROL_PARAMETER_KEYS } from "./control-parameter-keys";
 import { createWebOutputTargetPreparer } from "./target-preparation";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationCheckWaitParameters } from "../actions/check-wait";
@@ -62,6 +66,10 @@ export function createWebAutomationOutputNodeImplementationBundle(
     recordingCandidateParameterNormalizer: normalizeWebRecordingCandidateParameters,
     recordingTargetPolicy: webRecordingTargetPolicy,
     llmEvidenceSummary: webLlmEvidenceSummary,
+    recordedStepReader: webRecordedStepReader,
+    stateElementKindReader: webStateElementKindReader,
+    activityControlReader: webActivityControlReader,
+    controlParameterKeys: WEB_CONTROL_PARAMETER_KEYS,
     ...extension
   };
 }
