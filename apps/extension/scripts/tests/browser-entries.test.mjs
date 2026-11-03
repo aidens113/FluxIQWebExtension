@@ -18,7 +18,7 @@ const bundle = (edges) => ({
 const content = path.join(repoRoot, "apps/extension/src/content/index.ts");
 const domainClient = path.join(repoRoot, "domain/src/client/index.ts");
 const nodesDist = path.join(coreRoot, "packages/fluxiq/dist/framework/automation-service/nodes/index.js");
-const parkingDist = path.join(coreRoot, "packages/fluxiq/dist/runtime/parking/automation/index.js");
+const parkingDist = path.join(coreRoot, "packages/fluxiq/dist/runtime/automation-parking/index.js");
 
 const base = {
   workingDirectory, repoRoot, coreRoot,
@@ -35,7 +35,7 @@ test("lists that match the bundle report nothing, and Core's internal edges are 
 test("a bundle that enters Core through a module Core does not list is drift, named as source", () => {
   const drift = browserEntryDrift({ ...base, metafiles: [bundle({ [content]: [domainClient], [domainClient]: [nodesDist, parkingDist] })] });
   assert.equal(drift.length, 1);
-  assert.ok(drift[0].includes("packages/fluxiq/src/runtime/parking/automation/index.ts"), drift[0]);
+  assert.ok(drift[0].includes("packages/fluxiq/src/runtime/automation-parking/index.ts"), drift[0]);
   assert.ok(drift[0].includes("domain/src/client/index.ts"), "names the importer");
 });
 

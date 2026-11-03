@@ -1,7 +1,7 @@
 // Turns the `[FluxIQ build-trace]` lines of a real Core log into the activity
 // events Core's observer emits at the same seams, with the same timestamps.
 // The mapping is Core's own, read from
-// `packages/fluxiq/src/runtime/activity/automation/observer.ts`
+// `packages/fluxiq/src/runtime/automation-activity/observer.ts`
 // and `build.ts`:
 //
 //   loop start                 -> building "Building the Flow" (build.ts, the scope's opening event)
