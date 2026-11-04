@@ -497,6 +497,25 @@ or handle), and spends the remaining retries on the fresh target. An item
 truly gone is reported as gone. This holds on every path the retries do, and
 never repeats a lasting act whose earlier attempt may have landed.
 
+**A task ends only with its final result or with its budget gone** (user,
+2026-11-03): "it needs to actually GET the final result, not just return a failed response (except for run out of budget on that task)... The only hard requriement is it NEEDS to keep retrying until final result achieved or budget out". A person pressing Stop still stops it. Being built by
+[Answer First](docs/working/answer-first-plan.md), whose "Keep Going Until The
+Result" lists every ending this removes. A lane must not add a new way for a task
+to end in failure.
+
+**One live exploration, then simulation** (user, 2026-11-03): "since we're switching
+to a one-time exploration (MUST RESULT IN DESIRED FINAL RESULT), we use internal
+state engine simulation to improve & test flow with EXACTLY same inputs as real
+exploration calls recorded." The best-attempt Flow, notes and recording are saved,
+and the next attempt uses, repairs and improves the Flow and still returns the
+result. This replaces the next rule's live test inside a build as Answer First
+lands; its "one judged whole run" stands and moves to the next real attempt.
+
+**An agent repeating itself is caught and steered** (user, 2026-11-03): "i want built in agent call loop detection. If an agent keeps doing the same thing over and over that needs to be detected and steered/stopped". Built into Core's evidence loop for every agent role, as
+[Answer First](docs/working/answer-first-plan.md), "Loop Detection", describes.
+
+**No PIN on normal actions, and never mid-Flow** (user, 2026-11-03): "NO PIN FOR ANY NORMAL ACTIONS. Maybe just a pin to do dangerous actions ONLY THE FIRST TIME A USER DOES IT, AND NEVER IN THE MIDDLE OF A FLOW, ONLY WHEN FIRST STARTING A FLOW/CHAT."
+
 **Build the whole Flow first; test it whole only when it should work** (user,
 2026-09-30 and 2026-10-02, reaffirmed 2026-10-29): a build explores and authors
 the draft live, and its first run from the start is the test it asks for once it
