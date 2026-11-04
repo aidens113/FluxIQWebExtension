@@ -1607,7 +1607,8 @@ minimal-reset behaviour is what is measured, while the oracle still sees the
 site from the seed. A build no longer resets the site before every trial.
 Optionally a diagnostic can compare the fixture's final state before and after
 Core's judged whole run with Core's delta judgement; it is not required for
-acceptance. The structured verdict the Lab reads maps the new `unknown` reasons
+acceptance. The attempt's own score is judged before that reset, and judges the change
+as well (`answerVerdict`, "Two scores" below). The structured verdict the Lab reads maps the new `unknown` reasons
 (`already_in_end_state`, `unproven`) to fields, never to prose.
 
 **Project mode (automation-project-agents-plan, W4).** In `project` mode
@@ -1647,8 +1648,11 @@ promotion owner. The Lab therefore treats it as a candidate build:
   per role or brief. The step log's `role` and `briefId` stay in
   `steps/*/meta.json` for a debug.
 
-Until the Lab comparison (A8) passes, `project` is never the default of Core
-or of the Lab.
+`project` is Core's product default (`AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT`).
+The Lab's default is still `legacy`, which is not the product's: the live runs of
+2026-10-31 and 2026-11-03 measured `legacy` while a person gets `project`. When
+`answer-first` lands the Lab's default becomes the product's, one marked line in
+`live-llm/authoring-mode-env.ts`, and `--authoring-mode` names any other.
 
 The hook is Core deployment configuration: `FLUXIQ_CANDIDATE_START_URL`, an
 http(s) address Core POSTs an empty JSON object to before each trial, with the
@@ -1956,6 +1960,110 @@ In `snapshots/live-llm.json` they appear as `repair.resultChecks`
 result was checked". Spend totals are unchanged. Before this change, a run
 that needed no repair reported its two result checks as two diagnoses and a
 "repair attempt".
+
+### Two scores: the person's answer and the Flow
+
+A run answers two different questions, and the Lab scores them apart
+(`flow-lane/creation/answer/`, `test-contracts/src/attempt-score/`).
+
+**Did the person get the right answer?** `answerVerdict`, judged on the attempt
+itself, before any fixture reset (`judgeAttemptAnswer`), against the same private
+oracle a Flow's playback answers to:
+
+- `records`: the attempt's stored rows against the task's expected dataset, through
+  `judgeCreatedFlowDataset`, which takes a dataset source and needs no persisted
+  Flow run. Until Core's result record lands, a draft's rows are read from its last
+  trial run.
+- `finalState`: the scenario's declared facts on the site as the attempt left it.
+- `change`: the double-act oracle, below.
+- `shown`: what reached the person, read through `ChatAnswerPort`. A right answer
+  that never reached them is `wrong` with `not_shown`, and a declared secret in what
+  was shown is `wrong` with `secret_shown`. Until the Answer lane's turn lands, a real
+  run reads the panel's words, in which every expected value must appear; a real run
+  therefore scores `not_shown` today wherever the chat tells the build and not the
+  answer. It compares and never keeps: what a run publishes is counts and closed names.
+
+**Did the Flow become deterministic?** `oracleVerdict` is the Flow's playback only,
+`null` with no Flow, and the contract refuses anything else on a run with an answer
+score. `answer.flow` says `unproven` (a draft, or no Flow), `playback_held`,
+`playback_failed` or `replay_held` (a zero-call replay, `lab replay`). A draft with a
+right answer is `right` and `unproven`.
+
+**The hard rule (user, 2026-11-03).** A task that ends without its result fails,
+unless its budget is gone or a person stopped it. `no_result` can only be `wrong`
+(`lab.task_ended_without_result`), and `budget_out` and `stopped_by_person` are excused
+endings: neither is a pass, and neither is counted wrong. A right answer is `right`
+however the attempt ended.
+
+**What `verdict` means.** In `legacy`, `candidate` and `project`, `verdict` is the
+Flow chain as it always was, so a draft still fails with `lab.candidate_not_promoted`
+and its answer is scored beside that failure; `legacy` builds keep no rows of their own
+and state no answer. In `answer-first` a draft with a right answer ends the run with no
+failure (`CreatedFlowLaneAnswerOnly`) and a wrong one fails with `lab.answer_wrong`.
+
+**Never blended.** An evaluation from before these fields states none and none is
+inferred for it. `BenchWorkflowResult.passRate` counts a pass only with a Flow behind
+it; `answerRate` and `metrics.answerScore` are separate, over judged runs alone, and
+`report.md` prints them under their own heading. A run with any stand-in on it counts
+only in `standInRuns` and enters no rate.
+
+**The double-act oracle** (`flow-lane/creation/site-change/`). Final-state oracles are
+absolute, so an attempt also has a baseline: each site's lasting view of its own state
+(`views/`, named counts read from `GET /__control/final-state`, leaving out cookie
+answers, prompts, guards and logs), read just before the attempt acts. The change is
+the difference of two views, so nine plus one reads as one (the standing rule, user,
+2026-10-27). `asked/table.ts` says what each of the realistic tasks asks for, by act,
+once; no acts means any lasting change is an unasked one. An act that moved further
+than asked is a **repeated act, reported by name** with what was asked and what
+landed; an act taken back through the site's own controls nets out and is no repeat.
+
+Each row of the table is what the task's own recording script moved, played in a
+visible browser from the seeded fixture. To check them, with no Core and no model:
+
+```powershell
+node packages/test-runner/dist/attempt-lane/audit-asked-changes.js [--task <id>] [--scenario <id>] [--out <file>]
+```
+
+It exits 1 on any row that disagrees with the site. A task whose script cannot finish
+is reported and never taken as proof; today those are the two numbered-pagination reads
+on `professional-network`, whose reference reader follows only "next", and both are
+reads with no act by their instructions.
+
+### The same-workspace attempt lane
+
+Each build starts blank in a fresh workspace, so repeated runs are repeats and not
+attempts. `attempt-lane/` runs a task several times on **one workspace**: what an
+attempt saved stays where the next can find it, and only the site is reseeded between
+them, since the absolute oracles and the change are both judged from that baseline.
+
+`proveContinuation` refuses to say a later attempt started from an earlier one unless
+each of these holds, naming any that does not: one task, one workspace, consecutive
+attempts, something saved, exactly that found (by digest) before it began, a path that
+is not `explore`, and the saved Flow run. A repeat that merely spent less is refused.
+
+The report is one row per attempt (`AttemptReportRow`): task, attempt, path, calls,
+tokens, dollars, time, live steps, simulation result, both verdicts, repeated acts and
+loops caught, with calls and tokens beside dollars because models and prices change.
+`AttemptSeries` is a task's rows in order: the first right attempt, attempts until
+deterministic, each attempt's spend against the last, and whether the second was proven
+to have started from the first.
+
+The provider-free proof, headed, with no model anywhere:
+
+```powershell
+node packages/test-runner/dist/attempt-lane/cli.js [--task <id>] [--evidence <dir>] [--site-only]
+```
+
+It plays `everything-store-kettle-to-cart` on the real site: right with no Flow
+promoted, wrong with a repeated act, wrong when the right answer never reached the
+chat, and a second attempt that started from the first's draft and spent less.
+Without `--site-only` each attempt's instruction is typed into the real extension chat
+of a real isolated Core with no model key. `AttemptDriver` is the seam:
+`scripted/` is the only driver today, and **everything Core's attempt loop will do is a
+stand-in, named on every row** (`standIns`): the attempt record, the stored rows, the
+chat's turn, the exploration (the task's own recording script), the saved draft and the
+calls, tokens and dollars. Live steps, time, every act, every page and every oracle are
+real. A live driver needs `answer-first` and a Core read for its attempt records.
 
 ### A build that starts from a recorded demonstration
 

@@ -1,3 +1,5 @@
+import type { RunAnswerScore } from "@fluxiq-web-extension/test-contracts";
+import { selectLaneObservation } from "../../flow-lane/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RunLaneObservation } from "../../flow-lane/index.js";
@@ -64,4 +66,16 @@ test("a provider count on a run that configured no live provider contradicts the
   const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, adaptation: contradicted });
   assert.deepEqual([evaluation.adaptationReuse, evaluation.adaptationCost], [null, null]);
   assert.deepEqual(evaluation.adaptationPersistence, measuredReplay.adaptationPersistence);
+});
+
+test("a draft stopped by the lane reaches its evaluation as right on the answer, unproven on the Flow, with no playback verdict", () => {
+  const answer: RunAnswerScore = { verdict: "right", ending: "result", wrongBecause: [], records: "held", finalState: "not_declared", change: "held", shown: "held", repeatedActs: [], missingActs: [], unaskedChanges: [], storedRows: 2, shownRows: 2, flow: "unproven", standIns: [] };
+  const stoppedLane = { flowId: "flow.one", build: { outcome: "draft" }, review: null, answer };
+  const observation = selectLaneObservation({ evaluated: true, flowLane: true, published: undefined, automationFailureExpected: null, recordingLane: () => { throw new Error("a Flow-lane run is never the recording lane's"); }, stoppedLane })!;
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome: { ...outcome, verdict: "failed" as const, failureCategory: "runtime.behavior", invariants: [{ id: "runner-verdict", passed: false, expected: "passed", actual: "failed: runtime.behavior", evidenceSequences: [3] }] }, observation });
+  assert.equal(evaluation.answerVerdict, "right");
+  assert.equal(evaluation.answer?.flow, "unproven");
+  assert.equal(evaluation.flowCreated, false);
+  assert.equal(evaluation.oracleVerdict, null);
+  assert.equal(evaluation.verdict, "failed", "the Flow chain's verdict, as it always was outside answer-first");
 });

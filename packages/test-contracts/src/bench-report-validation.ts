@@ -3,6 +3,7 @@ import {
   type BenchCorpusMetrics, type BenchExtractionMetrics, type BenchReport,
 } from "./bench-report.js";
 import { validateBenchAdaptationCost, validateBenchAdaptationPersistence, validateBenchAdaptationReuse, validateBenchAdaptationValidation } from "./adaptation-reuse-validation.js";
+import { flowScores } from "./attempt-score/index.js";
 import { evaluationLanes, type EvaluationLane } from "./evaluation.js";
 import { validateLlmUsage } from "./evaluation-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
@@ -83,7 +84,8 @@ function checkWorkflows(input: unknown, repeatCount: unknown, issues: Validation
 }
 function checkWorkflowResult(input: unknown, path: string, repeatCount: unknown, issues: ValidationIssue[]): void {
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["corpusRowId", "scenarioId", "workflowId", "variantId", "lane", "runs", "passRate", "flakeClass"], path, issues);
+  keys(value, ["corpusRowId", "scenarioId", "workflowId", "variantId", "lane", "runs", "passRate", "answerRate", "flakeClass"], path, issues);
+  if (value.answerRate !== undefined && value.answerRate !== null) finite(value.answerRate, `${path}.answerRate`, issues, 0, 1);
   if (typeof value.corpusRowId !== "string" || !CORPUS_ROW_ID.test(value.corpusRowId)) add(issues, `${path}.corpusRowId`, "must be a corpus row id such as W05");
   if (!isKebabId(value.scenarioId)) add(issues, `${path}.scenarioId`, "must be a kebab-case scenario id");
   for (const key of ["workflowId", "variantId"] as const) if (value[key] !== null && !isKebabId(value[key])) add(issues, `${path}.${key}`, "must be null or a kebab-case id");
@@ -105,12 +107,32 @@ function reportPopulation(workflows: unknown, repeatCount: unknown): ReportPopul
   return { workflows: results.length, repeatCount: typeof repeatCount === "number" ? repeatCount : 0, byLane, laned: results.some((entry) => isObject(entry) && entry.lane !== undefined) };
 }
 
+/** Each run in one count, and a rate only over runs judged right or wrong. */
+function checkAnswerScore(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues);
+  if (!value) return;
+  keys(value, ["judged", "right", "wrong", "budgetOut", "stoppedByPerson", "rate", "runsWithRepeatedActs", "flow", "standInRuns"], path, issues);
+  for (const key of ["judged", "right", "wrong", "budgetOut", "stoppedByPerson", "runsWithRepeatedActs", "standInRuns"] as const) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  const counts = [value.right, value.wrong, value.budgetOut, value.stoppedByPerson];
+  if (counts.every((count) => typeof count === "number") && (counts as number[]).reduce((sum, count) => sum + count, 0) !== value.judged) add(issues, `${path}.judged`, "must equal right, wrong, budgetOut and stoppedByPerson together");
+  const decided = typeof value.right === "number" && typeof value.wrong === "number" ? value.right + value.wrong : 0;
+  if (value.rate === null) { if (decided > 0) add(issues, `${path}.rate`, "must be stated when a run was judged right or wrong"); }
+  else {
+    finite(value.rate, `${path}.rate`, issues, 0, 1);
+    if (decided === 0) add(issues, `${path}.rate`, "must be null when no run was judged right or wrong");
+    else if (Math.abs((value.rate as number) - (value.right as number) / decided) > EPSILON) add(issues, `${path}.rate`, "must be right over right and wrong");
+  }
+  const flow = object(value.flow, `${path}.flow`, issues);
+  if (flow) keys(flow, flowScores, `${path}.flow`, issues);
+}
+
 /** Returns whether the metrics are valid, so comparisons are only recomputed from sound values. */
 function checkCorpusMetrics(input: unknown, population: ReportPopulation, issues: ValidationIssue[]): boolean {
   const before = issues.length; const path = "$.metrics"; const value = object(input, path, issues);
   if (value) {
-    keys(value, ["ratesByLane", "rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, "extractionByLane", ...week2Keys], path, issues);
+    keys(value, ["ratesByLane", "rates", "answerScore", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, "extractionByLane", ...week2Keys], path, issues);
     checkRates(value, path, population, issues);
+    if (value.answerScore !== undefined) checkAnswerScore(value.answerScore, `${path}.answerScore`, issues);
     const latency = object(value.actionLatencyMs, `${path}.actionLatencyMs`, issues);
     if (latency) for (const [actionType, distribution] of Object.entries(latency)) { if (!actionType) add(issues, `${path}.actionLatencyMs`, "action types must be non-empty"); checkDistribution(distribution, `${path}.actionLatencyMs.${actionType}`, issues); }
     for (const key of distributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);

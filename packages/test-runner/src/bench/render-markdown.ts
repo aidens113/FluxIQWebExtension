@@ -1,4 +1,4 @@
-import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchExtractionCollection, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
+import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchAnswerScore, type BenchDistribution, type BenchExtractionCollection, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
 import { BENCH_EXTRACTION_RATE_DEFINITIONS } from "./extraction-metrics.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
@@ -60,6 +60,7 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     "",
     evaluated.length ? table(["Row", "Workflow", "Variant", "Lane", "Repeat", "Run", "Verdict", "Actions FluxIQ executed", "Failure category", "Facility diagnostic", "Cause and problems"], evaluated.map((run) => [run.corpusRowId, run.workflowId ?? "primary", run.variantId ?? "unarmed", run.lane, String(run.repeatIndex), run.runId ?? "", run.verdict ?? "", String(run.actionsExecuted ?? 0), run.failureCategory ?? "", run.facilityFailure ? describeFacilityFailure(run.facilityFailure) : "", causeAndProblems(run)])) : "None.",
     "",
+    ...(report?.metrics.answerScore ? answerLines(report.metrics.answerScore) : []),
     ...(report && coverage ? metricLines(report, coverage) : []),
     "## Measurement sources",
     "",
@@ -115,6 +116,20 @@ function executionLines(coverage: BenchMarkdownCoverage): string[] {
     "",
     ...(lanes.length > 0 ? [`By lane: ${lanes.join("; ")}.`, ""] : []),
     "A run in which FluxIQ executed nothing is counted as a **miss** by every execution rate below, never dropped from one: the rate's own population still holds it, and the Not executed column says how many of that population it holds. On the recording lane a run's pass means the Testing Lab drove the fixture and the fixture ended in the expected state; FluxIQ executes at most a two-action Core round-trip probe there, never the workflow, so the action count is the only figure on this page that says what FluxIQ did.",
+    "",
+  ];
+}
+
+/** The answer's score under its own heading, because it is not comparable to any pass rate above or below it. */
+function answerLines(score: BenchAnswerScore): string[] {
+  return [
+    "## The person's answer",
+    "",
+    "Judged on each attempt before any fixture reset. This is a different question from the pass rates and rates in this report, which measure the Flow chain, and it is never blended with them.",
+    "",
+    table(["Judged", "Right", "Wrong", "Budget out", "Stopped by a person", "Answer rate", "Runs with a repeated act", "Stand-in runs (in no rate)"], [[String(score.judged), String(score.right), String(score.wrong), String(score.budgetOut), String(score.stoppedByPerson), score.rate === null ? "n/a" : fixed(score.rate), String(score.runsWithRepeatedActs), String(score.standInRuns)]]),
+    "",
+    table(["Flow unproven", "Playback held", "Playback failed", "Replay held"], [[String(score.flow.unproven), String(score.flow.playback_held), String(score.flow.playback_failed), String(score.flow.replay_held)]]),
     "",
   ];
 }

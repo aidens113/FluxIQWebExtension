@@ -25,8 +25,10 @@ import type { FlowLanePermissionStop } from "./permission-stop.js";
  * person grants and the build continues reaches no stop at all, and passes
  * only if the continued build then created its Flow.
  */
-export function assertFlowLaneBuiltFlow(input: { flowLane: boolean; evaluated: boolean; published: Pick<RunLaneObservation, "flowCreated"> | undefined; permissionStop?: FlowLanePermissionStop | undefined }): void {
+export function assertFlowLaneBuiltFlow(input: { flowLane: boolean; evaluated: boolean; published: Pick<RunLaneObservation, "flowCreated"> | undefined; permissionStop?: FlowLanePermissionStop | undefined; answerOnly?: boolean }): void {
   if (!input.flowLane || !input.evaluated) return;
+  // An answer-first attempt ended on its right answer: no Flow was promoted, and its own score says so as `unproven`.
+  if (input.answerOnly === true) return;
   const flowCreated = input.published?.flowCreated ?? null;
   if (input.permissionStop) {
     const { consequence, control } = input.permissionStop;

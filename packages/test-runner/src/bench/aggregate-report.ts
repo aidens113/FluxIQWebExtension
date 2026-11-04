@@ -6,6 +6,7 @@ import {
 import { benchDistribution } from "./distribution.js";
 import { benchExtractionMetrics } from "./extraction-metrics.js";
 import { benchAdaptationMetrics } from "./adaptation-metrics.js";
+import { benchAnswerRate, benchAnswerScore } from "./answer-score/index.js";
 
 /**
  * One bench result, a corpus row's workflow unarmed or one of its variants, on
@@ -191,10 +192,12 @@ function checkRuns(result: BenchResultRuns, repeatCount: number): void {
 
 function workflowResult(result: BenchResultRuns): BenchWorkflowResult {
   const runs = result.evaluations.length;
-  const passRate = result.evaluations.filter((evaluation) => evaluation.verdict === "passed").length / runs;
+  // The Flow chain's rate, as it always was. A run that passed on its answer with no Flow behind it is the answer score's, and is never blended in here.
+  const passRate = result.evaluations.filter((evaluation) => evaluation.verdict === "passed" && evaluation.flowCreated !== false).length / runs;
+  const answerRate = benchAnswerRate(result.evaluations);
   return {
     corpusRowId: result.corpusRowId, scenarioId: result.scenarioId, workflowId: result.workflowId, variantId: result.variantId, lane: result.lane,
-    runs, passRate, flakeClass: passRate === 1 ? "stable-pass" : passRate === 0 ? "stable-fail" : "flaky",
+    runs, passRate, ...(answerRate === undefined ? {} : { answerRate }), flakeClass: passRate === 1 ? "stable-pass" : passRate === 0 ? "stable-fail" : "flaky",
   };
 }
 
@@ -227,6 +230,7 @@ function laneRates(results: readonly BenchResultRuns[]): BenchRates {
 
 function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics {
   const runs = results.flatMap((result) => result.evaluations);
+  const answerScore = benchAnswerScore(runs);
   // Per lane like the rates, and only for a lane whose runs measured
   // extraction: a lane that measured none states nothing, because the contract
   // reads an absent block as unmeasured and a block of zeros as a measurement.
@@ -240,6 +244,8 @@ function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics 
     // Per lane, never combined: the recording lane executes no workflow, and a
     // rate over both lanes would count each unarmed row twice.
     ratesByLane: Object.fromEntries(benchResultsByLane(results).map(([lane, onLane]) => [lane, laneRates(onLane)])),
+    // The person's answer, apart from every rate here, which measures the Flow chain. Absent when no run was judged.
+    ...(answerScore === undefined ? {} : { answerScore }),
     actionLatencyMs: Object.fromEntries([...latency.keys()].sort().map((actionType) => [actionType, benchDistribution(latency.get(actionType) ?? [])])),
     runDurationMs: benchDistribution(runs.map((run) => run.durationMs)),
     sanitizedPacketBytes: benchDistribution(runs.flatMap((run) => run.evidence.sanitizedPacketBytes)),
