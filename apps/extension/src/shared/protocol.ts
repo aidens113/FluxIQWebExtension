@@ -342,6 +342,13 @@ export const AUTOMATION_PANEL_MESSAGES = {
    * `get-task-attempt`, answering `{ outcome }`. It names exactly one of them.
    */
   taskOutcomes: RUNTIME_MESSAGES.panelTaskOutcomes,
+  /**
+   * Carries a budget-out attempt on, or one a Core restart cut off, as the same attempt: `carry-on-task-attempt` with
+   * `{ projectId, attemptId, addUsd }` and nothing else. `addUsd` is above zero for an attempt that ran out and zero for
+   * one that was cut off. Answers `{ attemptId, budgetUsd }` at once, and the attempt goes on after the answer; a
+   * refusal is Core's own sentence.
+   */
+  carryOnTaskAttempt: RUNTIME_MESSAGES.panelCarryOnTaskAttempt,
   /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider` and `enabled` only. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
@@ -369,6 +376,8 @@ export type AutomationPanelRequest = {
   format?: string | undefined;
   conversationId?: string | undefined;
   attemptId?: string | undefined;
+  /** Dollars to add to an attempt that is carried on: zero or more. */
+  addUsd?: number | undefined;
   proposalId?: string | undefined;
   entryId?: string | undefined;
 };

@@ -1,5 +1,5 @@
 // Automation panel's relays (`AUTOMATION_PANEL_MESSAGES`): saved automations and their
-// runs, running one, a run's facts, a dataset's export, a task's attempts, whether
+// runs, running one, a run's facts, a dataset's export, a task's attempts and carrying one on, whether
 // an AI model key is set, and turning the last recording into an automation.
 //
 // Shaped like `panel/panel-control.ts`: only the side panel or the popup may
@@ -81,6 +81,14 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       if (conversationId && !attemptId) return deps.call("list-conversation-task-attempts", { projectId, conversationId });
       if (attemptId && !conversationId) return deps.call("get-task-attempt", { projectId, attemptId });
       return failure("invalid_request", "That request must name one conversation or one attempt.");
+    }
+    case AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt: {
+      // It spends the person's own key, so exactly these three fields go to Core, and the amount must be a number of dollars.
+      const attemptId = text(message.attemptId);
+      const addUsd = message.addUsd;
+      if (!attemptId) return missing("attemptId");
+      if (typeof addUsd !== "number" || !Number.isFinite(addUsd) || addUsd < 0) return failure("invalid_request", "That request must say how much budget to add, zero or more.");
+      return deps.call("carry-on-task-attempt", { projectId, attemptId, addUsd });
     }
     case AUTOMATION_PANEL_MESSAGES.generateFromRecording:
     case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation:

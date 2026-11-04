@@ -220,5 +220,6 @@ test("run again starts the outcome's own flow through the existing run message, 
   assert.deepEqual(t.sent.at(-1), { type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
   const unknown = await t.results.runAgain({ projectId: "p1", taskId: "task-nope" });
   assert.deepEqual(unknown, { ok: false, sentence: "I can't run this one again from here.", unsupported: true });
-  assert.equal(t.results.addBudgetAndCarryOn, undefined);
+  // Carrying on is Core's since t869 (`core-attempts.test.ts`), so the port has it.
+  assert.equal(typeof t.results.addBudgetAndCarryOn, "function");
 });

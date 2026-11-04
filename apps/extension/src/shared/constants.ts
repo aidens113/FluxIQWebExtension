@@ -50,6 +50,7 @@ export const RUNTIME_MESSAGES = {
   panelRunDetail: "fluxiq.panel.runDetail",
   panelExportDataset: "fluxiq.panel.exportDataset",
   panelTaskOutcomes: "fluxiq.panel.taskOutcomes",
+  panelCarryOnTaskAttempt: "fluxiq.panel.carryOnTaskAttempt",
   panelModelReadiness: "fluxiq.panel.modelReadiness",
   panelGenerateFromRecording: "fluxiq.panel.generateFromRecording",
   panelTestGeneratedAutomation: "fluxiq.panel.testGeneratedAutomation",

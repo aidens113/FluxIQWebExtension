@@ -1,8 +1,9 @@
 import { checkAutomationStudioTaskAttemptResult, parseAutomationStudioSavedState, parseAutomationStudioTaskAttempt, parseAutomationStudioTaskResult } from "@fluxiq/contracts/automation";
 import type { ChatTaskOutcome } from "@fluxiq/ui-components";
 import { asRecord } from "../../reply";
+import { readProvenance } from "./read-provenance";
 
-const FIELDS: ReadonlySet<string> = new Set(["attempt", "result", "saved", "comparedTo"]);
+const FIELDS: ReadonlySet<string> = new Set(["attempt", "result", "saved", "comparedTo", "provenance"]);
 
 /**
  * Core's account of one attempt, through the contract's own parsers, or undefined for anything they
@@ -42,6 +43,13 @@ export function readTaskOutcome(value: unknown): ChatTaskOutcome | undefined {
       return undefined;
     }
     outcome.comparedTo = earlier.attempt;
+  }
+  if (fields.provenance !== undefined) {
+    const provenance = readProvenance(fields.provenance);
+    if (provenance === undefined) {
+      return undefined;
+    }
+    outcome.provenance = provenance;
   }
   return outcome;
 }

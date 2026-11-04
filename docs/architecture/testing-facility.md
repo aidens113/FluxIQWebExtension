@@ -2115,6 +2115,11 @@ instruction: request.message } }`. `evidence_tool_decision` answers with `toolCa
 answers the judge's `diagnosis`. Every request of a run is in its evidence folder (`model/`,
 and Core's `steps/` beside it), which is how to read the page words a step needs.
 
+`FLUXIQ_ATTEMPT_SCRIPT_FORM` names which form of a task's script a `--scripted-model` run plays, for a task whose script has more than one
+(`scripted-model/scripts/index.ts`); a form its script does not have is refused by the script, and `lab attempt` takes no such option.
+Every attempt writes `site.json` into its evidence folder: the site's lasting view before and after the attempt, the change between them,
+and the activity the panel showed, kept so a verdict can be re-read without the site.
+
 **The ceiling.** `--authoring-mode answer-first --llm-max-cost-usd <n>` with nothing
 configured starts Core with `FLUXIQ_LLM_RUN_COST_CEILING_USD=<n>` and passes
 `assertLlmMaxCostWithinCeiling`, so a run that names its budget has nothing else to remember.

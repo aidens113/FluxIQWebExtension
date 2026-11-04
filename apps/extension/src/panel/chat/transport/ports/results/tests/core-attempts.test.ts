@@ -126,3 +126,74 @@ test("an attempt's own session finishing in the feed is not told a second time",
 test("the port says nothing against real spend: the marker is a run's alone", () => {
   assert.equal(setup({}).results.reportsSpend, undefined);
 });
+
+// A person closes the popup while a task goes on, and opens it again after it finished. The result is Core's,
+// so the new panel's first read tells it, though this port never saw a push for it.
+test("a task that finished while no panel was open is told by the first read of a panel opened afterwards", async () => {
+  let kept: unknown[] = [];
+  const request = (async (message: PanelMessage) => {
+    if (message.type === AUTOMATION_PANEL_MESSAGES.taskOutcomes) return outcomes(...kept);
+    return { ok: false, sentence: "unexpected" };
+  }) as PanelStore["request"];
+  const open = () => createExtensionChatTransport(request, () => () => undefined).results!;
+  const before = open();
+  assert.deepEqual(await before.readThread({ projectId: "p1", conversationId: "c1" }), { ok: true, value: { outcomes: [] } });
+  // The popup is closed here: nothing is listening, and the task finishes.
+  kept = [{ attempt: attempt(), result: confirmed(), saved: SAVED }];
+  const after = open();
+  const read = await after.readThread({ projectId: "p1", conversationId: "c1" });
+  assert.ok(read.ok);
+  assert.deepEqual(read.value.outcomes.map((outcome) => [outcome.attempt.attemptId, outcome.attempt.status, outcome.result?.label]), [["attempt.1", "achieved", "confirmed"]]);
+  const one = await open().readAttempt({ projectId: "p1", attemptId: "attempt.1" });
+  assert.equal(one.ok, false, "this scripted Core answers a thread, and the attempt read asks for its own");
+});
+
+const PROVENANCE = { route: "ran the Flow it had saved", startedFrom: "a saved Flow of 2 steps", steps: [{ position: 1, label: "Open loans", from: "saved", ran: true }, { position: 2, label: "Renew", from: "worked_out", ran: false }] };
+
+test("an attempt's provenance reaches the chat through the contract's parse, and an attempt with none has none", async () => {
+  const t = setup({ thread: outcomes({ attempt: attempt(), result: confirmed(), provenance: PROVENANCE }, { attempt: attempt({ attemptId: "attempt.2", runId: "explore.2", startedAtMs: 3000, endedAtMs: 3900 }), result: confirmed("attempt.2") }), attempt: { ok: true, value: { ok: true, payload: { outcome: { attempt: attempt(), result: confirmed(), provenance: PROVENANCE } } } } });
+  const read = await t.results.readThread({ projectId: "p1", conversationId: "c1" });
+  assert.ok(read.ok);
+  assert.deepEqual(read.value.outcomes[0]?.provenance, PROVENANCE);
+  assert.equal("provenance" in read.value.outcomes[1]!, false);
+  const one = await t.results.readAttempt({ projectId: "p1", attemptId: "attempt.1" });
+  assert.ok(one.ok);
+  assert.deepEqual(one.value.provenance, PROVENANCE);
+});
+
+test("a provenance that is not exactly the shape fails the read, and nothing is dropped silently", async () => {
+  const bad: unknown[] = [
+    "steps",
+    { ...PROVENANCE, extra: 1 },
+    { route: "x", startedFrom: "y" },
+    { ...PROVENANCE, steps: [{ position: 1, label: "Open", from: "saved" }] },
+    { ...PROVENANCE, steps: [{ position: 1, label: "Open", from: "invented", ran: true }] },
+    { ...PROVENANCE, steps: [{ position: 1.5, label: "Open", from: "saved", ran: true }] },
+    { ...PROVENANCE, steps: [{ position: 1, label: "Open", from: "saved", ran: "yes" }] },
+    { ...PROVENANCE, steps: [{ position: 1, label: "Open", from: "saved", ran: true, hidden: true }] }
+  ];
+  for (const provenance of bad) {
+    const t = setup({ thread: outcomes({ attempt: attempt(), result: confirmed(), provenance }) });
+    assert.equal((await t.results.readThread({ projectId: "p1", conversationId: "c1" })).ok, false, JSON.stringify(provenance));
+  }
+});
+
+test("carrying an attempt on asks Core for exactly the attempt and the amount, and answers what Core said", async () => {
+  const sent: PanelMessage[] = [];
+  const reply = (async (message: PanelMessage) => {
+    sent.push(message);
+    return { ok: true, value: { ok: true, payload: { attemptId: "attempt.1", budgetUsd: 5 } } };
+  }) as PanelStore["request"];
+  const results = createExtensionChatTransport(reply, () => () => undefined).results!;
+  assert.deepEqual(await results.addBudgetAndCarryOn!({ projectId: "p1", attemptId: "attempt.1", addUsd: 0 }), { ok: true, value: { attemptId: "attempt.1", budgetUsd: 5 } });
+  assert.deepEqual(sent, [{ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, projectId: "p1", attemptId: "attempt.1", addUsd: 0 }]);
+});
+
+test("a carry-on Core refuses is Core's sentence, and an answer that is not the contract's is a failed request", async () => {
+  const refusing = createExtensionChatTransport((async () => ({ ok: false, sentence: "That attempt is still going." })) as PanelStore["request"], () => () => undefined).results!;
+  assert.deepEqual(await refusing.addBudgetAndCarryOn!({ projectId: "p1", attemptId: "attempt.1", addUsd: 0 }), { ok: false, sentence: "That attempt is still going." });
+  for (const payload of [{}, { attemptId: "attempt.1" }, { attemptId: "attempt.1", budgetUsd: "5" }, { attemptId: "", budgetUsd: 5 }]) {
+    const odd = createExtensionChatTransport((async () => ({ ok: true, value: { ok: true, payload } })) as PanelStore["request"], () => () => undefined).results!;
+    assert.equal((await odd.addBudgetAndCarryOn!({ projectId: "p1", attemptId: "attempt.1", addUsd: 1 })).ok, false, JSON.stringify(payload));
+  }
+});

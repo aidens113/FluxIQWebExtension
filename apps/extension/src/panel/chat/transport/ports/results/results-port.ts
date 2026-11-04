@@ -5,6 +5,7 @@ import { readRunReplies } from "../../../../automations";
 import { refusalOf } from "../../reply";
 import type { RuntimeListen } from "../activity";
 import { conversationOfPush } from "./conversation-of-push";
+import { carryOnAttempt } from "./carry-on-attempt";
 import { createThreadOutcomes } from "./create-thread-outcomes";
 import { finishedRunOf } from "./finished-run-of";
 import { mergedOutcomes } from "./merged-outcomes";
@@ -23,6 +24,13 @@ import { readExport } from "./read-export";
  * out `reportsSpend` is what lets the answer turn and the meter tell it. A run's outcome
  * has no spend to tell, and says so itself (`spendUnknown`). Nothing here throws: a
  * failed read is a failed result.
+ *
+ * **A closed panel loses nothing.** A task's result is Core's, kept per task, and `readThread`
+ * asks Core on every read, so a result that arrived while no panel was open is told by the first
+ * read of a panel opened afterwards. The panel's own feed (`listen`) only adds the runs it saw.
+ *
+ * **Carrying on** (`addBudgetAndCarryOn`) is Core's too: it asks `carryOnTaskAttempt` and
+ * answers at once.
  */
 export function resultsPort(request: PanelStore["request"], listen: RuntimeListen, download: ChatDownload, now: () => number = Date.now): ChatResultsPort {
   const held = createThreadOutcomes();
@@ -84,6 +92,7 @@ export function resultsPort(request: PanelStore["request"], listen: RuntimeListe
       }
       return { ok: true, value: { fileName: exported.value.fileName } };
     },
+    addBudgetAndCarryOn: (query) => carryOnAttempt(request, query),
     runAgain: async ({ projectId, taskId }): Promise<ChatResult<{ attemptId: string }>> => {
       await settled();
       const flowId = held.byTask(projectId, taskId)?.attempt.flowId;
