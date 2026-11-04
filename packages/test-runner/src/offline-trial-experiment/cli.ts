@@ -63,6 +63,12 @@
 //   read is also run over its own snapshot and compared with its live result.
 //   Headed Chrome (or Edge) over recorded snapshots, network off.
 //
+//   node packages/test-runner/dist/offline-trial-experiment/cli.js state-rule --lab-runs <lab-runs dir> --work <dir under test-runs/> [--extra-store <project.sqlite>]... [--out <file>] [--tables <file>]
+//
+//   The Answer First go/no-go (`./state-rule/`). Saved Flows walked over Core's trace
+//   state rule and compared with their own live answers: no model, site or browser.
+//   Stores are read from copies under `--work`; only counts and codes come out.
+//
 // Exit codes: 0 done; 2 usage; 3 prepared, not run (no --work); 4 the
 // candidate could not be prepared (refused or unverified rebuild).
 
@@ -75,12 +81,14 @@ import { offlineTrialRequest } from "./offline-trial-request.js";
 import { READS_USAGE, readsCommand } from "./reads/index.js";
 import { withRecordProcessing } from "./rebuild/index.js";
 import { freshStoreCopy, runExperimentTrial } from "./run/index.js";
+import { stateRuleCommand, STATE_RULE_USAGE } from "./state-rule/index.js";
 import { surveyExperiment } from "./survey-experiment.js";
 import { openTier2Reevaluation } from "./tier2/index.js";
 
 // dist/offline-trial-experiment -> repository root.
 const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 if (process.argv[2] === "reads") process.exit(await readsCommand(process.argv.slice(3), repositoryRoot));
+if (process.argv[2] === "state-rule") process.exit(await stateRuleCommand(process.argv.slice(3)));
 const parsed = parseExperimentArguments(process.argv.slice(2));
 if ("error" in parsed) {
   process.stderr.write(`${parsed.error}\n${EXPERIMENT_USAGE}\n${READS_USAGE}\n`);
