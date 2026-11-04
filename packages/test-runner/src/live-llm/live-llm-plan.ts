@@ -10,7 +10,7 @@
 
 import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, defaultLlmModelForProvider, isLlmModel, isLlmModelForProvider, isLlmProvider, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmProvider, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT } from "fluxiq/automation";
 import { RunnerFailure } from "../failure.js";
 
 /**
@@ -104,7 +104,7 @@ export type LiveLlmPlan = {
  * default model (`liveLlmCoreDefaultModel`, `./core-default-model.ts`), passed
  * in for the same reason; a Core given none builds on `DEFAULT_LLM_MODEL`.
  */
-export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number, coreDefaultModel: string = DEFAULT_LLM_MODEL, coreAuthoringMode: AutomationStudioAuthoringMode = "legacy"): LiveLlmPlan {
+export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number, coreDefaultModel: string = DEFAULT_LLM_MODEL, coreAuthoringMode: AutomationStudioAuthoringMode = AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT): LiveLlmPlan {
   if (!Number.isFinite(buildCostCeilingUsd) || buildCostCeilingUsd <= 0) throw refusal(`the per-build cost ceiling ${buildCostCeilingUsd} is not a positive amount`);
   if (!isLlmModel(coreDefaultModel)) throw refusal(`the run's Core default model ${describe(coreDefaultModel)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
