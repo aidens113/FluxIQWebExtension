@@ -1,7 +1,7 @@
 # Answer First
 
 Status: Active
-Status detail: Plan shown to the user on 2026-11-03 and waiting for their review; no code changed for it yet.
+Status detail: Steps approved by the user on 2026-11-03, with the hard rule that a task ends only with its result or its budget gone. Lanes starting; no paid run yet.
 Created: 2026-11-03
 Last updated: 2026-11-03
 Owner: Senior supervisor agent
@@ -17,7 +17,7 @@ Related: [testing facility](../architecture/testing-facility.md), [extension cli
 
 **On this side,** two findings matter most. The extension tells the story of building a Flow and never shows the answer. And the live runs of 2026-10-31 and 2026-11-03 ran `legacy`, the Lab's default, while the product's default is `project`.
 
-**Blockers:** the user's review. **Next:** the Answer lane, which can start with fake ports, and the Lab lane. The screen-by-screen evidence is in Core's `docs/working/answer-first-plan/reports/study-extension-ux.md`.
+**Blockers:** none. **Next:** the truth pass and the Answer lane, which can start with fake ports, and the Lab lane. The screen-by-screen evidence is in Core's `docs/working/answer-first-plan/reports/study-extension-ux.md`.
 
 ## Extension Lane
 
@@ -30,13 +30,14 @@ No saved picture shows getting-started, the empty state, Automations, the strip,
 | Phase | Build | Proves | Checked on |
 | --- | --- | --- | --- |
 | Truth pass | No codes, no cut sentences, no tick on "not confirmed", red only when it matters, onboarding claims true, dead review code gone | The chat stops saying untrue things | everything-store, crossborder-marketplace |
+| Budget out | The only failure shape: the best result so far, what was saved, add budget and carry on; anything else that goes wrong shows as a step while it keeps working | A task never ends in a bare failure | crossborder-marketplace with a scripted ending |
 | Answer turn | `results` port, rows preview, counts, CSV and JSON, on-site list, check line, Run again | The result can be taken without leaving chat | company-website; 360 px and keyboard |
 | Real rows | The adapter reads the last run's dataset into the answer turn | Value before Core's result record lands | crossborder-marketplace, oracle rows equal the preview |
 | Work header | Time, cost, one Stop, each step and ask told once | The person knows what it costs and can stop | job-board; robot check on crossborder-marketplace |
 | Setup | One screen in order, deep links, readiness, the extension's factory passing `purpose` | A new person reaches a first task | Stand-in gateway and a realistic page |
 | Second attempt shown | Saved state chip, "Using what I saved", from-saved marking, comparison line | The loop's value is visible | bigbox-retail, everything-store replay |
 | Tasks | Inside the Automations tab: search, attempts, rename, delete; durable steps from Core | Old work can be found and understood | local-classifieds; worker restart |
-| Asks | Told once; consequences; the PIN if the user wants it; Firefox popup re-open | Lasting acts finish in the extension | auction-marketplace |
+| Asks | Told once; consequences; no PIN once a Flow is running; for money, delete and send, a PIN once ever, when first starting a chat or Flow (user, 2026-11-03); Firefox popup re-open | Lasting acts finish in the extension | auction-marketplace |
 | Library | Tree, search, run with inputs, inspect | Nested subflows are usable | professional-network |
 | Recording and settings | "Show me how" as a composer attachment; settings in order, Advanced for the rest | Chat-first end to end | everything-store, company-website, photo-social |
 | Firefox pass | Popup layout, long work without an open panel, badge | Parity is real | social-network-feed |
@@ -55,6 +56,8 @@ The Lab today throws `lab.candidate_not_promoted` on a draft and never consults 
 6. **The defaults.** The Lab's authoring mode default (`packages/test-runner/src/live-llm/authoring-mode-env.ts`) equals the product's, and `testing-facility.md`'s stale line about it is corrected.
 
 Old pass rates are not comparable to `answerVerdict` and are never blended with it. Only a few tasks run fully end to end (user rule), so a second attempt runs on about one task per site, and every other task stays proven provider-free.
+
+**The hard rule in the Lab (user, 2026-11-03).** A task that ends without its result fails, unless its budget is gone or a person stopped it.
 
 **Done when:** a provider-free lane scores a task right with no Flow promoted, wrong with a repeated act, and shows a second attempt spending less than its first, all headed on a realistic site.
 
