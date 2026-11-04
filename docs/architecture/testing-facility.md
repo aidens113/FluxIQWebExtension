@@ -2063,7 +2063,74 @@ of a real isolated Core with no model key. `AttemptDriver` is the seam:
 stand-in, named on every row** (`standIns`): the attempt record, the stored rows, the
 chat's turn, the exploration (the task's own recording script), the saved draft and the
 calls, tokens and dollars. Live steps, time, every act, every page and every oracle are
-real. A live driver needs `answer-first` and a Core read for its attempt records.
+real.
+
+### A real attempt from the chat: `lab attempt`
+
+```powershell
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--dry-run]
+```
+
+One attempt at one realistic task, in a visible browser. `attempt-lane/live/` types the
+instruction into the real extension chat, follows the attempt with the read the extension
+uses (`list-conversation-task-attempts`, `get-task-attempt`) until it stops on `achieved`,
+`budget_out`, `stopped_by_person` or `waiting_for_person`, and scores it with
+`judgeAttemptAnswer`: the rows in the attempt's own dataset, the site's change since the
+baseline it recorded, the declared final state on the page the attempt left, and the answer
+turn **read from the panel's DOM** (`li.answer-turn[data-attempt-id]`), so a right answer
+that never reached the person fails. It exits 0 only on a right answer. There is no build
+deadline: only a stretch with nothing moving stops the watch, and that reports where the
+attempt stood and judges nothing. The series runner takes this driver unchanged, but only
+attempt 1 is exercised, and a continuation cannot be proven until Core's read says what an
+attempt started from.
+
+**`--scripted-model` is provider-free, and is never a live result.** Everything is the
+product's except the model's choices:
+
+- `scripted-model/model-server.ts` is an HTTP server in the Lab's process speaking Anthropic
+  Messages with `stream: true`. Core's endpoint is a fixed URL by design and gains no
+  setting for this.
+- The Core child gets it through `NODE_OPTIONS=--import` (`scripted-model/fetch-preload.ts`,
+  passed in `TopologyOptions.environment`). The wrapper sends a Messages call to that server,
+  leaves loopback alone, and refuses every other call leaving the machine. It tells a
+  Messages call by its shape, because the structure audit refuses a provider's host written
+  in this repository, and a call of that shape can only reach the loopback server.
+- A fake key goes in through Secret Keys as a live run's does, so the chat's model, the
+  session's unlock and the provider's whole transport all run. The server refuses any other
+  key.
+- `scripted-model/scripts/` holds a script per task: ordered replies per request kind
+  (`panel_command`, `evidence_tool_decision`, `loop_verification`), reading handles and
+  field keys from the real evidence in the request. A request the script does not expect
+  fails the run with its kind, and is never answered.
+- The run sets `FLUXIQ_PROVIDER_KEY_FILES=none` and `FLUXIQ_TEST_ENV_FILES=none`, drops
+  provider secrets, opens no env file for its ceiling and writes nothing to the spend ledger.
+  Its row names the stand-ins `model` and `spend`, says `live: false`, and the result line
+  says NOT LIVE. Validation refuses `live: true` on a row with any stand-in.
+
+**How to write a script for a new task.** Add `scripted-model/scripts/<task>.ts` and list it
+in that folder's `index.ts`. `panel_command` answers `{ do: "flow.createHere", with: {
+instruction: request.message } }`. `evidence_tool_decision` answers with `toolCall(...)`,
+`pressOf(...)` or a `complete`, deciding from `currentPageOf(request)`. `loop_verification`
+answers the judge's `diagnosis`. Every request of a run is in its evidence folder (`model/`,
+and Core's `steps/` beside it), which is how to read the page words a step needs.
+
+`FLUXIQ_ATTEMPT_SCRIPT_FORM` names which form of a task's script a `--scripted-model` run plays, for a task whose script has more than one
+(`scripted-model/scripts/index.ts`); a form its script does not have is refused by the script, and `lab attempt` takes no such option.
+Every attempt writes `site.json` into its evidence folder: the site's lasting view before and after the attempt, the change between them,
+and the activity the panel showed, kept so a verdict can be re-read without the site.
+
+**The ceiling.** `--authoring-mode answer-first --llm-max-cost-usd <n>` with nothing
+configured starts Core with `FLUXIQ_LLM_RUN_COST_CEILING_USD=<n>` and passes
+`assertLlmMaxCostWithinCeiling`, so a run that names its budget has nothing else to remember.
+Without both flags nothing moves. A configured environment or file ceiling lower than the
+flag is still refused, `--llm-cost-ceiling-usd` still only lowers, and above $10 is Core's
+refusal. A scripted run gives its Core these flags at $5, the attempt's own default budget.
+
+**The paid form** is `--live-llm`, which alone counts as live: it goes through the live-run
+guards and is ledgered under its task. `--dry-run` plans it with no browser, no Core and no
+provider call. It files its steps under `lab-runs/` and leaves `run.json` and
+`snapshots/live-llm.json` for the ledger.
 
 ### A build that starts from a recorded demonstration
 

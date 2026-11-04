@@ -17,9 +17,10 @@
 // Flow's subflows and assemble its builders' work into one candidate, admitted
 // on the same terms. `answer-first` (opt-in) is the Answer First plan's one live
 // exploration, which ends with the person's result judged and leaves a saved draft
-// rather than a promoted Flow; the Lab scores it by its answer, and a run on it
-// must name its `--llm-max-cost-usd`, because a Lab-scoped ceiling holds under the
-// attempt's $5.
+// rather than a promoted Flow; the Lab scores it by its answer. A run on it names
+// its `--llm-max-cost-usd`, which with nothing configured is also the ceiling its
+// Core is started with (`./cost-ceiling-env.ts`), because a Lab-scoped ceiling
+// would otherwise hold it under the attempt's $5.
 //
 // The Lab's default is the product's (user, 2026-11-03), so a run that names no mode
 // tests what a person gets. The product's default stays `project` until live runs prove
@@ -52,7 +53,7 @@ const LAB_DEFAULT_AUTHORING_MODE: AutomationStudioAuthoringMode = AUTOMATION_STU
 
 /**
  * The authoring mode for the Core started with `args`: `--authoring-mode` when
- * given, else the Lab's default (`legacy`). A value Core would refuse is refused
+ * given, else the product's default, which is the Lab's. A value Core would refuse is refused
  * here, through Core's own resolver, before anything starts.
  */
 export function labAuthoringModeValue(args: readonly string[] = process.argv, resolve: typeof resolveAutomationStudioAuthoringMode = resolveAutomationStudioAuthoringMode): AutomationStudioAuthoringMode {
