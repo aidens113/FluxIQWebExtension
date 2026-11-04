@@ -92,9 +92,10 @@ the side panel fill its column; nothing else differs, so a change to the panel
 lands in both browsers at once.
 
 There are no modes. The panel is laid out like a chat app: a slim top bar
-(FluxIQ, the Chat and Automations tabs, the record button, the connection dot,
-the gear and Open FluxIQ) and, under it, exactly one screen
-(`panel/shell/screen-state.ts`):
+(FluxIQ, the Chat and Automations tabs, the connection dot, the gear and Open
+FluxIQ) and, under it, exactly one screen (`panel/shell/screen-state.ts`).
+Recording is not in the top bar: "Show me how" sits in the chat's composer
+(below).
 
 - **Chat**, the default, with the whole panel. While it shows one automation's
   thread, a slim strip above it gives that automation's last run, Run, Stop,
@@ -104,25 +105,60 @@ the gear and Open FluxIQ) and, under it, exactly one screen
   run that starts while a recording runs or is paused, and not while the
   person types in a field the switch would hide (it waits for a later event
   of the same run). Builds do not switch the panel. The chat then retargets
-  to a thread that shows the run (`ChatPanel.followRun`, below).
-- **Automations**, the person's saved automations, newest first. Choosing one
-  calls `chat.open({ kind: "automation", flowId, name })` and shows the chat.
-  New automation starts with explicit written task instructions. Recording and
-  extraction offer supporting evidence with a required description of what it
-  demonstrates. A completed recording remains reviewable and attachable to an
-  instructed draft; it cannot independently generate, test or approve an
-  executable automation. Review preserves the person's focus and existing data.
-- **Settings**, opened by the gear in place of everything else: the two
-  addresses and four switches with an explicit Save, Disconnect, the on-page
-  status (Full, Small, Off), Report a problem, Forget this pairing, and Open
-  FluxIQ. Picking a tab or "Close settings" goes back.
-- **Getting started**, which replaces the chat and the automations tab while
-  the browser is not connected -- never connected, connecting, waiting for
-  approval, lost, or unable to reach FluxIQ -- or when the background does not
-  answer: numbered steps (1 Open FluxIQ, 2 Connect this browser, 3 Approve this
-  browser in FluxIQ), each marked done, under way, a problem or still to do,
-  with their buttons and the approval code. Settings still open over it,
-  because the connection address is there.
+  to a thread that shows the run (`ChatPanel.followRun`, below). Above the
+  chat, once the browser is connected and its model key reads missing or
+  locked, a setup card says what is done and the one thing left
+  (below).
+- **Automations**, the person's saved automations, newest first, under
+  "Your automations", with a "New automation" section below the list.
+  Choosing one calls `chat.open({ kind: "automation", flowId, name })` and
+  shows the chat. New automation starts with explicit written task
+  instructions, from the Chat tab, or with "Show FluxIQ how" and "Extract
+  Data From This Page". Recording and extraction offer supporting evidence
+  with a required description of what it demonstrates. A completed recording
+  remains reviewable and attachable to an instructed draft; it cannot
+  independently generate, test or approve an executable automation. Review
+  preserves the person's focus and existing data. The tab also gains a search
+  box ("Search tasks, automations and subflows") when the panel has a tasks
+  port or a library port, and "Tasks" and "Library" segments (the Library one
+  with a count of matches while a search is typed) when it has a library port.
+  Neither port is filled by the extension today (`extensionTasksPort` answers
+  `undefined`, and `extensionLibraryPort` answers `undefined` while its
+  `LIBRARY_LANDED` is `false`), so the tab is the plain list until they are.
+  With a tasks port the package's tasks screen (`createTasksScreen`) shows
+  above the list, and with a library port its library screen
+  (`createLibraryScreen`) shows under the Library segment; both live in
+  `@fluxiq/ui-components` and are described in Core's
+  package boundaries (`docs/architecture/package-boundaries.md`).
+- **Settings**, opened by the gear in place of everything else, in this order:
+  Connection (the connection in a sentence and whether this browser is
+  approved), Project, Model key (a sentence and Open FluxIQ, which opens
+  FluxIQ's keys page), Status on the page (Full, Small, Off), Report a
+  problem, and Advanced. Advanced is closed until a person opens it (their
+  choice is remembered in `chrome.storage.local`; a failed Save and unsaved
+  changes open it by themselves) and holds the two addresses, the
+  switches, Save, Disconnect and Forget this pairing. Picking a tab or
+  "Close settings" goes back. The Project line reads "This browser works in
+  the project you chose in FluxIQ. Change it there." (or says none is chosen
+  yet, or asks to connect): the panel is given the project's id only, so no
+  name is shown.
+- **Getting started** (headed "Get started with FluxIQ"), which replaces the
+  chat and the automations tab while the browser is not connected -- never
+  connected, connecting, waiting for approval, lost, or unable to reach FluxIQ
+  -- or when the background does not answer: numbered steps, in order, each
+  marked done, under way, needs attention or to do, with their buttons and the
+  approval code: 1 Start FluxIQ, 2 Sign in to FluxIQ, 3 Connect this browser,
+  4 Approve this browser in FluxIQ, 5 Add a model key. Step 1 says to run
+  `pnpm dev` in the `!FluxIQWebExtension` folder (there is no installer), and
+  step 2 how to sign in the first time. A step is marked done only for what
+  was detected: FluxIQ reached, the browser paired, a model key listed. A failed
+  connection says so in words with "Try again", and "Check the connection
+  address" opens Settings, because that address is there. Once the browser is
+  connected the chat comes back. A model key that reads missing, or a locked
+  browser (a sixth step, "Unlock this browser once"), does not hold the chat
+  back: the setup card sits above a usable chat with "Open FluxIQ" and "Not
+  now", and goes by itself when the key reads ready. A key read that fails
+  shows nothing and blocks nobody.
 
 While a recording runs, a bar under the top bar on every screen shows its step
 count, "Extract Data From This Page" and "Stop recording". It also holds a
@@ -146,10 +182,12 @@ pairing token in the URL.
 | --- | --- |
 | `shell/` | `mountPanel`, the top bar, the one `PanelStore`, and which screen shows (`screen-state.ts`, pure). |
 | `state/` | The one `PanelStore`: a single `getStatus` on mount plus the `statusChanged` subscription, and `request`, which never throws. Every failure comes back as a `PanelResult` sentence, including a service worker that did not answer. Also the sticky error every screen uses. |
-| `getting-started/` | The numbered steps as data (`startGuide`, pure) and their screen. |
+| `getting-started/` | The numbered steps as data (`startGuide`, pure) and their screen, the setup card above the chat, and the model key's reader (`model/`). `extensionSetupPort` is the one seam the key is read through (`SetupPort`, over `fluxiq.panel.modelReadiness`). |
 | `settings/` | The settings screen, the connection form, its unsaved draft (`fluxiq.ui.connectionDraft`), Save's plan, Report a problem and Forget this pairing. The on-page status choice is the adapter's (`chat/settings/`), mounted here. |
-| `automations/` | The automations tab, the open automation's strip, and the controller and readers behind them. |
-| `recording/` | The record button, the recording bar, the "New automation" section and the review after a recording. |
+| `automations/` | The automations tab (its search box and Tasks / Library segments), the open automation's strip, and the controller and readers behind them. |
+| `tasks/` | The package's tasks screen as the shell mounts it (`createTasksPanel`), over `extensionTasksPort` (the one named seam, empty today) and the open task's memory in `chrome.storage.local` (`extensionTasksMemory`). |
+| `library/` | The package's library screen as the shell mounts it (`createExtensionLibrary`), over `extensionLibraryPort` (the one named seam, empty until `LIBRARY_LANDED` is flipped) and `createPartsLibraryPort`, its panel messages. |
+| `recording/` | "Show me how" for the composer, the description dialog, the recording bar, the "New automation" section, the pending recording's memory and the finish that attaches it to the next message. |
 | `open-fluxiq/` | The Open FluxIQ button and its failure line. |
 | `chat/` | A thin adapter over the shared chat package: `chat-panel.ts` (`createChatPanel`), the extension's `transport/` (the background messages behind the package's `ChatTransport`), the live-activity `feed/`, the owner context, the on-page status setting and host status. The chat itself is `@fluxiq/ui-components` ([Live Activity](#live-activity)). |
 | `copy/` | Every sentence about the connection, a step and an error, as pure functions of the status. The panel shows no selectors, ids or URLs other than a hostname. |
@@ -161,9 +199,43 @@ Each screen imports its own stylesheet, and the build emits one `index.css`
 per page entry beside its `index.js` (`scripts/build-extension.mjs`, which
 fails if a page's stylesheet is missing).
 
-The record button is neutral (`--muted`, like the other top-bar icons) while
-idle and turns `--danger` only on hover or keyboard focus. While a recording
-runs or is paused it is hidden, and the red recording bar shows the state.
+`mountPanel(root, surface, ports)` takes `PanelPorts`
+(`panel/shell/contracts.ts`), each field optional: `setup` (the model key's
+reader, default `extensionSetupPort`), `tasks` (`{ port, results }`, so a
+tasks port cannot be given without the results port behind its Add budget,
+Run again and export; default `extensionTasksPort`), `library` (default
+`extensionLibraryPort`) and `taskMemory` (default `extensionTasksMemory`). A
+screen whose port is absent shows nothing of itself, so no dead control
+appears; a spec passes fakes. The tasks and library seams are where the
+background's task and part messages are wired when they exist.
+
+**Showing FluxIQ how.** "Show me how" sits in the chat composer beside "+",
+visible while the browser is connected and no recording runs (hidden when it
+is not connected), and disabled with its reason as the tooltip while FluxIQ
+works or the page cannot be recorded. It keeps the accessible name
+"Start recording" the Lab presses (`#recordButton`). The Automations tab's
+"New automation" section has the same action as "Show FluxIQ how". Pressing
+either opens a dialog titled "What should FluxIQ learn from this?"
+(a "Recording description" box, "Start described recording" and "Cancel";
+Firefox's popup adds a note that clicking the page closes it while recording
+goes on) and, once a sentence is given, records the current tab. The chat
+stays on screen: the panel does not move to another tab. The red recording
+bar then holds the step count, "Extract Data From This Page" and "Stop
+recording". When a recording ends, the panel waits for FluxIQ to save it
+("Saving your recording so it can go with your next message...", read at most
+40 times, one second apart), attaches it to the next message as a chip with
+a remove button, and puts the caret in the message box. If it never shows up,
+a line says the recording is saved but did not attach and to press "+" beside
+the box, with OK. What was asked is kept in `chrome.storage.local`
+(`fluxiq.ui.pendingRecording`, dropped after 12 hours) so a Firefox popup
+that closed in between attaches it on reopening. The description dialog
+stays because the Lab fills "Recording description" and then finds the
+recording by those words.
+
+In the Lab, Settings' Advanced starts closed, so the Lab opens it first
+through `packages/test-runner/src/extension-settings/` (`openSettingsAdvanced`,
+used by the demo-workspace browser session and the ui-e2e extension-project
+journey) before it fills an address or switch.
 
 The strip's Stop shows while a Run from this panel is in flight or the
 automation's newest known run reads as running, so a run started from the
@@ -177,8 +249,8 @@ status line says "Stop requested. Waiting for the run to finish." or
 The names the Lab presses are kept: the gear's "Settings", the settings labels,
 "Save" and "Saved.", "Forget this pairing" and "Forget", the getting-started
 "Connect" / "Try again" / "Try now" (`#connectButton`) and the approval code
-(`#pairingReferenceCode`), the top bar's "Start recording" (`#recordButton`),
-the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
+(`#pairingReferenceCode`), the composer's "Start recording"
+(`#recordButton`, "Show me how"), the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
 Data From This Page". The old way back from settings, the "Simple" radio, is
 gone with the modes.
 Paused recording remains an active recording lifecycle: Start recording stays
@@ -680,10 +752,13 @@ pacer keeps what Core says and changes how often it is said:
   (`RunRetry`, Core's `ui/activity-status/run-retry.ts`; D12 of the t174 UI review of
   `run-musp8nz1-dbd3905a`, where the overlay said "Fixing your Flow" while
   the chat said "Trying the step again");
-  "Waiting for you: finish the check on the page" while a page action's result
+  "Waiting for you: finish the check on the page, then press Continue" while a page action's result
   is `web.intervention.required` (a robot check or code prompt only a person
-  can answer), until a later page action succeeds; "Waiting for you: answer in
-  the FluxIQ panel" for Core's `waiting_permission`; then "Flow ready", "Build
+  can answer), until a later page action succeeds; "Waiting for you: a
+  question in the FluxIQ panel" for Core's `waiting_permission` and any other
+  question (both sentences are the extension's own words, passed to Core's
+  pacer as `EXTENSION_ACTIVITY_HOST_WORDS` in
+  `src/background/activity/host-words.ts`); then "Flow ready", "Build
   failed", "Run finished" or "Run failed". Every headline change shows at once,
   however recently the detail changed. The repair and check situations span
   many events, so `UnitSituation` folds every event in, shown or not. Core
