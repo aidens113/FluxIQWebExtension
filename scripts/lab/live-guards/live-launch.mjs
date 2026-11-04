@@ -9,14 +9,14 @@
 //
 // A launch also names the authoring mode its Core is started in
 // (`--authoring-mode`), because a run in another mode is another experiment
-// (`rules/unchanged.mjs`). With no flag it is the Lab's own default, `legacy`,
+// (`rules/unchanged.mjs`). With no flag it is the product's default, `project`,
 // restated from `LAB_DEFAULT_AUTHORING_MODE` in
 // `packages/test-runner/src/live-llm/authoring-mode-env.ts` because `scripts/`
 // resolves no workspace package. A value the runner would refuse is recorded
 // as given: the runner refuses it before anything is spent.
 
-/** The mode a launch that names none runs its Core in (the Lab's default, not Core's). */
-const LAB_DEFAULT_AUTHORING_MODE = "legacy";
+/** The mode a launch that names none runs its Core in (the Lab's default, which is the product's). */
+const LAB_DEFAULT_AUTHORING_MODE = "project";
 
 /**
  * @param {string[]} args the Lab arguments, as `run-lab.mjs` received them

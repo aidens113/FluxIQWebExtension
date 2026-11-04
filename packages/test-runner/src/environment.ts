@@ -118,7 +118,7 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * and Core builds on its own default.
  *
  * `FLUXIQ_AUTHORING_MODE` is always set, from the run's `--authoring-mode` or
- * Core's default `legacy` (`./live-llm/authoring-mode-env.ts`): an inherited value
+ * the product's default, `project` (`./live-llm/authoring-mode-env.ts`): an inherited value
  * is dropped, so the mode the run records is the mode its Core runs in.
  *
  * In `candidate` mode the Core also gets the candidate start hook (decision
