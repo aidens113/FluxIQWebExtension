@@ -1,37 +1,22 @@
 // The port the panel gives the chat, and the watch that tells it when a task is at
-// work: no dialog means no way to reach one, and work in progress refuses a dialog
-// even for a question drawn before it began.
+// work: the port offers no PIN dialog, so the one question that needs a PIN goes to
+// FluxIQ, and work in progress leaves it only Cancel.
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ChatReauthorizeRequest } from "@fluxiq/ui-components";
 import { createAskPort } from "../ask-port";
 import { createWorkWatch } from "../work-watch";
 
-const request = (): ChatReauthorizeRequest & { cancels: number } => {
-  const made = { title: "t", description: "d", actionLabel: "a", cancels: 0, submit: async () => ({ ok: true as const }), cancel() { made.cancels += 1; } };
-  return made;
-};
 const panelCommand = { askId: "panel-command.1", kind: "confirm", status: "pending", parks: false, consequences: ["delete"] };
 
-test("with no dialog the port offers none, so the chat sends that question to FluxIQ", () => {
+test("the port offers no PIN dialog, so the chat sends that question to FluxIQ", () => {
   const port = createAskPort({ working: () => false, surface: () => "sidepanel" });
   assert.equal(port.reauthorize, undefined);
   assert.equal(port.present(panelCommand)?.note, "This panel can't take your PIN.");
 });
 
-test("with a dialog, a press while no task works opens it; a press once work has begun opens nothing", () => {
-  let working = false;
-  const shown: ChatReauthorizeRequest[] = [];
-  const port = createAskPort({ working: () => working, surface: () => "sidepanel", pinDialog: (made) => shown.push(made) });
-  const first = request();
-  port.reauthorize!(first);
-  assert.deepEqual(shown, [first]);
-  working = true;
-  const second = request();
-  port.reauthorize!(second);
-  assert.equal(shown.length, 1);
-  assert.equal(second.cancels, 1);
+test("a question that needs a PIN, once a task is at work, leaves only Cancel", () => {
+  const port = createAskPort({ working: () => true, surface: () => "sidepanel" });
   assert.deepEqual(port.present(panelCommand)?.actions.map((action) => action.label), ["Cancel"]);
 });
 

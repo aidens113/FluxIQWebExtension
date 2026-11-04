@@ -7,7 +7,8 @@ import { defaultSettings } from "../../../../src/shared/browser";
 import type { PanelMessage } from "../../../../src/panel/state";
 
 type Status = Record<string, unknown>;
-type Answer = (message: { type: string } & Record<string, unknown>) => Promise<unknown> | undefined;
+type Core = ReturnType<typeof targetCore>;
+type Answer = (message: { type: string } & Record<string, unknown>, core: Core) => Promise<unknown> | undefined;
 
 export type ScriptedPanelOptions = {
   surface?: PanelSurface;
@@ -20,6 +21,8 @@ export type ScriptedPanelOptions = {
   /** The threads the chat reads. */
   threads?: Parameters<typeof targetCore>[0];
   ports?: PanelPorts;
+  /** What `chrome.storage.local` holds, kept by the caller so it can outlive the page (a popup that closed and opened again). */
+  memory?: Record<string, unknown>;
 };
 
 const settings = { ...defaultSettings(), coreApiUrl: "http://127.0.0.1:3000" };
@@ -35,7 +38,7 @@ export function startScriptedPanel(options: ScriptedPanelOptions = {}): void {
   let status = screens[options.start ?? "connected"];
   const core = targetCore(options.threads ?? [{ conversationId: "conv-latest", subjectKind: "project", subjectId: "project-1", turns: [] }]);
   const answer = (message: { type: string } & Record<string, unknown>): Promise<unknown> => {
-    const scripted = options.answer?.(message);
+    const scripted = options.answer?.(message, core);
     if (scripted !== undefined) return scripted;
     switch (message.type) {
       case "fluxiq.getStatus": return Promise.resolve({ ok: true, status });
@@ -46,7 +49,7 @@ export function startScriptedPanel(options: ScriptedPanelOptions = {}): void {
     }
   };
   const listeners: Array<(message: unknown) => void> = [];
-  const memory: Record<string, unknown> = {};
+  const memory: Record<string, unknown> = options.memory ?? {};
   const scope = window as unknown as Record<string, unknown>;
   scope.chrome = {
     runtime: {
@@ -56,6 +59,10 @@ export function startScriptedPanel(options: ScriptedPanelOptions = {}): void {
     },
     storage: { local: {
       get: (keys: unknown, callback?: (items: Record<string, unknown>) => void) => callback?.({ ...memory }),
+      remove: (key: string, callback?: () => void) => {
+        delete memory[key];
+        callback?.();
+      },
       set: (values: Record<string, unknown>, callback?: () => void) => {
         Object.assign(memory, values);
         callback?.();

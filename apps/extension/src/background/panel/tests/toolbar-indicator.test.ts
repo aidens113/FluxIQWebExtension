@@ -141,3 +141,23 @@ test("the indicator shows ! when the activity starts waiting and clears it when 
   indicator.activity(null);
   assert.deepEqual(written, ["...", "!", ""]);
 });
+
+test("the indicator says ... while a task's work goes on with no run open, ! when it waits, and clears when it ends", () => {
+  const written: string[] = [];
+  const indicator = new ToolbarIndicator((text) => written.push(text), clock().timers);
+  indicator.update(idle);
+  indicator.activity({ outcome: null, working: true });
+  indicator.activity({ outcome: null, working: true });
+  indicator.activity({ outcome: "waiting", working: false });
+  indicator.activity({ outcome: null, working: true });
+  indicator.activity({ outcome: "done", working: false });
+  assert.deepEqual(written, ["", "...", "!", "...", ""]);
+});
+
+test("recording still wins over the work the activity display says is going on", () => {
+  const written: string[] = [];
+  const indicator = new ToolbarIndicator((text) => written.push(text), clock().timers);
+  indicator.update({ recordingState: "recording", runtime: { state: "idle" } });
+  indicator.activity({ outcome: null, working: true });
+  assert.deepEqual(written, ["REC"]);
+});

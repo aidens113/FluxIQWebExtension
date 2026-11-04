@@ -4,10 +4,10 @@
 // you:", in the panel's work header, so each has to read true in both places.
 //
 // A question is in the FluxIQ panel. A check only a person can pass is finished on
-// the page, and Continue is pressed afterwards. Core's pacer heads every wait it
-// was told of as a question, a person-only check's too, so `answer` says where the
-// question is rather than "answer in the panel", which on a check would point the
-// wrong way; Core's sentence beside it says what to do.
+// the page, and Continue is pressed afterwards. Core's pacer tells the two apart
+// by the ask the row names (`waitingOn` in `pacer.ts`): `answer` heads a permission
+// or any other question, and `check` heads a person-only check, so each word says
+// where to go; Core's sentence beside it says what to do.
 
 import type { ActivityHostWords } from "fluxiq/ui";
 

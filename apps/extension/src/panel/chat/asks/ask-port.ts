@@ -1,36 +1,24 @@
 // The chat's ask port for the extension: Core's question in the extension's words
-// (`present-ask.ts`) and, when one is given, the dialog that takes a PIN.
+// (`present-ask.ts`).
 //
-// The panel mounts this with no dialog today, because a PIN cannot do its job from
-// a paired browser: Core skips the check for a paired client and nothing here runs
-// what the confirmation carries (`chat-panel.ts`). With none, the chat shows
-// "Answer this in FluxIQ." and the Open FluxIQ control instead of Confirm.
+// There is no PIN dialog: one press of Allow answers a permission, and the
+// panel never asks for a PIN. A confirmation that does need one (a shared-thread
+// `panel-command.` question naming a lasting act) shows "Answer this in FluxIQ."
+// and the Open FluxIQ control instead of Confirm, because the answer is FluxIQ's.
 
-import type { ChatAskPort, ChatReauthorizeRequest } from "@fluxiq/ui-components";
+import type { ChatAskPort } from "@fluxiq/ui-components";
 import { presentAsk } from "./present-ask";
 
 /** How the port is made. `surface` defaults to the one the panel mounted on. */
 export type AskPortOptions = {
   working(): boolean;
   surface?(): string | undefined;
-  /** Draws the PIN dialog (`showPinDialog`). Absent: a question that needs one goes to FluxIQ. */
-  pinDialog?(request: ChatReauthorizeRequest): void;
 };
 
 /** Creates the port. */
 export function createAskPort(options: AskPortOptions): ChatAskPort {
   const surface = options.surface ?? mountedSurface;
-  const pinDialog = options.pinDialog;
-  const present: ChatAskPort["present"] = (ask) => presentAsk(ask, { surface, working: options.working, pinDialog: pinDialog !== undefined });
-  if (pinDialog === undefined) return { present };
-  return {
-    present,
-    reauthorize(request) {
-      // The press was made for a question drawn before work began: nothing asks in the middle of a task.
-      if (options.working()) request.cancel();
-      else pinDialog(request);
-    }
-  };
+  return { present: (ask) => presentAsk(ask, { surface, working: options.working }) };
 }
 
 function mountedSurface(): string | undefined {

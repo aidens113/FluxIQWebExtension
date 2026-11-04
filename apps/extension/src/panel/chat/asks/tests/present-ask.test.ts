@@ -8,7 +8,7 @@ import { AUTOMATION_STUDIO_ACTION_CONSEQUENCE_PHRASES, AUTOMATION_STUDIO_DESTRUC
 import { presentAsk, type AskPresentContext } from "../present-ask";
 import { askTakesPin } from "../takes-pin";
 
-const idle: AskPresentContext = { surface: () => "sidepanel", working: () => false, pinDialog: true };
+const idle: AskPresentContext = { surface: () => "sidepanel", working: () => false };
 const working: AskPresentContext = { ...idle, working: () => true };
 const CLASSES = ["move_money", "delete", "send_or_publish", "modify_existing", "create_new"];
 
@@ -81,8 +81,8 @@ test("no PIN while a task is working: only Cancel stays, and the question says w
   assert.equal(shown.note, "You can confirm this once the task has ended.");
 });
 
-test("with no PIN dialog the question says plainly that this panel cannot take it", () => {
-  const shown = presentAsk(panelCommand(["delete"]), { ...idle, pinDialog: false })!;
+test("a confirmation that needs a PIN says plainly that this panel cannot take it, and goes to FluxIQ", () => {
+  const shown = presentAsk(panelCommand(["delete"]), idle)!;
   assert.equal(shown.note, "This panel can't take your PIN.");
   assert.ok(shown.actions.find((action) => action.kind === "grant")?.reauthorize, "the chat swaps an action it cannot take for the Open FluxIQ control");
 });
@@ -120,6 +120,6 @@ test("what it cannot read goes back to the chat's own words", () => {
 });
 
 test("no word a person reads names a machine thing", () => {
-  const all = [permission(["move_money"]), panelCommand(["delete"]), personCheck].flatMap((ask) => [idle, working, { ...idle, pinDialog: false }, { ...idle, surface: () => "popup" }].map((context) => JSON.stringify(presentAsk(ask, context))));
+  const all = [permission(["move_money"]), panelCommand(["delete"]), personCheck].flatMap((ask) => [idle, working, { ...idle, surface: () => "popup" }].map((context) => JSON.stringify(presentAsk(ask, context))));
   for (const said of all) assert.doesNotMatch(said.replace(/"(?:id|kind|value|tone)":"[^"]*"/gu, ""), /\b(?:Flow|build|promoted|candidate|trial|judge|Core)\b/u);
 });

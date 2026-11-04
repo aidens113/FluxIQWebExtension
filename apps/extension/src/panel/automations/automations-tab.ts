@@ -88,10 +88,12 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
   let segment: SegmentName = "tasks";
   let taskMatches: number | null = null;
   let taskOpen = false;
+  let libraryWanted = false;
   const searchBox = createSearchBox((typed) => {
     text = typed;
     tasks?.search(typed);
     library?.search(typed);
+    applyView();
     draw();
   });
   const segments = createSegments(names, (name) => {
@@ -169,7 +171,10 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     tasksPane.hidden = segment !== "tasks";
     libraryPane.hidden = segment !== "library" || taskOpen;
     segments.select(segment);
-    library?.setActive(active && segment === "library" && !taskOpen);
+    // A search typed on Tasks reads the library too (quietly, once), so its count can show beside the Library segment.
+    const wanted = active && !taskOpen && (segment === "library" || text.trim() !== "");
+    if (wanted !== libraryWanted || segment === "library") library?.setActive(wanted);
+    libraryWanted = wanted;
   }
 
   function reconcileRows(rows: readonly AutomationRowView[], fallbackTarget: HTMLElement): HTMLElement | undefined {

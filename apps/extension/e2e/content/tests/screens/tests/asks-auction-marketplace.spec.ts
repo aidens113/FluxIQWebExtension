@@ -1,8 +1,7 @@
 // Headed, provider-free look at every question a person can be asked, on the auction-marketplace scenario at
-// 360 px, by mouse and by keyboard: a permission ask for a money act, a person-only check, a text question, a
-// panel confirmation sent to FluxIQ, the PIN dialog with a refusal and a success, the answered states, and the
-// popup's wording at 380 x 580. The panel is the real one over a scripted background. No provider, no real site,
-// and the PIN is digits made up here.
+// 360 px, by mouse and by keyboard: a permission ask for a money act (one press of Allow, no PIN), a person-only
+// check, a text question, a panel confirmation sent to FluxIQ, the answered states, and the popup's wording at
+// 380 x 580. The panel is the real one over a scripted background. No provider, no real site.
 import { expect, test } from "../../../index.js";
 import type { FrameLocator, Page, TestInfo } from "@playwright/test";
 import { bundlePanel, mountPanelFrame } from "../panel-frame.js";
@@ -13,9 +12,9 @@ const CHECK_WORDS = "Waiting for you: finish the check on the page, then press C
 const PLACE_BID = 'FluxIQ needs to press "Place bid" (button) to build this Flow. That would spend, refund or move money, and that always needs your permission, even when your instruction asks for it.';
 const CHECK = "FluxIQ needs you: complete the check on this page, then press Continue.";
 const CHECK_TITLE = "Asked the person to complete a check";
+const OPEN_TITLE = "Asked a question (open)";
 const OPEN_QUESTION = "Which auction do you mean: the lamp or the clock?";
 const PANEL_COMMAND = 'You asked me to "Delete the automation". That would delete or remove something, and it cannot be undone, so confirm it here with your PIN, or cancel.';
-const RIGHT_PIN = "482910";
 
 const permissionAsk = { askId: "request.1", kind: "permission", status: "pending", parks: true, options: null, answer: null, missing: ["move_money"], consequences: ["move_money"],
   control: { name: "Place bid", kind: "button" }, permissionRequest: { action: { kind: "exploration", verb: "press" }, control: { name: "Place bid", kind: "button" }, missing: ["move_money"] } };
@@ -63,41 +62,6 @@ function panelEntry(scene: Scene, surface: "sidepanel" | "popup"): string {
         return undefined;
       }
     });
-  `;
-}
-
-/** The chat alone with a PIN dialog, as it mounts once Core takes a PIN from a paired browser. `window.__pins` holds each PIN the answer carried. */
-function pinEntry(): string {
-  return `
-    import { createChatPanel } from "./src/panel/chat";
-    import { createAskPort, showPinDialog } from "./src/panel/chat/asks";
-    import { targetCore } from "./src/panel/chat/conversation/tests/target-core";
-    import { ACTIVITY_MESSAGES } from "./src/shared/activity";
-    import { RUNTIME_MESSAGES } from "./src/shared/constants";
-    import "./src/panel/shell/shell.css";
-    const core = targetCore([{ conversationId: "conv-latest", subjectKind: "project", subjectId: "project-1", turns: [
-      { turnId: "t1", author: "person", text: "Delete that automation", createdAt: Date.now() - 60000 },
-      { turnId: "t2", author: "automation", text: ${JSON.stringify(PANEL_COMMAND)}, createdAt: Date.now() - 5000, ask: ${JSON.stringify(commandAsk)} }
-    ] }]);
-    window.__pins = [];
-    const request = async (message) => {
-      if (message.type === ACTIVITY_MESSAGES.read) return { ok: true, value: { ok: true, state: { current: null, display: null, recent: [], history: [], overlay: "expanded", live: true } } };
-      if (message.type === RUNTIME_MESSAGES.panelConversationAnswer && message.kind === "grant") {
-        window.__pins.push(message.authorizationPin);
-        if (message.authorizationPin !== ${JSON.stringify(RIGHT_PIN)}) return { ok: false, sentence: "That PIN isn't right. Try again." };
-      }
-      return core.request(message);
-    };
-    window.chrome = { runtime: { onMessage: { addListener() {}, removeListener() {} } } };
-    document.documentElement.dataset.surface = "sidepanel";
-    const chat = createChatPanel(request, () => ({ element: document.createElement("a"), observe() {} }), { asks: createAskPort({ working: () => false, pinDialog: showPinDialog }) });
-    const status = { connectionState: "connected", projectId: "project-1", paired: true };
-    const shell = document.createElement("div");
-    shell.className = "shell";
-    shell.append(chat.element);
-    document.querySelector("#app").append(shell);
-    chat.render(status);
-    chat.setActive(true);
   `;
 }
 
@@ -150,8 +114,8 @@ test("auction-marketplace: a permission ask refused with the mouse says so", asy
 
 test("auction-marketplace: a person-only check is told once, on the page and in the panel, and Continue is kept in the transcript", async ({ openHarness, page }, testInfo) => {
   const harness = await openHarness("auction-marketplace");
-  // Core's own ask arrives as a question, so the headline is `answer` and Core's sentence is the detail.
-  const scene = { text: CHECK, ask: personAsk, headline: QUESTION_WORDS, detail: CHECK, title: CHECK_TITLE };
+  // Core's own ask names itself a check, so the headline is `check` and Core's sentence is the detail.
+  const scene = { text: CHECK, ask: personAsk, headline: CHECK_WORDS, detail: CHECK, title: CHECK_TITLE };
   const frame = await open(page, panelEntry(scene, "sidepanel"));
   await expect(button(frame, "Continue")).toBeVisible();
   await expect(frame.locator(".chat-work-now")).toHaveText("The question is above.");
@@ -181,7 +145,7 @@ test("auction-marketplace: a person-only check is told once, on the page and in 
 
 test("auction-marketplace: each Stop does what its words say", async ({ openHarness, page }, testInfo) => {
   await openHarness("auction-marketplace");
-  const frame = await open(page, panelEntry({ text: CHECK, ask: personAsk, headline: QUESTION_WORDS, detail: CHECK, title: CHECK_TITLE }, "sidepanel"));
+  const frame = await open(page, panelEntry({ text: CHECK, ask: personAsk, headline: CHECK_WORDS, detail: CHECK, title: CHECK_TITLE }, "sidepanel"));
   await frame.locator(".turn-ask").getByRole("button", { name: "Stop", exact: true }).click();
   await expect(frame.getByText("You pressed Stop.")).toBeVisible();
   expect((await answersOf(page)).map(({ kind, value }: any) => [kind, value])).toEqual([["choice", "person_stop"]]);
@@ -195,7 +159,10 @@ test("auction-marketplace: each Stop does what its words say", async ({ openHarn
 
 test("auction-marketplace: a text question, typed and sent with Enter", async ({ openHarness, page }, testInfo) => {
   await openHarness("auction-marketplace");
-  const frame = await open(page, panelEntry({ text: OPEN_QUESTION, ask: openAsk, headline: QUESTION_WORDS }, "sidepanel"));
+  const frame = await open(page, panelEntry({ text: OPEN_QUESTION, ask: openAsk, headline: QUESTION_WORDS, title: OPEN_TITLE }, "sidepanel"));
+  // A text question is told once, by the question: no card of any kind sits beside it (the header's "Waiting for you" is the work's, not a card).
+  await expect(frame.locator(".chat-card")).toHaveCount(0);
+  await expect(frame.getByText(/Permission|Robot check/u)).toHaveCount(0);
   const box = frame.getByRole("textbox", { name: "Your answer" });
   await expect(box).toBeVisible();
   await box.click();
@@ -227,62 +194,10 @@ test("auction-marketplace: a confirmation that takes a PIN says where to answer 
   await picture(frame, testInfo, "confirmation-cancelled");
 });
 
-test("auction-marketplace: the PIN dialog, by keyboard: focus moves in, a refusal stays open, Escape cancels, success closes and the PIN is gone", async ({ openHarness, page }, testInfo) => {
-  await openHarness("auction-marketplace");
-  const frame = await open(page, pinEntry());
-  const child = page.frame({ name: "panel-frame" })!;
-  await expect(button(frame, "Confirm")).toBeVisible();
-  await button(frame, "Confirm").focus();
-  await page.keyboard.press("Enter");
-  const dialog = frame.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  const field = dialog.getByRole("textbox", { name: "Your PIN" });
-  await expect(field).toBeFocused();
-  await picture(frame, testInfo, "pin-dialog");
-  await page.screenshot({ path: testInfo.outputPath("pin-dialog-whole.png") });
-
-  await page.keyboard.type("12");
-  await page.keyboard.press("Enter");
-  await expect(dialog.getByRole("alert")).toHaveText("A PIN is 4 to 12 digits.");
-  expect(await child.evaluate(() => (window as unknown as { __pins: unknown[] }).__pins)).toEqual([]);
-
-  await page.keyboard.type("111111");
-  await page.keyboard.press("Enter");
-  await expect(dialog.getByRole("alert")).toHaveText("That PIN isn't right. Try again.");
-  await expect(dialog).toBeVisible();
-  await expect(field).toHaveValue("");
-  await expect(field).toBeFocused();
-  await picture(frame, testInfo, "pin-dialog-refused");
-
-  await page.keyboard.press("Tab");
-  expect(await focusedText(frame)).toBe("Cancel");
-  await page.keyboard.press("Tab");
-  expect(await focusedText(frame)).toBe("Confirm");
-  await picture(frame, testInfo, "pin-dialog-focus");
-
-  await field.focus();
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(button(frame, "Confirm"), "cancelling leaves the question as it was").toBeVisible();
-  await expect(button(frame, "Confirm")).toBeFocused();
-
-  await page.keyboard.press("Enter");
-  await expect(field).toBeFocused();
-  await expect(field, "a new dialog starts empty").toHaveValue("");
-  await page.keyboard.type(RIGHT_PIN);
-  await page.keyboard.press("Enter");
-  await expect(dialog).toHaveCount(0);
-  await expect(frame.getByText("You said yes.")).toBeVisible();
-  await picture(frame, testInfo, "pin-answered");
-  expect(await child.evaluate(() => (window as unknown as { __pins: unknown[] }).__pins)).toEqual(["111111", RIGHT_PIN]);
-  const leftovers = await child.evaluate(() => (document.documentElement.outerHTML + JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage })));
-  expect(leftovers.replaceAll(JSON.stringify(RIGHT_PIN), "")).not.toContain(RIGHT_PIN);
-});
-
 test("auction-marketplace: on the popup at 380 x 580 a person-only check says the window closes, and reopening shows the same question", async ({ openHarness, page }, testInfo) => {
   await openHarness("auction-marketplace");
   const size = { width: 380, height: 580 };
-  const entry = panelEntry({ text: CHECK, ask: personAsk, headline: QUESTION_WORDS, detail: CHECK, title: CHECK_TITLE }, "popup");
+  const entry = panelEntry({ text: CHECK, ask: personAsk, headline: CHECK_WORDS, detail: CHECK, title: CHECK_TITLE }, "popup");
   const frame = await open(page, entry, size);
   await expect(frame.getByText("This window closes when you click the page. Press the FluxIQ button to come back and press Continue.")).toBeVisible();
   await expect(button(frame, "Continue")).toBeInViewport();

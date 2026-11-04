@@ -4,15 +4,11 @@
 // (`owner-context.ts`). The chat itself, and everything it knows how to show,
 // lives in the package; this keeps the panel's one call, `createChatPanel`.
 //
-// Questions are worded by `asks/`, with no PIN dialog. A panel-command
-// confirmation is the one question that takes a PIN, and from a paired browser a
-// PIN cannot do its job yet: Core skips the check for a paired client and nothing
-// here runs what the confirmation carries, so a dialog would accept any digits and
-// do nothing. The chat sends that one question to FluxIQ. When Core takes it from
-// a paired client, passing `pinDialog: showPinDialog` is the only change here
-// (the background relay already forwards the PIN).
+// Questions are worded by `asks/`, with no PIN dialog: one press of Allow answers
+// a permission. A panel-command confirmation is the one question that takes a PIN,
+// and the extension never asks for it: the chat sends that one question to FluxIQ.
 
-import { createChatWidget, type ChatAskPort, type ChatOpenControlFactory, type ChatWidget } from "@fluxiq/ui-components";
+import { createChatWidget, type ChatAskPort, type ChatOpenControlFactory, type ChatWidget, type ChatWidgetOptions } from "@fluxiq/ui-components";
 import "@fluxiq/ui-components/styles/chat.css";
 import type { PanelStore } from "../state";
 import type { ExtensionStatus } from "../../shared/protocol";
@@ -49,6 +45,8 @@ export type ChatPanelOptions = {
   onExtract?: () => void;
   /** How questions are worded and answered, instead of the extension's own port. */
   asks?: ChatAskPort;
+  /** The composer's host control ("Show me how", beside "+"), as the package takes it. */
+  composer?: NonNullable<ChatWidgetOptions["composer"]>;
 };
 
 /** Creates the chat, talking to the background through `request`. */

@@ -40,3 +40,16 @@ export async function mountPanelFrame(page: Page, bundle: PanelBundle, size: { w
   await child.addScriptTag({ content: bundle.script });
   return { frame, child };
 }
+
+/**
+ * What Firefox's popup does when the person clicks the page: the window closes, so the page
+ * unloads (`pagehide`) and the frame goes. Playwright cannot load the real popup, so this models it:
+ * a real click on the scenario's own page (left of the panel), then `pagehide` in the panel and the
+ * frame removed. What the background and Core keep survives only where the caller keeps it
+ * (`journey-panel.ts` keeps it on the page that holds the frame); a new `mountPanelFrame` is the reopening.
+ */
+export async function closePopupOnPageClick(page: Page): Promise<void> {
+  await page.mouse.click(6, 6);
+  await page.frame({ name: "panel-frame" })?.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+  await page.evaluate(() => document.getElementById("panel-frame")?.remove());
+}

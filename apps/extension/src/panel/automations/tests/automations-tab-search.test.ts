@@ -121,3 +121,13 @@ test("tasks alone: the box and the list, with no Library switch", async () => wi
   assert.equal(view.segmentButtons().length, 0);
   assert.equal(view.root.querySelectorAll("input").length, 1);
 }));
+
+test("a search typed on Tasks reads the library once, quietly, so its count can show; clearing it stops that", async () => withView({}, async (view) => {
+  assert.ok(!view.libraryCalls.includes("active:true"), "the library is not read while nobody looks at it");
+  await view.type("o");
+  await view.type("or");
+  await view.type("ord");
+  assert.deepEqual(view.libraryCalls.filter((call) => call.startsWith("active:")), ["active:true"], "one read for the whole search");
+  await view.type("");
+  assert.equal(view.libraryCalls.filter((call) => call.startsWith("active:")).at(-1), "active:false");
+}));

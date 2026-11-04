@@ -42,8 +42,6 @@ export type AskPresentContext = {
   surface(): string | undefined;
   /** True while a task is working or waiting on the person. */
   working(): boolean;
-  /** Whether this panel has a PIN dialog it can answer through. */
-  pinDialog: boolean;
 };
 
 /** `value` as the chat should show it; null: the chat's own words for a question this cannot read. */
@@ -85,7 +83,7 @@ function pinConfirmation(ask: AskRecord, context: AskPresentContext): ChatAskPre
     ...answer("grant", "Confirm", "danger"),
     reauthorize: { title: "Enter your PIN", description: `Confirming will ${joined(phrasesOf(ask))}. It can't be undone.`, actionLabel: "Confirm" }
   };
-  return { ...plain(ask), ...(context.pinDialog ? {} : { note: NO_PIN_HERE }), actions: [confirm, cancel], takesText: false };
+  return { ...plain(ask), note: NO_PIN_HERE, actions: [confirm, cancel], takesText: false };
 }
 
 function personCheck(ask: AskRecord, context: AskPresentContext): ChatAskPresentation {

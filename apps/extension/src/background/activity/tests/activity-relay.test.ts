@@ -113,10 +113,18 @@ test("a wait is headed in the extension's own words: a question in the FluxIQ pa
   await h.relay.accept(activity(3, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "building", label: "Reading your request" }));
   await h.relay.accept(activity(4, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "exploring", label: "Using core.run_node: web.intervention.required", detail: check }));
   assert.equal(h.relay.state().display?.headline, "Waiting for you: finish the check on the page, then press Continue");
-  // Core's own ask for that check arrives as a question: the pacer heads it so (`pacer.ts`, `waitingOn`), and no word here may say to answer it in the panel instead of finishing it on the page.
-  await h.relay.accept(activity(5, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "waiting_permission", label: "FluxIQ needs you: complete the check on this page, then press Continue." }));
-  assert.equal(h.relay.state().display?.headline, "Waiting for you: a question in the FluxIQ panel");
+  // Core's own ask for that check names itself a check (`ask/title.ts`), so the pacer heads it as one (`pacer.ts`, `waitingOn`): no word here points the person to the panel instead of the page.
+  // The headline is the same words as the check the page reported, so only the sentence changes, and a sentence waits its turn.
+  h.clock.advance(10_000);
+  await settle();
+  const asked = { kind: "ask" as const, title: "Asked the person to complete a check", status: "started" as const, ref: "ask-1" };
+  await h.relay.accept(activity(5, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "waiting_permission", label: "FluxIQ needs you: complete the check on this page, then press Continue.", detail: asked }));
+  assert.equal(h.relay.state().display?.headline, "Waiting for you: finish the check on the page, then press Continue");
   assert.equal(h.relay.state().display?.detail, "FluxIQ needs you: complete the check on this page, then press Continue.");
+  // A text question named by its ask kind is still a question in the panel.
+  const question = { kind: "ask" as const, title: "Asked a question (open)", status: "started" as const, ref: "ask-2" };
+  await h.relay.accept(activity(6, { activityId: "build:b-1", subject: { kind: "build", id: "b-1", projectId: "project-1" }, phase: "waiting_permission", label: "Waiting for an answer before going on", detail: question }));
+  assert.equal(h.relay.state().display?.headline, "Waiting for you: a question in the FluxIQ panel");
 });
 
 test("an event not newer than the last kept one is dropped, and nothing is sent for it", async () => {
