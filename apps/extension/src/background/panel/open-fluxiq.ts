@@ -19,6 +19,16 @@ export function fluxIQWebAddress(coreApiUrl: string | undefined, automation?: { 
   return url.toString();
 }
 
+/** The keys page of the web panel, where a model key is added; undefined when the address is not an http(s) address. */
+export function fluxIQKeysAddress(coreApiUrl: string | undefined): string | undefined {
+  const url = parsedAddress(coreApiUrl?.trim() || DEFAULT_CORE_API_URL);
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) return undefined;
+  url.pathname = "/programs/secret-keys";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 // `URL.canParse` would say this without a throw, but it arrived in Chrome 120
 // and the Chrome manifest still admits 116. A `TypeError` from the constructor is the
 // one failure that means "not an address"; anything else is rethrown.

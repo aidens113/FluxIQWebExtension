@@ -8,6 +8,7 @@ import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
 import { createStickyError, type PanelStore } from "../state";
+import type { PanelOpenFluxIQRequest } from "../../shared/protocol";
 
 /** A mounted Open FluxIQ button and its failure line. */
 export type OpenFluxIQButton = {
@@ -21,7 +22,13 @@ export type OpenFluxIQButton = {
  * small one, a link, or the top bar's icon (the words are then its name and
  * tooltip).
  */
-export type OpenFluxIQStyle = { label: string; look: "primary" | "small" | "link" | "icon"; canOpen?: () => boolean };
+export type OpenFluxIQStyle = {
+  label: string;
+  look: "primary" | "small" | "link" | "icon";
+  canOpen?: () => boolean;
+  /** What the chat opens it for: a model key to add goes straight to the keys page; a question only FluxIQ can show opens the web address. */
+  purpose?: "model-key" | "ask";
+};
 
 const FAILED = "Couldn't open FluxIQ. Check its web address in Settings.";
 const LOOKS = { primary: "primary-button", small: "small-button", link: "link-button", icon: "icon-button" } as const;
@@ -52,7 +59,8 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
     button.disabled = true;
     const failedAt = address;
     try {
-      const message: { type: string; flowId?: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ };
+      // A model key is added on FluxIQ's keys page: the background opens that rather than the front page.
+      const message: PanelOpenFluxIQRequest & { type: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ, ...(style.purpose === "model-key" ? { purpose: "model-key" as const } : {}) };
       const selectedFlowId = flowId?.();
       if (selectedFlowId !== undefined) message.flowId = selectedFlowId;
       const result = await request(message);

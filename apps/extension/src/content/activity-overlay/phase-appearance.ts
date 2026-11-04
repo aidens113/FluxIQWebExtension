@@ -13,6 +13,12 @@ export type ActivityPhaseMark = "pulse" | "check" | "cross" | "attention";
 
 export type ActivityPhaseAppearance = { name: string; accent: string; mark: ActivityPhaseMark };
 
+/**
+ * A run that finished with its result not confirmed: neither done nor failed, so no tick and no cross.
+ * Keyed by the display's own typed `unconfirmed` field, never by its words.
+ */
+export const ACTIVITY_UNCONFIRMED_APPEARANCE: ActivityPhaseAppearance = Object.freeze({ name: "Not confirmed", accent: "#c9ced8", mark: "attention" });
+
 /** Every phase Core sends. The overlay reads the unit's phase (building, running) while it works and the settle phase once it settles. */
 export const ACTIVITY_PHASE_APPEARANCE: Readonly<Record<ClientGatewayActivityPhase, ActivityPhaseAppearance>> = Object.freeze({
   thinking: { name: "Thinking", accent: "#b39dfb", mark: "pulse" },

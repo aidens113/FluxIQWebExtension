@@ -239,6 +239,16 @@ export type PanelConversationSendRequest = {
   title?: string | undefined;
 };
 
+/**
+ * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
+ * `purpose: "model-key"`, the keys page, where a model key is added. The three are mutually exclusive.
+ */
+export type PanelOpenFluxIQRequest = {
+  flowId?: string | undefined;
+  runId?: string | undefined;
+  purpose?: "model-key" | undefined;
+};
+
 /** `answer-ask`: the person's answer to a question FluxIQ asked in a thread. */
 export type PanelConversationAnswerRequest = {
   projectId?: string | undefined;
