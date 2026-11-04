@@ -122,11 +122,19 @@ function flowPairs(runs: readonly StoreTrace[], domain: ClientGatewayTraceStateD
       from: shortId(from.manifest.traceId), to: shortId(to.manifest.traceId),
       fromActivity: from.manifest.activity, toActivity: to.manifest.activity,
       liveFrom: trialVerdicts.get(from.manifest.episodeId) ?? null, liveTo: trialVerdicts.get(to.manifest.episodeId) ?? null,
-      sameCommands: fromCalls.length === toCalls.length && fromCalls.every((call, position) => domain.canonicalKey(call.operation) === domain.canonicalKey(toCalls[position]!.operation)),
+      sameCommands: sameCommands(fromCalls, toCalls, domain),
       tally, verdict,
     }));
   }
   return pairs;
+}
+
+/** Whether two runs sent one list of commands: each run's own handles read as where they stand in it. */
+function sameCommands(from: readonly ClientGatewayTraceStateRecordedCall[], to: readonly ClientGatewayTraceStateRecordedCall[], domain: ClientGatewayTraceStateDomain): boolean {
+  if (from.length !== to.length) return false;
+  const fromHandles = domain.handleScope();
+  const toHandles = domain.handleScope();
+  return from.every((call, position) => domain.canonicalKey(fromHandles(call.operation)) === domain.canonicalKey(toHandles(to[position]!.operation)));
 }
 
 function chooseFlow(exploration: StoreTrace, tests: readonly StoreTrace[], executions: readonly StoreTrace[]): { flow: FlowSource; calls: readonly ClientGatewayTraceStateRecordedCall[]; trace: StoreTrace | null } {

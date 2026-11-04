@@ -10,7 +10,7 @@ import test from "node:test";
 import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { RunAllocation } from "../../allocation.js";
 import { buildFluxIQEnvironment } from "../../environment.js";
-import { LAB_AUTHORING_MODE_ENV, LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue, planLiveLlmExecution } from "../index.js";
+import { LAB_AUTHORING_MODE_ENV, LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue, labAuthorsAnswerFirst, planLiveLlmExecution } from "../index.js";
 import { LAB_CEILING_USD } from "./lab-ceiling.js";
 
 const allocation: RunAllocation = {
@@ -54,4 +54,18 @@ test("every Core the Lab starts is given the mode explicitly, and an inherited o
 test("the plan records the mode the run's Core was started in, legacy by default", () => {
   assert.equal(planLiveLlmExecution(profile, LAB_CEILING_USD).coreAuthoringMode, "legacy");
   assert.equal(planLiveLlmExecution(profile, LAB_CEILING_USD, DEFAULT_LLM_MODEL, "candidate").coreAuthoringMode, "candidate");
+});
+
+// `answer-first` is selected by name, through Core's own resolver: the Lab accepts it
+// the moment Core does, and until then refuses it before anything starts.
+test("answer-first is selectable once Core's resolver takes it, and refused until then (Answer First)", () => {
+  assert.throws(() => labAuthoringModeValue(["--authoring-mode", "answer-first"]), /cannot be the authoring mode/u);
+  const coreWithTheMode = ((env: Record<string, string | undefined>) => env[LAB_AUTHORING_MODE_ENV]) as unknown as Parameters<typeof labAuthoringModeValue>[1];
+  assert.equal(labAuthoringModeValue(["--authoring-mode", "answer-first"], coreWithTheMode), "answer-first");
+});
+
+test("a run that names no mode is still legacy until the lead flips the one marked line at the Answer First merge", () => {
+  assert.equal(labAuthoringModeValue([]), "legacy");
+  assert.equal(labAuthorsAnswerFirst("answer-first"), true);
+  assert.equal(labAuthorsAnswerFirst("project"), false);
 });

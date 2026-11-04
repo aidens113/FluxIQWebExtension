@@ -5,7 +5,7 @@
 // `settleBuild` for the build, and `authorizeRun` and `settleRun` for the
 // repair its playback may make, and the lane decides only when each is used.
 
-import type { AuthoredFlowGraph, AuthoredFlowNode, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { flowScoreOf, type AuthoredFlowGraph, type AuthoredFlowNode, type ResolvedScenarioWorkflow, type RunAnswerScore } from "@fluxiq-web-extension/test-contracts";
 import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import { RunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
@@ -17,6 +17,7 @@ import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedF
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly, flowActionsSnapshot } from "../run-flow-lane.js";
 import { budgetOverProductFailure } from "../../live-llm/budget-over-product-failure.js";
+import { labAuthorsAnswerFirst } from "../../live-llm/authoring-mode-env.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
 import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatWait } from "./chat/index.js";
 import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildLlm, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
@@ -30,6 +31,8 @@ import { assertCreatedFlowOracles, createdFlowOraclesHold, judgeCreatedFlowOracl
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
 import { judgeCreatedFlowPermissionStop, readCreatedFlowPermissionAsks, type CreatedFlowPermissionStop } from "./permission-point.js";
 import { createdFlowCandidateDraftFailure } from "./candidate-outcome.js";
+import { attemptEndingOfBuild, judgeAttemptAnswer, type AttemptAnswerJudgement, type AttemptEndingFact, type CreatedFlowAnswerStage } from "./answer/index.js";
+import type { SiteBaseline } from "./site-change/index.js";
 import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { describeCreatedFlowRequest, type CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
@@ -217,6 +220,11 @@ export type CreatedFlowLaneInput = {
    * (`oracles.ts`). It names each fact that did not hold (`final-state-facts.ts`), so a failed playback says what it missed.
    */
   judgeFinalState: () => Promise<FinalStateVerdict>;
+  /**
+   * Scores the person's answer on the attempt itself, before any fixture reset and
+   * apart from the Flow (`./answer/`). Absent, the run states no `answerVerdict`.
+   */
+  answerStage?: CreatedFlowAnswerStage;
   bounds?: FluxIQHttpOptions;
   buildWait?: CreatedFlowBuildWait;
   fetchLab?: LabResetFetch;
@@ -253,6 +261,8 @@ export type CreatedFlowLaneEvidence = Readonly<{
   extraction: FlowExtractionJudgement | null;
   /** Each oracle the run was held to, and how it came out: the run passes only when none failed. */
   oracles: CreatedFlowOracles;
+  /** The attempt's own score, judged before the reset; absent when the run had no answer stage. */
+  answer?: RunAnswerScore;
   /** Where `build.instructedConsequences` came from, as `live-llm.json` says it. */
   instructedConsequencesFrom: CreatedFlowSettledBuild["instructedConsequencesFrom"];
   /** The mode the run's Core authored in; a candidate-mode build's candidate, trials and verdict are on `build.candidateOutcome`. */
@@ -275,6 +285,20 @@ export type CreatedFlowLanePermissionStop = Readonly<{
   permissionStop: Extract<CreatedFlowPermissionStop, { verdict: "at_declared_point" }>;
 }>;
 
+/**
+ * An `answer-first` attempt that ended with its result and no promoted Flow: a right
+ * answer and an unproven Flow, the normal ending of a first attempt. Returned rather
+ * than thrown, because nothing went wrong; the run's Flow score says `unproven`, and
+ * `flowCreated` keeps it out of every Flow rate.
+ */
+export type CreatedFlowLaneAnswerOnly = Readonly<{
+  answerOnly: true;
+  request: CreatedFlowRequest;
+  build: CreatedFlowBuild;
+  flowId: string | null;
+  answer: RunAnswerScore;
+}>;
+
 /** Where a lane that could not finish stopped, named in the order the lane does the work. */
 export type CreatedFlowLaneStage = "blank-flow" | "build" | "review" | "flow-read" | "secrets" | "playback-page" | "run" | "judgement" | "publish" | "expectations";
 
@@ -293,6 +317,8 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   /** `null` only for a build that stopped to ask at the task's declared permission point: no lane fault, and a `stopped_for_permission` run rather than a pass (`permissionStop`). */
   failure: { category: RunnerFailureCategory | null; message: string } | null;
   permissionStop?: CreatedFlowLanePermissionStop["permissionStop"];
+  /** The attempt's own score, judged before the lane stopped; `null` when the run had no answer stage or stopped before a build. */
+  answer: RunAnswerScore | null;
   task: ReturnType<typeof describeCreatedFlowRequest>;
   /** How the build was started, as the complete snapshot says it: the lane's own entry, since a build that stopped may leave no chat record (`run-murdouox-c5294247`). */
   buildEntry: CreatedFlowLaneEntry["kind"];
@@ -332,6 +358,9 @@ type CreatedFlowLaneProgress = {
   authoredGraph?: AuthoredFlowGraph;
   ownPage?: CreatedFlowOwnPage;
   run?: PersistedFlowRunOutcome;
+  /** The site as the attempt found it, read just before the build began. */
+  baseline?: SiteBaseline;
+  answer?: AttemptAnswerJudgement;
 };
 
 /**
@@ -358,7 +387,7 @@ type CreatedFlowLaneProgress = {
  * failure is rethrown unchanged either way, so the artifact is added to the
  * run's record rather than taken out of its verdict.
  */
-export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
+export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop | CreatedFlowLaneAnswerOnly> {
   // In candidate and project mode the running Core is asked first -- a read, no provider -- whether it test-runs candidates and starts each trial from the Lab's reset.
   const candidateTrial = createdFlowTrialsCandidates(input.authoringMode) ? await readCreatedFlowCandidateTrialReadiness(input.control, input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, input.bounds ?? {}, input.candidateTrialFixtureReset ?? true) : undefined;
   assertCreatedFlowVerificationReady(input.authoringMode, candidateTrial);
@@ -372,6 +401,8 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
     // nothing but nulls would say nothing by being present.
     // A chat build that made no Flow still has its build record -- what the chat
     // made of the instruction -- and that is the one artifact such a run needs.
+    // A build that threw has still left an attempt: its budget gone, a person's Stop, or the hard rule's failure. It is scored before anything is written.
+    if (progress.build !== undefined && !progress.published) await judgeAnswerOnce(input, progress, endingOfFailure(error, progress.build)).catch(/* best-effort: the lane failure rethrown below is this run's finding */ () => undefined);
     if ((progress.flowId !== undefined || progress.build !== undefined) && !progress.published && input.recordIncompleteEvidence) {
       await input.recordIncompleteEvidence(incompleteCreatedFlowLaneEvidence(input, progress, error))
         .catch(/* best-effort: the lane failure rethrown below is this run's finding and must not be replaced by a failed artifact write */ () => undefined);
@@ -380,7 +411,26 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   }
 }
 
-async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, candidateTrial: CreatedFlowCandidateTrialReadiness | undefined): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
+/** Why a lane stopped, as an attempt's ending: a spent budget excuses it, and so does a person's Stop on the build it stopped. */
+function endingOfFailure(error: unknown, build: CreatedFlowBuild | undefined): AttemptEndingFact {
+  if (error instanceof RunnerFailure && error.category === "performance.budget") return "budget_out";
+  const ending = attemptEndingOfBuild(build?.failure?.code);
+  return ending === "finished" ? "other" : ending;
+}
+
+/** Scores the attempt once, on the site as it stands, before any reset. A run with no answer stage scores nothing. */
+async function judgeAnswerOnce(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, ending: AttemptEndingFact): Promise<AttemptAnswerJudgement | undefined> {
+  if (!input.answerStage) return undefined;
+  progress.answer ??= await judgeAttemptAnswer({ request: input.request, workflow: input.workflow, scenarioOrigin: input.scenarioOrigin, ending, stage: input.answerStage, build: progress.build, baseline: progress.baseline ?? null, judgeFinalState: input.judgeFinalState });
+  return progress.answer;
+}
+
+/** The site as the attempt finds it, recorded before the build acts: the "before" of the double-act oracle. */
+async function recordBaseline(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress): Promise<void> {
+  if (input.answerStage) progress.baseline = await input.answerStage.readBaseline();
+}
+
+async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, candidateTrial: CreatedFlowCandidateTrialReadiness | undefined): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop | CreatedFlowLaneAnswerOnly> {
   const bounds = input.bounds ?? {};
   const { request, workflow, projectId, facilityRunId, authorizationPin } = input;
   if (workflow.workflowId !== request.workflowId || workflow.variant?.id !== request.variantId) {
@@ -388,6 +438,12 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   }
   const started = input.entry.kind === "chat" ? await startChatBuild(input, input.entry, progress, bounds, candidateTrial) : await startDirectBuild(input, progress, bounds, candidateTrial);
   const { build, buildPermitted, said } = started;
+  // A task whose instruction ends on a person's answer has not ended: the permission stop below is its own ending.
+  const stoppedToAsk = build.outcome === "permission_required" && build.permissionRequest;
+  // On the attempt itself, before anything below can reset the fixture or throw (`./answer/`).
+  if (!stoppedToAsk) await judgeAnswerOnce(input, progress, attemptEndingOfBuild(build.failure?.code));
+  // In answer-first a task ends on its result; a Flow it did not promote is unproven, not a failure.
+  if (labAuthorsAnswerFirst(input.authoringMode) && progress.answer && build.outcome !== "proposed" && !stoppedToAsk) return answerFirstEnding(input, progress, build, started.flowId, progress.answer.score);
   if (started.flowId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ's chat did not build a Flow from the task's instruction (${build.failure?.code ?? "no Flow"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
       details: { failure: build.failure, chat: build.chat ?? null },
@@ -504,8 +560,10 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     run,
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
+    // Judged before the reset, and now able to say what the Flow's own playback did: the two scores stay apart.
+    answer: progress.answer ? { ...progress.answer.score, flow: flowScoreOf({ flowCreated: true, oracleVerdict: oracleHeld ? "passed" : "failed" }) } : undefined,
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, authoredGraph, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null, authoringMode: input.authoringMode });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, authoredGraph, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null, authoringMode: input.authoringMode, ...(observation.answer ? { answer: observation.answer } : {}) });
   progress.stage = "publish";
   await input.recordEvidence(evidence);
   // From here the complete snapshot is on disk, so a failing expectation below
@@ -528,7 +586,32 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     throw budgetOverProductFailure(breach, own);
   }
   assertExpectations();
+  if (labAuthorsAnswerFirst(input.authoringMode) && progress.answer) assertAnswerRight(progress.answer.score);
   return evidence;
+}
+
+/**
+ * The hard rule, enforced (user, 2026-11-03): a task that ends without its result
+ * fails, unless its budget is gone or a person stopped it. An excused ending raises
+ * nothing here: its verdict is the score's, and a spent budget has already thrown as
+ * `performance.budget`.
+ */
+function assertAnswerRight(answer: RunAnswerScore): void {
+  if (answer.verdict !== "wrong") return;
+  const repeated = answer.repeatedActs.map((act) => `${act.name} (asked ${act.asked}, landed ${act.landed})`);
+  throw new RunnerFailure("runtime.behavior", answer.ending === "no_result"
+    ? "The task ended without its result, with its budget not gone and nobody having stopped it"
+    : `The person did not get the right answer: ${answer.wrongBecause.join(", ")}${repeated.length ? `; repeated: ${repeated.join("; ")}` : ""}`, {
+    details: { code: answer.ending === "no_result" ? "lab.task_ended_without_result" : "lab.answer_wrong", wrongBecause: [...answer.wrongBecause], repeatedActs: answer.repeatedActs.map((act) => act.name), missingActs: [...answer.missingActs], unaskedChanges: [...answer.unaskedChanges] },
+  });
+}
+
+/** An answer-first attempt that ended with no Flow promoted: written down, then held to the hard rule. */
+async function answerFirstEnding(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, build: CreatedFlowBuild, flowId: string | null, answer: RunAnswerScore): Promise<CreatedFlowLaneAnswerOnly> {
+  assertAnswerRight(answer);
+  progress.published = true;
+  await input.recordIncompleteEvidence?.(incompleteCreatedFlowLaneEvidence(input, progress, undefined));
+  return Object.freeze({ answerOnly: true as const, request: input.request, build, flowId, answer });
 }
 
 /**
@@ -542,6 +625,7 @@ async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFl
   progress.flowId = flowId;
   progress.stage = "build";
   await input.prepareFlowPage("build");
+  await recordBaseline(input, progress);
   // What the operator permitted the build (`--llm-permit`), kept so the verdict knows whether the task's act needed a person at all.
   let buildPermitted: readonly string[] = [];
   const authorize = async (id: string) => {
@@ -577,6 +661,7 @@ async function startChatBuild(input: CreatedFlowLaneInput, entry: Extract<Create
   const { projectId } = input;
   progress.stage = "build";
   await input.prepareFlowPage("build");
+  await recordBaseline(input, progress);
   await entry.authorizeChat();
   // The chat's thread and the build it starts belong to the project the paired extension has selected.
   await input.control.selectExistingContext(projectId, undefined, bounds);
@@ -658,6 +743,7 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
     complete: false,
     stoppedAt: progress.stage,
     failure: error === undefined ? null : { category: error instanceof RunnerFailure ? error.category : null, message: error instanceof Error ? error.message : String(error) },
+    answer: progress.answer?.score ?? null,
     task: describeCreatedFlowRequest(input.request),
     buildEntry: input.entry.kind,
     authoringMode: input.authoringMode,

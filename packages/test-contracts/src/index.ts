@@ -5,6 +5,7 @@ export * from "./failure-category.js";
 export * from "./run.js";
 export * from "./evidence.js";
 export * from "./evaluation.js";
+export * from "./attempt-score/index.js";
 export * from "./validation.js";
 export * from "./run-validation.js";
 export * from "./evidence-validation.js";

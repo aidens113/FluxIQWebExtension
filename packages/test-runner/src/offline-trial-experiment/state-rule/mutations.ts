@@ -28,7 +28,8 @@ export function traceStateMutations(calls: Calls, domain: ClientGatewayTraceStat
   if (firstAct !== undefined) mutations.push({ mutation: "repeat_act", flow: [...calls.slice(0, firstAct + 1), calls[firstAct]!, ...calls.slice(firstAct + 1)] });
   const rowBound = calls.findIndex((call) => domain.labelCall(call.operation) === "act" && hasRowIdentity(call));
   if (rowBound >= 0) mutations.push({ mutation: "other_row", flow: calls.map((call, index) => (index === rowBound ? withParameters(call, otherRow) : call)) });
-  const read = lastIndex(calls, (call) => call.operation.actionType === "web.dom.extract_list" && domain.readAnswer(call.answer).outcome === "succeeded");
+  // A read that kept nothing is not changed by another filter that keeps nothing, so it would be no defect at all.
+  const read = lastIndex(calls, (call) => call.operation.actionType === "web.dom.extract_list" && domain.readAnswer(call.answer).outcome === "succeeded" && (domain.readAnswer(call.answer).rows?.length ?? 0) > 0);
   if (read >= 0) mutations.push({ mutation: "changed_read", flow: calls.map((call, index) => (index === read ? withParameters(call, changedRead) : call)) });
   const swap = acts.findIndex((index, position) => position + 1 < acts.length && domain.siblingKey(calls[index]!.operation) !== domain.siblingKey(calls[acts[position + 1]!]!.operation));
   if (swap >= 0) {

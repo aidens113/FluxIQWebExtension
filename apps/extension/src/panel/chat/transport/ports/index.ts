@@ -4,3 +4,4 @@ export { conversationPort } from "./conversation";
 export { modelsPort } from "./models";
 export { recordingsPort } from "./recordings";
 export { runsPort } from "./runs";
+export { resultsPort } from "./results";

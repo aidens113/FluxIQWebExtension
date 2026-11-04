@@ -26,6 +26,7 @@ function runtime() {
 test("subscribe passes the state of each changed push and ignores other messages", () => {
   const bus = runtime();
   const transport = createExtensionChatTransport(sendRecorder({ ok: true, value: {} }).request, bus.listen);
+  const kept = bus.listeners.size; // the results port's own, held for the transport's life
   const heard: unknown[] = [];
   const unsubscribe = transport.activity.subscribe((state) => heard.push(state));
   const state = { overlay: "expanded", live: true };
@@ -35,7 +36,7 @@ test("subscribe passes the state of each changed push and ignores other messages
   bus.broadcast({ type: ACTIVITY_MESSAGES.changed, state });
   assert.deepEqual(heard, [state]);
   unsubscribe();
-  assert.equal(bus.listeners.size, 0);
+  assert.equal(bus.listeners.size, kept);
   bus.broadcast({ type: ACTIVITY_MESSAGES.changed, state });
   assert.equal(heard.length, 1);
 });

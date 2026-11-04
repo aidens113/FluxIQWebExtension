@@ -7,6 +7,7 @@ import { validateRunAdaptationCost, validateRunAdaptationPersistence, validateRu
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
 import { isScreenedFacilityRefusal } from "./facility-failure-refusal.js";
 import { validateRunHarnessRecovery } from "./harness-recovery-validation.js";
+import { answerVerdicts, validateRunAnswerScore } from "./attempt-score/index.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, enumeration, finite, isObject, keys, object, optionalText, parseJson, result, text, type JsonObject } from "./runtime-validation.js";
 
@@ -22,7 +23,7 @@ const adaptationKeys = ["adaptationCost", "adaptationValidation", "adaptationPer
 const week2Keys = ["harnessRecovery", ...adaptationKeys] as const;
 const runEvaluationKeys = [
   "schemaVersion", "runId", "verdict", "failureCategory", "facilityFailure", "invariants", "metrics",
-  "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "reportedVerdict",
+  "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "answerVerdict", "answer", "reportedVerdict",
   "automationFailureReported", "automationFailureExpected", "harnessActivations", "durationMs", "actions", "evidence", "llm",
   "extraction", ...week2Keys,
 ];
@@ -134,12 +135,28 @@ function checkRunOutcome(value: JsonObject, issues: ValidationIssue[]): void {
   else if (value.lane === "recording" && flowCreated !== null) add(issues, "$.flowCreated", "must be null on the recording lane, which creates no Flow");
   nullableVerdict(value.oracleVerdict, "$.oracleVerdict", issues);
   nullableEnum(value.reportedVerdict, reportedVerdicts, "$.reportedVerdict", issues);
-  if (flowCreated === false && value.reportedVerdict !== null) add(issues, "$.reportedVerdict", "must be null when no Flow was created");
+  checkAnswerScore(value, issues);
+  // An attempt judged with no Flow created still ran and FluxIQ still reported on it; anything else with no Flow ran nothing.
+  const attemptJudged = isObject(value.answer);
+  if (flowCreated === false && value.reportedVerdict !== null && !attemptJudged) add(issues, "$.reportedVerdict", "must be null when no Flow was created and no attempt was judged");
+  // Held on any run judged since the two scores parted; a run from before them keeps what it said.
+  if (attemptJudged && flowCreated !== true && value.oracleVerdict !== null) add(issues, "$.oracleVerdict", "must be null without a created Flow: it means the Flow's playback only, and the attempt's own score is answerVerdict");
   checkAutomationFailure(value.automationFailureReported, "$.automationFailureReported", issues);
   checkAutomationFailure(value.automationFailureExpected, "$.automationFailureExpected", issues);
   const reportedFailure = value.reportedVerdict === "failed";
   if (reportedFailure && value.automationFailureReported === null) add(issues, "$.automationFailureReported", "is required when FluxIQ reported failure; use ambiguous_or_unknown when it gave no category");
   if (!reportedFailure && isObject(value.automationFailureReported)) add(issues, "$.automationFailureReported", "must be null unless FluxIQ reported failure");
+}
+
+/** `answerVerdict` and `answer` agree, and an old evaluation stating neither stays one: nothing fills a score in. */
+function checkAnswerScore(value: JsonObject, issues: ValidationIssue[]): void {
+  const verdict = value.answerVerdict ?? null, score = value.answer ?? null;
+  if (verdict !== null) enumeration(verdict, answerVerdicts, "$.answerVerdict", issues);
+  if ((verdict === null) !== (score === null)) add(issues, "$.answer", "must be present exactly when answerVerdict is");
+  if (score === null) return;
+  nest(validateRunAnswerScore(score), "$.answer", issues);
+  if (isObject(score) && score.verdict !== verdict) add(issues, "$.answerVerdict", "must equal answer.verdict");
+  if (value.lane === "recording") add(issues, "$.answerVerdict", "must be absent on the recording lane, which judges no attempt");
 }
 
 function checkRunMeasurements(value: JsonObject, issues: ValidationIssue[]): void {
