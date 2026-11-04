@@ -37,7 +37,7 @@ export type CorpusSummary = {
   mutations: Record<MutationName, { applied: number; pass: number; fail: number; inconclusive: number }>;
   refusals: Record<string, number>;
   /** One live Flow run over the one before it. */
-  pairs: { pairs: number; tally: WalkTally; pass: number; fail: number; inconclusive: number; sameCommands: number; passSameCommands: number; passAfterYesThenYes: number; passAfterYesThenNo: number; passAfterNoThenNo: number; passAfterNoThenYes: number; passUnjudged: number };
+  pairs: { pairs: number; tally: WalkTally; pass: number; fail: number; inconclusive: number; sameCommands: number; passSameCommands: number; passAfterYesThenYes: number; passAfterYesThenNo: number; passAfterNoThenNo: number; passAfterNoThenYes: number; passUnjudged: number; falsePasses: number; wrongReference: number; failOnYes: number; failOnNo: number };
 };
 
 export function addTally(total: WalkTally, tally: WalkTally): void {
@@ -60,7 +60,7 @@ export function summariseCorpus(builds: readonly BuildReport[]): CorpusSummary {
     self: { builds: 0, tally: emptyWalkTally(), pass: 0, fail: 0, inconclusive: 0 },
     mutations: { drop_last_act: mutationCounts(), repeat_act: mutationCounts(), other_row: mutationCounts(), changed_read: mutationCounts(), swap_acts: mutationCounts(), drop_last_move: mutationCounts() },
     refusals: {},
-    pairs: { pairs: 0, tally: emptyWalkTally(), pass: 0, fail: 0, inconclusive: 0, sameCommands: 0, passSameCommands: 0, passAfterYesThenYes: 0, passAfterYesThenNo: 0, passAfterNoThenNo: 0, passAfterNoThenYes: 0, passUnjudged: 0 },
+    pairs: { pairs: 0, tally: emptyWalkTally(), pass: 0, fail: 0, inconclusive: 0, sameCommands: 0, passSameCommands: 0, passAfterYesThenYes: 0, passAfterYesThenNo: 0, passAfterNoThenNo: 0, passAfterNoThenYes: 0, passUnjudged: 0, falsePasses: 0, wrongReference: 0, failOnYes: 0, failOnNo: 0 },
   };
   for (const build of builds) {
     for (const pair of build.pairs) {
@@ -69,11 +69,17 @@ export function summariseCorpus(builds: readonly BuildReport[]): CorpusSummary {
       addTally(pairs.tally, pair.tally);
       pairs[pair.verdict.verdict] += 1;
       if (pair.sameCommands) pairs.sameCommands += 1;
-      if (pair.verdict.verdict !== "pass") continue;
-      if (pair.sameCommands) pairs.passSameCommands += 1;
       const judged = (verdict: string | null): "yes" | "no" | null => (verdict === "yes" ? "yes" : verdict === "no" || verdict === "execution_failed" ? "no" : null);
       const from = judged(pair.liveFrom);
       const to = judged(pair.liveTo);
+      if (pair.verdict.verdict === "fail") {
+        if (to === "yes") pairs.failOnYes += 1;
+        if (to === "no") pairs.failOnNo += 1;
+      }
+      if (pair.verdict.verdict !== "pass") continue;
+      if (pair.sameCommands) pairs.passSameCommands += 1;
+      if (to === "no") pairs.falsePasses += 1;
+      if (from === "yes" && to === "no") pairs.wrongReference += 1;
       if (from === "yes" && to === "yes") pairs.passAfterYesThenYes += 1;
       else if (from === "yes" && to === "no") pairs.passAfterYesThenNo += 1;
       else if (from === "no" && to === "no") pairs.passAfterNoThenNo += 1;
@@ -186,8 +192,8 @@ export function gapsTable(summary: CorpusSummary): string {
 
 /** "Exactly the same input": how many of a Flow's commands the recording holds, whatever the state. */
 export function inputsTable(summary: CorpusSummary): string {
-  const lines = ["| Config | Reads same input | Moves same input | Acts same input | Act gaps' nearest recorded act |", "|---|---:|---:|---:|---|"];
-  for (const [key, tally] of Object.entries(summary.measures)) lines.push(`| ${key} | ${ratio(tally.readsSameInput, tally.readsOtherInput)} | ${ratio(tally.movesSameInput, tally.movesOtherInput)} | ${ratio(tally.actsSameInput, tally.actsOtherInput)} | ${sorted(tally.actGapElements)} |`);
+  const lines = ["| Config | Reads same input | Moves same input | Acts same input | Reads computed | Computed rows same as live | Changed list reads | Of those, no recorded read of that page | Computable from one that has | Their rows same as live | Act gaps' nearest recorded act |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"];
+  for (const [key, tally] of Object.entries(summary.measures)) lines.push(`| ${key} | ${ratio(tally.readsSameInput, tally.readsOtherInput)} | ${ratio(tally.movesSameInput, tally.movesOtherInput)} | ${ratio(tally.actsSameInput, tally.actsOtherInput)} | ${tally.readsComputed} | ${ratio(tally.rowsComputedSame, tally.rowsComputedDiffer)} | ${tally.listReadsChanged} | ${tally.listReadsNoSamePage} | ${tally.listReadsComputable} | ${ratio(tally.listRowsSameAsLive, tally.listRowsDifferFromLive)} | ${sorted(tally.actGapElements)} |`);
   return lines.join("\n");
 }
 
@@ -212,7 +218,9 @@ export function pairsTable(summary: CorpusSummary): string {
     "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     `| ${pairs.pairs} | ${pairs.sameCommands} | ${tally.commands} | ${tally.answered} | ${ratio(tally.snapshotUrlSame, tally.snapshotUrlDiffer)} | ${ratio(tally.selectorsClose, tally.selectorsFar)} | ${tally.selectorsVeryClose}/${tally.selectorsClose + tally.selectorsFar} | ${ratio(tally.rowsSame, tally.rowsDiffer)} | ${ratio(tally.statusSameAll, tally.statusDifferAll)} | ${ratio(tally.statusSameActs, tally.statusDifferActs)} (${tally.markedActDisagreements} marked) | ${pairs.pass} | ${pairs.fail} | ${pairs.inconclusive} |`,
     "",
+    `False passes (a pass whose later run was judged no): ${pairs.falsePasses}. With a recording only counted when its own run was judged yes: ${pairs.wrongReference}, each a wrong reference (the earlier run's judge said yes and the later run was judged no). Fails: ${pairs.fail}, of which the later run was judged yes ${pairs.failOnYes} (false failures), no ${pairs.failOnNo}.`,
     `Passes by what each run's judge said: earlier yes, later yes ${pairs.passAfterYesThenYes}; earlier yes, later no ${pairs.passAfterYesThenNo} (a false pass); earlier no, later no ${pairs.passAfterNoThenNo}; earlier no, later yes ${pairs.passAfterNoThenYes}; a run with no judge ${pairs.passUnjudged}. Passes where the two runs sent the same commands: ${pairs.passSameCommands}.`,
+    `Row computer on changed list reads: ${tally.listReadsChanged} changed, ${tally.listReadsNoSamePage} with no recorded read of that page, ${tally.listReadsComputable} computable, rows same as live ${ratio(tally.listRowsSameAsLive, tally.listRowsDifferFromLive)}; answered in the walk ${tally.readsComputed}, rows same as live ${ratio(tally.rowsComputedSame, tally.rowsComputedDiffer)}.`,
     `Gaps: ${sorted(tally.gaps)}.`,
     `Disagreements: ${sorted(tally.disagreements)}.`,
   ].join("\n");

@@ -1,6 +1,7 @@
 // The state-rule go/no-go harness (Answer First, Engine lane step 1): saved Flows walked
 // over Core's trace state rule and compared with their own live answers, on saved data.
-// `state-rule-command.ts` is the `state-rule` command `../cli.ts` runs.
+// `state-rule-command.ts` is the `state-rule` command `../cli.ts` runs, and
+// `engine/` its `state-engine` command, the same Flows through the real intake.
 export type * from "./types.js";
 export * from "./answer-comparison.js";
 export * from "./receipts.js";
@@ -14,3 +15,4 @@ export * from "./store-traces.js";
 export * from "./corpus-summary.js";
 export * from "./state-rule-arguments.js";
 export * from "./state-rule-command.js";
+export * from "./engine/index.js";

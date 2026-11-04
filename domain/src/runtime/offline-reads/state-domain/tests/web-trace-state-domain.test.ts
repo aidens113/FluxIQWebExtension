@@ -1,5 +1,5 @@
 // The web port of Core's trace state rule: labels from the domain's safety table, the
-// three declared normalisations and nothing more, reading an answer, and the layer mark.
+// declared normalisations and nothing more, reading an answer, and the layer mark.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -30,8 +30,8 @@ test("an exploration's call and a Flow step's call of the same element have one 
   assert.equal(webTraceStateCanonicalKey(explored()), webTraceStateCanonicalKey(flowStep()));
 });
 
-test("declares exactly its three normalisations", () => {
-  assert.deepEqual(WEB_TRACE_STATE_NORMALISATIONS.map((normalisation) => normalisation.id), ["target_form", "wait_fields", "new_tab"]);
+test("declares exactly its six normalisations", () => {
+  assert.deepEqual(WEB_TRACE_STATE_NORMALISATIONS.map((normalisation) => normalisation.id), ["target_form", "wait_fields", "new_tab", "run_handles", "run_clock", "read_asks"]);
   assert.equal(webTraceStateDomain.normalisations, WEB_TRACE_STATE_NORMALISATIONS);
 });
 
@@ -42,7 +42,7 @@ test("wait fields and newTab make no difference", () => {
 
 test("never normalises a real difference", () => {
   const base = webTraceStateCanonicalKey(explored());
-  for (const extra of [{ text: "a" }, { url: "b" }, { value: "c" }, { checked: true }, { ensureState: { checked: true } }, { browserTabId: 3 }, { rejectedSamples: "x" }]) {
+  for (const extra of [{ text: "a" }, { url: "b" }, { value: "c" }, { checked: true }, { ensureState: { checked: true } }, { browserTabId: 3 }, { browserFrameUrlPath: "/x" }, { key: "Enter" }]) {
     assert.notEqual(webTraceStateCanonicalKey(explored(extra)), base, JSON.stringify(extra));
   }
   const read = (where: unknown) => readClientGatewayTraceOperation({ actionType: "web.dom.extract_list", parameters: { extractList: { item: ".row", where } } });
