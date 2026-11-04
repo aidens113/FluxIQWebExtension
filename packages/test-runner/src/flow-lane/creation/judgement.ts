@@ -12,6 +12,13 @@ import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import type { FlowRunDataset } from "../run-datasets.js";
 
 /**
+ * Where the rows being judged came from: a Flow's persisted run, or an attempt's own
+ * stored rows when no Flow was promoted (`answer/`). `actions` and the durations say
+ * which node ran when, and an attempt with no Flow has none.
+ */
+export type CreatedFlowDatasetSource = Pick<PersistedFlowRunOutcome, "extracted" | "actions" | "extractionDurationsByNode">;
+
+/**
  * The run's datasets against the expected dataset `stepId` names, which must
  * be an `extract` step of `workflow` (`resolveCreatedFlowRequest` has already
  * refused a task for which it is not). Never throws, so a run whose records
@@ -21,7 +28,7 @@ import type { FlowRunDataset } from "../run-datasets.js";
 export function judgeCreatedFlowDataset(input: {
   workflow: ResolvedScenarioWorkflow;
   stepId: string;
-  run: PersistedFlowRunOutcome;
+  run: CreatedFlowDatasetSource;
   actionTypes: ReadonlyMap<string, string>;
   /** Where the run's scenario was served from, as `judgeFlowExtraction` takes it. */
   scenarioOrigin: string;

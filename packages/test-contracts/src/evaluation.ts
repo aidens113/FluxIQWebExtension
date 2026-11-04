@@ -1,3 +1,4 @@
+import type { AnswerVerdict, RunAnswerScore } from "./attempt-score/index.js";
 import type { RunAdaptationCost, RunAdaptationPersistence, RunAdaptationReuse, RunAdaptationValidation } from "./adaptation-reuse.js";
 import type { AutomationStudioAdaptiveFailureClass } from "./failure-category.js";
 import type { RunHarnessRecovery } from "./harness-recovery.js";
@@ -285,10 +286,24 @@ export type RunEvaluation = {
   lane: EvaluationLane;
   /** Whether recording, proposal, and approval produced a runnable Flow; `null` on the recording lane. */
   flowCreated: boolean | null;
-  /** The fixture oracle's verdict (final state against `expected`); `null` when it was not consulted. */
+  /** The fixture oracle's verdict (final state against `expected`) on the **Flow's playback only**; `null` when no Flow played. Whether the person got the right answer is `answerVerdict`. */
   oracleVerdict: "passed" | "failed" | null;
   /**
-   * What FluxIQ reported for the run; `null` when nothing ran.
+   * Whether the person got the right answer, judged against the same private oracle
+   * on the attempt itself, before any fixture reset (`attempt-score/answer-score.ts`).
+   * A draft with a right answer is `right` here and `flow: "unproven"` on `answer`.
+   *
+   * Absent or `null`: not judged, which is every run on the recording lane, every
+   * `legacy` build and every evaluation written before it existed. Absent rather than
+   * filled in, because **an old pass rate is not comparable to this and nothing may
+   * blend them**: an old run has no answer score, and none is inferred for it.
+   */
+  answerVerdict?: AnswerVerdict | null;
+  /** What decided `answerVerdict`, in counts and closed names; present exactly when it is not null. */
+  answer?: RunAnswerScore | null;
+  /**
+   * What FluxIQ reported for the run; `null` when nothing ran. A draft's attempt ran
+   * with no Flow created: it says here what Core said of its result, beside `answer`.
    *
    * `unverified` is neither: the run's steps all succeeded and its result was
    * never judged, because the run reached no model to judge it with. It is a
