@@ -6,6 +6,7 @@
 // `--out` and tables to `--tables`; nothing else is written, and no row, URL or page text.
 // Returns the exit code: 0 done, 2 usage.
 
+import type { ClientGatewayTraceStateDomain } from "fluxiq/client-gateway";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { webTraceStateDomain } from "@fluxiq-web-extension/domain/node";
 import { measureBuild } from "./build-measure.js";
@@ -27,6 +28,7 @@ export async function stateRuleCommand(argv: readonly string[]): Promise<number>
   }
   await mkdir(parsed.work, { recursive: true });
   const started = performance.now();
+  const domain: ClientGatewayTraceStateDomain = parsed.rowComputer ? webTraceStateDomain : { ...webTraceStateDomain, computeRead: () => null, recordedAnswerFits: () => true };
   const saved = parsed.labRuns !== null ? await readLabRuns(parsed.labRuns) : await oneRun(parsed.run!);
   // A run still marked running has no verdict to compare with, and an open window that would claim later runs' traces.
   const runs = saved.filter((run) => run.finishedAt !== null);
@@ -49,7 +51,7 @@ export async function stateRuleCommand(argv: readonly string[]): Promise<number>
       const trialVerdicts = await readTrialVerdicts(path.join(run.directory, "steps"));
       // A store and its saved copy can both hold one build: it counts once.
       if (builds.some((known) => known.runId === run.runId && known.explorationTrace === exploration.manifest.traceId.slice(-8))) continue;
-      const build = measureBuild({ run, exploration, traces: own.filter((trace) => trace !== exploration), domain: webTraceStateDomain, trialVerdicts });
+      const build = measureBuild({ run, exploration, traces: own.filter((trace) => trace !== exploration), domain, trialVerdicts });
       builds.push(build);
       process.stderr.write(`${build.runId} ${build.task.slice(0, 40)} ${build.flow} ${build.measures[PRIMARY_CONFIG]?.verdict.verdict ?? "no flow"}\n`);
     }

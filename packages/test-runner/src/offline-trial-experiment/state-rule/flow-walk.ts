@@ -13,6 +13,7 @@ import {
   clientGatewayTraceStateVerdict,
   ClientGatewayTraceStateWalker,
   type ClientGatewayTraceOperation,
+  type ClientGatewayTraceStateAnswerReading,
   type ClientGatewayTraceStateDomain,
   type ClientGatewayTraceStateGapCode,
   type ClientGatewayTraceStateRecordedCall,
@@ -23,6 +24,7 @@ import { failureCode, sameRows, selectorOverlap, SELECTORS_CLOSE_AT, SELECTORS_V
 import type { WalkTally, WalkVerdict } from "./types.js";
 
 const SNAPSHOT = "web.dom.capture_snapshot";
+const LIST_READ = "web.dom.extract_list";
 const MAX_GAP_FIELD_DEPTH = 3;
 
 export function emptyWalkTally(): WalkTally {
@@ -32,7 +34,8 @@ export function emptyWalkTally(): WalkTally {
     statusSameAll: 0, statusDifferAll: 0,
     notSent: 0, gaps: {}, readsAnswered: 0,
     urlSame: 0, urlDiffer: 0, openingUrlSame: 0, openingUrlDiffer: 0, snapshotUrlSame: 0, snapshotUrlDiffer: 0,
-    selectorsClose: 0, selectorsFar: 0, selectorsVeryClose: 0, rowsSame: 0, rowsDiffer: 0,
+    selectorsClose: 0, selectorsFar: 0, selectorsVeryClose: 0, rowsSame: 0, rowsDiffer: 0, readsComputed: 0, rowsComputedSame: 0, rowsComputedDiffer: 0,
+    listReadsChanged: 0, listReadsNoSamePage: 0, listReadsComputable: 0, listRowsSameAsLive: 0, listRowsDifferFromLive: 0,
     statusSameMoves: 0, statusDifferMoves: 0, statusSameActs: 0, statusDifferActs: 0,
     disagreements: {}, markedActDisagreements: 0, blindPositionUrlSame: 0, blindPositionUrlDiffer: 0, refusedUrlSame: {}, refusedUrlDiffer: {}, gapFields: {}, firstLeave: {}, actGapElements: {},
   };
@@ -49,6 +52,22 @@ function elementRelation(left: ClientGatewayTraceOperation, right: ClientGateway
   const conflicts = shared.filter((key) => JSON.stringify(leftElement[key]) !== JSON.stringify(rightElement[key]));
   if (conflicts.length === 0) return "same_selector_agree";
   return `same_selector_conflict:${conflicts.sort().join("+")}`;
+}
+
+/** The row computer on a changed list read, over the recorded reads of the page the live run read: how often it can answer, and whether its rows are the live ones. */
+function measureRowComputer(tally: WalkTally, operation: ClientGatewayTraceOperation, live: ClientGatewayTraceStateAnswerReading, recording: ClientGatewayTraceStateRecording, domain: ClientGatewayTraceStateDomain): void {
+  tally.listReadsChanged += 1;
+  const samePage = recording.entries.flatMap((entry) => (entry.call.operation.actionType === LIST_READ && entry.reading.position === live.position && entry.call.answer !== null && !entry.call.redacted ? [{ entry: entry.index, operation: entry.call.operation, answer: entry.call.answer }] : []));
+  if (samePage.length === 0) {
+    tally.listReadsNoSamePage += 1;
+    return;
+  }
+  const computed = domain.computeRead(operation, samePage);
+  if (computed === null) return;
+  tally.listReadsComputable += 1;
+  const same = sameRows({ ...live, rows: computed.rows }, live);
+  if (same === true) tally.listRowsSameAsLive += 1;
+  if (same === false) tally.listRowsDifferFromLive += 1;
 }
 
 function sameSet(left: ReadonlySet<number>, right: ReadonlySet<number>): boolean {
@@ -71,9 +90,10 @@ export function walkFlow(input: {
   let retried: string | null = null;
   let left = false;
   const recordedKeys = new Set(recording.entries.map((entry) => entry.key));
+  const handles = domain.handleScope();
   for (const call of flow) {
     const kind = domain.labelCall(call.operation);
-    const key = domain.canonicalKey(call.operation);
+    const key = domain.canonicalKey(handles(call.operation));
     const live = domain.readAnswer(call.answer);
     if (kind !== "read" && retried === key) {
       tally.notSent += 1;
@@ -85,6 +105,7 @@ export function walkFlow(input: {
     if (kind === "read") {
       if (known) tally.readsSameInput += 1;
       else tally.readsOtherInput += 1;
+      if (!known && call.operation.actionType === LIST_READ) measureRowComputer(tally, handles(call.operation), live, recording, domain);
     } else if (kind === "page_move") {
       if (known) tally.movesSameInput += 1;
       else tally.movesOtherInput += 1;
@@ -132,6 +153,12 @@ export function walkFlow(input: {
     }
     tally.answered += 1;
     const entry = recording.entries[answer.entry]!;
+    if (answer.computed !== null) {
+      tally.readsComputed += 1;
+      const computedRows = sameRows({ ...entry.reading, rows: answer.computed.rows }, live);
+      if (computedRows === true) tally.rowsComputedSame += 1;
+      if (computedRows === false) tally.rowsComputedDiffer += 1;
+    }
     if (entry.reading.outcome === live.outcome) tally.statusSameAll += 1;
     else tally.statusDifferAll += 1;
     if (kind === "read") {
@@ -160,7 +187,7 @@ export function walkFlow(input: {
           if (overlap >= SELECTORS_VERY_CLOSE_AT) tally.selectorsVeryClose += 1;
         }
       }
-      const rows = sameRows(entry.reading, live);
+      const rows = answer.computed === null ? sameRows(entry.reading, live) : null;
       if (rows === true) tally.rowsSame += 1;
       if (rows === false) tally.rowsDiffer += 1;
       continue;
