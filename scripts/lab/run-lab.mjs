@@ -20,6 +20,7 @@ import { coreBuildCurrency, coreBuildMissing, scanCoreBuildEntries } from "./cor
 import { repositoryBuilds, staleRepositoryBuild } from "./domain-build-staleness.mjs";
 import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { labInvocationEnvironment } from "./lab-invocation.mjs";
+import { providerFreeWhenScripted } from "./provider-free-run.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 import { admitLiveRun, formatRefusals, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
 import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
@@ -227,7 +228,7 @@ A source changed while the Lab was building it; run again, or rebuild with: ${st
 }
 
 const runEnvironment = {
-  ...process.env,
+  ...providerFreeWhenScripted(args, process.env),
   // How this run was started, for its manifest: the argv after the script and the FLUXIQ_ names the person set, never a value.
   ...labInvocationEnvironment(args, process.env),
   FLUXIQ_LAB_EXTENSION_PATH: paths.extensionPath,

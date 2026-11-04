@@ -39,6 +39,8 @@ export function validateRunAnswerScore(input: unknown): ValidationResult<RunAnsw
     finite(item.landed, `${path}.landed`, target, 0, Number.MAX_SAFE_INTEGER, true);
   });
   for (const key of ["storedRows", "shownRows"] as const) if (value[key] !== null) finite(value[key], `$.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  // A scripted model's usage is made up, so what it costs is too.
+  if (Array.isArray(value.standIns) && value.standIns.includes("model") && !value.standIns.includes("spend")) add(issues, "$.standIns", "must name spend with model: a scripted model's calls, tokens and dollars are not real");
   const reasons = Array.isArray(value.wrongBecause) ? value.wrongBecause : [];
   if (value.ending === "no_result" && value.verdict !== "wrong") add(issues, "$.verdict", "must be wrong: a task that ends without its result fails, unless its budget is gone or a person stopped it");
   if (value.verdict === "wrong" && reasons.length === 0) add(issues, "$.wrongBecause", "must say why a wrong answer is wrong");

@@ -41,6 +41,8 @@ export type AttemptReportRow = {
   loopsCaught: AttemptLoopsCaught;
   /** Empty when every input was read from Core and the real chat. */
   standIns: AttemptStandIn[];
+  /** True only with no stand-in at all (`attemptCountsAsLive`), held by validation: a scripted model's row can never be counted as live. */
+  live: boolean;
 };
 
 /** How a task's attempts went, in order. It says nothing a row does not. */

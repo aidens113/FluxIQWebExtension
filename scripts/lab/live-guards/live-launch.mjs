@@ -3,7 +3,9 @@
 //
 // Every `--live-llm` run is guarded except `--dry-run`, which the runner
 // defines as a provider-free check that the run would start: it spends
-// nothing, so there is nothing for the guards to protect.
+// nothing, so there is nothing for the guards to protect. Only `--live-llm`
+// counts as live: `lab attempt --scripted-model` reaches no provider, and leaves
+// nothing in the ledger.
 //
 // A launch also names the authoring mode its Core is started in
 // (`--authoring-mode`), because a run in another mode is another experiment
@@ -24,7 +26,7 @@ const LAB_DEFAULT_AUTHORING_MODE = "legacy";
 export function describeLiveLaunch(args, env) {
   if (!args.includes("--live-llm") || args.includes("--dry-run")) return null;
   const scenarioId = scenarioOf(args) ?? "unknown-scenario";
-  const work = option(args, "--instruction-task") ?? option(args, "--llm-task") ?? "unknown-task";
+  const work = option(args, "--instruction-task") ?? option(args, "--task") ?? option(args, "--llm-task") ?? "unknown-task";
   const workflow = option(args, "--workflow");
   const variant = option(args, "--variant");
   const task = [scenarioId, work, ...(workflow ? [`workflow=${workflow}`] : []), ...(variant ? [`variant=${variant}`] : [])].join("/");
@@ -32,9 +34,9 @@ export function describeLiveLaunch(args, env) {
   return { instance: env.FLUXIQ_LAB_INSTANCE?.trim() || "default", scenarioId, task, authoringMode };
 }
 
-/** `lab run <scenario>` names it second; a live `lab matrix` names exactly one in `--scenarios-json`. */
+/** `lab run <scenario>` and `lab attempt <scenario>` name it second; a live `lab matrix` names exactly one in `--scenarios-json`. */
 function scenarioOf(args) {
-  if (args[0] === "run" && args[1] !== undefined && !args[1].startsWith("--")) return args[1];
+  if ((args[0] === "run" || args[0] === "attempt") && args[1] !== undefined && !args[1].startsWith("--")) return args[1];
   const json = option(args, "--scenarios-json");
   if (json === undefined) return null;
   let parsed;
