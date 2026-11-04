@@ -29,7 +29,7 @@
 
 import { cutAtWord, type ActivityDisplay, type ActivityOverlayPreference } from "../../shared/activity";
 import { detailBesideHeadline } from "./detail-beside-headline";
-import { ACTIVITY_PHASE_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
+import { ACTIVITY_PHASE_APPEARANCE, ACTIVITY_UNCONFIRMED_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
 
 /** The overlay's detail while a run is held for the person. */
 const PAUSED_DETAIL = "Open FluxIQ and press Hand back";
@@ -63,7 +63,7 @@ export function activityOverlayView(display: ActivityDisplay | null, preference:
     headline,
     detail: detailBesideHeadline(headline, detail),
     step: display.working ? stepText(display.step) : "",
-    fades: !display.working && display.outcome === "done"
+    fades: !display.working && display.outcome === "done" && display.unconfirmed !== true
   };
 }
 
@@ -71,6 +71,7 @@ function appearanceOf(display: ActivityDisplay): ActivityPhaseAppearance {
   if (display.outcome === "failed") return ACTIVITY_PHASE_APPEARANCE.failed;
   if (isHeld(display)) return ACTIVITY_PHASE_APPEARANCE.paused;
   if (display.outcome === "waiting") return ACTIVITY_PHASE_APPEARANCE.waiting_permission;
+  if (display.outcome === "done" && display.unconfirmed === true) return ACTIVITY_UNCONFIRMED_APPEARANCE;
   if (display.outcome === "done") return ACTIVITY_PHASE_APPEARANCE.done;
   return display.subjectKind === "run" ? ACTIVITY_PHASE_APPEARANCE.running : ACTIVITY_PHASE_APPEARANCE.building;
 }

@@ -135,6 +135,7 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     lane: observation.lane,
     flowCreated: observation.flowCreated,
     oracleVerdict: observation.oracleVerdict,
+    ...(observation.answer ? { answerVerdict: observation.answer.verdict, answer: observation.answer } : {}),
     reportedVerdict: observation.reportedVerdict,
     automationFailureReported: observation.automationFailureReported,
     automationFailureExpected: identity.expectedFailure,

@@ -27,7 +27,7 @@ import type { ExtensionStatus, FluxIQSettings, PanelHandBackRunRequest, PanelSto
 import { isActivityOverlayPreference } from "../activity/index";
 import { isControlPage } from "../control-page";
 import { relayConversation } from "./conversation-relay";
-import { fluxIQWebAddress } from "./open-fluxiq";
+import { fluxIQKeysAddress, fluxIQWebAddress } from "./open-fluxiq";
 import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
 import { handBackRun, stopRun, takeOverRun } from "./run-control";
@@ -83,6 +83,13 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   }
   if (message.type === RUNTIME_MESSAGES.panelOpenFluxIQ) {
     let automation: { projectId: string; flowId: string } | undefined;
+    if (message.purpose !== undefined) {
+      if (message.purpose !== "model-key" || message.runId !== undefined || message.flowId !== undefined) return relayFailure("invalid_request", "That request names an unknown purpose.");
+      const keys = fluxIQKeysAddress((await deps.readSettings()).coreApiUrl);
+      if (!keys) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
+      await deps.openTab(keys);
+      return { ok: true, url: keys };
+    }
     if (message.runId !== undefined) {
       if (typeof message.runId !== "string" || !message.runId.trim() || message.runId.length > 2048) return relayFailure("invalid_request", "A valid runId is required.");
       const projectId = await deps.relay.projectId();
