@@ -1,15 +1,19 @@
 import { createElement } from "../dom";
 
-/** Collects supporting-evidence context without inventing automation instructions. */
-export function requestRecordingDescription(_host: HTMLElement): Promise<string | undefined> {
+/** Said under the question while the panel is Firefox's popup, which closes when the page is clicked. */
+export const POPUP_RECORDING_NOTE = "Clicking the page closes this window, and recording goes on. Open FluxIQ again to see it and stop it.";
+
+/** Asks what the recording is for; FluxIQ reads it to understand what it is shown. Answers undefined when the person cancels. */
+export function requestRecordingDescription(_host: HTMLElement, options: { popup?: boolean } = {}): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const input = createElement("textarea", { attrs: { "aria-label": "Recording description", maxlength: "4000", rows: "4" } });
+    const input = createElement("textarea", { attrs: { "aria-label": "Recording description", maxlength: "4000", rows: "4", placeholder: "For example: add a coffee to the cart and open the cart." } });
     const error = createElement("p", { attrs: { role: "status" } });
-    const start = createElement("button", { text: "Start described recording", attrs: { type: "submit" } });
-    const cancel = createElement("button", { text: "Cancel", attrs: { type: "button" } });
+    const start = createElement("button", { className: "primary-button", text: "Start described recording", attrs: { type: "submit" } });
+    const cancel = createElement("button", { className: "small-button", text: "Cancel", attrs: { type: "button" } });
     const form = createElement("form", { className: "card recording-description", attrs: { "aria-label": "Describe recording" } }, [
-      createElement("h3", { text: "Describe this recording" }),
-      createElement("p", { text: "Explain what this demonstration shows. Recordings support the task instructions you author in FluxIQ." }),
+      createElement("h3", { text: "What should FluxIQ learn from this?" }),
+      createElement("p", { text: "Say in a sentence what you are about to show. FluxIQ watches this tab while you do it, then keeps it with your next message." }),
+      ...(options.popup === true ? [createElement("p", { className: "recording-popup-note", text: POPUP_RECORDING_NOTE })] : []),
       input, error, start, cancel
     ]);
     const dialog = createElement("dialog", { className: "recording-description-dialog" }, [form]);
@@ -23,7 +27,7 @@ export function requestRecordingDescription(_host: HTMLElement): Promise<string 
       event.preventDefault();
       const value = input.value.trim();
       if (!value || value.length > 4000) {
-        error.textContent = "Describe this recording in 1-4000 characters.";
+        error.textContent = "Write a sentence about what you will show (up to 4,000 characters).";
         input.focus();
         return;
       }

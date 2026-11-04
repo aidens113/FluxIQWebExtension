@@ -1,6 +1,7 @@
 // The browser sessions a lane runs inside: the extension-loaded context, the
 // panel-only context, the extension pairing handshake, and the runtime
 // messaging used to read and drive the extension's status.
+import { openSettingsAdvanced } from "../extension-settings/index.js";
 import { randomBytes } from "node:crypto";
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -230,6 +231,7 @@ export async function connectExtension(
     // its explicit Save, not by Connect, and the way back is the "Chat" tab.
     await checkpoint("settings-open", "extension");
     await evidence.step("extension", "settings-open", "Open extension settings", () => page.getByRole("button", { name: "Settings" }).click());
+    await evidence.step("extension", "settings-advanced", "Open Advanced in extension settings", () => openSettingsAdvanced(page));
     facts.settingsOpened = true;
 
     await checkpoint("settings-gateway", "extension");

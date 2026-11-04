@@ -17,7 +17,7 @@ test("a finished recording offers explicit task authoring and never generates, t
     status("idle");
     assert.equal(root.hidden, false);
     const buttons = root.descendants().filter((node) => node.tagName === "BUTTON");
-    assert.deepEqual(buttons.map((node) => node.textContent), ["Author task instructions in FluxIQ", "Done"]);
+    assert.deepEqual(buttons.map((node) => node.textContent), ["Open FluxIQ", "Done"]);
     buttons[0]!.dispatch("click");
     await Promise.resolve();
     assert.equal(calls.length, 1);

@@ -33,10 +33,13 @@ export const browserToolbarBadge: ToolbarBadgeWriter = (text) => {
   if (text) void action.setBadgeBackgroundColor?.({ color: BADGE_COLORS[text] })?.catch(/* best-effort: the default colour still shows the text */ () => undefined);
 };
 
+/** What the badge reads of the activity display: whether it waits on the person, and whether work is going on. */
+type ActivityShown = Pick<ActivityDisplay, "outcome"> & Partial<Pick<ActivityDisplay, "working">>;
+
 export class ToolbarIndicator {
   private shown: ToolbarBadge["text"] | undefined;
   private last: Pick<ExtensionStatus, "recordingState" | "runtime"> | undefined;
-  private display: Pick<ActivityDisplay, "outcome"> | null = null;
+  private display: ActivityShown | null = null;
   private timer: unknown;
 
   constructor(
@@ -44,19 +47,19 @@ export class ToolbarIndicator {
     private readonly timers: Timers = { now: () => Date.now(), setTimeout: (callback, delayMs) => setTimeout(callback, delayMs), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) }
   ) {}
 
-  /** The activity display shown now; the badge says "!" while it waits on the person. */
-  activity(display: Pick<ActivityDisplay, "outcome"> | null): void {
-    if ((display?.outcome === "waiting") === (this.display?.outcome === "waiting")) {
-      this.display = display;
-      return;
-    }
+  /** The activity display shown now; the badge says "!" while it waits on the person, and "..." while FluxIQ works on a task. */
+  activity(display: ActivityShown | null): void {
+    const before = this.display;
     this.display = display;
+    if ((display?.outcome === "waiting") === (before?.outcome === "waiting") && (display?.working === true) === (before?.working === true)) return;
     this.update(this.last ?? { recordingState: "idle" });
   }
 
   update(status: Pick<ExtensionStatus, "recordingState" | "runtime">): void {
     this.last = status;
-    const badge = toolbarBadge(status, this.timers.now(), this.display);
+    // A task's work (finding its way, not a saved run) is working too, and with no panel open the badge is all a person sees.
+    const working = this.display?.working === true && status.runtime?.state !== "running";
+    const badge = toolbarBadge(working ? { ...status, runtime: { state: "running" } } : status, this.timers.now(), this.display);
     if (badge.text !== this.shown) {
       this.shown = badge.text;
       this.write(badge.text);

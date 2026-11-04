@@ -30,7 +30,7 @@ test("mounts the shared panel: getting-started steps until connected, and settin
   const start = page.getByRole("region", { name: "Get started" });
   await expect(start).toBeVisible();
   await expect(start.getByRole("heading", { name: "Get started with FluxIQ" })).toBeVisible();
-  await expect(page.getByText("Connect this browser so FluxIQ can work in it.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Press Connect so FluxIQ can work in this browser.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeEnabled();
   await expect(page.getByRole("tabpanel", { name: "Chat" })).toBeHidden();
   await expect(page.getByRole("button", { name: "Start recording" })).toBeHidden();
@@ -44,6 +44,8 @@ test("mounts the shared panel: getting-started steps until connected, and settin
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("region", { name: "Settings" })).toBeVisible();
   await expect(start).toBeHidden();
+  // The Lab opens Advanced first (`extension-settings/open-settings-advanced.ts`): the same summary.
+  await page.locator("details.settings-advanced > summary").click();
   for (const label of ["FluxIQ connection address", "FluxIQ web address", "Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots"]) {
     await expect(page.getByLabel(label, { exact: true })).toBeVisible();
   }

@@ -3,11 +3,16 @@
 // own Open FluxIQ control and the owner identity its `ExtensionStatus` implies
 // (`owner-context.ts`). The chat itself, and everything it knows how to show,
 // lives in the package; this keeps the panel's one call, `createChatPanel`.
+//
+// Questions are worded by `asks/`, with no PIN dialog: one press of Allow answers
+// a permission. A panel-command confirmation is the one question that takes a PIN,
+// and the extension never asks for it: the chat sends that one question to FluxIQ.
 
-import { createChatWidget, type ChatOpenControlFactory, type ChatWidget } from "@fluxiq/ui-components";
+import { createChatWidget, type ChatAskPort, type ChatOpenControlFactory, type ChatWidget, type ChatWidgetOptions } from "@fluxiq/ui-components";
 import "@fluxiq/ui-components/styles/chat.css";
 import type { PanelStore } from "../state";
 import type { ExtensionStatus } from "../../shared/protocol";
+import { createAskPort, createWorkWatch } from "./asks";
 import { hostStatusOf } from "./host-status";
 import { createChatOwnerContext } from "./owner-context";
 import { createExtensionChatTransport } from "./transport";
@@ -38,6 +43,10 @@ export type ChatPanelOptions = {
   contextLine?: boolean;
   /** The empty latest chat's "Extract data from this page": the panel shows its extraction sheet. */
   onExtract?: () => void;
+  /** How questions are worded and answered, instead of the extension's own port. */
+  asks?: ChatAskPort;
+  /** The composer's host control ("Show me how", beside "+"), as the package takes it. */
+  composer?: NonNullable<ChatWidgetOptions["composer"]>;
 };
 
 /** Creates the chat, talking to the background through `request`. */
@@ -57,10 +66,14 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       }
     };
   };
-  const widget = createChatWidget(createExtensionChatTransport(request), {
+  const transport = createExtensionChatTransport(request);
+  // Listening before the chat does, so a question is drawn knowing the same news the chat just heard.
+  const work = createWorkWatch(transport.activity);
+  const widget = createChatWidget(transport, {
     ...options,
     openControl,
-    ownerKey: owners.capture().identity
+    ownerKey: owners.capture().identity,
+    asks: options.asks ?? createAskPort({ working: work.working })
   });
   return {
     ...widget,

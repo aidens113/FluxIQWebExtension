@@ -1,7 +1,10 @@
-// Settings, opened by the gear in place of the chat: the connection (the two
-// addresses and four switches, with an explicit Save, and Disconnect), the
-// on-page status, Report a problem, Forget this pairing behind a confirmation,
-// and a way into FluxIQ for everything richer. Nothing here edits a Flow.
+// Settings, opened by the gear in place of the chat, read top down by what a
+// person cares about: whether FluxIQ is connected and has approved this browser,
+// which project, whether the model key is ready (with Open FluxIQ), the status
+// on the page, and Report a problem. Under Advanced, the technical things: the
+// two addresses and the capture switches with an explicit Save, Disconnect, and
+// Forget this pairing behind a confirmation (`advanced-section.ts`). There is no
+// spending setting here: none exists behind any port. Nothing here edits a Flow.
 //
 // The labels, "Save", "Saved.", "Forget this pairing" and "Forget" are the
 // names the Lab presses and waits for (packages/test-runner/src/demo-workspace/
@@ -19,31 +22,45 @@ import type { ExtensionStatus, FluxIQSettings } from "../../shared/protocol";
 import { createOnPageStatusSetting } from "../chat";
 import { connectionCopy } from "../copy";
 import { createElement } from "../dom";
+import type { ModelKeyReading, SetupPort } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
 import type { PanelContext } from "../shell";
 import type { PanelResult } from "../state";
+import { createAdvancedSection } from "./advanced-section";
 import { createSettingsForm } from "./address-form";
+import { approvalLine } from "./approval-line";
 import { readConnectionDraft, writeConnectionDraft } from "./draft-store";
 import { createForgetConfirmation } from "./forget-confirmation";
+import { modelKeyLine } from "./model-key-line";
 import { createProblemReportSection } from "./problem-report-section";
 import { forgetOutcomeWords } from "./forget-outcome-words";
+import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
 import "./settings.css";
 
 /** The mounted settings screen; `shown` and `hidden` start and stop what it reads. */
 export type SettingsView = { readonly element: HTMLElement; shown(): void; hidden(): void };
 
+/** What settings reads beside the status: the model key, through the setup screens' one seam. Absent, the key line says it could not check. */
+export type SettingsViewOptions = { readonly setup?: SetupPort };
+
 /** Builds settings; `close` goes back to where the person was. */
-export function createSettingsView(context: PanelContext, close: () => void): SettingsView {
+export function createSettingsView(context: PanelContext, close: () => void, options: SettingsViewOptions = {}): SettingsView {
   const { store } = context;
   let dirty = false;
   let editRevision = 0;
   let mutation: "save" | "disconnect" | "forget" | undefined;
+  let modelKey: ModelKeyReading = "unknown";
+  let reading = 0;
+  let isShown = false;
 
   const back = createElement("button", { className: "icon-button settings-back", text: "←", attrs: { type: "button", "aria-label": "Close settings", title: "Close settings" } });
   back.addEventListener("click", close);
   const dot = createElement("span", { className: "dot", attrs: { "aria-hidden": "true" } });
   const stateLine = createElement("p", { className: "settings-state-text", text: "Checking the connection..." });
+  const approval = createElement("p", { className: "card-line" });
+  const project = createElement("p", { className: "card-line" });
+  const keyLine = createElement("p", { className: "card-line" });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
   const form = createSettingsForm();
   const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: "Save", attrs: { type: "button" } });
@@ -53,7 +70,15 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
   // The on-page status preference is the chat's (`panel/chat/settings`); settings only hold it.
   const onPage = createOnPageStatusSetting(store.request);
   const forget = createForgetConfirmation(forgetPairing);
-  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small" });
+  const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: "model-key" });
+  const advanced = createAdvancedSection([
+    draftLine,
+    form.element,
+    createElement("div", { className: "card-actions" }, [saveButton, disconnectButton]),
+    message,
+    notice,
+    forget.element
+  ]);
 
   const element = createElement("section", { className: "settings-screen", hidden: true, attrs: { "aria-label": "Settings" } }, [
     createElement("div", { className: "settings-column" }, [
@@ -61,18 +86,20 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Connection" } }, [
         createElement("h3", { className: "settings-group-title", text: "Connection" }),
         createElement("div", { className: "settings-state" }, [dot, stateLine]),
-        draftLine,
-        form.element,
-        createElement("div", { className: "card-actions" }, [saveButton, disconnectButton]),
-        message,
-        notice
+        approval
+      ]),
+      createElement("section", { className: "settings-group", attrs: { "aria-label": "Project" } }, [
+        createElement("h3", { className: "settings-group-title", text: "Project" }),
+        project
+      ]),
+      createElement("section", { className: "settings-group", attrs: { "aria-label": "Model key" } }, [
+        createElement("h3", { className: "settings-group-title", text: "Model key" }),
+        keyLine,
+        open.element
       ]),
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Status on the page" } }, [onPage.element]),
-      createElement("section", { className: "settings-group", attrs: { "aria-label": "Help" } }, [createProblemReportSection(context), forget.element]),
-      createElement("section", { className: "settings-group settings-more", attrs: { "aria-label": "More in FluxIQ" } }, [
-        createElement("p", { className: "card-line", text: "Your Flows, their runs and everything else are in FluxIQ." }),
-        open.element
-      ])
+      createElement("section", { className: "settings-group", attrs: { "aria-label": "Help" } }, [createProblemReportSection(context)]),
+      advanced.element
     ])
   ]);
 
@@ -100,6 +127,7 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
     // The raw text sits beside the sentence, for whoever is fixing the connection.
     if (detail !== undefined && detail !== sentence) notice.append(createElement("span", { className: "notice-detail", text: detail }));
     notice.hidden = false;
+    advanced.reveal();
   }
 
   function failed(result: PanelResult<unknown>): boolean {
@@ -192,28 +220,51 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
     const copy = connectionCopy(status);
     dot.className = `dot dot-${copy.dot}`;
     stateLine.textContent = copy.sentence;
+    approval.textContent = approvalLine(status);
+    project.textContent = projectLine(status);
+    keyLine.textContent = modelKeyLine(modelKey, status.connectionState === "connected");
     open.observe(status);
     // Before filling, so a switch Core's policy forbids fills as off.
     form.allow(status.captureAllowed);
     if (!dirty) form.fill(savedSettings(status));
   }
 
+  /** Reads the model key again (settings just opened, or the panel came back from FluxIQ); the newest read wins. */
+  async function readKey(): Promise<void> {
+    if (options.setup === undefined || store.current()?.connectionState !== "connected") return;
+    const mine = ++reading;
+    let next: ModelKeyReading;
+    try {
+      next = await options.setup.readModelKey();
+    } catch {
+      next = "unknown";
+    }
+    if (mine !== reading) return;
+    modelKey = next;
+    render();
+  }
+
   store.subscribe(render);
+  globalThis.addEventListener?.("focus", () => { if (isShown) void readKey(); });
   void readConnectionDraft().then((draft) => {
     if (draft === undefined || dirty) return;
     editRevision += 1;
     dirty = true;
     draftLine.hidden = false;
     form.fill(draft);
+    advanced.reveal();
   });
 
   return {
     element,
     shown() {
+      isShown = true;
       render();
+      void readKey();
       onPage.setActive(true);
     },
     hidden() {
+      isShown = false;
       onPage.setActive(false);
     }
   };
