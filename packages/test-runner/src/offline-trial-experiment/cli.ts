@@ -69,6 +69,12 @@
 //   state rule and compared with their own live answers: no model, site or browser.
 //   Stores are read from copies under `--work`; only counts and codes come out.
 //
+//   node packages/test-runner/dist/offline-trial-experiment/cli.js state-engine --lab-runs <lab-runs dir> --work <dir under test-runs/> [--only <run id>,...] [--out <file>] [--tables <file>]
+//
+//   Saved Flows run end to end through the real intake on Core's state engine
+//   (`./state-rule/engine/replay.ts`), against the build's exploration and against the
+//   live test before it, with a judge that calls no model. Needs Scenario Lab's dist.
+//
 // Exit codes: 0 done; 2 usage; 3 prepared, not run (no --work); 4 the
 // candidate could not be prepared (refused or unverified rebuild).
 
@@ -81,7 +87,7 @@ import { offlineTrialRequest } from "./offline-trial-request.js";
 import { READS_USAGE, readsCommand } from "./reads/index.js";
 import { withRecordProcessing } from "./rebuild/index.js";
 import { freshStoreCopy, runExperimentTrial } from "./run/index.js";
-import { stateRuleCommand, STATE_RULE_USAGE } from "./state-rule/index.js";
+import { stateEngineCommand, stateRuleCommand } from "./state-rule/index.js";
 import { surveyExperiment } from "./survey-experiment.js";
 import { openTier2Reevaluation } from "./tier2/index.js";
 
@@ -89,6 +95,7 @@ import { openTier2Reevaluation } from "./tier2/index.js";
 const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 if (process.argv[2] === "reads") process.exit(await readsCommand(process.argv.slice(3), repositoryRoot));
 if (process.argv[2] === "state-rule") process.exit(await stateRuleCommand(process.argv.slice(3)));
+if (process.argv[2] === "state-engine") process.exit(await stateEngineCommand(process.argv.slice(3), repositoryRoot));
 const parsed = parseExperimentArguments(process.argv.slice(2));
 if ("error" in parsed) {
   process.stderr.write(`${parsed.error}\n${EXPERIMENT_USAGE}\n${READS_USAGE}\n`);

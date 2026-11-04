@@ -7,4 +7,4 @@ export { webOfflineReadRecordedListEnded } from "./recorded-list-ended";
 export { webOfflineReadControlReproduced } from "./control-reproduced";
 export { webOfflineReadDynamicContent } from "./dynamic-content";
 export { webOfflineReadAnsweredResult } from "./answered-result";
-export { webTraceStateDomain, webTraceStateCanonicalKey, webTraceStateSiblingKey, webTraceStateCallKind, webTraceStateReadAnswer, WEB_TRACE_STATE_NORMALISATIONS } from "./state-domain";
+export { webTraceStateDomain, webTraceStateCanonicalKey, webTraceStateSiblingKey, webTraceStateCallKind, webTraceStateReadAnswer, webTraceStateHandleScope, webTraceStateComputeRead, webTraceStateRecordedAnswerFits, webTraceStateUnansweredCall, WEB_TRACE_STATE_NORMALISATIONS } from "./state-domain";

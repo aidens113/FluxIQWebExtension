@@ -8,7 +8,9 @@
 //
 // A row's identity is its canonical value: object keys sorted at every depth. A cell
 // that changes on its own (a relative date, a live price) then reads as another row,
-// which costs a false gap and never a false match.
+// which costs a false gap and never a false match. A read whose conditions kept nothing
+// answers the rows they rejected (`unfiltered`, `content/extraction/filtered-answer.ts`):
+// those are not its rows, so the reading holds none.
 
 import type { ClientGatewayTraceRecordedPayload, ClientGatewayTraceStateAnswerReading } from "fluxiq/client-gateway";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
@@ -37,6 +39,7 @@ function positionOf(payload: Record<string, unknown> | undefined): string | null
 function rowsOf(payload: Record<string, unknown> | undefined): readonly string[] | null {
   const extracted = payload?.extracted;
   if (extracted === undefined || extracted === null) return null;
+  if (recordOf(recordOf(payload?.extraction)?.conditions)?.unfiltered === true) return [];
   return (Array.isArray(extracted) ? extracted : [extracted]).map((row: unknown) => JSON.stringify(canonical(row)));
 }
 
