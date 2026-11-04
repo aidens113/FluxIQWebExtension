@@ -7,10 +7,10 @@ import type { RunFacts } from "../types";
 
 test("ended unknown and unkept changes never assert ongoing checks or page-specific learning", () => {
   const unknown = runSummaryLines({ outcome: "completed", changesTried: 1 });
-  assert.ok(unknown.some(line => line.includes("not available")));
+  assert.deepEqual(unknown, ["Completed"], "what is not known is left out, not warned about");
   assert.ok(!unknown.some(line => /Checking|Learned|page variation/.test(line)));
   const unkept = runSummaryLines({ outcome: "completed", changesTried: 1, validated: true, futureRunsUpdated: false });
-  assert.ok(unkept.some(line => line.includes("not keep")));
+  assert.ok(unkept.some(line => line.includes("Nothing from this run was saved")));
   assert.ok(!unkept.some(line => /Checking|Learned|page variation/.test(line)));
 });
 
@@ -22,19 +22,19 @@ test("the plan's example reads as written", () => {
 });
 
 test("outcomes", () => {
-  assert.deepEqual(runSummaryLines({ outcome: "failed", durationMs: 3_100 }), ["Failed after 3.1s", "Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ outcome: "stopped", durationMs: 3_100 }), ["Stopped", "Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ outcome: "completed" }), ["Completed", "Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ outcome: "failed" }), ["Failed", "Whether this run kept a change is not available"]);
+  assert.deepEqual(runSummaryLines({ outcome: "failed", durationMs: 3_100 }), ["Failed after 3.1s"]);
+  assert.deepEqual(runSummaryLines({ outcome: "stopped", durationMs: 3_100 }), ["Stopped"]);
+  assert.deepEqual(runSummaryLines({ outcome: "completed" }), ["Completed"]);
+  assert.deepEqual(runSummaryLines({ outcome: "failed" }), ["Failed"]);
   assert.deepEqual(runSummaryLines({ outcome: "running" }), ["Running..."]);
   assert.deepEqual(runSummaryLines({}), [], "unknown says nothing");
 });
 
 test("durations", () => {
-  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 0 }), ["Completed in 0.0s", "Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 59_960 }), ["Completed in 1m 0s", "Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 125_000 }), ["Completed in 2m 5s", "Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 3_780_000 }), ["Completed in 1h 3m", "Whether this run kept a change is not available"]);
+  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 0 }), ["Completed in 0.0s"]);
+  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 59_960 }), ["Completed in 1m 0s"]);
+  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 125_000 }), ["Completed in 2m 5s"]);
+  assert.deepEqual(runSummaryLines({ outcome: "completed", durationMs: 3_780_000 }), ["Completed in 1h 3m"]);
 });
 
 test("AI activations", () => {
@@ -48,16 +48,16 @@ test("retention is generic and never guessed from counts or current statuses", (
   assert.deepEqual(runSummaryLines({ learned: 1 }), []);
   assert.deepEqual(runSummaryLines({ learned: 0 }), []);
   assert.deepEqual(runSummaryLines({ futureRunsUpdated: true }), ["This run kept a change for future runs"]);
-  assert.deepEqual(runSummaryLines({ learned: 9, futureRunsUpdated: false }), ["This run did not keep a change for future runs"]);
+  assert.deepEqual(runSummaryLines({ learned: 9, futureRunsUpdated: false }), ["Nothing from this run was saved for next time"]);
 });
 
 // A change the run tried and Core has not applied is never "learned" (item 24):
 // it is still being checked, or it did not hold.
 test("ended change counts and validation never invent retention or ongoing checking", () => {
-  assert.deepEqual(runSummaryLines({ learned: 0, changesTried: 2 }), ["Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ changesTried: 1, validated: true }), ["Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ learned: 0, changesTried: 1, validated: false }), ["Whether this run kept a change is not available"]);
-  assert.deepEqual(runSummaryLines({ changesTried: 0 }), ["Whether this run kept a change is not available"]);
+  assert.deepEqual(runSummaryLines({ learned: 0, changesTried: 2 }), []);
+  assert.deepEqual(runSummaryLines({ changesTried: 1, validated: true }), []);
+  assert.deepEqual(runSummaryLines({ learned: 0, changesTried: 1, validated: false }), []);
+  assert.deepEqual(runSummaryLines({ changesTried: 0 }), []);
 });
 
 // A re-author Core kept after a judged re-run (item 24): runFacts gives
@@ -69,7 +69,7 @@ test("a kept re-author reads as learned, and a rejected change as not held", () 
   );
   assert.deepEqual(
     runSummaryLines({ outcome: "completed", learned: 0, changesTried: 1, validated: false, futureRunsUpdated: false }),
-    ["Completed", "This run did not keep a change for future runs"]
+    ["Completed", "Nothing from this run was saved for next time"]
   );
 });
 

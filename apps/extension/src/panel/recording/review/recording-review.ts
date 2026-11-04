@@ -16,15 +16,15 @@ export const ATTACH_NEXT_LABEL = "Attach to my next message";
 export const ATTACHED_SENTENCE = "Attached. Say what to automate in the Chat tab.";
 export const NOT_ATTACHED_SENTENCE = "Couldn't find this recording to attach. Try Attach a recording in the chat.";
 
-/** A recording is supporting evidence; authoring always starts with explicit task instructions. */
+/** Where a recording goes next: attached to a message, where the person says what it is for. */
 export function createRecordingReview(context: PanelContext, options: RecordingReviewOptions = {}): RecordingReview {
-  const open = createOpenFluxIQButton(context.store.request, { label: "Author task instructions in FluxIQ", look: "primary" });
+  const open = createOpenFluxIQButton(context.store.request, { label: "Open FluxIQ", look: "small" });
   const done = createElement("button", { text: "Done", className: "small-button", attrs: { type: "button" } });
   const attach = createElement("button", { text: ATTACH_NEXT_LABEL, className: "small-button", attrs: { type: "button" } });
   const attachNote = createElement("p", { attrs: { role: "status" } });
   const element = createElement("section", { className: "card recording-review", hidden: true, attrs: { "aria-label": "Recording review" } }, [
-    createElement("h3", { text: "Recording saved as supporting evidence" }),
-    createElement("p", { text: "Author the automation's task instructions in FluxIQ, then optionally attach this described recording. A recording alone does not build or approve an automation." }),
+    createElement("h3", { text: "Your recording is saved" }),
+    createElement("p", { text: "It goes with your next message in the Chat tab. Say there what FluxIQ should do with it." }),
     open.element, ...(options.onAttach ? [attach, attachNote] : []), done
   ]);
   let recording: boolean | undefined;

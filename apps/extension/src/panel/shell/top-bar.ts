@@ -1,5 +1,8 @@
-// The slim top bar: FluxIQ, the Chat / Automations tabs, the record button,
-// the connection dot, the gear, and Open FluxIQ.
+// The slim top bar: FluxIQ, the Chat / Automations tabs, the connection dot, the
+// gear, and Open FluxIQ. Recording is not here: "Show me how" sits beside "+" in the
+// chat's composer (`panel/recording`), where a person is already saying what they want.
+// At 360 px what is left is the brand, two tabs and three small controls, each named
+// ("Settings", "Open FluxIQ", and the dot's connection sentence).
 //
 // The gear keeps the id `settingsButton` and the accessible name "Settings",
 // which the Lab presses. The tabs are an ARIA tablist: arrow keys, Home and End
@@ -24,8 +27,6 @@ export type TopBar = {
 export type TopBarParts = {
   onTab(tab: ShellTab): void;
   onGear(): void;
-  /** The record button (`panel/recording`). */
-  readonly record: HTMLElement;
   /** The Open FluxIQ icon (`panel/open-fluxiq`). */
   readonly openFluxIQ: HTMLElement;
 };
@@ -76,7 +77,7 @@ export function createTopBar(parts: TopBarParts): TopBar {
       createElement("h1", { className: "top-name", text: "FluxIQ" })
     ]),
     tablist,
-    createElement("div", { className: "top-actions" }, [parts.record, dot, gear, parts.openFluxIQ])
+    createElement("div", { className: "top-actions" }, [dot, gear, parts.openFluxIQ])
   ]);
 
   return {

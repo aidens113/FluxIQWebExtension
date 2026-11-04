@@ -146,7 +146,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     lines.textContent = row === undefined
       ? (state.mode === "offline" ? "Connect to FluxIQ to see its runs." : unavailable ? "This automation is unavailable in the current list." : "")
       : row.stoppable || row.runId === undefined ? row.lines.join(" · ") : `Last run: ${row.lines.join(" · ")}`;
-    const blocked = row?.stoppable ? undefined : state.working || state.runInFlight ? "Wait for FluxIQ to finish." : undefined;
+    const blocked = row?.stoppable ? undefined : state.runInFlight ? "Another run is going. You can run this when it finishes." : state.working ? "FluxIQ is working on a task. You can run this when it finishes." : undefined;
     run.textContent = row?.stoppable ? "Running..." : "Run";
     run.disabled = row === undefined || row.stoppable || blocked !== undefined || state.mode !== "list";
     stop.hidden = row?.stoppable !== true;

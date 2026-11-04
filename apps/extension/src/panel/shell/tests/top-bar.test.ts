@@ -24,7 +24,7 @@ async function setup(body: (view: ReturnType<typeof mounted>) => void) {
 
 function mounted(doc: { activeElement?: FakeElement }) {
   const chosen: ShellTab[] = [];
-  const bar = createTopBar({ onTab: (tab) => { chosen.push(tab); bar.showScreen(tab); }, onGear: () => {}, record: document.createElement("button"), openFluxIQ: document.createElement("button") });
+  const bar = createTopBar({ onTab: (tab) => { chosen.push(tab); bar.showScreen(tab); }, onGear: () => {}, openFluxIQ: document.createElement("button") });
   const tabs = fake(bar.element).byClass("top-tab");
   bar.showScreen("chat");
   function key(index: number, key: string, flags: Record<string, unknown> = {}) {

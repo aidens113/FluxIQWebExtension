@@ -12,7 +12,7 @@ characters.
 **Summary.** This is the manifest `description`, capped at 132 characters. The
 build checks the cap.
 
-> Record, run and repair browser automations with FluxIQ. Connects only to the FluxIQ runtime you run and pair.
+> Ask FluxIQ for a task in plain words and get the result. Connects only to the FluxIQ runtime you run and pair.
 
 **Category.** Chrome: Productivity > Workflow & Planning. AMO: Other.
 
@@ -30,7 +30,7 @@ build checks the cap.
 
 **Single purpose (Chrome).**
 
-> Record, run and repair browser automations for the user's own FluxIQ runtime.
+> Do a task the user asks for in plain words, through the user's own FluxIQ runtime, and return its result.
 
 **Permission justifications (Chrome dashboard).** Paste the "Why FluxIQ
 needs it" column of [Permissions](permissions.md), one row per permission. For
