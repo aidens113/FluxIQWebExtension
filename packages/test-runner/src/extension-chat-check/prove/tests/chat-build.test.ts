@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
 import test from "node:test";
 import { proveChatBuild } from "../chat-build.js";
 
@@ -13,9 +14,9 @@ test("in candidate authoring mode the probe never touches chat, controls, screen
   assert.deepEqual(touched, []);
 });
 
-test("in legacy authoring mode, the default, the probe goes on to type into the chat", async () => {
+test("in every mode that can qualify, and on the default, the probe goes on to type into the chat", async () => {
   const context = { session: { panel: undefined }, projectId: "project", log: () => undefined };
-  for (const mode of ["legacy" as const, undefined]) {
+  for (const mode of ["legacy" as const, "project" as const, "answer-first" as AutomationStudioAuthoringMode, undefined]) {
     await assert.rejects(proveChatBuild(context as never, { control: {} as never, screenshot: async () => undefined, ...(mode ? { authoringMode: mode } : {}) }), /The chat is not open/u);
   }
 });
