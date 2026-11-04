@@ -183,6 +183,9 @@ test("photo-social: settings read top down, Advanced holds the technical things,
   await expect(frame.locator(".settings-screen")).toContainText("Your model key is ready.");
   await expect(frame.locator(".settings-screen")).not.toContainText(/project-1|spend|budget/iu);
   await shot("settings-1-top-connected");
+  // Advanced starts closed: a person reads what they care about first.
+  await expect(frame.getByLabel("FluxIQ connection address", { exact: true })).toBeHidden();
+  await frame.locator(".settings-advanced > summary").click();
   await frame.locator(".settings-advanced").scrollIntoViewIfNeeded();
   await expect(frame.getByLabel("FluxIQ connection address", { exact: true })).toBeVisible();
   await expect(frame.getByLabel("Record what I type", { exact: true })).toBeVisible();

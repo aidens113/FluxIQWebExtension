@@ -44,7 +44,7 @@ async function sweepOf(page: Page, child: Frame): Promise<{ order: string[]; mis
     await page.keyboard.press("Tab");
   }
   const missed = await child.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("button, input, textarea, select, a[href], summary, [tabindex]"))
-    .filter((element) => !element.hasAttribute("data-reached") && !(element as HTMLButtonElement).disabled && element.getAttribute("tabindex") !== "-1" && element.getClientRects().length > 0 && !element.closest("[hidden], [inert]"))
+    .filter((element) => !element.hasAttribute("data-reached") && !(element as HTMLButtonElement).disabled && element.getAttribute("tabindex") !== "-1" && element.checkVisibility() && !element.closest("[hidden], [inert]"))
     .map((element) => element.id || (element.getAttribute("aria-label") ?? element.textContent ?? element.className).trim().replace(/\s+/g, " ").slice(0, 50)));
   await child.evaluate(() => document.querySelectorAll("[data-reached]").forEach((element) => element.removeAttribute("data-reached")));
   return { order, missed };
@@ -193,6 +193,7 @@ for (const { surface, title, size } of SURFACES) {
     await frame.getByRole("button", { name: "Settings" }).click();
     await expect(frame.locator(".settings-screen")).toContainText("Connected to FluxIQ");
     await shot("settings-top");
+    await frame.locator(".settings-advanced > summary").click();
     await frame.locator(".settings-advanced").scrollIntoViewIfNeeded();
     await expect(frame.getByLabel("FluxIQ connection address", { exact: true })).toBeVisible();
     await frame.locator(".settings-screen").evaluate((screen) => screen.scrollTo(0, screen.scrollHeight));
@@ -228,5 +229,7 @@ test("social-network-feed: one tab order reaches every control, and focus is kep
   await frame.getByRole("button", { name: "Settings" }).click();
   expect(await focusKept(child), "focus kept opening settings").toBe(true);
   await sweep("settings");
+  await frame.locator(".settings-advanced > summary").click();
+  await sweep("settings, Advanced open");
   console.log(report.join("\n"));
 });

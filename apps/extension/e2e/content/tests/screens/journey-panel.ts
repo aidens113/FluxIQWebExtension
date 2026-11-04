@@ -184,7 +184,7 @@ export function startJourneyPanel(surface: PanelSurface): void {
         default: return undefined;
       }
     },
-    ports: { setup: { readModelKey: async () => load().key }, tasks, results: tasks.results, taskMemory, library }
+    ports: { setup: { readModelKey: async () => load().key }, tasks: { port: tasks, results: tasks.results }, taskMemory, library }
   });
   // The status the background holds survives the popup closing: remember each move, as the background would.
   const show = scope.__show;

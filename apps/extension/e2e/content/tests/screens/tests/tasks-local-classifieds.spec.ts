@@ -21,7 +21,7 @@ const ENTRY = (tasks: "all" | "none") => `
   const memory = { read: async () => store.value, write: async (open?: { projectId: string; taskId: string }) => { store.value = open; }, get open() { return store.value; } };
   const port = createFakeTasksPort({ tasks: ${tasks === "all" ? "Object.values(fakeTasks(Date.now()))" : "[]"} });
   (window as unknown as { __fake: unknown }).__fake = { port, memory };
-  startScriptedPanel({ surface: "sidepanel", start: "connected", ports: { tasks: port, results: port.results, taskMemory: memory } });
+  startScriptedPanel({ surface: "sidepanel", start: "connected", ports: { tasks: { port, results: port.results }, taskMemory: memory } });
 `;
 
 let bundle: PanelBundle;

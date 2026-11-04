@@ -227,6 +227,7 @@ test("closing while recording, and a recording stopped while closed", async ({ p
 test("closing on an unsaved settings draft", async ({ page }, testInfo) => {
   const first = await open(page);
   await first.frame.getByRole("button", { name: "Settings" }).click();
+  await first.frame.locator(".settings-advanced > summary").click();
   const address = first.frame.getByLabel("FluxIQ connection address", { exact: true });
   await address.fill("ws://127.0.0.1:9999/client");
   await closePopupOnPageClick(page);

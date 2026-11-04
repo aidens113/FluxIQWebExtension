@@ -6,14 +6,15 @@
 //   t869  Core's task records: `list`, `read` and the attempts behind them (the same records
 //         the answer turn reads), plus `carryOn` for an attempt a restart cut off, `rename`
 //         and `remove`, each through a background message, answered as checked `ChatResult`s.
-//   t870  the task memory behind `readSteps` (the durable steps) and `readProvenance`
-//         (`taskMemory.provenance`, what was taken from saved steps and what was worked out again).
-// Add budget and Run again are the chat's `ChatResultsPort`, passed in `PanelPorts.results`.
+//   t870  the task memory behind `readSteps` (the durable steps). What was taken from saved steps
+//         and what was worked out again arrives on each outcome (`ChatTaskOutcome.provenance`).
+// Add budget, Run again and the rows export are the chat's `ChatResultsPort`, which is why this
+// answers the two together: a tasks port with no results port does not compile.
 
-import type { TasksPort } from "@fluxiq/ui-components";
+import type { PanelTasks } from "../shell";
 import type { PanelStore } from "../state";
 
 /** The tasks port over the background's messages, or `undefined` while none exists. */
-export function extensionTasksPort(_request: PanelStore["request"]): TasksPort | undefined {
+export function extensionTasksPort(_request: PanelStore["request"]): PanelTasks | undefined {
   return undefined;
 }

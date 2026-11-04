@@ -22,11 +22,11 @@ export type TasksPanelHost = {
 
 /** The tasks screen, or `undefined` when this build has no tasks to read. */
 export function createTasksPanel(context: PanelContext, ports: PanelPorts, host: TasksPanelHost): TasksScreen | undefined {
-  const port = ports.tasks ?? extensionTasksPort(context.store.request);
-  if (port === undefined) return undefined;
+  const tasks = ports.tasks ?? extensionTasksPort(context.store.request);
+  if (tasks === undefined) return undefined;
   return createTasksScreen({
-    port,
-    ...(ports.results === undefined ? {} : { results: ports.results }),
+    port: tasks.port,
+    results: tasks.results,
     memory: ports.taskMemory ?? extensionTasksMemory(),
     projectId: () => {
       const projectId = context.store.current()?.projectId;

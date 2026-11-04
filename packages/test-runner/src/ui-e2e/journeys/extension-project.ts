@@ -11,6 +11,7 @@
 // and is confirmed with "Forget". A journey that finds the extension on another
 // project forgets the pairing there and reconnects, and reports that it had to
 // (`sessionReset`), rather than letting the workaround pass unseen.
+import { openSettingsAdvanced } from "../../extension-settings/index.js";
 import { connectExtension, extensionStatus, pollStatus } from "../../demo-workspace/index.js";
 import { RunnerFailure } from "../../failure.js";
 import type { JourneySession } from "./session.js";
@@ -28,6 +29,7 @@ export async function connectExtensionForProject(session: JourneySession, input:
   await evidence.diagnostic("extension", "extension-project-stale", "ui-e2e.extension.project-stale", { sessionReset: true });
   await evidence.step("extension", "extension-reset-settings", "Open extension settings to reset the session", () => extensionPage.getByRole("button", { name: "Settings" }).click());
   await evidence.step("extension", "extension-reset-session", "Forget the extension pairing left on another project", async () => {
+    await openSettingsAdvanced(extensionPage);
     await extensionPage.getByRole("button", { name: "Forget this pairing", exact: true }).click();
     await extensionPage.getByRole("button", { name: "Forget", exact: true }).click();
   });

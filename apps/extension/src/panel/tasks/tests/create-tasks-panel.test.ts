@@ -29,7 +29,7 @@ test("without a port there is no tasks screen", () => {
 test("with a port it lists the connected project's tasks and opens one in the chat as a thread", async () => withFakeDocument(async () => {
   const port = createFakeTasksPort({ tasks: Object.values(fakeTasks(NOW)) });
   const shell = host();
-  const screen = createTasksPanel(context, { tasks: port, results: port.results, taskMemory: createFakeTasksMemory() }, shell.host);
+  const screen = createTasksPanel(context, { tasks: { port, results: port.results }, taskMemory: createFakeTasksMemory() }, shell.host);
   assert.notEqual(screen, undefined);
   screen!.setActive(true);
   await settle();
@@ -46,7 +46,7 @@ test("with a port it lists the connected project's tasks and opens one in the ch
 test("a task that was open when the panel closed brings the Automations tab forward", async () => withFakeDocument(async () => {
   const port = createFakeTasksPort({ tasks: Object.values(fakeTasks(NOW)) });
   const shell = host();
-  const screen = createTasksPanel(context, { tasks: port, taskMemory: createFakeTasksMemory({ projectId: "project-1", taskId: "task-jobs" }) }, shell.host)!;
+  const screen = createTasksPanel(context, { tasks: { port, results: port.results }, taskMemory: createFakeTasksMemory({ projectId: "project-1", taskId: "task-jobs" }) }, shell.host)!;
   screen.restore();
   await settle();
   assert.deepEqual(shell.calls, ["automations"]);

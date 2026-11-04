@@ -67,14 +67,14 @@ test("settings read top down: connection, project, model key, on the page, help,
   }));
 });
 
-test("Advanced starts open so the labels the Lab fills are on screen", async () => {
+test("Advanced starts closed: a person reads what they care about first", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
     const settings = view(status({ connectionState: "disconnected" }), "none");
     settings.shown();
     await tick();
     const advanced = fake(settings.element).descendants().find((node) => node.tagName === "DETAILS")! as unknown as { open: boolean };
-    assert.equal(advanced.open, true);
+    assert.equal(advanced.open, false);
   }));
 });
 

@@ -2,17 +2,16 @@
 // this pairing, under a disclosure so the settings read top down by what a person
 // cares about.
 //
-// It starts open. The Lab fills these labels the moment it opens Settings, and a
-// control inside a closed disclosure is not visible to it (`shown()` checks
-// `[hidden]` and client rects), so a closed start would stop the Lab. A person who
-// closes it is remembered, per viewer, in `chrome.storage.local`; it opens again by
-// itself when something inside needs them (a failure, unsaved changes).
+// It starts closed. The Lab opens it first (`extension-settings/open-settings-advanced.ts` in
+// the test runner). What a person chooses is remembered, per viewer, in
+// `chrome.storage.local`; it opens by itself when something inside needs them (a failure,
+// unsaved changes).
 
 import { createElement, type ElementChild } from "../dom";
 
 export const ADVANCED_KEY = "fluxiq.ui.settingsAdvanced";
 /** Whether Advanced is open for a viewer who never chose. */
-export const ADVANCED_STARTS_OPEN = true;
+export const ADVANCED_STARTS_OPEN = false;
 
 export type AdvancedSection = {
   readonly element: HTMLElement;
@@ -33,9 +32,10 @@ export function createAdvancedSection(children: readonly ElementChild[]): Advanc
   try {
     chrome.storage.local.get([ADVANCED_KEY], (items) => {
       if (chrome.runtime.lastError || chosen) return;
-      if (items?.[ADVANCED_KEY] === "closed") {
+      const remembered = items?.[ADVANCED_KEY];
+      if ((remembered === "open" || remembered === "closed") && details.open !== (remembered === "open")) {
         programmatic = true;
-        details.open = false;
+        details.open = remembered === "open";
       }
     });
   } catch {

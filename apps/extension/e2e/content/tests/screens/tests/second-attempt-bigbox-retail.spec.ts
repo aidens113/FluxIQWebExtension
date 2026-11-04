@@ -57,6 +57,13 @@ async function mountScene(frame: Frame, site: string, scene: Scene): Promise<voi
         delete second.result;
       }
       const start = second.attempt.startedAtMs as number;
+      second.provenance = { route: "use", startedFrom: "saved", steps: [
+        { position: 1, label: "Open the deals page", from: "saved", ran: true },
+        { position: 2, label: "Search for kettles", from: "saved", ran: true },
+        { position: 3, label: "Read the list", from: "saved", ran: true },
+        { position: 4, label: "Check the rows", from: "saved", ran: true },
+        { position: 5, label: "Reading the price filter", from: "worked_out", ran: true }
+      ] };
       const subject = (kind: string, id: string) => ({ kind, id, projectId: "project-1", flowId: "flow-deals" });
       const event = (activityId: string, kind: string, sequence: number, offset: number, detail: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
         activityId, sequence, subject: subject(kind, activityId), conversationId: "conv-latest", phase: kind === "run" ? "running" : "repairing",
