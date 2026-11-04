@@ -24,7 +24,7 @@ export type OpenFluxIQControl = { readonly element: HTMLElement; observe(status:
  * Makes an Open FluxIQ control, for a question that only FluxIQ can show. The panel passes its own (`panel/open-fluxiq/`), so the
  * chat does not reach into it.
  */
-export type OpenFluxIQFactory = (style: { label: string; look: "small" | "link"; canOpen?: () => boolean }) => OpenFluxIQControl;
+export type OpenFluxIQFactory = (style: { label: string; look: "small" | "link"; canOpen?: () => boolean; purpose?: "model-key" | "ask" }) => OpenFluxIQControl;
 
 /** How the panel mounts the chat. */
 export type ChatPanelOptions = {
@@ -46,7 +46,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   let latest: ExtensionStatus | undefined;
   // Each control the chat makes observes the extension's latest status, which `render` records before the chat sees it.
   const openControl: ChatOpenControlFactory = (style) => {
-    const control = openFluxIQ(style);
+    // The widget says what the button is for (`purpose`): it is passed on whole, so a model key's button reaches the keys page.
+    const control = openFluxIQ({ ...style });
     return {
       element: control.element,
       observe: () => {
