@@ -336,6 +336,12 @@ export const AUTOMATION_PANEL_MESSAGES = {
   runDetail: RUNTIME_MESSAGES.panelRunDetail,
   /** `export-run-dataset` with `{ runId, datasetId, format }`. */
   exportDataset: RUNTIME_MESSAGES.panelExportDataset,
+  /**
+   * A task's attempts, for the chat's answer turn. With `conversationId`:
+   * `list-conversation-task-attempts`, answering `{ outcomes }`, oldest first. With `attemptId`:
+   * `get-task-attempt`, answering `{ outcome }`. It names exactly one of them.
+   */
+  taskOutcomes: RUNTIME_MESSAGES.panelTaskOutcomes,
   /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider` and `enabled` only. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
@@ -361,6 +367,8 @@ export type AutomationPanelRequest = {
   runId?: string | undefined;
   datasetId?: string | undefined;
   format?: string | undefined;
+  conversationId?: string | undefined;
+  attemptId?: string | undefined;
   proposalId?: string | undefined;
   entryId?: string | undefined;
 };

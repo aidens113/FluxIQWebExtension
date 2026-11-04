@@ -433,10 +433,20 @@ panel's message:
 | `testGeneratedAutomation` | `run-runtime-session` `{ projectId, flowId }`: a test of a Flow just generated from a recording runs as generated, since repairing it would hide what the recording got wrong |
 | `runDetail` | `get-flow-run-detail` `{ projectId, runId, compact: true }`, then `list-flow-adaptations` for its Flow; answers `{ runDetail, adaptations }` |
 | `exportDataset` | `export-run-dataset` `{ projectId, runId, datasetId, format }` |
+| `taskOutcomes` | exactly one of: `list-conversation-task-attempts` `{ projectId, conversationId }`, answering `{ outcomes }` oldest first, or `get-task-attempt` `{ projectId, attemptId }`, answering `{ outcome }` |
 | `modelReadiness` | `secret-keys` `snapshot` `{}`; answers `{ keys }`, each key's `kind`, `provider` and `enabled` only |
 | `generateFromRecording` | `generate-recording-proposal` `{ projectId, recordingId, mode: "direct" }` for the recording this browser stopped last |
 | `saveGeneratedAutomation` | `review-recording-flow-proposal` `{ projectId, proposalId, decision: "approved" }` |
 | `removeRecordingStep` | by `entryId`, the `ActivityEntry.id` the recording log showed: removed from the offline queue if it was never sent, otherwise `remove-recording-entry` `{ projectId, recordingId, eventId }` |
+
+The chat's answer turn reads `taskOutcomes` on each of its reads
+(`panel/chat/transport/ports/results/`) and runs every record through
+`@fluxiq/contracts/automation`'s parsers: a record that fails fails the read, so nothing is
+guessed. Runs the panel saw finish are told beside Core's attempts, unless an attempt
+already tells that run. An attempt's spend is real, and a run's outcome has none to tell,
+so it carries `spendUnknown`. This is a program call over the pairing token, so it has no
+gateway message, domain mapping or capability. It runs the same in the side panel and
+the Firefox popup.
 
 Core accepts the token on these endpoints only with the same narrowed requests
 (Core's `docs/architecture/automation-studio/client-gateway.md`), so a run from

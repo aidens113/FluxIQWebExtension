@@ -86,6 +86,21 @@ test("an export names its run, dataset and format", async () => {
   assert.equal((await h.send({ type: AUTOMATION_PANEL_MESSAGES.exportDataset, runId: "run-1", datasetId: "d1" })).ok, false);
 });
 
+test("a task's attempts are read by conversation or by attempt, naming exactly one, and nothing else reaches Core", async () => {
+  const listed = { ok: true, payload: { outcomes: [{ attempt: { attemptId: "a1" } }] } } as const;
+  const h = harness({ "list-conversation-task-attempts": listed, "get-task-attempt": { ok: true, payload: { outcome: { attempt: { attemptId: "a1" } } } } });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.taskOutcomes, projectId: "project-7", conversationId: "c1", flow: { nodes: [] } }), listed);
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.taskOutcomes, attemptId: "a1", inputs: { password: "x" } });
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
+    ["list-conversation-task-attempts", { projectId: "project-7", conversationId: "c1" }],
+    ["get-task-attempt", { projectId: "project-1", attemptId: "a1" }]
+  ]);
+  for (const asked of [{}, { conversationId: "c1", attemptId: "a1" }]) {
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.taskOutcomes, ...asked }), { ok: false, code: "invalid_request", error: "That request must name one conversation or one attempt." });
+  }
+  assert.equal(h.calls.length, 2);
+});
+
 test("model readiness asks the secret-keys program and keeps only kind, provider and enabled", async () => {
   const h = harness({
     snapshot: { ok: true, payload: { keys: [{ id: "secret:1", name: "My OpenAI key", kind: "llm-api-key", provider: "openai", enabled: true, metadata: { hint: "sk-...1234" } }, { kind: "llm-api-key", enabled: "yes" }] } }

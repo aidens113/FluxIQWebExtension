@@ -1,6 +1,6 @@
 // Automation panel's relays (`AUTOMATION_PANEL_MESSAGES`): saved automations and their
-// runs, running one, a run's facts, a dataset's export, whether an AI model key
-// is set, and turning the last recording into an automation.
+// runs, running one, a run's facts, a dataset's export, a task's attempts, whether
+// an AI model key is set, and turning the last recording into an automation.
 //
 // Shaped like `panel/panel-control.ts`: only the side panel or the popup may
 // ask (`control-page.ts`), and each relay sends Core exactly the fields named
@@ -74,6 +74,13 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       if (!datasetId) return missing("datasetId");
       if (!format) return missing("format");
       return deps.call("export-run-dataset", { projectId, runId, datasetId, format });
+    }
+    case AUTOMATION_PANEL_MESSAGES.taskOutcomes: {
+      const conversationId = text(message.conversationId);
+      const attemptId = text(message.attemptId);
+      if (conversationId && !attemptId) return deps.call("list-conversation-task-attempts", { projectId, conversationId });
+      if (attemptId && !conversationId) return deps.call("get-task-attempt", { projectId, attemptId });
+      return failure("invalid_request", "That request must name one conversation or one attempt.");
     }
     case AUTOMATION_PANEL_MESSAGES.generateFromRecording:
     case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation:

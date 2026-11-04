@@ -16,7 +16,7 @@ const NO_LOOP = { steered: 0, refused: 0, changeApproach: 0, askPerson: 0 };
  * a failed result when the background could not be read. Nothing is invented: a
  * row is a row the dataset holds, the label is `unverified` unless the run's own
  * summary says a result check confirmed it, and the spend is zeros because this
- * path has no attempt record to read it from (the port says so with `reportsSpend: false`).
+ * path has no attempt record to read it from (the outcome says so with `spendUnknown`).
  */
 export async function outcomeOfRun(request: PanelStore["request"], run: FinishedRun, now: () => number): Promise<ChatResult<ChatTaskOutcome | undefined>> {
   const reply = await request({ type: AUTOMATION_PANEL_MESSAGES.runDetail, runId: run.runId });
@@ -62,6 +62,7 @@ export async function outcomeOfRun(request: PanelStore["request"], run: Finished
   return {
     ok: true,
     value: {
+      spendUnknown: true,
       attempt: {
         taskId: `task-${run.runId}`,
         attemptId,
@@ -75,7 +76,7 @@ export async function outcomeOfRun(request: PanelStore["request"], run: Finished
         spend: { calls: 0, inputTokens: 0, outputTokens: 0, usd: 0, ms: Math.max(0, endedAtMs - startedAtMs) },
         budget: { usd: 0 },
         liveSteps: 0,
-        loopsCaught: { exact_repeat: { ...NO_LOOP }, near_repeat: { ...NO_LOOP }, cycle: { ...NO_LOOP }, no_progress: { ...NO_LOOP }, same_fix: { ...NO_LOOP } },
+        loopsCaught: { exact_repeat: { ...NO_LOOP }, near_repeat: { ...NO_LOOP }, cycle: { ...NO_LOOP }, no_progress: { ...NO_LOOP }, same_fix: { ...NO_LOOP }, same_act: { ...NO_LOOP } },
         startedAtMs,
         endedAtMs
       },
