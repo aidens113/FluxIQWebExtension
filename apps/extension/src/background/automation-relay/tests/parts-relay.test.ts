@@ -70,6 +70,18 @@ test("keeping a part sends its five fields and nothing else, and needs its Flow 
   assert.equal(h.calls.length, 1);
 });
 
+test("running a part sends its seven fields and nothing else, and needs a part", async () => {
+  const payload = { runId: "run-1", status: "succeeded", outputs: { found: 3 }, acts: [], modelCalls: 0 };
+  const h = harness({ "run-project-part": { ok: true, payload } });
+  const reply = await h.send({ type: AUTOMATION_PANEL_MESSAGES.runPart, partId: " part.a ", version: 2, inputs: { query: "shoes" }, permittedConsequences: ["create_new", 3], acknowledgedRepeat: true, newRunId: "run-1", caller: "build", flowId: "flow-1", permission: {} });
+  assert.deepEqual(reply, { ok: true, payload });
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [["run-project-part", { projectId: "project-1", partId: "part.a", version: 2, inputs: { query: "shoes" }, permittedConsequences: ["create_new"], acknowledgedRepeat: true, newRunId: "run-1" }]]);
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.runPart, partId: "part.b", inputs: ["not", "a", "map"], acknowledgedRepeat: "yes", version: 1.5 });
+  assert.deepEqual(h.calls[1]?.payload, { projectId: "project-1", partId: "part.b" });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.runPart }), { ok: false, code: "invalid_request", error: "That request is missing its partId." });
+  assert.equal(h.calls.length, 2);
+});
+
 test("a refusal from the library is passed on as Core answered it", async () => {
   const refusal = { refused: true, code: "parts.unavailable", message: "This project's library of saved parts is not available right now." };
   const h = harness({ "list-project-parts": { ok: true, payload: refusal } });

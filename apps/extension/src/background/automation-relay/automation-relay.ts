@@ -79,6 +79,7 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
     case AUTOMATION_PANEL_MESSAGES.listParts:
     case AUTOMATION_PANEL_MESSAGES.getPart:
     case AUTOMATION_PANEL_MESSAGES.savePart:
+    case AUTOMATION_PANEL_MESSAGES.runPart:
       return relayPartsRequest(type, projectId, message, deps.call);
     case AUTOMATION_PANEL_MESSAGES.generateFromRecording:
     case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation:

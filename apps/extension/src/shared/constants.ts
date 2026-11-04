@@ -58,6 +58,7 @@ export const RUNTIME_MESSAGES = {
   panelListParts: "fluxiq.panel.listParts",
   panelGetPart: "fluxiq.panel.getPart",
   panelSavePart: "fluxiq.panel.savePart",
+  panelRunPart: "fluxiq.panel.runPart",
   testArmScriptedNavigation: "fluxiq.test.armScriptedNavigation",
   testAwaitScriptedNavigation: "fluxiq.test.awaitScriptedNavigation",
   testCancelScriptedNavigation: "fluxiq.test.cancelScriptedNavigation"

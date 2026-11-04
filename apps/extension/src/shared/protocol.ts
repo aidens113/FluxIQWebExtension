@@ -359,7 +359,12 @@ export const AUTOMATION_PANEL_MESSAGES = {
   /** `get-project-part` with `{ projectId, partId, version? }`. Answers `{ card, steps, calls, versions, callers }`, or a refusal. */
   getPart: RUNTIME_MESSAGES.panelGetPart,
   /** `save-project-part` with `{ projectId, flowId, subflowId, name?, purpose? }`. Answers `{ saved: true, partId, version, status }` or `{ saved: false, code, message }`. */
-  savePart: RUNTIME_MESSAGES.panelSavePart
+  savePart: RUNTIME_MESSAGES.panelSavePart,
+  /**
+   * `run-project-part` with `{ projectId, partId, version?, inputs?, permittedConsequences?, acknowledgedRepeat?, newRunId? }`.
+   * Answers `{ runId, status, outputs, rows?, stoppedAt?, acts, modelCalls }`, or `{ refused: true, code, message, classes? }` where nothing was run.
+   */
+  runPart: RUNTIME_MESSAGES.panelRunPart
 } as const;
 
 export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
@@ -387,6 +392,11 @@ export type AutomationPanelRequest = {
   /** A saved part, and the version of it to read (`getPart`). */
   partId?: string | undefined;
   version?: number | undefined;
+  /** What a part is given, by input id, and that the person was told it does its acts again (`runPart`). `permittedConsequences` says what it may do. */
+  inputs?: Readonly<Record<string, unknown>> | undefined;
+  acknowledgedRepeat?: boolean | undefined;
+  permittedConsequences?: string | readonly string[] | undefined;
+  newRunId?: string | undefined;
   /** The Subflow to keep, and the person's own name and purpose for it (`savePart`). */
   subflowId?: string | undefined;
   name?: string | undefined;

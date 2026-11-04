@@ -1,7 +1,7 @@
-// The panel's reads and its one write on the project's library of saved parts. Each
-// sends Core exactly the fields named here, one by one, and never the panel's
-// message spread into the request; Core narrows `save-project-part` to the same five
-// fields on its side, so the two checks both hold.
+// The panel's reads, its one write and its one run on the project's library of saved
+// parts. Each sends Core exactly the fields named here, one by one, and never the
+// panel's message spread into the request; Core narrows `save-project-part` and
+// `run-project-part` to the same fields on its side, so the two checks both hold.
 //
 // A reply is Core's payload as Core returned it: the cards, the part, the save's
 // answer, or `{ refused: true, code, message }` where the library cannot be read.
@@ -13,6 +13,7 @@ type Call = (endpoint: string, payload: Record<string, unknown>, programId?: str
 export function relayPartsRequest(type: string, projectId: string, message: AutomationPanelRequest, call: Call): Promise<PanelRelayResponse> {
   if (type === AUTOMATION_PANEL_MESSAGES.listParts) return call("list-project-parts", listBody(projectId, message));
   if (type === AUTOMATION_PANEL_MESSAGES.getPart) return getPart(projectId, message, call);
+  if (type === AUTOMATION_PANEL_MESSAGES.runPart) return runPart(projectId, message, call);
   return savePart(projectId, message, call);
 }
 
@@ -31,6 +32,23 @@ function savePart(projectId: string, message: AutomationPanelRequest, call: Call
   if (!flowId) return Promise.resolve(missing("flowId"));
   if (!subflowId) return Promise.resolve(missing("subflowId"));
   return call("save-project-part", { projectId, flowId, subflowId, ...(name ? { name } : {}), ...(purpose ? { purpose } : {}) });
+}
+
+function runPart(projectId: string, message: AutomationPanelRequest, call: Call): Promise<PanelRelayResponse> {
+  const partId = text(message.partId);
+  if (!partId) return Promise.resolve(missing("partId"));
+  const version = count(message.version);
+  const inputs = message.inputs && typeof message.inputs === "object" && !Array.isArray(message.inputs) ? message.inputs : undefined;
+  const permitted = words(message.permittedConsequences);
+  const newRunId = text(message.newRunId);
+  return call("run-project-part", {
+    projectId, partId,
+    ...(version !== undefined ? { version } : {}),
+    ...(inputs ? { inputs } : {}),
+    ...(permitted ? { permittedConsequences: Array.isArray(permitted) ? permitted : [permitted] } : {}),
+    ...(message.acknowledgedRepeat === true ? { acknowledgedRepeat: true } : {}),
+    ...(newRunId ? { newRunId } : {})
+  });
 }
 
 function listBody(projectId: string, message: AutomationPanelRequest): Record<string, unknown> {
