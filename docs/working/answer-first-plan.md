@@ -1,36 +1,58 @@
 # Answer First
 
 Status: Active
-Status detail: Draft, being rewritten after the user's refinement of 2026-11-03: one live exploration, simulation with exact recorded inputs, subflow library, extension UI focus. Not yet shown to the user as a plan.
+Status detail: Plan shown to the user on 2026-11-03 and waiting for their review; no code changed for it yet.
 Created: 2026-11-03
 Last updated: 2026-11-03
 Owner: Senior supervisor agent
-Scope: The extension and Lab side of the Answer First pivot: scoring "the person got the right answer" separately from "the Flow became deterministic", a same-workspace second attempt, a double-act oracle, the per-attempt report and the Lab's default build path. Core's plan owns the idea, the design and the phases.
+Scope: The extension and Lab side of Answer First: the chat experience the person sees, the Lab's two scores, a same-workspace second attempt, a double-act oracle, and the Lab's default build path. Core's plan owns the idea, the design, the lanes and the open questions.
 Paired document: `C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/answer-first-plan.md`
-Related: [testing facility](../architecture/testing-facility.md), [adaptation and breadth plan](./adaptation-and-breadth-plan.md), [offline trials plan](./trace-offline-trials-plan.md)
+Related: [testing facility](../architecture/testing-facility.md), [extension client](../architecture/extension-client.md), [offline trials plan](./trace-offline-trials-plan.md)
 
 ---
 
 ## Current State
 
-**Planned, not started.** Core's paired plan holds the user's words, the findings, the design, the phases and the open questions, all as the lead's proposal until reviewed.
+**Planned, not started.** Core's paired plan holds the user's words, the findings, the loop and the open questions. The user has made the extension and `@fluxiq/ui-components` the focus for now; the web panel waits until they reopen it.
 
-**On this side,** the finding that matters most: the live runs of 2026-10-31 and 2026-11-03 ran `legacy`, the Lab's default, while the product's default is `project`, so they did not exercise the path people use. P0 measures both on Claude on the same tasks, and afterwards the two defaults are the same.
+**On this side,** two findings matter most. The extension tells the story of building a Flow and never shows the answer. And the live runs of 2026-10-31 and 2026-11-03 ran `legacy`, the Lab's default, while the product's default is `project`.
 
-**Blockers:** none for P7. **Next:** Core's P0, then P7.
+**Blockers:** the user's review. **Next:** the Answer lane, which can start with fake ports, and the Lab lane. The screen-by-screen evidence is in Core's `docs/working/answer-first-plan/reports/study-extension-ux.md`.
 
-## P7: Two Scores And The Second Attempt
+## Extension Lane
 
-The Lab today throws `lab.candidate_not_promoted` on a draft and never consults the oracle, so a task the person got right scores as a failure when no Flow was promoted. References are in Core's discovery report (`docs/working/answer-first-plan/reports/discovery.md`), section 8.
+Rendering goes in `@fluxiq/ui-components`. Approvals, routing, extension storage and `chrome.*` stay in `apps/extension/src/panel/chat`, as now. Checks are unit tests beside the code plus provider-free headed specs on the ten realistic scenarios, never a synthetic page in a browser.
 
-**Keep every rule that already binds a Lab run:** the ten realistic scenarios, starting from the extension chat, visible browsers, the task audit, up to four live lanes, no weakened oracle, and no fixture or guidance shaped to pass.
+The Lab presses names: `#connectButton`, "Settings", "Start recording", `#stopRecordingButton`, `panelTab-*` and the settings labels. A phase that moves one moves the Lab in the same unit.
 
-1. **`answerVerdict`.** Judge the attempt's stored rows and the site's state against the same private oracle, on the attempt itself, before any fixture reset (before `lane.ts:452`). `oracleVerdict` then means Flow playback only. Relax the validation that forces both null without a Flow (`lane-observation.ts:163`, `evaluation-validation.ts:137`). `judgeCreatedFlowDataset` takes a persisted Flow run today, and needs a dataset source without one.
-2. **What the chat showed.** Score the answer the person actually saw, screened, as well as what is stored, so a right answer that never reached them fails.
-3. **A double-act oracle.** For each task with a lasting act, the site's recorded change must equal what the task asked for, once. Final-state oracles are absolute today (`testing-facility.md`), so a finish on a used site needs a seeded baseline per attempt and a judgement of the change, as the standing rule says.
-4. **A same-workspace second attempt.** Today each build starts blank in a fresh workspace, so repeated runs are repeats and not attempts. A new lane runs a task twice on one workspace and proves the second started from the first's draft. `persistent-isolated` and `lab replay` are the nearest existing pieces.
-5. **The per-attempt report.** One row per attempt: task, attempt, path, calls, tokens, dollars, time, live trials, offline checks, both verdicts, repeated acts. A per-task series over it, and the bench report carrying both scores. Calls and tokens sit beside dollars, because models and prices change.
-6. **The defaults.** After Core's D11, the Lab's authoring mode default (`packages/test-runner/src/live-llm/authoring-mode-env.ts`) equals the product's, and `testing-facility.md`'s stale line about it is corrected.
+No saved picture shows getting-started, the empty state, Automations, the strip, Settings, recording, extraction or Firefox. So the first step is a provider-free capture of each, for this plan and for later comparison.
+
+| Phase | Build | Proves | Checked on |
+| --- | --- | --- | --- |
+| Truth pass | No codes, no cut sentences, no tick on "not confirmed", red only when it matters, onboarding claims true, dead review code gone | The chat stops saying untrue things | everything-store, crossborder-marketplace |
+| Answer turn | `results` port, rows preview, counts, CSV and JSON, on-site list, check line, Run again | The result can be taken without leaving chat | company-website; 360 px and keyboard |
+| Real rows | The adapter reads the last run's dataset into the answer turn | Value before Core's result record lands | crossborder-marketplace, oracle rows equal the preview |
+| Work header | Time, cost, one Stop, each step and ask told once | The person knows what it costs and can stop | job-board; robot check on crossborder-marketplace |
+| Setup | One screen in order, deep links, readiness, the extension's factory passing `purpose` | A new person reaches a first task | Stand-in gateway and a realistic page |
+| Second attempt shown | Saved state chip, "Using what I saved", from-saved marking, comparison line | The loop's value is visible | bigbox-retail, everything-store replay |
+| Tasks | Inside the Automations tab: search, attempts, rename, delete; durable steps from Core | Old work can be found and understood | local-classifieds; worker restart |
+| Asks | Told once; consequences; the PIN if the user wants it; Firefox popup re-open | Lasting acts finish in the extension | auction-marketplace |
+| Library | Tree, search, run with inputs, inspect | Nested subflows are usable | professional-network |
+| Recording and settings | "Show me how" as a composer attachment; settings in order, Advanced for the rest | Chat-first end to end | everything-store, company-website, photo-social |
+| Firefox pass | Popup layout, long work without an open panel, badge | Parity is real | social-network-feed |
+
+## Lab Lane
+
+The Lab today throws `lab.candidate_not_promoted` on a draft and never consults the oracle, so a task the person got right scores as a failure if no Flow was promoted.
+
+**Every rule that binds a Lab run stays:** the ten realistic scenarios, starting from the extension chat, visible browsers, the task audit, up to four live lanes, no weakened oracle, and no fixture or guidance shaped to pass.
+
+1. **`answerVerdict`.** Judge the attempt's stored rows and the site's state against the same private oracle, on the attempt itself, before any fixture reset (before `lane.ts:452`). `oracleVerdict` then means Flow playback only. Relax the validation that forces both null without a Flow (`lane-observation.ts:163`, `evaluation-validation.ts:137`). `judgeCreatedFlowDataset` needs a dataset source without a persisted Flow run.
+2. **What the chat showed.** Score the answer the person saw, screened, as well as what is stored, so a right answer that never reached them fails.
+3. **A double-act oracle.** For each task with a lasting act, the site's recorded change must equal what the task asked for, once. Final-state oracles are absolute today, so attempts need a seeded baseline and a judgement of the change, as the standing rule says.
+4. **A same-workspace second attempt.** Each build starts blank in a fresh workspace today, so repeated runs are repeats and not attempts. A new lane runs a task twice on one workspace and proves the second started from the first's draft. `persistent-isolated` and `lab replay` are the nearest existing pieces.
+5. **The per-attempt report.** One row per attempt: task, attempt, path, calls, tokens, dollars, time, live steps, simulation result, both verdicts, repeated acts. A per-task series over it, and the bench report carrying both scores. Calls and tokens sit beside dollars, because models and prices change.
+6. **The defaults.** The Lab's authoring mode default (`packages/test-runner/src/live-llm/authoring-mode-env.ts`) equals the product's, and `testing-facility.md`'s stale line about it is corrected.
 
 Old pass rates are not comparable to `answerVerdict` and are never blended with it. Only a few tasks run fully end to end (user rule), so a second attempt runs on about one task per site, and every other task stays proven provider-free.
 
@@ -43,7 +65,7 @@ Old pass rates are not comparable to `answerVerdict` and are never blended with 
 - Agent: lead.
 - Changed: this document. No source.
 - Validation: not validated; this is a plan. The evidence is in Core's ledger.
-- Outcome: for the user's review.
+- Outcome: shown to the user for review.
 
 ## Open Questions
 
