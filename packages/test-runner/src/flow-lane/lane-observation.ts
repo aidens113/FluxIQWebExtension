@@ -1,4 +1,4 @@
-import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunActionTiming, RunAutomationFailure, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import type { RunAnswerScore, AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunActionTiming, RunAutomationFailure, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { absorbedEveryFailure } from "./recovery-attribution.js";
 import { bypassedByNode } from "./optional-bypass/index.js";
@@ -13,6 +13,8 @@ export type RunLaneObservation = Pick<
   RunEvaluation,
   "lane" | "flowCreated" | "oracleVerdict" | "reportedVerdict" | "automationFailureReported" | "automationFailureExpected" | "harnessActivations" | "actions" | "extraction"
 > & {
+  /** The attempt's own score, judged before any fixture reset (`creation/answer/`); absent when it was not judged. */
+  answer?: RunAnswerScore;
   /**
    * Core's recovery record for the Flow that ran, `null` when none ran. Both
    * lane builders below state it. It is optional because the bench's Flow-lane
@@ -110,9 +112,12 @@ export function flowLaneObservation(input: {
    * `null` when no Flow ran, since a run that never happened measured nothing.
    */
   extraction?: readonly RunExtractionMeasurement[];
+  /** The attempt's own score, judged before any fixture reset; it stands whether or not a Flow followed. */
+  answer?: RunAnswerScore | undefined;
 }): RunLaneObservation {
   const run = input.flowCreated ? input.run : undefined;
   return {
+    ...(input.answer ? { answer: input.answer } : {}),
     lane: "flow" satisfies EvaluationLane,
     flowCreated: input.flowCreated,
     oracleVerdict: input.oracleVerdict,
@@ -154,13 +159,13 @@ export function selectLaneObservation(input: {
   published: RunLaneObservation | undefined;
   automationFailureExpected: ExpectedFailure | null;
   recordingLane: () => RunLaneObservation;
-  stoppedLane?: { flowId: string | null; build: { outcome: string } | null; review: unknown } | undefined;
+  stoppedLane?: { flowId: string | null; build: { outcome: string } | null; review: unknown; answer?: RunAnswerScore | null } | undefined;
 }): RunLaneObservation | undefined {
   if (input.published) return input.published;
   if (!input.evaluated) return undefined;
   const stopped = input.stoppedLane;
   const flowCreated = stopped !== undefined && stopped.flowId !== null && stopped.build?.outcome === "proposed" && stopped.review != null;
-  if (input.flowLane) return flowLaneObservation({ flowCreated, oracleVerdict: null, run: undefined, automationFailureExpected: input.automationFailureExpected });
+  if (input.flowLane) return flowLaneObservation({ flowCreated, oracleVerdict: null, run: undefined, automationFailureExpected: input.automationFailureExpected, ...(stopped?.answer ? { answer: stopped.answer } : {}) });
   return input.recordingLane();
 }
 
