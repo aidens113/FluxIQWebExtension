@@ -1,12 +1,12 @@
 // The authoring mode every Core the Lab starts runs in: the run's
-// --authoring-mode, legacy when absent (the Lab's default, not Core's product
-// default, which t450 made candidate), always given to Core explicitly and
+// --authoring-mode, Core's product default when absent, always given to Core explicitly and
 // recorded in the run's plan, so a created-Flow run
 // says which mode its Core was in (t338).
 
 import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
+import { AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT } from "fluxiq/automation";
 import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { RunAllocation } from "../../allocation.js";
 import { buildFluxIQEnvironment } from "../../environment.js";
@@ -29,10 +29,10 @@ const profile: LlmExecutionProfile = {
 
 const core = (args: readonly string[], base: NodeJS.ProcessEnv = {}) => buildFluxIQEnvironment(allocation, { repositoryRoot: path.resolve("runs/run-a/no-checkout"), fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, base, args);
 
-test("Core's own variable, read through Core, and the Lab's own default, whatever Core's is", () => {
+test("Core's own variable, read through Core, and the product's default when a run names none", () => {
   assert.equal(LAB_AUTHORING_MODE_ENV, "FLUXIQ_AUTHORING_MODE");
   assert.equal(LAB_AUTHORING_MODE_FLAG, "--authoring-mode");
-  assert.equal(labAuthoringModeValue(["node", "cli", "run"]), "legacy");
+  assert.equal(labAuthoringModeValue(["node", "cli", "run"]), AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
   assert.equal(labAuthoringModeValue(["node", "cli", "--authoring-mode", "legacy"]), "legacy");
   assert.equal(labAuthoringModeValue(["node", "cli", "--authoring-mode", "candidate"]), "candidate");
 });
@@ -44,28 +44,28 @@ test("a mode Core would refuse is refused before anything starts", () => {
 });
 
 test("every Core the Lab starts is given the mode explicitly, and an inherited one is dropped", () => {
-  assert.equal(core(["node", "cli", "run"])[LAB_AUTHORING_MODE_ENV], "legacy");
-  assert.equal(core(["node", "cli", "run"], { [LAB_AUTHORING_MODE_ENV]: "candidate" })[LAB_AUTHORING_MODE_ENV], "legacy");
+  assert.equal(core(["node", "cli", "run"])[LAB_AUTHORING_MODE_ENV], AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
+  assert.equal(core(["node", "cli", "run"], { [LAB_AUTHORING_MODE_ENV]: "candidate" })[LAB_AUTHORING_MODE_ENV], AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
   assert.equal(core(["node", "cli", "run", "--authoring-mode", "candidate"])[LAB_AUTHORING_MODE_ENV], "candidate");
   assert.equal(core(["node", "cli", "run", "--authoring-mode", "legacy"], { [LAB_AUTHORING_MODE_ENV]: "candidate" })[LAB_AUTHORING_MODE_ENV], "legacy");
   assert.throws(() => core(["node", "cli", "run", "--authoring-mode", "both"]), /cannot be the authoring mode/u);
 });
 
-test("the plan records the mode the run's Core was started in, legacy by default", () => {
-  assert.equal(planLiveLlmExecution(profile, LAB_CEILING_USD).coreAuthoringMode, "legacy");
+test("the plan records the mode the run's Core was started in, the product's by default", () => {
+  assert.equal(planLiveLlmExecution(profile, LAB_CEILING_USD).coreAuthoringMode, AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
   assert.equal(planLiveLlmExecution(profile, LAB_CEILING_USD, DEFAULT_LLM_MODEL, "candidate").coreAuthoringMode, "candidate");
 });
 
-// `answer-first` is selected by name, through Core's own resolver: the Lab accepts it
-// the moment Core does, and until then refuses it before anything starts.
-test("answer-first is selectable once Core's resolver takes it, and refused until then (Answer First)", () => {
-  assert.throws(() => labAuthoringModeValue(["--authoring-mode", "answer-first"]), /cannot be the authoring mode/u);
+// `answer-first` is selected by name, through Core's own resolver, which now takes it (t861).
+test("answer-first is selectable through Core's own resolver, and a word Core does not know is refused (Answer First)", () => {
+  assert.equal(labAuthoringModeValue(["--authoring-mode", "answer-first"]), "answer-first");
+  assert.throws(() => labAuthoringModeValue(["--authoring-mode", "answer-later"]), /cannot be the authoring mode/u);
   const coreWithTheMode = ((env: Record<string, string | undefined>) => env[LAB_AUTHORING_MODE_ENV]) as unknown as Parameters<typeof labAuthoringModeValue>[1];
   assert.equal(labAuthoringModeValue(["--authoring-mode", "answer-first"], coreWithTheMode), "answer-first");
 });
 
-test("a run that names no mode is still legacy until the lead flips the one marked line at the Answer First merge", () => {
-  assert.equal(labAuthoringModeValue([]), "legacy");
+test("a run that names no mode runs the product's default, and only answer-first reads as it", () => {
+  assert.equal(labAuthoringModeValue([]), AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
   assert.equal(labAuthorsAnswerFirst("answer-first"), true);
   assert.equal(labAuthorsAnswerFirst("project"), false);
 });
