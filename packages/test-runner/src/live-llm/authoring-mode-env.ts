@@ -10,7 +10,11 @@
 // (`../flow-lane/creation/readiness.ts`), and the creation-qualification lanes
 // name it explicitly. `project` (opt-in) has a project supervisor plan the
 // Flow's subflows and assemble its builders' work into one candidate, admitted
-// on the same terms.
+// on the same terms. `answer-first` (opt-in) is the Answer First plan's one live
+// exploration, which ends with the person's result judged and leaves a saved draft
+// rather than a promoted Flow; the Lab scores it by its answer, and a run on it
+// must name its `--llm-max-cost-usd`, because a Lab-scoped ceiling holds under the
+// attempt's $5.
 //
 // The Lab's default is its own, not Core's. Core's configured product default
 // became `candidate` in t450 (2026-10-11) while the Lab's stayed `legacy`
@@ -43,7 +47,7 @@ export function labAuthoringModeValue(args: readonly string[] = process.argv): A
   const at = args.indexOf(LAB_AUTHORING_MODE_FLAG);
   if (at < 0) return LAB_DEFAULT_AUTHORING_MODE;
   const flagged = args[at + 1];
-  if (flagged === undefined || flagged.startsWith("--") || flagged.trim() === "") throw new Error(`${LAB_AUTHORING_MODE_FLAG} needs a mode: legacy, candidate or project`);
+  if (flagged === undefined || flagged.startsWith("--") || flagged.trim() === "") throw new Error(`${LAB_AUTHORING_MODE_FLAG} needs a mode: legacy, candidate, project or answer-first`);
   try {
     return resolveAutomationStudioAuthoringMode({ [LAB_AUTHORING_MODE_ENV]: flagged });
   } catch (error) {
