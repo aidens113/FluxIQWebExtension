@@ -27,7 +27,8 @@ test("reopened detail cannot turn explicit false or missing run proof into kept 
     await controller.focus("f1");
     await controller.refresh();
     const lines = controller.state().rows[0]?.lines ?? [];
-    assert.ok(lines.some(line => line.includes(durable === false ? "did not keep" : "not available")));
+    assert.equal(lines.some(line => line.includes("Nothing from this run was saved")), durable === false, "said only where the record says it");
+    assert.ok(!lines.some(line => /not available|did not keep/.test(line)));
     assert.ok(!lines.some(line => /Learned|page variation|This run kept/.test(line)));
   }
 });
@@ -81,7 +82,7 @@ test("a list read gives rows with plain summary lines; the last run's detail is 
   await controller.refresh();
   const state = controller.state();
   assert.equal(state.mode, "list");
-  assert.deepEqual(state.rows[0]?.lines, ["Completed in 2.0s", "No AI needed", "Whether this run kept a change is not available"]);
+  assert.deepEqual(state.rows[0]?.lines, ["Completed in 2.0s", "No AI needed"]);
   assert.deepEqual(types(), [M.listAutomations], "no detail for a row nobody opened");
   await controller.focus("f1");
   assert.deepEqual(types(), [M.listAutomations, M.runDetail]);
@@ -158,7 +159,7 @@ test("Run sends runAutomation, shows Running..., then the reply's summary, re-re
 
   assert.deepEqual(sent.find((message) => message.type === M.runAutomation), { type: M.runAutomation, flowId: "f1" });
   const row = controller.state().rows[0];
-  assert.deepEqual(row?.lines, ["Completed in 14.2s", "AI activated once", "Whether this run kept a change is not available"]);
+  assert.deepEqual(row?.lines, ["Completed in 14.2s", "AI activated once"]);
   assert.equal(row?.runId, "r1");
   assert.deepEqual(row?.datasets.map((dataset) => dataset.label), ["Orders"]);
   assert.equal(sent.filter((message) => message.type === M.listAutomations).length, 2, "re-read after the run");
@@ -239,5 +240,5 @@ test("a listed run that changed later runs says so in its row, without a reply f
 test("a listed run that changed nothing durable is not read as learned", async () => {
   const { controller } = setup(() => list([{ ...newRun, adaptationCount: 0, durableBehaviorChanged: false }]));
   controller.observe(connected); await controller.refresh();
-  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once", "This run did not keep a change for future runs"]);
+  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once", "Nothing from this run was saved for next time"]);
 });

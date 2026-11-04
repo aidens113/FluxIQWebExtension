@@ -24,6 +24,7 @@ test("requests Settings stays unavailable under Core's default, a save cannot tu
   const saved = await page.evaluate(() => chrome.runtime.sendMessage({ type: "fluxiq.panel.saveSettings", settings: { requestsEnabled: true, autoReconnect: false } }));
   expect(saved).toMatchObject({ ok: true });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("details.settings-advanced > summary").click();
   const requests = page.getByRole("checkbox", { name: "Allow direct requests", exact: true });
   await expect(requests).toBeDisabled();
   await expect(requests).not.toBeChecked();

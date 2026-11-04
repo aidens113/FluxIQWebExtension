@@ -73,3 +73,13 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* The setup card (setup-card.ts): above the chat, in place of the chat's own model-key line. It shows
+   only while the chat's empty state is on screen (a chat holding work is never nagged) and hides the
+   chat's line while it does, so nothing about the key is told twice. */
+.setup-card { display: grid; gap: 6px; flex: 0 0 auto; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--divider); border-radius: 12px; background: var(--surface-muted); }
+.setup-card-done { color: var(--success); font-size: 12px; line-height: 1.4; }
+.setup-card-step { font-size: 14px; font-weight: 700; }
+.setup-card-line { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.chat-screen:not(:has(.chat-empty:not([hidden]))) > .setup-card { display: none; }
+.chat-screen:has(> .setup-card:not([hidden])) .chat-key-line { display: none; }
