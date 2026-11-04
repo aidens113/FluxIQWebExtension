@@ -4,14 +4,16 @@ import { browserDescriptor } from "../shared/browser";
 import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../shared/protocol";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
-import { clearSession, discardPersistentQueue, onSavedStateRepaired, readOrCreateClientId, readSession, readSettings, writeSession, writeSettings } from "./storage";
+import { clearSession, discardPersistentQueue, forgetDeliveryStorage, onSavedStateRepaired, readOrCreateClientId, readSession, readSettings, writeSession, writeSettings } from "./storage";
 import { acceptActionEvidencePort } from "./action-evidence";
 import { handleScriptedNavigationControl } from "./scripted-navigation-control";
 import { clearExtractionTab, handleExtractionControl } from "./extraction";
-import { isControlPage } from "./control-page";
+import { isControlPage, refusedOutsideControlPage } from "./control-page";
 import { handleExtensionInstalled } from "./extension-installed";
 import { AutoConnect, handlePanelControl, panelControlDeps, sessionDisconnectMemory, ToolbarIndicator } from "./panel";
 import { callCoreProgram } from "./connection/index";
+import { deliverPendingForget, forgetWithoutSocket, type ForgetDeliveryDeps } from "./forget-delivery/index";
+import { keepOverlayPlacement, recallOverlayPlacement } from "./overlay-placement";
 import { requestsChoice } from "./capture-policy/index";
 import { readBuildIdentity, handleReportProblem, localProblemLogStore, ProblemLog, ProblemNoticer, type ReportProblemDeps } from "./diagnostics";
 import { browserReconnectAlarms, RECONNECT_ALARM_NAME, ReconnectWatchdog } from "./reconnect-watchdog";
@@ -40,6 +42,9 @@ onSavedStateRepaired((message) => void problemLog.note({ source: "saved-state", 
 // The offline queue older builds kept in local storage, page data and all, is
 // removed at every start; the queue now lives in session storage.
 void discardPersistentQueue().catch(noteMessageFailure);
+// Nothing the worker's pages read needs a content script to reach this storage, and the credential is in it.
+void chrome.storage.local.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })?.catch(noteMessageFailure);
+void deliverPendingForget(forgetDeliveryDeps()).catch(noteMessageFailure);
 
 function getConnection(): Promise<FluxIQConnection> {
   if (connection) return Promise.resolve(connection);
@@ -150,6 +155,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.MessageSender): Promise<unknown> {
   const typed = message as { type?: string; [key: string]: unknown };
   if (typed.type === BUILD_IDENTITY_MESSAGE) return readBuildIdentity({ tabId: typed.tabId }, sender);
+  if (sender.id === chrome.runtime.id && typed.type === RUNTIME_MESSAGES.overlayPlacementRecall) return await recallOverlayPlacement();
+  if (sender.id === chrome.runtime.id && typed.type === RUNTIME_MESSAGES.overlayPlacementKeep) return await keepOverlayPlacement(typed.placement);
   const manager = await getConnection();
 
   const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
@@ -175,7 +182,10 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
     return { ok: true, status: await statusWithQueue(manager) };
   }
 
+  if (refusedOutsideControlPage(typed.type, sender)) return { ok: false, code: "forbidden" };
+
   if (typed.type === RUNTIME_MESSAGES.connect) {
+    await deliverPendingForget(forgetDeliveryDeps()).catch(noteMessageFailure);
     await autoConnect.noteConnectedByPerson();
     const stored = await readSettings();
     const requested = (typed.settings as Partial<FluxIQSettings> | undefined) ?? {};
@@ -198,12 +208,14 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
 
   if (typed.type === RUNTIME_MESSAGES.resetSession) {
     await autoConnect.noteDisconnectedByPerson();
-    await manager.forgetPairing();
+    const stored = await readSession();
+    const settings = await readSettings();
+    const told = await manager.forgetPairing() || (stored?.token ? await forgetWithoutSocket(forgetDeliveryDeps(), { token: stored.token, coreApiUrl: settings.coreApiUrl }) : true);
     manager.disconnect();
     await clearSession();
     connection = undefined;
     const next = await getConnection();
-    return { ok: true, status: await statusWithQueue(next) };
+    return { ok: true, status: await statusWithQueue(next), forgetReachedCore: told };
   }
 
   if (typed.type === RUNTIME_MESSAGES.dismissRecordingLock) {
@@ -295,6 +307,10 @@ async function syncReconnectWatchdog(manager: FluxIQConnection): Promise<void> {
     disconnectedByPerson,
     connectionState: status.connectionState
   });
+}
+
+function forgetDeliveryDeps(): ForgetDeliveryDeps {
+  return { ...forgetDeliveryStorage, fetch: (input, init) => fetch(input, init), now: () => Date.now() };
 }
 
 function noteMessageFailure(error: unknown): void {

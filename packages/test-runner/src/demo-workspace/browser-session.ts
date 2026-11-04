@@ -275,7 +275,7 @@ export async function connectExtension(
       facts.pairingRequired = true;
       await checkpoint("pairing-approval", "panel");
       if (typeof initial.pairingReferenceCode !== "string") throw new RunnerFailure("gateway.pairing", "Extension pairing code is unavailable");
-      await approvePairingInPanel(panelPage, initial.pairingReferenceCode, evidence);
+      await approvePairingInPanel(panelPage, initial.pairingReferenceCode, evidence, control.pairingPassword());
       await pollStatus(page, value => value.connectionState === "connected" && typeof value.sessionId === "string", "pairing approval");
     }
     facts.connected = true;

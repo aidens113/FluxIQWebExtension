@@ -409,6 +409,24 @@ is missing. The panel's settings show it as "Report a problem":
 it copies the report and offers it as a file. What it holds and withholds is in
 [sensitive values](sensitive-values.md#problem-reports).
 
+`fluxiq.connect` and `fluxiq.resetSession` are control-page-only too
+(`refusedOutsideControlPage` in `background/control-page.ts`): the first can send the
+stored credential to a new gateway address, and the second ends the trust on Core.
+The background also sets `chrome.storage.local` to trusted contexts at start, so a
+content script cannot read the credential; Firefox has no such setting, and the same
+gates are what stand there. The overlay's last place, the one value a content script
+keeps, goes through the background instead (`background/overlay-placement.ts`), which
+reads and writes only that key and only a value small enough to be a placement.
+
+**Forget without a socket.** Forget tells Core over a live socket. With none it posts the
+credential to `/api/client-gateway/forget-pairing`. If that fails too, the credential
+stays in `chrome.storage.local` as `fluxiq.pendingForget`, long enough to tell Core
+(`background/forget-delivery/`), which is tried at each worker start and each connect,
+and the settings screen says plainly that FluxIQ still trusts this browser and where to
+revoke it now. It is the same credential pairing already held, protected the same way;
+it is dropped as soon as Core has answered, or unsent after 60 days, when it has ended
+on Core by itself.
+
 The internal `fluxiq.buildIdentity` diagnostic is also control-page-only. A
 numeric tab id addresses frame zero, which responds only from the active content
 instance. The reply contains immutable build identities for background/content,

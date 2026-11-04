@@ -17,6 +17,7 @@ import {
   type ClientGatewayOutboxContext
 } from "@fluxiq/client-gateway-websocket";
 import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
+import { browserClientLabel } from "../../../shared/browser";
 import { HEARTBEAT_INTERVAL_MS } from "../../../shared/constants";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings, ServerCommandPayload } from "../../../shared/protocol";
 import { effectiveSettings } from "../../capture-policy/index";
@@ -172,7 +173,7 @@ test("every socket opens with the extension's hello: identity, capabilities, dom
   };
   assert.equal(payload.clientId, "client-1");
   assert.equal(payload.clientType, "extension");
-  assert.equal(payload.name, "FluxIQ Browser Extension");
+  assert.equal(payload.name, browserClientLabel(navigator.userAgent, navigator.platform));
   assert.equal(payload.version, "0.0.0-test");
   assert.equal(payload.token, SYNTHETIC_TOKEN, "the saved token resumes the trusted client");
   assert.ok(payload.capabilities.length > 0);

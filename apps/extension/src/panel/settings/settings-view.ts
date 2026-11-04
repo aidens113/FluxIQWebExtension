@@ -26,6 +26,7 @@ import { createSettingsForm } from "./address-form";
 import { readConnectionDraft, writeConnectionDraft } from "./draft-store";
 import { createForgetConfirmation } from "./forget-confirmation";
 import { createProblemReportSection } from "./problem-report-section";
+import { forgetOutcomeWords } from "./forget-outcome-words";
 import { savePlan } from "./save-plan";
 import "./settings.css";
 
@@ -161,8 +162,9 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
     mutation = "forget";
     renderBusy();
     try {
-      if (failed(await store.request({ type: RUNTIME_MESSAGES.resetSession }))) return false;
-      showSuccess("Pairing forgotten. Connect again to pair this browser.");
+      const reply = await store.request({ type: RUNTIME_MESSAGES.resetSession });
+      if (failed(reply)) return false;
+      showSuccess(forgetOutcomeWords((reply as { forgetReachedCore?: boolean }).forgetReachedCore));
       return true;
     } catch {
       showFailure("Couldn't forget this pairing. Try Forget again.");

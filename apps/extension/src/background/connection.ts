@@ -423,13 +423,15 @@ export class FluxIQConnection {
    * credential kept end there and then. Best effort, because the credential is
    * dropped here either way, and with it nothing can open what Core still holds.
    */
-  async forgetPairing(): Promise<void> {
+  async forgetPairing(): Promise<boolean> {
     // Only over a live socket: `send` would otherwise queue it for a later connection, whose credential is about to be gone.
-    if (this.gateway.state() !== "connected") return;
+    if (this.gateway.state() !== "connected") return false;
     try {
       await this.gateway.send("client.forget_pairing", {});
+      return true;
     } catch (error) {
       console.warn("FluxIQ could not tell Core this pairing was forgotten.", error instanceof Error ? error.name : "non_error");
+      return false;
     }
   }
 

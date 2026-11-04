@@ -10,7 +10,7 @@ import { chatNetworkPolicy } from "./chat-network-policy.js";
 import { evidenceWriter } from "./evidence-writer.js";
 import { openChromeChatSession, type WorkerRequest } from "./open-chrome-session.js";
 import { openFirefoxChatSession } from "./open-firefox-session.js";
-import { proveAskAnswered, proveChatBuild, proveChatRelay, type AskAnswerObservation, type ChatBuildObservation, type ChatRelayObservation } from "./prove/index.js";
+import { proveAskAnswered, proveChatBuild, proveChatRelay, proveModelKeyUnlock, type AskAnswerObservation, type ChatBuildObservation, type ModelKeyUnlockObservation, type ChatRelayObservation } from "./prove/index.js";
 import { threadReader } from "./thread-reader.js";
 import type { Page } from "@playwright/test";
 import type { ChatBrowser, ChatBrowserSession, ChatCheckContext } from "./types.js";
@@ -26,6 +26,8 @@ export type ChatCheckOptions = {
   ask: boolean;
   /** Also run claim 4: the created-Flow lane's chat stage types a build request into the panel and follows the build (`prove/chat-build.ts`). */
   build?: boolean;
+  /** Runs only the model key's claim: pairing, a Core restart, a sign-out and the one-time step, with a dummy key and no model. */
+  modelKey?: boolean;
   evidenceDirectory: string;
   log?: (line: string) => void;
 };
@@ -48,6 +50,7 @@ export type ChatCheckResult = {
   relay: ChatRelayObservation | null;
   ask: AskAnswerObservation | null;
   build: ChatBuildObservation | null;
+  modelKey: ModelKeyUnlockObservation | null;
   flow: ApprovalFlow | null;
   /** The chat-relevant program calls the extension made, as the proxy in front of Core received them. No headers. */
   coreCalls: unknown[];
@@ -75,7 +78,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
   const workerRequests: WorkerRequest[] = [];
   let topology: RunningTopology | undefined;
   let proxy: CoreRecordingProxy | undefined;
-  const result: ChatCheckResult = { browser: options.browser, browserVersion: null, scenarioId: scenario.id, pageUrl: null, panelMode: null, panelNote: null, panelInput: null, extensionProject: null, cookiePrompt: null, stage: "topology", relay: null, ask: null, build: null, flow: null, coreCalls: [], failure: null, evidenceDirectory: options.evidenceDirectory };
+  const result: ChatCheckResult = { browser: options.browser, browserVersion: null, scenarioId: scenario.id, pageUrl: null, panelMode: null, panelNote: null, panelInput: null, extensionProject: null, cookiePrompt: null, stage: "topology", relay: null, ask: null, build: null, modelKey: null, flow: null, coreCalls: [], failure: null, evidenceDirectory: options.evidenceDirectory };
   const stage = (name: string) => { result.stage = name; log(`[chat-check] ${options.browser}: ${name}`); };
   try {
     topology = await startTopology({
@@ -96,6 +99,11 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
     if (!control || !projectId || !authorizationPin || !topology.gatewayUrl) throw new Error("The isolated Core started without a signed-in control, a project, a PIN or a gateway");
     stage("recording proxy");
     proxy = await startCoreRecordingProxy(topology.fluxiqOrigin);
+    if (options.modelKey) {
+      stage("add a dummy model key");
+      // Never reaches a provider: this claim makes no model call, and the network guard would refuse one.
+      await control.secretKeysCall("create-key", { name: "Chat check dummy", value: ["sk", "ant", "dummy", "a1b2".repeat(8)].join("-"), kind: "llm", provider: "anthropic", authorizationPassword: topology.authorizationPassword ?? "", authorizationPin });
+    }
     if (options.ask) {
       stage("save approval flow");
       result.flow = await saveApprovalFlow(control, { projectId, authorizationPin });
@@ -140,10 +148,28 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       evidence,
       log,
     };
-    stage("claim relay");
-    result.relay = await proveChatRelay(context, { message: "What can you do?", expectedPageUrl: pageUrl });
-    await evidence.shot("relay-answered");
-    if (options.ask && result.flow) {
+    if (options.modelKey) {
+      stage("claim model key");
+      const owned = topology;
+      result.modelKey = await proveModelKeyUnlock(context, {
+        selectProject: () => control.selectProject(projectId),
+        restartCore: () => owned.restartCore!(),
+        signOut: () => control.signOut(),
+        signIn: async () => {
+          await control.reauthenticate();
+          return control.sessionCookieValue();
+        },
+        password: owned.authorizationPassword ?? "",
+        fluxiqOrigin: owned.fluxiqOrigin,
+        gatewayUrl: owned.gatewayUrl!,
+        coreApiUrl: proxy.origin,
+      });
+    } else {
+      stage("claim relay");
+      result.relay = await proveChatRelay(context, { message: "What can you do?", expectedPageUrl: pageUrl });
+      await evidence.shot("relay-answered");
+    }
+    if (options.ask && result.flow && !options.modelKey) {
       stage("claim ask");
       result.ask = await proveAskAnswered(context, { flow: result.flow, screenshot: name => evidence.shot(name) });
       await evidence.shot("ask-settled");
