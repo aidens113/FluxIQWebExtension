@@ -550,6 +550,7 @@ test("a part presses on each row it read: each intended row exactly once, by ide
     // (a) and (c): each intended job saved exactly once; a second part while this one runs is refused, the site unchanged.
     let savedAtStart = await freshBoard();
     let second: { answer: JsonObject; commands: string[]; whole: string[]; ms: number } | undefined;
+    let plainRun: { message: string; thrown: boolean; commands: string[]; newSessions: { runId: string; status: string }[]; whole: string[]; providerCalls: number; ms: number } | undefined;
     const plain = await runWith(async () => {
       const before = await boardState(installed);
       const count = installed.siteCommands().length;
@@ -557,6 +558,23 @@ test("a part presses on each row it read: each intended row exactly once, by ide
       const answer = await askRun();
       const ms = Date.now() - at;
       second = { answer, commands: installed.siteCommands().slice(count), whole: [before.whole, (await boardState(installed)).whole], ms };
+      // A person's plain Flow run started now, through the real service: refused at its start, in the part's words.
+      const sessionsBefore = (await service.listRuntimeSessions(projectId)).map((candidate) => candidate.runId);
+      const plainBefore = await boardState(installed);
+      const plainCount = installed.siteCommands().length;
+      const plainCalls = providerCalls;
+      const plainAt = Date.now();
+      const refusedError = await service.runRuntimeSession({ projectId, flowId: review.flowId, inputs: {}, adaptiveMode: "no_llm_intervention", permittedConsequences: ["modify_existing"], authorizedExternalSideEffects: true }).then(() => null, (error: unknown) => error);
+      const sessionsAfter = await service.listRuntimeSessions(projectId);
+      plainRun = {
+        message: refusedError instanceof Error ? refusedError.message : String(refusedError),
+        thrown: refusedError instanceof Error,
+        commands: installed.siteCommands().slice(plainCount),
+        newSessions: sessionsAfter.filter((candidate) => !sessionsBefore.includes(candidate.runId) && record(candidate.metadata).partRun === undefined).map((candidate) => ({ runId: candidate.runId, status: candidate.status })),
+        whole: [plainBefore.whole, (await boardState(installed)).whole],
+        providerCalls: providerCalls - plainCalls,
+        ms: Date.now() - plainAt
+      };
     });
     console.log(JSON.stringify({ partRunRows: { status: plain.answer.status, acts: plain.answer.acts, stoppedAt: plain.answer.stoppedAt ?? null, clicks: clicks(plain.commands), reads: reads(plain.commands), ms: plain.ms } }));
     console.log(JSON.stringify({ partRunSecond: { code: second!.answer.code, message: second!.answer.message, commands: second!.commands, ms: second!.ms } }));
@@ -572,6 +590,28 @@ test("a part presses on each row it read: each intended row exactly once, by ide
     const titlesAfterRows = await myJobsTitles(page, origin);
     for (const posting of intended) expect(titlesAfterRows.filter((shown) => shown === posting.title), posting.title).toHaveLength(1);
     await page.screenshot({ path: testInfo.outputPath("after-rows-my-jobs.png"), fullPage: true });
+
+    // A plain Flow run started while the part ran was refused at its start, in the part's own words, and touched nothing.
+    console.log(JSON.stringify({ plainRunDuringPart: plainRun }));
+    await keepDiagnostic(testInfo, "part-run-plain-refused.json", { plainRun });
+    expect(plainRun!.thrown, JSON.stringify(plainRun)).toBe(true);
+    expect(plainRun!.message, "the same words as the part's refusal").toBe(String(second!.answer.message));
+    expect(plainRun!.newSessions, "the refused run wrote no session").toEqual([]);
+    expect(plainRun!.commands.filter((command) => !NOT_A_PAGE_COMMAND.test(command)), "the refused run sent the site nothing").toEqual([]);
+    expect(plainRun!.whole[1], "the board's state did not change while the plain run was refused").toBe(plainRun!.whole[0]);
+    expect(plainRun!.providerCalls, "a refused run called no model").toBe(0);
+
+    // Once the part has ended, the same plain run starts and runs normally.
+    savedAtStart = await freshBoard();
+    const plainStarted = installed.siteCommands().length;
+    const plainFlow = await service.runRuntimeSession({ projectId, flowId: review.flowId, inputs: {}, adaptiveMode: "no_llm_intervention", permittedConsequences: ["modify_existing"], authorizedExternalSideEffects: true });
+    console.log(JSON.stringify({ plainRunAfterPart: { status: plainFlow.status, clicks: clicks(installed.siteCommands().slice(plainStarted)) } }));
+    expect(plainFlow.status, JSON.stringify(record(plainFlow.trace).message ?? null)).toBe("succeeded");
+    expect((await boardState(installed)).saved, "the plain run did what the Flow does").toEqual([...savedAtStart, ...keysOf(intended)].sort());
+    expect(providerCalls, "a plain run called no model").toBe(0);
+    await page.screenshot({ path: testInfo.outputPath("after-plain-run-board.png"), fullPage: true });
+    await myJobsTitles(page, origin);
+    await page.screenshot({ path: testInfo.outputPath("after-plain-run-my-jobs.png"), fullPage: true });
 
     // (b) Rows reordered between the read and the press: the right rows are pressed, whichever row now stands in their places.
     savedAtStart = await freshBoard();

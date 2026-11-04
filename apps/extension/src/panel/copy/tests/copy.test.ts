@@ -120,6 +120,8 @@ test("error sentences: transport and API failures become plain sentences", () =>
 });
 
 test("error sentences: plain background sentences are kept, anything else is generic", () => {
+  const held = "Another run is using this project's page right now, so this part was not run and nothing changed. Try again when that run has ended.";
+  assert.equal(errorSentence(held), held);
   assert.equal(errorSentence("Connect to FluxIQ before recording."), "Connect to FluxIQ before recording.");
   assert.equal(errorSentence("Open a FluxIQ project before recording."), "Open a FluxIQ project before recording.");
   assert.equal(errorSentence("Cannot read properties of undefined (reading 'ok')"), "Something went wrong.");

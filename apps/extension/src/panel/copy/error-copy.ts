@@ -36,6 +36,8 @@ export function errorSentence(raw: string | undefined): string {
   if (/^FluxIQ recordings API returned \d+/.test(text)) return "Couldn't load recordings from FluxIQ.";
   if (text.startsWith("recording.description_required:")) return "Describe this recording before starting it.";
   if (text.startsWith("Author task instructions in FluxIQ")) return text;
+  // A run refused at its start because another holds the page: Core's own plain words (`AUTOMATION_STUDIO_PAGE_HELD_MESSAGE`).
+  if (text.startsWith("Another run is using this project's page right now")) return text;
   if (PLAIN.has(text)) return text;
   return UNMAPPED;
 }

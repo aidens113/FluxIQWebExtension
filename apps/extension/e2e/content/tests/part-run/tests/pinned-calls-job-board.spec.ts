@@ -407,3 +407,293 @@ test("a site part and its action part pinned from two Flows: the row crosses the
     await installed.close();
   }
 });
+
+// The same site part and action part, written by a model through the script format: `input: row`, `row: $row`, and no
+// hand on the graph. Then the part run in an attempt's shape, and a candidate trial of a Flow that pins the part.
+// The script here may name what this board needs; only the product's own guidance is held to the generic rule.
+test("a site part and action part written in the script format: the row crosses the call, each intended job saved once, at zero model calls; a candidate trial runs the pin", async ({ extensionSession }, testInfo) => {
+  test.setTimeout(900_000);
+  const one = firstRows(WORDS_ONE);
+  expect(one, "the words give three rows of their own").toBeDefined();
+  const { intended, others } = one!;
+
+  const installed = await startInstalledBuild(extensionSession);
+  const { page, service, origin } = installed;
+  const home = new URL(HOME, origin).href;
+  const build = projectBuild(installed, "Installed script parts", TASK);
+  const answers: Record<string, JsonObject> = {};
+  let adaptation: JsonObject = {};
+  const generate = service.generateFlowBootstrapAdaptation.bind(service);
+  service.generateFlowBootstrapAdaptation = (async (...args: Parameters<typeof generate>) => {
+    const value = await generate(...args);
+    adaptation = record(value);
+    return value;
+  }) as typeof service.generateFlowBootstrapAdaptation;
+  const diagnostic: JsonObject = {};
+  try {
+    await readyBoard(page, origin);
+    await installed.pair();
+    bindDetectingRuntime(installed);
+
+    // ---- The build: a model's script, a part that reads and calls an action part per row, handing it the row. ----
+    let what = "", extraction = "", title = "", company = "", heart = "", pending = "", builderError = "";
+    const send = (callId: string, made: ScriptedAnswer) => {
+      pending = callId;
+      return made;
+    };
+    const flow = () => [
+      "flow: Find roles and keep the first few",
+      "part keepone: Keep the role on this row",
+      "  input: row",
+      "  step press: keep the role",
+      "    node: web.dom.click",
+      `    target: ${heart}`,
+      "    consequences: modify_existing",
+      "end",
+      "part keeprows: Keep the first few roles the words find",
+      "  input: words",
+      "  output: roles = $step.read.records",
+      "  step what: type the words and search",
+      "    node: web.dom.type",
+      `    target: ${what}`,
+      "    text: $input.words",
+      "    submit: true",
+      "    consequences: none",
+      "  step read: read the roles",
+      "    node: web.dom.extract_list",
+      `    extractList: ${JSON.stringify({ handle: extraction, fields: { title, company } })}`,
+      "  step settle: wait a moment for the page",
+      "    node: builtin.timing.wait",
+      `    duration: ${WAIT_SECONDS}`,
+      "    unit: seconds",
+      "  step each: keep this role",
+      "    call: keepone",
+      "    row: $row",
+      "    repeat over: read",
+      `    repeat most: ${MOST}`,
+      "end",
+      "step open: open the board",
+      "  node: web.browser.navigate",
+      `  url: ${JSON.stringify(home)}`,
+      "step found: keep the roles",
+      "  call: keeprows",
+      `  words: $input.words = ${WORDS_ONE}`
+    ].join("\n");
+    const scripted = (turn: BuilderTurn): ScriptedAnswer => {
+      const { node, call } = turn;
+      const previous = pending;
+      if (pending) {
+        answers[pending] = record([...turn.evidence].reverse().find((entry) => entry.callId === pending)?.value);
+        pending = "";
+      }
+      switch (previous) {
+        case "":
+          return send("home", node("home", "web.output.browser-navigate", { url: home }));
+        case "home":
+          what = pageHandle(turn.shownPage(), "What");
+          return send("search", node("search", "web.output.dom-type", { target: { handle: what }, text: WORDS_ONE, submit: true }));
+        case "search": {
+          const cell = pageHandleWhere(turn.shownPage(), new RegExp(JSON.stringify(intended[1]!.title).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+          if (!cell) throw new Error("diagnostic.result_missing");
+          return send("detect", call("detect", "web.detect_repeating_structure", { target: cell }));
+        }
+        case "detect": {
+          const packet = answers["detect"];
+          extraction = typeof packet?.extraction === "string" ? packet.extraction : "";
+          const columns = detectedColumns(packet);
+          title = columns.find((column) => column.sample?.includes(intended[0]!.title))?.key ?? "";
+          company = columns.find((column) => column.sample?.includes(intended[0]!.company))?.key ?? "";
+          if (!extraction || !title || !company) throw new Error("diagnostic.results_undetected");
+          return send("read", node("read", "web.output.dom-extract_list", { extractList: { handle: extraction, fields: { title, company } } }));
+        }
+        case "read": {
+          const found = pageHandleWhere(turn.shownPage(), /\bicon\b/u);
+          if (!found) throw new Error("diagnostic.heart_missing");
+          heart = found;
+          return send("submit", call("submit", "core.submit_subflow", { flow: flow() }));
+        }
+        case "submit": {
+          const sub = answers["submit"];
+          if (typeof sub?.revision !== "number" || typeof sub.digest !== "string") return turn.complete({ ended: "blocked", reason: `The Flow was refused: ${JSON.stringify(sub).slice(0, 2000)}` });
+          return send("trial", call("trial", "core.test_subflow", { revision: sub.revision, digest: sub.digest }));
+        }
+        default: {
+          const sub = answers["submit"]!;
+          return turn.complete({ subflowKey: "main", revision: sub.revision!, digest: sub.digest! });
+        }
+      }
+    };
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 40, builder: (turn) => {
+      try {
+        return scripted(turn);
+      } catch (error) {
+        builderError = String(error);
+        throw error;
+      }
+    } });
+    const { ending, failure } = await build.run();
+    Object.assign(diagnostic, { ending, failure, answers, builderError, script: flow() });
+    await keepDiagnostic(testInfo, "script-parts-build.json", diagnostic);
+    expect(ending, JSON.stringify(failure)).toBe("proposed");
+    const projectId = String(adaptation.projectId);
+    const flowId = String(adaptation.flowId);
+    const review = { projectId, flowId, adaptationId: String(adaptation.adaptationId), actorId: "diagnostic" };
+    await service.reviewFlowBootstrapAdaptation({ ...review, action: "approve" });
+    await service.reviewFlowBootstrapAdaptation({ ...review, action: "apply" });
+
+    // The graph the script made, read back: the call hands the pass's row; the action part takes it and reads no list.
+    const summaries = await service.listFlowSubflowSummaries({ projectId, flowId, limit: 100, offset: 0 });
+    const subflows = (await Promise.all(summaries.subflows.map((item) => service.getFlowSubflow(projectId, flowId, item.subflowId)))).filter((item) => item !== null);
+    const graphs = await Promise.all(subflows.map(async (subflow) => ({ subflow, graph: await service.getFlow(projectId, subflow.graphFlowId!) })));
+    const site = graphs.find((entry) => entry.graph.nodes.some((node) => node.definitionId === "builtin.control.for-each"))!;
+    const action = graphs.find((entry) => entry.graph.nodes.some((node) => node.definitionId === CLICK))!;
+    const siteCall = site.graph.nodes.find((node) => node.definitionId === CALL)!;
+    expect(record(record(siteCall.parameterValues).inputs).item, "the pass's row crosses the call").toEqual(ROW_BINDING);
+    expect(action.graph.interface.inputs.map((port) => port.id)).toEqual(["item"]);
+    expect(action.graph.nodes.some((node) => node.definitionId === "web.output.dom-extract_list"), "the action part reads no list").toBe(false);
+
+    // ---- From here no model may be called. ----
+    let providerCalls = 0;
+    service.bindLlmExecutionProvider(() => ({ provider: { metadata: { provider: "throws", model: "none" }, runTask: async () => {
+      providerCalls += 1;
+      throw new Error("diagnostic.a_replay_called_a_model");
+    } }, maxCallsPerRun: 1, maxEstimatedCostUsd: 0 }));
+    const freshBoard = async (): Promise<string[]> => {
+      await installed.resetLab();
+      await readyBoard(page, origin);
+      const saved = await savedOnBoard(installed);
+      for (const posting of [...intended, ...others]) expect(saved, "the board starts with none of these saved").not.toContain(posting.key);
+      return saved;
+    };
+    const keys = intended.map((posting) => posting.key);
+    const clicks = (commands: readonly string[]) => commands.filter((command) => command === "web.dom.click").length;
+    const reads = (commands: readonly string[]) => commands.filter((command) => command === "web.dom.extract_list").length;
+
+    // (a) The Flow replays: the action part once per row, each job saved exactly once, read off the board.
+    let savedAtStart = await freshBoard();
+    let before = installed.siteCommands().length;
+    const replay = await service.runRuntimeSession({ projectId, flowId, inputs: {}, adaptiveMode: "no_llm_intervention", permittedConsequences: ["modify_existing"], authorizedExternalSideEffects: true });
+    const replayed = installed.siteCommands().slice(before);
+    const ran = versionsRan(replay.trace);
+    console.log(JSON.stringify({ scriptPartsRun: { status: replay.status, frames: ran.length, actionFrames: ran.filter((id) => id === action.subflow.subflowId).length, clicks: clicks(replayed), reads: reads(replayed) } }));
+    await keepDiagnostic(testInfo, "script-parts-run.json", { trace: replay.trace ?? null } as unknown as JsonObject);
+    expect(replay.status, JSON.stringify(record(replay.trace).message ?? null)).toBe("succeeded");
+    expect(ran.filter((id) => id === action.subflow.subflowId), "the action part is called once per row").toHaveLength(MOST);
+    const savedAfterRun = await savedOnBoard(installed);
+    console.log(JSON.stringify({ scriptPartsSaved: { start: savedAtStart, intended: keys, after: savedAfterRun } }));
+    expect(savedAfterRun, "each intended job saved exactly once: a second press would have unsaved it").toEqual([...savedAtStart, ...keys].sort());
+    const titles = await myJobsTitles(page, origin);
+    for (const posting of intended) expect(titles.filter((shown) => shown === posting.title), posting.title).toHaveLength(1);
+    await page.screenshot({ path: testInfo.outputPath("after-script-parts-my-jobs.png"), fullPage: true });
+
+    // (b) The library holds both, from the script: the site part run in an attempt's shape, the real act record asked before each press.
+    const cards = list(record(await service.projectParts.list({ projectId })).parts);
+    console.log(JSON.stringify({ scriptPartsLibrary: cards.map((card) => ({ partId: card.partId, version: card.version, name: card.name, inputs: list(card.inputs).map((port) => port.id) })) }));
+    const siteCard = cards.find((card) => list(card.inputs).some((port) => port.id === "words"));
+    expect(siteCard, "the site part was kept").toBeDefined();
+    const actionCard = cards.find((card) => list(card.inputs).some((port) => port.id === "item"));
+    expect(actionCard, "the action part was kept, and takes the row").toBeDefined();
+    const sitePin = { partId: String(siteCard!.partId), version: Number(siteCard!.version) };
+    savedAtStart = await freshBoard();
+    // What this scene reads is how a real press on the real board answers the part's two doors. The attempt's record itself
+    // is not one of Core's public exports, so this stands in for its rule on rows: a row landed is done, one that may have
+    // landed is held. The record's own answers are proven in Core (`project-parts/run/tests/attempt-admit.test.ts`).
+    const rowOf = (row: JsonObject | undefined) => JSON.stringify([row?.title, row?.company]);
+    const landed = new Set<string>();
+    const unsure = new Set<string>();
+    const asked: string[] = [];
+    const told: JsonObject[] = [];
+    const inAttempt = async () => {
+      const ran = record(await service.projectParts.runAs({
+        projectId, partId: sitePin.partId, version: sitePin.version, inputs: { words: WORDS_ONE }, caller: "build", permittedConsequences: ["modify_existing"], acknowledgedRepeat: true,
+        permission: async () => ({ permitted: true, missing: [], requestId: null }),
+        settled: (call, outcome) => {
+          told.push({ applied: outcome.effectApplied, uncertain: outcome.uncertain === true });
+          if (!call.row) return;
+          if (outcome.effectApplied) landed.add(rowOf(call.row));
+          else if (outcome.uncertain) unsure.add(rowOf(call.row));
+        },
+        admit: (call) => {
+          const kind = !call.row ? "run" as const : landed.has(rowOf(call.row)) ? "already_done" as const : unsure.has(rowOf(call.row)) ? "look_first" as const : "run" as const;
+          asked.push(kind);
+          return kind;
+        }
+      } as Parameters<typeof service.projectParts.runAs>[0]));
+      return record(ran.response);
+    };
+    before = installed.siteCommands().length;
+    const attempted = await inAttempt();
+    const attemptCommands = installed.siteCommands().slice(before);
+    console.log(JSON.stringify({ scriptPartsAttempt: { status: attempted.status, stoppedAt: attempted.stoppedAt ?? null, asked, told, landed: landed.size, unsure: unsure.size, clicks: clicks(attemptCommands), reads: reads(attemptCommands) } }));
+    expect(attempted.status, JSON.stringify(attempted)).toBe("succeeded");
+    expect(attempted.modelCalls).toBe(0);
+    expect(await savedOnBoard(installed), "the board's own failed first press did not stop it, and nothing was pressed twice").toEqual([...savedAtStart, ...keys].sort());
+    const savedAfterAttempt = await savedOnBoard(installed);
+    before = installed.siteCommands().length;
+    const again = await inAttempt();
+    const againCommands = installed.siteCommands().slice(before);
+    console.log(JSON.stringify({ scriptPartsAttemptAgain: { status: again.status, stoppedAt: again.stoppedAt ?? null, clicks: clicks(againCommands) } }));
+    expect(again.status, "a lasting act the attempt already did stops the part there").toBe("stopped");
+    expect(record(again.stoppedAt).stepLabel, "at the press: the search it sends first says it is no lasting act").toBe("keep the role");
+    expect(clicks(againCommands), "nothing pressed").toBe(0);
+    expect(await savedOnBoard(installed), "the board is as it was: a press would have unsaved a job").toEqual(savedAfterAttempt);
+    expect(providerCalls, "no replay called a model").toBe(0);
+
+    // (c) A candidate trial of a Flow holding one pinned step. The trial's run has no model in it; its judge is this spec's scripted yes.
+    const flowTrial = "flow.pinned.trial";
+    await service.createFlow({ projectId, flowId: flowTrial, name: "Pinned trial" });
+    await service.saveFlowGenerationInstruction({ projectId, flowId: flowTrial, instruction: TASK });
+    const opener = graphs.flatMap((entry) => entry.graph.nodes).find((node) => node.parameterValues?.url !== undefined)!;
+    const plan = {
+      schemaVersion: "0.1",
+      router: { name: "Instruction router", rules: [], fallback: { kind: "subflow", targetSubflowKey: "primary" } },
+      subflows: [{ key: "primary", name: "Primary", role: "primary",
+        nodes: [
+          { key: "open", definitionId: opener.definitionId, definitionVersion: opener.definitionVersion, outputActionId: "web.browser.navigate", parameters: { url: home } },
+          { key: "keep", definitionId: CALL, definitionVersion: "1.0.0", parameters: { part: sitePin, inputs: { words: WORDS_ONE } } }
+        ],
+        edges: [{ key: "open_keep", source: { nodeKey: "open", portId: "success" }, target: { nodeKey: "keep", portId: "in" } }]
+      }]
+    } as unknown as JsonObject;
+    const order: string[] = [];
+    let trialAnswer: JsonObject = {};
+    bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: () => "", maxIterations: 12, maxCallsPerRun: 30,
+      verify: () => {
+        order.push("judge");
+        return { summary: "The roles were kept.", diagnosis: { answersRequest: "yes", observed: "The roles were kept." } };
+      },
+      builder: (turn) => {
+        order.push(`decide:${turn.step}`);
+        const submitted = turn.last("core.submit_candidate");
+        const tested = turn.last("core.test_candidate");
+        if (tested) trialAnswer = tested;
+        if (turn.step === 1) return turn.node("home", "web.output.browser-navigate", { url: home });
+        if (!submitted) return turn.call("submit", "core.submit_candidate", { summary: "Keep the first few roles", plan });
+        if (typeof submitted.revision !== "number") return turn.complete({ ended: "blocked", reason: JSON.stringify(submitted).slice(0, 1500) });
+        if (!tested) return turn.call("test", "core.test_candidate", { revision: submitted.revision, digest: submitted.digest! });
+        return turn.complete({ revision: submitted.revision, digest: submitted.digest! });
+      }
+    });
+    savedAtStart = await freshBoard();
+    before = installed.siteCommands().length;
+    const trialEnding = await service.generateFlowBootstrapAdaptation({ projectId, flowId: flowTrial, evidenceGuided: true, authoringMode: "candidate", caller: { actorUserId: "diagnostic", actorSessionId: "diagnostic" }, permittedConsequences: ["modify_existing"] } as Parameters<typeof generate>[0]).then((value) => record(value), (error: unknown) => ({ thrown: String(error).slice(0, 600), diagnostic: record(record(error).diagnostic) }) as JsonObject);
+    const trialCommands = installed.siteCommands().slice(before);
+    const trialRunId = typeof trialAnswer.trialRunId === "string" ? trialAnswer.trialRunId : "";
+    const trialSession = trialRunId ? await service.getRuntimeSession(projectId, trialRunId) : null;
+    const trialRan = versionsRan(trialSession?.trace);
+    const judgedAt = order.indexOf("judge");
+    console.log(JSON.stringify({ scriptPartsCandidateTrial: { status: trialEnding.status ?? null, thrown: trialEnding.thrown ?? null, verdict: trialAnswer.verdict ?? null, code: trialAnswer.code ?? null, order, versions: [...new Set(trialRan)], frames: trialRan.length, clicks: clicks(trialCommands), reads: reads(trialCommands) } }));
+    await keepDiagnostic(testInfo, "script-parts-candidate-trial.json", { trialEnding, trialAnswer, order, trace: trialSession?.trace ?? null } as unknown as JsonObject);
+    expect(trialAnswer.verdict, JSON.stringify(trialAnswer).slice(0, 1500)).toBe("yes");
+    expect(trialRan, "the trial ran the version the step pins").toContain(`part:${sitePin.partId}:v${sitePin.version}`);
+    expect(judgedAt, "the judge is scripted, and it was asked").toBeGreaterThan(0);
+    expect(order.filter((step) => step !== "judge"), "the run itself asked for no decision: only the turns that asked for it and read its answer").toEqual(["decide:1", "decide:2", "decide:3", "decide:4"]);
+    expect(await savedOnBoard(installed), "the trial saved each intended job once, as a real run would").toEqual([...savedAtStart, ...keys].sort());
+    await page.screenshot({ path: testInfo.outputPath("after-candidate-trial-page.png"), fullPage: true });
+    expect(installed.gatewayErrors).toEqual([]);
+  } finally {
+    await keepDiagnostic(testInfo, "script-parts-diagnostic.json", diagnostic);
+    await build.stop();
+    await installed.close();
+  }
+});
