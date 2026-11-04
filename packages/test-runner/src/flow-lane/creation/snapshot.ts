@@ -89,6 +89,8 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     // "Core never said".
     unsettled: evidence.run.unsettled ?? null,
     oracleVerdict: evidence.observation.oracleVerdict,
+    // The attempt's own score, judged before the reset: the person's answer, apart from the Flow's playback above.
+    answer: evidence.answer ?? null,
     // Which oracle decided that verdict: the records, the scenario's final state, or both.
     oracles: evidence.oracles,
     extraction: evidence.extraction ? flowExtractionSnapshot(evidence.extraction) : null,

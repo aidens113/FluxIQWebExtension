@@ -245,7 +245,7 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   // Since t519 the created lane is the only Flow lane: the Flow is built from a live instruction task, never the recording.
   const at = {
     flowLane: source.indexOf("runCreatedFlowLane({"),
-    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });'),
+    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop, answerOnly });'),
     passed: source.indexOf('verdict = "passed";'),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);

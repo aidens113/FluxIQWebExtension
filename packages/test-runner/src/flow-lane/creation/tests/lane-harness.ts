@@ -9,6 +9,7 @@ import { resolveScenarioWorkflow, type LlmActionConsequence, type ResolvedScenar
 import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
 import type { LabResetFetch } from "../../reset-scenario-lab.js";
+import type { CreatedFlowAnswerStage } from "../answer/index.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
 import { runCreatedFlowLane, type CreatedFlowLaneEntry, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete, type CreatedFlowSettledBuild } from "../lane.js";
 import { resolveCreatedFlowRequest, type CreatedFlowRequest } from "../request.js";
@@ -36,6 +37,8 @@ export type LaneOptions = {
   entry?: CreatedFlowLaneEntry;
   /** The mode the run's Core authors in; `legacy` unless a test says otherwise. */
   authoringMode?: AutomationStudioAuthoringMode;
+  /** The attempt's answer stage; absent, the run states no answer. */
+  answerStage?: CreatedFlowAnswerStage;
 };
 
 export async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneOptions = {}) {
@@ -70,6 +73,7 @@ export async function runLane(core: ReturnType<typeof fakeCreationCore>, options
     },
     ...(options.authorizeRun ? { authorizeRun: options.authorizeRun } : {}),
     ...(options.settleRun ? { settleRun: options.settleRun } : {}),
+    ...(options.answerStage ? { answerStage: options.answerStage } : {}),
     prepareFlowPage: async () => { core.calls.push("prepare"); },
     recordEvidence: async (published) => { core.calls.push("publish"); evidence.push(published); },
     recordIncompleteEvidence: async (published) => { core.calls.push("publish-incomplete"); incomplete.push(published); },
@@ -79,6 +83,7 @@ export async function runLane(core: ReturnType<typeof fakeCreationCore>, options
   // Every test but the permission-point ones reads a lane that ran a Flow; a stop reaching them is a failure of its own.
   const run = raw.then((lane) => {
     if ("permissionStop" in lane) throw new Error("the lane stopped at a permission point instead of running a Flow");
+    if ("answerOnly" in lane) throw new Error("the lane ended on an answer instead of running a Flow");
     return lane;
   });
   void run.catch(() => undefined);

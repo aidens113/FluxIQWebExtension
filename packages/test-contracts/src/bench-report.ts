@@ -1,6 +1,7 @@
 import { evaluationLanes, type EvaluationLane, type LlmUsage } from "./evaluation.js";
 import type { BenchAdaptationCost, BenchAdaptationPersistence, BenchAdaptationReuse, BenchAdaptationValidation } from "./adaptation-reuse.js";
 import type { FluxIQExecutionMetadata } from "./run.js";
+import type { FlowScore } from "./attempt-score/index.js";
 
 export const BENCH_REPORT_SCHEMA_VERSION = "0.1" as const;
 
@@ -67,8 +68,18 @@ export type BenchWorkflowResult = {
   lane?: EvaluationLane;
   /** Always the report's `repeatCount`. */
   runs: number;
-  /** Passing runs over `runs`. */
+  /**
+   * Runs that passed with a Flow behind them, over `runs`: the Flow chain's rate, as
+   * it always was. A run that passed on its answer with no Flow is not counted here.
+   */
   passRate: number;
+  /**
+   * Right answers over runs judged right or wrong, kept apart from `passRate` and
+   * never blended with it (`attempt-score/answer-score.ts`). Absent when no run of the
+   * result was judged, which is every report written before it existed; `null` when
+   * every judged run ended excused.
+   */
+  answerRate?: number | null;
   /** `stable-pass` exactly when `passRate` is 1, `stable-fail` when it is 0, otherwise `flaky`. */
   flakeClass: BenchFlakeClass;
 };
@@ -140,6 +151,25 @@ export type BenchExtractionCollection = {
 };
 
 /**
+ * Runs by answer verdict and by the Flow's score. `rate` is `right / (right + wrong)`:
+ * the two excused endings are reported and enter no rate, and `null` is a refusal to
+ * publish a number. A run any of whose inputs was a stand-in counts only in
+ * `standInRuns`, so a scripted proof can never read as the product.
+ */
+export type BenchAnswerScore = {
+  judged: number;
+  right: number;
+  wrong: number;
+  budgetOut: number;
+  stoppedByPerson: number;
+  rate: number | null;
+  /** Judged runs in which an act landed more than the task asked. */
+  runsWithRepeatedActs: number;
+  flow: Record<FlowScore, number>;
+  standInRuns: number;
+};
+
+/**
  * The Week 1 Metrics table over the whole corpus. Units are in the field
  * names. The rates are per lane; the distributions and counts cover every
  * evaluated run.
@@ -164,6 +194,11 @@ export type BenchCorpusMetrics = {
    * well, so its rates combine both lanes and compare as neither.
    */
   rates?: BenchRates;
+  /**
+   * The answer's score, beside and apart from the rates above, which measure the Flow
+   * chain. Absent when no run was judged, as in every report written before it.
+   */
+  answerScore?: BenchAnswerScore;
   /** Keyed by FluxIQ action type. */
   actionLatencyMs: Record<string, BenchDistribution>;
   runDurationMs: BenchDistribution;

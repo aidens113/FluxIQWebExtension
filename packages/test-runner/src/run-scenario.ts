@@ -51,7 +51,7 @@ import { exportCloneSource } from "./clone-source-exporter.js";
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
-import { LAB_PROJECT_DOMAIN_ID, judgeEveryFact, withholdObservedFactValues, type JudgedFact, type JudgedFinalState, type CreatedFlowLaneEvidence, type FlowLaneEvidence, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, recordFailedJudgement, repairLaneSummary, runCreatedFlowLane, selectLaneObservation, labCandidateTrialFixtureReset, type CreatedFlowRequest, type LiveRepairLaneInput, type LiveRepairLaneFailure, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { LAB_PROJECT_DOMAIN_ID, judgeEveryFact, withholdObservedFactValues, type JudgedFact, type JudgedFinalState, type CreatedFlowLaneEvidence, type FlowLaneEvidence, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, recordFailedJudgement, repairLaneSummary, runCreatedFlowLane, liveAnswerStage, selectLaneObservation, labCandidateTrialFixtureReset, type CreatedFlowRequest, type LiveRepairLaneInput, type LiveRepairLaneFailure, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, type LiveLlmRun } from "./live-llm/index.js";
 import { LabRunRecord, writePlaybackSteps, type PlaybackSkippedStep, type PlaybackStateRoutingStep } from "./lab-runs/index.js";
@@ -221,6 +221,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // The fixture oracle's own verdict, published rather than inferred: a failure
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
+  let answerOnly = false; // An answer-first attempt that ended on its right answer with no Flow promoted.
   const actions: RunActionTiming[] = [];
   // Each Flow run's skipped attempts (a sometimes-present step observed absent), for the playback step log to write as skipped.
   const playbackSkips: PlaybackSkippedStep[] = [];
@@ -441,6 +442,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
         // The created Flow's playback runs with the model taking part, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
         authorizeRun: live.repairAuthorizer(control, activeTopology),
+        // The person's answer, scored on the attempt before the reset. A `legacy` build keeps no rows of its own to read, so it states none, and old runs stay comparable.
+        ...(live.coreAuthoringMode === "legacy" ? {} : { answerStage: liveAnswerStage({ control, projectId: createdProjectId, domainId: LAB_PROJECT_DOMAIN_ID, scenarioId: scenario.id, scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, chat: chat?.entry.chat, secretValues: declaredSecrets.map(secret => secret.value) }) }),
         // Core's post-run result checks are not a repair: they settle with their own words (`resultChecks`), and only recovery is called one (Cause 12, run-murwd8le-79e735a8).
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "resultChecks" in details ? "The created Flow's result was checked" : "The created Flow's repair attempt finished"), details })),
         recordIncompleteEvidence: async incomplete => {
@@ -463,7 +466,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         })),
       }), (judged, laneFailure) => proveRepair(control, activeTopology, createdProjectId, judged, "instruction", laneFailure));
       // A consequential task run without permission for its act stops to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): correct, but no Flow was built, so the run is `stopped_for_permission` and not a pass (`assertFlowLaneBuiltFlow` below).
-      if ("permissionStop" in lane) { permissionStop = { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control }; await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } }); }
+      // An answer-first attempt that ended on its right answer with no Flow promoted: the Flow is unproven, which is the score's to say and no failure of the run (`flow-lane/creation/answer/`).
+      if ("answerOnly" in lane) answerOnly = true;
+      else if ("permissionStop" in lane) { permissionStop = { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control }; await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } }); }
       else { if (recordedEvidence) await assertRecordedEvidenceFacts(control, { projectId: createdProjectId, flowId: lane.flowId, domainId: LAB_PROJECT_DOMAIN_ID, recorded: recordedEvidence.recorded, detours: options.demonstration!.demonstration.detours }); await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
     } else {
       if (paired && topology.authorizationPin) {
@@ -544,7 +549,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
     // A demonstration dry run built no Flow on purpose, so it is judged on its own summary, not on a Flow lane's observation.
-    if (!demonstrationDryRun) assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });
+    if (!demonstrationDryRun) assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop, answerOnly });
     consoleErrors!.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     // Whatever the Flow did: a Flow the Lab built by calling Core itself was never asked for in the chat, which is what the product is measured on.
