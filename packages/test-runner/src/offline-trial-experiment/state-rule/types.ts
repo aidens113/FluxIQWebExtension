@@ -86,6 +86,20 @@ export type WalkTally = {
   selectorsVeryClose: number;
   rowsSame: number;
   rowsDiffer: number;
+  /** Reads answered by the row computer, and how their rows compare with the live answer's. */
+  readsComputed: number;
+  rowsComputedSame: number;
+  rowsComputedDiffer: number;
+  /**
+   * What the row computer could do with any changed list read, wherever the walk stood: asked
+   * of the recorded reads on the page the live run read, and its rows held against the live
+   * rows. This measures the computing and not the state rule, so it is never an answer.
+   */
+  listReadsChanged: number;
+  listReadsNoSamePage: number;
+  listReadsComputable: number;
+  listRowsSameAsLive: number;
+  listRowsDifferFromLive: number;
   statusSameMoves: number;
   statusDifferMoves: number;
   statusSameActs: number;

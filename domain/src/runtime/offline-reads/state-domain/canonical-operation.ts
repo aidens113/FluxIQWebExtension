@@ -1,5 +1,7 @@
 // One canonical form for a web call, so an exploration's call and a Flow step's call
-// compare as what they are. Three normalisations, each declared, and nothing else:
+// compare as what they are. The live wire stays as it is: each path keeps sending what it
+// sends, and this is how the rule reads both. Six normalisations, each declared, and
+// nothing else:
 //
 // - `target_form`: a Flow step's call writes the recorded element twice more than an
 //   exploration's: `target` on the wire and `parameters.target`, both Core's lossy
@@ -11,6 +13,16 @@
 // - `wait_fields`: `parameters.timeoutMs` and `parameters.checkWaitMs`. What a
 //   different wait may be answered with is rule 7, not a match.
 // - `new_tab`: `parameters.newTab`. Which tab a page opens in does not say which page.
+// - `run_handles`: `parameters.browserTabId` and `browserFrameId`, handles a run mints for
+//   itself. `./run-handles.ts` writes them as where they stand in the run, before a key
+//   is made, so a tab the run opened still differs from the one it started on.
+// - `read_asks`: what a Flow's list read asks of the page beside what it reads, added by
+//   its dispatch and never by an exploration's read (`output-nodes/extract-list/dispatch.ts`):
+//   `rejectedSamples`, information for a judge; `recordOutput`, Core's instruction, which
+//   never reaches the page; `extractList.answer`, whether a read that kept nothing answers
+//   the rows it rejected, which is `recordedAnswerFits`'s to check; and `extractList.now`,
+//   the instant relative dates are judged at, only on a read with no date to judge.
+//   An instant on a read that does judge a date is `run_clock`'s (`./run-handles.ts`).
 //
 // Never normalised, because each is a real difference: row identity
 // (`element.context.record`, `listPosition`), `where`, `text`, `url`, `value`,
@@ -18,17 +30,23 @@
 // identity out, to say two acts are one act on two rows of a list.
 
 import type { ClientGatewayTraceOperation, ClientGatewayTraceStateNormalisation } from "fluxiq/client-gateway";
+import { automationStudioRecordConditionComparesDates, type AutomationStudioRecordConditionTest } from "fluxiq/components/automation";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationExtractListRequestValue } from "../../../actions/extraction";
 import { adaptedTargetSupersedesRecording } from "../../../output-nodes";
 
 const WAIT_FIELDS: readonly string[] = ["timeoutMs", "checkWaitMs"];
 const NEW_TAB = "newTab";
+const READ_ASKS: readonly string[] = ["rejectedSamples", "recordOutput"];
 const ROW_IDENTITY: readonly string[] = ["record", "listPosition"];
 
 export const WEB_TRACE_STATE_NORMALISATIONS: readonly ClientGatewayTraceStateNormalisation[] = Object.freeze([
   Object.freeze({ id: "target_form", why: "a Flow step's wire target and adapted target are lossy copies of the recorded element, dropped only when they name that same element" }),
   Object.freeze({ id: "wait_fields", why: "parameters.timeoutMs and checkWaitMs: a different wait is rule 7, not a different call" }),
-  Object.freeze({ id: "new_tab", why: "parameters.newTab says which tab, not which page" })
+  Object.freeze({ id: "new_tab", why: "parameters.newTab says which tab, not which page" }),
+  Object.freeze({ id: "run_handles", why: "parameters.browserTabId and browserFrameId are minted per run, so each is read as where it stands in the run; a tab the run opened still differs" }),
+  Object.freeze({ id: "run_clock", why: "extractList.now inside the time the recording spans is the recording's own clock, which a simulated run stands on; an instant outside it stays a different read" }),
+  Object.freeze({ id: "read_asks", why: "rejectedSamples, recordOutput, extractList.answer, and extractList.now on a read with no date to judge: asked beside the read, and they change no row it keeps" })
 ]);
 
 export function webTraceStateCanonicalKey(operation: ClientGatewayTraceOperation): string {
@@ -47,6 +65,8 @@ function canonicalForm(operation: ClientGatewayTraceOperation): CanonicalForm {
   const parameters: Record<string, unknown> = isRecord(raw) ? { ...raw } : {};
   for (const field of WAIT_FIELDS) delete parameters[field];
   delete parameters[NEW_TAB];
+  for (const field of READ_ASKS) delete parameters[field];
+  if (isRecord(parameters.extractList)) parameters.extractList = withoutReadAsks(parameters.extractList);
   if (!namesSameElement(target, parameters)) return { actionType, target, parameters: parameters as JsonObject };
   if (isRecord(target)) {
     if (parameters.selector === undefined && target.selector !== undefined) parameters.selector = target.selector;
@@ -54,6 +74,20 @@ function canonicalForm(operation: ClientGatewayTraceOperation): CanonicalForm {
   }
   delete parameters.target;
   return { actionType, target: null, parameters: parameters as JsonObject };
+}
+
+/** A list request without what it asks beside the read: `now` stays when a date is judged, because it can change the rows. */
+function withoutReadAsks(written: { readonly [key: string]: unknown }): { readonly [key: string]: unknown } {
+  const { answer: _answer, ...read } = written;
+  if (judgesDates(written)) return read;
+  const { now: _now, ...undated } = read;
+  return undated;
+}
+
+function judgesDates(written: { readonly [key: string]: unknown }): boolean {
+  const request = webAutomationExtractListRequestValue(written);
+  if (request === undefined) return true;
+  return (request.sort?.length ?? 0) > 0 || (request.where ?? []).some((condition) => automationStudioRecordConditionComparesDates(condition as AutomationStudioRecordConditionTest));
 }
 
 /** Whether the call's wire and adapted targets only restate its recorded element. */
