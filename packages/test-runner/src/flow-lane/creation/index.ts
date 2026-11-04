@@ -20,6 +20,8 @@ export * from "./document-identifier.js";
 export * from "./detour/index.js";
 export * from "./own-page.js";
 export * from "./judgement.js";
+export * from "./answer/index.js";
+export * from "./site-change/index.js";
 export * from "./final-state-facts.js";
 export * from "./oracles.js";
 export * from "./permission-point.js";
