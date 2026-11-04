@@ -1,10 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { resolveScenarioWorkflow, type AttemptSeries } from "@fluxiq-web-extension/test-contracts";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
-import { withoutProviderSecrets } from "../environment.js";
 import { chatNetworkPolicy, openChromeChatSession, sendChatMessage, startCoreRecordingProxy, type ChatBrowserSession, type ChatCheckContext, type CoreRecordingProxy, type WorkerRequest } from "../extension-chat-check/index.js";
 import { loadLiveInstructionTasks, resetScenarioLab, resolveCreatedFlowRequest, selectLiveInstructionTask } from "../flow-lane/index.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
@@ -12,6 +10,7 @@ import { assertRealisticScenarios } from "../realistic-scenarios/index.js";
 import { extensionStatus, pairExtensionWithColdEpochRecovery, runtimeMessage } from "../run-lifecycle/index.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import type { AttemptTask } from "./driver.js";
+import { openGuardedLabTab } from "./open-guarded-lab-tab.js";
 import { renderAttemptSeries } from "./report.js";
 import { runAttemptSeries, type AttemptSeriesResult } from "./run-attempt-series.js";
 import { scriptedAttemptDriver, type ScriptedDoubleAct, type ScriptedDriverInput } from "./scripted/index.js";
@@ -72,17 +71,21 @@ async function siteOnlySession(options: AttemptProofOptions, seed: number): Prom
   const paths = resolveLabPaths(options.repositoryRoot);
   const server = await import(pathToFileURL(path.join(paths.scenarioLabDist, "server.js")).href) as { startScenarioLab(input: { runToken: string; seed: number }): Promise<{ origin: string; close(): Promise<void> }> };
   const lab = await server.startScenarioLab({ runToken: LAB_TOKEN, seed });
-  const browser: Browser = await chromium.launch({ headless: false, channel: "chromium", env: withoutProviderSecrets(process.env) });
+  const tabs = new Set<{ close(): Promise<void> }>();
   return {
     origin: lab.origin,
     runToken: LAB_TOKEN,
     openTab: async () => {
-      const context: BrowserContext = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
-      const page: Page = await context.newPage();
-      return { context, page, close: () => context.close() };
+      const tab = await openGuardedLabTab({ origin: lab.origin, token: LAB_TOKEN });
+      tabs.add(tab);
+      const close = async () => {
+        tabs.delete(tab);
+        await tab.close();
+      };
+      return { context: tab.context, page: tab.page, close };
     },
     close: async () => {
-      await browser.close().catch(/* best-effort: the result is written */ () => undefined);
+      for (const tab of [...tabs]) await tab.close();
       await lab.close().catch(/* best-effort: the result is written */ () => undefined);
     },
   };
