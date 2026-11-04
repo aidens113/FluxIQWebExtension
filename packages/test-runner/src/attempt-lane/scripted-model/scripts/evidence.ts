@@ -18,7 +18,9 @@ export function currentPageOf(request: ScriptedModelRequest): string {
   const view = [...evidenceOf(request)].reverse().find((entry) => entry.toolId === "core.current_view");
   const groups = view && Array.isArray(view.value.groups) ? view.value.groups : [];
   for (const group of groups) {
-    const page = isRecord(group) && isRecord(group.value) ? group.value.page : undefined;
+    const held = isRecord(group) && isRecord(group.value) ? group.value.page : undefined;
+    // A call's answer holds the page's words directly, or the whole page answer around them.
+    const page = isRecord(held) ? held.page : held;
     if (typeof page === "string") return page;
   }
   // Before any newer result, the first call's page is the only one.

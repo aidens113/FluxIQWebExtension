@@ -12,7 +12,7 @@ import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
 import { renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
-import { scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
+import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
 import { AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, type LiveAttemptSession } from "./attempt/index.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
@@ -56,7 +56,7 @@ type ModelSide = {
 async function scriptedSide(input: AttemptCommandInput, evidence: string, log: (line: string) => void): Promise<ModelSide> {
   const key = scriptedModelKey();
   const server = await startScriptedModelServer({
-    script: scriptedModelScriptFor(input.command.taskId),
+    script: scriptedModelScriptFor(input.command.taskId, input.environment[SCRIPTED_MODEL_FORM_ENV]),
     key,
     logDirectory: path.join(evidence, "model"),
     onCall: (call) => log(`[attempt] model request ${call.kind} ${call.ordinal}${call.answered ? "" : ` REFUSED: ${call.refused}`}`),
@@ -115,7 +115,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   const scenario = await loadScenarioManifest(repositoryRoot, command.scenarioId, paths.scenarioLabDist);
   const request: CreatedFlowRequest = await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: paths.scenarioLabDist, scenarioId: command.scenarioId, taskId: command.taskId });
   const workflow = resolveScenarioWorkflow(scenario, { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }), ...(request.variantId === undefined ? {} : { variantId: request.variantId }) });
-  if (command.model.kind === "scripted") scriptedModelScriptFor(command.taskId);
+  if (command.model.kind === "scripted") scriptedModelScriptFor(command.taskId, input.environment[SCRIPTED_MODEL_FORM_ENV]);
   const planned = command.model.kind === "live" ? await liveSide(input, command.model.llm) : undefined;
   if (command.dryRun) {
     process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "attempt", entry: "chat", task: request.task.id, model: command.model.kind, authoringMode: command.authoringMode, live: planned?.live?.describe() ?? null })}\n`);
@@ -157,6 +157,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       log,
       onEnded: async (attempt) => {
         ended = attempt;
+        await writeFile(path.join(evidence, "site.json"), JSON.stringify(attempt.site, null, 2));
         await pictureOfAnswer(opened, attempt, evidence, log);
       },
     });

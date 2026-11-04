@@ -1,6 +1,6 @@
 import type { AttemptStandIn } from "@fluxiq-web-extension/test-contracts";
 import type { ChatBrowserSession } from "../../extension-chat-check/index.js";
-import { attemptEndingOfBuild, judgeAttemptAnswer, judgeEveryFact, readSiteBaseline, type AttemptEndingFact, type RunDatasetControl } from "../../flow-lane/index.js";
+import { attemptEndingOfBuild, judgeAttemptAnswer, judgeEveryFact, lastingViewOf, readSiteBaseline, readSiteState, siteChange, type AttemptEndingFact, type LastingView, type RunDatasetControl, type SiteChange } from "../../flow-lane/index.js";
 import { finalStateFacts } from "../../lane-rules/index.js";
 import { playwrightScenarioFactProbe } from "../../scenario-assertions.js";
 import type { AttemptDriver, AttemptOutcome, AttemptSavedState, AttemptTask } from "../driver.js";
@@ -10,7 +10,7 @@ import { followAttempt } from "./follow-attempt.js";
 import { panelAnswerPort } from "./panel-answer-port.js";
 
 /** One attempt's ending, kept for the run's result line and its evidence. */
-export type LiveAttemptEnded = Readonly<{ outcome: AttemptOutcomeRead; shown: AnswerTurnDom | null; conversationId: string }>;
+export type LiveAttemptEnded = Readonly<{ outcome: AttemptOutcomeRead; shown: AnswerTurnDom | null; conversationId: string; site: Readonly<{ before: LastingView; after: LastingView; change: SiteChange; activity: unknown }> }>;
 
 export type LiveAttemptDriverInput = {
   control: AttemptReadControl & RunDatasetControl;
@@ -88,7 +88,10 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
           return { held: facts.every((fact) => fact.held), unheldFacts: facts.filter((fact) => !fact.held), facts };
         },
       });
-      await input.onEnded?.({ outcome, shown, conversationId });
+      const state = await readSiteState(input.origin, input.runToken, scenario.id);
+      const after = lastingViewOf(scenario.id)(state);
+      // The site's own record of what landed, for the evidence: `activity` lists each act the fixture took, and a repeat it ignored is not in it.
+      await input.onEnded?.({ outcome, shown, conversationId, site: { before: baseline.view, after, change: siteChange(baseline.view, after), activity: state.activity ?? null } });
       return Object.freeze({
         record: {
           taskId: request.task.id, attemptId: attempt.attemptId, ordinal: attempt.ordinal, projectId: attempt.projectId,
