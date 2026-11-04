@@ -54,6 +54,10 @@ export const RUNTIME_MESSAGES = {
   panelTestGeneratedAutomation: "fluxiq.panel.testGeneratedAutomation",
   panelSaveGeneratedAutomation: "fluxiq.panel.saveGeneratedAutomation",
   panelRemoveRecordingStep: "fluxiq.panel.removeRecordingStep",
+  // The project's library of saved parts (`background/automation-relay/parts-relay.ts`).
+  panelListParts: "fluxiq.panel.listParts",
+  panelGetPart: "fluxiq.panel.getPart",
+  panelSavePart: "fluxiq.panel.savePart",
   testArmScriptedNavigation: "fluxiq.test.armScriptedNavigation",
   testAwaitScriptedNavigation: "fluxiq.test.awaitScriptedNavigation",
   testCancelScriptedNavigation: "fluxiq.test.cancelScriptedNavigation"
