@@ -56,7 +56,7 @@ class OpeningSocket {
   }
   /** What the client sent, parsed. */
   messages(): Array<{ type: string; clientId?: string; payload: Record<string, unknown> }> {
-    return this.sent.map((data) => JSON.parse(data) as { type: string; clientId?: string; payload: Record<string, unknown> });
+    return this.sent.map((data) => JSON.parse(data) as { type: string; clientId?: string; payload: Record<string, unknown> }).filter((message) => message.type !== "client.credential_received");
   }
 }
 

@@ -418,6 +418,21 @@ export class FluxIQConnection {
     return this.gateway.retryNow();
   }
 
+  /**
+   * The person pressed Forget: Core is told, so this browser's trust and what its
+   * credential kept end there and then. Best effort, because the credential is
+   * dropped here either way, and with it nothing can open what Core still holds.
+   */
+  async forgetPairing(): Promise<void> {
+    // Only over a live socket: `send` would otherwise queue it for a later connection, whose credential is about to be gone.
+    if (this.gateway.state() !== "connected") return;
+    try {
+      await this.gateway.send("client.forget_pairing", {});
+    } catch (error) {
+      console.warn("FluxIQ could not tell Core this pairing was forgotten.", error instanceof Error ? error.name : "non_error");
+    }
+  }
+
   disconnect(): void {
     this.scriptedNavigation.cancelAll("cancelled");
     this.gateway.stopReconnecting();

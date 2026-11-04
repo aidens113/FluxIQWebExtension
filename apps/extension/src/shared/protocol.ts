@@ -336,7 +336,7 @@ export const AUTOMATION_PANEL_MESSAGES = {
   runDetail: RUNTIME_MESSAGES.panelRunDetail,
   /** `export-run-dataset` with `{ runId, datasetId, format }`. */
   exportDataset: RUNTIME_MESSAGES.panelExportDataset,
-  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider` and `enabled` only. */
+  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider`, `enabled` and, when Core says, `unlocked` and `lockedBecause` only. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,

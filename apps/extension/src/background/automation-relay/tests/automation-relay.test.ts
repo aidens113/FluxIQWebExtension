@@ -86,6 +86,14 @@ test("an export names its run, dataset and format", async () => {
   assert.equal((await h.send({ type: AUTOMATION_PANEL_MESSAGES.exportDataset, runId: "run-1", datasetId: "d1" })).ok, false);
 });
 
+test("model readiness carries whether a key opens here, and nothing else about it", async () => {
+  const h = harness({
+    snapshot: { ok: true, payload: { keys: [{ id: "secret:1", name: "Mine", kind: "llm", provider: "anthropic", enabled: true, unlocked: false, lockedBecause: "signed_out" }, { kind: "llm", enabled: true, unlocked: true }, { kind: "llm", enabled: true, unlocked: "no" }] } }
+  });
+  const reply = await h.send({ type: AUTOMATION_PANEL_MESSAGES.modelReadiness });
+  assert.deepEqual(reply, { ok: true, payload: { keys: [{ kind: "llm", provider: "anthropic", enabled: true, unlocked: false, lockedBecause: "signed_out" }, { kind: "llm", enabled: true, unlocked: true }, { kind: "llm", enabled: true }] } });
+});
+
 test("model readiness asks the secret-keys program and keeps only kind, provider and enabled", async () => {
   const h = harness({
     snapshot: { ok: true, payload: { keys: [{ id: "secret:1", name: "My OpenAI key", kind: "llm-api-key", provider: "openai", enabled: true, metadata: { hint: "sk-...1234" } }, { kind: "llm-api-key", enabled: "yes" }] } }

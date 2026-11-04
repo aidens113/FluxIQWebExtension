@@ -114,7 +114,9 @@ async function modelReadiness(deps: AutomationRelayDeps): Promise<PanelRelayResp
   const keys = listed.map((key) => {
     const kind = text(field(key, "kind"));
     const provider = text(field(key, "provider"));
-    return { ...(kind ? { kind } : {}), ...(provider ? { provider } : {}), enabled: field(key, "enabled") === true };
+    const unlocked = field(key, "unlocked");
+    const lockedBecause = text(field(key, "lockedBecause"));
+    return { ...(kind ? { kind } : {}), ...(provider ? { provider } : {}), enabled: field(key, "enabled") === true, ...(typeof unlocked === "boolean" ? { unlocked } : {}), ...(lockedBecause ? { lockedBecause } : {}) };
   });
   return { ok: true, payload: { keys } };
 }

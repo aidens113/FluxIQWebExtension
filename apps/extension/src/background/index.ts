@@ -198,6 +198,7 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
 
   if (typed.type === RUNTIME_MESSAGES.resetSession) {
     await autoConnect.noteDisconnectedByPerson();
+    await manager.forgetPairing();
     manager.disconnect();
     await clearSession();
     connection = undefined;
