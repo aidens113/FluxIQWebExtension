@@ -511,6 +511,9 @@ and the next attempt uses, repairs and improves the Flow and still returns the
 result. This replaces the next rule's live test inside a build as Answer First
 lands; its "one judged whole run" stands and moves to the next real attempt.
 
+**An agent repeating itself is caught and steered** (user, 2026-11-03): "i want built in agent call loop detection. If an agent keeps doing the same thing over and over that needs to be detected and steered/stopped". Built into Core's evidence loop for every agent role, as
+[Answer First](docs/working/answer-first-plan.md), "Loop Detection", describes.
+
 **No PIN on normal actions, and never mid-Flow** (user, 2026-11-03): "NO PIN FOR ANY NORMAL ACTIONS. Maybe just a pin to do dangerous actions ONLY THE FIRST TIME A USER DOES IT, AND NEVER IN THE MIDDLE OF A FLOW, ONLY WHEN FIRST STARTING A FLOW/CHAT."
 
 **Build the whole Flow first; test it whole only when it should work** (user,
