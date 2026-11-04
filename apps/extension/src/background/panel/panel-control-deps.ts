@@ -12,6 +12,11 @@ import type { PanelControlDeps } from "./panel-control";
 
 export function panelControlDeps(connection: FluxIQConnection, status: () => Promise<ExtensionStatus>): PanelControlDeps {
   return {
+    unlockTicket: async () => {
+      const snapshot = await callCoreProgram(connection.coreApiCredentials(), "snapshot", {}, "secret-keys");
+      const ticket = snapshot.ok ? (snapshot.payload as { unlockTicket?: unknown } | undefined)?.unlockTicket : undefined;
+      return typeof ticket === "string" ? ticket : undefined;
+    },
     relay: {
       // Credentials are read per call, so a token FluxIQ rotated on reconnect is the one sent.
       call: (endpoint, payload) => callCoreProgram(connection.coreApiCredentials(), endpoint, payload),

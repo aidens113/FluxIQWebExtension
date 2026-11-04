@@ -152,7 +152,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       stage("claim model key");
       const owned = topology;
       result.modelKey = await proveModelKeyUnlock(context, {
-        selectProject: () => control.selectProject(projectId),
+        gatewaySnapshot: () => control.gatewaySnapshot(),
         restartCore: () => owned.restartCore!(),
         signOut: () => control.signOut(),
         signIn: async () => {

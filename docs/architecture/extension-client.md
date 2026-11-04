@@ -418,6 +418,14 @@ gates are what stand there. The overlay's last place, the one value a content sc
 keeps, goes through the background instead (`background/overlay-placement.ts`), which
 reads and writes only that key and only a value small enough to be a placement.
 
+**Open FluxIQ for a model key** asks Core for this browser's ticket (`unlockTicket`, in the
+`secret-keys` `snapshot` a paired client reads) and opens the keys page with it in the
+address's fragment, when nobody has unlocked this browser yet. The page offers such a browser
+only to someone who came from it.
+
+**A browser's name** in its hello is what its person reads when choosing among theirs:
+"Chrome on Windows" (`browserClientLabel`).
+
 **Forget without a socket.** Forget tells Core over a live socket. With none it posts the
 credential to `/api/client-gateway/forget-pairing`. If that fails too, the credential
 stays in `chrome.storage.local` as `fluxiq.pendingForget`, long enough to tell Core
