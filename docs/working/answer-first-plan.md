@@ -21,7 +21,7 @@ Related: [testing facility](../architecture/testing-facility.md), [adaptation an
 
 ## P7: Two Scores And The Second Attempt
 
-The Lab today throws `lab.candidate_not_promoted` on a draft and never consults the oracle, so a task the person got right scores as a failure when no Flow was promoted. References are in Core's [discovery report](../../../!FluxIQ/docs/working/answer-first-plan/reports/discovery.md), section 8.
+The Lab today throws `lab.candidate_not_promoted` on a draft and never consults the oracle, so a task the person got right scores as a failure when no Flow was promoted. References are in Core's discovery report (`docs/working/answer-first-plan/reports/discovery.md`), section 8.
 
 **Keep every rule that already binds a Lab run:** the ten realistic scenarios, starting from the extension chat, visible browsers, the task audit, up to four live lanes, no weakened oracle, and no fixture or guidance shaped to pass.
 
