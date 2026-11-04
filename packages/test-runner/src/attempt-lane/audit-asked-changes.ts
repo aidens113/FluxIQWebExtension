@@ -13,13 +13,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { chromium, type Browser } from "@playwright/test";
 import { resolveScenarioWorkflow, type ScenarioStep, type WebScenario } from "@fluxiq-web-extension/test-contracts";
-import { withoutProviderSecrets } from "../environment.js";
 import { askedChangeOf, lastingViewOf, loadLiveInstructionTasks, resolveCreatedFlowRequest, siteChange, type LiveInstructionTask, type SiteChange, type SiteState } from "../flow-lane/index.js";
 import { isRealisticScenario, type RealisticScenarioId } from "../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import { ScenarioStepRunner } from "../scenario-steps/index.js";
+import { openGuardedLabTab } from "./open-guarded-lab-tab.js";
 
 /** One task's honest path. */
 export type AskedChangeAudit = {
@@ -56,16 +55,17 @@ async function siteState(lab: RunningLab, scenarioId: string): Promise<SiteState
 }
 
 /** Plays `script` on a fresh browser session of `scenario`, from the fixture's seed, and answers with what changed. */
-async function playHonestPath(browser: Browser, lab: RunningLab, scenario: WebScenario, task: LiveInstructionTask, script: readonly ScenarioStep[], armVariant: { workflowId?: string } | null): Promise<Pick<AskedChangeAudit, "stoppedAt" | "stopReason" | "change">> {
+async function playHonestPath(lab: RunningLab, scenario: WebScenario, task: LiveInstructionTask, script: readonly ScenarioStep[], armVariant: { workflowId?: string } | null): Promise<Pick<AskedChangeAudit, "stoppedAt" | "stopReason" | "change">> {
   await control(lab, "/__control/seed", { seed: scenario.seed });
   if (armVariant && task.variantId) await control(lab, "/__control/arm", { scenarioId: scenario.id, variantId: task.variantId, ...armVariant });
   const view = lastingViewOf(scenario.id as RealisticScenarioId);
   const before = view(await siteState(lab, scenario.id));
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
+  const tab = await openGuardedLabTab({ origin: lab.origin, token: CONTROL_TOKEN });
+  const { context } = tab;
   let stoppedAt: string | null = null;
   let stopReason: string | null = null;
   try {
-    const page = await context.newPage();
+    const { page } = tab;
     // The script begins on the page the harness opens for it, as a recording-lane run does.
     await page.goto(`${lab.origin}${scenario.startPath}`, { waitUntil: "domcontentloaded" });
     const runner = new ScenarioStepRunner({
@@ -82,8 +82,13 @@ async function playHonestPath(browser: Browser, lab: RunningLab, scenario: WebSc
         break;
       }
     }
+    const blocked = tab.guard.violations();
+    if (stoppedAt === null && blocked.length > 0) {
+      stoppedAt = "network-guard";
+      stopReason = `The network guard blocked ${blocked.length} request(s)`;
+    }
   } finally {
-    await context.close().catch(/* best-effort: the audit's answer does not depend on closing the session */ () => undefined);
+    await tab.close();
   }
   return { stoppedAt, stopReason, change: siteChange(before, view(await siteState(lab, scenario.id))) };
 }
@@ -99,7 +104,6 @@ export async function auditAskedChanges(input: { scenarioLabDist: string; reposi
   }
   const server = await import(pathToFileURL(path.join(input.scenarioLabDist, "server.js")).href) as LabModule;
   const lab = await server.startScenarioLab({ runToken: CONTROL_TOKEN });
-  const browser = await chromium.launch({ headless: false, channel: "chromium", env: withoutProviderSecrets(process.env) });
   const audits: AskedChangeAudit[] = [];
   try {
     for (const tasks of groups.values()) {
@@ -110,7 +114,7 @@ export async function auditAskedChanges(input: { scenarioLabDist: string; reposi
       const unarmed: LiveInstructionTask = task.variantArmedAfterBuild || armedLater === undefined ? unarmedFields : task;
       const request = resolveCreatedFlowRequest(scenario, unarmed);
       const workflow = resolveScenarioWorkflow(scenario, { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }), ...(unarmed.variantId === undefined ? {} : { variantId: unarmed.variantId }) });
-      const played = await playHonestPath(browser, lab, scenario, unarmed, workflow.recordingScript, unarmed.variantId ? { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }) } : null);
+      const played = await playHonestPath(lab, scenario, unarmed, workflow.recordingScript, unarmed.variantId ? { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }) } : null);
       const asked = askedChangeOf(task.id);
       const audit: AskedChangeAudit = {
         taskId: task.id, sameAs: tasks.filter((other) => other !== task).map((other) => other.id),
@@ -121,7 +125,6 @@ export async function auditAskedChanges(input: { scenarioLabDist: string; reposi
       input.onResult?.(audit);
     }
   } finally {
-    await browser.close().catch(/* best-effort: the audit is already recorded */ () => undefined);
     await lab.close().catch(/* best-effort: the audit is already recorded */ () => undefined);
   }
   return audits;

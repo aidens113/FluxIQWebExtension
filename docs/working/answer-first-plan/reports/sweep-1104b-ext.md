@@ -1,0 +1,12 @@
+# Sweep 1104b, extension repo: four failing tests
+
+Outcome: Done.
+
+1. chat-build "legacy, the default, types into the chat". Cause: a real Lab defect. On the default mode (`project`) `proveChatBuild` called `createdFlowVerificationReady(mode)` with no trial readiness, which is false for `project`, so the chat check typed nothing on the product default. Fix (source, `extension-chat-check/prove/chat-build.ts`): for `project`, pass `labCandidateTrialReadiness({ startsCore: true, fixtureResetBetweenTrials: true })`; the chat check starts its own Core with the hook, so this is true. `candidate` still refuses as before. Test renamed and now covers legacy, project, answer-first and the default (each reaches "The chat is not open"). Not exercised live: whether the project-mode chat build then reports "model key is locked" with no key.
+2. coordinator-existing: asserts against `AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT`.
+3. environment (t348): hook is decided by `labCandidateStartHookEnvironment` via `createdFlowTrialsCandidates`: `candidate` and `project` get the hook, `legacy` and `answer-first` never do, inherited values always dropped. The default now gets the hook (it is `project`). This does not contradict "reset as rarely as possible" by itself, but note that on `answer-first` (the intended flip) the Core gets no start hook and no fixture reset between trials. Test now asserts the default against the constant, and legacy plus answer-first for no hook.
+4. auction watch limiter (browser.test.ts). Cause: the site's 5 s window is real server time (`Date.now()` in the server), so `page.clock` cannot reach it; four Playwright actionability-waiting clicks could straddle 5 s. Fix: wait for all four hearts visible, then `dispatchEvent("click")` on each in order with no waiting. Fixture unchanged; the limiter is still proven by the "Slow down!" toast and `lastWatch.outcome === "rate-limited"`. Other tests in the file: none depend on this window; bid cooldown is covered only in state.test.ts with injected time.
+
+Other `"legacy"` pins in test sources are explicit-mode uses (flag parsing, inherited-value drop), not defaults; left alone.
+
+Commands: test-runner `check` and `build` passed; scenario-lab `check` and `build` passed (first attempt failed typecheck on DOM types, fixed). `node --test` on chat-build, coordinator-existing and environment dist tests: 26 pass, 0 fail. Item 4 run 4 times: pass each time. No file added, structure audit not run.

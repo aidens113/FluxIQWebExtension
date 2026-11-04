@@ -9,6 +9,7 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import { removeRunOwnedTopologyState, startTopology, type TopologyOptions } from "../coordinator.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT } from "fluxiq/automation";
 import { LAB_COST_CEILING_SCOPE_ENV } from "../live-llm/index.js";
 import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
@@ -240,7 +241,7 @@ test("owned Core context keeps live Claude defaults and provider-free model isol
   assert.equal(live.FLUXIQ_LLM_DEFAULT_MODEL, DEFAULT_LLM_MODEL);
   const offline = await isolatedCoreEnvironment(undefined, { args: [], environment });
   assert.equal(offline.FLUXIQ_LLM_DEFAULT_MODEL, undefined);
-  assert.equal(offline.FLUXIQ_AUTHORING_MODE, "legacy");
+  assert.equal(offline.FLUXIQ_AUTHORING_MODE, AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
 });
 
 /** Starts an isolated topology over fake processes up to Core's readiness wait, and answers the environment Core was spawned with. */
