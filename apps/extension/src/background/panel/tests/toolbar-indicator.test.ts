@@ -8,7 +8,7 @@ import test from "node:test";
 
 import type { ExtensionStatus, RuntimeCommandStatus } from "../../../shared/protocol";
 import { RUN_BADGE_HOLD_MS, toolbarBadge } from "../toolbar-badge";
-import { ToolbarIndicator } from "../toolbar-indicator";
+import { browserToolbarBadge, ToolbarIndicator } from "../toolbar-indicator";
 
 type BadgeStatus = Pick<ExtensionStatus, "recordingState" | "runtime">;
 
@@ -110,6 +110,23 @@ test("! while the work waits on the person, over ...; REC keeps priority", () =>
   assert.deepEqual(toolbarBadge({ recordingState: "recording", runtime: { state: "idle" } }, 0, waiting), { text: "REC" });
   assert.deepEqual(toolbarBadge(running, 0, { outcome: null }), { text: "..." });
   assert.deepEqual(toolbarBadge(idle, 0, { outcome: "failed" }), { text: "" });
+});
+
+test("the browser's badge says ! on the one action API both browsers' manifests name, in the waiting colour", () => {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const before = globals.chrome;
+  const calls: unknown[] = [];
+  globals.chrome = { action: {
+    setBadgeText: async (details: unknown) => { calls.push(details); },
+    setBadgeBackgroundColor: async (details: unknown) => { calls.push(details); }
+  } };
+  try {
+    browserToolbarBadge("!");
+    browserToolbarBadge("");
+  } finally {
+    globals.chrome = before;
+  }
+  assert.deepEqual(calls, [{ text: "!" }, { color: "#b26a00" }, { text: "" }]);
 });
 
 test("the indicator shows ! when the activity starts waiting and clears it when the run continues", () => {

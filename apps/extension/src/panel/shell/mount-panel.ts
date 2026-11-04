@@ -51,12 +51,14 @@ import { chooseAutomation, createAutomationsTab } from "../automations";
 import { createActivityFeed, createChatOwnerContext, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { bindChatProjectNavigation } from "../chat/project-navigation";
-import { createStartView, startGuide } from "../getting-started";
+import { createModelKeyReader, createSetupCard, createStartView, extensionSetupPort, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
 import { createRecordingControls, createRecordingReview } from "../recording";
+import { createExtensionLibrary } from "../library";
+import { createTasksPanel } from "../tasks";
 import { createSettingsView } from "../settings";
 import { createPanelStore } from "../state";
-import type { PanelContext, PanelSurface } from "./contracts";
+import type { PanelContext, PanelPorts, PanelSurface } from "./contracts";
 import { createRunFollow } from "./run-follow";
 import { INITIAL_SHELL, reduceShell, shellScreen, type ShellEvent, type ShellScreen } from "./screen-state";
 import { createTopBar, screenId, tabId } from "./top-bar";
@@ -65,8 +67,8 @@ import { workingInput } from "./working-input";
 import "../theme/tokens.css";
 import "./shell.css";
 
-/** Mounts the panel into `root` for `surface`. */
-export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
+/** Mounts the panel into `root` for `surface`, with `ports` in place of each screen's real one (a spec's fakes). */
+export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: PanelPorts = {}): void {
   document.documentElement.dataset.surface = surface;
   const store = createPanelStore();
   const context: PanelContext = { store, surface };
@@ -82,6 +84,13 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   const recording = createRecordingControls(context);
   const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction() });
   const review = createRecordingReview(context, { onAttach: () => chat.attachLatestRecording() });
+  const tasks = createTasksPanel(context, ports, { openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }), showAutomations: () => dispatch({ type: "tab", tab: "automations" }) });
+  const library = createExtensionLibrary(store.request, ports.library, {
+    askAbout: (text) => {
+      dispatch({ type: "tab", tab: "chat" });
+      chat.fillComposer(text);
+    }
+  });
   const automations = createAutomationsTab(context, {
     choose: (row) => {
       const source = activatedRow;
@@ -97,7 +106,9 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
       }
     },
     review: review.element,
-    newAutomation: recording.newAutomation
+    newAutomation: recording.newAutomation,
+    ...(tasks === undefined ? {} : { tasks }),
+    ...(library === undefined ? {} : { library })
   });
   const working = createWorkingHold(
     { setTimeout: (run, ms) => window.setTimeout(run, ms), clearTimeout: (handle) => window.clearTimeout(handle as number) },
@@ -167,6 +178,14 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   }
 
   const start = createStartView(context, () => dispatch({ type: "gear" }));
+  const setupCard = createSetupCard(context);
+  const keyReader = createModelKeyReader(ports.setup ?? extensionSetupPort(store.request), {
+    setTimeout: (run, ms) => window.setTimeout(run, ms),
+    clearTimeout: (handle) => window.clearTimeout(handle as number)
+  }, () => draw());
+  // Coming back to the panel (a Firefox popup closes when Open FluxIQ is pressed; a side panel only loses focus) reads the key again.
+  window.addEventListener("focus", () => keyReader.refresh());
+  root.ownerDocument.addEventListener?.("visibilitychange", () => { if (root.ownerDocument.visibilityState === "visible") keyReader.refresh(); });
   const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }));
   const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" });
   const topBar = createTopBar({
@@ -180,7 +199,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     id: screenId("chat"),
     className: "chat-screen",
     attrs: { role: "tabpanel", "aria-labelledby": tabId("chat") }
-  }, [automations.strip.element, chat.element]);
+  }, [setupCard.element, automations.strip.element, chat.element]);
   automations.element.id = screenId("automations");
   automations.element.setAttribute("role", "tabpanel");
   automations.element.setAttribute("aria-labelledby", tabId("automations"));
@@ -196,6 +215,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   function openExtraction(): void {
     dispatch({ type: "tab", tab: "automations" });
+    automations.showTasks();
     const entry = recording.newAutomation.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`)
       ?? recording.bar.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`);
     if (entry === null) return;
@@ -238,9 +258,10 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer, store.lost());
+    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current());
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
+    setupCard.render(guide, status);
     if (next !== screen) {
       start.element.hidden = next !== "getting-started";
       settings.element.hidden = next !== "settings";
@@ -266,12 +287,14 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     const replaced = owner.changed || owner.initial;
     if (replaced) replaceWorkingFeed();
     else observeWorking();
+    keyReader.observe(status.connectionState === "connected");
     topBar.render(status);
     openIcon.observe(status);
     recording.render(status);
     review.render(status);
     chat.render(status);
     automations.render(status);
+    library?.render(typeof status.projectId === "string" ? status.projectId : undefined);
     // The relay forgets its state when the worker restarts; read it again on reconnecting.
     const nowConnected = status.connectionState === "connected";
     if (nowConnected && !connected && !replaced && !activityUnsupported) void activity?.read();

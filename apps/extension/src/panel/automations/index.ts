@@ -20,6 +20,8 @@ export { runFacts, type RunFactsInput } from "./facts";
 export { readCore } from "./read-core";
 export { readRunReplies } from "./replies";
 export { automationRowElement } from "./row-element";
+export { createSearchBox, SEARCH_WORDS, type SearchBox } from "./search-box";
+export { createSegments, type SegmentName, type Segments } from "./segments";
 export { automationRows } from "./rows";
 export { runSummaryLines } from "./summary-copy";
 export type { AutomationRow, DatasetExport, RunDataset, RunDetail, RunFacts, RunOutcome, RunReply, RunSummary } from "./types";
