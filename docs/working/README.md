@@ -60,7 +60,7 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | [module-size-governance-plan.md](./module-size-governance-plan.md) | Senior supervisor agent | 312 | Applying the shared file and class size policy to this repository, and decomposing the files here that already exceed it. | `module-size-governance-plan.md` |
 | [mvp-week1-web-automation-reliability-plan.md](./mvp-week1-web-automation-reliability-plan.md) | Senior supervisor agent | 720 | Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them. | `mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)` |
 | [repository-state-audit.md](./repository-state-audit.md) | Senior supervisor agent | 137 | Read-only audit of FluxIQWebExtension and FluxIQ Core at their current dev heads, with confirmed findings and prioritized follow-up. | `repository-state-audit.md` |
-| [studio-controller-plan.md](./studio-controller-plan.md) | Senior supervisor | 41 | Downstream consumers of the Studio moves, web semantics that belong in this repository, and the extension's move onto the shared chat package. | `studio-controller-plan.md` |
+| [studio-controller-plan.md](./studio-controller-plan.md) | Senior supervisor | 43 | Downstream consumers of the Studio moves, web semantics that belong in this repository, and the extension's move onto the shared chat package. | `studio-controller-plan.md` |
 
 ## Superseded
 

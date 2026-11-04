@@ -17,6 +17,8 @@ The paired Core plan (`../!FluxIQ/docs/working/studio-controller-plan.md`, relat
 
 **Live:** both tasks pass from the extension chat: `run-mw0jgf2o-478d13da` and `run-mw0l0e9y-a7d8ae51`. Each failed run's cause is in `language-driven-flow-loop-plan/debugs/`.
 
+**Follow-up (user, 2026-11-03: "obviously fix the problems").** Seven fixes from what the unit left unfinished are on `dev` in both repositories, t854 and t855 are in progress, and `main` waits for the 2026-11-04 sweep. Core's plan has the table. On this side: the domain supplies the new browser-field hooks (t851).
+
 **Blockers:** none.
 
 ## Work Ledger
