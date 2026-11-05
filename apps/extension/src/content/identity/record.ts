@@ -412,6 +412,12 @@ function holdsRowValues(record: Element | undefined, values: readonly string[]):
   return values.every((value) => holds(value) || heldAsJoinedLines(value, holds));
 }
 
+/** Whether `row` holds every one of a pass row's values, by the rule above; never for a row with none. */
+export function rowHoldsValues(row: Element, values: readonly unknown[]): boolean {
+  const compared = rowValues(values);
+  return compared.length > 0 && holdsRowValues(row, compared);
+}
+
 /** The recorded values as this module compares them: each collapsed and cut the way the domain cut it, empties dropped. */
 function rowValues(values: readonly unknown[] | undefined): string[] {
   if (!Array.isArray(values)) return [];

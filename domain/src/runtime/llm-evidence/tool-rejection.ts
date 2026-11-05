@@ -449,7 +449,11 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   // The node acts on an element and its parameters named no handle. The model
   // has never been shown a locator, so whatever it wrote is one it invented;
   // `instead` carries the shape a handle is written in.
-  "target_not_a_handle"
+  "target_not_a_handle",
+  // A pass of a repeat, and its own row's control is not on the page: nothing was
+  // pressed. Core's own word (`AS/runtime/llm/node-tools/replay/replay.ts`), read
+  // by a forward run, which tells the model that row and goes on to the next.
+  "row_control_not_found"
 ] as const;
 
 export type WebLlmToolRejectionReason = (typeof WEB_LLM_TOOL_REJECTION_REASONS)[number];

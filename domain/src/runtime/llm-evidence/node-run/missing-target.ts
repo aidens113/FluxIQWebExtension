@@ -82,8 +82,9 @@ export async function webNodeReplayMissingTarget(
           : "the step's target is gone from the page it acted on, which is how its effect already in place looks; it was not run",
       acted: false,
       ok: true,
-      // A step that passed refused nothing, so it says no reason.
-      about: { resultReason: undefined, nodeId: about.nodeId, assumed: about.assumed },
+      // A step that passed refused nothing, so it says no reason: but for a pass's own row, whose control a forward run
+      // does not take as remembered, since no earlier act of this row says so (`./replay.ts`).
+      about: { resultReason: about.resultReason === "row_control_not_found" ? about.resultReason : undefined, nodeId: about.nodeId, assumed: about.assumed },
       found
     });
   }

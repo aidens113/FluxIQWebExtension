@@ -116,6 +116,9 @@ const EXTRACT_ACTION = "web.dom.extract";
 /** The verb that moves a list to its next page, whose end is a route rather than a failure. */
 const NEXT_PAGE_ACTION = "web.dom.next_page";
 
+/** What a pass answers when its own row's control is not on the page: nothing was pressed (`AS/runtime/llm/node-tools/replay/replay.ts`). */
+const ROW_CONTROL_NOT_FOUND = "row_control_not_found";
+
 /** The command a reset dispatches: the same move the Flow's own navigate makes. */
 const RESET_ACTION = "web.browser.navigate";
 
@@ -363,8 +366,10 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     ? await webNodeLookUntilPresent(run, node.definitionId, async () => await replayPage(run, false), (page) => page !== undefined && targetAbsentBefore(page, ran, run.request.value))
     : undefined;
   const before = looked?.seen;
+  // A pass's own row's control that is not there is told apart for Core, whichever way it reads below.
+  const onARow = isJsonRecord(value.item);
   if (looked?.absent === true) {
-    return await webNodeReplayMissingTarget(run, "step", { resultReason: undefined, nodeId: node.definitionId, assumed }, "target_not_found");
+    return await webNodeReplayMissingTarget(run, "step", { resultReason: onARow ? ROW_CONTROL_NOT_FOUND : undefined, nodeId: node.definitionId, assumed }, "target_not_found");
   }
   // Under Core's default retries, as playback and a trial run the step
   // (`./retries/`, t355); a lasting act is never blindly repeated, and one
@@ -389,7 +394,8 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // because its read came back empty was recorded identically to one that
     // failed because the browser would not script the page. The node's id still
     // says which step of the draft it was.
-    const about: WebNodeReplayFacts = { resultReason: refused.detail?.reason, nodeId: node.definitionId, assumed, failure: controlFailure, actionability };
+    const rowMissing = onARow && lastingAct !== "uncertain" && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
+    const about: WebNodeReplayFacts = { resultReason: rowMissing ? ROW_CONTROL_NOT_FOUND : refused.detail?.reason, nodeId: node.definitionId, assumed, failure: controlFailure, actionability };
     // The one failure a page-level reset explains. A control that is simply not
     // there, on the very page the step worked on, is what a site that remembers
     // the step looks like -- a consent banner answered once stays answered --

@@ -66,6 +66,11 @@ export function ownRun(control: Element): readonly Element[] | undefined {
   return differs ? run : undefined;
 }
 
+/** Whether an element carries content of its own by the rule in the header: a picture, or words in more than one place. */
+export function carriesOwnContent(member: Element): boolean {
+  return memberContent(member)?.carries === true;
+}
+
 /** Whether two elements are two stampings of one template: the same tag, written role and class attribute. */
 function sameShape(element: Element, other: Element): boolean {
   return tagOf(element) === tagOf(other)

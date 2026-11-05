@@ -20,12 +20,10 @@
 
 import { agreesWithRecordedRecord, repeatedRowOf, type RecordIdentity } from "../../identity";
 import { differsOnlyByRowData } from "./row-data";
+import { followSlot, slotPath } from "./slot-path";
 
 /** Rows weighed beside the build's. A list is long, but past this it is not read. */
 const MAX_ROWS = 1_000;
-
-/** One step down from a row's root: a child of this tag, at this index among its same-tag siblings. */
-type Step = { tag: string; index: number };
 
 /**
  * The copy of `built` in the pass's row by the rule in the header, or
@@ -36,7 +34,7 @@ export function placedInPassRow(built: Element, record: RecordIdentity): Element
   if (!values.length) return undefined;
   const row = repeatedRowOf(built);
   const list = row?.parentElement;
-  const slot = row ? slotIn(row, built) : undefined;
+  const slot = row ? slotPath(row, built) : undefined;
   if (!row || !list || !slot) return undefined;
   const placed: Element[] = [];
   let weighed = 0;
@@ -44,32 +42,10 @@ export function placedInPassRow(built: Element, record: RecordIdentity): Element
     if (tagOf(other) !== tagOf(row)) continue;
     weighed += 1;
     if (weighed > MAX_ROWS) return undefined;
-    const copy = follow(other, slot);
+    const copy = followSlot(other, slot);
     if (copy && agreesWithRecordedRecord({ values }, copy) && differsOnlyByRowData(built, copy, values)) placed.push(copy);
   }
   return placed.length === 1 ? placed[0] : undefined;
-}
-
-/** The path from `row` down to `element`, or `undefined` when `element` is not inside it. */
-function slotIn(row: Element, element: Element): Step[] | undefined {
-  const steps: Step[] = [];
-  for (let current = element; current !== row; ) {
-    const parent = current.parentElement;
-    if (!parent) return undefined;
-    const tag = tagOf(current);
-    steps.unshift({ tag, index: [...parent.children].filter((child) => tagOf(child) === tag).indexOf(current) });
-    current = parent;
-  }
-  return steps;
-}
-
-/** The element at `slot` below `row`, or `undefined` where the row draws nothing there. */
-function follow(row: Element, slot: readonly Step[]): Element | undefined {
-  let current: Element | undefined = row;
-  for (const step of slot) {
-    current = current ? [...current.children].filter((child) => tagOf(child) === step.tag)[step.index] : undefined;
-  }
-  return current;
 }
 
 function tagOf(element: Element): string {

@@ -42,6 +42,19 @@ test("a press refused because its match is another row's control fails, and is n
   assert.match(String((answered.evidence as JsonObject).said), /another row's control/u);
 });
 
+test("a pass on a row whose own control is not found says so beside the code it reads as, for a forward run; a step with no row does not", async () => {
+  const onARow = async (resolution: JsonObject | undefined) => await createWebAutomationLlmEvidenceRuntime(site(resolution)).executeTool({ ...PROJECT, callId: "fw.3.pass.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { ...VALUE, item: { title: "Second order" } } });
+  const refused = await onARow({ strategy: "selector", candidateCount: 1, refusedBecause: "other-record" });
+  assert.equal(refused.resultCode, "core.replay.failed");
+  assert.equal(refused.resultReason, "row_control_not_found");
+  assert.equal(refused.effectApplied, false);
+  const remembered = await onARow({ strategy: "selector", candidateCount: 1 });
+  assert.equal(remembered.resultCode, "core.replay.remembered");
+  assert.equal(remembered.resultReason, "row_control_not_found");
+  assert.equal((await replay({ strategy: "selector", candidateCount: 1 })).resultReason, undefined);
+  assert.notEqual((await replay({ strategy: "selector", candidateCount: 1, refusedBecause: "other-record" })).resultReason, "row_control_not_found");
+});
+
 test("the same miss without the refusal word is still remembered on the page it acted on", async () => {
   const answered = await replay({ strategy: "selector", candidateCount: 1 });
   assert.equal(answered.resultCode, "core.replay.remembered");
