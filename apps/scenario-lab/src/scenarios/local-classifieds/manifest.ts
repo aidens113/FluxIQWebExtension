@@ -3,7 +3,7 @@ import { budgetBikesWorkflow, furnitureWorkflow, priceCheckWorkflow, testRideWor
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { listingByKey, sellerById } from "./catalog/index.js";
-import { bikeRecords, SAVED_TOTAL_AFTER, savedRecords } from "./answers.js";
+import { bikeRecords, savedRecords } from "./answers.js";
 import { priceText } from "./format/index.js";
 import { CLASSIFIEDS_ROOT } from "./root.js";
 import { OFFER_AMOUNT, OFFER_LISTING_KEY, SAVED_TABLE_KEYS } from "./targets.js";
@@ -27,7 +27,6 @@ const OFFER_RECEIPT: ExpectedFact = { id: "offer-receipt", subject: "marketplace
  * what went into them.
  */
 const ONLY_THE_OFFER: ExpectedFact = { id: "only-the-offer", subject: "marketplace_conversation", predicate: "text", value: `You've sent ${sellerById(OFFER_LISTING.seller).name} 1 offer` };
-const SAVED_TOTAL: ExpectedFact = { id: "saved-total", subject: "marketplace_saved_total", predicate: "text", value: SAVED_TOTAL_AFTER };
 
 /** What a person reads off each saved row: the title, the current price, and whether it is still for sale. */
 const SAVED_FIELDS = {
@@ -193,7 +192,7 @@ export const localClassifiedsManifest = createScenarioManifest({
         recordingEvents: [{ type: "web.element.clicked" }],
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.extract_list", outcome: "succeeded" }],
         extracted: [{ step: "extract-saved-items", count: savedRecords().length, records: savedRecords() }],
-        finalState: [SAVED_TOTAL, buyingIs(2)],
+        finalState: [savedBadgeIs(savedRecords().length), buyingIs(2)],
         allowedConsoleErrors: [],
       },
       variants: [
@@ -204,7 +203,7 @@ export const localClassifiedsManifest = createScenarioManifest({
           expected: {
             pageFacts: [...ARRIVAL, { id: "recorded-save-gone", subject: "marketplace_pdp_save", predicate: "exists", value: false }],
             extracted: [{ step: "extract-saved-items", count: savedRecords().length, records: savedRecords() }],
-            finalState: [SAVED_TOTAL, buyingIs(2)],
+            finalState: [savedBadgeIs(savedRecords().length), buyingIs(2)],
           },
         },
       ],
