@@ -32,9 +32,22 @@
 //   screen as sensitive: never into a password or card field, never into a
 //   control it cannot name, and never a secret request, which is not words.
 //
-// Core turns these into the sentence by the call's verb ("Reading the details
+// - `wouldRunWith` is the one thing here that is not for the chat: the parameters
+//   a run-node call that names its control by a handle the build was shown would
+//   run with, as the Flow would keep them (`ranWith`, `./node-call.ts`): the
+//   address and identity the handle stands for, beside the call's own parameters.
+//   Core's act record reads it, opaque, to know a lasting act again before it is
+//   sent (t870, `answer-first/act-record/identity/target-keys.ts`), since a handle
+//   says nothing it can know the act by. It holds nothing `ranWith` would not, and
+//   is built from the packet the words come from. A handle it cannot resolve leaves
+//   it out. It is what the plan resolver would write, not what it wrote: a control
+//   the look before the press would name by the label beside it
+//   (`./observed-control.ts`) keeps a thinner identity here than in `ranWith`.
+//
+// Core turns the words into the sentence by the call's verb ("Reading the details
 // of “Colour”"); nothing here writes a sentence, decides anything, or changes
-// the shape Core reads. An answer that cannot be given is no answer.
+// the shape Core reads. An answer that cannot be given is no answer: this runs for
+// every call, so nothing here throws, a lookup that does included.
 
 import type { JsonObject } from "fluxiq/core";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
@@ -43,12 +56,12 @@ import type { WebLlmTargetResolution, WebLlmTargetScope } from "../plan-resoluti
 import { present } from "../present";
 import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 
-/** The words a call names, as Core's chat shows them. */
-export type WebLlmCallWords = { target?: string; text?: string };
+/** The words a call names, as Core's chat shows them, and the frozen parameters it would run with (header). */
+export type WebLlmCallWords = { target?: string; text?: string; wouldRunWith?: JsonObject };
 
 type Element = { accessibleName?: unknown; visibleText?: unknown; inputType?: unknown };
 /** A control a handle names on a page this build was shown: its identity, and the words a person reads for it when they are spelled otherwise. */
-type Shown = { element: Element; words: string | undefined };
+type Shown = { element: Element; words: string | undefined; resolved: Extract<WebLlmTargetResolution, { ok: true }> };
 
 const FIND_TOOL_IDS: ReadonlySet<string> = new Set(["web.find_on_page", "web.recovery.find_on_page"]);
 /** Tools whose `target` is one handle and that type nothing: looks at a control, and the repair harness's press. */
@@ -97,8 +110,8 @@ export function webLlmCallWords(
   const scope = { projectId: call.projectId, flowId: call.flowId };
   const shown = (written: unknown): Shown | undefined => {
     const handle = typeof written === "string" ? canonicalWebLlmTargetHandle(written) : undefined;
-    const resolved = handle === undefined ? undefined : resolve(scope, handle);
-    return resolved?.ok ? { element: resolved.element, words: resolved.words } : undefined;
+    const resolved = handle === undefined ? undefined : resolvedOrUnknown(() => resolve(scope, handle));
+    return resolved?.ok ? { element: resolved.element, words: resolved.words, resolved } : undefined;
   };
   if (FIND_TOOL_IDS.has(call.toolId)) return wordsOf(undefined, stringOf(call.value.query));
   if (HANDLE_TOOL_IDS.has(call.toolId)) return wordsOf(shownName(shown(call.value.target)), undefined);
@@ -116,9 +129,35 @@ export function webLlmCallWords(
   const element = found?.element ?? objectOf(parameters.element) as Element | undefined;
   const target = found === undefined ? nameOf(element) : shownName(found);
   const node = stringOf(call.value.node);
-  if (node === KEY_NODE) return wordsOf(target, stringOf(parameters.key));
-  if (node !== TYPE_NODE) return wordsOf(target, undefined);
-  return wordsOf(target, sayableInto(element) ? stringOf(parameters.text) : undefined);
+  const wouldRunWith = found === undefined ? undefined : frozenParameters(parameters, found);
+  if (node === KEY_NODE) return wordsOf(target, stringOf(parameters.key), wouldRunWith);
+  if (node !== TYPE_NODE) return wordsOf(target, undefined, wouldRunWith);
+  return wordsOf(target, sayableInto(element) ? stringOf(parameters.text) : undefined, wouldRunWith);
+}
+
+/** A lookup that cannot be made is a handle that cannot be resolved (header). */
+function resolvedOrUnknown(lookup: () => WebLlmTargetResolution): WebLlmTargetResolution {
+  try {
+    return lookup();
+  } catch {
+    return { ok: false, code: "unknown" };
+  }
+}
+
+/**
+ * The call's parameters as the plan resolver writes them for a handle
+ * (`../plan-resolution/resolve-plan-node.ts`): the slots the element was named in
+ * gone, the address and identity behind the handle beside the rest, and the frame
+ * where it is not the top one.
+ */
+function frozenParameters(parameters: JsonObject, { resolved }: Shown): JsonObject {
+  const { target: _target, element: _element, selector: _selector, ...rest } = parameters;
+  const frozen: JsonObject = { ...rest, selector: resolved.selector, element: resolved.element as unknown as JsonObject };
+  if (resolved.frameId !== undefined && resolved.frameId !== 0) {
+    frozen.browserFrameId = resolved.frameId;
+    if (resolved.frameUrlPath !== undefined) frozen.browserFrameUrlPath = resolved.frameUrlPath;
+  }
+  return frozen;
 }
 
 /** The element a run-node call's handle names, written any of the ways the resolver reads one. */
@@ -145,9 +184,9 @@ function nameOf(element: Element | undefined): string | undefined {
   return stringOf(element?.accessibleName) ?? stringOf(element?.visibleText);
 }
 
-function wordsOf(target: string | undefined, text: string | undefined): WebLlmCallWords | undefined {
-  if (target === undefined && text === undefined) return undefined;
-  return present<WebLlmCallWords>({ target, text });
+function wordsOf(target: string | undefined, text: string | undefined, wouldRunWith?: JsonObject): WebLlmCallWords | undefined {
+  if (target === undefined && text === undefined && wouldRunWith === undefined) return undefined;
+  return present<WebLlmCallWords>({ target, text, wouldRunWith });
 }
 
 function stringOf(value: unknown): string | undefined {

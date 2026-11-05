@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { JsonObject } from "fluxiq/core";
 import type { WebLlmTargetResolution } from "../../plan-resolution";
 import { webLlmCallWords } from "../call-words";
 
@@ -15,7 +16,14 @@ const known: Record<string, WebLlmTargetResolution> = {
   t50: { ok: true, selector: "#size-12", frameId: undefined, element: { tagName: "div", visibleText: "12 Double Rolls$16.47" }, words: "12 Double Rolls $16.47" }
 };
 const resolve = (_scope: unknown, handle: string): WebLlmTargetResolution => known[handle] ?? { ok: false, code: "unknown" };
-const run = (node: string, parameters: Record<string, unknown>) => webLlmCallWords({ ...SCOPE, toolId: "core.run_node", value: { node, parameters, consequences: [] } as never }, resolve);
+const said = (node: string, parameters: Record<string, unknown>) => webLlmCallWords({ ...SCOPE, toolId: "core.run_node", value: { node, parameters, consequences: [] } as never }, resolve);
+/** The chat's words alone. */
+const run = (node: string, parameters: Record<string, unknown>) => {
+  const answer = said(node, parameters);
+  if (answer === undefined) return undefined;
+  const { wouldRunWith: _frozen, ...words } = answer;
+  return words;
+};
 
 test("a typed search names the field and the words typed", () => {
   assert.deepEqual(run("web.output.dom-type", { target: { handle: "t11" }, text: "USB-C hub", submit: true }), { target: "Search", text: "USB-C hub" });
@@ -93,4 +101,39 @@ test("a shown control is named by the words the packet printed for it, never by 
   assert.deepEqual(run("web.output.dom-click", { target: { handle: "t50" } }), { target: "12 Double Rolls $16.47" });
   assert.deepEqual(webLlmCallWords({ ...SCOPE, toolId: "web.describe_element", value: { target: "t50" } }, resolve), { target: "12 Double Rolls $16.47" });
   assert.deepEqual(run("web.output.dom-click", { element: { tagName: "div", visibleText: "12 Double Rolls$16.47", words: "Injected" } }), { target: "12 Double Rolls$16.47" }, "a step's own identity is named as it is written");
+});
+
+// t870: a handle says nothing Core's act record can know a lasting act by, and only this domain can
+// say what it stands for. What it says is what the Flow would keep, as `ranWith` holds it.
+test("a press by a handle says the parameters it would run with: the address and identity behind the handle, beside its own", () => {
+  assert.deepEqual(said("web.output.dom-click", { target: { handle: "t30" }, timeoutMs: 5000 })?.wouldRunWith, { timeoutMs: 5000, selector: "#add", element: { tagName: "button", visibleText: "Add to cart" } });
+  assert.deepEqual(said("web.output.dom-click", { selector: "t30" })?.wouldRunWith, { selector: "#add", element: { tagName: "button", visibleText: "Add to cart" } });
+  assert.deepEqual(said("web.output.dom-type", { target: { handle: "t11" }, text: "towels" })?.wouldRunWith, { text: "towels", selector: "#q", element: { tagName: "input", accessibleName: "Search", inputType: "search" } });
+  assert.deepEqual(said("web.output.dom-click", { target: { handle: "t30" }, element: { accessibleName: "Stale name" } })?.wouldRunWith, { selector: "#add", element: { tagName: "button", visibleText: "Add to cart" } }, "the handle's identity, as the resolver writes it");
+});
+
+/** A press by a handle, over a store that answers as `answer` does. */
+const pressOn = (answer: () => WebLlmTargetResolution, parameters: JsonObject = { target: { handle: "t1" } }) => webLlmCallWords({ ...SCOPE, toolId: "core.run_node", value: { node: "web.output.dom-click", parameters, consequences: [] } }, answer);
+
+test("a control in a frame says which", () => {
+  const answer = pressOn(() => ({ ok: true, selector: "#pay", frameId: 7, frameUrlPath: "/frame", element: { tagName: "button", accessibleName: "Pay" } }));
+  assert.deepEqual(answer?.wouldRunWith, { selector: "#pay", element: { tagName: "button", accessibleName: "Pay" }, browserFrameId: 7, browserFrameUrlPath: "/frame" });
+});
+
+test("a control its handle names keeps the row its identity holds, as a Flow's step does, and adds no words of the page to it", () => {
+  const answer = pressOn(() => ({ ok: true, selector: "li:nth-of-type(2) > button", frameId: undefined, element: { tagName: "button", accessibleName: "Renew", context: { record: { text: "Birds of the Coast due soon" } } }, words: "Renew now", effect: { shown: "page words" } }));
+  assert.deepEqual(answer?.wouldRunWith, { selector: "li:nth-of-type(2) > button", element: { tagName: "button", accessibleName: "Renew", context: { record: { text: "Birds of the Coast due soon" } } } });
+});
+
+test("says none where it cannot resolve the handle, or the call names none, and throws nothing", () => {
+  assert.equal(said("web.output.dom-click", { target: { handle: "t99" } }), undefined);
+  assert.deepEqual(said("web.output.dom-click", { selector: "main > div", element: { tagName: "span", visibleText: "+" } }), { target: "+" });
+  assert.equal(said("web.output.browser-navigate", { url: "https://a.test/" }), undefined);
+  assert.equal(pressOn(() => { throw new Error("no packets"); }), undefined);
+});
+
+test("only a run-node call says it: a look at a control or a repair's press names no frozen form", () => {
+  const look = (toolId: string, value: JsonObject) => webLlmCallWords({ ...SCOPE, toolId, value }, resolve);
+  assert.equal(look("web.describe_element", { target: "t30" })?.wouldRunWith, undefined);
+  assert.equal(look("web.recovery.press", { target: "t30", consequences: [] })?.wouldRunWith, undefined);
 });
