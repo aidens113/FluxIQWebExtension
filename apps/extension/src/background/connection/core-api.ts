@@ -53,11 +53,11 @@ export async function askCoreForFirstProject(credentials: CoreApiCredentials & {
   return root?.ok === true ? stringValue(objectValue(root.payload)?.projectId) : undefined;
 }
 
-export async function fetchProjectIdFromCoreSnapshot(
+export async function fetchProjectFromCoreSnapshot(
   credentials: CoreApiCredentials & { token: string },
   identity: { sessionId: string | undefined; clientId: string },
   reason: string
-): Promise<string | undefined> {
+): Promise<{ projectId: string; projectName?: string } | undefined> {
   const url = new URL("/api/client-gateway/snapshot", credentials.coreApiUrl || DEFAULT_CORE_API_URL);
   const response = await fetch(url.toString(), {
     headers: compactObject({
@@ -89,7 +89,20 @@ export async function fetchProjectIdFromCoreSnapshot(
   const webRuntime = objectValue(body?.webRuntime);
   const automationStudio = objectValue(webRuntime?.automationStudio);
   const activeProjectId = stringValue(automationStudio?.activeProjectId);
-  return sessionProjectId ?? activeProjectId;
+  const projectId = sessionProjectId ?? activeProjectId;
+  if (projectId === undefined) return undefined;
+  // Core names only the project it has open. A project this browser's session holds that is another one has no name here.
+  const projectName = projectId === activeProjectId ? stringValue(automationStudio?.activeProjectName)?.trim() : undefined;
+  return projectName ? { projectId, projectName } : { projectId };
+}
+
+/** The project Core currently names for this client, by id alone. */
+export async function fetchProjectIdFromCoreSnapshot(
+  credentials: CoreApiCredentials & { token: string },
+  identity: { sessionId: string | undefined; clientId: string },
+  reason: string
+): Promise<string | undefined> {
+  return (await fetchProjectFromCoreSnapshot(credentials, identity, reason))?.projectId;
 }
 
 export async function uploadStateAsset(

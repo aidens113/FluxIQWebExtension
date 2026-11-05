@@ -109,6 +109,25 @@ test("a task's attempts are read by conversation or by attempt, naming exactly o
   assert.equal(h.calls.length, 2);
 });
 
+test("tasks are listed, renamed and forgotten with exactly the fields each needs, and a stray field never reaches Core", async () => {
+  const h = harness({ "list-project-tasks": { ok: true, payload: { tasks: [], nextCursor: null } }, "rename-task": { ok: true, payload: { taskId: "t1", title: "Loans" } }, "remove-task": { ok: true, payload: { taskId: "t1", removed: true } }, "list-flow-subflows": { ok: true, payload: { subflows: [] } } });
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.listTasks, projectId: "project-7", limit: 20, cursor: "20", flow: { nodes: [] } });
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.renameTask, taskId: "t1", title: " Loans ", flowId: "f1" });
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.removeTask, taskId: "t1", title: "x", flowId: "f1" });
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
+    ["list-project-tasks", { projectId: "project-7", limit: 20, cursor: "20" }],
+    ["rename-task", { projectId: "project-1", taskId: "t1", title: "Loans" }],
+    ["remove-task", { projectId: "project-1", taskId: "t1" }]
+  ]);
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.listFlowSubflows, flowId: "f1", role: "utility", status: "archived" });
+  assert.deepEqual([h.calls.at(-1)?.endpoint, h.calls.at(-1)?.payload], ["list-flow-subflows", { projectId: "project-1", flowId: "f1", role: "primary", status: "active", limit: 3, offset: 0 }]);
+  h.calls.pop();
+  for (const asked of [{ type: AUTOMATION_PANEL_MESSAGES.renameTask, title: "x" }, { type: AUTOMATION_PANEL_MESSAGES.renameTask, taskId: "t1" }, { type: AUTOMATION_PANEL_MESSAGES.removeTask }]) {
+    assert.equal((await h.send(asked)).ok, false);
+  }
+  assert.equal(h.calls.length, 3);
+});
+
 test("a carry-on sends Core exactly the attempt and the amount, and no stray field reaches it", async () => {
   const h = harness({ "carry-on-task-attempt": { ok: true, payload: { attemptId: "a1", budgetUsd: 1 } } });
   assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, projectId: "project-7", attemptId: "a1", addUsd: 0, flowId: "flow-x", authoringMode: "candidate", authSessionId: "s" }), { ok: true, payload: { attemptId: "a1", budgetUsd: 1 } });

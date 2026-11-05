@@ -178,6 +178,8 @@ export type ExtensionStatus = {
   paired: boolean;
   sessionId?: string | undefined;
   projectId?: string | null | undefined;
+  /** What Core calls that project, once it has said; absent until then. */
+  projectName?: string | undefined;
   activeTabId?: number | undefined;
   activeTabUrl?: string | undefined;
   queueSize: number;
@@ -349,6 +351,14 @@ export const AUTOMATION_PANEL_MESSAGES = {
    * refusal is Core's own sentence.
    */
   carryOnTaskAttempt: RUNTIME_MESSAGES.panelCarryOnTaskAttempt,
+  /** `list-project-tasks` with `{ projectId, limit?, cursor? }`. Answers `{ tasks, nextCursor }`, each task with its latest attempt, newest first. */
+  listTasks: RUNTIME_MESSAGES.panelListTasks,
+  /** `list-flow-subflows` with `{ projectId, flowId }` and the primary role: the subflow a task's "Save this" would keep. Answers `{ subflows }`, each a name, a role and a status. */
+  listFlowSubflows: RUNTIME_MESSAGES.panelListFlowSubflows,
+  /** `rename-task` with `{ projectId, taskId, title }`: the person's own name for the task, nothing else. Answers `{ taskId, title }`. */
+  renameTask: RUNTIME_MESSAGES.panelRenameTask,
+  /** `remove-task` with `{ projectId, taskId }`: forgets the task's own memory entry and no Flow, saved part, result or attempt. Answers `{ taskId, removed }`. */
+  removeTask: RUNTIME_MESSAGES.panelRemoveTask,
   /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider`, `enabled` and, when Core says, `unlocked` and `lockedBecause` only. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
@@ -391,6 +401,9 @@ export type AutomationPanelRequest = {
   format?: string | undefined;
   conversationId?: string | undefined;
   attemptId?: string | undefined;
+  /** The task to rename or forget, and the name the person gave it (`renameTask`). */
+  taskId?: string | undefined;
+  title?: string | undefined;
   /** Dollars to add to an attempt that is carried on: zero or more. */
   addUsd?: number | undefined;
   proposalId?: string | undefined;

@@ -19,7 +19,7 @@ const ENTRY = (tasks: "all" | "none") => `
   const host = window.parent as unknown as { __open?: { value?: { projectId: string; taskId: string } } };
   const store = (host.__open ??= {});
   const memory = { read: async () => store.value, write: async (open?: { projectId: string; taskId: string }) => { store.value = open; }, get open() { return store.value; } };
-  const port = createFakeTasksPort({ tasks: ${tasks === "all" ? "Object.values(fakeTasks(Date.now()))" : "[]"} });
+  const port = createFakeTasksPort({ tasks: ${tasks === "all" ? "Object.values(fakeTasks(Date.now()))" : "[]"}, keepable: { "flow-saved-searches": { subflowId: "sub-1", name: "Check saved searches" } } });
   (window as unknown as { __fake: unknown }).__fake = { port, memory };
   startScriptedPanel({ surface: "sidepanel", start: "connected", ports: { tasks: { port, results: port.results }, taskMemory: memory } });
 `;
@@ -174,6 +174,11 @@ test("local-classifieds: tasks by keyboard", async ({ openHarness, page }, testI
     seen.push(await focusName());
   }
   expect(seen.at(-1), `Tab order ${seen.join(" > ")}`).toBe("Search tasks, automations and subflows");
+  // The Tasks and Library segments sit between the search box and the list, a tab stop each.
+  await page.keyboard.press("Tab");
+  expect(await focusName()).toBe("Tasks");
+  await page.keyboard.press("Tab");
+  expect(await focusName()).toBe("Library");
   await page.keyboard.press("Tab");
   expect(await focusName()).toContain("Check my saved searches");
   await page.keyboard.press("Tab");
@@ -183,6 +188,8 @@ test("local-classifieds: tasks by keyboard", async ({ openHarness, page }, testI
   await frame.getByRole("searchbox", { name: "Search tasks, automations and subflows" }).focus();
   await page.keyboard.type("job");
   await expect(frame.locator(".task-row")).toHaveCount(1);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");
   await expect(frame.locator(".task-title")).toHaveText("Collect the new job posts every morning");
@@ -260,4 +267,24 @@ test("local-classifieds: an empty list says what to do, and a failed read is qui
   await frame.getByRole("button", { name: "Try again" }).click();
   await expect(frame.locator(".tasks-notice")).toHaveCount(0);
   await expect(frame.locator(".task-row")).toHaveCount(9);
+});
+
+test("local-classifieds: Save this on a task's details names what is kept, and a refusal reads in Core's sentence", async ({ openHarness, page }, testInfo) => {
+  await openHarness("local-classifieds");
+  const { frame, child } = await mountPanelFrame(page, bundle, { width: 360, height: 760 });
+  await openTab(frame);
+  await row(frame, "Summarise today's news").click();
+  await expect(frame.locator(".task-title")).toBeVisible();
+  await expect(frame.getByRole("button", { name: "Save this" })).toHaveCount(0);
+  await frame.getByRole("button", { name: "Back to tasks" }).click();
+  await row(frame, "Check my saved searches").click();
+  await expect(frame.getByText("Keep “Check saved searches” in your Library, so other automations can use it.")).toBeVisible();
+  await child.evaluate(() => (window as unknown as { __fake: { port: { refuseKeepNext(r: unknown): void } } }).__fake.port.refuseKeepNext({ code: "part.not_found", message: "That piece is not part of this automation any more." }));
+  await frame.getByRole("button", { name: "Save this" }).click();
+  await expect(frame.locator(".task-keep")).toContainText("That piece is not part of this automation any more.");
+  await frame.locator("#app").screenshot({ path: testInfo.outputPath("keep-refused.png") });
+  await frame.getByRole("button", { name: "Save this" }).click();
+  await expect(frame.locator(".task-keep")).toContainText("Saved. Find it in your Library.");
+  await expect(frame.getByRole("button", { name: "Saved" })).toBeDisabled();
+  await frame.locator("#app").screenshot({ path: testInfo.outputPath("keep-kept.png") });
 });
