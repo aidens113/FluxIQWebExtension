@@ -3,7 +3,8 @@
 export * from "./attempt/index.js";
 export { readAnswerTurnInDocument, type AnswerTurnDom } from "./answer-turn-dom.js";
 export { followAttempt, type FollowAttemptInput } from "./follow-attempt.js";
-export { liveAttemptDriver, type LiveAttemptDriverInput, type LiveAttemptEnded } from "./live-driver.js";
+export { attemptPersonFor, type AttemptPersonInput, type AttemptPersonRecords } from "./attempt-person.js";
+export { liveAttemptDriver, type LiveAttemptDriverInput, type LiveAttemptEnded, type LiveAttemptPerson, type LiveAttemptPersonRun } from "./live-driver.js";
 export { attemptBalanceFailures, type ProviderFailureRecord } from "./balance-failures.js";
 export { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
 export { panelAnswerPort, readPanelAnswerTurn } from "./panel-answer-port.js";
