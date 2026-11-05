@@ -17,6 +17,8 @@ export type AttemptOutcomeRecord = {
   liveSteps: number;
   simulation?: { verdict: "passed" | "failed" | "inconclusive" | "not_run"; flags: number };
   loopsCaught: Record<string, { steered: number; refused: number; changeApproach: number; askPerson: number }>;
+  /** Lasting acts Core could not tie to a row (a known limit it measures); absent reads as zero. */
+  actsWithNoRow?: number;
   startedAtMs: number;
   endedAtMs?: number;
 };

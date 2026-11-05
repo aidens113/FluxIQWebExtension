@@ -16,6 +16,8 @@ export type AttemptRecord = Readonly<{
   simulation?: Readonly<{ verdict: AttemptSimulationResult; flags: number }>;
   /** Core's five patterns, each with its ladder counts. */
   loopsCaught: Readonly<Record<string, Readonly<{ steered: number; refused: number; changeApproach: number; askPerson: number }>>>;
+  /** Lasting acts Core could not tie to a row; absent reads as zero. */
+  actsWithNoRow?: number;
 }>;
 
 /** What an attempt left saved for the next (`AutomationStudioSavedState`), restated to what the proof reads. */

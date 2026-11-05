@@ -27,6 +27,7 @@ export function attemptReportRow(task: AttemptTask, outcome: AttemptOutcome): At
     flow: answer.flow,
     repeatedActs: answer.repeatedActs.map((act) => ({ ...act })),
     loopsCaught: loopsCaughtOf(outcome),
+    ...(record.actsWithNoRow !== undefined ? { actsWithNoRow: record.actsWithNoRow } : {}),
     standIns: [...outcome.standIns],
     live: attemptCountsAsLive(outcome.standIns),
   };

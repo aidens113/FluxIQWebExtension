@@ -39,6 +39,8 @@ export type AttemptReportRow = {
   flow: FlowScore;
   repeatedActs: RepeatedActReport[];
   loopsCaught: AttemptLoopsCaught;
+  /** Lasting acts Core could not tie to a row, so that row may be pressed again (a measured known limit). Absent reads as zero. */
+  actsWithNoRow?: number;
   /** Empty when every input was read from Core and the real chat. */
   standIns: AttemptStandIn[];
   /** True only with no stand-in at all (`attemptCountsAsLive`), held by validation: a scripted model's row can never be counted as live. */

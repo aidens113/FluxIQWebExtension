@@ -103,6 +103,7 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
           liveSteps: attempt.liveSteps,
           ...(attempt.simulation ? { simulation: attempt.simulation } : {}),
           loopsCaught: attempt.loopsCaught,
+          ...(attempt.actsWithNoRow !== undefined ? { actsWithNoRow: attempt.actsWithNoRow } : {}),
         },
         saved: savedOf(outcome),
         startedFrom: null,
