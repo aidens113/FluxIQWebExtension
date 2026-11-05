@@ -552,6 +552,30 @@ test("a list read's statement says what each condition kept and rejected, with t
   assert.equal(looked.draft !== undefined && "conditions" in looked.draft, false);
 });
 
+test("a list read a Flow would refuse is refused where it is written, naming why, and nothing is read (t869)", async () => {
+  let reads = 0;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page("Catalogue", 0), structure: structuredClone(ROWS) } };
+      reads += 1;
+      return { status: "succeeded", payload: { extracted: [], extraction: { recordCount: 0, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: [], missingFields: [] } } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const detected = await runtime.executeTool({ ...PROJECT, callId: "detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  const handle = (detected.evidence as WebLlmRepeatingStructure).extraction;
+  const recordOutput = { datasetId: "working", writeMode: "replace", purpose: "intermediate" };
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED,
+    value: { node: EXTRACT, parameters: { extractList: { handle, dedupe: true }, recordOutput }, consequences: [] } });
+  assert.equal(reads, 0);
+  assert.equal(refused.effectApplied, false);
+  assert.match(JSON.stringify(refused.evidence), /record_output\.intermediate_process_unsupported/u);
+  await runtime.executeTool({ ...PROJECT, callId: "read.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED,
+    value: { node: EXTRACT, parameters: { extractList: { handle }, recordOutput }, consequences: [] } });
+  assert.equal(reads, 1, "the same read with no dedupe goes out");
+});
+
 test("an incomplete-text list refusal reaches the builder with executable disclosure recovery", async () => {
   let reads = 0;
   const gateway: WebLlmEvidenceGateway = {
