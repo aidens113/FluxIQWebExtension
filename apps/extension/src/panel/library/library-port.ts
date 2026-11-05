@@ -1,15 +1,11 @@
 // The library's port over the panel messages for saved parts: list, get and run. Core's answer comes back as the
 // background relays it, `{ ok: true, payload }`. A refusal is an ordinary payload and so a value here, and a failed
-// request is a failed `ChatResult`. Nothing throws. The message names are written out because the constants
-// (`AUTOMATION_PANEL_MESSAGES.listParts`, `getPart`, `runPart`) are not on this branch yet.
+// request is a failed `ChatResult`. Nothing throws.
 
 import type { ChatResult, SubflowLibraryPort, SubflowRefusal } from "@fluxiq/ui-components";
+import { AUTOMATION_PANEL_MESSAGES } from "../../shared/protocol";
 import type { PanelStore } from "../state";
 import { readDetail, readListing, readOutcome, readRefusal } from "./read";
-
-const LIST_PARTS = "fluxiq.panel.listParts";
-const GET_PART = "fluxiq.panel.getPart";
-const RUN_PART = "fluxiq.panel.runPart";
 
 const UNREADABLE = "FluxIQ answered in a way this panel could not read.";
 
@@ -28,13 +24,13 @@ async function ask<T>(request: PanelStore["request"], message: { type: string } 
 export function createPartsLibraryPort(request: PanelStore["request"]): SubflowLibraryPort {
   return {
     list: ({ projectId, text, limit, cursor }) =>
-      ask(request, { type: LIST_PARTS, projectId, ...(text === undefined || text.trim() === "" ? {} : { query: text.trim() }), ...(limit === undefined ? {} : { limit }), ...(cursor ? { cursor } : {}) }, readListing),
-    read: ({ projectId, partId, version }) => ask(request, { type: GET_PART, projectId, partId, ...(version === undefined ? {} : { version }) }, readDetail),
+      ask(request, { type: AUTOMATION_PANEL_MESSAGES.listParts, projectId, ...(text === undefined || text.trim() === "" ? {} : { query: text.trim() }), ...(limit === undefined ? {} : { limit }), ...(cursor ? { cursor } : {}) }, readListing),
+    read: ({ projectId, partId, version }) => ask(request, { type: AUTOMATION_PANEL_MESSAGES.getPart, projectId, partId, ...(version === undefined ? {} : { version }) }, readDetail),
     run: ({ projectId, partId, version, inputs, permitted, acknowledgedRepeat }) =>
       ask(
         request,
         {
-          type: RUN_PART,
+          type: AUTOMATION_PANEL_MESSAGES.runPart,
           projectId,
           partId,
           inputs: { ...inputs },

@@ -12,6 +12,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { Page } from "@playwright/test";
 import { DEFAULT_QUERY, pageOfResults, searchPostings, sponsoredFor } from "../../../../../../scenario-lab/src/scenarios/job-board/catalog/index.js";
+import { readDetail, readListing, readOutcome } from "../../../../../src/panel/library/read/index";
 import { expect, test } from "../../../../fixtures/extension-context";
 import { bindDetectingRuntime, bindScriptedProvider, detectedColumns, keepDiagnostic, pageHandle, pageHandleWhere, projectBuild, startInstalledBuild, type BuilderTurn, type InstalledBuild, type ScriptedAnswer } from "../../../../site-reset/index";
 
@@ -276,6 +277,13 @@ test("a site part and its action part pinned from two Flows: the row crosses the
     expect(list(got.calls).map((node) => [node.partId, node.version])).toEqual([[actionPart, actionVersion]]);
     expect(list(record(await service.projectParts.list({ projectId, usedByFlowId: flowTwo })).parts).map((card) => card.partId)).toEqual([sitePart]);
 
+    // What the panel's library screen reads off these same real answers, so the two sides of the wire are held together.
+    const screenList = readListing(await service.projectParts.list({ projectId }));
+    expect(screenList?.parts.map((card) => card.partId).sort(), "the panel reads every card Core lists").toEqual([sitePart, actionPart].sort());
+    const screenDetail = readDetail(got);
+    expect(screenDetail?.detail.callers.filter((caller) => caller.kind === "flow"), "the panel reads both Flows as callers").toHaveLength(2);
+    expect(screenDetail?.detail.calls.map((node) => node.partId)).toEqual([actionPart]);
+
     // ---- From here no model may be called. ----
     let providerCalls = 0;
     service.bindLlmExecutionProvider(() => ({
@@ -379,6 +387,7 @@ test("a site part and its action part pinned from two Flows: the row crosses the
       });
       expect(order.indexOf(intended[1]!.key), "an intended row now stands after a row the part does not mean").toBeGreaterThan(order.indexOf(others.at(-1)!.key));
     });
+    expect(readOutcome(reordered.answer)?.status, "the panel reads a run's real answer").toBe(reordered.answer.status);
     console.log(JSON.stringify({ pinnedPartReordered: { status: reordered.answer.status, stoppedAt: reordered.answer.stoppedAt ?? null, clicks: clicks(reordered.commands), reads: reads(reordered.commands), modelCalls: reordered.answer.modelCalls, ms: reordered.ms } }));
     expect(reordered.answer.status, JSON.stringify(reordered.answer)).toBe("succeeded");
     expect(reordered.answer.modelCalls).toBe(0);

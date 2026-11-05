@@ -1,5 +1,4 @@
-// The one named seam, and the mount over it. While the parts messages have not landed there is no library, and
-// nothing asks the background for one.
+// The library's port for this build, and the mount over it.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -9,15 +8,15 @@ import { createExtensionLibrary, extensionLibraryPort } from "../index";
 
 const host = { askAbout: () => undefined };
 
-test("while the library has not landed the build has no port, and nothing is sent", () => {
+test("the build has a port, and it asks the background for the library's parts", async () => {
   const sent: PanelMessage[] = [];
   const request = (async (message: PanelMessage) => {
     sent.push(message);
     return { ok: false, sentence: "no" };
   }) as PanelStore["request"];
-  assert.equal(extensionLibraryPort(request), undefined);
-  assert.equal(createExtensionLibrary(request, undefined, host), undefined);
-  assert.deepEqual(sent, []);
+  const port = extensionLibraryPort(request);
+  await port.list({ projectId: "p1" });
+  assert.deepEqual(sent, [{ type: "fluxiq.panel.listParts", projectId: "p1" }]);
 });
 
 test("a port the caller has mounts the library screen", async () => {

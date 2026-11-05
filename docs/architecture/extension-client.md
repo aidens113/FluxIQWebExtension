@@ -122,9 +122,9 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   box ("Search tasks, automations and subflows") when the panel has a tasks
   port or a library port, and "Tasks" and "Library" segments (the Library one
   with a count of matches while a search is typed) when it has a library port.
-  Neither port is filled by the extension today (`extensionTasksPort` answers
-  `undefined`, and `extensionLibraryPort` answers `undefined` while its
-  `LIBRARY_LANDED` is `false`), so the tab is the plain list until they are.
+  The extension fills the library port (`extensionLibraryPort`, over the panel
+  messages for saved parts), so the search box and both segments show.
+  `extensionTasksPort` answers `undefined` today, so no tasks screen shows yet.
   With a tasks port the package's tasks screen (`createTasksScreen`) shows
   above the list, and with a library port its library screen
   (`createLibraryScreen`) shows under the Library segment; both live in
@@ -186,7 +186,7 @@ pairing token in the URL.
 | `settings/` | The settings screen, the connection form, its unsaved draft (`fluxiq.ui.connectionDraft`), Save's plan, Report a problem and Forget this pairing. The on-page status choice is the adapter's (`chat/settings/`), mounted here. |
 | `automations/` | The automations tab (its search box and Tasks / Library segments), the open automation's strip, and the controller and readers behind them. |
 | `tasks/` | The package's tasks screen as the shell mounts it (`createTasksPanel`), over `extensionTasksPort` (the one named seam, empty today) and the open task's memory in `chrome.storage.local` (`extensionTasksMemory`). |
-| `library/` | The package's library screen as the shell mounts it (`createExtensionLibrary`), over `extensionLibraryPort` (the one named seam, empty until `LIBRARY_LANDED` is flipped) and `createPartsLibraryPort`, its panel messages. |
+| `library/` | The package's library screen as the shell mounts it (`createExtensionLibrary`), over `extensionLibraryPort` and `createPartsLibraryPort`, its panel messages (list, read, run), which the background sends Core field by field (`background/automation-relay/parts-relay.ts`). |
 | `recording/` | "Show me how" for the composer, the description dialog, the recording bar, the "New automation" section, the pending recording's memory and the finish that attaches it to the next message. |
 | `open-fluxiq/` | The Open FluxIQ button and its failure line. |
 | `chat/` | A thin adapter over the shared chat package: `chat-panel.ts` (`createChatPanel`), the extension's `transport/` (the background messages behind the package's `ChatTransport`), the live-activity `feed/`, the owner context, the on-page status setting and host status. The chat itself is `@fluxiq/ui-components` ([Live Activity](#live-activity)). |
