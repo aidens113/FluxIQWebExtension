@@ -13,6 +13,13 @@ export function defaultSettings(): FluxIQSettings {
   };
 }
 
+/** What a person calls this browser, for choosing among theirs: "Chrome on Windows". */
+export function browserClientLabel(userAgent: string, platform: string): string {
+  const browser = /\bEdg\//u.test(userAgent) ? "Edge" : /\bFirefox\//u.test(userAgent) ? "Firefox" : /\bChrome\//u.test(userAgent) ? "Chrome" : "This browser";
+  const system = /\bWin/iu.test(platform) || /Windows/u.test(userAgent) ? "Windows" : /\bMac/iu.test(platform) ? "Mac" : /Linux/iu.test(platform) ? "Linux" : undefined;
+  return system ? `${browser} on ${system}` : browser;
+}
+
 export function browserDescriptor(): BrowserDescriptor {
   return {
     clientKind: "browser_extension",

@@ -217,7 +217,6 @@
       "packages/test-runner/src/existing-fluxiq-control.ts": 18,
       "apps/extension/src/panel/automations/controller.ts": 17,
       "apps/extension/src/panel/extraction/read-recovery/tests/session-identity.test.ts": 17,
-      "apps/extension/src/panel/getting-started/tests/start-view.test.ts": 16,
       "apps/extension/src/panel/shell/tests/working-hold-reset.test.ts": 16,
       "packages/test-contracts/src/evidence-validation.ts": 15,
       "packages/test-runner/src/bench/campaign/store.ts": 15,

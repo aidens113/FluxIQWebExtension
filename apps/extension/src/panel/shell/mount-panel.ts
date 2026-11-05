@@ -179,7 +179,8 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
 
   const start = createStartView(context, () => dispatch({ type: "gear" }));
   const setupCard = createSetupCard(context);
-  const keyReader = createModelKeyReader(ports.setup ?? extensionSetupPort(store.request), {
+  const setupPort = ports.setup ?? extensionSetupPort(store.request);
+  const keyReader = createModelKeyReader(setupPort, {
     setTimeout: (run, ms) => window.setTimeout(run, ms),
     clearTimeout: (handle) => window.clearTimeout(handle as number)
   }, () => draw());
@@ -257,7 +258,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
 
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current());
+    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current(), setupPort.lockWords?.());
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
     setupCard.render(guide, status);

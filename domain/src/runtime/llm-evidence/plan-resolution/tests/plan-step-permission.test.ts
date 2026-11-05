@@ -231,7 +231,7 @@ test("a step that says it would publish, under a gate that permits nothing, asks
   assert.equal(request?.action.ref, "main.post");
   assert.equal(request?.control.name, "Schedule post");
   assert.equal(request?.control.kind, "button");
-  assert.equal(request?.sentence, "The Flow would press \"Schedule post\" (button) each time it runs. That would delete or remove something, and that always needs your permission, even when your instruction asks for it.");
+  assert.equal(request?.sentence, "FluxIQ needs to press \"Schedule post\" each time this runs.");
   // The issue names the request the person is answering, so the record joins them.
   assert.equal(issue?.message.includes(request?.requestId ?? "-"), true);
 });

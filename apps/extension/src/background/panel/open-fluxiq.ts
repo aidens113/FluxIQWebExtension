@@ -20,12 +20,13 @@ export function fluxIQWebAddress(coreApiUrl: string | undefined, automation?: { 
 }
 
 /** The keys page of the web panel, where a model key is added; undefined when the address is not an http(s) address. */
-export function fluxIQKeysAddress(coreApiUrl: string | undefined): string | undefined {
+export function fluxIQKeysAddress(coreApiUrl: string | undefined, unlockTicket?: string): string | undefined {
   const url = parsedAddress(coreApiUrl?.trim() || DEFAULT_CORE_API_URL);
   if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) return undefined;
   url.pathname = "/programs/secret-keys";
   url.search = "";
-  url.hash = "";
+  // In the fragment, which never reaches a server's log. No use without the person's password.
+  url.hash = unlockTicket ? new URLSearchParams({ unlock: unlockTicket }).toString() : "";
   return url.toString();
 }
 

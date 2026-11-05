@@ -18,13 +18,14 @@ function installChrome(t: TestContext) {
   });
 }
 
-function depsFor(coreApiUrl: string) {
+function depsFor(coreApiUrl: string, ticket?: string) {
   const opened: string[] = [];
   const deps = {
     readSettings: async () => ({ coreApiUrl }) as FluxIQSettings,
     openTab: async (url: string) => {
       opened.push(url);
-    }
+    },
+    unlockTicket: async () => ticket
   } as unknown as PanelControlDeps;
   return { deps, opened };
 }
@@ -44,6 +45,16 @@ test("purpose model-key opens the keys page and answers its address", async (t) 
   const result = await handlePanelControl(open({ purpose: "model-key" }), sidepanel, h.deps);
   assert.deepEqual(h.opened, ["http://127.0.0.1:4711/programs/secret-keys"]);
   assert.deepEqual(result, { handled: true, response: { ok: true, url: "http://127.0.0.1:4711/programs/secret-keys" } });
+});
+
+test("purpose model-key carries what starts this browser's own unlock, in the fragment", async (t) => {
+  installChrome(t);
+  const h = depsFor("http://127.0.0.1:4711", "paired-client:one.part");
+  await handlePanelControl(open({ purpose: "model-key" }), sidepanel, h.deps);
+  const url = new URL(h.opened[0]!);
+  assert.equal(url.pathname, "/programs/secret-keys");
+  assert.equal(url.search, "");
+  assert.equal(new URLSearchParams(url.hash.slice(1)).get("unlock"), "paired-client:one.part");
 });
 
 test("a purpose is refused when unknown, mixed with an automation, or when the address is not a web address", async (t) => {

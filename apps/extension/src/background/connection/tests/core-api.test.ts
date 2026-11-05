@@ -364,6 +364,60 @@ test("a live session's binding still wins, matched by session id or else by clie
   assert.equal(await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: undefined, clientId: "client-1" }, "panel"), "project-bound");
 });
 
+function contextWith(session: Partial<FluxIQSession>) {
+  const adopted: string[] = [];
+  const context = new ProjectContext({
+    settings: () => ({ coreApiUrl: credentials.coreApiUrl }) as FluxIQSettings,
+    session: () => ({ token: TOKEN, clientId: "client-1", ...session }) as FluxIQSession,
+    adoptProjectId: async (projectId) => { adopted.push(projectId); },
+    onActivity: () => undefined,
+    lookupBoundMs: 5_000
+  });
+  return { context, adopted };
+}
+
+function coreNamingNone(firstProject: () => Response) {
+  return (url: string) => url.endsWith("/first-project") ? firstProject() : json(200, { ok: true, payload: { sessions: [], webRuntime: { automationStudio: { activeProjectId: null } } } });
+}
+
+function stubFetchByUrl(t: TestContext, respond: (url: string) => Response) {
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return respond(String(url));
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = original; });
+  return requests;
+}
+
+test("a browser with no project anywhere asks Core, by POST with no cookie, and adopts what it is given", async (t) => {
+  const requests = stubFetchByUrl(t, coreNamingNone(() => json(200, { ok: true, payload: { projectId: "project-first" } })));
+  const { context, adopted } = contextWith({});
+  assert.equal(await context.resolve("panel"), "project-first");
+  assert.deepEqual(adopted, ["project-first"]);
+  const asked = requests.filter((request) => request.url.endsWith("/api/client-gateway/first-project"));
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0]?.init.method, "POST");
+  assert.equal(asked[0]?.init.credentials, "omit");
+});
+
+test("a browser with a project stored never asks for one to be made", async (t) => {
+  const requests = stubFetchByUrl(t, coreNamingNone(() => json(200, { ok: true, payload: { projectId: "project-first" } })));
+  const { context, adopted } = contextWith({ projectId: "project-stored" });
+  assert.equal(await context.resolve("panel"), "project-stored");
+  assert.deepEqual(adopted, []);
+  assert.equal(requests.some((request) => request.url.endsWith("/first-project")), false);
+});
+
+test("when Core refuses, or makes none, there is still no project", async (t) => {
+  let answer = json(403, { ok: false, error: "Not allowed" });
+  stubFetchByUrl(t, coreNamingNone(() => answer));
+  assert.equal(await contextWith({}).context.resolve("panel"), undefined);
+  answer = json(200, { ok: true, payload: { projectId: null } });
+  assert.equal(await contextWith({}).context.resolve("panel"), undefined);
+});
+
 test("the snapshot lookup carries a timeout, so a Core that never answers cannot hold the request open", async (t) => {
   const requests = stubFetch(t, () => json(200, { ok: true, payload: { sessions: [] } }));
   await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: undefined, clientId: "client-1" }, "panel");

@@ -168,8 +168,13 @@ test("a control pressed from an earlier look, absent from the look before the pr
   const chip = shownHandle(shown, "12 Double Rolls $16.47");
   const call = { node: CLICK, parameters: { target: { handle: chip } }, consequences: [] };
 
-  assert.deepEqual(runtime.describeCall({ ...PROJECT, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: call }), { target: "12 Double Rolls $16.47" });
+  const described = runtime.describeCall({ ...PROJECT, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: call });
+  assert.equal(described?.target, "12 Double Rolls $16.47");
   const pressed = await press(runtime, "press-chip", chip);
+  // What it said before the press is what the real run kept (t870): Core's act record knows the act by it before it is sent.
+  assert.deepEqual(described?.wouldRunWith, pressed.draft?.ranWith?.parameters);
+  // Where the press left the page, which the record tells the same control on another page by.
+  assert.equal((pressed.evidence as JsonObject & { location?: string }).location, PRODUCT);
 
   assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
   assert.deepEqual(page.clicked, [CHIP]);

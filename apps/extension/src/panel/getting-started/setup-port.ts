@@ -4,4 +4,8 @@
 import type { ModelKeyReading } from "./model";
 
 /** What setup reads. A failed read answers `unknown`, never throws. */
-export type SetupPort = { readModelKey(): Promise<ModelKeyReading> };
+export type SetupPort = {
+  readModelKey(): Promise<ModelKeyReading>;
+  /** Why the key the last read found locked is locked, when the port knows. */
+  lockWords?(): string | undefined;
+};

@@ -26,7 +26,7 @@ import {
 } from "@fluxiq/client-gateway-websocket";
 import { WEB_AUTOMATION_DOMAIN_ID, webAutomationFactCheckFromGatewayCommand } from "@fluxiq-web-extension/domain/client";
 import { HEARTBEAT_INTERVAL_MS, RECONNECT_BASE_DELAY_MS, RECONNECT_MAX_DELAY_MS } from "../../shared/constants";
-import { browserDescriptor } from "../../shared/browser";
+import { browserClientLabel, browserDescriptor } from "../../shared/browser";
 import {
   browserExtensionCapabilities,
   type ClientGatewayActionResult,
@@ -158,7 +158,7 @@ function extensionHello(session: FluxIQSession, settings: FluxIQSettings): Clien
   return {
     clientId: session.clientId,
     clientType: "extension",
-    name: "FluxIQ Browser Extension",
+    name: browserClientLabel(browserDescriptor().userAgent, browserDescriptor().platform),
     version: browserDescriptor().extensionVersion,
     ...(session.token !== undefined ? { token: session.token } : {}),
     capabilities: browserExtensionCapabilities,

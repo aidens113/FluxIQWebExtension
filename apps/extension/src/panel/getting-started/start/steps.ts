@@ -69,7 +69,7 @@ const LOST_LINES: Readonly<Record<BackgroundLoss, string>> = {
  * background lost, from the panel store. `key` is the model key reading, used
  * only once connected (before that nothing can read it).
  */
-export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown"): StartGuide {
+export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolean, lost?: BackgroundLoss, key: ModelKeyReading = "unknown", lockWords?: string): StartGuide {
   const base = { gated: true, heading: HEADING, line: words.SETUP_LINE, addressLink: false, card: false };
   if (noAnswer && status === undefined) {
     return {
@@ -83,7 +83,7 @@ export function startGuide(status: ExtensionStatus | undefined, noAnswer: boolea
 
   const state = status.connectionState;
   if (state === "connected") {
-    return { ...base, gated: false, steps: [...doneSteps(), ...keySteps(key)], card: key === "missing" || key === "locked" };
+    return { ...base, gated: false, steps: [...doneSteps(), ...keySteps(key, lockWords)], card: key === "missing" || key === "locked" };
   }
 
   const paired = status.paired;
@@ -160,14 +160,14 @@ function doneSteps(): StartStep[] {
 }
 
 /** The model key and unlock steps once connected. `unknown` lists neither: nothing is claimed. */
-function keySteps(key: ModelKeyReading): StartStep[] {
+function keySteps(key: ModelKeyReading, lockWords: string | undefined): StartStep[] {
   switch (key) {
     case "ready":
       return [step("key", "Add a model key", "done", undefined, "Model key added")];
     case "missing":
       return [step("key", "Add a model key", "current", words.KEY_MISSING_LINE)];
     case "locked":
-      return [step("key", "Add a model key", "done", undefined, "Model key added"), step("unlock", "Unlock this browser once", "current", words.UNLOCK_LINE)];
+      return [step("key", "Add a model key", "done", undefined, "Model key added"), step("unlock", "Unlock this browser once", "current", lockWords ?? words.UNLOCK_LINE)];
     case "unknown":
       return [];
   }

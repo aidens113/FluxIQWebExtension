@@ -26,6 +26,24 @@ test("captures output and cleans up a running child exactly once", async () => {
   } finally { await supervisor.cleanup(); await rm(root, { recursive: true, force: true }); }
 });
 
+test("stops one process by name, leaving the others, and can start it again", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-runner-process-"));
+  const supervisor = new ProcessSupervisor();
+  const spec = (name: string) => ({ name, command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], cwd: root, env: process.env });
+  try {
+    const core = supervisor.start(spec("core"));
+    const other = supervisor.start(spec("other"));
+    await supervisor.stop("core");
+    assert.notEqual(core.exitCode ?? core.signalCode, null);
+    assert.equal(other.exitCode ?? other.signalCode, null);
+    const again = supervisor.start(spec("core"));
+    assert.equal(again.exitCode ?? again.signalCode, null);
+  } finally {
+    await supervisor.cleanup();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("reports a non-zero one-shot process as process.startup", async () => {
   const supervisor = new ProcessSupervisor();
   try {

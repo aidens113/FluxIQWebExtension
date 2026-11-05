@@ -48,6 +48,8 @@ export type PanelControlDeps = {
   readonly applySettings: (settings: FluxIQSettings) => void;
   readonly status: () => Promise<ExtensionStatus>;
   readonly openTab: (url: string) => Promise<void>;
+  /** What starts this browser's own unlock, when nobody has unlocked it yet. Asked for as the person presses; a failure leaves the keys page plain. */
+  readonly unlockTicket: () => Promise<string | undefined>;
   readonly activity: {
     readonly read: () => Promise<ExtensionActivityState>;
     readonly setOverlay: (overlay: ActivityOverlayPreference) => Promise<ExtensionActivityState>;
@@ -85,7 +87,7 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
     let automation: { projectId: string; flowId: string } | undefined;
     if (message.purpose !== undefined) {
       if (message.purpose !== "model-key" || message.runId !== undefined || message.flowId !== undefined) return relayFailure("invalid_request", "That request names an unknown purpose.");
-      const keys = fluxIQKeysAddress((await deps.readSettings()).coreApiUrl);
+      const keys = fluxIQKeysAddress((await deps.readSettings()).coreApiUrl, await deps.unlockTicket());
       if (!keys) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
       await deps.openTab(keys);
       return { ok: true, url: keys };
