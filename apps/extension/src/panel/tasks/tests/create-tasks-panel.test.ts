@@ -22,9 +22,16 @@ function host() {
 
 const settle = async (): Promise<void> => { for (let turn = 0; turn < 8; turn++) await new Promise<void>((resolve) => setTimeout(resolve, 0)); };
 
-test("without a port there is no tasks screen", () => {
-  assert.equal(createTasksPanel(context, {}, host().host), undefined);
-});
+test("without a port the build's own tasks port is used, so the screen is there", async () => withFakeDocument(async () => {
+  const scope = globalThis as { chrome?: unknown };
+  const before = scope.chrome;
+  scope.chrome = { runtime: { onMessage: { addListener: () => undefined, removeListener: () => undefined } } };
+  try {
+    assert.notEqual(createTasksPanel(context, {}, host().host), undefined);
+  } finally {
+    scope.chrome = before;
+  }
+}));
 
 test("with a port it lists the connected project's tasks and opens one in the chat as a thread", async () => withFakeDocument(async () => {
   const port = createFakeTasksPort({ tasks: Object.values(fakeTasks(NOW)) });

@@ -88,6 +88,27 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       if (attemptId && !conversationId) return deps.call("get-task-attempt", { projectId, attemptId });
       return failure("invalid_request", "That request must name one conversation or one attempt.");
     }
+    case AUTOMATION_PANEL_MESSAGES.listTasks: {
+      const limit = count(message.limit);
+      const cursor = text(message.cursor ?? undefined);
+      return deps.call("list-project-tasks", { projectId, ...(limit !== undefined ? { limit } : {}), ...(cursor ? { cursor } : {}) });
+    }
+    case AUTOMATION_PANEL_MESSAGES.listFlowSubflows: {
+      // Only the primary subflow is asked for, and only the Flow named: a panel cannot widen what the pairing token reads.
+      const flowId = text(message.flowId);
+      return flowId ? deps.call("list-flow-subflows", { projectId, flowId, role: "primary", status: "active", limit: 3, offset: 0 }) : missing("flowId");
+    }
+    case AUTOMATION_PANEL_MESSAGES.renameTask: {
+      const taskId = text(message.taskId);
+      const title = text(message.title);
+      if (!taskId) return missing("taskId");
+      if (!title) return missing("title");
+      return deps.call("rename-task", { projectId, taskId, title });
+    }
+    case AUTOMATION_PANEL_MESSAGES.removeTask: {
+      const taskId = text(message.taskId);
+      return taskId ? deps.call("remove-task", { projectId, taskId }) : missing("taskId");
+    }
     case AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt: {
       // It spends the person's own key, so exactly these three fields go to Core, and the amount must be a number of dollars.
       const attemptId = text(message.attemptId);
@@ -148,6 +169,10 @@ function field(value: unknown, key: string): unknown {
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function count(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 function missing(name: string): PanelRelayResponse {

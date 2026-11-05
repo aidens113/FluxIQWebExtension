@@ -1,11 +1,11 @@
-// The library's port over the panel messages for saved parts: list, get and run. Core's answer comes back as the
+// The library's port over the panel messages for saved parts: list, get, save and run. Core's answer comes back as the
 // background relays it, `{ ok: true, payload }`. A refusal is an ordinary payload and so a value here, and a failed
 // request is a failed `ChatResult`. Nothing throws.
 
-import type { ChatResult, SubflowLibraryPort, SubflowRefusal } from "@fluxiq/ui-components";
+import type { ChatResult, SubflowLibraryPort, SubflowReading, SubflowRefusal } from "@fluxiq/ui-components";
 import { AUTOMATION_PANEL_MESSAGES } from "../../shared/protocol";
 import type { PanelStore } from "../state";
-import { readDetail, readListing, readOutcome, readRefusal } from "./read";
+import { nameCallers, readDetail, readFlowNames, readListing, readOutcome, readRefusal, readSave } from "./read";
 
 const UNREADABLE = "FluxIQ answered in a way this panel could not read.";
 
@@ -20,12 +20,27 @@ async function ask<T>(request: PanelStore["request"], message: { type: string } 
   return value === undefined ? { ok: false, sentence: UNREADABLE } : { ok: true, value };
 }
 
+/** Names the automations that use a subflow, from the automations list. A list that cannot be read leaves them unnamed: the detail still shows. */
+async function withFlowNames(request: PanelStore["request"], answer: ChatResult<SubflowReading | SubflowRefusal>): Promise<ChatResult<SubflowReading | SubflowRefusal>> {
+  if (!answer.ok || answer.value.refused || !answer.value.detail.callers.some((caller) => caller.kind === "flow" && caller.flowId !== undefined)) return answer;
+  const listed = await request<{ payload?: unknown }>({ type: AUTOMATION_PANEL_MESSAGES.listAutomations });
+  if (!listed.ok) return answer;
+  return { ok: true, value: { ...answer.value, detail: nameCallers(answer.value.detail, readFlowNames(listed.value.payload)) } };
+}
+
 /** The library over the background's parts messages. Only the fields that were given are sent. */
 export function createPartsLibraryPort(request: PanelStore["request"]): SubflowLibraryPort {
   return {
     list: ({ projectId, text, limit, cursor }) =>
       ask(request, { type: AUTOMATION_PANEL_MESSAGES.listParts, projectId, ...(text === undefined || text.trim() === "" ? {} : { query: text.trim() }), ...(limit === undefined ? {} : { limit }), ...(cursor ? { cursor } : {}) }, readListing),
-    read: ({ projectId, partId, version }) => ask(request, { type: AUTOMATION_PANEL_MESSAGES.getPart, projectId, partId, ...(version === undefined ? {} : { version }) }, readDetail),
+    read: async ({ projectId, partId, version }) =>
+      withFlowNames(request, await ask(request, { type: AUTOMATION_PANEL_MESSAGES.getPart, projectId, partId, ...(version === undefined ? {} : { version }) }, readDetail)),
+    save: ({ projectId, flowId, subflowId, name, purpose }) =>
+      ask(
+        request,
+        { type: AUTOMATION_PANEL_MESSAGES.savePart, projectId, flowId, subflowId, ...(name === undefined || name.trim() === "" ? {} : { name: name.trim() }), ...(purpose === undefined || purpose.trim() === "" ? {} : { purpose: purpose.trim() }) },
+        readSave
+      ),
     run: ({ projectId, partId, version, inputs, permitted, acknowledgedRepeat }) =>
       ask(
         request,

@@ -12,6 +12,7 @@ export { ContentAttachment, type ContentAttachmentDeps } from "./content-attachm
 export {
   callCoreProgram,
   fetchCoreRecordings,
+  fetchProjectFromCoreSnapshot,
   fetchProjectIdFromCoreSnapshot,
   uploadStateAsset,
   type CoreApiCredentials

@@ -15,7 +15,7 @@ import type { AddressInfo } from "node:net";
 import test, { type TestContext } from "node:test";
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
-import { callCoreProgram, fetchProjectIdFromCoreSnapshot, uploadTraceArtifact } from "../core-api";
+import { callCoreProgram, fetchProjectFromCoreSnapshot, fetchProjectIdFromCoreSnapshot, uploadTraceArtifact } from "../core-api";
 import { ProjectContext } from "../project-context";
 
 const TOKEN = "secret-pairing-token";
@@ -180,6 +180,7 @@ type ContextHarness = {
   context: ProjectContext;
   readonly session: FluxIQSession;
   readonly adopted: string[];
+  readonly named: string[];
   readonly activity: Array<{ label: string; tone: ActivityEntry["tone"] | undefined }>;
   clock: number;
 };
@@ -187,7 +188,7 @@ type ContextHarness = {
 function projectContext(stored: string | null | undefined, options: { token?: string | null; lookupBoundMs?: number } = {}): ContextHarness {
   const session: FluxIQSession = { clientId: "client-1", sessionId: "session-1", projectId: stored };
   if (options.token !== null) session.token = options.token ?? TOKEN;
-  const harness = { session, adopted: [] as string[], activity: [] as ContextHarness["activity"], clock: 1_000_000 } as ContextHarness;
+  const harness = { session, adopted: [] as string[], named: [] as string[], activity: [] as ContextHarness["activity"], clock: 1_000_000 } as ContextHarness;
   harness.context = new ProjectContext({
     settings: () => ({ coreApiUrl: credentials.coreApiUrl }) as FluxIQSettings,
     session: () => harness.session,
@@ -195,6 +196,7 @@ function projectContext(stored: string | null | undefined, options: { token?: st
       harness.adopted.push(projectId);
       harness.session.projectId = projectId;
     },
+    onProjectName: () => { harness.named.push(harness.context.currentName() ?? "none"); },
     onActivity: (_kind, label, _detail, tone) => { harness.activity.push({ label, tone }); },
     now: () => harness.clock,
     ...(options.lookupBoundMs !== undefined ? { lookupBoundMs: options.lookupBoundMs } : {})
@@ -494,4 +496,40 @@ test("without a token nothing is sent", async (t) => {
   const requests = stubTraceFetch(t, () => new Response(null, { status: 201 }));
   await assert.rejects(uploadTraceArtifact({ coreApiUrl: credentials.coreApiUrl, token: undefined }, DIGEST, new Uint8Array([1]), "image/png", 1_000));
   assert.equal(requests.length, 0);
+});
+
+// Core says what the project it has open is called, so Settings can name it. A project the session holds that is not the open one has no name here.
+test("the snapshot names the project Core has open, and only that one", async (t) => {
+  stubFetch(t, () => json(200, {
+    ok: true,
+    payload: {
+      sessions: [{ sessionId: "session-live", clientId: "client-1", status: "ready", projectId: "project-bound" }],
+      webRuntime: { automationStudio: { activeProjectId: "project-studio", activeProjectName: " Company website " } }
+    }
+  }));
+  const bound = await fetchProjectFromCoreSnapshot(credentials, { sessionId: "session-live", clientId: "client-1" }, "panel");
+  assert.deepEqual(bound, { projectId: "project-bound" });
+  const open = await fetchProjectFromCoreSnapshot(credentials, { sessionId: "gone", clientId: "other" }, "panel");
+  assert.deepEqual(open, { projectId: "project-studio", projectName: "Company website" });
+});
+
+test("Core's name for the current project is kept beside it, told once, and never carried to another project", async (t) => {
+  stubFetch(t, () => json(200, { ok: true, payload: { sessions: [], webRuntime: { automationStudio: { activeProjectId: "project-1", activeProjectName: "Company website" } } } }));
+  const h = projectContext("project-1");
+  assert.equal(h.context.currentName(), undefined);
+  assert.equal(await h.context.resolve("panel"), "project-1");
+  assert.equal(h.context.currentName(), "Company website");
+  assert.deepEqual(h.named, ["Company website"]);
+  await h.context.resolve("panel again");
+  assert.deepEqual(h.named, ["Company website"], "the same name is not told twice");
+  h.session.projectId = "project-2";
+  assert.equal(h.context.currentName(), undefined, "the stored project is now another one");
+});
+
+test("a project Core gives no name for has none", async (t) => {
+  stubFetch(t, () => json(200, { ok: true, payload: { sessions: [], webRuntime: { automationStudio: { activeProjectId: "project-1" } } } }));
+  const h = projectContext("project-1");
+  await h.context.resolve("panel");
+  assert.equal(h.context.currentName(), undefined);
+  assert.deepEqual(h.named, []);
 });

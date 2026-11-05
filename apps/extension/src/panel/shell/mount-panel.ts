@@ -89,7 +89,8 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: Pane
     askAbout: (text) => {
       dispatch({ type: "tab", tab: "chat" });
       chat.fillComposer(text);
-    }
+    },
+    openFlow: (flow) => void chooseAutomation(flow, { open: openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }) })
   });
   const automations = createAutomationsTab(context, {
     choose: (row) => {

@@ -9,7 +9,7 @@
 // here: its relays pass a named project through untouched.
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../shared/protocol";
-import { askCoreForFirstProject, fetchProjectIdFromCoreSnapshot } from "./core-api";
+import { askCoreForFirstProject, fetchProjectFromCoreSnapshot } from "./core-api";
 
 // A Core answer is reused this long, so a burst of reads (the panel opening,
 // one snapshot per runtime step) asks Core once rather than once each.
@@ -25,6 +25,8 @@ export type ProjectContextDeps = {
   readonly session: () => FluxIQSession;
   // Records a project Core named on the session and persists it.
   readonly adoptProjectId: (projectId: string) => Promise<void>;
+  // Told when Core names the current project's name, which the status carries to the panel.
+  readonly onProjectName?: () => void;
   readonly onActivity: (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => void;
   readonly now?: () => number;
   readonly lookupBoundMs?: number;
@@ -42,6 +44,8 @@ export class ProjectContext {
   // has no project, which is different from not yet knowing.
   private activeRecordingProjectId: string | null | undefined;
   private lookup: CoreLookup | undefined;
+  // What Core last called a project, kept here only: a restarted worker learns it again at the next read.
+  private named: { readonly projectId: string; readonly name: string } | undefined;
 
   constructor(private readonly deps: ProjectContextDeps) {}
 
@@ -56,6 +60,12 @@ export class ProjectContext {
   /** The best project known without asking Core: the recording's, else the stored one. */
   current(): string | undefined {
     return nonEmpty(this.activeRecordingProjectId ?? this.deps.session().projectId);
+  }
+
+  /** What Core calls the current project, or nothing when it has not said or the project has since changed. */
+  currentName(): string | undefined {
+    const project = this.current();
+    return this.named !== undefined && this.named.projectId === project ? this.named.name : undefined;
   }
 
   /**
@@ -108,7 +118,8 @@ export class ProjectContext {
     if (!token) return undefined;
     try {
       const credentials = { coreApiUrl: this.deps.settings().coreApiUrl, token };
-      const named = nonEmpty(await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: session.sessionId, clientId: session.clientId }, reason));
+      const found = await fetchProjectFromCoreSnapshot(credentials, { sessionId: session.sessionId, clientId: session.clientId }, reason);
+      const named = nonEmpty(found?.projectId);
       // Core read none: asked once this browser has nothing stored either, since a browser's chat has nowhere to be without one.
       const projectId = named ?? (this.current() ? undefined : nonEmpty(await askCoreForFirstProject(credentials)));
       if (!projectId) return undefined;
@@ -118,6 +129,7 @@ export class ProjectContext {
         await this.deps.adoptProjectId(projectId);
         this.deps.onActivity("recording", "Project context linked", projectId, "success");
       }
+      this.learnName(projectId, named === projectId ? found?.projectName : undefined);
       return projectId;
     } catch (error) {
       // With a stored project to fall back on, an unreachable Core changes
@@ -128,6 +140,12 @@ export class ProjectContext {
       }
       return undefined;
     }
+  }
+
+  private learnName(projectId: string, name: string | undefined): void {
+    const before = this.named;
+    this.named = name ? { projectId, name } : this.named?.projectId === projectId ? this.named : undefined;
+    if (before?.projectId !== this.named?.projectId || before?.name !== this.named?.name) this.deps.onProjectName?.();
   }
 
   private now(): number {
