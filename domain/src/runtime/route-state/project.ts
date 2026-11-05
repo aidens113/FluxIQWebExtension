@@ -18,6 +18,7 @@ import type { JsonObject } from "fluxiq/core";
 import { actionableEvidenceElement } from "../llm-evidence/elements";
 import { webLlmReadableWords } from "../llm-evidence/page-view/element";
 import type { WebLlmPageEvidence } from "../llm-evidence";
+import { webRouteControlsLine } from "./controls-line";
 
 const LIST_SEPARATOR = " | ";
 
@@ -39,7 +40,8 @@ export function webAutomationRouteState(evidence: WebLlmPageEvidence): JsonObjec
   // the capture's spaced `readable` words, "12 Double Rolls $16.47" and not
   // "12 Double Rolls$16.47" (U-B3-3). `name` and `text` themselves stay as
   // captured; identity compares them.
-  const controls = joinedNames(evidence.elements.filter((element) => element.hidden !== true && actionableEvidenceElement(element)).map((element) => webLlmReadableWords(element, element.name ?? element.text) ?? ""));
+  // The headings they fell under are written in the line (`./controls-line.ts`).
+  const controls = webRouteControlsLine(evidence.elements.filter((element) => element.hidden !== true && actionableEvidenceElement(element)).map((element) => ({ name: webLlmReadableWords(element, element.name ?? element.text) ?? "", heading: element.heading })));
   if (controls) page.controls = controls;
   return { page };
 }
