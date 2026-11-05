@@ -83,7 +83,7 @@ import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
-import { webNodeRefusedBecause, webNodeReplayMissingTarget } from "./missing-target";
+import { webNodePassRowReason, webNodeRefusedBecause, webNodeReplayMissingTarget } from "./missing-target";
 import { webNodeNamedControlShown } from "./named-control-shown";
 import { webNodePageChanges, webNodePageNotice } from "./press-effect";
 import {
@@ -457,7 +457,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   const said = moved?.said ?? readSaid(payload, where) ?? "the step ran again";
   // What it changed on the page it stayed on, as an exploration press says it (`./press-effect/page-changes.ts`).
   const after = before === undefined ? undefined : await replayPage(run, false);
-  const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed, actionability }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
+  const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: onARow ? webNodePassRowReason(result) : undefined, nodeId: undefined, assumed, actionability }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
   // A read's outputs, on the ports the Flow's own node fills, for the test's later steps to read (D6, t646).
   const outputs = replayedReadOutputs(node.actionType, resolvedParameters, payload);
   // A list read's rows and command, so a later pass whose row went stale can read it again (`./retries/replayed-reads.ts`, t786).

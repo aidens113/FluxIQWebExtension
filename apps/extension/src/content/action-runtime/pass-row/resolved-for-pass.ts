@@ -71,7 +71,8 @@ type Placed = { context?: DomElementContext | undefined };
 export function resolvedForPass<Target extends Placed, Resolved extends { element: Element }, Failure>(
   target: Target | undefined,
   resolve: (recorded: Target | undefined) => PassOutcome<Resolved, Failure>,
-  placed: (built: Resolved, element: Element) => Resolved
+  placed: (built: Resolved, element: Element) => Resolved,
+  marked: (resolved: Resolved, passRow: "own" | "page-level-link") => Resolved = (resolved) => resolved
 ): PassOutcome<Resolved, Failure> {
   const record = target?.context?.record;
   if (!target || !record?.values?.length) return resolve(target);
@@ -81,17 +82,17 @@ export function resolvedForPass<Target extends Placed, Resolved extends { elemen
     built = resolve(asBuilt);
     if ("resolved" in built && !sitsInRepeatedRow(built.resolved.element)) {
       const aim = passRowAim(built.resolved.element, record);
-      if (aim.kind === "as-built") return built;
-      if (aim.kind === "copy") return { resolved: placed(built.resolved, aim.element) };
+      if (aim.kind === "as-built") return aim.passRow ? { resolved: marked(built.resolved, aim.passRow) } : built;
+      if (aim.kind === "copy") return { resolved: marked(placed(built.resolved, aim.element), "own") };
     }
   }
   const inRow = resolve(target);
-  if ("resolved" in inRow) return inRow;
+  if ("resolved" in inRow) return { resolved: marked(inRow.resolved, "own") };
   built ??= resolve(asBuilt);
   if (!("resolved" in built)) return inRow;
   const aim = passRowAim(built.resolved.element, record);
   const copy = placedInPassRow(built.resolved.element, record) ?? (aim.kind === "copy" ? aim.element : undefined);
-  return copy ? { resolved: placed(built.resolved, copy) } : inRow;
+  return copy ? { resolved: marked(placed(built.resolved, copy), "own") } : inRow;
 }
 
 /** Whether the row is the only thing that places the target: values, and no `key`, `text` or `listPosition` the build recorded. */

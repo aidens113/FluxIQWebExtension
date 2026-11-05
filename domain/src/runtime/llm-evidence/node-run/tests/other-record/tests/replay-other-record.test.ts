@@ -43,7 +43,7 @@ test("a press refused because its match is another row's control fails, and is n
 });
 
 test("a pass on a row whose own control is not found says so beside the code it reads as, for a forward run; a step with no row does not", async () => {
-  const onARow = async (resolution: JsonObject | undefined) => await createWebAutomationLlmEvidenceRuntime(site(resolution)).executeTool({ ...PROJECT, callId: "fw.3.pass.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { ...VALUE, item: { title: "Second order" } } });
+  const onARow = async (resolution: JsonObject | undefined) => await createWebAutomationLlmEvidenceRuntime(site(resolution)).executeTool({ ...PROJECT, callId: "fw.3.pass.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: Object.assign({}, VALUE, { item: { title: "Second order" } }) });
   const refused = await onARow({ strategy: "selector", candidateCount: 1, refusedBecause: "other-record" });
   assert.equal(refused.resultCode, "core.replay.failed");
   assert.equal(refused.resultReason, "row_control_not_found");
@@ -53,6 +53,17 @@ test("a pass on a row whose own control is not found says so beside the code it 
   assert.equal(remembered.resultReason, "row_control_not_found");
   assert.equal((await replay({ strategy: "selector", candidateCount: 1 })).resultReason, undefined);
   assert.notEqual((await replay({ strategy: "selector", candidateCount: 1, refusedBecause: "other-record" })).resultReason, "row_control_not_found");
+});
+
+test("a pass's press that ran says what the page said of its row; one with no row, or no word, says nothing", async () => {
+  const pressed = (resolution: JsonObject | undefined, item?: JsonObject) => createWebAutomationLlmEvidenceRuntime(Object.assign(site(undefined), {
+    executeAction: async (_session: string, command: { actionType: string }) => command.actionType === "web.dom.click" ? { status: "succeeded", payload: resolution ? { resolution } : {} } : { status: "succeeded", payload: {} }
+  }) as WebLlmEvidenceGateway).executeTool({ ...PROJECT, callId: "fw.3.pass.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: item ? Object.assign({}, VALUE, { item }) : VALUE });
+  const row = { title: "Second order" };
+  assert.equal((await pressed({ strategy: "selector", candidateCount: 1, passRow: "page-level-link" }, row)).resultReason, "row_left_behind");
+  assert.equal((await pressed({ strategy: "selector", candidateCount: 1, passRow: "own" }, row)).resultReason, "row_own_control");
+  assert.equal((await pressed({ strategy: "selector", candidateCount: 1 }, row)).resultReason, undefined);
+  assert.equal((await pressed({ strategy: "selector", candidateCount: 1, passRow: "own" })).resultReason, undefined);
 });
 
 test("the same miss without the refusal word is still remembered on the page it acted on", async () => {

@@ -29,6 +29,12 @@
 //      a toolbar's button and a form's field are the same control on every pass, and
 //      no part around them ever holds a row's values.
 //
+// **A link that goes as page-level leaves the row behind.** Step 4's link is not a row's as far as anything
+// shows, so it may go: a pass's own way back to a list is such a link. But it moves the page, and from there
+// nothing says the pass stands on its row, so the answer says so (`passRow`), and no later lasting step of that
+// pass lands until a step finds its row again (`AS/runtime/llm/node-tools/replay/span.ts`,
+// `SVC/answer-first/run-acts/run-gate.ts`). An answer the row placed says that too.
+//
 // "Refused" is no answer here: the caller goes on to the gated resolution, which fails
 // not found, saying the match was another row's, and the step reports that row.
 
@@ -43,9 +49,11 @@ const MAX_CLIMB = 6;
 const MAX_PART_NODES = 2_000;
 
 /** What a pass does with an answer in no recognised row. */
-export type PassRowAim = { kind: "as-built" } | { kind: "copy"; element: Element } | { kind: "refused" };
+export type PassRowAim = { kind: "as-built"; passRow?: "own" | "page-level-link" } | { kind: "copy"; element: Element } | { kind: "refused" };
 
 const AS_BUILT: PassRowAim = { kind: "as-built" };
+const OWN: PassRowAim = { kind: "as-built", passRow: "own" };
+const LEFT_BEHIND: PassRowAim = { kind: "as-built", passRow: "page-level-link" };
 const REFUSED: PassRowAim = { kind: "refused" };
 
 /** The answer `built`, asked about the pass's row (header). */
@@ -54,19 +62,24 @@ export function passRowAim(built: Element, record: RecordIdentity): PassRowAim {
   if (values.length === 0) return AS_BUILT;
   if (onAnotherRowsPage(values)) return REFUSED;
   const link = linkToRow(built, values);
-  if (link === "own") return AS_BUILT;
+  if (link === "own") return OWN;
   if (link === "another") {
     const own = elementLinkingToRow(values, sameShaped(built));
     return own ? { kind: "copy", element: own } : REFUSED;
   }
   const around = rowsAround(built);
-  if (!around) return AS_BUILT;
-  if (rowHoldsValues(around.row, values)) return AS_BUILT;
+  if (!around) return pageLevel(built);
+  if (rowHoldsValues(around.row, values)) return OWN;
   const holding = around.others.filter((other) => rowHoldsValues(other, values));
   const copy = holding.length === 1 ? followSlot(holding[0] as Element, around.slot) : undefined;
   if (copy && sameShape(copy, built) && differsOnlyByRowData(built, copy, values)) return { kind: "copy", element: copy };
   if (holding.length > 0) return REFUSED;
-  return built.hasAttribute("href") && carriesOwnContent(built) ? REFUSED : AS_BUILT;
+  return built.hasAttribute("href") && carriesOwnContent(built) ? REFUSED : pageLevel(built);
+}
+
+/** What goes as page-level says so where it is a link, which moves the page (header). */
+function pageLevel(built: Element): PassRowAim {
+  return built.hasAttribute("href") ? LEFT_BEHIND : AS_BUILT;
 }
 
 /** Whether two elements are two stampings of one template: the same tag, written role and class attribute. */

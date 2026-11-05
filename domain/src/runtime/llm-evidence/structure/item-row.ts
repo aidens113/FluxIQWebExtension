@@ -26,6 +26,8 @@ import type { WebLlmPageEvidence } from "../sanitize";
 
 /** The most of an item's lines said. */
 const MOST_LINES = 2;
+/** The most characters of an item's whole words kept for the record. */
+const MOST_WHOLE_CHARACTERS = 2_000;
 /** The most characters of an item's words said, past which they are cut. */
 const MOST_CHARACTERS = 80;
 
@@ -43,6 +45,19 @@ export function webLlmItemRow(evidence: Pick<WebLlmPageEvidence, "elements">, ha
   return words === undefined || words.trim() === "" ? place : `${place} (${cut(words)})`;
 }
 
+/**
+ * `webLlmItemRow` with every line its item printed, uncut as far as `MOST_WHOLE_CHARACTERS`: what a read of that item
+ * can have read, whichever of its columns it kept. For the record, which compares it with a read's rows
+ * (`AS/runtime/answer-first/act-record/row-ties.ts`), where two lines cut short could share no word with them.
+ */
+export function webLlmItemWholeWords(evidence: Pick<WebLlmPageEvidence, "elements">, handle: string): string | undefined {
+  const element = evidence.elements.find((candidate) => candidate.target === handle);
+  const place = element === undefined ? undefined : placeOf(element);
+  if (element === undefined || place === undefined) return undefined;
+  const words = [lineWords(evidence.elements, element, Number.POSITIVE_INFINITY), element.within].filter((each) => each !== undefined && each.trim() !== "").join(", ");
+  return words === "" ? place : `${place} (${words.replace(/\s+/gu, " ").trim().slice(0, MOST_WHOLE_CHARACTERS)})`;
+}
+
 /** Where the element is, as the page view's marker says it; a one-item list is no place. */
 function placeOf(element: WebLlmEvidenceElement): string | undefined {
   if (element.item !== undefined && element.item.total > 1) return `item ${element.item.index}/${element.item.total}`;
@@ -51,7 +66,7 @@ function placeOf(element: WebLlmEvidenceElement): string | undefined {
 }
 
 /** The words of the lines printed under the same marker as the element's own line, or `undefined` when it has no line or they say nothing. */
-function lineWords(elements: readonly WebLlmEvidenceElement[], element: WebLlmEvidenceElement): string | undefined {
+function lineWords(elements: readonly WebLlmEvidenceElement[], element: WebLlmEvidenceElement, most = MOST_LINES): string | undefined {
   const lines = chosenWebLlmLines(elements, webLlmPageTree(elements));
   const at = lines.findIndex((line) => line.element === element);
   if (at < 0) return undefined;
@@ -63,7 +78,7 @@ function lineWords(elements: readonly WebLlmEvidenceElement[], element: WebLlmEv
   for (const line of lines.slice(first, last + 1)) {
     const words = rowWords(line);
     if (words !== undefined && !said.includes(words)) said.push(words);
-    if (said.length === MOST_LINES) break;
+    if (said.length >= most) break;
   }
   return said.length > 0 ? said.join(", ") : undefined;
 }

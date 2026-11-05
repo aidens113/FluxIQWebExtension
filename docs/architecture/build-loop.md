@@ -453,7 +453,12 @@ copy in the same place of the part that holds the row's values, is what the pass
 on, never a position; and nothing is pressed on another row's own page
 (`pass-row/item-address.ts`). A pass whose own control cannot be found answers its
 code with the reason `row_control_not_found`, which a forward run tells the model by
-the row's name, going on to the next row. Until extract_list rows carry an anchor
+the row's name, going on to the next row. A link nothing shows to be the row's still goes as a
+page-level control, and its resolution says so (`passRow: "page-level-link"`): nothing then says
+the pass stands on its row, so no later lasting step of that pass lands until a step's
+resolution says `own` again. A press's answer also carries its item's whole words
+(`actedOnItem`), which the act record finds its row by: the sentence the model reads is cut short
+and names the control, whose name a column may repeat on every row. Until extract_list rows carry an anchor
 (P6, not built), two rows with equal values cannot be told apart.
 
 ## The Rows A List Read Gives The Test

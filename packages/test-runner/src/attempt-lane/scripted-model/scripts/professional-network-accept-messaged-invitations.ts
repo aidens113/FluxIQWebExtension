@@ -7,8 +7,11 @@ import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type 
  * `reshape`: the Flow's own read is written after the press, under other column names and with a column
  * the first read had not, and its press is written for a row the loop will reach. So the row a pass
  * carries really differs from the row the press was noted on, which is what this form exists to prove.
+ * `thin`: the read keeps only the message, so what the page says of the press by hand, its row's first lines
+ * and its control's name, shares no word with the row the record holds unless the whole item is compared. The
+ * row pressed by hand must be left out and every other row pressed, each once.
  */
-export type AcceptMessagedForm = "plain" | "reshape";
+export type AcceptMessagedForm = "plain" | "reshape" | "thin";
 
 const ACT = ["modify_existing"];
 const READ_NODE = "web.output.dom-extract_list";
@@ -121,8 +124,8 @@ const decideOf = (form: AcceptMessagedForm): ScriptedReply => (request) => {
   }
   const columns = columnsOf(fieldsOf(structure));
   const withMessage = [{ field: columns.message, is: "present" }];
-  if (!made.has("read-invitations")) return toolCall("Read the invitations, keeping those with a message.", "read-invitations", "core.run_node", readOf(structure, { name: columns.name, message: columns.message }, withMessage), form === "plain");
-  if (!made.has("accept-first")) return toolCall("Accept the first invitation that has a message, by hand, to see that it works.", "accept-first", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: acceptOf(page, "Ximena Ruiz") } }, consequences: ACT }, form === "plain");
+  if (!made.has("read-invitations")) return toolCall("Read the invitations, keeping those with a message.", "read-invitations", "core.run_node", readOf(structure, form === "thin" ? { message: columns.message } : { name: columns.name, message: columns.message }, withMessage), form !== "reshape");
+  if (!made.has("accept-first")) return toolCall("Accept the first invitation that has a message, by hand, to see that it works.", "accept-first", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: acceptOf(page, "Ximena Ruiz") } }, consequences: ACT }, form !== "reshape");
   if (form === "reshape" && !made.has("write-read")) return toolCall("Write the Flow's read of the list, with the columns the Flow will carry.", "write-read", "core.run_node", { ...readOf(structure, { person: columns.name, note: columns.message, headline: columns.headline }, withMessage), write: true });
   if (form === "reshape" && !made.has("write-accept")) return toolCall("Write the accept as a step of the Flow, for the rows the repeat reaches.", "write-accept", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: acceptOf(page, "Lucia Romano") } }, consequences: ACT, write: true });
   if (!made.has("forward") && !repeating(request)) {
@@ -146,7 +149,7 @@ const MOST_DECISIONS = 24;
 
 /** `professional-network-accept-messaged-invitations`, in the form asked for. A wrong form name is refused rather than run as another. */
 export function professionalNetworkAcceptMessagedScript(form: string = "plain"): ScriptedModelScript {
-  if (form !== "plain" && form !== "reshape") throw new Error(`This script has no form "${form}". It has plain and reshape`);
+  if (form !== "plain" && form !== "reshape" && form !== "thin") throw new Error(`This script has no form "${form}". It has plain, reshape and thin`);
   const decide = decideOf(form);
   return Object.freeze({
     taskId: "professional-network-accept-messaged-invitations",

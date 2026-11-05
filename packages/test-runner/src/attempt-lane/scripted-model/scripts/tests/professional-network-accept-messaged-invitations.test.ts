@@ -48,6 +48,13 @@ test("it reads the rows with a message, keeping the columns the task asks for", 
   assert.deepEqual(read.input?.parameters?.extractList.where, [{ field: "x_blockquote", is: "present" }]);
 });
 
+test("the thin form's read keeps only the message, and its press is still the first row's own control", () => {
+  const read = decide("thin", [DETECTED]);
+  assert.equal(read.callId, "read-invitations");
+  assert.deepEqual(Object.keys(read.input?.parameters?.extractList.fields), ["message"]);
+  assert.equal(decide("thin", [DETECTED, made("read-invitations")]).callId, "accept-first");
+});
+
 test("the press by hand is on the first row's own control, declares its act, and is read from the page", () => {
   const press = decide("plain", [DETECTED, made("read-invitations")]);
   assert.equal(press.callId, "accept-first");

@@ -110,6 +110,13 @@ function actedOnLocation(value: JsonObject): string | undefined {
   return typeof from?.location === "string" && from.location ? from.location : undefined;
 }
 
+/** What a pass's answer says of its row, from the closed word its resolution carries (`actions/types.ts`), for Core (`AS/runtime/llm/node-tools/replay/replay.ts`). */
+export function webNodePassRowReason(result: { payload?: unknown }): "row_left_behind" | "row_own_control" | undefined {
+  const payload = result.payload;
+  const resolution = isJsonRecord(payload) && isJsonRecord(payload.resolution) ? payload.resolution : undefined;
+  return resolution?.passRow === "page-level-link" ? "row_left_behind" : resolution?.passRow === "own" ? "row_own_control" : undefined;
+}
+
 /** The closed word a failed result's resolution carries when the match was another row's control, or nothing (header, t792). */
 export function webNodeRefusedBecause(result: { payload?: unknown }): "other-record" | undefined {
   const payload = result.payload;

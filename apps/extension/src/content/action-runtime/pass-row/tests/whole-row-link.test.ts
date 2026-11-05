@@ -116,6 +116,38 @@ test("a title link beside other things in a plain card is re-aimed the same way"
   }
 });
 
+test("a title link with a read that kept no link and its row not drawn goes as page-level, and says the row is left behind; the row placed says its own", (t) => {
+  const cards = [titledCard(dish(0)), titledCard(dish(2))];
+  install(t, cards);
+  const selector = "main > section > div > div:nth-of-type(1) > a";
+  const click = (values: string[]) => clickOn(selector, { tagName: "a", implicitRole: "link", accessibleName: dish(0).title, classNames: ["name"] }, values);
+  const missing = resolveTarget(click(rowOf(dish(1), false)));
+  assert.equal(missing.element, linkIn(cards[0] as StubElement));
+  assert.equal(missing.resolution.passRow, "page-level-link");
+  assert.equal(resolveTarget(click(rowOf(dish(2), false))).resolution.passRow, "own");
+  assert.equal(resolveTarget(click(rowOf(dish(0), false))).resolution.passRow, "own");
+});
+
+test("a plain navigation link in a pass may go, and says the row is left behind; a button that stays on the page says nothing", (t) => {
+  const home = el("a", { class: "nav", href: "/shop/" }, "Home");
+  const close = el("button", { class: "shut" }, "Close");
+  install(t, DISHES.map(wholeCard), [home, close]);
+  const nav = resolveTarget(clickOn("aside > a", { tagName: "a", implicitRole: "link", accessibleName: "Home", classNames: ["nav"] }, rowOf(dish(1))));
+  assert.equal(nav.element, home as unknown as Element);
+  assert.equal(nav.resolution.passRow, "page-level-link");
+  const button = resolveTarget(clickOn("aside > button", { tagName: "button", implicitRole: "button", accessibleName: "Close", classNames: ["shut"] }, rowOf(dish(1))));
+  assert.equal(button.element, close as unknown as Element);
+  assert.equal(button.resolution.passRow, undefined);
+});
+
+test("a row's own link, or its copy, says its own", (t) => {
+  const cards = DISHES.map(wholeCard);
+  install(t, cards);
+  assert.equal(resolveTarget(cardClick(rowOf(dish(0)))).resolution.passRow, "own");
+  assert.equal(resolveTarget(cardClick(rowOf(dish(1)))).resolution.passRow, "own");
+  assert.equal(resolveTarget(cardClick(rowOf(dish(1), false))).resolution.passRow, "own");
+});
+
 test("a toolbar in boxes of one shape stays page-level: no part of it holds a row's values, and its button is no card", (t) => {
   const tool = (label: string, count: string): StubElement => el("div", { class: "tool" }, el("button", { class: "act" }, label), el("span", {}, count));
   const keep = tool("Keep", "3");

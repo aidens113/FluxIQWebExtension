@@ -26,7 +26,7 @@ export {
   type WebLlmExtractionHandles,
   type WebLlmExtractionHandleScope
 } from "./handles";
-export { webLlmItemRow } from "./item-row";
+export { webLlmItemRow, webLlmItemWholeWords } from "./item-row";
 export type { WebLlmColumnType } from "./column-type";
 export type { WebLlmStructureItem, WebLlmStructureMark } from "./list-items";
 export {
