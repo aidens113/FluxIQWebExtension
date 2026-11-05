@@ -7,4 +7,6 @@ export type { AttemptDriver, AttemptOutcome, AttemptRecord, AttemptSavedState, A
 export { attemptReportRow, attemptSeries, renderAttemptSeries } from "./report.js";
 export { runAttemptProof, type AttemptProofChecks, type AttemptProofOptions, type AttemptProofResult } from "./run-attempt-proof.js";
 export { runAttemptSeries, type AttemptSeriesResult } from "./run-attempt-series.js";
+export * from "./live/index.js";
 export * from "./scripted/index.js";
+export * from "./scripted-model/index.js";

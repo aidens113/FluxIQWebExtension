@@ -45,9 +45,21 @@ export type AnswerShownOutcome = (typeof answerShownOutcomes)[number];
 export const flowScores = ["unproven", "playback_held", "playback_failed", "replay_held"] as const;
 export type FlowScore = (typeof flowScores)[number];
 
-/** Which inputs of a score were scripted rather than read from Core, so a stand-in can never pass as the product. */
-export const attemptStandIns = ["attempt_record", "stored_rows", "chat_turn", "exploration", "workspace", "spend"] as const;
+/**
+ * Which inputs of a score were scripted rather than read from Core, so a stand-in can never pass as the product.
+ *
+ * `model` is the scripted Anthropic server every model call of a run went to, and `spend` the
+ * calls, tokens and dollars that follow from its made-up usage. With `model` on a row the rest of
+ * the road is the product's and the choices are a script's, so it proves the road and nothing of
+ * what a model would do.
+ */
+export const attemptStandIns = ["attempt_record", "stored_rows", "chat_turn", "exploration", "workspace", "spend", "model"] as const;
 export type AttemptStandIn = (typeof attemptStandIns)[number];
+
+/** Whether a score or a row with these stand-ins counts as a live result. Any stand-in at all means it does not. */
+export function attemptCountsAsLive(standIns: readonly AttemptStandIn[]): boolean {
+  return standIns.length === 0;
+}
 
 /** An act that landed more than asked, by its name in the Lab's table. Words the Lab wrote, never page text. */
 export type RepeatedActReport = { name: string; asked: number; landed: number };

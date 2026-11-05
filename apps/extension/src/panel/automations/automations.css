@@ -39,3 +39,15 @@
 .strip-exports { display: inline-flex; flex-wrap: wrap; gap: 2px var(--space-3); }
 .strip-dataset { color: var(--muted); overflow-wrap: anywhere; }
 .strip-dataset .link-button, .strip-links .link-button { font-size: 12px; }
+
+/* The search box and the Tasks / Library switch (present when tasks or the library are). */
+.automations-controls { display: grid; gap: var(--space-2); }
+.automations-search-input { box-sizing: border-box; width: 100%; min-height: 34px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface); color: var(--text); padding: 6px 10px; font: inherit; font-size: 13px; }
+.automations-search-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.automations-segments { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border: 1px solid var(--divider); border-radius: 9px; background: var(--surface-muted); padding: 2px; }
+.segment-button { min-height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 650; }
+.segment-button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.segment-button:hover:not([aria-pressed="true"]) { background: var(--hover); }
+.segment-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.automations-pane, .automations-group { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+.automations-pane[hidden], .automations-group[hidden], .automations-controls[hidden] { display: none; }

@@ -1,9 +1,9 @@
 import { add, array, enumeration, finite, isObject, keys, result, type JsonObject } from "../runtime-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "../validation.js";
-import { answerVerdicts, attemptStandIns, flowScores } from "./answer-score.js";
+import { answerVerdicts, attemptCountsAsLive, attemptStandIns, flowScores, type AttemptStandIn } from "./answer-score.js";
 import { ATTEMPT_REPORT_SCHEMA_VERSION, attemptPaths, attemptSimulationResults, type AttemptReportRow, type AttemptSeries } from "./attempt-report.js";
 
-const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "standIns"] as const;
+const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "standIns", "live"] as const;
 const SERIES_KEYS = ["schemaVersion", "taskId", "scenarioId", "rows", "firstRightAttempt", "attemptsUntilDeterministic", "spendDeltas", "secondStartedFromFirst"] as const;
 
 function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void {
@@ -28,6 +28,9 @@ function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void
   });
   if (!isObject(value.loopsCaught)) add(issues, `${path}.loopsCaught`, "must be an object");
   array(value.standIns, `${path}.standIns`, issues, (item, at, target) => enumeration(item, attemptStandIns, at, target));
+  // A stand-in anywhere, and above all a scripted model, can never be counted as live.
+  if (typeof value.live !== "boolean") add(issues, `${path}.live`, "must be a boolean");
+  else if (Array.isArray(value.standIns) && value.live !== attemptCountsAsLive(value.standIns as AttemptStandIn[])) add(issues, `${path}.live`, "must be true only with no stand-in at all");
 }
 
 export function validateAttemptReportRow(input: unknown): ValidationResult<AttemptReportRow> {

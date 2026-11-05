@@ -6,6 +6,8 @@ import { DEFAULT_LLM_PROVIDER, DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LA
 import type { RunAllocation } from "../allocation.js";
 import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES, buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath, withoutProviderSecrets } from "../environment.js";
 import { LiveLlmRun, planLiveLlmExecution } from "../live-llm/index.js";
+import { AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT } from "fluxiq/automation";
+import { createdFlowTrialsCandidates } from "../flow-lane/index.js";
 
 const allocation: RunAllocation = {
   runId: "run-a", runRoot: path.resolve("runs/run-a"), fluxiqRoot: path.resolve("runs/run-a/fluxiq-root"),
@@ -171,9 +173,12 @@ test("a candidate-mode Core gets the start hook on this run's own Scenario Lab r
   assert.equal(project.FLUXIQ_AUTHORING_MODE, "project");
   assert.equal(project.FLUXIQ_CANDIDATE_START_URL, candidate.FLUXIQ_CANDIDATE_START_URL);
   assert.equal(project.FLUXIQ_CANDIDATE_START_TOKEN, allocation.controllerToken);
-  for (const args of [[], ["--authoring-mode", "legacy"]]) {
-    const legacy = buildFluxIQEnvironment(allocation, paths, inherited, args);
-    assert.equal(legacy.FLUXIQ_AUTHORING_MODE, "legacy");
+  const byDefault = buildFluxIQEnvironment(allocation, paths, inherited, []);
+  assert.equal(byDefault.FLUXIQ_AUTHORING_MODE, AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT);
+  assert.equal(byDefault.FLUXIQ_CANDIDATE_START_URL, createdFlowTrialsCandidates(AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT) ? candidate.FLUXIQ_CANDIDATE_START_URL : undefined, "the default gets this run's hook exactly when it is a trial mode, never the inherited one");
+  for (const mode of ["legacy", "answer-first"]) {
+    const legacy = buildFluxIQEnvironment(allocation, paths, inherited, ["--authoring-mode", mode]);
+    assert.equal(legacy.FLUXIQ_AUTHORING_MODE, mode);
     assert.equal("FLUXIQ_CANDIDATE_START_URL" in legacy, false, "a legacy Core has no start hook, inherited or not");
     assert.equal("FLUXIQ_CANDIDATE_START_TOKEN" in legacy, false);
   }

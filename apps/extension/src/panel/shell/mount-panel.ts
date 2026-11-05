@@ -2,8 +2,8 @@
 // `sidepanel/index.ts` each call `mountPanel` with the stub page's `#app` and
 // their surface. There is one UI, laid out like a chat app:
 //
-//   top bar          FluxIQ, the Chat / Automations tabs, record, the
-//                    connection dot, the gear, Open FluxIQ (`top-bar.ts`)
+//   top bar          FluxIQ, the Chat / Automations tabs, the connection
+//                    dot, the gear, Open FluxIQ (`top-bar.ts`)
 //   recording bar    only while a recording runs (`panel/recording`)
 //   one screen       chosen by `screen-state.ts`:
 //     chat             the whole panel: the chat (`panel/chat`), with a slim
@@ -18,7 +18,7 @@
 //   panel/getting-started/ the steps, `startGuide`
 //   panel/settings/       the connection, on-page status, report, forget pairing
 //   panel/automations/    the list, the strip, Run and exports
-//   panel/recording/      record, the recording bar, extraction's entry, review
+//   panel/recording/      "Show me how" (in the composer), the recording bar, extraction's entry, review
 //   panel/open-fluxiq/    the Open FluxIQ button
 //   panel/copy/, dom/, theme/tokens.css, extraction/, chat/
 //
@@ -46,17 +46,19 @@
 // reads never make those controls flicker.
 
 import { RUNTIME_MESSAGES } from "../../shared/constants";
-import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
+import type { ExtensionStatus } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
 import { createActivityFeed, createChatOwnerContext, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { bindChatProjectNavigation } from "../chat/project-navigation";
-import { createStartView, startGuide } from "../getting-started";
+import { createModelKeyReader, createSetupCard, createStartView, extensionSetupPort, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
 import { createRecordingControls, createRecordingReview } from "../recording";
+import { createExtensionLibrary } from "../library";
+import { createTasksPanel } from "../tasks";
 import { createSettingsView } from "../settings";
 import { createPanelStore } from "../state";
-import type { PanelContext, PanelSurface } from "./contracts";
+import type { PanelContext, PanelPorts, PanelSurface } from "./contracts";
 import { createRunFollow } from "./run-follow";
 import { INITIAL_SHELL, reduceShell, shellScreen, type ShellEvent, type ShellScreen } from "./screen-state";
 import { createTopBar, screenId, tabId } from "./top-bar";
@@ -65,23 +67,30 @@ import { workingInput } from "./working-input";
 import "../theme/tokens.css";
 import "./shell.css";
 
-/** Mounts the panel into `root` for `surface`. */
-export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
+/** Mounts the panel into `root` for `surface`, with `ports` in place of each screen's real one (a spec's fakes). */
+export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: PanelPorts = {}): void {
   document.documentElement.dataset.surface = surface;
   const store = createPanelStore();
   const context: PanelContext = { store, surface };
   let state = INITIAL_SHELL;
   let screen: ShellScreen | undefined;
   let noAnswer = false;
-  let recordingWas: RecordingState | undefined;
   let visible = true;
   let connected = false;
   let activatedRow: HTMLElement | undefined;
   const runFollow = createRunFollow();
 
-  const recording = createRecordingControls(context);
-  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction() });
+  // A recording that ends goes to the next message, and the caret goes into the box (`panel/recording`).
+  const recording = createRecordingControls(context, { attach: () => chat.attachLatestRecording(), attached: () => chat.focusComposer() });
+  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction(), composer: { action: recording.recordButton } });
   const review = createRecordingReview(context, { onAttach: () => chat.attachLatestRecording() });
+  const tasks = createTasksPanel(context, ports, { openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }), showAutomations: () => dispatch({ type: "tab", tab: "automations" }) });
+  const library = createExtensionLibrary(store.request, ports.library, {
+    askAbout: (text) => {
+      dispatch({ type: "tab", tab: "chat" });
+      chat.fillComposer(text);
+    }
+  });
   const automations = createAutomationsTab(context, {
     choose: (row) => {
       const source = activatedRow;
@@ -97,7 +106,9 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
       }
     },
     review: review.element,
-    newAutomation: recording.newAutomation
+    newAutomation: recording.newAutomation,
+    ...(tasks === undefined ? {} : { tasks }),
+    ...(library === undefined ? {} : { library })
   });
   const working = createWorkingHold(
     { setTimeout: (run, ms) => window.setTimeout(run, ms), clearTimeout: (handle) => window.clearTimeout(handle as number) },
@@ -167,12 +178,19 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   }
 
   const start = createStartView(context, () => dispatch({ type: "gear" }));
-  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }));
+  const setupCard = createSetupCard(context);
+  const keyReader = createModelKeyReader(ports.setup ?? extensionSetupPort(store.request), {
+    setTimeout: (run, ms) => window.setTimeout(run, ms),
+    clearTimeout: (handle) => window.clearTimeout(handle as number)
+  }, () => draw());
+  // Coming back to the panel (a Firefox popup closes when Open FluxIQ is pressed; a side panel only loses focus) reads the key again.
+  window.addEventListener("focus", () => keyReader.refresh());
+  root.ownerDocument.addEventListener?.("visibilitychange", () => { if (root.ownerDocument.visibilityState === "visible") keyReader.refresh(); });
+  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }), { setup: ports.setup ?? extensionSetupPort(store.request) });
   const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" });
   const topBar = createTopBar({
     onTab: (tab) => dispatch({ type: "tab", tab }),
     onGear: () => dispatch({ type: "gear" }),
-    record: recording.recordButton,
     openFluxIQ: openIcon.element
   });
 
@@ -180,7 +198,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     id: screenId("chat"),
     className: "chat-screen",
     attrs: { role: "tabpanel", "aria-labelledby": tabId("chat") }
-  }, [automations.strip.element, chat.element]);
+  }, [setupCard.element, automations.strip.element, chat.element]);
   automations.element.id = screenId("automations");
   automations.element.setAttribute("role", "tabpanel");
   automations.element.setAttribute("aria-labelledby", tabId("automations"));
@@ -196,6 +214,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   function openExtraction(): void {
     dispatch({ type: "tab", tab: "automations" });
+    automations.showTasks();
     const entry = recording.newAutomation.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`)
       ?? recording.bar.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`);
     if (entry === null) return;
@@ -238,9 +257,10 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   function draw(): void {
     const status = store.current();
-    const guide = startGuide(status, noAnswer, store.lost());
+    const guide = startGuide(status, noAnswer, store.lost(), keyReader.current());
     const next = shellScreen(state, guide.gated);
     start.render(guide, status);
+    setupCard.render(guide, status);
     if (next !== screen) {
       start.element.hidden = next !== "getting-started";
       settings.element.hidden = next !== "settings";
@@ -266,20 +286,18 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     const replaced = owner.changed || owner.initial;
     if (replaced) replaceWorkingFeed();
     else observeWorking();
+    keyReader.observe(status.connectionState === "connected");
     topBar.render(status);
     openIcon.observe(status);
     recording.render(status);
     review.render(status);
     chat.render(status);
     automations.render(status);
+    library?.render(typeof status.projectId === "string" ? status.projectId : undefined);
     // The relay forgets its state when the worker restarts; read it again on reconnecting.
     const nowConnected = status.connectionState === "connected";
     if (nowConnected && !connected && !replaced && !activityUnsupported) void activity?.read();
     connected = nowConnected;
-    const ended = (recordingWas === "recording" || recordingWas === "paused") && status.recordingState === "idle";
-    recordingWas = status.recordingState;
-    // A recording that just ended is reviewed on the automations tab.
-    if (ended) dispatch({ type: "tab", tab: "automations" });
     draw();
   });
   // The store asks once on creation; asking here too is what lets the panel

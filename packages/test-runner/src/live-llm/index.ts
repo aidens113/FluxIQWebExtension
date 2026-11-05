@@ -5,6 +5,7 @@ export { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmA
 export { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "./budget.js";
 export { liveLlmBudgetFindings, type LiveLlmBudgetFinding, type LiveLlmBudgetFindingCall } from "./budget/index.js";
 export { budgetOverProductFailure } from "./budget-over-product-failure.js";
+export { labBuildCallLimitFor, LAB_CALL_LIMIT_FLAG } from "./answer-first-call-limit.js";
 export { labBuildCallLimitEnvironment } from "./call-limit-env.js";
 export { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
 export { liveLlmBuildUsage } from "./build-usage.js";
