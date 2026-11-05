@@ -179,7 +179,7 @@ export async function runAttemptProof(options: AttemptProofOptions): Promise<Att
         picture: async (ordinal, page) => { await page.screenshot({ path: path.join(options.evidenceDirectory, `${name}-attempt-${ordinal}.png`) }).catch(/* best-effort: a picture never decides the proof */ () => undefined); },
         ...extra,
       });
-      const result = await runAttemptSeries({ task, driver, attempts });
+      const result = await runAttemptSeries({ task, driver, attempts, between: "reseed" });
       log(renderAttemptSeries(result.series));
       return result;
     };

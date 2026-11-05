@@ -1,4 +1,4 @@
-import type { AttemptPath, AttemptSimulationResult, AttemptStandIn, ResolvedScenarioWorkflow, RunAnswerScore, WebScenario } from "@fluxiq-web-extension/test-contracts";
+import type { AttemptAgainstEarlier, AttemptPath, AttemptSimulationResult, AttemptStandIn, ResolvedScenarioWorkflow, RunAnswerScore, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { CreatedFlowRequest } from "../flow-lane/index.js";
 
 /** What Core's attempt record says of one attempt (`AutomationStudioTaskAttempt`), restated to what the Lab reads. */
@@ -28,26 +28,39 @@ export type AttemptSavedState = Readonly<{
   draftDigest: string | null;
 }>;
 
-/** One attempt as a driver ended it. `startedFrom` is what the driver found saved before it began, and `null` is a blank workspace. */
+/**
+ * What a later attempt began from. On a live run this is Core's own read of the attempt
+ * (`AutomationStudioTaskAttempt.startedFrom`): the digest of the saved steps it found, and
+ * `route`, what it did with them. A row with no such read has none, and is refused.
+ */
+export type AttemptStart = Readonly<{
+  draftDigest: string | null;
+  state?: AttemptSavedState["state"];
+  flowId?: string;
+  route?: "use" | "repair";
+}>;
+
+/** One attempt as a driver ended it. `startedFrom` is what it found saved before it began, and `null` is a blank workspace. */
 export type AttemptOutcome = Readonly<{
   record: AttemptRecord;
   saved: AttemptSavedState | null;
-  startedFrom: AttemptSavedState | null;
+  startedFrom: AttemptStart | null;
   answer: RunAnswerScore;
   oracleVerdict: "passed" | "failed" | null;
   standIns: readonly AttemptStandIn[];
+  /** Said only of an attempt that began on what an earlier one left, with no reseed. */
+  against?: AttemptAgainstEarlier;
 }>;
 
 export type AttemptTask = Readonly<{ scenario: WebScenario; request: CreatedFlowRequest; workflow: ResolvedScenarioWorkflow }>;
 
 /**
  * Runs one attempt at a task on one workspace. The series owns the order and the
- * workspace; a driver owns how an attempt happens. Today's is the scripted stand-in
- * (`./scripted/`). A live one starts from the extension chat on a persistent workspace
- * and reads Core's attempt record, once Core has a read for it.
+ * workspace; a driver owns how an attempt happens: the scripted stand-in (`./scripted/`),
+ * or the real chat and Core's own record of the attempt (`./live/live-driver.ts`).
  */
 export type AttemptDriver = {
-  /** Reseeds the site, so the attempt's baseline is the seed: final-state oracles are absolute, and the change is judged from it. */
+  /** Reseeds the site, so the attempt's baseline is the seed. A series that leaves the site as the last attempt left it calls this only before the first. */
   seedSite(): Promise<void>;
   run(task: AttemptTask, ordinal: number): Promise<AttemptOutcome>;
 };

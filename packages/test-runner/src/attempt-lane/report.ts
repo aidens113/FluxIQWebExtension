@@ -28,6 +28,7 @@ export function attemptReportRow(task: AttemptTask, outcome: AttemptOutcome): At
     repeatedActs: answer.repeatedActs.map((act) => ({ ...act })),
     loopsCaught: loopsCaughtOf(outcome),
     ...(record.actsWithNoRow !== undefined ? { actsWithNoRow: record.actsWithNoRow } : {}),
+    ...(outcome.against ? { against: { reseeded: outcome.against.reseeded, foundDone: [...outcome.against.foundDone], changed: [...outcome.against.changed] } } : {}),
     standIns: [...outcome.standIns],
     live: attemptCountsAsLive(outcome.standIns),
   };
@@ -60,6 +61,16 @@ export function attemptSeries(task: AttemptTask, rows: readonly AttemptReportRow
   return series;
 }
 
+const LESS_OR_MORE = (delta: number, what: string, words: (value: number) => string = String): string => `${delta === 0 ? "the same" : `${words(Math.abs(delta))} ${delta < 0 ? "less" : "more"}`} ${what}`;
+
+/** Each later attempt beside the one before it, in words. */
+function comparedWords(series: AttemptSeries): string[] {
+  return series.spendDeltas.map((delta) => `attempt ${delta.attempt} beside attempt ${delta.attempt - 1}: ${[
+    LESS_OR_MORE(delta.calls, "calls"), LESS_OR_MORE(delta.tokens, "tokens"), LESS_OR_MORE(delta.usd, "dollars", (usd) => `$${usd.toFixed(4)}`),
+    LESS_OR_MORE(delta.ms, "time", (ms) => `${Math.round(ms / 1000)} s`), LESS_OR_MORE(delta.liveSteps, "live steps"),
+  ].join(", ")}`);
+}
+
 /** The series as a person reads it. Stand-ins are named beside the numbers they produced. */
 export function renderAttemptSeries(series: AttemptSeries): string {
   const header = "attempt | path | calls | tokens | from cache | usd | ms | live steps | simulation | answer | oracle | flow | repeated acts | loops caught | counted as | stand-ins";
@@ -71,5 +82,5 @@ export function renderAttemptSeries(series: AttemptSeries): string {
     row.standIns.join(",") || "none",
   ].join(" | "));
   const started = series.secondStartedFromFirst === null ? "" : `second attempt started from the first's draft: ${series.secondStartedFromFirst ? "proven" : "refused"}`;
-  return [`task ${series.taskId} on ${series.scenarioId}`, header, ...lines, ...(started ? [started] : [])].join("\n");
+  return [`task ${series.taskId} on ${series.scenarioId}`, header, ...lines, ...comparedWords(series), ...(started ? [started] : [])].join("\n");
 }

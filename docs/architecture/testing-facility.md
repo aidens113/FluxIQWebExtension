@@ -2068,8 +2068,8 @@ real.
 ### A real attempt from the chat: `lab attempt`
 
 ```powershell
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--dry-run]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model [--attempts 2]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts 2] [--dry-run]
 ```
 
 One attempt at one realistic task, in a visible browser. `attempt-lane/live/` types the
@@ -2081,9 +2081,43 @@ baseline it recorded, the declared final state on the page the attempt left, and
 turn **read from the panel's DOM** (`li.answer-turn[data-attempt-id]`), so a right answer
 that never reached the person fails. It exits 0 only on a right answer. There is no build
 deadline: only a stretch with nothing moving stops the watch, and that reports where the
-attempt stood and judges nothing. The series runner takes this driver unchanged, but only
-attempt 1 is exercised, and a continuation cannot be proven until Core's read says what an
-attempt started from.
+attempt stood and judges nothing.
+
+**`--attempts 2`: the second attempt, on the site as the first left it.** The site is seeded
+once, before attempt 1, and never again. The second attempt is the same words typed into the
+same thread of the same workspace, which is what a person with the panel open does, and its
+turn sits under the first. Its baseline is read when it starts, and:
+
+- **What right is.** The task's end state still holds, no lasting act landed again, and the
+  rows are right and shown. So its change is judged against what is still asked
+  (`flow-lane/creation/site-change/later/`): with attempt 1's acts landed, a change of nothing.
+  A count pressed again is `repeated_act`, asked 0. A toggle pressed again is a change away from
+  the end state, named in `unaskedChanges`, and the absolute facts and the rows fail as well.
+  What attempt 1 left undone is still asked. Attempt 1's oracle is not touched: it never
+  comes here. A task that means "do it again" says so in its own words, which is another task
+  with another key and its own row in the asked table.
+- **What it reports.** One line per attempt, attempt 2's saying that it ran against what attempt 1
+  left with no reseed, what it found already done, the change it made, the path it took and
+  whether the digest proves it started from attempt 1's saved work. `attempt.json` holds both
+  attempts, `attempt-report.txt` both rows and the second beside the first, and each attempt's
+  `site.json` and picture are in `attempt-1/` and `attempt-2/`. In `site.json`, `activity` is the
+  site's record of that attempt alone, and `activityBefore` what it already held.
+- **How it is proven to have started from the first.** Core's own read: `get-task-attempt`'s
+  `attempt.startedFrom` (the digest of the saved steps it found, and what it did with them) against
+  `saved.stepsDigest` of the attempt before. A row with no such read is refused
+  (`proveContinuation`), and a refused proof exits 1 however right the answer.
+- **When it does not run.** A wrong first answer leaves the site in no known state, a person's
+  Stop or a wait with nobody coming has not left a settled task, and an empty balance stops paid
+  work. It says so and exits 1. A first attempt whose budget ran out goes on: the second is held to
+  what is still asked. `attemptCanGoOn` holds the list.
+
+**What a second attempt finds, on the road as it stands.** Core runs what the task saved, trusted or
+not: `partly_works` and `unproven` does not stop it. The act record starts empty after an achieved
+attempt (`act-record/seed.ts`), so nothing in Core stops a press across attempts, and it is the
+Lab's oracle that catches one. A saved Flow's save only stays right on a toggle if it sets a state
+(`dom-check`) or stops because the control now reads otherwise. A Flow that keeps a hand journey stops
+on the way: at a prompt the site remembers, or at a repeated press the run gate holds back. The form
+`again-check` proves the road, and `again-press` proves the oracle fails.
 
 **`--scripted-model` is provider-free, and is never a live result.** Everything is the
 product's except the model's choices:
@@ -2121,6 +2155,8 @@ and Core's `steps/` beside it), which is how to read the page words a step needs
 
 `FLUXIQ_ATTEMPT_SCRIPT_FORM` names which form of a task's script a `--scripted-model` run plays, for a task whose script has more than one
 (`scripted-model/scripts/index.ts`); a form its script does not have is refused by the script, and `lab attempt` takes no such option.
+A second attempt reaches the script only where Core's run of the saved Flow did not end it, plus the chat's request and the judge's, so a
+script's replies read the request and say so if a round comes they did not expect.
 Every attempt writes `site.json` into its evidence folder: the site's lasting view before and after the attempt, the change between them,
 and the activity the panel showed, kept so a verdict can be re-read without the site.
 

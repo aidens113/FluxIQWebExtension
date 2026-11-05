@@ -6,7 +6,7 @@ import type { CreatedFlowBuild } from "../build-proposal.js";
 import type { JudgedFinalState } from "../oracles.js";
 import { judgeCreatedFlowDataset, type CreatedFlowDatasetSource } from "../judgement.js";
 import type { CreatedFlowRequest } from "../request.js";
-import { askedChangeOf, judgeSiteChange, siteChange, type LastingView, type SiteBaseline, type SiteChangeJudgement } from "../site-change/index.js";
+import { askedChangeOf, judgeLaterChange, judgeSiteChange, siteChange, stillAsked, type LastingView, type SiteBaseline, type SiteChange, type SiteChangeJudgement } from "../site-change/index.js";
 import { judgeShownAnswer } from "./judge-shown.js";
 import type { AttemptEndingFact, CreatedFlowAnswerStage } from "./ports.js";
 import { scoreAnswer } from "./score-answer.js";
@@ -34,9 +34,10 @@ function recordsHold(judgement: FlowExtractionJudgement): boolean {
  * answers to, before any fixture reset:
  *
  * - its stored rows against the task's expected dataset, with no persisted Flow run;
- * - the site's declared facts, which are absolute, and so hold only on an attempt
- *   that began from the seeded baseline, as every attempt does;
- * - the site's recorded change since that baseline against what the task asked, once;
+ * - the site's declared facts, which are absolute: an attempt from the seed must make
+ *   them true, and one on what an earlier attempt left must keep them true;
+ * - the site's recorded change since that baseline against what the task asked, once,
+ *   and, with `earlierLeft`, against what is still asked (`judgeLaterChange`);
  * - what the person was shown, screened.
  *
  * It never throws for a wrong answer. A fixture defect still throws, since that is
@@ -51,6 +52,8 @@ export async function judgeAttemptAnswer(input: {
   /** The build as it settled, when the attempt came through the created-Flow lane. */
   build?: CreatedFlowBuild | undefined;
   baseline: SiteBaseline | null;
+  /** On an attempt that began on what an earlier one left with no reseed: how far the site had moved from the first attempt's baseline to this one's. Absent on a first attempt, which this changes nothing for. */
+  earlierLeft?: SiteChange | undefined;
   judgeFinalState: () => Promise<JudgedFinalState>;
   /** What the Flow's own playback has said so far; a draft has none. */
   flow?: { flowCreated: boolean | null; oracleVerdict: "passed" | "failed" | null };
@@ -67,9 +70,11 @@ export async function judgeAttemptAnswer(input: {
   const asked = askedChangeOf(request.task.id);
   const after: LastingView | null = baseline ? await stage.readSiteView() : null;
   const moved = baseline && after ? siteChange(baseline.view, after) : null;
-  const change: SiteChangeJudgement | null = asked && moved ? judgeSiteChange(asked, moved) : null;
+  const earlierLeft = input.earlierLeft;
+  const change: SiteChangeJudgement | null = asked && moved ? (earlierLeft ? judgeLaterChange(asked, earlierLeft, moved) : judgeSiteChange(asked, moved)) : null;
+  const askedNow = asked && earlierLeft ? stillAsked(asked, earlierLeft) : asked;
   const expected = taskJudgement.judgeBy === "expected-dataset" ? workflow.expected.extracted?.find((entry) => entry.step === taskJudgement.stepId) : undefined;
-  const shown = judgeShownAnswer({ shown: await stage.chat.readShownAnswer(), expected, askedActs: asked?.acts.length ?? 0, secretValues: stage.secretValues, scenarioOrigin: input.scenarioOrigin });
+  const shown = judgeShownAnswer({ shown: await stage.chat.readShownAnswer(), expected, askedActs: askedNow?.acts.length ?? 0, secretValues: stage.secretValues, scenarioOrigin: input.scenarioOrigin });
   // A task's result is the rows it asked for, or the act it asked for having landed. A read-only task judged by its goal has its goal.
   const hasResult = taskJudgement.judgeBy === "expected-dataset" ? stored > 0 : (moved !== null && Object.keys(moved).length > 0) || finalState === "held";
   const score = scoreAnswer({

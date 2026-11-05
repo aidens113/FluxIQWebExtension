@@ -275,3 +275,48 @@ test("a form the script does not have is refused, and the default is the plain o
   assert.throws(() => scriptedModelScriptFor(TASK, "other"), /no form "other"/u);
   assert.equal(scriptedModelScriptFor(TASK).taskId, TASK);
 });
+
+const TABLES_PAGE = LIST;
+const note = (flowRun: Record<string, unknown>): EvidenceEntry => ({ callId: "core.attempt_note.1", toolId: "core.attempt_note", value: { flowRun } });
+const judge = (form: string, ordinal: number, recordSets: unknown) => scriptedModelScriptFor(TASK, form).replies.loop_verification![ordinal]!({ kind: "loop_verification", ordinal: ordinal + 1, model: "m", jsonText: true, message: "", payload: { context: { resultSummary: { recordSets } } } }) as { diagnosis: { answersRequest: string; defects: { row: string }[] } };
+const SAVED_ROWS = [{ sampleRows: [{ title: "Round pine dining table, 90cm" }, { title: "Glass dining table with chrome legs" }, { title: "Dining table, industrial style, 160cm" }] }];
+
+test("the same words a second time go to the same command, and there are replies for a second attempt", () => {
+  const script = scriptedModelScriptFor(TASK, "again-check");
+  assert.equal(script.replies.panel_command!.length, 2);
+  const message = "Save the tables.";
+  assert.deepEqual(script.replies.panel_command![1]!({ kind: "panel_command", ordinal: 2, model: "m", jsonText: false, message, payload: undefined }), { do: "flow.createHere", with: { instruction: message } });
+  assert.ok(script.replies.loop_verification!.length >= 2);
+});
+
+test("the two-attempt form that saves by setting a state refuses any decision after the saved Flow's run: it never presses to get there", () => {
+  const item = [`URL ~/item/1003/   (~ = ${BASE})`, 't987 button "Saved" pressed'].join("\n");
+  assert.throws(() => decide("again-check", [note({ stoppedAt: 8, happened: "The step's control was not found on the page." })], item), /did not end the attempt, stopped at step 8: The step's control was not found/u);
+});
+
+test("its judge reads the real rows: the three saved tables are the answer, and one gone is a no naming it", () => {
+  assert.equal(judge("again-check", 1, SAVED_ROWS).diagnosis.answersRequest, "yes");
+  const short = judge("again-check", 1, [{ sampleRows: [{ title: "Round pine dining table, 90cm" }] }]);
+  assert.equal(short.diagnosis.answersRequest, "no");
+  assert.deepEqual(short.diagnosis.defects.map((defect) => defect.row), ["Glass dining table", "Dining table, industrial"]);
+});
+
+test("the form that means to fail has a judge that says yes to whatever it is shown, so only the Lab's oracle can catch it", () => {
+  assert.equal(judge("again-press", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
+});
+
+test("on the second attempt that form goes to each table the first saved and presses again, by what the page shows", () => {
+  const reply = scriptedModelScriptFor(TASK, "again-press").replies.evidence_tool_decision![0]!;
+  const sorted = [`URL ~/search/?query=dining+table&radius=5&sortBy=price_ascend   (~ = ${BASE})`, ...TABLES_PAGE.split("\n").slice(1)].join("\n");
+  (reply(request(sorted, [made("search"), made("choose-radius"), made("apply-1"), made("open-radius"), made("open-sort"), made("sort-cheapest")])) as Called);
+  const stopped = note({ stoppedAt: 5, happened: "The step's control was not found on the page." });
+  const home = [`URL ~/   (~ = ${BASE})`, 't30 field[search] "Search Marketplace" =""'].join("\n");
+  const open = (reply(request(home, [stopped])) as Called).decision;
+  assert.equal(open.callId, "again-open-1");
+  assert.equal(open.input?.parameters?.url, `${BASE}/item/1003/`);
+  const item = [`URL ~/item/1003/   (~ = ${BASE})`, 't987 button "Saved" pressed'].join("\n");
+  const press = (reply(request(item, [stopped, made("again-open-1")])) as Called).decision;
+  assert.equal(press.callId, "again-save-1");
+  assert.equal(press.input?.parameters?.target.handle, "t987");
+  assert.deepEqual(press.input?.consequences, ["modify_existing"]);
+});

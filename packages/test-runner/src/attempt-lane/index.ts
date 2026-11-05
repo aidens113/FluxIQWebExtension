@@ -3,7 +3,7 @@
 // plays each task's honest path to check what the double-act oracle is told.
 export { auditAskedChanges, type AskedChangeAudit } from "./audit-asked-changes.js";
 export { proveContinuation } from "./continuation.js";
-export type { AttemptDriver, AttemptOutcome, AttemptRecord, AttemptSavedState, AttemptTask } from "./driver.js";
+export type { AttemptDriver, AttemptOutcome, AttemptRecord, AttemptSavedState, AttemptStart, AttemptTask } from "./driver.js";
 export { attemptReportRow, attemptSeries, renderAttemptSeries } from "./report.js";
 export { runAttemptProof, type AttemptProofChecks, type AttemptProofOptions, type AttemptProofResult } from "./run-attempt-proof.js";
 export { runAttemptSeries, type AttemptSeriesResult } from "./run-attempt-series.js";

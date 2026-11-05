@@ -4,24 +4,36 @@ import type { AttemptDriver, AttemptOutcome, AttemptTask } from "./driver.js";
 import { proveContinuation } from "./continuation.js";
 import { attemptReportRow, attemptSeries } from "./report.js";
 
-export type AttemptSeriesResult = Readonly<{ series: AttemptSeries; outcomes: readonly AttemptOutcome[]; continuations: readonly AttemptContinuation[] }>;
+export type AttemptSeriesResult = Readonly<{
+  series: AttemptSeries;
+  outcomes: readonly AttemptOutcome[];
+  continuations: readonly AttemptContinuation[];
+  /** Why the attempts stopped short of those asked for; absent when they all ran. */
+  stoppedShort?: string;
+}>;
 
 /**
  * A task run `attempts` times on **one workspace**, which is the difference from a
- * repeat: what an attempt saved stays where the next can find it. Only the site is
- * reseeded between attempts, because final-state oracles are absolute and a lasting
- * act's second landing would otherwise read as wrong rows; each attempt's change is
- * judged from that recorded baseline.
+ * repeat: what an attempt saved stays where the next can find it.
+ *
+ * `between` says what happens to the site between attempts. `reseed` puts it back, so each
+ * attempt is judged from the seed, which proves the workspace and nothing about acts.
+ * `as_left` leaves it as the last attempt left it, as a person's site is: the case where a
+ * repeat could press what the first already pressed, which each later attempt's change is
+ * judged against. `mayGoOn` may stop the series short, with its reason.
  */
-export async function runAttemptSeries(input: { task: AttemptTask; driver: AttemptDriver; attempts: number }): Promise<AttemptSeriesResult> {
+export async function runAttemptSeries(input: { task: AttemptTask; driver: AttemptDriver; attempts: number; between: "reseed" | "as_left"; mayGoOn?: (outcome: AttemptOutcome) => Promise<string | undefined> }): Promise<AttemptSeriesResult> {
   const { task, driver } = input;
   assertRealisticScenarios([task.scenario.id], "The same-workspace attempt lane");
   const outcomes: AttemptOutcome[] = [];
-  for (let ordinal = 1; ordinal <= input.attempts; ordinal += 1) {
-    await driver.seedSite();
-    outcomes.push(await driver.run(task, ordinal));
+  let stoppedShort: string | undefined;
+  for (let ordinal = 1; ordinal <= input.attempts && stoppedShort === undefined; ordinal += 1) {
+    if (ordinal === 1 || input.between === "reseed") await driver.seedSite();
+    const outcome = await driver.run(task, ordinal);
+    outcomes.push(outcome);
+    if (ordinal < input.attempts) stoppedShort = await input.mayGoOn?.(outcome);
   }
   const continuations = outcomes.slice(1).map((later, index) => proveContinuation(outcomes[index]!, later));
   const series = attemptSeries(task, outcomes.map((outcome) => attemptReportRow(task, outcome)), continuations[0] ?? null);
-  return Object.freeze({ series, outcomes, continuations });
+  return Object.freeze({ series, outcomes, continuations, ...(stoppedShort === undefined ? {} : { stoppedShort }) });
 }

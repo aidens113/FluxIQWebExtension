@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { resolveScenarioWorkflow, attemptPaths, attemptSimulationResults, type RunAnswerScore } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, attemptPaths, attemptSimulationResults, type AttemptReportRow, type RunAnswerScore } from "@fluxiq-web-extension/test-contracts";
 import { resolveCreatedFlowRequest } from "../../flow-lane/index.js";
 import { catalogScenario, datasetTask } from "../../flow-lane/creation/tests/scenario-fixture.js";
 import type { AttemptDriver, AttemptOutcome, AttemptTask } from "../driver.js";
@@ -59,7 +59,7 @@ test("the series reseeds the site before each attempt, on one workspace, and rep
       return ordinal === 1 ? outcome(1) : outcome(2, SECOND);
     },
   };
-  const { series, continuations } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2 });
+  const { series, continuations } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "reseed" });
   assert.deepEqual(calls, ["seed", "attempt-1", "seed", "attempt-2"]);
   assert.equal(series.secondStartedFromFirst, true);
   assert.equal(continuations[0]?.held, true);
@@ -67,8 +67,46 @@ test("the series reseeds the site before each attempt, on one workspace, and rep
   assert.equal(series.firstRightAttempt, 1);
 });
 
+test("left as it was, the site is seeded once, before the first attempt and never between them", async () => {
+  const calls: string[] = [];
+  const driver: AttemptDriver = {
+    seedSite: async () => { calls.push("seed"); },
+    run: async (_task, ordinal) => {
+      calls.push(`attempt-${ordinal}`);
+      return ordinal === 1 ? outcome(1) : outcome(2, SECOND);
+    },
+  };
+  const { series, stoppedShort } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "as_left" });
+  assert.deepEqual(calls, ["seed", "attempt-1", "attempt-2"]);
+  assert.equal(series.secondStartedFromFirst, true);
+  assert.equal(stoppedShort, undefined);
+});
+
+test("a series can stop short with its reason, and what ran is still reported", async () => {
+  const driver: AttemptDriver = { seedSite: async () => undefined, run: async (_task, ordinal) => outcome(ordinal) };
+  const { series, outcomes, stoppedShort } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "as_left", mayGoOn: async () => "the first was wrong" });
+  assert.equal(outcomes.length, 1);
+  assert.equal(stoppedShort, "the first was wrong");
+  assert.equal(series.secondStartedFromFirst, null);
+});
+
+test("a second attempt's row says it began on what the first left, and that is validated", () => {
+  const against = { reseeded: false as const, foundDone: ["Three saved"], changed: [] };
+  const row = attemptReportRow(task, { ...outcome(2, SECOND), against });
+  assert.deepEqual(row.against, against);
+  assert.doesNotThrow(() => attemptSeries(task, [attemptReportRow(task, outcome(1)), row], null));
+  const reseeded: unknown = { ...row, against: { ...against, reseeded: true } };
+  assert.throws(() => attemptSeries(task, [attemptReportRow(task, outcome(1)), reseeded as AttemptReportRow], null), /reseeded/u);
+});
+
+test("what is printed sets the second beside the first", () => {
+  const text = renderAttemptSeries(attemptSeries(task, [attemptReportRow(task, outcome(1)), attemptReportRow(task, outcome(2, SECOND))], { fromAttempt: 1, toAttempt: 2, held: true, refused: [] }));
+  assert.match(text, /attempt 2 beside attempt 1: 9 less calls/u);
+  assert.match(text, /second attempt started from the first's draft: proven/u);
+});
+
 test("the lane refuses a scenario that is not one of the ten realistic ones", async () => {
-  await assert.rejects(runAttemptSeries({ task, driver: { seedSite: async () => undefined, run: async () => outcome(1) }, attempts: 1 }), /ten realistic/u);
+  await assert.rejects(runAttemptSeries({ task, driver: { seedSite: async () => undefined, run: async () => outcome(1) }, attempts: 1, between: "reseed" }), /ten realistic/u);
 });
 
 test("a row carries the count of acts with no row only when the attempt had one, and the series validates both", () => {
