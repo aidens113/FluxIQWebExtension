@@ -1,9 +1,9 @@
 # Answer First
 
 Status: Active
-Status detail: Steps approved by the user on 2026-11-03, with the hard rule that a task ends only with its result or its budget gone. Lanes starting; no paid run yet.
+Status detail: The answer screens and the Lab's attempt command are on `dev`; the two-attempt Lab and Run again are on lane t869 awaiting browser proofs. Four paid runs, $6.13.
 Created: 2026-11-03
-Last updated: 2026-11-03
+Last updated: 2026-11-05
 Owner: Senior supervisor agent
 Scope: The extension and Lab side of Answer First: the chat experience the person sees, the Lab's two scores, a same-workspace second attempt, a double-act oracle, and the Lab's default build path. Core's plan owns the idea, the design, the lanes and the open questions.
 Paired document: `C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/answer-first-plan.md`
@@ -13,11 +13,13 @@ Related: [testing facility](../architecture/testing-facility.md), [extension cli
 
 ## Current State
 
-**Planned, not started.** Core's paired plan holds the user's words, the findings, the loop and the open questions. The user has made the extension and `@fluxiq/ui-components` the focus for now; the web panel waits until they reopen it.
+**State (2026-11-05).** Core's paired plan holds the user's words, the full state, the paid runs and the questions waiting on the user. The user has made the extension and `@fluxiq/ui-components` the focus for now; the web panel waits until they reopen it.
 
-**On this side,** two findings matter most. The extension tells the story of building a Flow and never shows the answer. And the live runs of 2026-10-31 and 2026-11-03 ran `legacy`, the Lab's default, while the product's default is `project`.
+**On `dev` (adc6a56a8):** the extension screens for the answer, the work header, the saved state, the task list with rename, remove and "Save this", and the model key unlock; the Lab's `pnpm lab attempt` with its scripted and paid forms, its per-attempt report and cache share.
 
-**Blockers:** none. **Next:** the truth pass and the Answer lane, which can start with fake ports, and the Lab lane. The screen-by-screen evidence is in Core's `docs/working/answer-first-plan/reports/study-extension-ux.md`.
+**On lane t869 (`task/t869-attempt-road`, pushed, not on `dev`):** every realistic task's final facts read independently of the page a run ends on (`answer-first-plan/reports/final-facts-audit.md`); `--attempts 2`, with no reseed and attempt 2 judged on its change; Run again from the answer card through the relay to Core; a check already in state answering `skipped`; a saved read keeping what its handle stood for; and the controls line carrying headings. Next: the Lab's Core restart between attempts, then provider-free browser proofs of every attempt-2 form, then landing.
+
+**Blockers:** none. **Next after landing:** the full sweep on 2026-11-06, promotion, and the breadth round of one task per realistic site, attempts 1 and 2.
 
 ## Extension Lane
 
@@ -69,6 +71,13 @@ Old pass rates are not comparable to `answerVerdict` and are never blended with 
 - Changed: this document. No source.
 - Validation: not validated; this is a plan. The evidence is in Core's ledger.
 - Outcome: shown to the user for review.
+
+### 2026-11-05 - Paid runs and the two-attempt Lab
+
+- Agent: lead; lane supervisor of t869 and its workers.
+- Changed: on t869 only, the Lab's final facts on all ten realistic scenarios, `--attempts 2`, Run again in the panel and relay, `check` answering `skipped`, the saved-read binding, and headings on the controls line.
+- Validation: lane, provider-free in a visible browser: `FLUXIQ_ATTEMPT_SCRIPT_FORM=again-check pnpm lab attempt local-classifieds --task local-classifieds-save-dining-tables --authoring-mode answer-first --scripted-model --attempts 2` -> exit 0, `run-mw3r7gal-3ef7639e`, attempt 2 `change: {}`; with `again-press` -> exit 1, `run-mw3rfe9e-af5a3ce8`, the Lab naming three `unsaved` rows. Lead: the extension's pre-push structure audit -> `passed (244 warning(s), 552 baselined)`. Paid runs are in Core's ledger.
+- Outcome: the Lab can prove a second attempt. t869 is not landed.
 
 ## Open Questions
 
