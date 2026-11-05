@@ -98,6 +98,14 @@ test("what is printed names each stand-in beside the numbers it produced", () =>
   assert.match(text, /\| spend$/mu);
 });
 
+test("the report prints how much of the input came from the cache, and says when no step said", () => {
+  const row = attemptReportRow(task, outcome(1));
+  const series = attemptSeries(task, [row], null);
+  assert.match(renderAttemptSeries(series), /tokens \| from cache \| usd/u);
+  assert.match(renderAttemptSeries(series), /\| unknown \|/u);
+  assert.match(renderAttemptSeries({ ...series, rows: [{ ...row, cacheHitPercent: 83 }] }), /\| 83% \|/u);
+});
+
 test("the report's paths and simulation words are still Core's", async () => {
   const contracts = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..", "..", "!FluxIQ", "packages", "contracts", "src", "task-attempts", "task-attempt.ts");
   const source = await readFile(contracts, "utf8");

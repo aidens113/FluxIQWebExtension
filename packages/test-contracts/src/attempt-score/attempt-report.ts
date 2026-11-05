@@ -41,6 +41,8 @@ export type AttemptReportRow = {
   loopsCaught: AttemptLoopsCaught;
   /** Lasting acts Core could not tie to a row, so that row may be pressed again (a measured known limit). Absent reads as zero. */
   actsWithNoRow?: number;
+  /** The share of this attempt's input tokens read from the model service's cache, whole percent. Absent when no step said. */
+  cacheHitPercent?: number;
   /** Empty when every input was read from Core and the real chat. */
   standIns: AttemptStandIn[];
   /** True only with no stand-in at all (`attemptCountsAsLive`), held by validation: a scripted model's row can never be counted as live. */

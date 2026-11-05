@@ -10,6 +10,8 @@ const series = (rows, changed = {}) => ({ schemaVersion: "0.1", taskId: "task-on
 
 test("a row holds every column, and refuses one it does not know or a word outside the closed lists", () => {
   assert.equal(validateAttemptReportRow(row(1)).valid, true);
+  assert.equal(validateAttemptReportRow(row(1, { cacheHitPercent: 83 })).valid, true);
+  assert.equal(validateAttemptReportRow(row(1, { cacheHitPercent: 101 })).valid, false);
   assert.equal(validateAttemptReportRow(row(1, { surprise: 1 })).valid, false);
   assert.equal(validateAttemptReportRow(row(1, { path: "guess" })).valid, false);
   assert.equal(validateAttemptReportRow(row(1, { answerVerdict: "passed" })).valid, false, "the answer's words are not the oracle's");

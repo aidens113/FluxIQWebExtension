@@ -51,6 +51,11 @@ test("the result line says a scripted row is not live, in words", () => {
   assert.match(live, /counted as live\.$/u);
 });
 
+test("the result line says how much of the input came from the cache, once a step has said", () => {
+  assert.doesNotMatch(attemptResultLine({ row: ROW, answer: ANSWER, status: "achieved" }), /from cache/u);
+  assert.match(attemptResultLine({ row: { ...ROW, cacheHitPercent: 83 }, answer: ANSWER, status: "achieved" }), /7 calls, 83% of input from cache, \$0\.1234/u);
+});
+
 test("the result line says how many lasting acts could not be tied to a row, only above zero", () => {
   assert.doesNotMatch(attemptResultLine({ row: ROW, answer: ANSWER, status: "achieved", actsWithNoRow: 0 }), /tied to a row/u);
   assert.match(attemptResultLine({ row: ROW, answer: ANSWER, status: "achieved", actsWithNoRow: 2 }), /NOT LIVE, stand-ins: model, spend. 2 lasting acts could not be tied to a row.$/u);
