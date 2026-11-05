@@ -84,6 +84,12 @@ test("connected with a locked key: the key is added, unlocking this browser once
   assert.match(guide.steps.at(-1)?.line ?? "", /password once/u);
 });
 
+test("the unlock step says why the key locked, in the words every other place says it", () => {
+  const words = "Your model key locked on this browser because you signed out of FluxIQ.";
+  const guide = startGuide(statusWith({ connectionState: "connected", paired: true }), false, undefined, "locked", words);
+  assert.equal(guide.steps.at(-1)?.line, words);
+});
+
 test("the key reading never changes a screen that is not connected: no unlock step, no card, the key step claims nothing", () => {
   for (const state of ["disconnected", "connecting", "reconnecting", "pairing", "error"] as const) {
     const guide = startGuide(statusWith({ connectionState: state }), false, undefined, "locked");

@@ -76,6 +76,8 @@ export type RunningTopology = {
    */
   authorizationPassword?: string;
   processExitCodes(): Record<string, number | null>;
+  /** Stops the Core this topology owns and starts it again on the same ports, over the same stores. */
+  restartCore?(): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -143,22 +145,26 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       ...(options.signal ? { signal: options.signal } : {}),
     });
 
-    supervisor.start(coreWebServerProcessSpec({
+    const coreProcess = coreWebServerProcessSpec({
       name: "fluxiq-web", build: coreWebBuild, port: allocation.webPort,
       env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.modelProvidersEnabled === undefined ? {} : { modelProvidersEnabled: options.modelProvidersEnabled }), ...(options.buildCallLimit === undefined ? {} : { buildCallLimit: options.buildCallLimit }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}), ...(options.candidateTrialFixtureReset === undefined ? {} : { candidateTrialFixtureReset: options.candidateTrialFixtureReset }), ...(options.tracing === undefined ? {} : { tracing: options.tracing }) }, options.environment, options.args),
       logPath: processLogPath(allocation.logsDir, "core"),
-    }));
-    const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;
-    await dependencies.waitForHttp(fluxiqOrigin, {
-      operationStage: "core.health",
-      ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),
-      ...(options.signal ? { signal: options.signal } : {}),
     });
-    // Core creates its gateway lazily when an API route first requests the
-    // FluxIQ runtime. An unauthenticated snapshot probe intentionally returns
-    // 401, but still initializes the production gateway before TCP polling.
-    await fetch(`${fluxiqOrigin}/api/client-gateway/snapshot`, options.signal ? { signal: options.signal } : {}).catch(() => undefined);
-    await waitForTcpGateway(allocation.gatewayPort, options.startupTimeoutMs ?? 60_000, options.signal);
+    supervisor.start(coreProcess);
+    const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;
+    const coreReady = async (): Promise<void> => {
+      await dependencies.waitForHttp(fluxiqOrigin, {
+        operationStage: "core.health",
+        ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+      // Core creates its gateway lazily when an API route first requests the
+      // FluxIQ runtime. An unauthenticated snapshot probe intentionally returns
+      // 401, but still initializes the production gateway before TCP polling.
+      await fetch(`${fluxiqOrigin}/api/client-gateway/snapshot`, options.signal ? { signal: options.signal } : {}).catch(() => undefined);
+      await waitForTcpGateway(allocation.gatewayPort, options.startupTimeoutMs ?? 60_000, options.signal);
+    };
+    await coreReady();
 
     let control: ExistingFluxIQControlClient | undefined;
     let projectId: string | undefined;
@@ -182,6 +188,11 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       ...(credentials?.pin ? { authorizationPin: credentials.pin } : {}),
       ...(credentials?.password ? { authorizationPassword: credentials.password } : {}),
       processExitCodes: () => supervisor.processExitCodes(),
+      restartCore: async () => {
+        await supervisor.stop(coreProcess.name);
+        supervisor.start(coreProcess);
+        await coreReady();
+      },
       close: closeTopology(supervisor, workspaceLock),
     };
   } catch (error) {

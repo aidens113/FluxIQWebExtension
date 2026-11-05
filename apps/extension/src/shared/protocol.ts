@@ -349,7 +349,7 @@ export const AUTOMATION_PANEL_MESSAGES = {
    * refusal is Core's own sentence.
    */
   carryOnTaskAttempt: RUNTIME_MESSAGES.panelCarryOnTaskAttempt,
-  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider` and `enabled` only. */
+  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider`, `enabled` and, when Core says, `unlocked` and `lockedBecause` only. */
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,

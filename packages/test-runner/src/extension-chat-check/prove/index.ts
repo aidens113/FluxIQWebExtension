@@ -4,3 +4,4 @@
 export { proveAskAnswered, type AskAnswerObservation } from "./ask-answered.js";
 export { CHAT_BUILD_MESSAGE, proveChatBuild, type ChatBuildObservation } from "./chat-build.js";
 export { EXPECTED_CAPABILITY_IDS, proveChatRelay, type ChatRelayObservation } from "./chat-relay.js";
+export { proveModelKeyUnlock, type ModelKeyUnlockObservation } from "./model-key-unlock.js";
