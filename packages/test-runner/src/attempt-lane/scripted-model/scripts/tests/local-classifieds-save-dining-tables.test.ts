@@ -235,6 +235,42 @@ test("the open-save-back form leaves out its hand presses, puts the way back aft
   assert.throws(() => decide("open-save-back", [...before, looped, made("see-saved"), made("forward", "core.run_flow", { passed: false })], saved), /did not pass/u);
 });
 
+const itemPage = (saved: boolean) => [`URL ~/item/1003/   (~ = ${BASE})`, saved ? 't900 button "Saved"' : 't889 button "Save"'].join("\n");
+/** One script across its decisions, as a run has: it remembers the list's addresses from when the list showed. */
+const script = (form: string) => {
+  const decision = scriptedModelScriptFor(TASK, form).replies.evidence_tool_decision![0]!;
+  return (extra: readonly EvidenceEntry[], page = LIST) => (decision(request(page, extra)) as Called).decision;
+};
+const SORTED = [made("search"), made("choose-radius"), made("apply-1"), made("open-radius"), made("open-sort"), made("sort-cheapest")];
+
+for (const [form, before] of [["by-hand", [...SORTED, DETECTED, made("read-tables")]], ["by-hand-unread", SORTED]] as const) {
+  test(`the ${form} form presses each table's Save by hand, opening each by its own page, as a paid run did, with no forward run`, () => {
+    const next = script(form);
+    const open = next(before);
+    assert.equal(open.callId, "open-1");
+    assert.deepEqual(open.input, { node: "web.output.dom-click", parameters: { target: { handle: "t782" } }, consequences: [] });
+    const first = next([...before, made("open-1")], itemPage(false));
+    assert.equal(first.callId, "save-1");
+    assert.deepEqual(first.input, { node: "web.output.dom-click", parameters: { target: { handle: "t889" } }, consequences: ["modify_existing"] });
+    const second = next([...before, made("open-1"), made("save-1")], itemPage(true));
+    assert.equal(second.callId, "open-2");
+    assert.equal(second.input?.node, "web.output.browser-navigate");
+    assert.equal(second.input?.parameters?.url, `${BASE}/item/1054/`);
+    assert.equal(next([...before, made("open-1"), made("save-1"), made("open-2")], itemPage(false)).callId, "save-2");
+    const third = next([...before, made("open-1"), made("save-1"), made("open-2"), made("save-2")], itemPage(true));
+    assert.equal(third.input?.parameters?.url, `${BASE}/item/1055/`);
+    const allThree = [...before, made("open-1"), made("save-1"), made("open-2"), made("save-2"), made("open-3"), made("save-3")];
+    const saved = [`URL ~/saved/   (~ = ${BASE})`, 't1290 select "Sort saved items" ="Recently saved"'].join("\n");
+    assert.equal(next(allThree, saved).callId, "sort-saved");
+  });
+}
+
+test("the by-hand form reads the list first and the unread form does not", () => {
+  assert.equal(script("by-hand")([...SORTED, DETECTED]).callId, "read-tables");
+  assert.equal(script("by-hand")(SORTED).callId, "detect");
+  assert.equal(script("by-hand-unread")(SORTED).callId, "open-1");
+});
+
 test("a form the script does not have is refused, and the default is the plain one", () => {
   assert.throws(() => scriptedModelScriptFor(TASK, "other"), /no form "other"/u);
   assert.equal(scriptedModelScriptFor(TASK).taskId, TASK);

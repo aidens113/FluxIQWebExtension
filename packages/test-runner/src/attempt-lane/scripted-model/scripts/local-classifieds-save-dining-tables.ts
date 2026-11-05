@@ -16,13 +16,20 @@
 // Flow's save is written while the first table's page shows it on: `set Saved to checked` on that control, so a repeat never
 // presses it off. Its loop opens a row, sets that, and goes back, on the read's first three rows. Then the model looks at its
 // saved items, and asks for the loop by its first step from there, with the list before the range.
+// `by-hand`: what paid run `run-mw3itjcy-ce4429f7` did, and no other form does. It reads the list, then opens each of the three
+// tables and presses its Save by hand, with no forward pass at all. Every other form presses only the first by hand, so a repair
+// of the act's words proved on them passed two of its three lines on a row a forward pass carried.
+// `by-hand-unread`: what paid run `run-mw3if5xt-a2bc72ae` did. The same presses with no read of the list before them, so no row
+// is known when each lands and only its page says which table it was.
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
 
-export type SaveDiningTablesForm = "plain" | "reshape" | "row-link" | "open-save-back";
+export type SaveDiningTablesForm = "plain" | "reshape" | "row-link" | "open-save-back" | "by-hand" | "by-hand-unread";
 
 const SAVE = ["modify_existing"];
+/** The three presses of the by-hand forms, by the call that makes each. */
+const SAVES = ["save-1", "save-2", "save-3"] as const;
 const READ_NODE = "web.output.dom-extract_list";
 const PRESS_NODE = "web.output.dom-click";
 const NAVIGATE_NODE = "web.output.browser-navigate";
@@ -212,6 +219,34 @@ const decideOpenSaveBack: ScriptedReply = (request) => {
   return toolCall("Open the first table's page to reach its Save.", "open-again", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: tablesOn(page)[0]!.handle } }, consequences: [] }, true);
 };
 
+/** Every table saved by hand, as the paid runs did: its page, its Save, on to the next, and no forward pass (header). */
+function decideByHand(form: "by-hand" | "by-hand-unread"): ScriptedReply {
+  let tables: ReturnType<typeof tablesOn> | undefined;
+  return (request) => {
+    const page = currentPageOf(request);
+    const arriving = clearTheWay(request, page);
+    if (arriving) return arriving;
+    const made = callsMade(request);
+    const saved = SAVES.filter((save) => made.has(save)).length;
+    if (saved === SAVES.length) return readBack(request, page, made);
+    if (/^URL ~\/item\//mu.test(page)) {
+      const save = pageLine(page, /button "Save"$/u);
+      if (save) return toolCall("Press Save on this table.", SAVES[saved]!, "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: save.handle } }, consequences: SAVE }, true);
+      return toolCall("Open the next table's own page.", `open-${saved + 1}`, "core.run_node", { node: NAVIGATE_NODE, parameters: { url: tables![saved]!.address }, consequences: [] }, true);
+    }
+    const reaching = reachTheList(request, page, made);
+    if (reaching) return reaching;
+    tables ??= tablesOn(page);
+    if (form === "by-hand") {
+      const structure = latestOf(request, "web.detect_repeating_structure");
+      if (!structure) return toolCall("See the shape of the listings.", "detect", "web.detect_repeating_structure", { target: tables[0]!.handle });
+      const columns = resultColumns(fieldsOf(structure));
+      if (!made.has("read-tables")) return toolCall("Read the tables on offer, leaving out adverts, table legs and chairs.", "read-tables", "core.run_node", readOf(structure, { title: columns.title, price: columns.price, url: columns.url }, [{ field: columns.sponsored, is: "present", not: true }, { field: columns.title, contains: ["table legs", "chairs"], not: true }]), true);
+    }
+    return toolCall("Open the cheapest table by pressing its card.", "open-1", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: tables[0]!.handle } }, consequences: [] }, true);
+  };
+}
+
 /** The two steps of one table's save the Flow holds: its own page opened by address, and Save pressed on it. The draft may hold the way back to the list after them, so they are found by what they do. */
 function saveSpan(request: ScriptedModelRequest, form: SaveDiningTablesForm): { open: number; save: number; read: number } {
   const steps = proposedSteps(request);
@@ -310,8 +345,8 @@ const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { a
 const MOST_DECISIONS = 40;
 
 export function localClassifiedsSaveDiningTablesScript(form: string = "plain"): ScriptedModelScript {
-  if (form !== "plain" && form !== "reshape" && form !== "row-link" && form !== "open-save-back") throw new Error(`This script has no form "${form}". It has plain, reshape, row-link and open-save-back`);
-  const decide = form === "open-save-back" ? decideOpenSaveBack : decideOf(form);
+  if (form !== "plain" && form !== "reshape" && form !== "row-link" && form !== "open-save-back" && form !== "by-hand" && form !== "by-hand-unread") throw new Error(`This script has no form "${form}". It has plain, reshape, row-link, open-save-back, by-hand and by-hand-unread`);
+  const decide = form === "open-save-back" ? decideOpenSaveBack : form === "by-hand" || form === "by-hand-unread" ? decideByHand(form) : decideOf(form);
   return Object.freeze({
     taskId: "local-classifieds-save-dining-tables",
     replies: {
