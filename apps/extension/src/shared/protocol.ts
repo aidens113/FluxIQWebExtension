@@ -362,7 +362,22 @@ export const AUTOMATION_PANEL_MESSAGES = {
    * the recording log gave it: from the offline queue when it has not been
    * sent, otherwise through Core's `remove-recording-entry`.
    */
-  removeRecordingStep: RUNTIME_MESSAGES.panelRemoveRecordingStep
+  removeRecordingStep: RUNTIME_MESSAGES.panelRemoveRecordingStep,
+  /**
+   * `list-project-parts` with `{ projectId, query?, site?, inputName?, outputName?, lasting?, trust?, usedByFlowId?,
+   * sourceFlowId?, limit?, cursor? }` and nothing else. Answers Core's `{ parts, nextCursor, hasMore }`, or
+   * `{ refused: true, code, message }` when the project's library cannot be read.
+   */
+  listParts: RUNTIME_MESSAGES.panelListParts,
+  /** `get-project-part` with `{ projectId, partId, version? }`. Answers `{ card, steps, calls, versions, callers }`, or a refusal. */
+  getPart: RUNTIME_MESSAGES.panelGetPart,
+  /** `save-project-part` with `{ projectId, flowId, subflowId, name?, purpose? }`. Answers `{ saved: true, partId, version, status }` or `{ saved: false, code, message }`. */
+  savePart: RUNTIME_MESSAGES.panelSavePart,
+  /**
+   * `run-project-part` with `{ projectId, partId, version?, inputs?, permittedConsequences?, acknowledgedRepeat?, newRunId? }`.
+   * Answers `{ runId, status, outputs, rows?, stoppedAt?, acts, modelCalls }`, or `{ refused: true, code, message, classes? }` where nothing was run.
+   */
+  runPart: RUNTIME_MESSAGES.panelRunPart
 } as const;
 
 export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
@@ -380,6 +395,29 @@ export type AutomationPanelRequest = {
   addUsd?: number | undefined;
   proposalId?: string | undefined;
   entryId?: string | undefined;
+  /** The parts library's search words and filters (`listParts`). `inputName`, `outputName`, `lasting` and `trust` take one word or a list. */
+  query?: string | undefined;
+  site?: string | undefined;
+  inputName?: string | readonly string[] | undefined;
+  outputName?: string | readonly string[] | undefined;
+  lasting?: string | readonly string[] | undefined;
+  trust?: string | readonly string[] | undefined;
+  usedByFlowId?: string | undefined;
+  sourceFlowId?: string | undefined;
+  limit?: number | undefined;
+  cursor?: string | null | undefined;
+  /** A saved part, and the version of it to read (`getPart`). */
+  partId?: string | undefined;
+  version?: number | undefined;
+  /** What a part is given, by input id, and that the person was told it does its acts again (`runPart`). `permittedConsequences` says what it may do. */
+  inputs?: Readonly<Record<string, unknown>> | undefined;
+  acknowledgedRepeat?: boolean | undefined;
+  permittedConsequences?: string | readonly string[] | undefined;
+  newRunId?: string | undefined;
+  /** The Subflow to keep, and the person's own name and purpose for it (`savePart`). */
+  subflowId?: string | undefined;
+  name?: string | undefined;
+  purpose?: string | undefined;
 };
 
 /**
