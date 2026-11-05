@@ -160,6 +160,11 @@ export async function proveModelKeyUnlock(context: ChatCheckContext, input: Mode
   const pairedWords = await record("paired-with-the-password", paired);
   checks.labPairingUnlocksAtOnce = paired === "unlocked" && pairedWords === null;
 
+  // The library's routes assert the project's domain, so the panel's own call has to be answered through this browser's token, by the real route.
+  const library = await control.evaluate(() => (globalThis as any).chrome.runtime.sendMessage({ type: "fluxiq.panel.listParts" })) as { ok?: boolean; error?: string; payload?: { parts?: unknown[] } };
+  checks.partsLibraryAnswersThroughTheToken = library.ok === true && Array.isArray(library.payload?.parts);
+  if (!checks.partsLibraryAnswersThroughTheToken) context.log(`[chat-check] the parts library through the token answered: ${JSON.stringify({ ok: library.ok, error: library.error, keys: Object.keys(library.payload ?? {}) })}`);
+
   await input.restartCore();
   const reconnected = await waitForConnection(control, "connected");
   const afterRestart = await waitForReadiness(control, value => value === "unlocked");
