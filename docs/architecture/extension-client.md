@@ -141,7 +141,9 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   "Close settings" goes back. The Project line reads "This browser works in
   the project you chose in FluxIQ. Change it there." (or says none is chosen
   yet, or asks to connect): the panel is given the project's id only, so no
-  name is shown.
+  name is shown. With none named by Core and none stored, the background asks
+  Core for this person's first project (`askCoreForFirstProject`, which Core may
+  refuse, and then none is still chosen).
 - **Getting started** (headed "Get started with FluxIQ"), which replaces the
   chat and the automations tab while the browser is not connected -- never
   connected, connecting, waiting for approval, lost, or unable to reach FluxIQ
@@ -157,8 +159,9 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   connected the chat comes back. A model key that reads missing, or a locked
   browser (a sixth step, "Unlock this browser once"), does not hold the chat
   back: the setup card sits above a usable chat with "Open FluxIQ" and "Not
-  now", and goes by itself when the key reads ready. A key read that fails
-  shows nothing and blocks nobody.
+  now", and goes by itself when the key reads ready. The unlock step says why
+  the key locked, in the words every other place uses (`modelKeyLockedWords`). A
+  key read that fails shows nothing and blocks nobody.
 
 While a recording runs, a bar under the top bar on every screen shows its step
 count, "Extract Data From This Page" and "Stop recording". It also holds a

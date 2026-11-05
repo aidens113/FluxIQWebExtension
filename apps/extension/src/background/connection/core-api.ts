@@ -36,6 +36,23 @@ export async function fetchCoreRecordings(
 /** How long the project-context lookup may take before the request is abandoned. */
 const PROJECT_CONTEXT_LOOKUP_TIMEOUT_MS = 10_000;
 
+/**
+ * Asks Core for this person's project when it named none: their own, or a first one made through
+ * Core's own check, which may refuse. Then there is still none, and the chat says so.
+ */
+export async function askCoreForFirstProject(credentials: CoreApiCredentials & { token: string }): Promise<string | undefined> {
+  const url = new URL("/api/client-gateway/first-project", credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    credentials: "omit",
+    headers: { accept: "application/json", authorization: `Bearer ${credentials.token}` },
+    signal: AbortSignal.timeout(PROJECT_CONTEXT_LOOKUP_TIMEOUT_MS)
+  });
+  if (!response.ok) return undefined;
+  const root = objectValue(parseJsonBody(await response.text()));
+  return root?.ok === true ? stringValue(objectValue(root.payload)?.projectId) : undefined;
+}
+
 export async function fetchProjectIdFromCoreSnapshot(
   credentials: CoreApiCredentials & { token: string },
   identity: { sessionId: string | undefined; clientId: string },

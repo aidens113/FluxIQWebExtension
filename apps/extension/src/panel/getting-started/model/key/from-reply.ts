@@ -3,8 +3,16 @@
 // with no list says nothing about the keys. Same rules as the chat's own reading in
 // `@fluxiq/ui-components` (`onboarding/model-readiness.ts`), so the two never disagree.
 
+import { modelKeyLockedWords, readModelKeyLockReason } from "fluxiq/ui";
 import type { PanelResult } from "../../../state";
 import type { ModelKeyReading } from "./reading";
+
+/** Why the first enabled key of a locked reply is locked, from the one place those words live. */
+export function modelKeyLockWordsFromReply(result: PanelResult<unknown>): string | undefined {
+  if (modelKeyFromReply(result) !== "locked" || !result.ok) return undefined;
+  const keys = record(record(result.value)?.payload)?.keys as unknown[];
+  return modelKeyLockedWords(readModelKeyLockReason(keys.map(record).find((key) => key?.enabled === true)?.lockedBecause));
+}
 
 /** Never throws; anything that is not a clear answer is `unknown`. */
 export function modelKeyFromReply(result: PanelResult<unknown>): ModelKeyReading {
