@@ -453,7 +453,11 @@ copy in the same place of the part that holds the row's values, is what the pass
 on, never a position; and nothing is pressed on another row's own page
 (`pass-row/item-address.ts`). A pass whose own control cannot be found answers its
 code with the reason `row_control_not_found`, which a forward run tells the model by
-the row's name, going on to the next row. A link nothing shows to be the row's still goes as a
+the row's name, going on to the next row, as it does for any other step that fails on a row (Core's
+`docs/architecture/automation-studio/llm-flow-bootstrap.md`, "Forward runs"). A step call a forward run marks `reach: true`
+first moves to its recorded `from` if the page is not there and the step does not move the page itself
+(`runtime/llm-evidence/node-run/reach-page/`): the way the next pass gets back to its list when the last one did not
+come back by its own step, and the way a list read before the range gets to its page. A link nothing shows to be the row's still goes as a
 page-level control, and its resolution says so (`passRow: "page-level-link"`): nothing then says
 the pass stands on its row, so no later lasting step of that pass lands until a step's
 resolution says `own` again. A press's answer also carries its item's whole words
@@ -468,10 +472,12 @@ A replayed `extract_list` answers the rows the Flow would save on
 `webNodeReplayFlowRows`, `runtime/llm-evidence/node-run/replay-answer.ts`). It
 runs the same two steps as the Flow's capture: `webAutomationExtractListDispatch`
 on the resolved parameters, then Core's `validateAutomationStudioRecords` on the
-client's `extracted`, with the record output's schema and `maxRecords`. A
-dispatch that refuses its record output, an answer with no row list, or a
-schema that refuses every row gives no `outputs`, and Core's walker then runs
-the loop once on the explored row. These are whole rows, page text and all:
+client's `extracted`, with the record output's schema and `maxRecords`. An answer
+with no row list, or a schema that refuses every row, gives no `outputs`: a dry run's walker then runs the loop once on the
+explored row, and a forward run sends none of the loop and says so. A read whose dispatch refuses its record output is not
+read at all: a replay answers `core.replay.failed` with the dispatch's codes, and a read by hand or a written step is
+refused with them (`node-run/list-read/flow-refused.ts`, t869), where before it read, answered no rows, and nobody was
+told. `dedupe` on an `intermediate` record output is such a read. These are whole rows, page text and all:
 Core carries `outputs` and never shows it to the model or the judge.
 
 A replayed single-value read, `web.dom.extract`, answers the value it read on

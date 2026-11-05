@@ -2107,6 +2107,10 @@ product's except the model's choices:
   provider secrets, opens no env file for its ceiling and writes nothing to the spend ledger.
   Its row names the stand-ins `model` and `spend`, says `live: false`, and the result line
   says NOT LIVE. Validation refuses `live: true` on a row with any stand-in.
+- Every run's row, result line and `attempt.json` say how much of its input the model
+  service read from its cache (`cacheHitPercent`, and `cache` with the read and written
+  tokens), summed from what each step's `meta.json` recorded. A scripted run's is a
+  stand-in's like the rest of its spend.
 
 **How to write a script for a new task.** Add `scripted-model/scripts/<task>.ts` and list it
 in that folder's `index.ts`. `panel_command` answers `{ do: "flow.createHere", with: {

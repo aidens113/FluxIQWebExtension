@@ -165,6 +165,76 @@ test("after the forward run it presses the Saved link the view shows, goes by th
   assert.equal(decide("plain", [...so_far, made("read-saved")], saved).kind, "complete");
 });
 
+test("the open-save-back form does what the paid run did, in its order, and its Save step is the one the model wrote", () => {
+  const HOME = [...HAND];
+  const open = decide("open-save-back", HOME);
+  assert.equal(open.callId, "open-first");
+  assert.deepEqual(open.input?.parameters, { target: { handle: "t782" } });
+  assert.equal(open.add, undefined);
+  const item = [`URL ~/item/1003/   (~ = ${BASE})`, 't979 button "Save"', 't980 button "Share"'].join("\n");
+  const save = decide("open-save-back", [...HOME, made("open-first")], item);
+  assert.equal(save.callId, "save-first");
+  assert.deepEqual(save.input?.consequences, ["modify_existing"]);
+  const savedPage = [`URL ~/item/1003/   (~ = ${BASE})`, 't979 button "Saved" pressed', 't980 button "Share"'].join("\n");
+  const back = decide("open-save-back", [...HOME, made("open-first"), made("save-first")], savedPage);
+  assert.equal(back.callId, "back-first");
+  assert.equal(back.add, true);
+  const again = [...HOME, made("open-first"), made("save-first"), made("back-first")];
+  assert.equal(decide("open-save-back", again).callId, "detect-again");
+  const deduped = decide("open-save-back", [...again, made("detect-again")]);
+  assert.equal(deduped.callId, "read-deduped");
+  assert.equal(deduped.input?.parameters?.extractList.dedupe, true);
+  assert.equal(deduped.input?.parameters?.recordOutput.purpose, "intermediate");
+  assert.equal(deduped.add, undefined);
+  const read = decide("open-save-back", [...again, made("detect-again"), made("read-deduped")]);
+  assert.equal(read.callId, "read-tables");
+  assert.equal(read.input?.parameters?.extractList.dedupe, undefined);
+  assert.deepEqual(Object.keys(read.input?.parameters?.extractList.fields), ["title", "price", "link"]);
+  assert.deepEqual(read.input?.parameters?.extractList.where[0], { field: "a_sponsored", is: "absent" });
+  assert.equal(read.add, true);
+  const read2 = [...again, made("detect-again"), made("read-deduped"), made("read-tables")];
+  const openAgain = decide("open-save-back", read2);
+  assert.equal(openAgain.callId, "open-again");
+  assert.equal(openAgain.add, true);
+  const write = decide("open-save-back", [...read2, made("open-again")], savedPage);
+  assert.equal(write.callId, "write-save");
+  assert.equal(write.input?.node, "web.output.dom-check");
+  assert.deepEqual(write.input?.parameters, { target: { handle: "t979" }, checked: true });
+  assert.deepEqual(write.input?.consequences, ["modify_existing"]);
+  assert.equal(write.input?.write, true);
+});
+
+test("the open-save-back form leaves out its hand presses, puts the way back after the save, repeats the first three rows, and asks for the loop by its first step from the saved items", () => {
+  const before = [...HAND, made("open-first"), made("save-first"), made("back-first"), made("detect-again"), made("read-deduped"), made("read-tables"), made("open-again"), made("write-save")];
+  const press = (step: number, target: string) => ({ step, actionId: "web.output.dom-click", disposition: "kept", does: { target } });
+  const sort = press(7, "Price: lowest first");
+  const firstOpen = press(8, "£45 Round pine dining table, 90cm Upper Kelford");
+  const firstSave = press(9, "Save");
+  const backStep = { step: 10, actionId: "web.output.browser-navigate", disposition: "kept", input: { parameters: { url: `${BASE}/search/` } } };
+  const readStep = { step: 11, actionId: "web.output.dom-extract_list", disposition: "kept" };
+  const loopOpen = press(12, "£45 Round pine dining table, 90cm Upper Kelford");
+  const check = { step: 13, actionId: "web.output.dom-check", written: true, does: { target: "Saved" } };
+  const amended = decide("open-save-back", [...before, steps(sort, firstOpen, firstSave, backStep, readStep, loopOpen, check)]);
+  assert.deepEqual(amended.amendments, [
+    { step: 8, change: "drop" },
+    { step: 9, change: "drop" },
+    { step: 10, change: "reorder", to: 13 },
+    { step: 12, change: "repeat", over: 11, through: 10, most: 3 }
+  ]);
+  const looped = steps(sort, readStep, { ...loopOpen, runs: "repeats through step 13" }, check, { ...backStep, step: 14 });
+  const see = decide("open-save-back", [...before, looped]);
+  assert.equal(see.callId, "see-saved");
+  assert.equal(see.input?.parameters?.url, `${BASE}/saved/`);
+  assert.equal(see.add, true);
+  const saved = [`URL ~/saved/   (~ = ${BASE})`, 't1259 link "Saved 3" current ~/saved/', 't1290 select "Sort saved items" ="Recently saved"', 't1296 link "Lamp" ~/item/1030/'].join("\n");
+  const forward = decide("open-save-back", [...before, looped, made("see-saved")], saved);
+  assert.equal(forward.toolId, "core.run_flow");
+  assert.deepEqual(forward.input, { from: 12 });
+  const after = decide("open-save-back", [...before, looped, made("see-saved"), made("forward", "core.run_flow", { passed: true })], saved);
+  assert.equal(after.callId, "sort-saved");
+  assert.throws(() => decide("open-save-back", [...before, looped, made("see-saved"), made("forward", "core.run_flow", { passed: false })], saved), /did not pass/u);
+});
+
 test("a form the script does not have is refused, and the default is the plain one", () => {
   assert.throws(() => scriptedModelScriptFor(TASK, "other"), /no form "other"/u);
   assert.equal(scriptedModelScriptFor(TASK).taskId, TASK);

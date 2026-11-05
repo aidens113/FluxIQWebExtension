@@ -13,7 +13,7 @@ import { loadScenarioManifest } from "../../scenarios.js";
 import { renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
-import { AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, type LiveAttemptSession } from "./attempt/index.js";
+import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, type LiveAttemptSession } from "./attempt/index.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
 import { readPanelAnswerTurn } from "./panel-answer-port.js";
@@ -162,10 +162,11 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       },
     });
     const series = await runAttemptSeries({ task: { scenario, request, workflow }, driver, attempts: 1 });
-    const row = series.series.rows[0]!, outcome = series.outcomes[0]!, attempt = ended!.outcome.attempt;
+    const cache = await attemptCacheShare(stepsDirectory);
+    const row = { ...series.series.rows[0]!, ...(cache.hitPercent === null ? {} : { cacheHitPercent: cache.hitPercent }) }, outcome = series.outcomes[0]!, attempt = ended!.outcome.attempt;
     const resultLine = attemptResultLine({ row, answer: outcome.answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow });
-    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify({ row, answer: outcome.answer, attempt, saved: ended!.outcome.saved ?? null, budgetUsd: attempt.budget.usd, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: side.server?.counts() ?? null }, null, 2));
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${renderAttemptSeries(series.series)}\n`);
+    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify({ row, answer: outcome.answer, attempt, saved: ended!.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: side.server?.counts() ?? null }, null, 2));
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${renderAttemptSeries({ ...series.series, rows: [row] })}\n`);
     if (side.live) await writePaidAttemptBundle({ runsDirectory: paths.runsDirectory, runId, startedAt, verdict: outcome.answer.verdict === "right" ? "passed" : "failed", plan: side.live.describe().authorized, spentUsd: attempt.spend.usd, stepsDirectory });
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     verdict = outcome.answer.verdict === "right" && attempt.status !== "waiting_for_person" ? "passed" : "failed";

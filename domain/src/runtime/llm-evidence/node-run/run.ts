@@ -85,7 +85,7 @@ import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRe
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
-import { webListReadCode, webListReadConditionAccount } from "./list-read";
+import { webListReadCode, webListReadConditionAccount, webListReadFlowRefused } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
@@ -334,6 +334,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
     handle = webPlanFirstTargetHandle(written);
     ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, handle);
+    const refusedRead = webListReadFlowRefused(node.actionType, ran); // Told where it is written, not when its loop finds no rows (`./list-read/flow-refused.ts`).
+    if (refusedRead) return refusal(current, "target_unobserved", handleRefusal(written, refusedRead), record);
     }
     // A press on a control the look just taken shows covered is sent when the
     // runtime's own defence clears every cover over it: the extension's click
@@ -765,10 +767,8 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
   return rejectionDetail({
     reason: "parameters_not_resolved",
     target: webPlanFirstTargetHandle(parameters),
-    // The codes, and then the shapes a handle is accepted in. A live build was
-    // refused `web.handle.extraction_required` fifteen times and never once
-    // corrected the shape, because a code is a name for a mistake and not a
-    // statement of what is accepted instead (`run-mudabxqd-266e728d`).
+    // The codes, and then the shapes a handle is accepted in. A live build was refused `web.handle.extraction_required` fifteen times
+    // and never once corrected the shape, because a code is a name for a mistake and not a statement of what is accepted instead (`run-mudabxqd-266e728d`).
     instead: [...issueCodes.map((code) => String(code).slice(0, 100)).slice(0, 12), ...HANDLE_SHAPE],
     missing: undefined,
     requestId: undefined

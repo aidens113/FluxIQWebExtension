@@ -101,6 +101,8 @@ import {
 } from "./replay-answer";
 import type { WebNodeRun } from "./context";
 import { webMovesThePage } from "./start-location";
+import { webListReadFlowRefused } from "./list-read";
+import { webNodeReplayAsksToReach, webNodeReplayReach } from "./reach-page";
 import { verifyWebOutputNode } from "./verify";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookUntilPresent, webNodeReplayedReads, webNodeReplayRowReacquire } from "./retries";
 
@@ -325,6 +327,8 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
       assumed: undefined
     });
   }
+  // A forward run's step found on another page gets there first (`./reach-page/`); a step that moves the page goes where it goes.
+  if (webNodeReplayAsksToReach(value) && !webMovesThePage(node)) await webNodeReplayReach(run);
   // `gatedByCaller`, because the step was put to the gate a few lines above,
   // against this replay’s own declaration. Resolution would otherwise ask the
   // same question a second time and raise a second request for one act.
@@ -353,6 +357,9 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // dispatch.ts`), so the judge of the build's test can be shown them; it reads
   // and keeps the same rows either way.
   const resolvedParameters = resolved.status === "resolved" ? resolved.parameters : parameters;
+  // A read a Flow would refuse is not read: it would answer no rows, and nobody would be told why (`./list-read/flow-refused.ts`).
+  const refusedRead = webListReadFlowRefused(node.actionType, resolvedParameters);
+  if (refusedRead) return await answerWithPage(run, REPLAY_RESULT_CODES.failed, `a Flow cannot run this read as it is written (${refusedRead.join(", ")}), so the list was not read`, false, { resultReason: undefined, nodeId: node.definitionId, assumed });
   const ran = node.actionType === EXTRACT_LIST_ACTION ? webAutomationExtractListAloneRowsAsked(resolvedParameters) : resolvedParameters;
   // A step that changes the page in place -- a press, a type, a choice -- is
   // read as the same call is read while exploring (`./run.ts`, t174-w82): the

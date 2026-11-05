@@ -62,9 +62,9 @@ export function attemptSeries(task: AttemptTask, rows: readonly AttemptReportRow
 
 /** The series as a person reads it. Stand-ins are named beside the numbers they produced. */
 export function renderAttemptSeries(series: AttemptSeries): string {
-  const header = "attempt | path | calls | tokens | usd | ms | live steps | simulation | answer | oracle | flow | repeated acts | loops caught | counted as | stand-ins";
+  const header = "attempt | path | calls | tokens | from cache | usd | ms | live steps | simulation | answer | oracle | flow | repeated acts | loops caught | counted as | stand-ins";
   const lines = series.rows.map((row) => [
-    row.attempt, row.path, row.calls, row.inputTokens + row.outputTokens, row.usd.toFixed(4), row.ms, row.liveSteps, row.simulation, row.answerVerdict, row.oracleVerdict ?? "none", row.flow,
+    row.attempt, row.path, row.calls, row.inputTokens + row.outputTokens, row.cacheHitPercent === undefined ? "unknown" : `${row.cacheHitPercent}%`, row.usd.toFixed(4), row.ms, row.liveSteps, row.simulation, row.answerVerdict, row.oracleVerdict ?? "none", row.flow,
     row.repeatedActs.map((act) => `${act.name} (asked ${act.asked}, landed ${act.landed})`).join("; ") || "none",
     Object.values(row.loopsCaught).reduce((sum, count) => sum + count, 0),
     row.live ? "live" : "not live",
