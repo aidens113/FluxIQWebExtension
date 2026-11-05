@@ -76,8 +76,8 @@ export type LiveLlmPlan = {
   coreDefaultModel: LlmModel;
   /**
    * The authoring mode the run's Core was started with (`labAuthoringModeValue`,
-   * `FLUXIQ_AUTHORING_MODE` from `--authoring-mode`, `legacy` by default). A
-   * created-Flow run builds only in `legacy` (`../flow-lane/creation/readiness.ts`).
+   * `FLUXIQ_AUTHORING_MODE` from `--authoring-mode`, the product's default when
+   * it names none). A created-Flow run is admitted by `../flow-lane/creation/readiness.ts`.
    */
   coreAuthoringMode: AutomationStudioAuthoringMode;
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */

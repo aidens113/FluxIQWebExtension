@@ -73,8 +73,9 @@ test("the lane refuses a scenario that is not one of the ten realistic ones", as
 
 test("a row carries every column the plan names, and the series follows from its rows", () => {
   const row = attemptReportRow(task, outcome(1));
-  assert.deepEqual(Object.keys(row).sort(), ["answerVerdict", "attempt", "calls", "flow", "inputTokens", "liveSteps", "loopsCaught", "ms", "oracleVerdict", "outputTokens", "path", "repeatedActs", "scenarioId", "schemaVersion", "simulation", "standIns", "taskId", "usd"]);
+  assert.deepEqual(Object.keys(row).sort(), ["answerVerdict", "attempt", "calls", "flow", "inputTokens", "live", "liveSteps", "loopsCaught", "ms", "oracleVerdict", "outputTokens", "path", "repeatedActs", "scenarioId", "schemaVersion", "simulation", "standIns", "taskId", "usd"]);
   assert.equal(row.simulation, "not_run", "an attempt with no simulation says so");
+  assert.equal(row.live, false, "a row with a stand-in is not live");
   assert.equal(row.loopsCaught.near_repeat, 2, "each pattern's ladder counts, summed");
   const series = attemptSeries(task, [attemptReportRow(task, outcome(1, { answer: { verdict: "wrong", wrongBecause: ["records"], records: "failed" } })), attemptReportRow(task, outcome(2, { ...SECOND, answer: { flow: "replay_held" } }))], null);
   assert.equal(series.firstRightAttempt, 2);

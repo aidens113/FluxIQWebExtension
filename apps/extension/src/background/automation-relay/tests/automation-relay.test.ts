@@ -94,6 +94,40 @@ test("model readiness carries whether a key opens here, and nothing else about i
   assert.deepEqual(reply, { ok: true, payload: { keys: [{ kind: "llm", provider: "anthropic", enabled: true, unlocked: false, lockedBecause: "signed_out" }, { kind: "llm", enabled: true, unlocked: true }, { kind: "llm", enabled: true }] } });
 });
 
+test("a task's attempts are read by conversation or by attempt, naming exactly one, and nothing else reaches Core", async () => {
+  const listed = { ok: true, payload: { outcomes: [{ attempt: { attemptId: "a1" } }] } } as const;
+  const h = harness({ "list-conversation-task-attempts": listed, "get-task-attempt": { ok: true, payload: { outcome: { attempt: { attemptId: "a1" } } } } });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.taskOutcomes, projectId: "project-7", conversationId: "c1", flow: { nodes: [] } }), listed);
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.taskOutcomes, attemptId: "a1", inputs: { password: "x" } });
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
+    ["list-conversation-task-attempts", { projectId: "project-7", conversationId: "c1" }],
+    ["get-task-attempt", { projectId: "project-1", attemptId: "a1" }]
+  ]);
+  for (const asked of [{}, { conversationId: "c1", attemptId: "a1" }]) {
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.taskOutcomes, ...asked }), { ok: false, code: "invalid_request", error: "That request must name one conversation or one attempt." });
+  }
+  assert.equal(h.calls.length, 2);
+});
+
+test("a carry-on sends Core exactly the attempt and the amount, and no stray field reaches it", async () => {
+  const h = harness({ "carry-on-task-attempt": { ok: true, payload: { attemptId: "a1", budgetUsd: 1 } } });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, projectId: "project-7", attemptId: "a1", addUsd: 0, flowId: "flow-x", authoringMode: "candidate", authSessionId: "s" }), { ok: true, payload: { attemptId: "a1", budgetUsd: 1 } });
+  await h.send({ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, attemptId: "a1", addUsd: 0.5 });
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
+    ["carry-on-task-attempt", { projectId: "project-7", attemptId: "a1", addUsd: 0 }],
+    ["carry-on-task-attempt", { projectId: "project-1", attemptId: "a1", addUsd: 0.5 }]
+  ]);
+});
+
+test("a carry-on without an attempt, or with an amount that is not zero or more, never reaches Core", async () => {
+  const h = harness();
+  assert.equal((await h.send({ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, addUsd: 1 })).ok, false);
+  for (const addUsd of [undefined, "1", -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, attemptId: "a1", addUsd }), { ok: false, code: "invalid_request", error: "That request must say how much budget to add, zero or more." }, String(addUsd));
+  }
+  assert.equal(h.calls.length, 0);
+});
+
 test("model readiness asks the secret-keys program and keeps only kind, provider and enabled", async () => {
   const h = harness({
     snapshot: { ok: true, payload: { keys: [{ id: "secret:1", name: "My OpenAI key", kind: "llm-api-key", provider: "openai", enabled: true, metadata: { hint: "sk-...1234" } }, { kind: "llm-api-key", enabled: "yes" }] } }

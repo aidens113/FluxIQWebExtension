@@ -9,7 +9,7 @@
 import { unrealisticScenarioRefusal } from "@fluxiq-web-extension/test-runner/realistic-scenarios";
 
 /** The subcommands that name one scenario, right after the command. */
-const ONE_SCENARIO = new Set(["run", "interactive", "replay"]);
+const ONE_SCENARIO = new Set(["run", "interactive", "replay", "attempt"]);
 
 /**
  * The refusal for Lab arguments that would open a scenario outside the ten, or

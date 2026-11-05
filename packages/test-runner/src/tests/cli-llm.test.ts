@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { providerFreeEnvironment, scriptedModelChildEnvironment } from "../attempt-lane/scripted-model/index.js";
 import { runCli } from "../cli.js";
 import { coreWebBuildEnvironment, loadCoreWebBuildSeam } from "../core-web-build/index.js";
 import { catalogScenario, datasetTask } from "../flow-lane/creation/tests/scenario-fixture.js";
@@ -345,4 +346,50 @@ test("a realistic scenario passes the guard and reaches the runner's own checks"
     assert.doesNotMatch(result.stderr, RULE);
     assert.match(result.stderr, /DEEPSEEK_API_KEY is not set/u, "the next refusal is the live run's missing credential");
   }
+});
+
+const ATTEMPT = ["attempt", REALISTIC, "--task", "catalog-first-page", "--authoring-mode", "answer-first"];
+
+test("lab attempt's paid form dry-runs to its plan on a stand-in key: $5 with nothing configured, and no provider call", async (t) => {
+  const lab = await stubLab(t);
+  const standIn = ["stand", "in", "provider", "value"].join("-");
+  const env = { ...lab.env, FLUXIQ_PROVIDER_KEY_FILES: "none", CLAUDE_API_KEY: standIn };
+  const result = await captureCli([...ATTEMPT, "--live-llm", "--llm-max-cost-usd", "5", "--dry-run"], env);
+  assert.equal(result.code, 0, result.stderr);
+  const printed = JSON.parse(result.stdout) as Record<string, any>;
+  assert.equal(printed.status, "ready");
+  assert.equal(printed.providerCallCount, 0);
+  assert.equal(printed.model, "live");
+  assert.equal(printed.live.coreAuthoringMode, "answer-first");
+  assert.equal(printed.live.buildCostCeilingUsd ?? printed.live.authorized.maxTotalEstimatedCostUsd, 5);
+  assert.equal(printed.live.authorized.maxTotalEstimatedCostUsd, 5);
+  assert.equal(result.stdout.includes(standIn), false, "the dry run printed the credential");
+  await assert.rejects(access(path.join(lab.root, "test-runs")), "a dry run wrote no run");
+  const lower = await captureCli([...ATTEMPT, "--live-llm", "--llm-max-cost-usd", "5", "--dry-run"], { ...env, FLUXIQ_LLM_RUN_COST_CEILING_USD: "0.25" });
+  assert.equal(lower.code, 1);
+  assert.match(lower.stderr, /--llm-max-cost-usd 5 is above the per-build cost ceiling of \$0\.25/u);
+  const noKey = await captureCli([...ATTEMPT, "--live-llm", "--llm-max-cost-usd", "5", "--dry-run"], lab.env);
+  assert.equal(noKey.code, 1, "with nothing to read a key from, the paid form is refused before anything starts");
+  assert.match(noKey.stderr, /needs a provider credential/u);
+});
+
+test("lab attempt's scripted form refuses a task with no script before anything starts, and its environment holds no key", async (t) => {
+  const lab = await stubLab(t);
+  const noScript = await captureCli([...ATTEMPT, "--scripted-model"], lab.env);
+  assert.equal(noScript.code, 1);
+  assert.match(noScript.stderr, /--scripted-model has no script for catalog-first-page/u);
+  await assert.rejects(access(path.join(lab.root, "test-runs")), "a refused attempt wrote no run");
+  const scrubbed = providerFreeEnvironment({ CLAUDE_API_KEY: DUMMY_KEY, PATH: "/bin" });
+  assert.deepEqual(scrubbed, { PATH: "/bin", FLUXIQ_PROVIDER_KEY_FILES: "none", FLUXIQ_TEST_ENV_FILES: "none" });
+  const child = scriptedModelChildEnvironment({ CLAUDE_API_KEY: DUMMY_KEY, NODE_OPTIONS: "--max-old-space-size=4096" }, "http://127.0.0.1:9");
+  assert.equal(child.CLAUDE_API_KEY, undefined);
+  assert.match(child.NODE_OPTIONS ?? "", /^--max-old-space-size=4096 --import file:\S+fetch-preload\.js$/u);
+  assert.equal(child.FLUXIQ_LAB_SCRIPTED_MODEL_ORIGIN, "http://127.0.0.1:9");
+});
+
+test("lab attempt refuses a scenario outside the ten before anything starts", async (t) => {
+  const lab = await stubLab(t);
+  const refused = await captureCli(["attempt", "basic-form", "--task", "x", "--authoring-mode", "answer-first", "--scripted-model"], lab.env);
+  assert.equal(refused.code, 1);
+  assert.match(refused.stderr, /realistic/u);
 });

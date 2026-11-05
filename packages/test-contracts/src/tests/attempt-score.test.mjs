@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { flowScoreOf, validateAttemptReportRow, validateAttemptSeries, validateRunAnswerScore } from "../../dist/index.js";
+import { attemptCountsAsLive, attemptStandIns, flowScoreOf, validateAttemptReportRow, validateAttemptSeries, validateRunAnswerScore } from "../../dist/index.js";
 
 const row = (attempt, changed = {}) => ({
   schemaVersion: "0.1", taskId: "task-one", scenarioId: "everything-store", attempt, path: "explore", calls: 10, inputTokens: 100, outputTokens: 10, usd: 0.1, ms: 1000, liveSteps: 5,
-  simulation: "not_run", answerVerdict: "right", oracleVerdict: null, flow: "unproven", repeatedActs: [], loopsCaught: { exact_repeat: 0 }, standIns: [], ...changed,
+  simulation: "not_run", answerVerdict: "right", oracleVerdict: null, flow: "unproven", repeatedActs: [], loopsCaught: { exact_repeat: 0 }, standIns: [], live: true, ...changed,
 });
 const series = (rows, changed = {}) => ({ schemaVersion: "0.1", taskId: "task-one", scenarioId: "everything-store", rows, firstRightAttempt: 1, attemptsUntilDeterministic: null, spendDeltas: [], secondStartedFromFirst: null, ...changed });
 
@@ -16,6 +16,18 @@ test("a row holds every column, and refuses one it does not know or a word outsi
   assert.equal(validateAttemptReportRow(row(0)).valid, false, "attempts count from 1");
   const { usd: _usd, ...noDollars } = row(1);
   assert.equal(validateAttemptReportRow(noDollars).valid, false);
+});
+
+test("a row with any stand-in can never be counted as live, and a scripted model above all", () => {
+  assert.equal(validateAttemptReportRow(row(1, { standIns: ["model", "spend"], live: false })).valid, true);
+  assert.equal(validateAttemptReportRow(row(1, { standIns: ["model", "spend"], live: true })).valid, false);
+  assert.equal(validateAttemptReportRow(row(1, { standIns: ["spend"], live: true })).valid, false);
+  assert.equal(validateAttemptReportRow(row(1, { standIns: [], live: false })).valid, false, "no stand-in at all is live");
+  const { live: _live, ...unsaid } = row(1);
+  assert.equal(validateAttemptReportRow(unsaid).valid, false, "a row must say");
+  assert.equal(attemptCountsAsLive([]), true);
+  assert.equal(attemptCountsAsLive(["model"]), false);
+  assert.equal(attemptStandIns.includes("model"), true);
 });
 
 test("a series counts its attempts from 1, in order, all of one task", () => {
@@ -38,4 +50,10 @@ test("the Flow's score reads only the Flow: no Flow, or no playback, is unproven
   assert.equal(flowScoreOf({ flowCreated: true, oracleVerdict: null }), "unproven");
   assert.equal(flowScoreOf({ flowCreated: true, oracleVerdict: "passed" }), "playback_held");
   assert.equal(flowScoreOf({ flowCreated: true, oracleVerdict: "failed" }), "playback_failed");
+});
+
+test("a scripted model's score names its spend too: the usage it reports is made up", () => {
+  const right = { verdict: "right", ending: "result", wrongBecause: [], records: "held", finalState: "held", change: "held", shown: "held", repeatedActs: [], missingActs: [], unaskedChanges: [], storedRows: 2, shownRows: 2, flow: "unproven" };
+  assert.equal(validateRunAnswerScore({ ...right, standIns: ["model", "spend"] }).valid, true);
+  assert.equal(validateRunAnswerScore({ ...right, standIns: ["model"] }).valid, false);
 });
