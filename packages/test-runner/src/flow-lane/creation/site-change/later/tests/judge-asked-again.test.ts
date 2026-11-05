@@ -10,20 +10,46 @@ const SAVES = asked(act("Three saved", { "saved:a": 1, "saved:b": 1, "saved:c": 
 const CART = asked(act("Two kettles in the cart", { "cart:k": 2 }));
 const DONE = { "saved:a": 1, "saved:b": 1, "saved:c": 1 };
 
-test("a toggle a person asked to do again is pressed again, and that is no repeat: the same change the same-words oracle calls wrong", () => {
+test("a Run again on saves already standing changes nothing, and that is right: each was checked and left as asked", () => {
+  const judged = judgeAskedAgain(SAVES, DONE, {});
+  assert.equal(judged.held, true);
+  assert.deepEqual([judged.foundAsAsked, judged.pressedAgain, judged.undone, judged.notPressed], [["Three saved"], [], [], []]);
+});
+
+test("a toggle pressed again on a Run again undoes what was asked, and is wrong, naming each row, as the same words' oracle says", () => {
   const unsaved = { "saved:a": -1, "saved:b": -1, "saved:c": -1 };
   assert.equal(judgeLaterChange(SAVES, DONE, unsaved).held, false);
-  assert.deepEqual(judgeAskedAgain(SAVES, unsaved), { pressedAgain: ["Three saved"], notPressed: [], held: true });
+  const judged = judgeAskedAgain(SAVES, DONE, unsaved);
+  assert.equal(judged.held, false);
+  assert.deepEqual(judged.undone, ["Three saved"]);
+  assert.deepEqual([...judged.unaskedChanges].sort(), ["saved:a", "saved:b", "saved:c"]);
 });
 
-test("a count a person asked to do again moves further, and is held", () => {
-  assert.deepEqual(judgeAskedAgain(CART, { "cart:k": 2 }), { pressedAgain: ["Two kettles in the cart"], notPressed: [], held: true });
+test("one row pressed off among three standing is still undone", () => {
+  const judged = judgeAskedAgain(SAVES, DONE, { "saved:b": -1 });
+  assert.equal(judged.held, false);
+  assert.deepEqual(judged.unaskedChanges, ["saved:b"]);
 });
 
-test("a Run again that changed nothing did not do what was asked, and names the act", () => {
-  assert.deepEqual(judgeAskedAgain(SAVES, {}), { pressedAgain: [], notPressed: ["Three saved"], held: false });
+test("a count a person asked to do again moves further, and is no repeat", () => {
+  const judged = judgeAskedAgain(CART, { "cart:k": 2 }, { "cart:k": 2 });
+  assert.equal(judged.held, true);
+  assert.deepEqual([judged.pressedAgain, judged.repeatedActs, judged.unaskedChanges], [["Two kettles in the cart"], [], []]);
+});
+
+test("what an earlier attempt never reached is still asked: done now is right, not done is missing", () => {
+  assert.equal(judgeAskedAgain(SAVES, { "saved:a": 1 }, { "saved:b": 1, "saved:c": 1 }).held, true);
+  const short = judgeAskedAgain(SAVES, { "saved:a": 1 }, {});
+  assert.equal(short.held, false);
+  assert.deepEqual(short.notPressed, ["Three saved"]);
+});
+
+test("a change the task never asked for is wrong on a Run again too", () => {
+  const judged = judgeAskedAgain(SAVES, DONE, { "hidden:x": 1 });
+  assert.equal(judged.held, false);
+  assert.deepEqual(judged.unaskedChanges, ["hidden:x"]);
 });
 
 test("a task that asks for no act has nothing to do again, and is not held as done again", () => {
-  assert.equal(judgeAskedAgain(asked(), {}).held, false);
+  assert.equal(judgeAskedAgain(asked(), {}, {}).held, false);
 });

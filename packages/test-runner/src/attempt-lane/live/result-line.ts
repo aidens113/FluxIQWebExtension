@@ -1,4 +1,5 @@
 import type { AttemptPath, AttemptReportRow, RunAnswerScore } from "@fluxiq-web-extension/test-contracts";
+import type { AttemptAskedAgain } from "../driver.js";
 
 const PATH_WORDS: Readonly<Record<AttemptPath, string>> = {
   explore: "It explored, with no run of a saved Flow",
@@ -23,15 +24,19 @@ function againstWords(row: AttemptReportRow, startedFromFirst: boolean | undefin
  * The run's one result line, in plain words. A row with a stand-in on it says so here
  * as well as in its fields, so a scripted proof can never be read as a live result.
  */
-/** What an attempt a person started with Run again says of what it did: done again on purpose, never a repeat. */
-function askedAgainWords(askedAgain: { pressedAgain: readonly string[]; notPressed: readonly string[] } | undefined): string {
+/** What an attempt a person started with Run again says of each asked act: done again, left as it stood, undone, or not done. */
+function askedAgainWords(askedAgain: AttemptAskedAgain | undefined): string {
   if (!askedAgain) return "";
-  const done = askedAgain.pressedAgain.length > 0 ? ` it did again: ${quoted(askedAgain.pressedAgain)}, so these are no repeated acts` : " it did nothing again";
-  const left = askedAgain.notPressed.length > 0 ? `; it did not do again: ${quoted(askedAgain.notPressed)}` : "";
-  return ` You asked to do it again (Run again):${done}${left}.`;
+  const parts = [
+    askedAgain.pressedAgain.length > 0 ? `it did again: ${quoted(askedAgain.pressedAgain)}, so these are no repeated acts` : "",
+    askedAgain.foundAsAsked.length > 0 ? `it found already as asked and pressed nothing: ${quoted(askedAgain.foundAsAsked)}` : "",
+    askedAgain.undone.length > 0 ? `it undid what was asked: ${quoted(askedAgain.undone)}` : "",
+    askedAgain.notPressed.length > 0 ? `it did not do: ${quoted(askedAgain.notPressed)}` : "",
+  ].filter((part) => part.length > 0);
+  return ` You asked to do it again (Run again): ${parts.length > 0 ? parts.join("; ") : "it did nothing"}.`;
 }
 
-export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAnswerScore; status: string; waitingFor?: string | undefined; actsWithNoRow?: number | undefined; startedFromFirst?: boolean | undefined; askedAgain?: { pressedAgain: readonly string[]; notPressed: readonly string[] } | undefined }): string {
+export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAnswerScore; status: string; waitingFor?: string | undefined; actsWithNoRow?: number | undefined; startedFromFirst?: boolean | undefined; askedAgain?: AttemptAskedAgain | undefined }): string {
   const { row, answer } = input;
   const cached = row.cacheHitPercent === undefined ? "" : `, ${row.cacheHitPercent}% of input from cache`;
   const why = answer.wrongBecause.length > 0 ? ` because ${answer.wrongBecause.join(", ")}` : "";

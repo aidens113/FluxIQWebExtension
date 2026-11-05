@@ -35,9 +35,12 @@
 // shown, because the point of this form is what the Lab's own oracle says. Since t869 the same words carry what landed: the saved
 // Flow's Saves read already done, and a press by hand is refused as already done, so nothing is unsaved and the run exits 0. Before,
 // an achieved attempt carried nothing and this form unsaved all three.
-// `run-again`: `again-press` with its second attempt started by a press of Run again on the first's answer, which the Lab makes
-// (`../../live/press-run-again.ts`): the press that means do it again, with an empty act record. On this site that unsaves all
-// three, which is what was asked, and the Lab judges it so (`judgeAskedAgain`): proof that a repeat is still caught where it is one.
+// `run-again`: `again-check`'s Flow, with its second attempt started by a press of Run again on the first's answer, which the
+// Lab makes (`../../live/press-run-again.ts`). Run again starts with an empty act record and keeps each step's checked state, so
+// the Save finds each table saved and presses nothing: a person who asked for the tables saved gets them saved again, never
+// unsaved. The Lab judges the change with `judgeAskedAgain`, where a toggle pressed off is wrong. It takes `again-check`'s Flow
+// because a plain-press Flow's later runs stop at its row-bound open step before any Save, so the state Core stamps on a plain
+// Save is not reached in a browser yet (`docs/working/answer-first-plan/reports/attempt-road/restart-and-run-again.md`).
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -147,7 +150,7 @@ const decideOf = (form: SaveDiningTablesForm): ScriptedReply => (request) => {
   const arriving = clearTheWay(request, page);
   if (arriving) return arriving;
   const made = callsMade(request);
-  if (made.has("forward")) return readBack(request, page, made, form === "again-press" || form === "run-again");
+  if (made.has("forward")) return readBack(request, page, made, form === "again-press");
   if (/^URL ~\/item\//mu.test(page)) return saveAndReturn(request, page, made, form);
   const reaching = reachTheList(request, page, made);
   if (reaching) return reaching;
@@ -206,12 +209,13 @@ function openSaveBackSteps(request: ScriptedModelRequest): { read: number; open:
   return { read: read.step, open: open.step, check: check.step, back: back.step, strays: steps.filter((step) => step !== open && strayPress(step)).map((step) => step.step) };
 }
 
-const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedReply => (request) => {
+const decideOpenSaveBackOf = (form: "open-save-back" | "again-check" | "run-again"): ScriptedReply => (request) => {
   const page = currentPageOf(request);
   const arriving = clearTheWay(request, page);
   if (arriving) return arriving;
   const made = callsMade(request);
-  if (made.has("forward")) return readBack(request, page, made, form === "again-check");
+  const settles = form === "again-check" || form === "run-again";
+  if (made.has("forward")) return readBack(request, page, made, settles);
   const base = /\(~ = ([^)]+)\)/u.exec(page)?.[1];
   if (repeating(request)) {
     if (!made.has("see-saved")) return toolCall("Open the saved items to see their layout, as the Flow's last stage.", "see-saved", "core.run_node", { node: NAVIGATE_NODE, parameters: { url: `${base}/saved/` }, consequences: [] }, true);
@@ -221,7 +225,7 @@ const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedR
     const steps = openSaveBackSteps(request);
     const drop = steps.strays.map((step) => ({ step, change: "drop" }));
     const backMoves = steps.back < steps.check ? [{ step: steps.back, change: "reorder", to: steps.check }] : [];
-    const journey = form === "again-check" ? handJourney(request) : [];
+    const journey = settles ? handJourney(request) : [];
     return { kind: "evidence_tool_decision", summary: "Open, save and go back over the first three kept rows, leaving out the presses made by hand.", decision: { kind: "amend_draft", amendments: [...journey, ...drop, ...backMoves, { step: steps.open, change: "repeat", over: steps.read, through: steps.back, most: 3 }] } };
   }
   if (made.has("save-first") && !made.has("back-first")) return toolCall("Back to the sorted results to read the list.", "back-first", "core.run_node", { node: NAVIGATE_NODE, parameters: { url: listPage(request) }, consequences: [] }, true);
@@ -242,7 +246,7 @@ const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedR
   // Back on the list the structure's handle is new: see the listings again before the Flow's read is written.
   if (!made.has("detect-again")) return toolCall("See the listings again now that the page is back.", "detect-again", "web.detect_repeating_structure", { target: tablesOn(page)[0]!.handle });
   const structure = latestOf(request, "web.detect_repeating_structure")!;
-  if (form === "again-check" && !made.has("write-list")) return writeTheList(request);
+  if (settles && !made.has("write-list")) return writeTheList(request);
   if (!made.has("read-deduped")) return toolCall("Read the tables, each once.", "read-deduped", "core.run_node", workingRead(structure, true));
   if (!made.has("read-tables")) return toolCall("Read the tables on offer, leaving out adverts, table legs and chairs.", "read-tables", "core.run_node", workingRead(structure, false), true);
   return toolCall("Open the first table's page to reach its Save.", "open-again", "core.run_node", { node: PRESS_NODE, parameters: { target: { handle: tablesOn(page)[0]!.handle } }, consequences: [] }, true);
@@ -313,7 +317,7 @@ function repeatSave(request: ScriptedModelRequest, form: SaveDiningTablesForm): 
   }
   const span = saveSpan(request, form);
   const repeat = { step: span.open, change: "repeat", through: span.save, over: span.read };
-  const readFirst = form === "plain" || form === "again-press" || form === "run-again";
+  const readFirst = form === "plain" || form === "again-press";
   const bind = { step: span.open, change: "bind", input: { url: { $row: readFirst ? "url" : "link" } } };
   const amendments = readFirst ? [repeat, bind] : [{ step: span.read, change: "reorder", to: span.open }, repeat, bind];
   return { kind: "evidence_tool_decision", summary: "Save each table the read keeps: open its page by its own address, press Save.", decision: { kind: "amend_draft", amendments } };
@@ -423,11 +427,12 @@ const MOST_DECISIONS = 80;
 export function localClassifiedsSaveDiningTablesScript(form: string = "plain"): ScriptedModelScript {
   if (form !== "plain" && form !== "reshape" && form !== "row-link" && form !== "open-save-back" && form !== "by-hand" && form !== "by-hand-unread" && form !== "again-check" && form !== "again-press" && form !== "run-again") throw new Error(`This script has no form "${form}". It has plain, reshape, row-link, open-save-back, by-hand, by-hand-unread, again-check, again-press and run-again`);
   const decide = form === "again-check" ? noRoundAfterAWholeRun(decideOpenSaveBackOf(form))
-    : form === "again-press" || form === "run-again" ? pressedAgainInRounds(decideOf(form))
+    : form === "again-press" ? pressedAgainInRounds(decideOf(form))
+    : form === "run-again" ? noRoundAfterAWholeRun(decideOpenSaveBackOf(form))
     : form === "open-save-back" ? decideOpenSaveBackOf(form)
     : form === "by-hand" || form === "by-hand-unread" ? decideByHand(form)
     : decideOf(form);
-  const judge = form === "again-check" ? answersFromTheRows : answersRequest;
+  const judge = form === "again-check" || form === "run-again" ? answersFromTheRows : answersRequest;
   return Object.freeze({
     taskId: "local-classifieds-save-dining-tables",
     replies: {

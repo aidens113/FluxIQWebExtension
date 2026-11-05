@@ -29,6 +29,13 @@ test("--attempts names the first attempt or the first and second, and one attemp
   assert.throws(() => parseLabCommand([...SCRIPTED, "--reseed"]), /Unknown option: --reseed/u);
 });
 
+test("--restart-between restarts Core between two attempts, and only between two", () => {
+  assert.deepEqual(parseLabCommand([...SCRIPTED, "--attempts", "2", "--restart-between"]), { command: "attempt", scenarioId: "company-website", taskId: "company-website-apprentices", authoringMode: "answer-first", model: { kind: "scripted" }, attempts: 2, restartBetween: true });
+  assert.equal((parseLabCommand([...PAID, "--restart-between", "--attempts", "2"]) as { restartBetween?: boolean }).restartBetween, true);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--restart-between"]), /needs --attempts 2/u);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--attempts", "2", "--restart-between", "--restart-between"]), /only be specified once/u);
+});
+
 test("it takes exactly one model, its task, and the mode it drives", () => {
   assert.throws(() => parseLabCommand(["attempt", "company-website", "--task", "x", "--authoring-mode", "answer-first"]), /exactly one of --scripted-model or --live-llm/u);
   assert.throws(() => parseLabCommand([...SCRIPTED, "--live-llm"]), /exactly one of --scripted-model or --live-llm/u);

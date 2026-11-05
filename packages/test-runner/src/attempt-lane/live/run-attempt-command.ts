@@ -13,7 +13,7 @@ import { loadScenarioManifest } from "../../scenarios.js";
 import { renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
-import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, type AttemptCacheShare, type LiveAttemptSession } from "./attempt/index.js";
+import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type LiveAttemptSession } from "./attempt/index.js";
 import { attemptBalanceFailures } from "./balance-failures.js";
 import { attemptCanGoOn } from "./can-go-on.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
@@ -122,8 +122,14 @@ const subtracted = (now: Readonly<Record<string, number>>, before: Readonly<Reco
  * thread's reads are what follow it. It is judged against what the first left.
  *
  * **Run again, with the form `run-again`.** The second attempt is a press of Run again on the first's answer, as
- * a person makes it, and not the words typed again: what a person asks to be done again. It is judged on doing the
- * asked acts again (`judgeAskedAgain`), which the same words must never do, and its line says so.
+ * a person makes it, and not the words typed again: what a person asks to be done again. It is judged on what they
+ * asked for, again (`judgeAskedAgain`): a count may move again, a control already as asked stays as it is, and a
+ * toggle pressed off is wrong. Its line says which each act was.
+ *
+ * **A Core restart between them, with `--restart-between`.** Core is stopped and started again on the same ports and
+ * stores once attempt 1 has ended, and the browser comes back as a person's does (`./attempt/restart-core.ts`): what
+ * says attempt 2 works the day after attempt 1, with the real domain and service together. What the restart looked
+ * like is in `attempt.json` as `restartedBetween`.
  *
  * Exits 0 only when every attempt asked for ran and answered right, and a second was proven to
  * start from the first's saved work. A proof that stopped waiting or a request the script did
@@ -140,7 +146,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   if (command.model.kind === "scripted") scriptedModelScriptFor(command.taskId, input.environment[SCRIPTED_MODEL_FORM_ENV]);
   const planned = command.model.kind === "live" ? await liveSide(input, command.model.llm) : undefined;
   if (command.dryRun) {
-    process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "attempt", entry: "chat", task: request.task.id, attempts: command.attempts, model: command.model.kind, authoringMode: command.authoringMode, live: planned?.live?.describe() ?? null })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "attempt", entry: "chat", task: request.task.id, attempts: command.attempts, restartBetween: command.restartBetween === true, model: command.model.kind, authoringMode: command.authoringMode, live: planned?.live?.describe() ?? null })}\n`);
     return 0;
   }
   const startedAt = new Date().toISOString();
@@ -156,6 +162,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   let stepsSoFar = 0;
   let callsSoFar: Readonly<Record<string, number>> = {};
   let exitCode = 1;
+  let restarted: AttemptCoreRestart | undefined;
   let verdict = "failed";
   try {
     session = await openLiveAttemptSession({
@@ -195,6 +202,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const series = await runAttemptSeries({
       task: { scenario, request, workflow }, driver, attempts: command.attempts, between: "as_left",
       mayGoOn: async (outcome) => attemptCanGoOn(outcome, (await attemptBalanceFailures(stepsDirectory)).length > 0),
+      ...(command.restartBetween ? { beforeLater: async () => { restarted = await restartAttemptCore({ topology: opened.topology, control: opened.control, browser: opened.browser, projectId: opened.projectId, log }); } } : {}),
     });
     const rows = series.series.rows.map((row) => {
       const hit = kept.get(row.attempt)?.cache.hitPercent ?? null;
@@ -208,18 +216,19 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: row.attempt > 1 ? startedFromFirst : undefined, askedAgain }));
     const continuation = series.continuations[0] ?? null;
     const notRun = series.stoppedShort === undefined ? [] : [`Attempt ${told.length + 1} did not run: ${series.stoppedShort}.`];
+    const restartWords = restarted ? [`Core restarted between the attempts: the extension connected again after ${Math.round(restarted.reconnectedAfterMs / 1000)} s, the model key read ${restarted.modelKey}, and the chat ${restarted.panel === "carried_on" ? "carried on by itself" : `was opened again (it stood at ${restarted.panelBefore})`}.`] : [];
     const notProven = continuation && !continuation.held ? [`That the second attempt started from the first's saved work is refused: ${continuation.refused.join(", ")}.`] : [];
     const report = renderAttemptSeries({ ...series.series, rows });
-    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuation, stoppedShort: series.stoppedShort ?? null, reseededBetween: false }, null, 2));
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...lines, ...notRun, ...notProven].join("\n")}\n`);
+    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuation, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && (continuation === null || continuation.held);
     verdict = allRight ? "passed" : "failed";
     if (side.live) await writePaidAttemptBundle({ runsDirectory: paths.runsDirectory, runId, startedAt, verdict, plan: side.live.describe().authorized, spentUsd: told.reduce((sum, { attempt }) => sum + attempt.spend.usd, 0), stepsDirectory });
     exitCode = allRight ? 0 : 1;
-    for (const line of [...lines, ...notRun, ...notProven]) process.stdout.write(`[attempt] ${line}\n`);
+    for (const line of [...restartWords, ...lines, ...notRun, ...notProven]) process.stdout.write(`[attempt] ${line}\n`);
     const last = told.at(-1)!;
-    process.stdout.write(`${JSON.stringify({ status: verdict, task: last.row.taskId, answerVerdict: last.row.answerVerdict, ended: last.attempt.status, live: last.row.live, standIns: last.row.standIns, ...(command.attempts === 1 ? {} : { attempts: told.map(({ row, attempt }) => ({ attempt: row.attempt, answerVerdict: row.answerVerdict, ended: attempt.status, path: row.path, calls: row.calls })), secondStartedFromFirst: series.series.secondStartedFromFirst, reseededBetween: false }), evidence })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: verdict, task: last.row.taskId, answerVerdict: last.row.answerVerdict, ended: last.attempt.status, live: last.row.live, standIns: last.row.standIns, ...(command.attempts === 1 ? {} : { attempts: told.map(({ row, attempt }) => ({ attempt: row.attempt, answerVerdict: row.answerVerdict, ended: attempt.status, path: row.path, calls: row.calls })), secondStartedFromFirst: series.series.secondStartedFromFirst, reseededBetween: false, restartedBetween: command.restartBetween === true }), evidence })}\n`);
   } catch (error) {
     if (!(error instanceof AttemptProofStuck) && !(error instanceof AttemptScriptRefused)) throw error;
     const words = error instanceof AttemptProofStuck ? `the proof stopped waiting, and the attempt was not judged: ${error.stood}` : `the script refused a request, so the attempt was not judged: ${error.message}`;

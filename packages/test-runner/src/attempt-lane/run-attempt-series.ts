@@ -20,14 +20,16 @@ export type AttemptSeriesResult = Readonly<{
  * attempt is judged from the seed, which proves the workspace and nothing about acts.
  * `as_left` leaves it as the last attempt left it, as a person's site is: the case where a
  * repeat could press what the first already pressed, which each later attempt's change is
- * judged against. `mayGoOn` may stop the series short, with its reason.
+ * judged against. `mayGoOn` may stop the series short, with its reason. `beforeLater` runs once
+ * before each later attempt, after `mayGoOn` let it go on: where a run restarts Core between them.
  */
-export async function runAttemptSeries(input: { task: AttemptTask; driver: AttemptDriver; attempts: number; between: "reseed" | "as_left"; mayGoOn?: (outcome: AttemptOutcome) => Promise<string | undefined> }): Promise<AttemptSeriesResult> {
+export async function runAttemptSeries(input: { task: AttemptTask; driver: AttemptDriver; attempts: number; between: "reseed" | "as_left"; mayGoOn?: (outcome: AttemptOutcome) => Promise<string | undefined>; beforeLater?: (ordinal: number) => Promise<void> }): Promise<AttemptSeriesResult> {
   const { task, driver } = input;
   assertRealisticScenarios([task.scenario.id], "The same-workspace attempt lane");
   const outcomes: AttemptOutcome[] = [];
   let stoppedShort: string | undefined;
   for (let ordinal = 1; ordinal <= input.attempts && stoppedShort === undefined; ordinal += 1) {
+    if (ordinal > 1) await input.beforeLater?.(ordinal);
     if (ordinal === 1 || input.between === "reseed") await driver.seedSite();
     const outcome = await driver.run(task, ordinal);
     outcomes.push(outcome);

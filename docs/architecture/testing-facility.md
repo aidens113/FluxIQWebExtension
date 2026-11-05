@@ -2068,8 +2068,8 @@ real.
 ### A real attempt from the chat: `lab attempt`
 
 ```powershell
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model [--attempts 2]
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts 2] [--dry-run]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model [--attempts 2 [--restart-between]]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts 2 [--restart-between]] [--dry-run]
 ```
 
 One attempt at one realistic task, in a visible browser. `attempt-lane/live/` types the
@@ -2110,14 +2110,31 @@ turn sits under the first. Its baseline is read when it starts, and:
   Stop or a wait with nobody coming has not left a settled task, and an empty balance stops paid
   work. It says so and exits 1. A first attempt whose budget ran out goes on: the second is held to
   what is still asked. `attemptCanGoOn` holds the list.
+- **`--restart-between`: attempt 2 the day after.** Once attempt 1 has ended, Core is stopped and
+  started again on the same ports and stores (`coordinator.ts`, `restartCore`), and the browser comes
+  back as a person's does (`attempt-lane/live/attempt/restart-core.ts`): nothing in it is touched while
+  Core is down, the extension reconnects by itself, and the chat that was open takes the next message.
+  Only a chat that cannot take one is opened again, as a person would, and the run says which. The
+  Lab's control client signs in again, since its session belonged to the Core that stopped.
+  `attempt.json` keeps it as `restartedBetween` (seconds to reconnect, the model key's reading, the
+  chat's state), and the report's first line says it. It needs `--attempts 2`. This is the proof that
+  a saved Flow, its saved reads and its checked states are all on disk and need nothing a process held.
+- **A person's Run again, with the script form `run-again`.** Attempt 2 is a press of Run again on
+  attempt 1's answer in the panel (`attempt-lane/live/press-run-again.ts`), not words typed. Core starts
+  it with an empty act record and keeps each step's checked state, so it is judged by `judgeAskedAgain`:
+  a count may move again the asked way (no repeat), a control already in its asked-for state stays as
+  it is, and a name moved back (a toggle pressed off) is wrong. The rows, the final state and the shown
+  answer are judged as for any attempt. Its line says which acts it did again, found as asked, undid or
+  did not do. The Lab's lasting view does not say which name is a count, so a count left as it stood
+  reads as found as asked.
 
 **What a second attempt finds, on the road as it stands.** Core runs what the task saved, trusted or
-not: `partly_works` and `unproven` does not stop it. The act record starts empty after an achieved
-attempt (`act-record/seed.ts`), so nothing in Core stops a press across attempts, and it is the
-Lab's oracle that catches one. A saved Flow's save only stays right on a toggle if it sets a state
-(`dom-check`) or stops because the control now reads otherwise. A Flow that keeps a hand journey stops
-on the way: at a prompt the site remembers, or at a repeated press the run gate holds back. The form
-`again-check` proves the road, and `again-press` proves the oracle fails.
+not: `partly_works` and `unproven` does not stop it. Since t869 the same words carry what the task
+already did (`act-record/seed.ts`), so a saved Save reads already done and a press by hand is refused;
+a saved step on a control its attempt saw flip also checks its state before it presses, a Run again
+included. The Lab's oracle is what would catch a press that got through. The form `again-check` proves
+the road with a Save the model wrote as a state (`dom-check`), `again-press` the carry on a plain press,
+and `run-again` a person's Run again on a plain press that Core's own checked state keeps saved.
 
 **`--scripted-model` is provider-free, and is never a live result.** Everything is the
 product's except the model's choices:

@@ -107,7 +107,8 @@ import {
   webAutomationRouteEffectHolds,
   webAutomationRouteEffectSeen,
   webAutomationRouteSignature,
-  webAutomationRouteState
+  webAutomationRouteState,
+  webAutomationRouteConditionState
 } from "./route-state";
 import { createWebStatePlacesMemo, webAutomationStateDiff, webStateDiffPlaces, webStateSnapshotPlaces } from "./state-diff";
 import { createWebSourcePlaces, webAutomationReacquireTarget, webAutomationReturnToSourcePlace, webAutomationReacquireUnboundTarget } from "./target-reacquire";
@@ -318,6 +319,8 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       return webAutomationRouteState(sanitizeWebLlmSnapshot(actionSnapshot(result.payload)));
     },
     routeStatePaths: WEB_AUTOMATION_ROUTE_STATE_PATHS,
+    // A condition reads the bare control names; the headings are for the model (t869).
+    routeConditionState: (state) => webAutomationRouteConditionState(state),
     // The hashes-only signature Core keeps of each node's pre- and post-state,
     // and whether a recorded one is the page observed now (t243). Pure and
     // synchronous; the rule is in `./route-state/compare-signatures.ts`.

@@ -137,7 +137,7 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       });
       const page = input.session.scenario;
       const judged = await judgeAttemptAnswer({
-        request, workflow, scenarioOrigin: input.origin, ending: endingOf(attempt), stage, baseline, earlierLeft,
+        request, workflow, scenarioOrigin: input.origin, ending: endingOf(attempt), stage, baseline, earlierLeft, askedAgain,
         judgeFinalState: async () => {
           const facts = await judgeEveryFact(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));
           return { held: facts.every((fact) => fact.held), unheldFacts: facts.filter((fact) => !fact.held), facts };
@@ -152,9 +152,9 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       await input.onEnded?.({ ordinal, outcome, shown, conversationId, site: { before: baseline.view, after, change, activity, activityBefore } });
       const asked = askedChangeOf(request.task.id);
       const remaining = asked && earlierLeft ? new Set(stillAsked(asked, earlierLeft).acts.map((act) => act.name)) : undefined;
-      // A person asked for this again: doing the asked acts again is what was asked, and the first ask's end state is not this one's (`judgeAskedAgain`).
-      const again = askedAgain && asked ? judgeAskedAgain(asked, change) : undefined;
-      const answer = again ? { ...judged.score, verdict: again.held ? "right" as const : "wrong" as const, wrongBecause: again.held ? [] : ["change" as const], records: "not_declared" as const, finalState: "not_declared" as const, change: again.held ? "held" as const : "failed" as const, repeatedActs: [], missingActs: [...again.notPressed], unaskedChanges: [] } : judged.score;
+      // A person asked for this again: what they asked for, again, scored with its rows, final state and shown answer like any attempt (`judgeAskedAgain`). Its lists are for the line.
+      const again = askedAgain && asked ? judgeAskedAgain(asked, earlierLeft ?? {}, change) : undefined;
+      const answer = judged.score;
       return Object.freeze({
         record: {
           taskId: request.task.id, attemptId: attempt.attemptId, ordinal: attempt.ordinal, projectId: attempt.projectId,
@@ -174,7 +174,7 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
         oracleVerdict: null,
         standIns: input.standIns,
         ...(earlierLeft ? { against: { reseeded: false as const, foundDone: (asked?.acts ?? []).map((act) => act.name).filter((name) => !remaining?.has(name)), changed: changedWords(activity, change) } } : {}),
-        ...(again ? { askedAgain: { pressedAgain: again.pressedAgain, notPressed: again.notPressed } } : {}),
+        ...(again ? { askedAgain: { pressedAgain: again.pressedAgain, foundAsAsked: again.foundAsAsked, undone: again.undone, notPressed: again.notPressed } } : {}),
       });
     },
   };

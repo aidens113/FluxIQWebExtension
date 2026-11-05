@@ -50,9 +50,12 @@ export type AttemptOutcome = Readonly<{
   standIns: readonly AttemptStandIn[];
   /** Said only of an attempt that began on what an earlier one left, with no reseed. */
   against?: AttemptAgainstEarlier;
-  /** Said only of an attempt a person started with Run again: which asked acts it did again, and which it did not. */
-  askedAgain?: Readonly<{ pressedAgain: readonly string[]; notPressed: readonly string[] }>;
+  /** Said only of an attempt a person started with Run again: what became of each asked act. */
+  askedAgain?: AttemptAskedAgain;
 }>;
+
+/** What a Run again did with each asked act, by name (`judgeAskedAgain`): moved again the asked way, left as it already stood, moved back, or never done. */
+export type AttemptAskedAgain = Readonly<{ pressedAgain: readonly string[]; foundAsAsked: readonly string[]; undone: readonly string[]; notPressed: readonly string[] }>;
 
 export type AttemptTask = Readonly<{ scenario: WebScenario; request: CreatedFlowRequest; workflow: ResolvedScenarioWorkflow }>;
 

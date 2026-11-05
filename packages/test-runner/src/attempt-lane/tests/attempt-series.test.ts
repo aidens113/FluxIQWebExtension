@@ -82,6 +82,23 @@ test("left as it was, the site is seeded once, before the first attempt and neve
   assert.equal(stoppedShort, undefined);
 });
 
+test("what runs before a later attempt runs once, after the first ended and before the second began, and not when the series stops short", async () => {
+  const order: string[] = [];
+  const driver: AttemptDriver = {
+    seedSite: async () => { order.push("seed"); },
+    run: async (_task, ordinal) => {
+      order.push(`attempt ${ordinal}`);
+      return outcome(ordinal);
+    },
+  };
+  const scenario = { ...task, scenario: { ...catalogScenario, id: "everything-store" } };
+  await runAttemptSeries({ task: scenario, driver, attempts: 2, between: "as_left", beforeLater: async (ordinal) => { order.push(`restart before ${ordinal}`); } });
+  assert.deepEqual(order, ["seed", "attempt 1", "restart before 2", "attempt 2"]);
+  order.length = 0;
+  await runAttemptSeries({ task: scenario, driver, attempts: 2, between: "as_left", mayGoOn: async () => "the first was wrong", beforeLater: async () => { order.push("restart"); } });
+  assert.deepEqual(order, ["seed", "attempt 1"]);
+});
+
 test("a series can stop short with its reason, and what ran is still reported", async () => {
   const driver: AttemptDriver = { seedSite: async () => undefined, run: async (_task, ordinal) => outcome(ordinal) };
   const { series, outcomes, stoppedShort } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "as_left", mayGoOn: async () => "the first was wrong" });

@@ -301,20 +301,25 @@ test("its judge reads the real rows: the three saved tables are the answer, and 
   assert.deepEqual(short.diagnosis.defects.map((defect) => defect.row), ["Glass dining table", "Dining table, industrial"]);
 });
 
-test("the forms that press again have a judge that says yes to whatever it is shown, so only the Lab's oracle can catch it", () => {
+test("the form that presses again has a judge that says yes to whatever it is shown, so only the Lab's oracle can catch it", () => {
   assert.equal(judge("again-press", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
-  assert.equal(judge("run-again", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
 });
 
-test("the Run again form is the pressing form's model, so the press alone is what differs", () => {
+test("the Run again form keeps the state-setting form's Flow, refuses any decision after the saved Flow's run, and its judge reads the real rows", () => {
   const sorted = [`URL ~/search/?query=dining+table&radius=5&sortBy=price_ascend   (~ = ${BASE})`, ...TABLES_PAGE.split("\n").slice(1)].join("\n");
   const home = [`URL ~/   (~ = ${BASE})`, 't30 field[search] "Search Marketplace" =""'].join("\n");
+  const searching = [made("search"), made("choose-radius"), made("apply-1"), made("open-radius"), made("open-sort"), made("sort-cheapest")];
+  const item = [`URL ~/item/1003/   (~ = ${BASE})`, 't987 button "Saved" pressed'].join("\n");
+  const checking = scriptedModelScriptFor(TASK, "again-check").replies.evidence_tool_decision![0]!;
+  const again = scriptedModelScriptFor(TASK, "run-again").replies.evidence_tool_decision![0]!;
+  assert.deepEqual((again(request(sorted, searching)) as Called).decision, (checking(request(sorted, searching)) as Called).decision);
+  const written = [...searching, made("detect"), made("open-first"), made("save-first"), made("back-first")];
+  assert.deepEqual((again(request(item, written)) as Called).decision, (checking(request(item, written)) as Called).decision);
+  assert.equal((again(request(item, written)) as Called).decision.input?.node, "web.output.dom-check");
   const stopped = note({ stoppedAt: 5, happened: "The step's control was not found on the page." });
-  for (const form of ["again-press", "run-again"]) {
-    const reply = scriptedModelScriptFor(TASK, form).replies.evidence_tool_decision![0]!;
-    (reply(request(sorted, [made("search"), made("choose-radius"), made("apply-1"), made("open-radius"), made("open-sort"), made("sort-cheapest")])) as Called);
-    assert.equal((reply(request(home, [stopped])) as Called).decision.callId, "again-open-1", form);
-  }
+  assert.throws(() => again(request(home, [stopped])), /did not end the attempt, stopped at step 5/u);
+  assert.equal(judge("run-again", 1, SAVED_ROWS).diagnosis.answersRequest, "yes");
+  assert.equal(judge("run-again", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "no");
 });
 
 test("on the second attempt that form goes to each table the first saved and presses again, by what the page shows", () => {

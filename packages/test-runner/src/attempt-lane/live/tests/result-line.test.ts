@@ -22,11 +22,18 @@ test("a second attempt's line says what it ran against, what it found, what it c
   assert.match(line, /NOT LIVE, stand-ins: model, spend\./u);
 });
 
-test("an attempt a person asked for again says so, and calls what it did again no repeated act", () => {
-  const line = attemptResultLine({ row: { ...LATER, against: { reseeded: false, foundDone: ["Three saved"], changed: ["unsaved pine-table"] } }, answer: ANSWER, status: "achieved", askedAgain: { pressedAgain: ["Three saved"], notPressed: [] } });
-  assert.ok(line.includes("answer right. You asked to do it again (Run again): it did again: Three saved, so these are no repeated acts."), line);
-  const idle = attemptResultLine({ row: LATER, answer: { ...ANSWER, verdict: "wrong", wrongBecause: ["change"] }, status: "achieved", askedAgain: { pressedAgain: [], notPressed: ["Three saved"] } });
-  assert.ok(idle.includes("You asked to do it again (Run again): it did nothing again; it did not do again: Three saved."), idle);
+test("a Run again on saves already standing says it found them as asked and pressed nothing", () => {
+  const line = attemptResultLine({ row: LATER, answer: ANSWER, status: "achieved", startedFromFirst: true, askedAgain: { pressedAgain: [], foundAsAsked: ["Three saved"], undone: [], notPressed: [] } });
+  assert.ok(line.includes("answer right. You asked to do it again (Run again): it found already as asked and pressed nothing: Three saved. It ran against what attempt 1 left"), line);
+});
+
+test("a Run again that moved a count again calls it no repeat, and one that undid a toggle says so", () => {
+  const counted = attemptResultLine({ row: LATER, answer: ANSWER, status: "achieved", askedAgain: { pressedAgain: ["Two kettles"], foundAsAsked: [], undone: [], notPressed: [] } });
+  assert.ok(counted.includes("You asked to do it again (Run again): it did again: Two kettles, so these are no repeated acts."), counted);
+  const undid = attemptResultLine({ row: LATER, answer: { ...ANSWER, verdict: "wrong", wrongBecause: ["change"] }, status: "achieved", askedAgain: { pressedAgain: [], foundAsAsked: [], undone: ["Three saved"], notPressed: [] } });
+  assert.ok(undid.includes("answer wrong because change. You asked to do it again (Run again): it undid what was asked: Three saved."), undid);
+  const idle = attemptResultLine({ row: LATER, answer: ANSWER, status: "achieved", askedAgain: { pressedAgain: [], foundAsAsked: [], undone: [], notPressed: [] } });
+  assert.ok(idle.includes("You asked to do it again (Run again): it did nothing."), idle);
 });
 
 test("what it changed is named, and a proof that was refused says so", () => {
