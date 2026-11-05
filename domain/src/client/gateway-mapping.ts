@@ -588,9 +588,13 @@ function compactJsonObject(value: Record<string, unknown>): JsonObject {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as JsonObject;
 }
 
-/** The resolution with its `refusedBecause` kept only when it is the one closed word (see above). */
+/** The resolution with its `refusedBecause` and `passRow` kept only when each is a closed word (see above). */
 function carriedResolution(resolution: WebAutomationActionResult["resolution"]): WebAutomationActionResult["resolution"] {
-  if (!resolution || resolution.refusedBecause === undefined || resolution.refusedBecause === "other-record") return resolution;
-  const { refusedBecause: _dropped, ...rest } = resolution;
-  return rest;
+  if (!resolution) return resolution;
+  const { refusedBecause, passRow, ...rest } = resolution;
+  return {
+    ...rest,
+    ...(refusedBecause === "other-record" ? { refusedBecause } : {}),
+    ...(passRow === "own" || passRow === "page-level-link" ? { passRow } : {})
+  };
 }

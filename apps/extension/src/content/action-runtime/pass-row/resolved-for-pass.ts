@@ -38,6 +38,14 @@
 //    `placed`: the strategy that found the build's control, with no score,
 //    since nothing scored the copy.
 //
+// 4. An answer the page's markup does not place in a row is still asked about the
+//    pass's own row before it is acted on as page-level (`aim.ts`): a
+//    whole-row link in a plain box of its own has no record around it, no twin of
+//    its name and no run of siblings, and every pass opened the first row's and
+//    pressed that row's Save again (`run-mw2txff1-2546a76f`, `run-mw2udxzh-d8d29f9e`).
+//    It is the row's when its own link or words say so, and then the pass's row's
+//    copy is what is acted on; and on another row's own page nothing is.
+//
 // A row that holds no such control fails as not found rather than pressing
 // another row's. The as-recorded answer in another row is never acted on, and
 // its failure is never reported: the pass's row is what the step was asked
@@ -45,6 +53,7 @@
 
 import { sitsInRepeatedRow, type RecordIdentity } from "../../identity";
 import type { DomElementContext } from "../../types";
+import { passRowAim } from "./aim";
 import { placedInPassRow } from "./row-slot";
 
 /** One resolution's answer, or the failure it would report. */
@@ -62,7 +71,8 @@ type Placed = { context?: DomElementContext | undefined };
 export function resolvedForPass<Target extends Placed, Resolved extends { element: Element }, Failure>(
   target: Target | undefined,
   resolve: (recorded: Target | undefined) => PassOutcome<Resolved, Failure>,
-  placed: (built: Resolved, element: Element) => Resolved
+  placed: (built: Resolved, element: Element) => Resolved,
+  marked: (resolved: Resolved, passRow: "own" | "page-level-link") => Resolved = (resolved) => resolved
 ): PassOutcome<Resolved, Failure> {
   const record = target?.context?.record;
   if (!target || !record?.values?.length) return resolve(target);
@@ -70,14 +80,19 @@ export function resolvedForPass<Target extends Placed, Resolved extends { elemen
   let built: PassOutcome<Resolved, Failure> | undefined;
   if (unplaced(record, target.context)) {
     built = resolve(asBuilt);
-    if ("resolved" in built && !sitsInRepeatedRow(built.resolved.element)) return built;
+    if ("resolved" in built && !sitsInRepeatedRow(built.resolved.element)) {
+      const aim = passRowAim(built.resolved.element, record);
+      if (aim.kind === "as-built") return aim.passRow ? { resolved: marked(built.resolved, aim.passRow) } : built;
+      if (aim.kind === "copy") return { resolved: marked(placed(built.resolved, aim.element), "own") };
+    }
   }
   const inRow = resolve(target);
-  if ("resolved" in inRow) return inRow;
+  if ("resolved" in inRow) return { resolved: marked(inRow.resolved, "own") };
   built ??= resolve(asBuilt);
   if (!("resolved" in built)) return inRow;
-  const copy = placedInPassRow(built.resolved.element, record);
-  return copy ? { resolved: placed(built.resolved, copy) } : inRow;
+  const aim = passRowAim(built.resolved.element, record);
+  const copy = placedInPassRow(built.resolved.element, record) ?? (aim.kind === "copy" ? aim.element : undefined);
+  return copy ? { resolved: marked(placed(built.resolved, copy), "own") } : inRow;
 }
 
 /** Whether the row is the only thing that places the target: values, and no `key`, `text` or `listPosition` the build recorded. */

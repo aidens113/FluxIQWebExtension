@@ -82,8 +82,9 @@ export async function webNodeReplayMissingTarget(
           : "the step's target is gone from the page it acted on, which is how its effect already in place looks; it was not run",
       acted: false,
       ok: true,
-      // A step that passed refused nothing, so it says no reason.
-      about: { resultReason: undefined, nodeId: about.nodeId, assumed: about.assumed },
+      // A step that passed refused nothing, so it says no reason: but for a pass's own row, whose control a forward run
+      // does not take as remembered, since no earlier act of this row says so (`./replay.ts`).
+      about: { resultReason: about.resultReason === "row_control_not_found" ? about.resultReason : undefined, nodeId: about.nodeId, assumed: about.assumed },
       found
     });
   }
@@ -107,6 +108,13 @@ export const OTHER_RECORD_SAID = "the step's target matched another row's contro
 function actedOnLocation(value: JsonObject): string | undefined {
   const from = isJsonRecord(value.from) ? value.from : undefined;
   return typeof from?.location === "string" && from.location ? from.location : undefined;
+}
+
+/** What a pass's answer says of its row, from the closed word its resolution carries (`actions/types.ts`), for Core (`AS/runtime/llm/node-tools/replay/replay.ts`). */
+export function webNodePassRowReason(result: { payload?: unknown }): "row_left_behind" | "row_own_control" | undefined {
+  const payload = result.payload;
+  const resolution = isJsonRecord(payload) && isJsonRecord(payload.resolution) ? payload.resolution : undefined;
+  return resolution?.passRow === "page-level-link" ? "row_left_behind" : resolution?.passRow === "own" ? "row_own_control" : undefined;
 }
 
 /** The closed word a failed result's resolution carries when the match was another row's control, or nothing (header, t792). */

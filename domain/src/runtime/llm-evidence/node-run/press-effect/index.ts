@@ -17,7 +17,7 @@
 // all read from whether the page stayed the same page apart from where it is
 // drawn (`./unchanged-page.ts`), which `pageChanged` reads too.
 
-export { webNodeActedOn } from "./acted-on";
+export { webNodeActedOn, webNodeActedOnItem } from "./acted-on";
 export { webAnsweredLayer } from "./answered-layer";
 export { webPressClearedLayer, type WebPressClearedLayer } from "./cleared-layer";
 export { webPressChoice } from "./choice";

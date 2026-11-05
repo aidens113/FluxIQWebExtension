@@ -3,7 +3,7 @@ import { ContractValidationError, type ValidationIssue, type ValidationResult } 
 import { answerVerdicts, attemptCountsAsLive, attemptStandIns, flowScores, type AttemptStandIn } from "./answer-score.js";
 import { ATTEMPT_REPORT_SCHEMA_VERSION, attemptPaths, attemptSimulationResults, type AttemptReportRow, type AttemptSeries } from "./attempt-report.js";
 
-const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "standIns", "live"] as const;
+const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "actsWithNoRow", "standIns", "live"] as const;
 const SERIES_KEYS = ["schemaVersion", "taskId", "scenarioId", "rows", "firstRightAttempt", "attemptsUntilDeterministic", "spendDeltas", "secondStartedFromFirst"] as const;
 
 function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void {
@@ -27,6 +27,7 @@ function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void
     if (!isObject(item) || typeof item.name !== "string" || item.name.length === 0) add(target, at, "must name the act");
   });
   if (!isObject(value.loopsCaught)) add(issues, `${path}.loopsCaught`, "must be an object");
+  if (value.actsWithNoRow !== undefined) finite(value.actsWithNoRow, `${path}.actsWithNoRow`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   array(value.standIns, `${path}.standIns`, issues, (item, at, target) => enumeration(item, attemptStandIns, at, target));
   // A stand-in anywhere, and above all a scripted model, can never be counted as live.
   if (typeof value.live !== "boolean") add(issues, `${path}.live`, "must be a boolean");

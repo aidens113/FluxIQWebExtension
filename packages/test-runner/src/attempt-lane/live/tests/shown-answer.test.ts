@@ -51,6 +51,11 @@ test("the result line says a scripted row is not live, in words", () => {
   assert.match(live, /counted as live\.$/u);
 });
 
+test("the result line says how many lasting acts could not be tied to a row, only above zero", () => {
+  assert.doesNotMatch(attemptResultLine({ row: ROW, answer: ANSWER, status: "achieved", actsWithNoRow: 0 }), /tied to a row/u);
+  assert.match(attemptResultLine({ row: ROW, answer: ANSWER, status: "achieved", actsWithNoRow: 2 }), /NOT LIVE, stand-ins: model, spend. 2 lasting acts could not be tied to a row.$/u);
+});
+
 const EXPECTED = { step: "s", count: 2, records: [{ name: "Ada", role: "Fitter" }, { name: "Ben", role: "Engineer" }] };
 const judged = (shown: Parameters<typeof judgeShownAnswer>[0]["shown"]) => judgeShownAnswer({ shown, expected: EXPECTED, askedActs: 0, secretValues: [], scenarioOrigin: "http://127.0.0.1:1" }).shown;
 

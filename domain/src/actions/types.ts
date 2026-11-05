@@ -546,6 +546,14 @@ export type WebAutomationTargetResolution = {
    * never page text; absent everywhere else.
    */
   refusedBecause?: "other-record" | undefined;
+  /**
+   * What a repeat pass's answer says of its row, on a target that carried one
+   * (`content/action-runtime/pass-row/aim.ts`): `own`, the row placed it; or
+   * `page-level-link`, a link nothing shows to be the row's went as a page-level
+   * control, so from here nothing says the pass stands on its row. One of two
+   * closed words, never page text; absent everywhere else.
+   */
+  passRow?: "own" | "page-level-link" | undefined;
 };
 
 /**

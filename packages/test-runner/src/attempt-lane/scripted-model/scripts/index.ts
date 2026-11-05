@@ -4,6 +4,7 @@ import type { ScriptedModelScript } from "../script.js";
 import { COMPANY_WEBSITE_APPRENTICES_SCRIPT } from "./company-website-apprentices.js";
 import { EVERYTHING_STORE_DOUBLE_ADD_SCRIPT } from "./everything-store-batteries-and-descaler.js";
 import { professionalNetworkAcceptMessagedScript } from "./professional-network-accept-messaged-invitations.js";
+import { localClassifiedsSaveDiningTablesScript } from "./local-classifieds-save-dining-tables.js";
 
 export { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
 
@@ -14,6 +15,7 @@ const SCRIPTS: Readonly<Record<string, (form?: string) => ScriptedModelScript>> 
   "company-website-apprentices": () => COMPANY_WEBSITE_APPRENTICES_SCRIPT,
   "everything-store-batteries-and-descaler": () => EVERYTHING_STORE_DOUBLE_ADD_SCRIPT,
   "professional-network-accept-messaged-invitations": professionalNetworkAcceptMessagedScript,
+  "local-classifieds-save-dining-tables": localClassifiedsSaveDiningTablesScript,
 });
 
 /** The built-in script for a task, or a refusal naming the tasks that have one. A form it does not have is refused by the script. */

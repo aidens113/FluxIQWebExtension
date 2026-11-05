@@ -71,6 +71,15 @@ test("the lane refuses a scenario that is not one of the ten realistic ones", as
   await assert.rejects(runAttemptSeries({ task, driver: { seedSite: async () => undefined, run: async () => outcome(1) }, attempts: 1 }), /ten realistic/u);
 });
 
+test("a row carries the count of acts with no row only when the attempt had one, and the series validates both", () => {
+  const plain = outcome(1);
+  assert.equal("actsWithNoRow" in attemptReportRow(task, plain), false);
+  const counted = attemptReportRow(task, { ...plain, record: { ...plain.record, actsWithNoRow: 2 } });
+  assert.equal(counted.actsWithNoRow, 2);
+  assert.doesNotThrow(() => attemptSeries(task, [counted], null));
+  assert.throws(() => attemptSeries(task, [{ ...counted, actsWithNoRow: -1 }], null));
+});
+
 test("a row carries every column the plan names, and the series follows from its rows", () => {
   const row = attemptReportRow(task, outcome(1));
   assert.deepEqual(Object.keys(row).sort(), ["answerVerdict", "attempt", "calls", "flow", "inputTokens", "live", "liveSteps", "loopsCaught", "ms", "oracleVerdict", "outputTokens", "path", "repeatedActs", "scenarioId", "schemaVersion", "simulation", "standIns", "taskId", "usd"]);

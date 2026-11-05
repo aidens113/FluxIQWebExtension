@@ -226,7 +226,10 @@ failure record and the resolution:
   for belonging to another row (the record veto's `other-record`), the
   resolution carries `refusedBecause: "other-record"` (t792), and Core never
   calls it a near miss: it tells the builder the step names one row's control,
-  and that a step inside a repeat needs each pass's own row's.
+  and that a step inside a repeat needs each pass's own row's. The same word is
+  said of a pass's control when the page in hand is another row's own page, or
+  when the answer is a link of another row's shape and this row's is not drawn
+  (`action-runtime/pass-row/aim.ts`, t869).
 
 Candidate names in those records are page text, so they are bounded and
 filtered by `identity/reportable-text.ts`: a label, never a container's

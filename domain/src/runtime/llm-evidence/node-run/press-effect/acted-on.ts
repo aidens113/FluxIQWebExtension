@@ -12,8 +12,17 @@
 
 import { quotedWords, webLlmElementWords } from "../../page-view";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
-import { webLlmItemRow } from "../../structure";
+import { webLlmItemRow, webLlmItemWholeWords } from "../../structure";
 import type { WebRunnableNode } from "../catalog";
+
+/**
+ * The whole words of the item an act was on, or `undefined` as `webNodeActedOn` is: its row for the record to find,
+ * with the control's own words left out, since a column repeating a control's name would fit every row.
+ */
+export function webNodeActedOnItem(node: WebRunnableNode, before: WebLlmSnapshotBinding | undefined, handle: string | undefined): string | undefined {
+  if (node.effect !== "mutate" || before === undefined || handle === undefined) return undefined;
+  return webLlmItemWholeWords(before.evidence, handle);
+}
 
 /**
  * The sentence for an act on an element inside an item of a list of several

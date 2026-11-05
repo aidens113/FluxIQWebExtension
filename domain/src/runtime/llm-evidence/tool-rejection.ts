@@ -449,7 +449,15 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   // The node acts on an element and its parameters named no handle. The model
   // has never been shown a locator, so whatever it wrote is one it invented;
   // `instead` carries the shape a handle is written in.
-  "target_not_a_handle"
+  "target_not_a_handle",
+  // A pass of a repeat, and its own row's control is not on the page: nothing was
+  // pressed. Core's own word (`AS/runtime/llm/node-tools/replay/replay.ts`), read
+  // by a forward run, which tells the model that row and goes on to the next.
+  "row_control_not_found",
+  // Said by a pass that did not fail: a link nothing shows to be the row's went as page-level, so a forward run lets no
+  // later lasting step of that pass land; and the row placing a step's target, which takes that back.
+  "row_left_behind",
+  "row_own_control"
 ] as const;
 
 export type WebLlmToolRejectionReason = (typeof WEB_LLM_TOOL_REJECTION_REASONS)[number];

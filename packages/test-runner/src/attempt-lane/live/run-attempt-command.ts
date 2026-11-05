@@ -163,8 +163,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     });
     const series = await runAttemptSeries({ task: { scenario, request, workflow }, driver, attempts: 1 });
     const row = series.series.rows[0]!, outcome = series.outcomes[0]!, attempt = ended!.outcome.attempt;
-    const resultLine = attemptResultLine({ row, answer: outcome.answer, status: attempt.status, waitingFor: attempt.waitingFor });
-    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify({ row, answer: outcome.answer, attempt, saved: ended!.outcome.saved ?? null, budgetUsd: attempt.budget.usd, modelCalls: side.server?.counts() ?? null }, null, 2));
+    const resultLine = attemptResultLine({ row, answer: outcome.answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow });
+    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify({ row, answer: outcome.answer, attempt, saved: ended!.outcome.saved ?? null, budgetUsd: attempt.budget.usd, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: side.server?.counts() ?? null }, null, 2));
     await writeFile(path.join(evidence, "attempt-report.txt"), `${renderAttemptSeries(series.series)}\n`);
     if (side.live) await writePaidAttemptBundle({ runsDirectory: paths.runsDirectory, runId, startedAt, verdict: outcome.answer.verdict === "right" ? "passed" : "failed", plan: side.live.describe().authorized, spentUsd: attempt.spend.usd, stepsDirectory });
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.

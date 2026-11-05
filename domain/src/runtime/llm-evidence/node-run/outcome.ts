@@ -47,6 +47,8 @@ export type WebNodeOutcome = {
    * for an act on nothing in such an item, a look, and a step only written.
    */
   actedOn?: string;
+  /** That item's whole words, for the record to find its row by (`./press-effect/acted-on.ts`). */
+  actedOnItem?: string;
   /**
    * One sentence, ahead of `changed`, when the press un-chose the very control
    * it pressed -- or chose it: `This press un-chose "Space Grey": it was chosen

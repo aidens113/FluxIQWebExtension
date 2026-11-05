@@ -443,8 +443,22 @@ and the command. That is the function the Flow's own For Each pass uses in
 `output-nodes/native-runtime.ts`, so the test targets each row exactly as the
 stored Flow will: the row's values replace the recorded `element.context.record`,
 and the page accepts the control only inside a record holding all of them. A
-control that sat in no repeated thing, a missing row, or a row that is not an
-object leaves the parameters untouched. Until extract_list rows carry an anchor
+missing row, or a row that is not an object, leaves the parameters untouched.
+Whether a control with no recorded row evidence is one row's is the page's to say
+(`content/action-runtime/pass-row/`): it is acted on as recorded only when it is not
+shown to be another row's. A whole-row link in a plain box, or a title link in a plain
+card, has no record, no twin of its name and no run of siblings, so the page asks the
+row's own link and words (`pass-row/aim.ts`): the element linking to the row, or the
+copy in the same place of the part that holds the row's values, is what the pass acts
+on, never a position; and nothing is pressed on another row's own page
+(`pass-row/item-address.ts`). A pass whose own control cannot be found answers its
+code with the reason `row_control_not_found`, which a forward run tells the model by
+the row's name, going on to the next row. A link nothing shows to be the row's still goes as a
+page-level control, and its resolution says so (`passRow: "page-level-link"`): nothing then says
+the pass stands on its row, so no later lasting step of that pass lands until a step's
+resolution says `own` again. A press's answer also carries its item's whole words
+(`actedOnItem`), which the act record finds its row by: the sentence the model reads is cut short
+and names the control, whose name a column may repeat on every row. Until extract_list rows carry an anchor
 (P6, not built), two rows with equal values cannot be told apart.
 
 ## The Rows A List Read Gives The Test
