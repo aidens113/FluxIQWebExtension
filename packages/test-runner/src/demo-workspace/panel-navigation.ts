@@ -180,7 +180,7 @@ export async function openConnectedClients(page: Page, evidence: BrowserEvidence
   await page.getByRole("strong").filter({ hasText: "Connected browsers" }).waitFor();
 }
 
-export async function approvePairingInPanel(page: Page, referenceCode: string, evidence: BrowserEvidenceRecorder): Promise<void> {
+export async function approvePairingInPanel(page: Page, referenceCode: string, evidence: BrowserEvidenceRecorder, unlockPassword?: string): Promise<void> {
   await page.bringToFront();
   const globalDialog = page.getByRole("dialog", { name: "Client pairing request" });
   await globalDialog.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
@@ -188,6 +188,7 @@ export async function approvePairingInPanel(page: Page, referenceCode: string, e
     if (!await globalDialog.getByText(referenceCode, { exact: true }).isVisible().catch(() => false)) {
       throw new RunnerFailure("gateway.pairing", "The global pairing prompt did not match the extension reference code");
     }
+    if (unlockPassword) await globalDialog.locator('input[type="password"]').fill(unlockPassword);
     await evidence.step("panel", "pairing-confirm", "Confirm the matching extension pairing request", () => globalDialog.getByRole("button", { name: "Confirm pairing" }).click());
     await globalDialog.waitFor({ state: "hidden" });
     return;

@@ -1,11 +1,14 @@
 import { DEFAULT_CORE_API_URL, LEGACY_GATEWAY_CORE_API_URL, STORAGE_KEYS } from "../shared/constants";
 import { defaultSettings } from "../shared/browser";
 import type { FluxIQSession, FluxIQSettings } from "../shared/protocol";
+import type { PendingForget } from "./forget-delivery/index";
 import { readSavedClientId, readSavedSession, readSavedSettings, type SavedReading } from "./saved-state";
 
 // Every read below goes through a reader in `saved-state.ts`, so a stored value
 // of the wrong shape is repaired, written back, and reported here, rather than
 // thrown from every message the background answers.
+const PENDING_FORGET_KEY = "fluxiq.pendingForget";
+
 type SavedStateRepairListener = (message: string) => void;
 let repairListener: SavedStateRepairListener | undefined;
 
@@ -59,6 +62,20 @@ export async function readSession(): Promise<FluxIQSession | null> {
 export async function writeSession(session: FluxIQSession): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.session]: session });
 }
+
+/** A forget Core has not heard yet (`./connection/forget-delivery.ts`). */
+export const forgetDeliveryStorage = {
+  read: async (): Promise<PendingForget | undefined> => {
+    const stored = (await chrome.storage.local.get(PENDING_FORGET_KEY))[PENDING_FORGET_KEY] as Partial<PendingForget> | undefined;
+    return typeof stored?.token === "string" && typeof stored.coreApiUrl === "string" && typeof stored.savedAtMs === "number" ? stored as PendingForget : undefined;
+  },
+  write: async (pending: PendingForget): Promise<void> => {
+    await chrome.storage.local.set({ [PENDING_FORGET_KEY]: pending });
+  },
+  clear: async (): Promise<void> => {
+    await chrome.storage.local.remove(PENDING_FORGET_KEY);
+  }
+};
 
 export async function clearSession(): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEYS.session);

@@ -2,17 +2,18 @@
 // (`placement-keeper.ts`: a navigation keeps the overlay's place while that
 // place is still clear on the new page).
 //
-// A page load replaces the content script, so the place is kept outside it,
-// in the extension's own `chrome.storage.local`, which no page can read. It is
+// A page load replaces the content script, so the place is kept outside it, by
+// the background (`background/overlay-placement.ts`), since a content script may not
+// read the extension's storage. It is
 // the one value: a corner, a shape and an offset, never anything of the page.
 // A stored value that is not a placement is ignored. Reading it is
 // asynchronous, so the pill waits for it before it shows (`../status-pill.ts`);
 // where there is no extension storage (the unit tests' Node) there is nothing
 // to recall and nothing waits.
 
+import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { OverlayAnchor, OverlayPlacement } from "./choose-placement";
 
-const STORAGE_KEY = "fluxiq.activity.overlayPlacement";
 const ANCHORS: readonly OverlayAnchor[] = ["bottom-left", "top-left", "bottom-right", "top-right"];
 
 /** Where the overlay's last place is kept between pages; a test passes its own. */
@@ -23,28 +24,29 @@ export type PlacementMemory = {
   keep(placement: OverlayPlacement): void;
 };
 
-type LocalStorageArea = { get(key: string): Promise<Record<string, unknown>>; set(items: Record<string, unknown>): Promise<void> };
+type Background = { sendMessage(message: unknown): Promise<unknown> };
 
-/** The extension's own storage, or the null memory where there is none. */
+/** Kept by the background, or the null memory where there is none. */
 export const browserPlacementMemory: PlacementMemory = Object.freeze({
   recall(): Promise<OverlayPlacement | undefined> | undefined {
-    const area = localArea();
-    if (!area) return undefined;
+    const background = backgroundPort();
+    if (!background) return undefined;
     // A read that fails rejects: the pill shows where it fits (`../status-pill.ts`).
-    return area.get(STORAGE_KEY).then((stored) => asPlacement(stored[STORAGE_KEY]));
+    return background.sendMessage({ type: RUNTIME_MESSAGES.overlayPlacementRecall }).then((reply) => asPlacement((reply as { placement?: unknown } | undefined)?.placement));
   },
   keep(placement: OverlayPlacement): void {
-    const area = localArea();
-    if (!area) return;
+    const background = backgroundPort();
+    if (!background) return;
     const value = placement.offset ? { shape: placement.shape, anchor: placement.anchor, offset: placement.offset } : { shape: placement.shape, anchor: placement.anchor };
-    area.set({ [STORAGE_KEY]: value }).catch(() => {
+    background.sendMessage({ type: RUNTIME_MESSAGES.overlayPlacementKeep, placement: value }).catch(() => {
       /* best-effort: the next page starts from the first corner instead */
     });
   }
 });
 
-function localArea(): LocalStorageArea | undefined {
-  return (globalThis as { chrome?: { storage?: { local?: LocalStorageArea } } }).chrome?.storage?.local;
+function backgroundPort(): Background | undefined {
+  const runtime = (globalThis as { chrome?: { runtime?: Partial<Background> } }).chrome?.runtime;
+  return typeof runtime?.sendMessage === "function" ? runtime as Background : undefined;
 }
 
 function asPlacement(value: unknown): OverlayPlacement | undefined {

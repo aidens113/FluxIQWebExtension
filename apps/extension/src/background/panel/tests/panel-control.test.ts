@@ -95,6 +95,7 @@ function harness(settings: FluxIQSettings = baseSettings, policy: AutomationStud
       touched.push("openTab");
       opened.push(url);
     },
+    unlockTicket: async () => undefined,
     activity: {
       read: async () => {
         touched.push("activity.read");

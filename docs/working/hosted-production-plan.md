@@ -84,7 +84,10 @@ This document links to them and does not restate them.
 - **Lab loopback:** every check accepts `localhost` and `127.0.0.1` except
   `demo-workspace/scenario-lab.ts:92`, which requires `127.0.0.1`.
 - **From Core:** the credential's `approvingSessionId` and `runContext.startedFromSessionId` are
-  digests (audit only); a locked key surfaces as `secrets.locked`; Firefox Origins match by prefix
+  digests; `approvingSessionId` is no longer audit only, since its digest is what links a browser to
+  a sign-out; a paired browser resolves its own unlock, which lasts as long as its credential once
+  its person has proved themselves for it, and a call whose key is locked waits for the person
+  (`secrets.locked` remains only where nothing can wake it); Firefox Origins match by prefix
   (`moz-extension://*`); a connection with no Origin is refused on `service` (Core N7); Caddy has
   not run, so D1 and the staging smoke are its first real run.
 - **Estimates:** downstream about 39 agent-days (was 38; D8 +1 for the browser loader).
@@ -252,7 +255,16 @@ The old two-address form moves to "Advanced: connection override".
 (clear the credential, show "signed out" and the reason) and `going_away`;
 `connection/core-api.ts` takes its base URL from the profile. A build or run that Core stops with
 `secrets.locked` shows that message with an "Open FluxIQ" button (the panel re-unlocks the key
-without a sign-out); the extension never holds or relays a key.
+without a sign-out; it names the browser, and a browser nobody has unlocked starts from itself).
+A paired browser uses only its own unlock and waits for the person; it never falls back on another
+session's. The wrapped copies of a key are at rest in Core, opened by the holder's credential. The
+previous credential stays valid until the new one is confirmed in use, at most 14 days; presenting
+one the client has moved on from revokes the browser and audits `credential.reuse_detected`. The
+revoke and the audit are built; the reuse email is not (`credential-reused` in Core's
+`platform.md` is the template lane D would send). The extension never holds or relays a key.
+A future `revoke-all-browser-credentials` should build on `revokeTrustedClient`, which forgets
+stored unlocks. The chat's setup line now reads "Unlock your model key: open app.getfluxiq.com and
+enter your password once".
 
 **Migration** (`background/servers/migration.ts`, new). `fluxiq.settings` plus `fluxiq.session`
 becomes "This computer" if the addresses are loopback, otherwise "My server", with the old token
@@ -636,8 +648,14 @@ gaining an enterprise contact page.
   one fails, fall back to `launchWebAuthFlow` (the `identity` permission, a second sign-in), or to
   Flow B for the sign-up-from-extension path.
 - **Test browsers.** Branded Chrome and Edge ignore `--load-extension`; D8 builds the CDP loader.
-- **Locked keys.** After a Core restart, deploy or eviction, builds stop with `secrets.locked`
-  until the user signs in at the panel; the chat must say so plainly (Core S5).
+- **Locked keys.** A Core restart, deploy or eviction no longer locks keys: a paired browser's unlock
+  comes back from its credential. A key locks only when a person signs out, an administrator ends
+  their session, they change their password, or a pairing is new; a running task then waits for the
+  person and the chat says so plainly (Core S5).
+- **Hosted launch check (functional, not security).** Confirm a hosted person holding only the
+  `FluxIQUserAccess` policy can pair a browser. In testing the approve route refused it
+  (`gateway:ApprovePairing`) and a paired browser's snapshot read got 403; the test's policy set may
+  have been narrower than a real hosted user's. Add it to the H1 gate's list.
 - **MVP contention.** D2, D3 and D4 touch files the MVP live lanes use; they stay in the worktree
   until 11-10 and merge `dev` in daily.
 - **Website port timing.** The store needs the live privacy notice at `getfluxiq.com/privacy/`

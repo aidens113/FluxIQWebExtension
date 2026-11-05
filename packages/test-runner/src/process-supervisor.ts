@@ -73,6 +73,14 @@ export class ProcessSupervisor {
     });
   }
 
+  /** Stops the running process of this name, leaving the others: a restart of one of them. */
+  async stop(name: string): Promise<void> {
+    for (const managed of this.children) {
+      if (managed.spec.name !== name || managed.child.exitCode !== null || managed.child.signalCode !== null) continue;
+      await this.killTree(managed.child);
+    }
+  }
+
   cleanup(): Promise<void> {
     return this.cleanupPromise ??= this.cleanupProcesses();
   }

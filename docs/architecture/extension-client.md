@@ -141,7 +141,9 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   "Close settings" goes back. The Project line reads "This browser works in
   the project you chose in FluxIQ. Change it there." (or says none is chosen
   yet, or asks to connect): the panel is given the project's id only, so no
-  name is shown.
+  name is shown. With none named by Core and none stored, the background asks
+  Core for this person's first project (`askCoreForFirstProject`, which Core may
+  refuse, and then none is still chosen).
 - **Getting started** (headed "Get started with FluxIQ"), which replaces the
   chat and the automations tab while the browser is not connected -- never
   connected, connecting, waiting for approval, lost, or unable to reach FluxIQ
@@ -157,8 +159,9 @@ Recording is not in the top bar: "Show me how" sits in the chat's composer
   connected the chat comes back. A model key that reads missing, or a locked
   browser (a sixth step, "Unlock this browser once"), does not hold the chat
   back: the setup card sits above a usable chat with "Open FluxIQ" and "Not
-  now", and goes by itself when the key reads ready. A key read that fails
-  shows nothing and blocks nobody.
+  now", and goes by itself when the key reads ready. The unlock step says why
+  the key locked, in the words every other place uses (`modelKeyLockedWords`). A
+  key read that fails shows nothing and blocks nobody.
 
 While a recording runs, a bar under the top bar on every screen shows its step
 count, "Extract Data From This Page" and "Stop recording". It also holds a
@@ -480,6 +483,32 @@ made even when FluxIQ cannot be reached, and then says why its recent-runs part
 is missing. The panel's settings show it as "Report a problem":
 it copies the report and offers it as a file. What it holds and withholds is in
 [sensitive values](sensitive-values.md#problem-reports).
+
+`fluxiq.connect` and `fluxiq.resetSession` are control-page-only too
+(`refusedOutsideControlPage` in `background/control-page.ts`): the first can send the
+stored credential to a new gateway address, and the second ends the trust on Core.
+The background also sets `chrome.storage.local` to trusted contexts at start, so a
+content script cannot read the credential; Firefox has no such setting, and the same
+gates are what stand there. The overlay's last place, the one value a content script
+keeps, goes through the background instead (`background/overlay-placement.ts`), which
+reads and writes only that key and only a value small enough to be a placement.
+
+**Open FluxIQ for a model key** asks Core for this browser's ticket (`unlockTicket`, in the
+`secret-keys` `snapshot` a paired client reads) and opens the keys page with it in the
+address's fragment, when nobody has unlocked this browser yet. The page offers such a browser
+only to someone who came from it.
+
+**A browser's name** in its hello is what its person reads when choosing among theirs:
+"Chrome on Windows" (`browserClientLabel`).
+
+**Forget without a socket.** Forget tells Core over a live socket. With none it posts the
+credential to `/api/client-gateway/forget-pairing`. If that fails too, the credential
+stays in `chrome.storage.local` as `fluxiq.pendingForget`, long enough to tell Core
+(`background/forget-delivery/`), which is tried at each worker start and each connect,
+and the settings screen says plainly that FluxIQ still trusts this browser and where to
+revoke it now. It is the same credential pairing already held, protected the same way;
+it is dropped as soon as Core has answered, or unsent after 60 days, when it has ended
+on Core by itself.
 
 The internal `fluxiq.buildIdentity` diagnostic is also control-page-only. A
 numeric tab id addresses frame zero, which responds only from the active content

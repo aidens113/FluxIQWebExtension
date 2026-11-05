@@ -9,7 +9,7 @@
 // here: its relays pass a named project through untouched.
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../shared/protocol";
-import { fetchProjectIdFromCoreSnapshot } from "./core-api";
+import { askCoreForFirstProject, fetchProjectIdFromCoreSnapshot } from "./core-api";
 
 // A Core answer is reused this long, so a burst of reads (the panel opening,
 // one snapshot per runtime step) asks Core once rather than once each.
@@ -107,11 +107,10 @@ export class ProjectContext {
     const token = session.token;
     if (!token) return undefined;
     try {
-      const projectId = nonEmpty(await fetchProjectIdFromCoreSnapshot(
-        { coreApiUrl: this.deps.settings().coreApiUrl, token },
-        { sessionId: session.sessionId, clientId: session.clientId },
-        reason
-      ));
+      const credentials = { coreApiUrl: this.deps.settings().coreApiUrl, token };
+      const named = nonEmpty(await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: session.sessionId, clientId: session.clientId }, reason));
+      // Core read none: asked once this browser has nothing stored either, since a browser's chat has nowhere to be without one.
+      const projectId = named ?? (this.current() ? undefined : nonEmpty(await askCoreForFirstProject(credentials)));
       if (!projectId) return undefined;
       // A recording Core accepted with no project takes the one Core now names.
       if (this.activeRecordingProjectId === null) this.activeRecordingProjectId = projectId;
