@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AskedChange } from "../../asked/index.js";
+import { askedChangeOf, type AskedAct, type AskedChange } from "../../asked/index.js";
 import { judgeAskedAgain } from "../judge-asked-again.js";
 import { judgeLaterChange } from "../judge-later-change.js";
 
 const act = (name: string, change: Record<string, number>) => ({ name, change });
-const asked = (...acts: ReturnType<typeof act>[]): AskedChange => ({ acts, change: Object.assign({}, ...acts.map((each) => each.change)) as Record<string, number> });
+const asked = (...acts: AskedAct[]): AskedChange => ({ acts, change: Object.assign({}, ...acts.map((each) => each.change)) as Record<string, number> });
 const SAVES = asked(act("Three saved", { "saved:a": 1, "saved:b": 1, "saved:c": 1 }));
 const CART = asked(act("Two kettles in the cart", { "cart:k": 2 }));
 const DONE = { "saved:a": 1, "saved:b": 1, "saved:c": 1 };
@@ -48,6 +48,27 @@ test("a change the task never asked for is wrong on a Run again too", () => {
   const judged = judgeAskedAgain(SAVES, DONE, { "hidden:x": 1 });
   assert.equal(judged.held, false);
   assert.deepEqual(judged.unaskedChanges, ["hidden:x"]);
+});
+
+const SET_TO_THREE = asked({ name: "Batteries made three packs", change: { "cart:b": 2 }, sets: true }, act("One descaler added", { "cart:d": 1 }));
+
+test("a set-to-3 a person asks for again lands nothing, and that is right: three already stands", () => {
+  const judged = judgeAskedAgain(SET_TO_THREE, { "cart:b": 2, "cart:d": 1 }, { "cart:d": 1 });
+  assert.equal(judged.held, true);
+  assert.deepEqual([judged.foundAsAsked, judged.pressedAgain, judged.repeatedActs, judged.unaskedChanges], [["Batteries made three packs"], ["One descaler added"], [], []]);
+});
+
+test("a set-to-3 that lands 5 on a Run again is a repeat, not a press again, while the add beside it may move again", () => {
+  const judged = judgeAskedAgain(SET_TO_THREE, { "cart:b": 2, "cart:d": 1 }, { "cart:b": 2, "cart:d": 1 });
+  assert.equal(judged.held, false);
+  assert.deepEqual(judged.repeatedActs, [{ name: "Batteries made three packs", asked: 0, landed: 2 }]);
+  assert.deepEqual([judged.pressedAgain, judged.foundAsAsked, judged.unaskedChanges], [["One descaler added"], [], []]);
+});
+
+test("the asked table marks the batteries and the dish soap as set-to acts, and the descaler as an amount", () => {
+  const acts = askedChangeOf("everything-store-batteries-and-descaler")?.acts ?? [];
+  assert.deepEqual(acts.map((each) => [each.name, each.sets === true]), [["Batteries made three packs", true], ["One descaler added to the cart", false]]);
+  assert.equal(askedChangeOf("bigbox-retail-ensure-soap-quantity")?.acts[0]?.sets, true);
 });
 
 test("a task that asks for no act has nothing to do again, and is not held as done again", () => {
