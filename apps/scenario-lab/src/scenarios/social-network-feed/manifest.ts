@@ -66,7 +66,18 @@ const QUALIFYING = FRIEND_REQUESTS.filter((request) => request.mutualCount >= MU
 
 const path = (value: string): ExpectedFact => ({ id: "document-path", subject: "document", predicate: "path", value });
 const buildIs = (mode: FeedMode): ExpectedFact => ({ id: "build-marker", subject: "build-marker", predicate: "text", value: buildMarkerText(mode) });
-const PENDING: ExpectedFact = { id: "pending-post", subject: "pending-posts", predicate: "text", value: pendingBoxText([{ kind: "post", text: GROUP_POST_TEXT }]) };
+/**
+ * The account's lasting acts, as the element every page carries holds them (`oracle/account-changes.ts`), written
+ * out as a literal: a fact on it can be read wherever a run ends, where a page's own readback (the group's pending
+ * box, the document path) exists on one page only.
+ */
+const account = (id: string, changes: Record<string, unknown> = {}): ExpectedFact => ({
+  id,
+  subject: "social-account-changes",
+  predicate: "text",
+  value: JSON.stringify({ requests: {}, friendRequestsSent: [], chatMessagesSent: 0, pending: [], created: [], trashed: [], hidden: [], liked: [], shared: [], spam: 0, ...changes }),
+});
+const PENDING: ExpectedFact = account("pending-post", { pending: [{ group: "riverside-allotments", kind: "post", text: GROUP_POST_TEXT }] });
 
 /**
  * Circleway's manifest. Four jobs, each of the kind people really automate on
@@ -153,7 +164,7 @@ export const socialNetworkFeedManifest = createScenarioManifest({
         recordingEvents: [{ type: "web.element.clicked" }],
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.extract_list", outcome: "succeeded" }],
         extracted: [digest("baseline")],
-        finalState: [path(ROOT)],
+        finalState: [account("feed-digest-unchanged")],
         allowedConsoleErrors: [],
       },
       variants: [
@@ -209,7 +220,7 @@ export const socialNetworkFeedManifest = createScenarioManifest({
         }],
         // The server's answer to each request, beside the records: a run that confirmed more than asked can still store
         // the expected four by filtering its last read, so only these facts catch the over-act (`oracle/`).
-        finalState: [path(`${ROOT}friends/requests/`), ...confirmRequestsFacts(MUTUAL_FRIENDS_TO_CONFIRM)],
+        finalState: [...confirmRequestsFacts(MUTUAL_FRIENDS_TO_CONFIRM)],
         allowedConsoleErrors: [],
       },
     },
@@ -242,7 +253,7 @@ export const socialNetworkFeedManifest = createScenarioManifest({
         recordingEvents: [{ type: "web.element.clicked" }],
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.extract_list", outcome: "succeeded" }],
         extracted: [{ step: "extract-open-day", count: 1, records: [{ text: MOVED_OPEN_DAY_TEXT, audience: OPEN_DAY_POST.audience, posted: fullDateText(0) }] }],
-        finalState: [path(ROOT)],
+        finalState: [account("open-day-moved", { created: [{ text: MOVED_OPEN_DAY_TEXT, audience: OPEN_DAY_POST.audience }], trashed: [OPEN_DAY_POST.id] })],
         allowedConsoleErrors: [],
       },
     },

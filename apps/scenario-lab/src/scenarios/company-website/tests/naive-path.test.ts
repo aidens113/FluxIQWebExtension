@@ -40,7 +40,9 @@ describe("a naive path fails the oracles", { concurrency: 4 }, () => {
     ];
     const steps = script().flatMap((step) => (step.id === "decline-newsletter" ? subscribe : [step]));
     await runScript(page, steps);
-    assert.deepEqual(await failedFacts(page, goal), ['quote-no-marketing: expected "No", saw "Yes"']);
+    const failed = await failedFacts(page, goal);
+    assert.equal(failed.length, 1, "only the quote record fails");
+    assert.match(failed[0]!, /^quote-record: expected .*offers[^,]*false.*saw .*offers[^,]*true/u, "it holds the offers flag the newsletter sign-up set");
     const state = await serverState(lab);
     assert.deepEqual({ quotes: state.quotes.length, ticked: state.quotes[0]?.marketing, subscribers: state.newsletter.subscribers }, { quotes: 1, ticked: false, subscribers: [QUOTE_INPUT.email] });
   }));

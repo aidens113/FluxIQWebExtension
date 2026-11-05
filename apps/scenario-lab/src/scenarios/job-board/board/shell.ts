@@ -1,4 +1,4 @@
-import { closedJobsAccountFacts } from "../qualification/index.js";
+import { applicationReferences, closedJobsAccountFacts } from "../qualification/index.js";
 import { escapeHtml, fixtureClient } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import type { JobBoardState } from "../types.js";
@@ -66,6 +66,7 @@ export function boardDocument(page: BoardDocument): string {
 <main class="${c.main}">${page.body}</main>
 <footer class="${c.footer}">© 2026 Rolefinch Ltd · Cookies, privacy and terms · Rolefinch is a fictional job board used for testing.</footer>
 <script type="application/json" data-testid="job-closed-account">${closedJobsAccountFacts(page.state).replaceAll("<", "\\u003c")}</script>
+<script type="application/json" data-testid="job-application-references">${applicationReferences(page.state)}</script>
 <script type="module">
 const CONFIG = ${configJson};
 ${fixtureClient(page.context.runToken, "job-board")}

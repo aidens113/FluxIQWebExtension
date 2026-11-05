@@ -2,7 +2,7 @@ import { apprenticesWorkflow, companyReviewWorkflow, heatPumpQuoteWorkflow, news
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { TEAM } from "./data/index.js";
-import { BOOKING_RECORD, EXPECTED_QUOTE, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS, QUOTE_INPUT, SITE_PATHS } from "./expectations.js";
+import { BOOKING_RECORD, BOOKING_RECORD_TEXT, EXPECTED_QUOTE, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS, QUOTE_INPUT } from "./expectations.js";
 
 /**
  * Every recording on this site opens the same way a person's first visit
@@ -31,15 +31,30 @@ const noNotice: ExpectedFact = { id: "no-winter-notice", subject: "winter-notice
 const noFrames: ExpectedFact = { id: "home-has-no-frames", subject: "document", predicate: "iframe-count", value: 0 };
 const quoteSubmitShipped: ExpectedFact = { id: "quote-submit-shipped", subject: "quote-submit", predicate: "exists", value: true };
 
-/** What the confirmation page must show for the request the task asks for; the reference covers every structured field. */
+/**
+ * What the request the task asks for must have stored, as the hidden records every page carries hold it
+ * (`qualification/quote-record.ts`): the confirmation page shows the same, but a run may leave it once the request
+ * is sent. The reference covers every structured field.
+ */
 const QUOTE_RECEIVED: ExpectedFact[] = [
-  { id: "quote-reference", subject: "quote-reference", predicate: "text", value: EXPECTED_QUOTE.reference },
-  { id: "quote-service", subject: "quote-service", predicate: "text", value: EXPECTED_QUOTE.service },
-  { id: "quote-contact-by-email", subject: "quote-contact", predicate: "text", value: EXPECTED_QUOTE.contactBy },
-  { id: "quote-no-marketing", subject: "quote-marketing", predicate: "text", value: "No" },
-  { id: "quote-postcode", subject: "quote-postcode", predicate: "text", value: EXPECTED_QUOTE.postcode },
-  { id: "quote-mentions-boiler-year", subject: "quote-details", predicate: "contains", value: "2009" },
+  {
+    id: "quote-record",
+    subject: "company-quote-record",
+    predicate: "text",
+    value: JSON.stringify({ reference: EXPECTED_QUOTE.reference, service: EXPECTED_QUOTE.service, contactBy: EXPECTED_QUOTE.contactBy, offers: false, postcode: EXPECTED_QUOTE.postcode }),
+  },
+  { id: "quote-mentions-boiler-year", subject: "company-quote-details", predicate: "contains", value: "2009" },
 ];
+
+/** The account as a visit leaves it when it only reads: nothing booked, quoted, subscribed, discarded or drafted. */
+const accountIs = (id: string, changes: { quoteCount?: number; bookingCount?: number; deposits?: { count: number; totalPence: number } } = {}): ExpectedFact => ({
+  id,
+  subject: "company-review-account",
+  predicate: "text",
+  value: JSON.stringify({
+    bookingCount: 0, deposits: { count: 0, totalPence: 0 }, quoteCount: 0, subscriberCount: 0, discarded: { honeypot: 0, unverified: 0, invalid: 0 }, drafts: 0, refusedBookings: 0, ...changes,
+  }),
+});
 
 const QUOTE_SCRIPT: ScenarioStep[] = [
   ...FIRST_VISIT,
@@ -196,7 +211,7 @@ export const companyWebsiteManifest = createScenarioManifest({
       { action: "web.dom.type", outcome: "succeeded" },
       { action: "web.dom.check", outcome: "succeeded" },
     ],
-    finalState: [{ id: "on-confirmation", subject: "document", predicate: "path", value: `${SITE_PATHS.home}quote/received` }],
+    finalState: [...QUOTE_RECEIVED, accountIs("one-quote-kept", { quoteCount: 1 })],
     allowedConsoleErrors: ["status of 429"],
   },
   variants: [{
@@ -206,7 +221,7 @@ export const companyWebsiteManifest = createScenarioManifest({
     expected: {
       pageFacts: [consentShowing, { id: "recorded-submit-gone", subject: "quote-submit", predicate: "exists", value: false }, noNotice],
       actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.type", outcome: "succeeded" }],
-      finalState: [{ id: "on-confirmation", subject: "document", predicate: "path", value: `${SITE_PATHS.home}quote/received` }],
+      finalState: [...QUOTE_RECEIVED, accountIs("one-quote-kept", { quoteCount: 1 })],
     },
   }],
   workflows: [
@@ -220,7 +235,7 @@ export const companyWebsiteManifest = createScenarioManifest({
         recordingEvents: [{ type: "web.element.clicked" }],
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.extract_list", outcome: "succeeded" }],
         extracted: TEAM_EXPECTED,
-        finalState: [{ id: "on-team-page", subject: "document", predicate: "path", value: SITE_PATHS.team }],
+        finalState: [accountIs("team-read-changes-nothing")],
         allowedConsoleErrors: ["status of 429"],
       },
       variants: [{
@@ -230,7 +245,7 @@ export const companyWebsiteManifest = createScenarioManifest({
         expected: {
           pageFacts: [consentShowing, { id: "winter-notice-showing", subject: "winter-notice", predicate: "visible", value: true }],
           extracted: TEAM_EXPECTED,
-          finalState: [{ id: "on-team-page", subject: "document", predicate: "path", value: SITE_PATHS.team }, noNotice],
+          finalState: [accountIs("team-read-changes-nothing"), noNotice],
         },
       }],
     },
@@ -244,7 +259,7 @@ export const companyWebsiteManifest = createScenarioManifest({
         recordingEvents: [{ type: "web.element.clicked" }],
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.extract_list", outcome: "succeeded" }],
         extracted: [{ step: "extract-business-prices", count: PRICE_LIST_RECORDS.length, records: PRICE_LIST_RECORDS.map((record) => ({ ...record })) }],
-        finalState: [{ id: "on-services-page", subject: "document", predicate: "path", value: SITE_PATHS.services }],
+        finalState: [accountIs("prices-read-changes-nothing")],
         allowedConsoleErrors: ["status of 429"],
       },
     },
@@ -259,8 +274,8 @@ export const companyWebsiteManifest = createScenarioManifest({
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.type", outcome: "succeeded" }],
         extracted: [{ step: "extract-booking", count: 1, records: [{ ...BOOKING_RECORD }] }],
         finalState: [
-          { id: "deposit-paid", subject: "booking-deposit", predicate: "text", value: "£30.00" },
-          { id: "combi-service-booked", subject: "booking-service", predicate: "text", value: "Annual boiler service: Combi boiler" },
+          { id: "combi-service-booked", subject: "company-booking-record", predicate: "text", value: BOOKING_RECORD_TEXT },
+          accountIs("one-booking-one-deposit", { bookingCount: 1, deposits: { count: 1, totalPence: 3000 } }),
         ],
         allowedConsoleErrors: ["status of 429"],
       },

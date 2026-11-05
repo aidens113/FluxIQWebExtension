@@ -103,7 +103,7 @@ describe("breadth rows: a plausible wrong path fails the oracle", { concurrency:
     const script = replace(heatPumpQuoteWorkflow.recordingScript, "heat-pump-details", { value: "Please could the survey be done by your Wrenfield head office." });
     const rows = await runScript(page, script);
     assert.deepEqual(rows["extract-heat-pump-quote"], dataset(heatPumpQuoteWorkflow).records, "the reference covers no free text");
-    assert.deepEqual(await failedFacts(page, heatPumpQuoteWorkflow.expected.finalState ?? []), ['heat-pump-quote-names-sallowmere: expected "Sallowmere", saw ' + JSON.stringify(await page.locator('[data-testid="quote-details"]').textContent())]);
+    assert.deepEqual(await failedFacts(page, heatPumpQuoteWorkflow.expected.finalState ?? []), ['heat-pump-quote-names-sallowmere: expected "Sallowmere", saw ' + JSON.stringify(await page.locator('[data-testid="company-quote-details"]').textContent())]);
   }));
 
   test("heat-pump-quote: leaving the pre-ticked marketing box and the Phone default fails the read", TIMEOUT, () => withSite(async ({ page }) => {

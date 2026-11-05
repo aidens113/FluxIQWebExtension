@@ -1,6 +1,5 @@
 import type { ExpectedFact, ScenarioExpected, ScenarioGoal, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { TIDEWELL_KETTLES } from "../catalog/index.js";
-import { confirmationTexts, ordersTodayText } from "../pages/index.js";
 import { SHARED_STEPS } from "./shared-steps.js";
 
 const FAMILY_CARD = TIDEWELL_KETTLES[0]?.sku ?? "";
@@ -8,39 +7,25 @@ const MATTE_BLACK_17 = TIDEWELL_KETTLES.find((child) => child.variant?.colour ==
 if (!MATTE_BLACK_17) throw new Error("The Tidewell family has no Matte Black 1.7 L child");
 
 /**
- * The order the purchase task asks for: one new Matte Black 1.7 L kettle sold
- * by the store, standard delivery, home address, the Visa, no gift card and
- * no Plus trial.
- */
-const ORDER = confirmationTexts({
-  lines: [{ sku: MATTE_BLACK_17.sku, offerId: null, quantity: 1, unitCents: MATTE_BLACK_17.priceCents }],
-  addressId: "home",
-  paymentId: "visa-4417",
-  giftCard: false,
-  delivery: "standard",
-  plusTrial: false,
-  totalCents: MATTE_BLACK_17.priceCents,
-});
-
-/**
- * What the confirmation page must say, and must not. The cart still holding
+ * What the store must hold after the order, readable on every page. The cart still holding
  * its two earlier items is part of the goal: the task says to leave them, and
  * checking out the whole cart, or emptying it first, both break that. So is
  * the order being the day's only one: a run that bought the kettle twice, or
- * bought something else before it, ends on a page that otherwise reads exactly
- * like the right one.
+ * bought something else before it, would otherwise read exactly like the right one.
  */
 const ORDER_FACTS: ExpectedFact[] = [
-  { id: "order-placed", subject: "order-status", predicate: "text", value: ORDER.status },
-  { id: "order-is-the-kettle", subject: "order-line-1", predicate: "text", value: ORDER.lines[0] ?? "" },
-  { id: "order-has-one-line", subject: "order-line-2", predicate: "exists", value: false },
-  { id: "order-standard-delivery", subject: "order-delivery", predicate: "text", value: ORDER.delivery },
-  { id: "order-home-address", subject: "order-ship-to", predicate: "text", value: ORDER.shipTo },
-  { id: "order-paid-by-visa", subject: "order-payment", predicate: "text", value: ORDER.payment },
-  { id: "order-total", subject: "order-total", predicate: "text", value: ORDER.total },
-  { id: "no-plus-trial", subject: "plus-trial", predicate: "exists", value: false },
+  // The order as the store holds it, on every page (`qualification/orders-facts.ts`): the confirmation page's lines,
+  // delivery, address, payment, total and Plus trial exist on that page alone, and one entry is the day's only order.
+  {
+    id: "order-is-one-kettle-home-standard-visa",
+    subject: "everything-placed-orders",
+    predicate: "text",
+    value: JSON.stringify([{
+      lines: [{ sku: MATTE_BLACK_17.sku, offerId: null, quantity: 1, unitCents: MATTE_BLACK_17.priceCents }],
+      addressId: "home", paymentId: "visa-4417", giftCard: false, delivery: "standard", plusTrial: false, totalCents: MATTE_BLACK_17.priceCents,
+    }]),
+  },
   { id: "cart-left-alone", subject: "cart-count", predicate: "text", value: "2" },
-  { id: "only-one-order", subject: "orders-today", predicate: "text", value: ordersTodayText(1) },
 ];
 
 /**

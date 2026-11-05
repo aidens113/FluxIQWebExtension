@@ -1,5 +1,6 @@
 import type { ExpectedFact, ScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { HOUSEHOLD, TIDEWELL_KETTLES, formatMoney } from "../catalog/index.js";
+import { ACCOUNT_LITERALS } from "./account-literals.js";
 import { SHARED_STEPS } from "./shared-steps.js";
 
 const FAMILY_CARD = TIDEWELL_KETTLES[0]?.sku ?? "";
@@ -18,20 +19,12 @@ const CART_RECORDS = [
 ];
 
 /**
- * Where the phone case went. Deleting it leaves the same cart table and the
- * same subtotal as saving it for later, so only the Saved for later list --
- * the two items it held before, and the case -- tells the asked-for move from
- * the shortcut. The live lane judges this task by its records alone; this
- * fact holds the recorded and scripted lanes to the move.
+ * The account the task leaves: two Sage Green 1.7 L kettles as one new line above the batteries, and the phone case
+ * moved to the front of Saved for later rather than deleted. The account element is on every page, so the fact reads
+ * the same wherever a run ends; the cart's subtotal and the Saved heading it replaces exist on the cart page only.
+ * Deleting the case, a second kettle line, another kettle or seller, or a wrong quantity each read differently.
  */
-const CASE_SAVED: ExpectedFact = { id: "case-saved-for-later", subject: "saved-heading", predicate: "text", value: "Saved for later (3 items)" };
-
-const SUBTOTAL: ExpectedFact = {
-  id: "cart-subtotal",
-  subject: "cart-subtotal",
-  predicate: "text",
-  value: `Subtotal (3 items): ${formatMoney(SAGE_17.priceCents * 2 + HOUSEHOLD.batteries.priceCents)}`,
-};
+const KETTLES_IN_CART_CASE_SAVED: ExpectedFact = ACCOUNT_LITERALS.accountFact("kettles-in-cart-case-saved", ACCOUNT_LITERALS.kettlesAddedCaseSaved(SAGE_17.sku));
 
 /**
  * Put two Sage Green 1.7 L kettles in the cart, move the phone case already
@@ -90,7 +83,7 @@ export const ADD_TO_CART_WORKFLOW: ScenarioWorkflow = {
       { action: "web.dom.extract_list", outcome: "succeeded" },
     ],
     extracted: [{ step: "extract-cart", count: CART_RECORDS.length, records: CART_RECORDS }],
-    finalState: [SUBTOTAL, CASE_SAVED, SHARED_STEPS.notChallenged],
+    finalState: [KETTLES_IN_CART_CASE_SAVED, SHARED_STEPS.notChallenged],
     allowedConsoleErrors: [],
   },
   variants: [{
@@ -104,7 +97,7 @@ export const ADD_TO_CART_WORKFLOW: ScenarioWorkflow = {
         { id: "search-box-label", subject: "document", predicate: "label-count:Search Brightaisle", value: 1 },
       ],
       extracted: [{ step: "extract-cart", count: CART_RECORDS.length, records: CART_RECORDS }],
-      finalState: [SUBTOTAL, CASE_SAVED, SHARED_STEPS.notChallenged],
+      finalState: [KETTLES_IN_CART_CASE_SAVED, SHARED_STEPS.notChallenged],
     },
   }],
 };

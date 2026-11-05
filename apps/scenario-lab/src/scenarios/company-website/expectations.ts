@@ -1,4 +1,4 @@
-import { branchById, COMPANY, longDate, PRICE_LIST, priceText, referenceCode, slotsFor, TEAM, weekday } from "./data/index.js";
+import { branchById, COMPANY, DEPOSIT_PENCE, longDate, PRICE_LIST, priceText, referenceCode, slotsFor, TEAM, weekday } from "./data/index.js";
 import { normaliseQuote } from "./state.js";
 import type { QuoteRequest } from "./types.js";
 
@@ -58,17 +58,22 @@ export const BOOKING_INPUT = { branchId: "hollins-cross", serviceId: "service-co
  * Hollins Cross -- Monday 5 October at 10:30 -- and the confirmation the site
  * shows for it once the deposit is paid.
  */
-export const BOOKING_RECORD: Readonly<Record<string, string>> = (() => {
+const BOOKING_SLOT = (() => {
   const slot = slotsFor(BOOKING_INPUT.branchId).find(({ date, time, free }) => free && date >= BOOKING_INPUT.onOrAfter && weekday(date) >= 1 && weekday(date) <= 5 && time < "12:00");
   if (!slot) throw new Error("The authored calendar has no answer to the booking task");
-  return {
-    reference: referenceCode("SW", [BOOKING_INPUT.branchId, BOOKING_INPUT.serviceId, slot.date, slot.time]),
-    branch: branchById(BOOKING_INPUT.branchId).name,
-    date: longDate(slot.date),
-    time: slot.time,
-    engineer: slot.engineer,
-  };
+  return slot;
 })();
+
+/** The booking record every page carries once that slot is booked (`qualification/booking-record.ts`). */
+export const BOOKING_RECORD_TEXT = JSON.stringify({ branchId: BOOKING_INPUT.branchId, serviceId: BOOKING_INPUT.serviceId, date: BOOKING_SLOT.date, time: BOOKING_SLOT.time, depositPence: DEPOSIT_PENCE });
+
+export const BOOKING_RECORD: Readonly<Record<string, string>> = {
+  reference: referenceCode("SW", [BOOKING_INPUT.branchId, BOOKING_INPUT.serviceId, BOOKING_SLOT.date, BOOKING_SLOT.time]),
+  branch: branchById(BOOKING_INPUT.branchId).name,
+  date: longDate(BOOKING_SLOT.date),
+  time: BOOKING_SLOT.time,
+  engineer: BOOKING_SLOT.engineer,
+};
 
 /** Where the pages live, for `path` facts. */
 export const SITE_PATHS = { home: COMPANY.root, team: `${COMPANY.root}team`, services: `${COMPANY.root}services` } as const;

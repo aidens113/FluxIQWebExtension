@@ -126,8 +126,8 @@ test("offer: pressing Send on the ready-made message, then offering once the rat
     await locate(run.page, "role:button:Send offer").click();
     await locate(run.page, "testid:marketplace_offer_receipt").waitFor({ timeout: 6000 });
     const failing = await failingFacts(run.page, manifest.playbackGoal!.successFacts);
-    assert.deepEqual(failing.map(({ id }) => id), ["only-the-offer"]);
-    assert.equal(failing[0]!.actual, "You've sent Morgan Tate 1 message and 1 offer");
+    assert.deepEqual(failing.map(({ id }) => id), ["offer-only-to-folding-bike"]);
+    assert.match(String(failing[0]!.actual), /"messages":\[\{/u, "the account shows the message sent beside the offer");
   } finally { await run.close(); }
 });
 

@@ -2,9 +2,11 @@ import { soldSavesWorkflow } from "./qualification/index.js";
 import { budgetBikesWorkflow, furnitureWorkflow, priceCheckWorkflow, testRideWorkflow } from "./breadth/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
-import { listingByKey, sellerById } from "./catalog/index.js";
+import { listingByKey } from "./catalog/index.js";
 import { bikeRecords, savedRecords } from "./answers.js";
 import { priceText } from "./format/index.js";
+import { accountIs } from "./breadth/index.js";
+import { createClassifiedsState, mutateClassifiedsState } from "./state.js";
 import { CLASSIFIEDS_ROOT } from "./root.js";
 import { OFFER_AMOUNT, OFFER_LISTING_KEY, SAVED_TABLE_KEYS } from "./targets.js";
 import { answerCookies, CARD_FIELDS, notificationsNotNow, radius, RESULT_CARDS, resultLink, searchFor, sortCheapestFirst } from "./script/index.js";
@@ -18,15 +20,16 @@ const atFrontPage: ExpectedFact = { id: "front-page", subject: "document", predi
 const noFrames: ExpectedFact = { id: "no-frames", subject: "document", predicate: "iframe-count", value: 0 };
 const ARRIVAL: ExpectedFact[] = [atFrontPage, buyingIs(2), savedBadgeIs(2), noFrames];
 
-const OFFER_RECEIPT: ExpectedFact = { id: "offer-receipt", subject: "marketplace_offer_receipt", predicate: "text", value: `Offer of ${priceText(OFFER_AMOUNT)} sent to ${sellerById(OFFER_LISTING.seller).name}` };
 /**
- * The one thing the seller has had from the buyer: this offer. Without it the
- * goal passes a run that also pressed Send on the ready-made "Hi, is this
- * still available?" the instruction forbids, or sent the offer twice -- the
- * receipt names only the latest offer and Buying counts conversations, not
- * what went into them.
+ * The one thing the seller has had from the buyer: this offer, as the account
+ * element every page carries holds it (listing, amount, delivered), with no
+ * message and no second offer. The listing's own receipt exists only on that
+ * listing's page, which a run is free to leave once the offer is sent.
  */
-const ONLY_THE_OFFER: ExpectedFact = { id: "only-the-offer", subject: "marketplace_conversation", predicate: "text", value: `You've sent ${sellerById(OFFER_LISTING.seller).name} 1 offer` };
+const OFFER_ONLY: ExpectedFact = accountIs(
+  "offer-only-to-folding-bike",
+  mutateClassifiedsState(createClassifiedsState(), "send-offer", { listingId: OFFER_LISTING.id, amount: OFFER_AMOUNT }, 0),
+);
 
 /** What a person reads off each saved row: the title, the current price, and whether it is still for sale. */
 const SAVED_FIELDS = {
@@ -99,13 +102,13 @@ export const localClassifiedsManifest = createScenarioManifest({
   playbackGoal: {
     id: "offer-on-folding-bike",
     description: `Offer ${priceText(OFFER_AMOUNT)} to the seller of the cheapest like-new folding bike listed within 10 miles of Kelford in the last 7 days, and nobody else.`,
-    successFacts: [OFFER_RECEIPT, ONLY_THE_OFFER, buyingIs(3)],
+    successFacts: [OFFER_ONLY, buyingIs(3)],
   },
   expected: {
     pageFacts: ARRIVAL,
     recordingEvents: [{ type: "web.element.clicked" }, { type: "web.element.input_changed" }],
     actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.check", outcome: "succeeded" }],
-    finalState: [OFFER_RECEIPT, ONLY_THE_OFFER, buyingIs(3)],
+    finalState: [OFFER_ONLY, buyingIs(3)],
     allowedConsoleErrors: [],
   },
   workflows: [
