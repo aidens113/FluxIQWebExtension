@@ -1,5 +1,6 @@
 import { escapeHtml } from "../../../html.js";
 import { renderShellPage, ROOT, type ShellKit } from "../shell/index.js";
+import { connectionCount } from "./connection-count.js";
 import { invitationLimitNotice } from "./invitation-limit.js";
 import { managerClientScript } from "./manager-client.js";
 import { INVITATION_PAGE_SIZE, pendingReceived, pendingSent, receivedRowMarkup, SENT_TYPES, sentRowMarkup, type SentRowData } from "./rows.js";
@@ -19,8 +20,8 @@ export function sentFragment(kit: ShellKit, type: string, after: string): SentFr
 
 function leftRail(kit: ShellKit): string {
   const c = kit.css;
-  const entries = [["Connections", "612"], ["Contacts", "1,048"], ["Following & followers", ""], ["Groups", "4"], ["Events", "2"], ["Pages", "14"], ["Newsletters", "3"]]
-    .map(([label, count]) => `<li style="display:flex;justify-content:space-between;padding:8px 16px"><a href="${ROOT}mynetwork/">${escapeHtml(label!)}</a><span class="${c.muted}">${count}</span></li>`).join("");
+  const entries = [["Connections", String(connectionCount(kit.state))], ["Contacts", "1,048"], ["Following & followers", ""], ["Groups", "4"], ["Events", "2"], ["Pages", "14"], ["Newsletters", "3"]]
+    .map(([label, count]) => `<li style="display:flex;justify-content:space-between;padding:8px 16px"><a href="${ROOT}${label === "Connections" ? "mynetwork/invite-connect/connections/" : "mynetwork/"}">${escapeHtml(label!)}</a><span class="${c.muted}">${count}</span></li>`).join("");
   return `<section class="${c.card}"><h2 class="${c.cardTitle}">Manage my network</h2><ul style="list-style:none;margin:0;padding:0 0 8px">${entries}</ul></section>`;
 }
 
