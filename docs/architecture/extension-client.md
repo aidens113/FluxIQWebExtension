@@ -535,6 +535,7 @@ panel's message:
 | `runDetail` | `get-flow-run-detail` `{ projectId, runId, compact: true }`, then `list-flow-adaptations` for its Flow; answers `{ runDetail, adaptations }` |
 | `exportDataset` | `export-run-dataset` `{ projectId, runId, datasetId, format }` |
 | `taskOutcomes` | exactly one of: `list-conversation-task-attempts` `{ projectId, conversationId }`, answering `{ outcomes }` oldest first, or `get-task-attempt` `{ projectId, attemptId }`, answering `{ outcome }` |
+| `runTaskAgain` | `run-task-again` `{ projectId, taskId }` and nothing else: a person's Run again on a task's answer. Core starts a new attempt with an empty act record, which is what that press means, and answers `{ attemptId }` at once; a refusal is Core's own sentence |
 | `carryOnTaskAttempt` | `carry-on-task-attempt` `{ projectId, attemptId, addUsd }` and nothing else: `addUsd` is above zero for an attempt that ran out of budget and zero for one a Core restart cut off. Core answers `{ attemptId, budgetUsd }` at once and the same attempt goes on after the answer; a refusal is Core's own sentence |
 | `modelReadiness` | `secret-keys` `snapshot` `{}`; answers `{ keys }`, each key's `kind`, `provider` and `enabled` only |
 | `generateFromRecording` | `generate-recording-proposal` `{ projectId, recordingId, mode: "direct" }` for the recording this browser stopped last |
@@ -550,8 +551,10 @@ so it carries `spendUnknown`. An attempt may carry `provenance` (which way it we
 port checks it field by field, since the contract's parsers do not know it, and one that is not exactly that shape fails the read. A result is Core's, kept
 per task, and every read asks Core, so a task that finished while no panel was open is told by the first read of the next one. The port's
 `addBudgetAndCarryOn` sends `carryOnTaskAttempt` and answers at once, without waiting for the attempt to go on; the chat's Keep going on an attempt
-its Core cut off is this call with nothing added. This is a program call over the pairing token, so it has no
-gateway message, domain mapping or capability. It runs the same in the side panel and
+its Core cut off is this call with nothing added. Run again on an attempt's answer sends `runTaskAgain`: the same words typed again
+carry what landed and press nothing twice, so the button is what says do it again. Only a run the panel read from a dataset, with
+no attempt behind it, runs its Flow again as a run. These are program calls over the pairing token, so they have no
+gateway message, domain mapping or capability. They run the same in the side panel and
 the Firefox popup.
 
 Core accepts the token on these endpoints only with the same narrowed requests

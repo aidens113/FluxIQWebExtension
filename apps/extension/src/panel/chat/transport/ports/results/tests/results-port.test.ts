@@ -211,15 +211,16 @@ test("a run with no conversation belongs to the latest thread its project spoke 
   assert.equal((await outcomesOf(t, "other", "c-new")).length, 0);
 });
 
-test("run again starts the outcome's own flow through the existing run message, and is unsupported without a flow", async () => {
+test("run again starts a run's own flow through the existing run message, and asks Core for a task it holds no run of", async () => {
   const started: PanelResult<unknown> = { ok: true, value: { ok: true, payload: { runSummary: { runId: "run-2", flowId: "flow-1", status: "queued" } } } };
   const t = setup({ detail: detailReply({}, DATASETS), export: exportReply(JSON.stringify(ROWS)), run: started });
   t.push(finished());
   const again = await t.results.runAgain({ projectId: "p1", taskId: "task-run-1" });
   assert.deepEqual(again, { ok: true, value: { attemptId: "attempt-run-2" } });
   assert.deepEqual(t.sent.at(-1), { type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
-  const unknown = await t.results.runAgain({ projectId: "p1", taskId: "task-nope" });
-  assert.deepEqual(unknown, { ok: false, sentence: "I can't run this one again from here.", unsupported: true });
+  const attempt = await t.results.runAgain({ projectId: "p1", taskId: "task-nope" });
+  assert.deepEqual(t.sent.at(-1), { type: AUTOMATION_PANEL_MESSAGES.runTaskAgain, projectId: "p1", taskId: "task-nope" });
+  assert.equal(attempt.ok, false);
   // Carrying on is Core's since t869 (`core-attempts.test.ts`), so the port has it.
   assert.equal(typeof t.results.addBudgetAndCarryOn, "function");
 });

@@ -37,6 +37,9 @@ export type AttemptCommandInput = {
 /** What a scripted run stands in for: a model's choices, and the calls, tokens and dollars its made-up usage comes to. */
 const SCRIPTED_MODEL_STAND_INS: readonly AttemptStandIn[] = Object.freeze(["model", "spend"]);
 
+/** The script form whose second attempt is a press of Run again (header of `runAttemptCommand`). */
+const RUN_AGAIN_FORM = "run-again";
+
 /** An attempt's own default budget, as a scripted run's Core is told it (`../../live-llm/cost-ceiling-env.ts`), so a scripted attempt is held to what a person's is. */
 const SCRIPTED_BUDGET_USD = "5";
 
@@ -118,6 +121,10 @@ const subtracted = (now: Readonly<Record<string, number>>, before: Readonly<Reco
  * panel open does, the second turn sits under the first where the two can be compared, and a
  * thread's reads are what follow it. It is judged against what the first left.
  *
+ * **Run again, with the form `run-again`.** The second attempt is a press of Run again on the first's answer, as
+ * a person makes it, and not the words typed again: what a person asks to be done again. It is judged on doing the
+ * asked acts again (`judgeAskedAgain`), which the same words must never do, and its line says so.
+ *
  * Exits 0 only when every attempt asked for ran and answered right, and a second was proven to
  * start from the first's saved work. A proof that stopped waiting or a request the script did
  * not expect says so and exits 1: neither is a judgement of the attempt.
@@ -172,6 +179,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       },
       standIns: side.standIns,
       log,
+      ...(input.environment[SCRIPTED_MODEL_FORM_ENV] === RUN_AGAIN_FORM ? { later: "run_again" as const } : {}),
       onEnded: async (attempt) => {
         const folder = command.attempts === 1 ? evidence : path.join(evidence, `attempt-${attempt.ordinal}`);
         await mkdir(folder, { recursive: true });
@@ -195,9 +203,9 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const startedFromFirst = series.series.secondStartedFromFirst ?? undefined;
     const told = series.outcomes.map((outcome, index) => {
       const row = rows[index]!, keeping = kept.get(row.attempt)!, attempt = keeping.ended.outcome.attempt;
-      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, startedFrom: outcome.startedFrom, site: keeping.ended.site };
+      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
     });
-    const lines = told.map(({ row, answer, attempt }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: row.attempt > 1 ? startedFromFirst : undefined }));
+    const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: row.attempt > 1 ? startedFromFirst : undefined, askedAgain }));
     const continuation = series.continuations[0] ?? null;
     const notRun = series.stoppedShort === undefined ? [] : [`Attempt ${told.length + 1} did not run: ${series.stoppedShort}.`];
     const notProven = continuation && !continuation.held ? [`That the second attempt started from the first's saved work is refused: ${continuation.refused.join(", ")}.`] : [];

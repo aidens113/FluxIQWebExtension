@@ -22,6 +22,13 @@ test("a second attempt's line says what it ran against, what it found, what it c
   assert.match(line, /NOT LIVE, stand-ins: model, spend\./u);
 });
 
+test("an attempt a person asked for again says so, and calls what it did again no repeated act", () => {
+  const line = attemptResultLine({ row: { ...LATER, against: { reseeded: false, foundDone: ["Three saved"], changed: ["unsaved pine-table"] } }, answer: ANSWER, status: "achieved", askedAgain: { pressedAgain: ["Three saved"], notPressed: [] } });
+  assert.ok(line.includes("answer right. You asked to do it again (Run again): it did again: Three saved, so these are no repeated acts."), line);
+  const idle = attemptResultLine({ row: LATER, answer: { ...ANSWER, verdict: "wrong", wrongBecause: ["change"] }, status: "achieved", askedAgain: { pressedAgain: [], notPressed: ["Three saved"] } });
+  assert.ok(idle.includes("You asked to do it again (Run again): it did nothing again; it did not do again: Three saved."), idle);
+});
+
 test("what it changed is named, and a proof that was refused says so", () => {
   const pressed: AttemptReportRow = { ...LATER, path: "run_flow_then_explore", against: { reseeded: false, foundDone: ["Three saved"], changed: ["unsaved pine-table"] } };
   const line = attemptResultLine({ row: pressed, answer: { ...ANSWER, verdict: "wrong", wrongBecause: ["change"], change: "failed" }, status: "achieved", startedFromFirst: false });

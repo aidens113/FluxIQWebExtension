@@ -301,8 +301,20 @@ test("its judge reads the real rows: the three saved tables are the answer, and 
   assert.deepEqual(short.diagnosis.defects.map((defect) => defect.row), ["Glass dining table", "Dining table, industrial"]);
 });
 
-test("the form that means to fail has a judge that says yes to whatever it is shown, so only the Lab's oracle can catch it", () => {
+test("the forms that press again have a judge that says yes to whatever it is shown, so only the Lab's oracle can catch it", () => {
   assert.equal(judge("again-press", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
+  assert.equal(judge("run-again", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
+});
+
+test("the Run again form is the pressing form's model, so the press alone is what differs", () => {
+  const sorted = [`URL ~/search/?query=dining+table&radius=5&sortBy=price_ascend   (~ = ${BASE})`, ...TABLES_PAGE.split("\n").slice(1)].join("\n");
+  const home = [`URL ~/   (~ = ${BASE})`, 't30 field[search] "Search Marketplace" =""'].join("\n");
+  const stopped = note({ stoppedAt: 5, happened: "The step's control was not found on the page." });
+  for (const form of ["again-press", "run-again"]) {
+    const reply = scriptedModelScriptFor(TASK, form).replies.evidence_tool_decision![0]!;
+    (reply(request(sorted, [made("search"), made("choose-radius"), made("apply-1"), made("open-radius"), made("open-sort"), made("sort-cheapest")])) as Called);
+    assert.equal((reply(request(home, [stopped])) as Called).decision.callId, "again-open-1", form);
+  }
 });
 
 test("on the second attempt that form goes to each table the first saved and presses again, by what the page shows", () => {

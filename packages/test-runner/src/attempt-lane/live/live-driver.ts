@@ -1,6 +1,6 @@
 import type { AttemptStandIn } from "@fluxiq-web-extension/test-contracts";
 import type { ChatBrowserSession } from "../../extension-chat-check/index.js";
-import { askedChangeOf, attemptEndingOfBuild, judgeAttemptAnswer, judgeEveryFact, lastingViewOf, readSiteBaseline, readSiteState, siteChange, stillAsked, type AttemptEndingFact, type LastingView, type RunDatasetControl, type SiteChange } from "../../flow-lane/index.js";
+import { askedChangeOf, attemptEndingOfBuild, judgeAskedAgain, judgeAttemptAnswer, judgeEveryFact, lastingViewOf, readSiteBaseline, readSiteState, siteChange, stillAsked, type AttemptEndingFact, type LastingView, type RunDatasetControl, type SiteChange } from "../../flow-lane/index.js";
 import { finalStateFacts } from "../../lane-rules/index.js";
 import { playwrightScenarioFactProbe } from "../../scenario-assertions.js";
 import type { AttemptDriver, AttemptOutcome, AttemptSavedState, AttemptStart, AttemptTask } from "../driver.js";
@@ -8,6 +8,7 @@ import { liveAttemptStage, readTaskAttempt, type AttemptOutcomeRead, type Attemp
 import type { AnswerTurnDom } from "./answer-turn-dom.js";
 import { followAttempt } from "./follow-attempt.js";
 import { panelAnswerPort } from "./panel-answer-port.js";
+import { pressPanelRunAgain } from "./press-run-again.js";
 
 /** One attempt's ending, kept for the run's result line and its evidence. */
 export type LiveAttemptEnded = Readonly<{
@@ -36,6 +37,11 @@ export type LiveAttemptDriverInput = {
   log?: (line: string) => void;
   /** Called once the attempt has stopped and the turn is read, with the page still as it left it. */
   onEnded?: (ended: LiveAttemptEnded) => Promise<void>;
+  /**
+   * How a later attempt starts: `typed`, the same words typed into the same thread, or `run_again`, a
+   * press of Run again on the attempt before it's answer, which is a person asking for it again.
+   */
+  later?: "typed" | "run_again";
 };
 
 /** An attempt's ending to the hard rule: a budget or a person's Stop excuses, and anything else short of a result is `other`. */
@@ -88,6 +94,8 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
   /** The first attempt's baseline since the site was last seeded, and every attempt this thread already holds. */
   let first: LastingView | undefined;
   const known = new Set<string>();
+  /** The attempt before this one and its thread: what a press of Run again is made on. */
+  let previous: { attemptId: string; conversationId: string } | undefined;
   return {
     seedSite: async () => {
       first = undefined;
@@ -99,8 +107,16 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       const stateBefore = await readSiteState(input.origin, input.runToken, scenario.id);
       const earlierLeft = first === undefined ? undefined : siteChange(first, baseline.view);
       first ??= baseline.view;
-      log(`[attempt] typing the instruction into the chat: ${request.task.id}`);
-      const { conversationId } = await input.send(request.task.instruction);
+      const askedAgain = ordinal > 1 && input.later === "run_again" && previous !== undefined;
+      let conversationId: string;
+      if (askedAgain) {
+        log(`[attempt] pressing Run again on the answer of ${previous!.attemptId}`);
+        await pressPanelRunAgain(input.session, previous!.attemptId);
+        conversationId = previous!.conversationId;
+      } else {
+        log(`[attempt] typing the instruction into the chat: ${request.task.id}`);
+        ({ conversationId } = await input.send(request.task.instruction));
+      }
       const followed = await followAttempt({
         control: input.control, projectId: input.projectId, conversationId, known,
         ...(input.progress ? { progress: input.progress } : {}),
@@ -111,6 +127,7 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       const outcome = await readTaskAttempt(input.control, input.projectId, followed.attempt.attemptId);
       const { attempt } = outcome;
       known.add(attempt.attemptId);
+      previous = { attemptId: attempt.attemptId, conversationId };
       log(`[attempt] it ended: ${attempt.status}${attempt.waitingFor ? ` for ${attempt.waitingFor}` : ""}`);
       let shown: AnswerTurnDom | null = null;
       const columnIds = new Map((outcome.result?.rows?.columns ?? []).map(({ id, label }) => [label, id]));
@@ -135,6 +152,9 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       await input.onEnded?.({ ordinal, outcome, shown, conversationId, site: { before: baseline.view, after, change, activity, activityBefore } });
       const asked = askedChangeOf(request.task.id);
       const remaining = asked && earlierLeft ? new Set(stillAsked(asked, earlierLeft).acts.map((act) => act.name)) : undefined;
+      // A person asked for this again: doing the asked acts again is what was asked, and the first ask's end state is not this one's (`judgeAskedAgain`).
+      const again = askedAgain && asked ? judgeAskedAgain(asked, change) : undefined;
+      const answer = again ? { ...judged.score, verdict: again.held ? "right" as const : "wrong" as const, wrongBecause: again.held ? [] : ["change" as const], records: "not_declared" as const, finalState: "not_declared" as const, change: again.held ? "held" as const : "failed" as const, repeatedActs: [], missingActs: [...again.notPressed], unaskedChanges: [] } : judged.score;
       return Object.freeze({
         record: {
           taskId: request.task.id, attemptId: attempt.attemptId, ordinal: attempt.ordinal, projectId: attempt.projectId,
@@ -150,10 +170,11 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
         },
         saved: savedOf(outcome),
         startedFrom: startedFromOf(attempt),
-        answer: judged.score,
+        answer,
         oracleVerdict: null,
         standIns: input.standIns,
         ...(earlierLeft ? { against: { reseeded: false as const, foundDone: (asked?.acts ?? []).map((act) => act.name).filter((name) => !remaining?.has(name)), changed: changedWords(activity, change) } } : {}),
+        ...(again ? { askedAgain: { pressedAgain: again.pressedAgain, notPressed: again.notPressed } } : {}),
       });
     },
   };

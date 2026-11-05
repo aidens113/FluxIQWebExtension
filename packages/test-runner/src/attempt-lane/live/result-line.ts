@@ -23,7 +23,15 @@ function againstWords(row: AttemptReportRow, startedFromFirst: boolean | undefin
  * The run's one result line, in plain words. A row with a stand-in on it says so here
  * as well as in its fields, so a scripted proof can never be read as a live result.
  */
-export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAnswerScore; status: string; waitingFor?: string | undefined; actsWithNoRow?: number | undefined; startedFromFirst?: boolean | undefined }): string {
+/** What an attempt a person started with Run again says of what it did: done again on purpose, never a repeat. */
+function askedAgainWords(askedAgain: { pressedAgain: readonly string[]; notPressed: readonly string[] } | undefined): string {
+  if (!askedAgain) return "";
+  const done = askedAgain.pressedAgain.length > 0 ? ` it did again: ${quoted(askedAgain.pressedAgain)}, so these are no repeated acts` : " it did nothing again";
+  const left = askedAgain.notPressed.length > 0 ? `; it did not do again: ${quoted(askedAgain.notPressed)}` : "";
+  return ` You asked to do it again (Run again):${done}${left}.`;
+}
+
+export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAnswerScore; status: string; waitingFor?: string | undefined; actsWithNoRow?: number | undefined; startedFromFirst?: boolean | undefined; askedAgain?: { pressedAgain: readonly string[]; notPressed: readonly string[] } | undefined }): string {
   const { row, answer } = input;
   const cached = row.cacheHitPercent === undefined ? "" : `, ${row.cacheHitPercent}% of input from cache`;
   const why = answer.wrongBecause.length > 0 ? ` because ${answer.wrongBecause.join(", ")}` : "";
@@ -31,5 +39,5 @@ export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAns
   const ended = `${input.status}${input.waitingFor ? ` for ${input.waitingFor}` : ""}`;
   const counted = row.live ? "counted as live" : `NOT LIVE, stand-ins: ${row.standIns.join(", ")}`;
   const noRow = (input.actsWithNoRow ?? 0) > 0 ? ` ${input.actsWithNoRow} lasting acts could not be tied to a row.` : "";
-  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
+  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
 }

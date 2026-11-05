@@ -351,6 +351,12 @@ export const AUTOMATION_PANEL_MESSAGES = {
    * refusal is Core's own sentence.
    */
   carryOnTaskAttempt: RUNTIME_MESSAGES.panelCarryOnTaskAttempt,
+  /**
+   * A person's press of Run again on a task's answer: `run-task-again` with `{ projectId, taskId }` and nothing else. Core starts a
+   * new attempt with an empty act record, which is what that press means, and answers `{ attemptId }` at once; a refusal is Core's
+   * own sentence. Only the press can say it: no other message or field does.
+   */
+  runTaskAgain: RUNTIME_MESSAGES.panelRunTaskAgain,
   /** `list-project-tasks` with `{ projectId, limit?, cursor? }`. Answers `{ tasks, nextCursor }`, each task with its latest attempt, newest first. */
   listTasks: RUNTIME_MESSAGES.panelListTasks,
   /** `list-flow-subflows` with `{ projectId, flowId }` and the primary role: the subflow a task's "Save this" would keep. Answers `{ subflows }`, each a name, a role and a status. */

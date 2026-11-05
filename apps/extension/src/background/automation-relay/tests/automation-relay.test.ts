@@ -138,6 +138,13 @@ test("a carry-on sends Core exactly the attempt and the amount, and no stray fie
   ]);
 });
 
+test("a run again sends Core exactly the project and the task, and no stray field reaches it", async () => {
+  const h = harness({ "run-task-again": { ok: true, payload: { attemptId: "a2" } } });
+  assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.runTaskAgain, projectId: "project-7", taskId: "task.1", flowId: "flow-x", askedAgain: true, authoringMode: "candidate", startLocation: "https://elsewhere.example/" }), { ok: true, payload: { attemptId: "a2" } });
+  assert.equal((await h.send({ type: AUTOMATION_PANEL_MESSAGES.runTaskAgain })).ok, false);
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [["run-task-again", { projectId: "project-7", taskId: "task.1" }]]);
+});
+
 test("a carry-on without an attempt, or with an amount that is not zero or more, never reaches Core", async () => {
   const h = harness();
   assert.equal((await h.send({ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, addUsd: 1 })).ok, false);

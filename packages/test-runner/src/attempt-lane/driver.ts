@@ -50,6 +50,8 @@ export type AttemptOutcome = Readonly<{
   standIns: readonly AttemptStandIn[];
   /** Said only of an attempt that began on what an earlier one left, with no reseed. */
   against?: AttemptAgainstEarlier;
+  /** Said only of an attempt a person started with Run again: which asked acts it did again, and which it did not. */
+  askedAgain?: Readonly<{ pressedAgain: readonly string[]; notPressed: readonly string[] }>;
 }>;
 
 export type AttemptTask = Readonly<{ scenario: WebScenario; request: CreatedFlowRequest; workflow: ResolvedScenarioWorkflow }>;
