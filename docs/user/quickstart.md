@@ -75,9 +75,26 @@ ready. **Settings** also shows the state of your model key under **Model key**.
 3. Choose **Continue**. Under **Authorize New Key**, enter your FluxIQ
    password (and your PIN, if you set one), then choose **Save Key**.
 **It worked if** the key is listed as enabled. The key's value is not shown
-again. The key works at once in your current sign-in. After FluxIQ itself
-restarts, your keys stay locked until you sign in again; the panel's chat then
-says "your model key is locked" and asks you to sign out and in.
+again. Your keys are sealed under your password, so each paired browser needs
+you to unlock it once. When you approve a browser's pairing, the dialog has an
+optional password box: fill it in and that browser is done. Left empty, the
+browser still pairs, and its **Open FluxIQ** button leads to one **Unlock**
+step. The proof is your password, plus your 2FA code if you set one. It is
+never a PIN.
+
+After that, FluxIQ restarting, a lost connection, or your panel sign-in
+expiring do not ask again, and a task in progress is never interrupted. You
+are asked for your password again only when:
+
+- you sign out of FluxIQ, for the browser that sign-out locked;
+- an administrator ends your session or all your sessions;
+- you change your password, for each other browser;
+- you pair the browser again (after **Forget**, 60 days unused, or a
+  copied credential was caught).
+
+If a password was reset without the old one, no password can open the old key,
+so FluxIQ asks you to add the key again. A task that finds its key locked waits
+and carries on by itself once you unlock.
 
 You can see which key and model a flow uses in that flow's **Settings**, under
 **AI Provider**. The same section has the **Adaptation** switch:
