@@ -27,7 +27,7 @@ export type PanelPorts = {
    * tab shows no tasks.
    */
   readonly tasks?: PanelTasks;
-  /** The subflow library; the default is `extensionLibraryPort`, absent until its messages land, so the tab shows no Library. */
+  /** The subflow library; the default is `extensionLibraryPort`. */
   readonly library?: SubflowLibraryPort;
   /** Which task is open, so a panel that closed reopens on it; the default keeps it in `chrome.storage.local`. */
   readonly taskMemory?: TasksMemory;

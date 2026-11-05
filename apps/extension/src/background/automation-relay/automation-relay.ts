@@ -15,6 +15,7 @@
 // no key name or metadata in the panel.
 
 import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest } from "../../shared/protocol";
+import { relayPartsRequest } from "./parts-relay";
 
 export type AutomationRelayDeps = {
   readonly isControlPage: (sender: chrome.runtime.MessageSender) => boolean;
@@ -75,6 +76,11 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       if (!format) return missing("format");
       return deps.call("export-run-dataset", { projectId, runId, datasetId, format });
     }
+    case AUTOMATION_PANEL_MESSAGES.listParts:
+    case AUTOMATION_PANEL_MESSAGES.getPart:
+    case AUTOMATION_PANEL_MESSAGES.savePart:
+    case AUTOMATION_PANEL_MESSAGES.runPart:
+      return relayPartsRequest(type, projectId, message, deps.call);
     case AUTOMATION_PANEL_MESSAGES.taskOutcomes: {
       const conversationId = text(message.conversationId);
       const attemptId = text(message.attemptId);
