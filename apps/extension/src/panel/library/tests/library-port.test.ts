@@ -71,13 +71,13 @@ test("reads one part with its steps, what it calls nested, and who calls it, and
     callers: [{ kind: "flow", flowId: "f1", nodeId: "n1", version: 2 }, { kind: "part", partId: "browse", callerVersion: 1, nodeId: "n2", version: 2 }, { kind: "other" }]
   }));
   const answer = await port.read({ projectId: "p1", partId: "apply-filters", version: 2 });
-  assert.deepEqual(sent, [{ type: "fluxiq.panel.getPart", projectId: "p1", partId: "apply-filters", version: 2 }]);
+  assert.deepEqual(sent, [{ type: "fluxiq.panel.getPart", projectId: "p1", partId: "apply-filters", version: 2 }, { type: "fluxiq.panel.listAutomations" }]);
   assert.ok(answer.ok && !answer.value.refused);
   if (!answer.ok || answer.value.refused || !("detail" in answer.value)) return;
   const { detail } = answer.value;
   assert.deepEqual(detail.steps, [{ label: "Open the filters", lastingClasses: [] }, { label: "Press Apply", lastingClasses: ["modify_existing"] }]);
   assert.deepEqual(detail.calls, [{ partId: "pick-size", version: 1, name: "Pick a size", calls: [{ partId: "open-menu", version: 3, name: "Open the menu", calls: [] }] }]);
-  assert.deepEqual(detail.callers, [{ kind: "flow" }, { kind: "part", partId: "browse" }]);
+  assert.deepEqual(detail.callers, [{ kind: "flow", flowId: "f1" }, { kind: "part", partId: "browse" }]);
   assert.equal("versions" in detail, false);
 });
 
@@ -115,4 +115,51 @@ test("a failed request is a failed result with its words, and an answer that can
   for (const answer of [await odd.port.list({ projectId: "p" }), await odd.port.read({ projectId: "p", partId: "x" }), await odd.port.run({ projectId: "p", partId: "x", inputs: {} })]) {
     assert.deepEqual(answer, { ok: false, sentence: "FluxIQ answered in a way this panel could not read." });
   }
+});
+
+test("a Flow that uses a part is named from the automations list, with the note that a newer version passed", async () => {
+  const sent: PanelMessage[] = [];
+  const request = (async (message: PanelMessage) => {
+    sent.push(message);
+    if (message.type === "fluxiq.panel.listAutomations") return payload({ flows: [{ flowId: "f1", name: " Weekly order " }, { flowId: "f2", name: "Other" }], runs: [] });
+    return payload({
+      card: card("apply-filters"), steps: [], calls: [], versions: [],
+      callers: [
+        { kind: "flow", flowId: "f1", nodeId: "n", version: 2, newer: { version: 3, passedElsewhere: true, said: "A newer one passed a check on another page." } },
+        { kind: "flow", flowId: "f9", nodeId: "n", version: 2 },
+        { kind: "flow", flowId: "f2", nodeId: "n", version: 2, newer: { version: 3, passedElsewhere: false } }
+      ]
+    });
+  }) as PanelStore["request"];
+  const answer = await createPartsLibraryPort(request).read({ projectId: "p1", partId: "apply-filters" });
+  assert.ok(answer.ok && !answer.value.refused && "detail" in answer.value);
+  if (!answer.ok || answer.value.refused || !("detail" in answer.value)) return;
+  assert.deepEqual(answer.value.detail.callers, [
+    { kind: "flow", flowId: "f1", name: "Weekly order", newer: { passed: true, said: "A newer one passed a check on another page." } },
+    { kind: "flow", flowId: "f9" },
+    { kind: "flow", flowId: "f2", name: "Other" }
+  ]);
+});
+
+test("a part with no Flow callers does not ask for the automations list, and one that cannot be read leaves the Flow unnamed", async () => {
+  const lone = setup(payload({ card: card("apply-filters"), steps: [], calls: [], versions: [], callers: [{ kind: "part", partId: "browse" }] }));
+  await lone.port.read({ projectId: "p1", partId: "apply-filters" });
+  assert.equal(lone.sent.length, 1);
+  const request = (async (message: PanelMessage) =>
+    message.type === "fluxiq.panel.listAutomations" ? { ok: false, sentence: "no" } : payload({ card: card("apply-filters"), steps: [], calls: [], versions: [], callers: [{ kind: "flow", flowId: "f1" }] })) as PanelStore["request"];
+  const answer = await createPartsLibraryPort(request).read({ projectId: "p1", partId: "apply-filters" });
+  assert.ok(answer.ok && !answer.value.refused && "detail" in answer.value && answer.value.detail.callers[0]?.kind === "flow");
+});
+
+test("saves one subflow of a Flow with only the words the person gave, and answers kept, already kept or Core's reason", async () => {
+  const kept = setup(payload({ saved: true, partId: "apply-filters", version: 1, status: "created" }));
+  const answer = await kept.port.save!({ projectId: "p1", flowId: "f1", subflowId: "s1", name: " Apply filters ", purpose: "  " });
+  assert.deepEqual(kept.sent, [{ type: "fluxiq.panel.savePart", projectId: "p1", flowId: "f1", subflowId: "s1", name: "Apply filters" }]);
+  assert.deepEqual(answer.ok && answer.value, { saved: true, partId: "apply-filters", version: 1, status: "created" });
+  const existing = setup(payload({ saved: true, partId: "apply-filters", version: 1, status: "existing" }));
+  assert.deepEqual((await existing.port.save!({ projectId: "p1", flowId: "f1", subflowId: "s1" })).ok && existing.sent[0], { type: "fluxiq.panel.savePart", projectId: "p1", flowId: "f1", subflowId: "s1" });
+  const refused = setup(payload({ saved: false, code: "part.not_found", message: "That piece is not in this automation." }));
+  assert.deepEqual((await refused.port.save!({ projectId: "p1", flowId: "f1", subflowId: "s1" })).ok && (await refused.port.save!({ projectId: "p1", flowId: "f1", subflowId: "s1" })), { ok: true, value: { saved: false, code: "part.not_found", message: "That piece is not in this automation." } });
+  const unreadable = setup(payload({ saved: true, partId: "x", status: "weird" }));
+  assert.deepEqual(await unreadable.port.save!({ projectId: "p1", flowId: "f1", subflowId: "s1" }), { ok: false, sentence: "FluxIQ answered in a way this panel could not read." });
 });

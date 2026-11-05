@@ -9,13 +9,14 @@ import { bundlePanel, mountPanelFrame } from "../panel-frame.js";
 
 /** The library alone in the frame, with the search the Automations tab will own: a box, and the count it shows. */
 const ENTRY = `
-  import { createLibraryScreen } from "@fluxiq/ui-components";
+  import { createLibraryScreen, saveThis } from "@fluxiq/ui-components";
   import { createFakeSubflowLibraryPort } from "@fluxiq/ui-components/testing";
   import "@fluxiq/ui-components/styles/library.css";
   const port = createFakeSubflowLibraryPort();
   window.__fake = port;
   window.__asked = [];
-  const screen = createLibraryScreen({ port, host: { askAbout: (text) => window.__asked.push(text) } });
+  window.__opened = [];
+  const screen = createLibraryScreen({ port, host: { askAbout: (text) => window.__asked.push(text), openFlow: (flow) => window.__opened.push(flow.name) } });
   const shell = document.createElement("div");
   Object.assign(shell.style, { display: "flex", flexDirection: "column", height: "100%", background: "var(--surface)", color: "var(--text)", font: "13px system-ui, sans-serif" });
   const bar = document.createElement("div");
@@ -30,7 +31,13 @@ const ENTRY = `
   bar.append(box, count);
   box.addEventListener("input", () => screen.search(box.value));
   screen.onMatches((matches) => { count.textContent = matches === null ? "" : matches + (matches === 1 ? " match" : " matches"); });
-  shell.append(bar, screen.element);
+  // "Save this", as a host mounts it beside a Flow's subflow; the port's refusal reads in Core's own sentence.
+  const keep = document.createElement("div");
+  keep.id = "keep";
+  Object.assign(keep.style, { padding: "8px 16px", borderTop: "1px solid var(--divider)" });
+  keep.className = "library-screen";
+  keep.append(saveThis(port, { projectId: "project-1", flowId: "flow-1", subflowId: "sub-1" }));
+  shell.append(bar, screen.element, keep);
   document.querySelector("#app").append(shell);
   screen.render("project-1");
   screen.setActive(true);
@@ -94,6 +101,10 @@ test("professional-network: one subflow in plain words, a nested one opened and 
   await expect(frame.getByRole("heading", { name: "Order notebooks again" })).toBeVisible();
   await expect(frame.getByText("Place the order (can spend money)")).toBeVisible();
   await expect(frame.getByText("1 automation uses it.")).toBeVisible();
+  await expect(frame.getByRole("button", { name: "Weekly stationery order" })).toBeVisible();
+  await expect(frame.getByText("A newer one of these steps passed a check on another page.")).toBeVisible();
+  await frame.getByRole("button", { name: "Weekly stationery order" }).click();
+  expect(await inFrame(page).evaluate(() => (window as unknown as { __opened: string[] }).__opened)).toEqual(["Weekly stationery order"]);
   await expect(frame.getByText("signed in and on your order history page.")).toBeVisible();
   expect(await fits(page)).toBe(true);
   await picture(frame, testInfo, "detail-top");
@@ -247,4 +258,19 @@ test("professional-network: while it runs the button says so, and a failed read 
   await picture(frame, testInfo, "detail-read-failed-quietly");
   await button(frame, "Try again").click();
   await expect(frame.getByText("Open the order history")).toBeVisible();
+});
+
+test("professional-network: Save this keeps a subflow, and a refusal reads in Core's own sentence", async ({ openHarness, page }, testInfo) => {
+  await openHarness("professional-network");
+  const frame = await open(page, testInfo);
+  await fake(page, 'port.refuseSaveNext({ code: "part.not_found", message: "That piece is not part of this automation any more." })');
+  await button(frame, "Save this").click();
+  await expect(frame.locator("#keep")).toContainText("That piece is not part of this automation any more.");
+  await expect(frame.locator("#keep")).not.toContainText("part.not_found");
+  await picture(frame, testInfo, "save-refused");
+  await button(frame, "Save this").click();
+  await expect(frame.locator("#keep")).toContainText("Saved. Find it in your Library.");
+  await expect(button(frame, "Saved")).toBeDisabled();
+  expect(await fits(page)).toBe(true);
+  await picture(frame, testInfo, "save-kept");
 });

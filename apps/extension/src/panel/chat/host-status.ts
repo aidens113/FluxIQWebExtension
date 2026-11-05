@@ -7,6 +7,7 @@ export function hostStatusOf(status: ExtensionStatus, ownerKey: string): ChatHos
     connected: status.connectionState === "connected",
     ownerKey,
     projectId: status.projectId ?? undefined,
+    ...(status.projectName === undefined ? {} : { projectName: status.projectName }),
     recording: status.recordingState === "recording" || status.recordingState === "paused"
   };
 }

@@ -94,5 +94,7 @@ test("approval and project are said in words, never as codes", () => {
   assert.match(projectLine(status()), /project you chose in FluxIQ/);
   assert.equal(projectLine(status()).includes("project-1"), false);
   assert.match(projectLine(status({ projectId: null })), /No project is chosen/);
+  assert.equal(projectLine(status({ projectName: " Company website " })), "This browser works in the project “Company website”. Change it in FluxIQ.");
+  assert.equal(projectLine(status({ projectName: "Company website" })).includes("project-1"), false);
   assert.match(projectLine(status({ connectionState: "disconnected" })), /Connect to FluxIQ/);
 });

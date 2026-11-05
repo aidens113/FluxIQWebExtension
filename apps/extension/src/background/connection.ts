@@ -189,6 +189,7 @@ export class FluxIQConnection {
       settings: () => this.settings,
       session: () => this.session,
       adoptProjectId: (projectId) => this.persistSession(compactObject({ ...this.session, projectId })),
+      onProjectName: () => this.emitStatus(),
       onActivity
     });
     this.attachment = new ContentAttachment({
@@ -368,6 +369,8 @@ export class FluxIQConnection {
     const recordingBlock = this.recording.block();
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
     if (this.session.projectId !== undefined) status.projectId = this.session.projectId;
+    const projectName = this.projects.currentName();
+    if (projectName !== undefined) status.projectName = projectName;
     if (activeTabId !== undefined) status.activeTabId = activeTabId;
     if (activeTabUrl) status.activeTabUrl = activeTabUrl;
     if (gateway.pairingReferenceCode) status.pairingReferenceCode = gateway.pairingReferenceCode;

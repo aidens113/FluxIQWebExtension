@@ -23,8 +23,8 @@ export type PanelPorts = {
   readonly setup?: SetupPort;
   /**
    * Reads and changes the person's tasks, with the results port behind a task's Add budget, Run again and rows export. They
-   * come together so one cannot be filled without the other. The default is `extensionTasksPort`, which has none yet, so the
-   * tab shows no tasks.
+   * come together so one cannot be filled without the other. The default is `extensionTasksPort`, which reads Core's task records
+   * conversation by conversation.
    */
   readonly tasks?: PanelTasks;
   /** The subflow library; the default is `extensionLibraryPort`. */
