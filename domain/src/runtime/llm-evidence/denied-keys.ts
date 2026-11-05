@@ -19,7 +19,9 @@
  * `snapshot` is deliberately absent: that is Core's own word and its own
  * state-snapshot option produces one -- the nested `html` is what is refused.
  * `selector` is present because it is this domain's word for a target, and
- * after the repair target became opaque it is ours to deny.
+ * after the repair target became opaque it is ours to deny. So is
+ * `extractionBinding`, the selectors a saved list read keeps beside its handle
+ * (`./plan-resolution/extraction/saved-list.ts`).
  */
 export const WEB_LLM_DENIED_EVIDENCE_KEYS: readonly string[] = Object.freeze([
   "html",
@@ -28,7 +30,8 @@ export const WEB_LLM_DENIED_EVIDENCE_KEYS: readonly string[] = Object.freeze([
   "pageSource",
   "cookies",
   "headers",
-  "selector"
+  "selector",
+  "extractionBinding"
 ]);
 
 /** Core's own spelling rule for comparing a key against the declaration. */

@@ -140,6 +140,12 @@ export type WebNodeRanOutcome = WebNodeOutcome & {
    */
   effectUncertain?: string;
   /**
+   * The page said this press was not made, because its control already showed the
+   * state it asks for (`actions/types.ts`, `skipped`). Core reads it as nothing done:
+   * no act goes on the record (`AS/runtime/answer-first/act-record/gate/read-answer.ts`).
+   */
+  skipped?: "already_in_state";
+  /**
    * Said on a press that cleared a layer covering the page, one this build's
    * own press did not open: the layer covered controls on the look before and
    * covers none on the look after, the same page, and the control the press

@@ -64,6 +64,7 @@ import { keptWebExtractionColumns, type WebExtractionColumnAssumption, type WebE
 import { keptWebExtractionConditions } from "./conditions";
 import type { WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
+import { WEB_PLAN_EXTRACTION_BINDING_KEY, webPlanSavedExtractionBinding } from "./saved-list";
 
 /** Why an `extractList` names no one detected list. Each is a plan resolver issue code. */
 export type WebExtractionSlotIssue = WebExtractionColumnIssue | "web.handle.misplaced" | "web.handle.unknown" | "web.handle.stale";
@@ -121,7 +122,11 @@ const RETIRED_PAGING_KEYS: ReadonlySet<string> = new Set(["paginate", "maxPages"
 type Reference = { handle: unknown; location: unknown; path: WebPlanValuePath };
 type Refused = Extract<WebExtractionSlotResolution, { status: "refused" }>;
 
-export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtractionHandleScope, extractions: WebLlmExtractionHandles): WebExtractionSlotResolution {
+/**
+ * `heldByHost` says the value is not the model's writing, so what a saved step holds of its
+ * list may be read (`./saved-list.ts`); written by the model, that key is refused like any other.
+ */
+export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtractionHandleScope, extractions: WebLlmExtractionHandles, heldByHost = false): WebExtractionSlotResolution {
   const handles = webPlanHandlesIn(value);
   if (!isJsonRecord(value)) return handles[0] ? refused("web.handle.misplaced", handles[0].path) : { status: "literal" };
   const references = referencesIn(value);
@@ -130,7 +135,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (stray) return refused("web.handle.misplaced", stray.path);
   const retired = Object.keys(value).find((key) => RETIRED_PAGING_KEYS.has(key));
   if (retired !== undefined) return { status: "refused", issue: "web.handle.malformed", path: [retired], expected: NEXT_PAGE_INSTEAD };
-  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key));
+  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key) && !(heldByHost && key === WEB_PLAN_EXTRACTION_BINDING_KEY));
   if (unknownKey !== undefined) return refused("web.handle.malformed", [unknownKey]);
   if (value.location !== undefined && !Object.hasOwn(value, "handle")) return refused("web.handle.malformed", ["location"]);
   if (value.fields !== undefined && value.columns !== undefined) return refused("web.handle.malformed", ["columns"]);
@@ -140,7 +145,10 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
 
   const named = namedHandle(references);
   if ("issue" in named) return named;
-  const resolution = extractions.resolve(scope, named.handle);
+  // What the step holds of its list, where it holds it (`./saved-list.ts`); and a number it holds is one a new detection must not issue again.
+  const saved = heldByHost ? webPlanSavedExtractionBinding(value, named.handle) : undefined;
+  if (saved) extractions.saw(named.handle);
+  const resolution = saved ? { ok: true as const, binding: saved } : extractions.resolve(scope, named.handle);
   if (!resolution.ok) return refused(resolution.code === "stale_handle" ? "web.handle.stale" : "web.handle.unknown", named.path);
   const binding = resolution.binding;
   const elsewhere = references.find((reference) => reference.location !== undefined && reference.location !== binding.location);

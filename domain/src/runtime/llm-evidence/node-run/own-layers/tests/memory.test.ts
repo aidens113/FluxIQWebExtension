@@ -48,6 +48,45 @@ test("a layer recognised by kind is never the build's own, even when it appeared
   assert.equal(layers.owns(BUILD, "t30"), false);
 });
 
+// The shape of `run-mw3o6pgv-ffa1a04c`: a press opened a dialog, and in the same instant an unmarked modal
+// prompt and its cover stood over it. Only the dialog is the press's. Nothing here names any site's words.
+const OPENED: FixtureElement[] = [
+  { tag: "div", target: "t40", text: "A chooser", isDialog: { modal: false }, box: { x: 100, y: 100, width: 400, height: 300 } },
+  { tag: "input", target: "t41", label: "A field", parent: "t40", coveredBy: ["t50"], box: { x: 120, y: 120, width: 100, height: 20 } }
+];
+const OVER_IT: FixtureElement[] = [
+  { tag: "div", target: "t50", frontLayer: true, covers: ["t41"], coversCount: 1, box: { x: 0, y: 0, width: 1280, height: 720 } },
+  { tag: "div", target: "t51", text: "A question", isDialog: { modal: true }, box: { x: 200, y: 200, width: 200, height: 100 } },
+  { tag: "button", target: "t52", text: "The way out", inDialog: "t51", box: { x: 220, y: 220, width: 50, height: 20 } }
+];
+
+test("of two layers one press raised, the one standing over the other's controls is not the build's own", () => {
+  const layers = createWebNodeOwnLayers();
+  layers.pressed(BUILD, page(PAGE), page([...PAGE, ...OPENED, ...OVER_IT]));
+  assert.equal(layers.owns(BUILD, "t40"), true);
+  assert.equal(layers.owns(BUILD, "t50"), false);
+  assert.equal(layers.owns(BUILD, "t51"), false);
+});
+
+test("a dialog and the backdrop under it are one press's, though the backdrop's box holds what the dialog covers", () => {
+  const layers = createWebNodeOwnLayers();
+  const BACKDROP: FixtureElement[] = [
+    { tag: "div", target: "t60", frontLayer: true, covers: ["t61"], coversCount: 1, box: { x: 0, y: 0, width: 1280, height: 720 } },
+    { tag: "a", target: "t61", text: "Behind it all", coveredBy: ["t60", "t62"], box: { x: 300, y: 300, width: 40, height: 20 } },
+    { tag: "div", target: "t62", text: "A chooser", isDialog: { modal: true }, box: { x: 200, y: 200, width: 400, height: 300 } },
+    { tag: "button", target: "t63", text: "Choose", inDialog: "t62", box: { x: 220, y: 220, width: 50, height: 20 } }
+  ];
+  layers.pressed(BUILD, page(PAGE), page([...PAGE, ...BACKDROP]));
+  assert.equal(layers.owns(BUILD, "t60"), true);
+  assert.equal(layers.owns(BUILD, "t62"), true);
+});
+
+test("one new layer and nothing else new stays the press's, as it was: what opened on a timer then cannot be told from it", () => {
+  const layers = createWebNodeOwnLayers();
+  layers.pressed(BUILD, page(PAGE), page([...PAGE, ...CHOOSER]));
+  assert.equal(layers.owns(BUILD, "t20"), true);
+});
+
 test("a layer that appeared on another page, or with a look missing, is not remembered", () => {
   const layers = createWebNodeOwnLayers();
   layers.pressed(BUILD, page(PAGE), page([...CHOOSER, ...PAGE], "https://shop.test/other"));

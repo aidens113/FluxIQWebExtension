@@ -69,6 +69,26 @@ test("the setter's actual disabled measurement replaces the positive gate withou
   assert.equal(page.set(), 1);
 });
 
+test("a control already in the asked state says it was not pressed, as a click's does", async () => {
+  for (const outcome of [
+    { ok: true, kind: "checkbox", checked: true, changed: false },
+    { ok: true, kind: "option", checked: true, changed: false, shownBy: "aria-pressed" }
+  ] as const) {
+    assert.equal((await checkAction(ACTION, setup([READY], outcome).deps, 0)).skipped, "already_in_state");
+  }
+});
+
+test("a control the verb set, or one that did not end in the asked state, says nothing of the kind", async () => {
+  for (const outcome of [
+    { ok: true, kind: "checkbox", checked: true, changed: true },
+    { ok: true, kind: "option", checked: true, changed: true, shownBy: "aria-pressed" },
+    { ok: true, kind: "checkbox", checked: false, changed: true },
+    { ok: true, kind: "checkbox", checked: false, changed: false }
+  ] as const) {
+    assert.equal((await checkAction(ACTION, setup([READY], outcome).deps, 0)).skipped, undefined);
+  }
+});
+
 test("an already checked control retains the gate it actually measured", async () => {
   const page = setup([READY], { ok: true, kind: "checkbox", checked: true, changed: false });
   assert.deepEqual((await checkAction(ACTION, page.deps, 0)).actionability, { actionable: true });

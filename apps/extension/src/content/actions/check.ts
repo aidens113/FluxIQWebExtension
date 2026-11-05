@@ -79,13 +79,22 @@ export async function checkAction(action: BrowserActionCommand, deps: ContentAct
     const shown = `the option is ${chosenWord(outcome.checked)} (${outcome.shownBy})`;
     const verdict = outcome.checked === requested ? ({ status: "passed", expected: wanted, actual: shown } as const) : ({ status: "failed", expected: wanted, actual: shown } as const);
     const message = outcome.changed ? `Option ${chosenWord(requested)}.` : `Option already ${chosenWord(requested)}; nothing pressed.`;
-    return deps.success(action, startedAt, message, verdict, evidence);
+    return saidUnpressed(deps.success(action, startedAt, message, verdict, evidence), outcome, requested);
   }
   const actual = `the ${outcome.kind} is ${stateWord(outcome.checked)}`;
   const validation = outcome.checked === requested
     ? ({ status: "passed", expected, actual } as const)
     : ({ status: "failed", expected, actual } as const);
-  return deps.success(action, startedAt, outcome.changed ? "Check state set." : "Check state already set.", validation, evidence);
+  return saidUnpressed(deps.success(action, startedAt, outcome.changed ? "Check state set." : "Check state already set.", validation, evidence), outcome, requested);
+}
+
+/**
+ * A control already in the asked state was not touched, and the result says so as a click's
+ * does (`./click.ts`, `alreadyInState`): the run keeps that as not pressed, on its record, its
+ * card and its count (Core `engine/automation/node-execution/already-in-state.ts`, t869).
+ */
+function saidUnpressed(result: BrowserActionResult, outcome: { changed: boolean; checked: boolean }, requested: boolean): BrowserActionResult {
+  return !outcome.changed && outcome.checked === requested ? { ...result, skipped: "already_in_state" } : result;
 }
 
 /**

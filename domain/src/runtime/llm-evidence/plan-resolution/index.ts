@@ -21,6 +21,8 @@ export {
 } from "./resolve-plan-node";
 // How an extraction step's `where` clause is read into the conditions it runs.
 export { keptWebExtractionConditions, type WebExtractionConditionColumns, type WebExtractionConditions } from "./extraction";
+// What a saved read holds of its list, so it needs no handle in memory (t869).
+export { webPlanWithExtractionBinding } from "./extraction";
 // The first target handle a node call's parameters name: the control the call acts on.
 export { webPlanFirstTargetHandle } from "./first-target-handle";
 // The key a step's argument carries its row under, declared to Core (`rowContextKeys`).

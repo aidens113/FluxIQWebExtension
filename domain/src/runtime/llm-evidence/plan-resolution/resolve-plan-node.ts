@@ -523,7 +523,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       continue;
     }
     if (extractionNode && key === "extractList") {
-      const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
+      const slot = resolveWebExtractionSlot(value, scope, stores.extractions, !webPlanModelWrote(scope, key));
       if (slot.status === "resolved") {
         const stored = webPlanStoredColumns(slot.request, parameters.recordOutput);
         replaced.set(key, { value: stored.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });

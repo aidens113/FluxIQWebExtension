@@ -35,6 +35,10 @@
 // record the model aimed at, read as a one-row table (`./packet.ts`). Each is
 // an ordinary handle here, retained in the same scope, so the record's item is
 // an "own" list exactly as the run's item is.
+//
+// This store is for one authoring session. A step that is saved keeps what its
+// handle stands for itself (`../plan-resolution/extraction/saved-list.ts`, t869),
+// so a later attempt, another Flow or a restarted process does not depend on it.
 
 import type { WebAutomationExtractField, WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { present } from "../present";
@@ -106,6 +110,8 @@ export type WebLlmExtractionHandleResolution =
 /** The per-runtime store. `reserve` names a handle before its packet is sized; `retain` binds it once the packet is final. */
 export type WebLlmExtractionHandles = {
   reserve(): string;
+  /** A handle a saved step names, perhaps from before a restart: `reserve` never issues its number, so it cannot come to name another list. */
+  saw(handle: string): void;
   retain(scope: WebLlmExtractionHandleScope, binding: WebLlmExtractionBinding): void;
   resolve(scope: WebLlmExtractionHandleScope, handle: unknown): WebLlmExtractionHandleResolution;
   /** Whether any handle this store still knows of, kept or let go, was issued for this project and Flow. */
@@ -160,6 +166,10 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
     reserve() {
       reserved += 1;
       return `extraction.${reserved}`;
+    },
+    saw(handle) {
+      if (!HANDLE_PATTERN.test(handle)) return;
+      reserved = Math.max(reserved, Number(handle.slice(handle.indexOf(".") + 1)));
     },
     retain(scope, binding) {
       if (!HANDLE_PATTERN.test(binding.handle) || retained.has(binding.handle)) throw new Error("extraction handle was not reserved for this binding");
