@@ -25,6 +25,10 @@
 // the Flow's id as `subjectId`; Core then reads "run it" in that thread as that
 // Flow.
 //
+// An answer made with the person's PIN carries it to `answer-ask` and nowhere
+// else: it is that one call's field, never logged and never kept. Today Core
+// reads it from a signed-in person only, and no panel screen sends one.
+//
 // The message shapes are `PanelConversation*Request` in `shared/protocol.ts`.
 
 import { RUNTIME_MESSAGES } from "../../shared/constants";
@@ -103,13 +107,19 @@ async function send(message: Partial<PanelConversationSendRequest>, context: Pan
   return { ok: true, payload: { conversation, ...(appended.payload as Record<string, unknown> | null ?? {}) } };
 }
 
-async function answer(message: Partial<PanelConversationAnswerRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
+async function answer(message: Partial<PanelConversationAnswerRequest> & { authorizationPin?: unknown }, context: PanelRelayContext): Promise<PanelRelayResponse> {
   const projectId = await projectFor(message.projectId, context);
   if (!projectId) return relayFailure("no_project");
   const askId = text(message.askId);
   const kind = text(message.kind);
   if (!askId || !kind) return relayFailure("invalid_request", "Say which question this answers, and how.");
-  return context.call("answer-ask", defined({ projectId, askId, kind, value: typeof message.value === "string" ? message.value : undefined }));
+  return context.call("answer-ask", defined({
+    projectId,
+    askId,
+    kind,
+    value: typeof message.value === "string" ? message.value : undefined,
+    authorizationPin: typeof message.authorizationPin === "string" && message.authorizationPin !== "" ? message.authorizationPin : undefined
+  }));
 }
 
 // `capabilities` is never empty: with it Core reads the message, may run one of

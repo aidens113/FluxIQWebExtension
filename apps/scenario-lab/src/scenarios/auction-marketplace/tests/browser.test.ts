@@ -293,9 +293,13 @@ test("pressing every qualifying heart takes the watched one off, and a fourth pr
   const run = await session();
   try {
     await arriveAndSearch(run.page);
-    for (const handle of ["m1", "m2", "m3", "l2"]) {
-      await run.page.locator(`hl-watch[data-item="${listingByHandle(handle).id}"] div`).click();
-    }
+    // The site's window is real server time (five seconds, three changes), and a Playwright click that waits for
+    // actionability can take longer than that on a slow machine, letting the window slide past the first press.
+    // So the four presses are dispatched as click events, in order with no waiting between them: each is a real click on
+    // the heart's own element, and the limiter sees them as a quick person would make them.
+    const items = ["m1", "m2", "m3", "l2"].map((handle) => listingByHandle(handle).id);
+    for (const item of items) await run.page.locator(`hl-watch[data-item="${item}"] div`).waitFor({ state: "visible" });
+    for (const item of items) await run.page.locator(`hl-watch[data-item="${item}"] div`).dispatchEvent("click");
     await run.page.getByText(/^Slow down! You can change your Watchlist again in \d seconds\.$/u).waitFor({ timeout: 5000 });
     const state = await serverState(run.lab);
     assert.ok(!state.watched.includes(listingByHandle("m3").id), "the heart already on took m3 off the watchlist");

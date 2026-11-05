@@ -4,11 +4,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// The top bar's idle "Start recording" was red, so it read as "recording now"
-// while nothing recorded. It is neutral like the other top-bar icons and red
-// only on hover or keyboard focus; while a recording runs it is hidden and the
-// recording bar says so (`record-control.ts`). The stylesheets cannot be
-// rendered here, so their rules are read.
+// The composer's idle "Show me how" ("Start recording") was once red, so it read
+// as "recording now" while nothing recorded. It is neutral like the other controls
+// beside the box and red only on hover or keyboard focus; while a recording runs it
+// is hidden and the recording bar says so (`record-control.ts`). The stylesheets
+// cannot be rendered here, so their rules are read.
 
 function panelRoot(): string {
   // The test runs from a bundle under `.test-build-scratch/<label>/`.
@@ -21,14 +21,14 @@ function panelRoot(): string {
   return path.join(directory, "src", "panel");
 }
 
-/** Every selector that styles `.record-button`, with the declarations it sets. */
+/** Every selector that styles `.composer-record`, with the declarations it sets. */
 function recordRules(): Array<{ selector: string; body: string }> {
   const rules: Array<{ selector: string; body: string }> = [];
-  for (const sheet of ["shell/shell.css", "recording/recording.css"]) {
+  for (const sheet of ["recording/recording.css"]) {
     const text = readFileSync(path.join(panelRoot(), sheet), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       for (const selector of match[1]!.split(",").map((part) => part.trim())) {
-        if (selector.includes(".record-button")) rules.push({ selector, body: match[2]! });
+        if (selector.includes(".composer-record")) rules.push({ selector, body: match[2]! });
       }
     }
   }
@@ -46,4 +46,5 @@ test("Start recording keeps the id and name the Lab presses it by", () => {
   const source = readFileSync(path.join(panelRoot(), "recording", "recording-controls.ts"), "utf8");
   assert.match(source, /id: "recordButton"/u);
   assert.match(source, /"aria-label": "Start recording"/u);
+  assert.match(source, /text: "Show me how"/u);
 });

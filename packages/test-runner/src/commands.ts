@@ -1,6 +1,6 @@
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_PROVIDER, defaultLlmModelForProvider, isLlmProvider, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
-import { LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue } from "./live-llm/index.js";
+import { LAB_ANSWER_FIRST_AUTHORING_MODE, LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue, labAuthorsAnswerFirst } from "./live-llm/index.js";
 import { parseRecoveryMatrixCommand, type RecoveryMatrixCommand } from "./recovery-matrix/command.js";
 import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
 import { demonstrationOptions } from "./flow-lane/creation/recorded-evidence/demonstration/index.js";
@@ -33,6 +33,8 @@ export type LabCommand =
   // `variantId` (`--variant`) arms that variant in place of the task's own: the free pre-flight that a drift forces a failure before a paid gate round.
   // `tracing: false` (`--no-tracing`) starts Core with client gateway tracing off, for the off-versus-on overhead measurement; absent, it is on as for every Lab Core.
   | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; variantId?: string; seed?: number; tracing?: false }
+  // One attempt at a task from the real extension chat, scored on its answer: `lab attempt` (`attempt-lane/live/`). `model` is a scripted server (provider-free) or a live provider run.
+  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; dryRun?: true }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
   | RecoveryMatrixCommand;
 
@@ -138,6 +140,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (taskId !== undefined && !KEBAB_ID.test(taskId)) throw new Error("--instruction-task must be a lowercase kebab-case task ID");
     return { command, scenarioId, workspace: requireSafePersistentWorkspaceName(workspaceValue, "--workspace"), flowId, ...(projectId === undefined ? {} : { projectId }), ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...optionalVariant(rest), ...optionalSeed(rest), ...(noTracing ? { tracing: false as const } : {}) };
   }
+  if (command === "attempt") return parseAttemptCommand(args);
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
   if (command === "recovery-matrix") return parseRecoveryMatrixCommand(args);
   if (command === "compare") {
@@ -153,7 +156,35 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] [--no-tracing] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] [--no-tracing] | attempt <scenario> --task ID --authoring-mode answer-first (--scripted-model | --live-llm --llm-max-cost-usd N) [--dry-run] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
+}
+
+/**
+ * `lab attempt`. It drives Answer First's attempt, so it names that mode as a live run
+ * must, and it takes exactly one model: `--scripted-model`, which is provider-free and
+ * takes no LLM option, or `--live-llm`, the paid form, whose profile and task default to
+ * what this command always is. Only `--live-llm` counts as live.
+ */
+function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "attempt" }> {
+  rejectUnknownOptions(args, ["--task", "--scripted-model", "--dry-run", ...llmOptionNames]);
+  const { dryRun, rest: withoutDryRun } = dryRunOption(args);
+  const { present: scripted, rest } = flagOption(withoutDryRun, "--scripted-model");
+  const scenarioId = positional(rest, 0, "scenario ID");
+  const taskId = option(rest, "--task");
+  if (taskId === undefined || !KEBAB_ID.test(taskId)) throw new Error("lab attempt requires --task with a lowercase kebab-case task ID");
+  const authoringMode = option(rest, LAB_AUTHORING_MODE_FLAG);
+  if (!labAuthorsAnswerFirst(authoringMode)) throw new Error(`lab attempt drives the answer-first attempt, so it needs ${LAB_AUTHORING_MODE_FLAG} ${LAB_ANSWER_FIRST_AUTHORING_MODE}`);
+  const live = rest.includes("--live-llm");
+  if (scripted === live) throw new Error("lab attempt takes exactly one of --scripted-model or --live-llm --llm-max-cost-usd N");
+  if (scripted) {
+    const present = llmOptionNames.filter((name) => name !== LAB_AUTHORING_MODE_FLAG && rest.includes(name));
+    if (present.length > 0) throw new Error(`--scripted-model takes no LLM options, and ${present.join(", ")} is one`);
+    return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "scripted" }, ...(dryRun ? { dryRun: true as const } : {}) };
+  }
+  const named = [...rest, ...(rest.includes("--llm-profile") ? [] : ["--llm-profile", "lab-attempt"]), ...(rest.includes("--llm-task") ? [] : ["--llm-task", "create-flow"])];
+  const llm = llmOptions(named)!;
+  if (llm.task !== "create-flow") throw new Error("lab attempt starts from the extension's chat, which builds: --llm-task must be create-flow");
+  return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "live", llm }, ...(dryRun ? { dryRun: true as const } : {}) };
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -296,7 +327,7 @@ function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, f
  *   than from the Lab's fixture reset. For runs meant to prove that reset;
  *   without it every candidate build, live or not, keeps the fixture reset.
  */
-function flagOption(args: string[], flag: "--direct-api-build" | "--model-reset-only" | "--demonstration-probe" | "--no-tracing"): { present: boolean; rest: string[] } {
+function flagOption(args: string[], flag: "--direct-api-build" | "--model-reset-only" | "--demonstration-probe" | "--no-tracing" | "--scripted-model"): { present: boolean; rest: string[] } {
   const count = args.filter(value => value === flag).length;
   if (count > 1) throw new Error(`${flag} may only be specified once`);
   return { present: count === 1, rest: args.filter(value => value !== flag) };

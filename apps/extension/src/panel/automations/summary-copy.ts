@@ -1,6 +1,6 @@
 // Summary copy (plan 3.9): a run's facts as the short plain lines a person
 // reads under an automation -- "Completed in 14.2s", "AI activated once",
-// whether the run kept a change. Never an id, selector, guessed change kind or
+// what the run saved for next time, where its record says. Never an id, selector, guessed change kind or
 // exact kept count: current adaptation statuses do not prove run attribution.
 
 import type { RunFacts } from "./types";
@@ -16,9 +16,9 @@ export function runSummaryLines(facts: RunFacts): string[] {
 
   if (facts.aiActivations !== undefined) lines.push(activations(facts.aiActivations));
   if (facts.outcome !== "running") {
+    // Said only where the run's record says it. When it says nothing, the line is left out: not knowing is not a warning.
     if (facts.futureRunsUpdated === true) lines.push("This run kept a change for future runs");
-    else if (facts.futureRunsUpdated === false) lines.push("This run did not keep a change for future runs");
-    else if (facts.outcome !== undefined || facts.changesTried !== undefined) lines.push("Whether this run kept a change is not available");
+    else if (facts.futureRunsUpdated === false) lines.push("Nothing from this run was saved for next time");
   }
   return lines;
 }

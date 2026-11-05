@@ -5,19 +5,32 @@ import { readRunReplies } from "../../../../automations";
 import { refusalOf } from "../../reply";
 import type { RuntimeListen } from "../activity";
 import { conversationOfPush } from "./conversation-of-push";
+import { carryOnAttempt } from "./carry-on-attempt";
 import { createThreadOutcomes } from "./create-thread-outcomes";
 import { finishedRunOf } from "./finished-run-of";
+import { mergedOutcomes } from "./merged-outcomes";
 import { outcomeOfRun } from "./outcome-of-run";
+import { readOneAttempt, readThreadAttempts } from "./read-core-outcomes";
 import { readExport } from "./read-export";
 
-const NOT_FOUND = "I do not have that result in this session.";
-
 /**
- * The chat's answer turn, from the runs this panel session saw finish. Until Core
- * writes attempt records, each run the activity feed reports done becomes an outcome
- * of its first dataset's real rows, read through `runDetail` and `exportDataset`.
- * The records carry no real spend, so the port says `reportsSpend: false`. Nothing
- * here throws: a failed read is a failed result.
+ * The chat's answer turn. Core keeps a task's attempts, and each read asks it for them
+ * (`taskOutcomes`), through the contract: a record that fails fails the read. Beside
+ * them are the runs this panel session saw finish that no attempt tells: each run the
+ * activity feed reports done becomes an outcome of its first dataset's real rows, read
+ * through `runDetail` and `exportDataset`.
+ *
+ * **Spend.** An attempt's spend is real, so the port says nothing against it: leaving
+ * out `reportsSpend` is what lets the answer turn and the meter tell it. A run's outcome
+ * has no spend to tell, and says so itself (`spendUnknown`). Nothing here throws: a
+ * failed read is a failed result.
+ *
+ * **A closed panel loses nothing.** A task's result is Core's, kept per task, and `readThread`
+ * asks Core on every read, so a result that arrived while no panel was open is told by the first
+ * read of a panel opened afterwards. The panel's own feed (`listen`) only adds the runs it saw.
+ *
+ * **Carrying on** (`addBudgetAndCarryOn`) is Core's too: it asks `carryOnTaskAttempt` and
+ * answers at once.
  */
 export function resultsPort(request: PanelStore["request"], listen: RuntimeListen, download: ChatDownload, now: () => number = Date.now): ChatResultsPort {
   const held = createThreadOutcomes();
@@ -51,15 +64,18 @@ export function resultsPort(request: PanelStore["request"], listen: RuntimeListe
   };
 
   return {
-    reportsSpend: false,
     readThread: async ({ projectId, conversationId }) => {
       await settled();
-      return { ok: true, value: { outcomes: held.inThread(projectId, conversationId) } };
+      const attempts = await readThreadAttempts(request, { projectId, conversationId });
+      if (!attempts.ok) {
+        return attempts;
+      }
+      return { ok: true, value: { outcomes: mergedOutcomes(attempts.value, held.inThread(projectId, conversationId)) } };
     },
     readAttempt: async ({ projectId, attemptId }) => {
       await settled();
       const outcome = held.byAttempt(projectId, attemptId);
-      return outcome === undefined ? { ok: false, sentence: NOT_FOUND } : { ok: true, value: outcome };
+      return outcome === undefined ? readOneAttempt(request, { projectId, attemptId }) : { ok: true, value: outcome };
     },
     exportRows: async ({ runId, datasetId, format }) => {
       const exported = await readExport(request, { runId, datasetId, format });
@@ -76,6 +92,7 @@ export function resultsPort(request: PanelStore["request"], listen: RuntimeListe
       }
       return { ok: true, value: { fileName: exported.value.fileName } };
     },
+    addBudgetAndCarryOn: (query) => carryOnAttempt(request, query),
     runAgain: async ({ projectId, taskId }): Promise<ChatResult<{ attemptId: string }>> => {
       await settled();
       const flowId = held.byTask(projectId, taskId)?.attempt.flowId;

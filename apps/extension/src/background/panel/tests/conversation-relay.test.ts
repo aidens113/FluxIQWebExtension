@@ -238,6 +238,20 @@ test("an empty message is refused, and a failed open sends nothing and comes bac
   assert.deepEqual(d.calls.map((entry) => entry.endpoint), ["open-conversation"]);
 });
 
+test("a PIN goes with the one answer it was typed for, and only as that answer's field", async () => {
+  const c = context();
+  await relayConversation({ type: answer, askId: "panel-command.1", kind: "grant", authorizationPin: "4821", turn: { conversationId: "c-1", turnId: "t-1" } }, c.value);
+  await relayConversation({ type: answer, askId: "panel-command.2", kind: "grant" }, c.value);
+  await relayConversation({ type: answer, askId: "panel-command.3", kind: "grant", authorizationPin: "" }, c.value);
+  await relayConversation({ type: answer, askId: "panel-command.4", kind: "grant", authorizationPin: 4821 }, c.value);
+  assert.deepEqual(c.calls, [
+    { endpoint: "answer-ask", payload: { projectId: "project-session", askId: "panel-command.1", kind: "grant", authorizationPin: "4821" } },
+    { endpoint: "answer-ask", payload: { projectId: "project-session", askId: "panel-command.2", kind: "grant" } },
+    { endpoint: "answer-ask", payload: { projectId: "project-session", askId: "panel-command.3", kind: "grant" } },
+    { endpoint: "answer-ask", payload: { projectId: "project-session", askId: "panel-command.4", kind: "grant" } }
+  ]);
+});
+
 test("an answer names the ask and its kind, and keeps a value only when it is text", async () => {
   const c = context();
   await relayConversation({ type: answer, askId: "ask-1", kind: "approve" }, c.value);

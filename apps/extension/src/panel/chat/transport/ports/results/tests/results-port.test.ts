@@ -32,6 +32,8 @@ function setup(script: { detail?: PanelResult<unknown>; export?: PanelResult<unk
     if (message.type === AUTOMATION_PANEL_MESSAGES.runDetail) return script.detail ?? { ok: false, sentence: "no detail" };
     if (message.type === AUTOMATION_PANEL_MESSAGES.exportDataset) return script.export ?? { ok: false, sentence: "no export" };
     if (message.type === AUTOMATION_PANEL_MESSAGES.runAutomation) return script.run ?? { ok: false, sentence: "no run" };
+    // Core has no attempts for these runs: what its attempts add is `./core-attempts.test.ts`.
+    if (message.type === AUTOMATION_PANEL_MESSAGES.taskOutcomes) return message.attemptId === undefined ? { ok: true, value: { ok: true, payload: { outcomes: [] } } } : { ok: false, sentence: "I could not find that attempt." };
     return { ok: false, sentence: "unexpected" };
   }) as PanelStore["request"];
   const transport = createExtensionChatTransport(request, (listener) => {
@@ -66,7 +68,9 @@ test("a finished run becomes an outcome with the real rows of its export, unveri
   assert.ok(read.ok);
   assert.equal(read.value.outcomes.length, 1);
   const [outcome] = read.value.outcomes;
-  assert.equal(t.results.reportsSpend, false);
+  // An attempt's spend is real, so the port says nothing against it; this outcome has none to tell, and says so itself.
+  assert.equal(t.results.reportsSpend, undefined);
+  assert.equal(outcome?.spendUnknown, true);
   // Nothing confirmed these rows, so the run is never `achieved` (the contract refuses it), and it is not a
   // status the contract has either: the chat tells it as found and not confirmed.
   assert.equal(outcome?.attempt.status, "finished_unchecked");
@@ -85,7 +89,7 @@ test("a finished run becomes an outcome with the real rows of its export, unveri
   assert.deepEqual(outcome?.result?.acts, []);
   assert.equal(outcome?.result?.answerText, undefined);
   assert.equal(outcome?.saved, undefined);
-  assert.deepEqual(t.sent.map((message) => message.type), [AUTOMATION_PANEL_MESSAGES.runDetail, AUTOMATION_PANEL_MESSAGES.exportDataset]);
+  assert.deepEqual(t.sent.map((message) => message.type), [AUTOMATION_PANEL_MESSAGES.runDetail, AUTOMATION_PANEL_MESSAGES.exportDataset, AUTOMATION_PANEL_MESSAGES.taskOutcomes]);
   assert.deepEqual(t.sent[1], { type: AUTOMATION_PANEL_MESSAGES.exportDataset, runId: "run-1", datasetId: "deals", format: "json" });
   const one = await t.results.readAttempt({ projectId: "p1", attemptId: "attempt-run-1" });
   assert.deepEqual(one, { ok: true, value: outcome });
@@ -138,7 +142,8 @@ test("a run with no dataset, a run that did not succeed, and runs that are not f
   ignored.push(finished({}, { kind: "build" }));
   ignored.push({ type: "something.else" });
   assert.deepEqual(await outcomesOf(ignored, "p1", "c1"), []);
-  assert.deepEqual(ignored.sent, []);
+  // Core was asked for its attempts, and no run was read: none of these is a finished run.
+  assert.deepEqual(ignored.sent.map((message) => message.type), [AUTOMATION_PANEL_MESSAGES.taskOutcomes]);
 });
 
 test("an export that fails is a failed result with no outcome, and nothing throws", async () => {
@@ -215,5 +220,6 @@ test("run again starts the outcome's own flow through the existing run message, 
   assert.deepEqual(t.sent.at(-1), { type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1" });
   const unknown = await t.results.runAgain({ projectId: "p1", taskId: "task-nope" });
   assert.deepEqual(unknown, { ok: false, sentence: "I can't run this one again from here.", unsupported: true });
-  assert.equal(t.results.addBudgetAndCarryOn, undefined);
+  // Carrying on is Core's since t869 (`core-attempts.test.ts`), so the port has it.
+  assert.equal(typeof t.results.addBudgetAndCarryOn, "function");
 });

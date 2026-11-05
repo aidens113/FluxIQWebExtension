@@ -8,7 +8,7 @@ import test from "node:test";
 
 import type { ExtensionStatus, RuntimeCommandStatus } from "../../../shared/protocol";
 import { RUN_BADGE_HOLD_MS, toolbarBadge } from "../toolbar-badge";
-import { ToolbarIndicator } from "../toolbar-indicator";
+import { browserToolbarBadge, ToolbarIndicator } from "../toolbar-indicator";
 
 type BadgeStatus = Pick<ExtensionStatus, "recordingState" | "runtime">;
 
@@ -112,6 +112,23 @@ test("! while the work waits on the person, over ...; REC keeps priority", () =>
   assert.deepEqual(toolbarBadge(idle, 0, { outcome: "failed" }), { text: "" });
 });
 
+test("the browser's badge says ! on the one action API both browsers' manifests name, in the waiting colour", () => {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const before = globals.chrome;
+  const calls: unknown[] = [];
+  globals.chrome = { action: {
+    setBadgeText: async (details: unknown) => { calls.push(details); },
+    setBadgeBackgroundColor: async (details: unknown) => { calls.push(details); }
+  } };
+  try {
+    browserToolbarBadge("!");
+    browserToolbarBadge("");
+  } finally {
+    globals.chrome = before;
+  }
+  assert.deepEqual(calls, [{ text: "!" }, { color: "#b26a00" }, { text: "" }]);
+});
+
 test("the indicator shows ! when the activity starts waiting and clears it when the run continues", () => {
   const written: string[] = [];
   const indicator = new ToolbarIndicator((text) => written.push(text), clock().timers);
@@ -123,4 +140,24 @@ test("the indicator shows ! when the activity starts waiting and clears it when 
   indicator.activity({ outcome: null });
   indicator.activity(null);
   assert.deepEqual(written, ["...", "!", ""]);
+});
+
+test("the indicator says ... while a task's work goes on with no run open, ! when it waits, and clears when it ends", () => {
+  const written: string[] = [];
+  const indicator = new ToolbarIndicator((text) => written.push(text), clock().timers);
+  indicator.update(idle);
+  indicator.activity({ outcome: null, working: true });
+  indicator.activity({ outcome: null, working: true });
+  indicator.activity({ outcome: "waiting", working: false });
+  indicator.activity({ outcome: null, working: true });
+  indicator.activity({ outcome: "done", working: false });
+  assert.deepEqual(written, ["", "...", "!", "...", ""]);
+});
+
+test("recording still wins over the work the activity display says is going on", () => {
+  const written: string[] = [];
+  const indicator = new ToolbarIndicator((text) => written.push(text), clock().timers);
+  indicator.update({ recordingState: "recording", runtime: { state: "idle" } });
+  indicator.activity({ outcome: null, working: true });
+  assert.deepEqual(written, ["REC"]);
 });

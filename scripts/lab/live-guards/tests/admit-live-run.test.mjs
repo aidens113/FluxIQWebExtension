@@ -142,10 +142,10 @@ test("start and finish entries carry the launch's authoring mode, and a failed p
     // Same source, same task: another mode is another experiment; the same mode is a rerun.
     assert.deepEqual((await lab.admit({ args: [...ARGS, "--authoring-mode", "candidate"] })).refusals, []);
     assert.deepEqual((await lab.admit({ args: project })).refusals.map((refusal) => refusal.rule), ["unchanged"]);
-    // No flag is the Lab's default, legacy, which has no run of this task yet.
+    // No flag is the product's default, project, so it is a rerun of the project run above.
     const unnamed = await lab.admit();
-    assert.equal(unnamed.launch.authoringMode, "legacy");
-    assert.deepEqual(unnamed.refusals, []);
+    assert.equal(unnamed.launch.authoringMode, "project");
+    assert.deepEqual(unnamed.refusals.map((refusal) => refusal.rule), ["unchanged"]);
   } finally {
     await lab.cleanup();
   }

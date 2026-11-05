@@ -16,7 +16,8 @@ test("description collection keeps blank drafts editable and cancellation starts
     const form = doc.body.descendants().find((node) => node.tagName === "FORM")!;
     const input = doc.body.descendants().find((node) => node.tagName === "TEXTAREA")!;
     form.dispatch("submit", { preventDefault() {} });
-    assert.match(form.textContent, /Describe this recording/);
+    assert.match(form.textContent, /What should FluxIQ learn from this/);
+    assert.match(form.textContent, /Write a sentence about what you will show/);
     input.value = "  Demonstration of opening a reference document.  ";
     form.dispatch("submit", { preventDefault() {} });
     assert.equal(await pending, "Demonstration of opening a reference document.");

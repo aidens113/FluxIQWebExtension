@@ -3,7 +3,8 @@
 // $0.10, the user's rule; it was a fixed $0.25).
 //
 // The Lab passes that variable, with explicit test scope, to every Core it
-// starts from its own environment or `.env`/`.env.local`. A run flag only lowers it
+// starts from its own environment or `.env`/`.env.local`, or, with nothing configured,
+// from the budget an answer-first run names. `--llm-cost-ceiling-usd` only lowers it
 // (`./cost-ceiling-env.ts`). The Lab's plan, its post-run check and its spend
 // reports must hold a build to the very same number, so this reads the same
 // sources in the same order and resolves the value through Core's own

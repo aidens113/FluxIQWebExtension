@@ -1,5 +1,5 @@
 import type { AutomationStudioAuthoringMode } from "fluxiq/automation";
-import { createdFlowVerificationReady, failedCreatedFlowBuild, buildCreatedFlowFromChat, LAB_PROJECT_DOMAIN_ID, type CreatedFlowChatBuild } from "../../flow-lane/index.js";
+import { createdFlowVerificationReady, failedCreatedFlowBuild, labCandidateTrialReadiness, buildCreatedFlowFromChat, LAB_PROJECT_DOMAIN_ID, type CreatedFlowChatBuild } from "../../flow-lane/index.js";
 import { labAuthoringModeValue } from "../../live-llm/index.js";
 import type { ExistingFluxIQControlClient } from "../../existing-fluxiq-control.js";
 import type { ChatCheckContext } from "../types.js";
@@ -32,14 +32,15 @@ export type ChatBuildObservation = {
  * report as a failed build of the Flow it made, with FluxIQ's own account of
  * how far it got, and never as anything that could pass.
  *
- * That is Core's legacy authoring mode, the default. `authoringMode` is the mode
+ * `authoringMode` is the mode (default: the product's, `project`; this check starts its own Core with the start hook, so `project` qualifies and the probe types, as do `legacy` and `answer-first`)
  * the check's Core was started in (its `--authoring-mode`, read the way
  * `buildFluxIQEnvironment` read it); in candidate mode qualification is
  * unavailable, so nothing is typed, read or pictured and no build is sent.
  */
 export async function proveChatBuild(context: ChatCheckContext, input: { control: Pick<ExistingFluxIQControlClient, "automationStudioCall" | "listFlowAdaptations" | "getFlowAdaptation">; screenshot: (name: string) => Promise<unknown>; authoringMode?: AutomationStudioAuthoringMode }): Promise<ChatBuildObservation> {
   const authoringMode = input.authoringMode ?? labAuthoringModeValue();
-  if (!createdFlowVerificationReady(authoringMode)) {
+  const startedHere = authoringMode === "project" ? labCandidateTrialReadiness({ startsCore: true, fixtureResetBetweenTrials: true }) : undefined;
+  if (!createdFlowVerificationReady(authoringMode, startedHere)) {
     return { message: CHAT_BUILD_MESSAGE, result: { build: failedCreatedFlowBuild({ code: "lab.candidate_verification_unavailable", stage: "before_provider", httpStatus: null }, "not_attempted", 0), flowId: null, applied: null, said: "Created-Flow qualification is unavailable in candidate authoring mode; no chat build was sent." }, savedInstruction: null,
       checks: { qualificationAvailable: false, noBuildDispatched: true, noFlowApplied: true } };
   }

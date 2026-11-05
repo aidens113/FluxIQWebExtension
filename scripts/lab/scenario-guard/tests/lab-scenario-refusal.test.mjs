@@ -80,3 +80,11 @@ function spawnNode(args, env) {
     child.once("close", (code) => resolve({ code, stdout, stderr }));
   });
 }
+
+test("lab attempt is held to the ten like every run", () => {
+  const refusal = labScenarioRefusal(["attempt", "basic-form", "--task", "x", "--authoring-mode", "answer-first", "--scripted-model"]);
+  assert.ok(refusal?.startsWith("lab attempt refused basic-form: "), refusal);
+  assert.match(refusal, RULE);
+  assert.equal(labScenarioRefusal(["attempt", "company-website", "--task", "x", "--scripted-model"]), null);
+  assert.match(labScenarioRefusal(["attempt", "--task", "x"]) ?? "", /takes its scenario right after the command/u);
+});

@@ -36,7 +36,7 @@ test.beforeAll(async () => {
         window.chrome = { runtime: { onMessage: { addListener() {}, removeListener() {} } } };
         const chat = createChatPanel(request, () => ({ element: document.createElement("a"), observe() {} }));
         const status = { connectionState: "connected", projectId: "project-1", paired: true };
-        const bar = createTopBar({ onTab() {}, onGear() {}, record: document.createElement("span"), openFluxIQ: document.createElement("span") });
+        const bar = createTopBar({ onTab() {}, onGear() {}, openFluxIQ: document.createElement("span") });
         bar.showScreen("chat");
         bar.render(status);
         document.documentElement.dataset.surface = innerWidth === 380 ? "popup" : "sidepanel";
