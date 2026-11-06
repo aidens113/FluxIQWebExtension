@@ -1,3 +1,5 @@
+export { connectionCount } from "./connection-count.js";
+export { renderConnectionsPage } from "./connections-page.js";
 export { invitationLimitNotice } from "./invitation-limit.js";
 export { renderManagerPage, sentFragment } from "./manager-page.js";
 export type { SentFragment } from "./manager-page.js";

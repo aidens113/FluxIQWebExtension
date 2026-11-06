@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../../html.js";
 import { memberNamed } from "../data/index.js";
 import { initials, profileHref, renderShellPage, ROOT, type ShellKit } from "../shell/index.js";
+import { connectionCount } from "./connection-count.js";
 import { invitationLimitNotice } from "./invitation-limit.js";
 import { pendingReceived, receivedRowMarkup } from "./rows.js";
 
@@ -24,7 +25,7 @@ export function renderMyNetworkPage(kit: ShellKit): string {
 <div class="${c.muted} ${c.small}">${escapeHtml(person.mutual)}</div><button class="${c.actionBtn}" type="button" style="margin-top:8px">Connect</button></div>`;
   }).join("");
   const rail = `<section class="${c.card}"><div class="${c.sectionHead}"><h2 style="font-size:16px;margin:0">Manage my network</h2><a class="${c.link}" href="${ROOT}mynetwork/invitation-manager/sent/">Manage</a></div>
-<ul style="list-style:none;margin:0;padding:8px 0">${[["Connections", "612"], ["Following & followers", ""], ["Groups", "4"], ["Events", "2"], ["Pages", "14"], ["Newsletters", "3"]].map(([label, count]) => `<li style="display:flex;justify-content:space-between;padding:8px 16px"><span>${escapeHtml(label!)}</span><span class="${c.muted}">${count}</span></li>`).join("")}</ul></section>`;
+<ul style="list-style:none;margin:0;padding:8px 0">${[["Connections", String(connectionCount(kit.state))], ["Following & followers", ""], ["Groups", "4"], ["Events", "2"], ["Pages", "14"], ["Newsletters", "3"]].map(([label, count]) => `<li style="display:flex;justify-content:space-between;padding:8px 16px"><span>${label === "Connections" ? `<a href="${ROOT}mynetwork/invite-connect/connections/">Connections</a>` : escapeHtml(label!)}</span><span class="${c.muted}">${count}</span></li>`).join("")}</ul></section>`;
   const main = `${invitationLimitNotice(kit)}<section class="${c.card}"><div class="${c.sectionHead}"><h2 style="font-size:16px;margin:0">Invitations (${received.length})</h2><a class="${c.link}" href="${ROOT}mynetwork/invitation-manager/">Show all</a></div>
 <ul id="${listId}" class="${c.inviteList}">${received.slice(0, 3).map((invitation) => receivedRowMarkup(kit, invitation)).join("\n")}</ul></section>
 <section class="${c.card}"><h2 class="${c.cardTitle}">People you may know from Northwick Analytics</h2><div id="${gridId}" class="${c.grid}">${cards}</div></section>`;
