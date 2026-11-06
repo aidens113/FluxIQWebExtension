@@ -40,6 +40,26 @@ test("a control in another part of the page than its main heading names nothing,
   assert.equal("actedOnCard" in pressed, false);
 });
 
+// Lane A's run-mw4907db-c3992394: the 500 Count was chosen and added, and the line said "100 Count", from the page's title,
+// which the page never changed. The card is read from the look the press was made on, after the choice.
+test("an add after choosing an option that changes the item's heading names the chosen item, never the page's unchanged title", async () => {
+  let chosen = "100 Count";
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: optionPage(chosen) } };
+      if (command.actionType === "web.dom.click" && JSON.stringify(command).includes("#size-500")) chosen = "500 Count";
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const size = shownPageLines((await look(runtime)).evidence).find((line) => line.words === "500 Count")!.target;
+  await press(runtime, size);
+  const add = shownPageLines((await look(runtime)).evidence).find((line) => line.words === "Add to cart")!.target;
+  const added = (await press(runtime, add)).evidence as JsonObject;
+  assert.equal(added.actedOnCard, "Table napkins, 500 Count");
+});
+
 test("a tile with no card words on a page whose main heading names the page never takes that heading", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(bareTilesPage()));
   const adds = shownPageLines((await look(runtime)).evidence).filter((line) => line.words === "Add to cart").map((line) => line.target);
@@ -99,6 +119,17 @@ function bareTilesPage(): JsonObject {
     { tagName: "h1", selector: "h1", visibleText: "Your basket", context: main },
     { tagName: "button", selector: "#tile1 button", visibleText: "Add to cart", context: { ...main, heading: "Your basket" } },
     { tagName: "button", selector: "#tile2 button", visibleText: "Add to cart", context: { ...main, heading: "Your basket" } }
+  ]);
+}
+
+/** An item's own page whose heading names the size chosen, while its title keeps the first size. */
+function optionPage(chosen: string): JsonObject {
+  const main = { landmark: "main" };
+  return snapshot("Table napkins, 100 Count | Store", [
+    { tagName: "h1", selector: "h1", visibleText: `Table napkins, ${chosen}`, context: main },
+    { tagName: "button", selector: "#size-100", visibleText: "100 Count", context: { ...main, heading: `Table napkins, ${chosen}` } },
+    { tagName: "button", selector: "#size-500", visibleText: "500 Count", context: { ...main, heading: `Table napkins, ${chosen}` } },
+    { tagName: "button", selector: "#add", visibleText: "Add to cart", context: { ...main, heading: `Table napkins, ${chosen}` } }
   ]);
 }
 
