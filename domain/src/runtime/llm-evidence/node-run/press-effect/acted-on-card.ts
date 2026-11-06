@@ -11,7 +11,12 @@
 //      page view published them (a control that repeats, as an "Add to cart" on each
 //      tile does), else the binding's private `cardWords`, which hold the same words
 //      for a lone card and never enter the page view, so naming one costs no token.
-//   2. Otherwise, for a control in the page's single main item, the page's own
+//   2. Otherwise, for a control in a named dialog, that dialog's name, from the
+//      binding's private `dialogNames`, which never enter the page view: the "Done"
+//      of a picker titled "New collection" acted on that, not on the page behind it
+//      (run-mw4dsh8i-3fb9dc39's card read only "Done."). A dialog with no name
+//      gives nothing.
+//   3. Otherwise, for a control in the page's single main item, the page's own
 //      subject: its first main heading (`h1`), in the top frame, in no dialog and in
 //      the main landmark. A press on an item's own page names that item. A control in
 //      a card or a row the page placed it in, one that repeats or has look-alikes, or
@@ -19,7 +24,7 @@
 //      the `h1` names the page, which is the title's mistake again. The nearest
 //      heading is not used either: run-mw4a2ywt-f935cbc5 named an add on a product
 //      page after its "About this item" section.
-//   3. Otherwise nothing, and Core's line stays the control's own words.
+//   4. Otherwise nothing, and Core's line stays the control's own words.
 //
 // **Never a row tie.** These words travel as `actedOnCard`, apart from `actedOnItem`:
 // Core ties a press to the rows a read returned by `actedOnItem`'s words, and a
@@ -41,6 +46,8 @@ export function webNodeActedOnCard(node: WebRunnableNode, before: WebLlmSnapshot
   if (element === undefined || webLlmItemRow(before.evidence, handle) !== undefined) return undefined;
   const within = flat(element.within ?? before.cardWords?.get(handle));
   if (within !== undefined) return within;
+  const dialog = before.dialogNames?.get(handle);
+  if (dialog !== undefined || element.inDialog !== undefined) return flat(dialog);
   const inMainItem = element.landmark === "main" && element.frameId === undefined && element.inDialog === undefined
     && element.repeats === undefined && element.alike === undefined && !before.records?.has(handle);
   if (!inMainItem) return undefined;
