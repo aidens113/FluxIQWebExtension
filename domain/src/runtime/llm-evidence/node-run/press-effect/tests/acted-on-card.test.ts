@@ -1,6 +1,6 @@
 // A press in no list says the words of the control's own card as `actedOnCard`, for the
 // person's line of the act (`../acted-on-card.ts`): a tile's own words, or the heading of
-// an item's own page, and never a heading from another part of the page. Lane B,
+// an item's own page (its first main heading), and never a section heading or a heading from another part of the page. Lane B,
 // run-mw44rtn1-37dee092: an add from a cart page's suggestion tiles was named after the
 // page's title. Through the real runtime.
 
@@ -25,17 +25,26 @@ test("an add on a suggestion tile in no list names that tile, and is never an it
   assert.equal("actedOn" in second, false);
 });
 
-test("a press on an item's own page names the item by its own heading", async () => {
+test("a press on an item's own page names the item by the page's main heading, not the section it sits under", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(itemPage()));
   const save = shownPageLines((await look(runtime)).evidence).find((line) => line.words === "Save")!.target;
   const pressed = (await press(runtime, save)).evidence as JsonObject;
   assert.equal(pressed.actedOnCard, "Walnut writing desk, 120cm");
 });
 
-test("a control whose heading is in another part of the page names nothing, so the line keeps the control's own words", async () => {
+test("a control in another part of the page than its main heading names nothing, so the line keeps the control's own words", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(apartPage()));
   const subscribe = shownPageLines((await look(runtime)).evidence).find((line) => line.words === "Subscribe")!.target;
   const pressed = (await press(runtime, subscribe)).evidence as JsonObject;
+  assert.equal(pressed.ok, true);
+  assert.equal("actedOnCard" in pressed, false);
+});
+
+test("a tile with no card words on a page whose main heading names the page never takes that heading", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(bareTilesPage()));
+  const adds = shownPageLines((await look(runtime)).evidence).filter((line) => line.words === "Add to cart").map((line) => line.target);
+  assert.equal(adds.length, 2);
+  const pressed = (await press(runtime, adds[0]!)).evidence as JsonObject;
   assert.equal(pressed.ok, true);
   assert.equal("actedOnCard" in pressed, false);
 });
@@ -83,6 +92,16 @@ function tilesPage(): JsonObject {
   ]);
 }
 
+/** A basket page whose two suggestion tiles say nothing of themselves: two alike adds under the page's own heading. */
+function bareTilesPage(): JsonObject {
+  const main = { landmark: "main" };
+  return snapshot("Your basket", [
+    { tagName: "h1", selector: "h1", visibleText: "Your basket", context: main },
+    { tagName: "button", selector: "#tile1 button", visibleText: "Add to cart", context: { ...main, heading: "Your basket" } },
+    { tagName: "button", selector: "#tile2 button", visibleText: "Add to cart", context: { ...main, heading: "Your basket" } }
+  ]);
+}
+
 /** An item's own page: its title, then its Save. */
 function itemPage(): JsonObject {
   const main = { landmark: "main" };
@@ -90,13 +109,15 @@ function itemPage(): JsonObject {
     { tagName: "a", selector: "nav a", visibleText: "Home", attributes: { href: "/" }, context: { landmark: "navigation" } },
     { tagName: "h1", selector: "h1", visibleText: "Walnut writing desk, 120cm", context: main },
     { tagName: "span", selector: "#price", visibleText: "£80", context: { ...main, heading: "Walnut writing desk, 120cm" } },
-    { tagName: "button", selector: "#save", visibleText: "Save", context: { ...main, heading: "Walnut writing desk, 120cm" } }
+    { tagName: "h2", selector: "#about", visibleText: "About this item", context: { ...main, heading: "Walnut writing desk, 120cm" } },
+    { tagName: "button", selector: "#save", visibleText: "Save", context: { ...main, heading: "About this item" } }
   ]);
 }
 
-/** A page whose only heading sits in a side region, above a control in another region. */
+/** A page whose main heading is in its main region, and a control in its footer under a side region's heading. */
 function apartPage(): JsonObject {
   return snapshot("News", [
+    { tagName: "h1", selector: "main h1", visibleText: "Morning headlines", context: { landmark: "main" } },
     { tagName: "h2", selector: "aside h2", visibleText: "Trending topics", context: { landmark: "complementary" } },
     { tagName: "button", selector: "footer button", visibleText: "Subscribe", context: { landmark: "contentinfo", heading: "Trending topics" } }
   ]);
