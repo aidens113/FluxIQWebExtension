@@ -138,17 +138,17 @@ test("the row-link form opens the first table by pressing its card, keeps the wa
   assert.deepEqual(amended.amendments, [{ step: 11, change: "repeat", through: 13, over: 10 }]);
 });
 
-test("after the forward run it presses the Saved link the view shows, goes by the address only when that was refused, sorts, and reads title, price and status", () => {
+test("in a form run once, after the forward run it presses the Saved link the view shows, goes by the address only when that was refused, sorts, and reads title, price and status", () => {
   const forward = made("forward", "core.run_flow", { passed: true });
   const shown = [`URL ~/item/1055/   (~ = ${BASE})`, 't935 link "Saved 2" ~/saved/'].join("\n");
-  const open = decide("plain", [...DONE, forward], shown);
+  const open = decide("reshape", [...DONE, forward], shown);
   assert.equal(open.callId, "open-saved");
   assert.deepEqual(open.input?.parameters, { target: { handle: "t935" } });
-  const byAddress = decide("plain", [...DONE, forward, made("open-saved")], shown);
+  const byAddress = decide("reshape", [...DONE, forward, made("open-saved")], shown);
   assert.equal(byAddress.callId, "open-saved-by-address");
   assert.equal(byAddress.input?.parameters?.url, `${BASE}/saved/`);
   const saved =[`URL ~/saved/   (~ = ${BASE})`, 't1132 select "Sort saved items" ="Recently saved"', 't1138 link "Lamp" ~/item/1030/'].join("\n");
-  const sort = decide("plain", [...DONE, forward, made("open-saved")], saved);
+  const sort = decide("reshape", [...DONE, forward, made("open-saved")], saved);
   assert.deepEqual(sort.input?.parameters, { target: { handle: "t1132" }, value: "price_ascend" });
   const SAVED_FIELDS = [
     { key: "t", kind: "text", type: "text", coverage: 1, sample: "Lamp" },
@@ -159,10 +159,17 @@ test("after the forward run it presses the Saved link the view shows, goes by th
   ];
   const detected = made("detect-saved", "web.detect_repeating_structure", { extraction: "extraction.2", fields: SAVED_FIELDS });
   const so_far = [...DONE, forward, made("open-saved"), made("sort-saved"), detected];
-  const read = decide("plain", so_far, saved);
+  const read = decide("reshape", so_far, saved);
   assert.equal(read.callId, "read-saved");
   assert.deepEqual(read.input?.parameters?.extractList.fields, { title: "t", price: "p", status: "s" });
-  assert.equal(decide("plain", [...so_far, made("read-saved")], saved).kind, "complete");
+  assert.equal(decide("reshape", [...so_far, made("read-saved")], saved).kind, "complete");
+});
+
+test("the plain form reads its saved items back by their address, as steps of the Flow, so a later run of it needs no link's words", () => {
+  const shown = [`URL ~/item/1055/   (~ = ${BASE})`, 't935 link "Saved 2" ~/saved/'].join("\n");
+  const toSaved = decide("plain", [...DONE, made("forward", "core.run_flow", { passed: true })], shown);
+  assert.equal(toSaved.callId, "open-saved-by-address");
+  assert.equal(toSaved.add, true);
 });
 
 test("the open-save-back form does what the paid run did, in its order, and its Save step is the one the model wrote", () => {
@@ -305,19 +312,23 @@ test("the form that presses again has a judge that says yes to whatever it is sh
   assert.equal(judge("again-press", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
 });
 
-test("the Run again form keeps the state-setting form's Flow, refuses any decision after the saved Flow's run, and its judge reads the real rows", () => {
-  const sorted = [`URL ~/search/?query=dining+table&radius=5&sortBy=price_ascend   (~ = ${BASE})`, ...TABLES_PAGE.split("\n").slice(1)].join("\n");
+test("the Run again form takes plain's Flow, a plain Save on each table opened by its address, reads its saved items as steps of the Flow, refuses any decision after the saved Flow's run, and its judge reads the real rows", () => {
+  const item = [`URL ~/item/1003/   (~ = ${BASE})`, 't979 button "Save"'].join("\n");
+  for (const so_far of [HAND, [...HAND, made("read-tables")]]) assert.deepEqual(decide("run-again", so_far), decide("plain", so_far));
+  const save = decide("run-again", [...HAND, made("read-tables"), made("open-first")], item);
+  assert.equal(save.input?.node, "web.output.dom-click");
+  assert.deepEqual(save.input?.consequences, ["modify_existing"]);
+  assert.deepEqual(decide("run-again", [...DONE, steps(READ, OPEN, SAVE, BACK)]).amendments, [
+    { step: 11, change: "repeat", through: 12, over: 10 },
+    { step: 11, change: "bind", input: { url: { $row: "url" } } },
+  ]);
+  const shown = [`URL ~/item/1055/   (~ = ${BASE})`, 't935 link "Saved 2" ~/saved/'].join("\n");
+  const toSaved = decide("run-again", [...DONE, made("forward", "core.run_flow", { passed: true })], shown);
+  assert.equal(toSaved.callId, "open-saved-by-address");
+  assert.equal(toSaved.add, true);
   const home = [`URL ~/   (~ = ${BASE})`, 't30 field[search] "Search Marketplace" =""'].join("\n");
-  const searching = [made("search"), made("choose-radius"), made("apply-1"), made("open-radius"), made("open-sort"), made("sort-cheapest")];
-  const item = [`URL ~/item/1003/   (~ = ${BASE})`, 't987 button "Saved" pressed'].join("\n");
-  const checking = scriptedModelScriptFor(TASK, "again-check").replies.evidence_tool_decision![0]!;
-  const again = scriptedModelScriptFor(TASK, "run-again").replies.evidence_tool_decision![0]!;
-  assert.deepEqual((again(request(sorted, searching)) as Called).decision, (checking(request(sorted, searching)) as Called).decision);
-  const written = [...searching, made("detect"), made("open-first"), made("save-first"), made("back-first")];
-  assert.deepEqual((again(request(item, written)) as Called).decision, (checking(request(item, written)) as Called).decision);
-  assert.equal((again(request(item, written)) as Called).decision.input?.node, "web.output.dom-check");
-  const stopped = note({ stoppedAt: 5, happened: "The step's control was not found on the page." });
-  assert.throws(() => again(request(home, [stopped])), /did not end the attempt, stopped at step 5/u);
+  const stopped = note({ stoppedAt: 13, happened: "The step's node refused the step as written, so it did nothing." });
+  assert.throws(() => decide("run-again", [stopped], home), /did not end the attempt, stopped at step 13/u);
   assert.equal(judge("run-again", 1, SAVED_ROWS).diagnosis.answersRequest, "yes");
   assert.equal(judge("run-again", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "no");
 });

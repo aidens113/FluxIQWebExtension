@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../../html.js";
+import { threadRows } from "../conversations/index.js";
 import { memberNamed } from "../data/index.js";
 import type { ProfessionalNetworkState } from "../types.js";
 import type { ShellKit } from "./kit.js";
@@ -44,8 +45,8 @@ export function consentBanner(kit: ShellKit, ids: OverlayIds): string {
 export function messagingOverlay(kit: ShellKit, ids: OverlayIds): string {
   const c = kit.css;
   const priya = memberNamed("Priya Nair");
-  const threads = [["Priya Nair", "Hi Rafaela! Quick one — are you still hiring for the platform team?", "Sep 20"], ["Hendrik Mol", "Thanks, forwarded to our hiring lead.", "Sep 18"], ["Sophie Laurent", "Can we move the sync to Thursday?", "Sep 15"], ["Wouter de Boer", "Sounds good 👍", "Sep 9"]]
-    .map(([name, line, date]) => `<div class="${c.dockRow}"><div class="${c.avatar}" aria-hidden="true">${escapeHtml(initials(name!))}</div><div><div><strong>${escapeHtml(name!)}</strong> <span class="${c.muted} ${c.small}">${date}</span></div><div class="${c.muted} ${c.small}">${escapeHtml(line!)}</div></div></div>`)
+  const threads = threadRows(kit.state)
+    .map(({ name, line, date }) => `<div class="${c.dockRow}"><div class="${c.avatar}" aria-hidden="true">${escapeHtml(initials(name))}</div><div><div><strong>${escapeHtml(name)}</strong> <span class="${c.muted} ${c.small}">${date}</span></div><div class="${c.muted} ${c.small}">${escapeHtml(line)}</div></div></div>`)
     .join("");
   const bubble = kit.state.chatBubbleSeen ? "" : `<section id="${ids.bubble}" class="${c.bubble}" hidden>
 <header class="${c.bubbleHead}"><div class="${c.avatar}" aria-hidden="true">PN</div><div style="flex:1"><div><strong>${escapeHtml(priya.name)}</strong></div><div class="${c.muted} ${c.small}">Active now</div></div>

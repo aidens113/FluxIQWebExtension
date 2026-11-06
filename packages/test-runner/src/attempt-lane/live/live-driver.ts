@@ -4,7 +4,7 @@ import { askedChangeOf, attemptEndingOfBuild, judgeAskedAgain, judgeAttemptAnswe
 import { finalStateFacts } from "../../lane-rules/index.js";
 import { playwrightScenarioFactProbe } from "../../scenario-assertions.js";
 import type { AttemptDriver, AttemptOutcome, AttemptSavedState, AttemptStart, AttemptTask } from "../driver.js";
-import { liveAttemptStage, readTaskAttempt, type AttemptOutcomeRead, type AttemptOutcomeRecord, type AttemptReadControl } from "./attempt/index.js";
+import { keptWhateverScored, liveAttemptStage, readTaskAttempt, type AttemptOutcomeRead, type AttemptOutcomeRecord, type AttemptReadControl } from "./attempt/index.js";
 import type { AnswerTurnDom } from "./answer-turn-dom.js";
 import { followAttempt } from "./follow-attempt.js";
 import { panelAnswerPort } from "./panel-answer-port.js";
@@ -16,9 +16,27 @@ export type LiveAttemptEnded = Readonly<{
   outcome: AttemptOutcomeRead;
   shown: AnswerTurnDom | null;
   conversationId: string;
-  /** `activity` is the site's own record of what landed during this attempt, and `activityBefore` what it already held. */
-  site: Readonly<{ before: LastingView; after: LastingView; change: SiteChange; activity: unknown; activityBefore: unknown }>;
+  /**
+   * `activity` is the site's own record of what landed during this attempt, and `activityBefore` what it already held.
+   * `unread` only where scoring the attempt failed and the site could not be read after it either, saying why: never a guess at it.
+   */
+  site: Readonly<{ before: LastingView; after: LastingView; change: SiteChange; activity: unknown; activityBefore: unknown }> | Readonly<{ unread: string }>;
 }>;
+
+/** The site as it was read after the attempt, or why it could not be: kept with an attempt whose scoring already failed. */
+async function siteOrWhyUnread<Site>(read: () => Promise<Site>): Promise<Site | { unread: string }> {
+  try {
+    return await read();
+  } catch (error) {
+    return { unread: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** One attempt's Lab person, running until `finish` (`./attempt-person.ts`). */
+export type LiveAttemptPersonRun = { finish(): Promise<void> };
+
+/** The Lab's way of playing the scenario's declared person: `playable` says there is one to wait for, and `start` begins it for one attempt. */
+export type LiveAttemptPerson = { playable: boolean; start(ordinal: number): Promise<LiveAttemptPersonRun> };
 
 export type LiveAttemptDriverInput = {
   control: AttemptReadControl & RunDatasetControl;
@@ -33,6 +51,8 @@ export type LiveAttemptDriverInput = {
   /** What has moved, for the watch (`./follow-attempt.ts`). */
   progress?: () => Promise<{ marker: string; refused?: string }>;
   standIns: readonly AttemptStandIn[];
+  /** The person the Lab plays at a person-only check; absent, an attempt waiting for a person is where the proof stops. */
+  person?: LiveAttemptPerson;
   stallMs?: number;
   log?: (line: string) => void;
   /** Called once the attempt has stopped and the turn is read, with the page still as it left it. */
@@ -108,22 +128,30 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       const earlierLeft = first === undefined ? undefined : siteChange(first, baseline.view);
       first ??= baseline.view;
       const askedAgain = ordinal > 1 && input.later === "run_again" && previous !== undefined;
+      // Started before the message and finished after the attempt stops: it may be asked the moment the attempt starts.
+      const person = await input.person?.start(ordinal);
       let conversationId: string;
-      if (askedAgain) {
-        log(`[attempt] pressing Run again on the answer of ${previous!.attemptId}`);
-        await pressPanelRunAgain(input.session, previous!.attemptId);
-        conversationId = previous!.conversationId;
-      } else {
-        log(`[attempt] typing the instruction into the chat: ${request.task.id}`);
-        ({ conversationId } = await input.send(request.task.instruction));
+      let followed: AttemptOutcomeRead;
+      try {
+        if (askedAgain) {
+          log(`[attempt] pressing Run again on the answer of ${previous!.attemptId}`);
+          await pressPanelRunAgain(input.session, previous!.attemptId);
+          conversationId = previous!.conversationId;
+        } else {
+          log(`[attempt] typing the instruction into the chat: ${request.task.id}`);
+          ({ conversationId } = await input.send(request.task.instruction));
+        }
+        followed = await followAttempt({
+          control: input.control, projectId: input.projectId, conversationId, known,
+          ...(input.progress ? { progress: input.progress } : {}),
+          ...(input.person?.playable ? { personPlaying: true } : {}),
+          describeChat: () => input.session.panel?.text() ?? Promise.resolve(""),
+          onChange: (line) => log(`[attempt] ${line}`),
+          ...(input.stallMs === undefined ? {} : { stallMs: input.stallMs }),
+        });
+      } finally {
+        await person?.finish();
       }
-      const followed = await followAttempt({
-        control: input.control, projectId: input.projectId, conversationId, known,
-        ...(input.progress ? { progress: input.progress } : {}),
-        describeChat: () => input.session.panel?.text() ?? Promise.resolve(""),
-        onChange: (line) => log(`[attempt] ${line}`),
-        ...(input.stallMs === undefined ? {} : { stallMs: input.stallMs }),
-      });
       const outcome = await readTaskAttempt(input.control, input.projectId, followed.attempt.attemptId);
       const { attempt } = outcome;
       known.add(attempt.attemptId);
@@ -136,20 +164,29 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
         chat: panelAnswerPort({ session: input.session, attemptId: attempt.attemptId, columnIds, onRead: (dom) => { shown = dom; } }),
       });
       const page = input.session.scenario;
-      const judged = await judgeAttemptAnswer({
-        request, workflow, scenarioOrigin: input.origin, ending: endingOf(attempt), stage, baseline, earlierLeft, askedAgain,
-        judgeFinalState: async () => {
-          const facts = await judgeEveryFact(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));
-          return { held: facts.every((fact) => fact.held), unheldFacts: facts.filter((fact) => !fact.held), facts };
-        },
-      });
-      const state = await readSiteState(input.origin, input.runToken, scenario.id);
-      const after = lastingViewOf(scenario.id)(state);
-      // The site's own record of what landed, for the evidence: `activity` lists each act the fixture took, and a repeat it ignored is not in it.
-      const activityBefore = listOf(stateBefore.activity);
-      const activity = state.activity === undefined ? null : listOf(state.activity).slice(activityBefore.length);
-      const change = siteChange(baseline.view, after);
-      await input.onEnded?.({ ordinal, outcome, shown, conversationId, site: { before: baseline.view, after, change, activity, activityBefore } });
+      const siteAfter = async (): Promise<Exclude<LiveAttemptEnded["site"], { unread: string }> & { activity: readonly unknown[] | null }> => {
+        const state = await readSiteState(input.origin, input.runToken, scenario.id);
+        const after = lastingViewOf(scenario.id)(state);
+        // The site's own record of what landed, for the evidence: `activity` lists each act the fixture took, and a repeat it ignored is not in it.
+        const activityBefore = listOf(stateBefore.activity);
+        const activity = state.activity === undefined ? null : listOf(state.activity).slice(activityBefore.length);
+        return { before: baseline.view, after, change: siteChange(baseline.view, after), activity, activityBefore };
+      };
+      // The attempt has ended and been paid for: its ending is kept whatever the scoring throws, and the throw still fails the run.
+      const judged = await keptWhateverScored(
+        () => judgeAttemptAnswer({
+          request, workflow, scenarioOrigin: input.origin, ending: endingOf(attempt), stage, baseline, earlierLeft, askedAgain,
+          judgeFinalState: async () => {
+            const facts = await judgeEveryFact(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));
+            return { held: facts.every((fact) => fact.held), unheldFacts: facts.filter((fact) => !fact.held), facts };
+          },
+        }),
+        async () => input.onEnded?.({ ordinal, outcome, shown, conversationId, site: await siteOrWhyUnread(siteAfter) }),
+        log,
+      );
+      const site = await siteAfter();
+      const { activity, change } = site;
+      await input.onEnded?.({ ordinal, outcome, shown, conversationId, site });
       const asked = askedChangeOf(request.task.id);
       const remaining = asked && earlierLeft ? new Set(stillAsked(asked, earlierLeft).acts.map((act) => act.name)) : undefined;
       // A person asked for this again: what they asked for, again, scored with its rows, final state and shown answer like any attempt (`judgeAskedAgain`). Its lists are for the line.

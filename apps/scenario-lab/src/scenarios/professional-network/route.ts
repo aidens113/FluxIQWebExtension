@@ -1,6 +1,6 @@
 import type { RenderContext, ScenarioRouteRequest, ScenarioRouteResponse } from "../../types.js";
 import { memberBySlug } from "./data/index.js";
-import { renderManagerPage, renderMyNetworkPage, sentFragment } from "./network/index.js";
+import { renderConnectionsPage, renderManagerPage, renderMyNetworkPage, sentFragment } from "./network/index.js";
 import { adFrameDocument, feedBatch, renderFeedPage, renderProfilePage, renderSimplePage } from "./pages/index.js";
 import { challengeFragment, peopleFragment, readPeopleQuery, renderAllResultsPage, renderPeoplePage, RETRY_AFTER_SECONDS, searchChallenged } from "./search/index.js";
 import { shellKit } from "./shell/index.js";
@@ -47,6 +47,7 @@ export function routeNetwork(state: ProfessionalNetworkState, request: ScenarioR
   if (subpath === "search/results/people/") return { status: 200, body: renderPeoplePage(kit, readPeopleQuery(query)) };
   if (subpath === "search/results/all/") return { status: 200, body: renderAllResultsPage(kit, (query.get("keywords") ?? "").trim()) };
   if (subpath === "mynetwork/") return { status: 200, body: renderMyNetworkPage(kit) };
+  if (subpath === "mynetwork/invite-connect/connections/") return { status: 200, body: renderConnectionsPage(kit) };
   if (subpath === "mynetwork/invitation-manager/") return { status: 200, body: renderManagerPage(kit, "received", "") };
   if (subpath === "mynetwork/invitation-manager/sent/") return { status: 200, body: renderManagerPage(kit, "sent", query.get("invitationType") ?? "") };
   if (subpath === "mynetwork/invitation-manager/sent/fragment") {
