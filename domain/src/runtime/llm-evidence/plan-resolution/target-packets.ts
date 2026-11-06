@@ -389,13 +389,12 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       flow.steps.pressedInto(handle, after?.evidence.location ?? "", after === undefined ? "" : dialogsOf(after));
       // The first act's view only (header); a look the capture cut short before the control says nothing of it.
       if (flow.acted.has(handle)) return;
-      const target = targetsOf(before).get(handle);
+      // A handle from this document before a reload (a robot check's) is the one control here at the address the act resolved it to; several or none is no witness (t877).
+      const named = targetsOf(before).has(handle) ? undefined : resolveOnPage(flow, handle, before.evidence.location);
+      const target = named === undefined ? targetsOf(before).get(handle) : named.ok ? [...targetsOf(before).values()].find((each) => addressOf(each) === addressOf(named)) : undefined;
       if (target === undefined || target.shared) return;
       flow.acted.set(handle, { ...target, effect: webPlanActEffect(before, after, flow.selfChanging.of(before.evidence.location)) });
-      for (const oldest of flow.acted.keys()) {
-        if (flow.acted.size <= ACTED_PER_FLOW) break;
-        flow.acted.delete(oldest);
-      }
+      for (const oldest of flow.acted.keys()) if (flow.acted.size > ACTED_PER_FLOW) flow.acted.delete(oldest); else break;
     },
     acting(scope) {
       flows.get(scopeKey(scope))?.selfChanging.acting();

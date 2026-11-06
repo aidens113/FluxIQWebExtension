@@ -133,12 +133,10 @@ type WebNodeCallRecord = {
    * node's command went out, the state it left as well.
    */
   found?: WebLlmSnapshotBinding | undefined;
-  /**
-   * The node's command has gone to the page. From here a refusal cannot say
-   * the page is as it was found; only a page captured afterwards says what the
-   * call left.
-   */
+  /** The node's command has gone to the page. From here a refusal cannot say the page is as it was found; only a page captured afterwards says what the call left. */
   acted?: true;
+  /** The handle a lasting act on the page it stays on named, set as its command goes out: a robot check met after that still records the act's pre-act witness (t877). */
+  witness?: string | undefined;
   /**
    * The step as a succeeded call of this node would have stated it, written
    * just before its command goes out: what the model may be shown (`input`),
@@ -426,6 +424,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle, parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
     if (frozen.kind === "selected" && !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
     record.acted = true;
+    record.witness = current && node.effect === "mutate" && !webMovesThePage(node) ? handle : undefined; // As `named` below, for the catch.
     // The look just taken is the page before the act; a capture after it is not compared with it (`../plan-resolution/self-changing/`).
     run.stores.targets.acting(buildOf(run));
     // A list read also asks for a few of the rows its conditions turned down,
@@ -648,8 +647,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       if (page) run.shown(page);
       // A refusal the page wrote quotes what it wrote (`./press-effect/notice.ts`).
       const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record, actionAnswered ? undefined : error.failure, actionAnswered ? actionability : error.actionability);
-      // A robot check is the person's. The refusal is kept as the run's record
-      // says it, and Core puts the check to the person rather than to the model.
+      // A robot check is the person's: the refusal is kept as the run's record says it, and Core puts the check to the person.
+      // A lasting press that went out before it stands, so it keeps its pre-act witness as one that returned does; the page after was the check (t877).
+      if (error.personNeeded && record.acted && record.standing !== undefined && record.found !== undefined && record.witness !== undefined) run.stores.targets.acted(buildOf(run), record.witness, record.found, undefined);
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
     }
     throw error;

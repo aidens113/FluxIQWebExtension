@@ -196,6 +196,122 @@ test("a replay reset that lands on a robot check says a person is needed", async
   assert.equal(reset.personNeeded, true);
 });
 
+// A press behind which a robot check stood still leaves its pre-act witness (t877, lane C w3,
+// `run-mw46zf0k-e5977ea3`). Crossborder's price "OK" and "Price ↑" are drawn identically on every
+// filter state of the results page, so Flow assembly, which reads the saved step's literal target
+// against every view of it (`handleReach: "view_history"`), needs the record of the view the press
+// acted from to tell which it was (`../../plan-resolution/control-intents/absolute.ts`). Without it
+// the step stood in the Flow and the Flow was refused `web.handle.ambiguous`.
+
+const RESULTS = "https://store.test/search?q=hub";
+const FILTERED = "https://store.test/search?q=hub&max=10";
+const SORTED = "https://store.test/search?q=hub&max=10&sort=price";
+const SORT = "aside > div.sort > div";
+
+/** A results page whose "OK" and "Price ↑" are drawn alike on every state; "OK" filters, "Price ↑" sorts, and either may meet a check. */
+function results(fails: Fails) {
+  const state = { location: RESULTS, clicked: false, cleared: false };
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") {
+        if (state.clicked && fails.captureAfterClick && !state.cleared) return { status: "failed", failure: fails.captureAfterClick, error: "no" };
+        return { status: "succeeded", payload: { snapshot: resultsPage(state.location) } };
+      }
+      if (command.actionType === "web.dom.click") {
+        if (fails.click && !state.cleared) return { status: "failed", failure: fails.click, error: "no" };
+        state.clicked = true;
+        state.location = command.parameters.selector === SORT ? SORTED : FILTERED;
+        return { status: "succeeded" };
+      }
+      return { status: "succeeded" };
+    }
+  };
+  return { state, runtime: createWebAutomationLlmEvidenceRuntime(gateway) };
+}
+
+function resultsPage(url: string): JsonObject {
+  return {
+    url,
+    title: "Search",
+    viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
+    interactiveElements: [
+      { tagName: "input", selector: "#max", attributes: { placeholder: "Max" }, bounds: { x: 1, y: 1, width: 40, height: 10 } },
+      { tagName: "div", selector: "aside > div.price > div", visibleText: "OK", attributes: { role: "button" }, bounds: { x: 50, y: 1, width: 10, height: 10 } },
+      { tagName: "div", selector: SORT, visibleText: "Price ↑", attributes: { role: "button" }, bounds: { x: 70, y: 1, width: 10, height: 10 } }
+    ]
+  };
+}
+
+type Runtime = ReturnType<typeof createWebAutomationLlmEvidenceRuntime>;
+let resultCalls = 0;
+async function call(runtime: Runtime, node: string, parameters: JsonObject) {
+  resultCalls += 1;
+  return await runtime.executeTool({ ...PROJECT, callId: `call.results.${resultCalls}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node, parameters, consequences: [] } });
+}
+
+/** The saved step resolved as Flow assembly resolves it: its literal target, against every view the build took. */
+async function assembled(runtime: Runtime, pressed: Awaited<ReturnType<typeof call>>) {
+  const ranWith = pressed.draft?.ranWith?.parameters as JsonObject | undefined;
+  assert.ok(ranWith && typeof ranWith.selector === "string", "the press saved a resolved step");
+  return await runtime.resolvePlanNodeParameters({ ...PROJECT, nodeDefinitionId: CLICK, parameters: ranWith, declaredConsequences: [], permission: PERMITTED, handleReach: "view_history" });
+}
+
+/** Press "OK", let the person clear any check it met, and look at two later states of the page. */
+async function pressOk(fails: Fails) {
+  const { state, runtime } = results(fails);
+  const first = await call(runtime, SNAPSHOT, {});
+  const pressed = await call(runtime, CLICK, { target: { handle: shownHandle(first.evidence, "OK") } });
+  // The person clears the check and presses Continue; Core's look shows the filtered page, then the build sorts it.
+  state.cleared = true;
+  state.location = FILTERED;
+  await call(runtime, SNAPSHOT, {});
+  state.location = SORTED;
+  await call(runtime, SNAPSHOT, {});
+  return { runtime, first, pressed };
+}
+
+test("with no check, a press on a control every state draws resolves at assembly by its pre-act witness", async () => {
+  const { runtime, pressed } = await pressOk({});
+  assert.equal(pressed.personNeeded, undefined);
+  const resolved = await assembled(runtime, pressed);
+  assert.notEqual(resolved.status, "refused", JSON.stringify(resolved));
+});
+
+test("a press whose command met a robot check keeps its pre-act witness, so its step resolves at assembly", async () => {
+  const { runtime, pressed } = await pressOk({ click: CHECK });
+  assert.equal(pressed.personNeeded, true);
+  assert.equal(pressed.draft?.proposes, true, "the step stands in the Flow");
+  const resolved = await assembled(runtime, pressed);
+  assert.notEqual(resolved.status, "refused", JSON.stringify(resolved));
+});
+
+test("a press whose look after it met a robot check keeps its pre-act witness, so its step resolves at assembly", async () => {
+  const { runtime, pressed } = await pressOk({ captureAfterClick: CHECK });
+  assert.equal(pressed.personNeeded, true);
+  assert.equal(pressed.draft?.proposes, true, "the step stands in the Flow");
+  const resolved = await assembled(runtime, pressed);
+  assert.notEqual(resolved.status, "refused", JSON.stringify(resolved));
+});
+
+test("a press with a handle from before the check's reload is witnessed by the control it pressed on the fresh page", async () => {
+  const { state, runtime } = results({ click: CHECK });
+  const first = await call(runtime, SNAPSHOT, {});
+  const stale = shownHandle(first.evidence, "Price ↑");
+  await call(runtime, CLICK, { target: { handle: shownHandle(first.evidence, "OK") } });
+  state.cleared = true;
+  state.location = FILTERED;
+  const fresh = await call(runtime, SNAPSHOT, {});
+  assert.notEqual(shownHandle(fresh.evidence, "Price ↑"), stale, "the filtered page numbers its controls anew");
+  // The model presses "Price ↑" by the handle the page before the check showed, as Core's stale current view offers it.
+  const sorted = await call(runtime, CLICK, { target: { handle: stale } });
+  assert.equal(sorted.effectApplied, true, JSON.stringify(sorted.evidence));
+  assert.equal(state.location, SORTED);
+  await call(runtime, SNAPSHOT, {});
+  const resolved = await assembled(runtime, sorted);
+  assert.notEqual(resolved.status, "refused", JSON.stringify(resolved));
+});
+
 test("an ordinary replay failure carries no person-needed mark", async () => {
   const { runtime } = site({ click: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS } });
   const replayed = await runtime.executeTool({
