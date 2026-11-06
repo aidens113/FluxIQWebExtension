@@ -59,6 +59,32 @@ test("no command control is held to an answer, and a control no longer pressable
   }
 });
 
+// A widget that swaps its button for an identical copy and ignores the first press after a change (t878,
+// run-mw4foote-9cbea70e: an Apply in a location panel). The pressed control is gone, but the command names a
+// pressable copy in the same place and the page settled exactly as it was: nothing happened, and the press fails as
+// NO_EFFECT for Core to make once more on the copy. Measure the detached control instead and the first row goes red.
+test("a press whose control was swapped for a pressable copy, on a page settled exactly as it was, fails as certainly without effect", async (t) => {
+  const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, replaced: "copy" });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.action.no_effect");
+  assert.equal(result.failure?.certainNoEffect, true);
+  assert.deepEqual(events, FIRST_PRESS, "the click presses once: the press on the copy is Core's");
+  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
+});
+
+test("a press whose control was swapped for a copy and whose page changed landed, and is never pressed again", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: false, replaced: "copy" });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.failure, undefined);
+  assert.deepEqual(events, FIRST_PRESS);
+});
+
+test("a control gone with no copy the command names was answered by whatever removed it, and passes", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, replaced: "gone" });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, FIRST_PRESS);
+});
+
 // A press the page answered with nothing but its own notice (t743): a library's Reserve button whose first press
 // shows a busy state, reverts, and puts an error in a status region, reserving nothing. The settled look answers
 // "announced", and the press fails as PAGE_REPORTED_FAILURE, unacted and certain, for Core to make again under its

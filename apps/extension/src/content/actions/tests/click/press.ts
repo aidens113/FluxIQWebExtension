@@ -23,14 +23,15 @@ export async function click(
   pressing: PressOptions = {}
 ) {
   installMouseEvent(t);
-  const page = fakePage(behaviour);
+  const page = fakePage(pressing.replaced ? { ...behaviour, detachOnClick: true } : behaviour);
+  const replaced = pressing.replaced ? { copy: pressing.replaced === "copy" ? fakePage(behaviour).element : undefined } : undefined;
   const watch = fakeWatch(effect, page.events);
   const notices = fakeNoticeWatch(notice, page.events, pressing.secondNotice);
   const checks = fakeCheckWatch(sighting, page.events);
   // A page that answers the press unless a row says it ignored it, so every
   // row written before the extra press existed keeps its meaning.
   const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events, pressing.secondSeen, pressing.settledUnchanged);
-  const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true, pressing.againAs);
+  const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true, pressing.againAs, undefined, replaced);
   const result = await clickAction(action, deps, startedAt);
   return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record, unchangedAsked: ignored.unchangedAsked };
 }
@@ -39,6 +40,8 @@ export async function click(
 export type PressOptions = {
   /** The signs the ignored-press watch saw; `[]` is a press the page ignored. */
   seen?: PressSignal[];
+  /** The press takes the control out of the page, and the command then names a pressable copy in its place, or nothing (t878). */
+  replaced?: "copy" | "gone";
   /** Whether the control can still be pressed when it is judged again; true unless a row says otherwise. */
   pressableAgain?: boolean;
   /** Why it cannot, when it cannot: covered unless a row says otherwise. */
