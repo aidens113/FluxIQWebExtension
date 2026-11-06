@@ -7,8 +7,10 @@
 // card read "Add to cart: Brightaisle.com Shopping Cart". The thing acted on is the
 // control's own card, read from the look before the press:
 //
-//   1. The words the capture gave of the card the control sits in (`within`, on a
-//      control that repeats on the page, as an "Add to cart" on each tile does).
+//   1. The words the capture gave of the card the control sits in: `within` where the
+//      page view published them (a control that repeats, as an "Add to cart" on each
+//      tile does), else the binding's private `cardWords`, which hold the same words
+//      for a lone card and never enter the page view, so naming one costs no token.
 //   2. Otherwise, for a control in the page's single main item, the page's own
 //      subject: its first main heading (`h1`), in the top frame, in no dialog and in
 //      the main landmark. A press on an item's own page names that item. A control in
@@ -37,7 +39,7 @@ export function webNodeActedOnCard(node: WebRunnableNode, before: WebLlmSnapshot
   const elements = before.evidence.elements;
   const element = elements.find((candidate) => candidate.target === handle);
   if (element === undefined || webLlmItemRow(before.evidence, handle) !== undefined) return undefined;
-  const within = flat(element.within);
+  const within = flat(element.within ?? before.cardWords?.get(handle));
   if (within !== undefined) return within;
   const inMainItem = element.landmark === "main" && element.frameId === undefined && element.inDialog === undefined
     && element.repeats === undefined && element.alike === undefined && !before.records?.has(handle);
