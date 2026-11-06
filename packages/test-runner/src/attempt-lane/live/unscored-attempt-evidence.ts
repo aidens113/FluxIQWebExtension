@@ -1,7 +1,13 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { AttemptReportRow } from "@fluxiq-web-extension/test-contracts";
+import type { AttemptOutcome } from "../driver.js";
+import type { AttemptOutcomeRecord } from "./attempt/index.js";
 import type { LiveAttemptEnded } from "./live-driver.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
+
+/** An attempt the driver had already scored when the run ended early, with its row in the series. */
+export type ScoredAttempt = Readonly<{ outcome: AttemptOutcome; row: AttemptReportRow }>;
 
 /**
  * What a run keeps when something throws after its attempts ended: an attempt record for each
@@ -12,8 +18,17 @@ import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
  * Its picture and `answer-turn.json` are written as each attempt ends (`../live/live-driver.ts`
  * keeps that ending whatever its scoring throws), so they are already in the evidence folder.
  * An attempt record the run already wrote is left as it is: it is the whole one. The spend is
- * what Core recorded for the attempts that ended; with none ended there is no spend to stand
- * behind and no bundle is written, as before. Returns the line that says what was kept.
+ * what Core recorded for the attempts that ended; with none ended and nothing said of an attempt
+ * that did not, there is no spend to stand behind and no bundle is written, as before. Returns
+ * the line that says what was kept.
+ *
+ * It also keeps a series that ended early (`run-mw4907db-c3992394`: attempt 1 ended and was paid
+ * for, attempt 2 never started, and the proof stopped waiting). `scored` holds each attempt the
+ * driver had already scored; its record carries its verdict, rows and site change as a finished
+ * one does and is not marked unscored. `didNotEnd` names the attempt that never started or never
+ * ended, with the reason (the stuck message, with what the chat showed) and what Core had recorded
+ * of it so far. That spend is in the ledger too, and the bundle is written even with no attempt
+ * ended, because the run was started, typed into and paid for.
  */
 export async function writeUnscoredAttemptEvidence(input: {
   evidence: string;
@@ -21,19 +36,37 @@ export async function writeUnscoredAttemptEvidence(input: {
   kept: ReadonlyMap<number, { ended: LiveAttemptEnded; cache: unknown; modelCalls: Record<string, number> | null }>;
   error: unknown;
   recorded: boolean;
+  scored?: ReadonlyMap<number, ScoredAttempt>;
+  didNotEnd?: { ordinal: number; attempt?: AttemptOutcomeRecord | null };
   paid?: { runsDirectory: string; runId: string; startedAt: string; plan: { maxTotalEstimatedCostUsd: number }; stepsDirectory: string };
 }): Promise<string> {
   const ended = [...input.kept.entries()].sort(([left], [right]) => left - right).map(([, each]) => each);
-  if (ended.length === 0) return "no attempt had ended, so there was no attempt to keep";
+  if (ended.length === 0 && !input.didNotEnd) return "no attempt had ended, so there was no attempt to keep";
   const notScored = { name: input.error instanceof Error ? input.error.name : typeof input.error, ...categoryOf(input.error), message: input.error instanceof Error ? input.error.message : String(input.error) };
-  const records = ended.map(({ ended: { ordinal, outcome, site }, cache, modelCalls }) => ({ ordinal, notScored, attempt: outcome.attempt, result: outcome.result ?? null, saved: outcome.saved ?? null, budgetUsd: outcome.attempt.budget.usd, cache, actsWithNoRow: outcome.attempt.actsWithNoRow ?? 0, modelCalls, site }));
+  const records = ended.map(({ ended: { ordinal, outcome, site }, cache, modelCalls }) => ({ ordinal, ...scoreOf(input.scored?.get(ordinal), notScored), attempt: outcome.attempt, result: outcome.result ?? null, saved: outcome.saved ?? null, budgetUsd: outcome.attempt.budget.usd, cache, actsWithNoRow: outcome.attempt.actsWithNoRow ?? 0, modelCalls, site }));
+  const unended = input.didNotEnd ? { ordinal: input.didNotEnd.ordinal, of: input.attempts, reason: notScored, stoodAt: input.didNotEnd.attempt ?? null } : null;
   if (!input.recorded) {
-    await writeFile(path.join(input.evidence, "attempt.json"), JSON.stringify(input.attempts === 1 && records.length === 1 ? records[0] : { notScored, attempts: records }, null, 2));
-    await writeFile(path.join(input.evidence, "attempt-report.txt"), `${records.map(({ ordinal, attempt }) => `Attempt ${ordinal} ended ${attempt.status}${attempt.waitingFor ? ` for ${attempt.waitingFor}` : ""} and was not scored: ${notScored.message}`).join("\n")}\n`);
+    const single = input.attempts === 1 && records.length === 1 && !unended;
+    await writeFile(path.join(input.evidence, "attempt.json"), JSON.stringify(single ? records[0] : { notScored, ...(unended ? { didNotEnd: unended } : {}), attempts: records }, null, 2));
+    const lines = records.map((record) => {
+      const ending = `Attempt ${record.ordinal} ended ${record.attempt.status}${record.attempt.waitingFor ? ` for ${record.attempt.waitingFor}` : ""}`;
+      return record.scored ? `${ending} and was scored ${record.scored.answer.verdict}.` : `${ending} and was not scored: ${notScored.message}`;
+    });
+    if (unended) {
+      const stood = unended.stoodAt;
+      lines.push(`Attempt ${unended.ordinal} of ${unended.of} ${stood ? `did not end (it stood at ${stood.status}, ${stood.liveSteps} live steps, ${stood.spend.calls} calls)` : "did not start"}: ${notScored.message}`);
+    }
+    await writeFile(path.join(input.evidence, "attempt-report.txt"), `${lines.join("\n")}\n`);
   }
-  const spentUsd = records.reduce((sum, { attempt }) => sum + attempt.spend.usd, 0);
+  const spentUsd = records.reduce((sum, { attempt }) => sum + attempt.spend.usd, 0) + (unended?.stoodAt?.spend.usd ?? 0);
   if (input.paid) await writePaidAttemptBundle({ ...input.paid, verdict: "failed", spentUsd });
-  return `${records.length} attempt(s) ended and were kept unscored${input.paid ? `, with $${spentUsd.toFixed(4)} spent in the ledger` : ""}`;
+  const unscored = records.filter((record) => !record.scored).length;
+  return `${records.length} attempt(s) ended and were kept${unscored === 0 ? ", scored" : " unscored"}${unended ? `, attempt ${unended.ordinal} ${unended.stoodAt ? "did not end" : "did not start"}` : ""}${input.paid ? `, with $${spentUsd.toFixed(4)} spent in the ledger` : ""}`;
+}
+
+/** An attempt the driver scored keeps its verdict, rows and series row; one it did not is marked as not scored, and why. */
+function scoreOf(scored: ScoredAttempt | undefined, notScored: unknown): { scored: { answer: AttemptOutcome["answer"]; row: AttemptReportRow; startedFrom: AttemptOutcome["startedFrom"]; askedAgain: NonNullable<AttemptOutcome["askedAgain"]> | null }; notScored?: undefined } | { notScored: unknown; scored?: undefined } {
+  return scored ? { scored: { answer: scored.outcome.answer, row: scored.row, startedFrom: scored.outcome.startedFrom, askedAgain: scored.outcome.askedAgain ?? null } } : { notScored };
 }
 
 function categoryOf(error: unknown): { category?: string } {

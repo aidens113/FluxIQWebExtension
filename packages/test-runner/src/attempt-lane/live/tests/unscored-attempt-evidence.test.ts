@@ -3,7 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { AttemptReportRow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
+import type { AttemptOutcome } from "../../driver.js";
+import { AttemptProofStuck } from "../attempt/index.js";
 import type { LiveAttemptEnded } from "../live-driver.js";
 import { writeUnscoredAttemptEvidence } from "../unscored-attempt-evidence.js";
 
@@ -83,4 +86,52 @@ test("with no attempt ended there is nothing to keep and no spend to stand behin
   assert.equal(said, "no attempt had ended, so there was no attempt to keep");
   await assert.rejects(readFile(path.join(evidence, "attempt.json"), "utf8"));
   assert.deepEqual(await readRunOutcomes(runs, { sinceMs: now, knownRunIds: new Set() }), []);
+});
+
+test("a series whose second attempt never started keeps the first's verdict and the stuck reason, and the ledger has the run, a failed verdict and the spend of every call", async (t) => {
+  const { evidence, runs, steps, runId, startedAt, now } = await world(t);
+  const stuck = new AttemptProofStuck("the message started no attempt the thread can read, nothing moved for 600 s. The chat showed: \"Which of the two should I use?\"");
+  const first = ended(1, 0.5);
+  const outcome = { answer: { verdict: "right" }, startedFrom: null, record: first.outcome.attempt } as unknown as AttemptOutcome;
+  const said = await writeUnscoredAttemptEvidence({
+    evidence, attempts: 2, kept: new Map([[1, { ended: first, cache: null, modelCalls: null }]]), error: stuck, recorded: false,
+    scored: new Map([[1, { outcome, row: { attempt: 1 } as unknown as AttemptReportRow }]]), didNotEnd: { ordinal: 2, attempt: null },
+    paid: { runsDirectory: runs, runId, startedAt, plan: { maxTotalEstimatedCostUsd: 5 }, stepsDirectory: steps },
+  });
+  const record = JSON.parse(await readFile(path.join(evidence, "attempt.json"), "utf8")) as { didNotEnd: { ordinal: number; of: number; reason: { name: string; message: string } }; attempts: { ordinal: number; scored?: { answer: { verdict: string } }; notScored?: unknown }[] };
+  assert.equal(record.attempts[0]?.scored?.answer.verdict, "right");
+  assert.equal(record.attempts[0]?.notScored, undefined);
+  assert.equal(record.didNotEnd.ordinal, 2);
+  assert.equal(record.didNotEnd.reason.name, "AttemptProofStuck");
+  assert.match(record.didNotEnd.reason.message, /Which of the two should I use/u);
+  const report = await readFile(path.join(evidence, "attempt-report.txt"), "utf8");
+  assert.match(report, /^Attempt 1 ended waiting_for_person for stuck_in_a_loop and was scored right\.$/mu);
+  assert.match(report, /^Attempt 2 of 2 did not start: The proof stopped waiting: .*Which of the two/mu);
+  const [ledger] = await readRunOutcomes(runs, { sinceMs: now, knownRunIds: new Set() });
+  assert.equal(ledger?.runId, runId);
+  assert.equal(ledger?.verdict, "failed");
+  assert.equal(ledger?.totalEstimatedCostUsd, 0.5);
+  assert.match(said, /attempt 2 did not start, with \$0\.5000 spent/u);
+});
+
+test("an attempt that stood unended when the follow gave up adds its spend so far to the ledger", async (t) => {
+  const { evidence, runs, steps, runId, startedAt, now } = await world(t);
+  const standing = { ...ended(2, 0.25).outcome.attempt, status: "working" as const };
+  const first = ended(1, 0.5);
+  await writeUnscoredAttemptEvidence({
+    evidence, attempts: 2, kept: new Map([[1, { ended: first, cache: null, modelCalls: null }]]), error: new AttemptProofStuck("x"), recorded: false,
+    didNotEnd: { ordinal: 2, attempt: standing }, paid: { runsDirectory: runs, runId, startedAt, plan: { maxTotalEstimatedCostUsd: 5 }, stepsDirectory: steps },
+  });
+  assert.match(await readFile(path.join(evidence, "attempt-report.txt"), "utf8"), /Attempt 2 of 2 did not end \(it stood at working/u);
+  const [ledger] = await readRunOutcomes(runs, { sinceMs: now, knownRunIds: new Set() });
+  assert.equal(ledger?.totalEstimatedCostUsd, 0.75);
+});
+
+test("a stuck first attempt with nothing ended still writes its record and the ledger's run", async (t) => {
+  const { evidence, runs, steps, runId, startedAt, now } = await world(t);
+  await writeUnscoredAttemptEvidence({ evidence, attempts: 1, kept: new Map(), error: new AttemptProofStuck("nothing moved"), recorded: false, didNotEnd: { ordinal: 1 }, paid: { runsDirectory: runs, runId, startedAt, plan: { maxTotalEstimatedCostUsd: 5 }, stepsDirectory: steps } });
+  assert.match(await readFile(path.join(evidence, "attempt-report.txt"), "utf8"), /^Attempt 1 of 1 did not start: /u);
+  const [ledger] = await readRunOutcomes(runs, { sinceMs: now, knownRunIds: new Set() });
+  assert.equal(ledger?.runId, runId);
+  assert.equal(ledger?.verdict, "failed");
 });
