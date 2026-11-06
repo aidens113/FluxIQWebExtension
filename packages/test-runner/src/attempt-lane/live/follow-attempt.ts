@@ -1,7 +1,13 @@
 import { AttemptProofStuck, AttemptScriptRefused, readThreadAttempts, type AttemptOutcomeRead, type AttemptOutcomeRecord, type AttemptReadControl } from "./attempt/index.js";
 
-/** The statuses an attempt can stop on. `waiting_for_person` is not an ending to Core; here it is where a proof with no person stops and says so. */
-const STOPS: ReadonlySet<AttemptOutcomeRecord["status"]> = new Set(["achieved", "finished_unchecked", "budget_out", "stopped_by_person", "waiting_for_person"]);
+/** The statuses an attempt always stops on. */
+const ENDINGS: ReadonlySet<AttemptOutcomeRecord["status"]> = new Set(["achieved", "finished_unchecked", "budget_out", "stopped_by_person"]);
+
+/**
+ * `waiting_for_person` is not an ending to Core: its wait has no deadline and a person's Continue ends it. It is
+ * where a proof with no person playing stops and says so, and a wait to follow through where the Lab plays one.
+ */
+const stopsOn = (status: AttemptOutcomeRecord["status"], personPlaying: boolean): boolean => ENDINGS.has(status) || (status === "waiting_for_person" && !personPlaying);
 
 /** Nothing moved for this long: no new read of the attempt differs, no new call. It stops the proof and says where it stood; it never calls an attempt a failure. */
 const DEFAULT_STALL_MS = 10 * 60_000;
@@ -19,6 +25,8 @@ export type FollowAttemptInput = {
    * its first round has ended, so the record alone says nothing of a long first round.
    */
   progress?: () => Promise<{ marker: string; refused?: string }>;
+  /** The Lab is playing the scenario's declared person, so an attempt waiting for a person is waiting for it and is followed on. */
+  personPlaying?: boolean;
   /** What a stuck proof says it last saw of the chat. */
   describeChat?: () => Promise<string>;
   onChange?: (line: string) => void;
@@ -58,7 +66,7 @@ export async function followAttempt(input: FollowAttemptInput): Promise<AttemptO
     } catch (error) {
       readFailure = error instanceof Error ? error.message : String(error);
     }
-    if (current && STOPS.has(current.attempt.status)) return current;
+    if (current && stopsOn(current.attempt.status, input.personPlaying === true)) return current;
     const seen = `${current ? spoken(current.attempt) : "no attempt yet"} | ${progress?.marker ?? ""}`;
     if (seen !== last) {
       last = seen;

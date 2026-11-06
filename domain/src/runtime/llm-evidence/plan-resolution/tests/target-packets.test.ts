@@ -460,3 +460,51 @@ test("a look the capture cut short does not stand in for the page's document: th
   targets.remember(REVIEWS_SCOPE, capture([MORE(2)], 2_000));
   assert.deepEqual(targets.resolve(REVIEWS_SCOPE, gone, first.evidence.location), { ok: false, code: "unknown", renumberedByReload: true });
 });
+
+// A press made after a robot check's reload, by a handle the page showed before it (t877, lane C w3,
+// `run-mw46zf0k-e5977ea3`). Crossborder's "Price ↑" is drawn alike on every filter state of its results page, and
+// the reload gave it a new handle; the model pressed the old one, which `resolveOn` accepts as the same document in
+// another state, and the press landed. Flow assembly reads the saved step against every view of the control, so
+// it needs the view the act was made from (`acted`), and the old handle is not on that view. The witness is then
+// the one control there at the address the act resolved the handle to: never one of several, and never for a
+// handle another document showed, since a wrong witness would aim a saved lasting act at the wrong control.
+
+const SEARCH = "https://crossborder.test/search?q=hub";
+const SORT_CONTROL: JsonObject = { tagName: "div", selector: "aside > div.sort > div", visibleText: "Price ↑", hasClickHandler: true, attributes: { role: "button" } };
+const MAX_FIELD: JsonObject = { tagName: "input", selector: "#max", attributes: { placeholder: "Max" } };
+
+/** Show the control on the page before the check, act on it by that page's handle from `actedOn`, then show the sorted page; answer the saved step as assembly resolves it. */
+async function actedAcrossReload(shownOn: string, actedOn: JsonObject[]) {
+  const { targets, capture, handleOf, stores } = flow();
+  const before = capture(shownOn, [MAX_FIELD, SORT_CONTROL]);
+  targets.remember(SCOPE, before);
+  const stale = handleOf(before, String(SORT_CONTROL.selector));
+  const reloaded = capture(`${SEARCH}&max=10`, actedOn);
+  targets.rememberLook(SCOPE, reloaded);
+  assert.equal(reloaded.selectors.has(stale), false, "the reloaded page numbers its controls anew");
+  const sorted = capture(`${SEARCH}&max=10&sort=price`, [MAX_FIELD, SORT_CONTROL]);
+  targets.acted(SCOPE, stale, reloaded, sorted);
+  targets.remember(SCOPE, sorted);
+  // What the step saved: the control the handle named, as the page that showed it described it.
+  const ranWith = await resolveWebPlanNodeParameters(press(stale), stores);
+  assert.equal(ranWith.status, "resolved", JSON.stringify(ranWith));
+  if (ranWith.status !== "resolved") throw new Error("unresolved");
+  return await resolveWebPlanNodeParameters({
+    ...SCOPE, nodeDefinitionId: CLICK, parameters: ranWith.parameters, declaredConsequences: [], permission: async () => ({ permitted: true as const }), handleReach: "view_history"
+  }, stores);
+}
+
+test("a handle from before a check's reload is witnessed by the one control the act resolved it to, so its saved press resolves at assembly", async () => {
+  const answer = await actedAcrossReload(`${SEARCH}&free=y`, [MAX_FIELD, SORT_CONTROL]);
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+  if (answer.status === "resolved") assert.equal(answer.parameters.selector, SORT_CONTROL.selector);
+});
+
+test("a stale handle whose address the acted-on page gives to several controls, or that another document showed, records no witness", async () => {
+  // Two controls at the address: the act cannot say which it was, and the step stays refused.
+  const several = await actedAcrossReload(`${SEARCH}&free=y`, [MAX_FIELD, SORT_CONTROL, { ...SORT_CONTROL, visibleText: "Price ↓" }]);
+  assert.equal(several.status, "refused", JSON.stringify(several));
+  // Shown on another document: `resolveOn` calls it stale, so its control on this page is no witness for it.
+  const elsewhere = await actedAcrossReload("https://crossborder.test/item/42", [MAX_FIELD, SORT_CONTROL]);
+  assert.deepEqual(elsewhere, { status: "refused", issueCodes: ["web.handle.ambiguous", "web.handle.ambiguous:parameters"] });
+});

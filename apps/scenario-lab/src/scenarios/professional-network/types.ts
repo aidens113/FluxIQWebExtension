@@ -81,6 +81,9 @@ export type RunInvitation = { memberUrn: string; note: string; flagged: boolean 
  */
 export type InvitationStore = { received: string[]; sent: string[] };
 
+/** One conversation as the messaging list shows it: who, the latest message, and the day it was sent. */
+export type ThreadRow = { name: string; line: string; date: string; at: number; newConnection: boolean };
+
 export type ConsentChoice = "unset" | "accepted" | "rejected";
 
 /**

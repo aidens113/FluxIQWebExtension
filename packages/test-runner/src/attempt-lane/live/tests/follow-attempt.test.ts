@@ -26,7 +26,7 @@ function scripted(reads: readonly (readonly AttemptOutcomeRead[] | Error)[]) {
 
 const scope = { projectId: "p", conversationId: "c", known: new Set<string>() };
 
-for (const status of ["achieved", "budget_out", "stopped_by_person", "waiting_for_person"] as const) {
+for (const status of ["achieved", "budget_out", "stopped_by_person"] as const) {
   test(`it stops on ${status}`, async () => {
     const world = scripted([[], [outcome("working")], [outcome(status)]]);
     const ended = await followAttempt({ ...scope, ...world });
@@ -75,4 +75,22 @@ test("an attempt the thread held before this message is not this one", async () 
   const world = scripted([[outcome("achieved")], [outcome("achieved"), outcome("achieved", { attemptId: "attempt.two", ordinal: 2 })]]);
   const ended = await followAttempt({ ...scope, known: new Set(["attempt.one"]), ...world });
   assert.equal(ended.attempt.attemptId, "attempt.two");
+});
+
+test("with no person playing it stops on a wait for a person, saying so", async () => {
+  const world = scripted([[], [outcome("working")], [outcome("waiting_for_person", { waitingFor: "a person" })]]);
+  const ended = await followAttempt({ ...scope, ...world });
+  assert.equal(ended.attempt.status, "waiting_for_person");
+});
+
+test("with a person playing it follows a wait for a person on to the attempt's own ending", async () => {
+  const world = scripted([[outcome("working")], [outcome("waiting_for_person")], [outcome("waiting_for_person")], [outcome("waiting_for_person")], [outcome("achieved")]]);
+  const ended = await followAttempt({ ...scope, ...world, personPlaying: true });
+  assert.equal(ended.attempt.status, "achieved");
+  assert.ok(world.reads() >= 5, "it read past every wait");
+});
+
+test("a person that never answers still ends the watch by the stall, never by calling the wait an ending", async () => {
+  const world = scripted([[outcome("waiting_for_person")]]);
+  await assert.rejects(() => followAttempt({ ...scope, ...world, personPlaying: true, stallMs: 3_000, pollMs: 1_000 }), AttemptProofStuck);
 });

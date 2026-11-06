@@ -18,6 +18,7 @@
 // drawn (`./unchanged-page.ts`), which `pageChanged` reads too.
 
 export { webNodeActedOn, webNodeActedOnItem } from "./acted-on";
+export { webNodeActedOnCard } from "./acted-on-card";
 export { webAnsweredLayer } from "./answered-layer";
 export { webPressClearedLayer, type WebPressClearedLayer } from "./cleared-layer";
 export { webPressChoice } from "./choice";

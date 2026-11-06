@@ -95,3 +95,34 @@ test("a form the script does not have is refused, and the default is the plain o
   assert.throws(() => scriptedModelScriptFor(TASK, "other"), /no form "other"/u);
   assert.equal(scriptedModelScriptFor(TASK).taskId, TASK);
 });
+
+const AFTER = ['PAGE "Received invitations | Guildline"', "URL ~/invitation-manager/", 't30 link "Messaging" ~/messaging/', 't31 "Pavel Novák"'].join("\n");
+const MESSAGING = ['PAGE "Messaging | Guildline"', "URL ~/messaging/", 't40 "Ximena Ruiz"', 't41 "New connection"'].join("\n");
+const OPENED = made("back-open-messaging-1");
+const CONVERSATIONS = made("back-detect", "web.detect_repeating_structure", {
+  extraction: "extraction.2",
+  fields: [{ key: "row_div", sample: "Ximena Ruiz · Sep 21 · New connection · A note longer than every other field of the row" }, { key: "strong", sample: "Ximena Ruiz" }, { key: "date_span", sample: "Sep 21" }, { key: "tag_span", sample: "New connection" }, { key: "line_div", sample: "A note longer than every other field of the row" }],
+});
+
+test("the notes-back form, finding the invitations answered, opens Messaging and presses no Accept", () => {
+  const open = decide("notes-back", [], AFTER);
+  assert.equal(open.callId?.startsWith("back-open-messaging"), true);
+  assert.equal(open.input?.node, "web.output.dom-click");
+  assert.equal(open.input?.parameters?.target.handle, "t30");
+  assert.equal(decide("notes-back", [OPENED], MESSAGING).callId, "back-detect");
+});
+
+test("the notes-back form reads the tagged conversations' name and own message line, off the fields, and then finishes", () => {
+  const read = decide("notes-back", [OPENED, CONVERSATIONS], MESSAGING);
+  assert.equal(read.callId, "back-read");
+  assert.deepEqual(read.input?.parameters?.extractList.fields, { name: "strong", message: "line_div" });
+  assert.deepEqual(read.input?.parameters?.extractList.where, [{ field: "tag_span", contains: "New connection" }]);
+  assert.equal(decide("notes-back", [OPENED, CONVERSATIONS, made("back-read")], MESSAGING).kind, "complete");
+});
+
+test("the notes-back form's first attempt is still the plain accept path, and its judge reads the rows it was shown", () => {
+  assert.equal(decide("notes-back", [], PAGE).callId, "detect");
+  const judge = (count: number) => (scriptedModelScriptFor(TASK, "notes-back").replies.loop_verification![0]!({ kind: "loop_verification", ordinal: 1, model: "m", jsonText: true, message: "", payload: { context: { resultSummary: { totalRecordCount: count } } } }) as { diagnosis: { answersRequest: string } }).diagnosis.answersRequest;
+  assert.equal(judge(0), "no");
+  assert.equal(judge(3), "yes");
+});

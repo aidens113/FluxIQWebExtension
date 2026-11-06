@@ -32,6 +32,12 @@ async function siteOrWhyUnread<Site>(read: () => Promise<Site>): Promise<Site | 
   }
 }
 
+/** One attempt's Lab person, running until `finish` (`./attempt-person.ts`). */
+export type LiveAttemptPersonRun = { finish(): Promise<void> };
+
+/** The Lab's way of playing the scenario's declared person: `playable` says there is one to wait for, and `start` begins it for one attempt. */
+export type LiveAttemptPerson = { playable: boolean; start(ordinal: number): Promise<LiveAttemptPersonRun> };
+
 export type LiveAttemptDriverInput = {
   control: AttemptReadControl & RunDatasetControl;
   session: ChatBrowserSession;
@@ -45,6 +51,8 @@ export type LiveAttemptDriverInput = {
   /** What has moved, for the watch (`./follow-attempt.ts`). */
   progress?: () => Promise<{ marker: string; refused?: string }>;
   standIns: readonly AttemptStandIn[];
+  /** The person the Lab plays at a person-only check; absent, an attempt waiting for a person is where the proof stops. */
+  person?: LiveAttemptPerson;
   stallMs?: number;
   log?: (line: string) => void;
   /** Called once the attempt has stopped and the turn is read, with the page still as it left it. */
@@ -120,22 +128,30 @@ export function liveAttemptDriver(input: LiveAttemptDriverInput): AttemptDriver 
       const earlierLeft = first === undefined ? undefined : siteChange(first, baseline.view);
       first ??= baseline.view;
       const askedAgain = ordinal > 1 && input.later === "run_again" && previous !== undefined;
+      // Started before the message and finished after the attempt stops: it may be asked the moment the attempt starts.
+      const person = await input.person?.start(ordinal);
       let conversationId: string;
-      if (askedAgain) {
-        log(`[attempt] pressing Run again on the answer of ${previous!.attemptId}`);
-        await pressPanelRunAgain(input.session, previous!.attemptId);
-        conversationId = previous!.conversationId;
-      } else {
-        log(`[attempt] typing the instruction into the chat: ${request.task.id}`);
-        ({ conversationId } = await input.send(request.task.instruction));
+      let followed: AttemptOutcomeRead;
+      try {
+        if (askedAgain) {
+          log(`[attempt] pressing Run again on the answer of ${previous!.attemptId}`);
+          await pressPanelRunAgain(input.session, previous!.attemptId);
+          conversationId = previous!.conversationId;
+        } else {
+          log(`[attempt] typing the instruction into the chat: ${request.task.id}`);
+          ({ conversationId } = await input.send(request.task.instruction));
+        }
+        followed = await followAttempt({
+          control: input.control, projectId: input.projectId, conversationId, known,
+          ...(input.progress ? { progress: input.progress } : {}),
+          ...(input.person?.playable ? { personPlaying: true } : {}),
+          describeChat: () => input.session.panel?.text() ?? Promise.resolve(""),
+          onChange: (line) => log(`[attempt] ${line}`),
+          ...(input.stallMs === undefined ? {} : { stallMs: input.stallMs }),
+        });
+      } finally {
+        await person?.finish();
       }
-      const followed = await followAttempt({
-        control: input.control, projectId: input.projectId, conversationId, known,
-        ...(input.progress ? { progress: input.progress } : {}),
-        describeChat: () => input.session.panel?.text() ?? Promise.resolve(""),
-        onChange: (line) => log(`[attempt] ${line}`),
-        ...(input.stallMs === undefined ? {} : { stallMs: input.stallMs }),
-      });
       const outcome = await readTaskAttempt(input.control, input.projectId, followed.attempt.attemptId);
       const { attempt } = outcome;
       known.add(attempt.attemptId);
