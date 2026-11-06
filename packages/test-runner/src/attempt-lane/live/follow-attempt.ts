@@ -76,7 +76,7 @@ export async function followAttempt(input: FollowAttemptInput): Promise<AttemptO
     if (now() - movedAt >= stallMs) {
       const chat = await input.describeChat?.().catch((error: unknown) => `(the chat could not be read: ${error instanceof Error ? error.message : String(error)})`);
       const stood = current ? `the attempt stood at ${spoken(current.attempt)}` : "the message started no attempt the thread can read";
-      throw new AttemptProofStuck(`${stood}, nothing moved for ${Math.round(stallMs / 1000)} s${readFailure ? `, and the last read failed: ${readFailure}` : ""}${chat ? `. The chat showed: ${JSON.stringify(chat.slice(-800))}` : ""}`);
+      throw new AttemptProofStuck(`${stood}, nothing moved for ${Math.round(stallMs / 1000)} s${readFailure ? `, and the last read failed: ${readFailure}` : ""}${chat ? `. The chat showed: ${JSON.stringify(chat.slice(-800))}` : ""}`, current?.attempt ?? null);
     }
     await sleep(input.pollMs ?? POLL_MS);
   }

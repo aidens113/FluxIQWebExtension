@@ -11,7 +11,7 @@ import { beginLiveLlmRun, ensureLiveLlmSecretKey, type LiveLlmRun } from "../../
 import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
 import type { PersonHandOff } from "../../person-simulation/index.js";
-import { renderAttemptSeries } from "../report.js";
+import { attemptReportRow, renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
 import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type LiveAttemptSession } from "./attempt/index.js";
@@ -22,6 +22,7 @@ import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
 import { readPanelAnswerTurn } from "./panel-answer-port.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
+import { writeUnscoredAttemptEvidence, type ScoredAttempt } from "./unscored-attempt-evidence.js";
 
 type AttemptCommand = Extract<LabCommand, { command: "attempt" }>;
 
@@ -161,15 +162,18 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   const stepsDirectory = labRun?.stepsDirectory ?? path.join(evidence, "steps");
   let session: LiveAttemptSession | undefined;
   const kept = new Map<number, AttemptKept>();
+  const scored = new Map<number, ScoredAttempt>();
   let stepsSoFar = 0;
   let callsSoFar: Readonly<Record<string, number>> = {};
   let exitCode = 1;
   let restarted: AttemptCoreRestart | undefined;
   let verdict = "failed";
+  /** The whole attempt record is written: a later throw leaves it as it is. */
+  let recorded = false;
   try {
     session = await openLiveAttemptSession({
       repositoryRoot, fluxiqRepositoryRoot, runsDirectory: paths.runsDirectory, runId, seed: scenario.seed, startPath: scenario.startPath,
-      environment: side.environment, args: side.args, stepLogDirectory: stepsDirectory,
+      environment: side.environment, args: side.args, stepLogDirectory: stepsDirectory, startupLogsDirectory: path.join(evidence, "startup-logs"),
       // A call cap sits on the purse, and reaching it reads as budget out, so a run's Core is held to one only when the run typed one.
       ...(side.live && input.argv.includes("--llm-max-calls") ? { buildCallLimit: side.live.authorizedBuildCallLimit } : {}),
       authorize: side.authorize, log,
@@ -180,7 +184,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       scenarioId: scenario.id, scenarioLabDist: paths.scenarioLabDist, workflowId: workflow.workflowId, variantId: workflow.variant?.id,
       task: request.task.personCheck, permissionPoint: request.task.permissionPoint, panel: opened.browser.panel, log,
     });
-    const driver = liveAttemptDriver({
+    const live = liveAttemptDriver({
       control: opened.control, session: opened.browser, projectId: opened.projectId, origin: opened.topology.scenarioOrigin, runToken: opened.topology.allocation.controllerToken,
       resetSite: async () => {
         await resetScenarioLab(opened.topology.scenarioOrigin, opened.topology.allocation.controllerToken);
@@ -198,19 +202,27 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       onEnded: async (attempt) => {
         const folder = command.attempts === 1 ? evidence : path.join(evidence, `attempt-${attempt.ordinal}`);
         await mkdir(folder, { recursive: true });
-        await writeFile(path.join(folder, "site.json"), JSON.stringify(attempt.site, null, 2));
-        // What the Lab's person did at each check this attempt handed it, or nothing where the scenario declares none.
-        await writeFile(path.join(folder, "person-hand-offs.json"), JSON.stringify(person.snapshotOf(attempt.ordinal) ?? null, null, 2));
-        await pictureOfAnswer(opened, attempt, folder, log);
+        // Kept first: a picture that fails must not lose what the attempt was and what it spent.
         const cache = await attemptCacheShare(stepsDirectory, stepsSoFar);
         stepsSoFar = await countSteps(stepsDirectory);
         const calls = side.server?.counts() ?? null;
         kept.set(attempt.ordinal, { ended: attempt, cache, modelCalls: calls && subtracted(calls, callsSoFar), handOffs: person.snapshotOf(attempt.ordinal)?.handOffs ?? [] });
         callsSoFar = calls ?? {};
+        await writeFile(path.join(folder, "site.json"), JSON.stringify(attempt.site, null, 2));
+        // What the Lab's person did at each check this attempt handed it, or nothing where the scenario declares none.
+        await writeFile(path.join(folder, "person-hand-offs.json"), JSON.stringify(person.snapshotOf(attempt.ordinal) ?? null, null, 2));
+        await pictureOfAnswer(opened, attempt, folder, log);
       },
     });
+    // Each attempt's score is kept as it ends, so a series that ends early still keeps what its earlier attempts were judged to be.
+    const task = { scenario, request, workflow };
+    const driver = { ...live, run: async (...args: Parameters<typeof live.run>) => {
+      const outcome = await live.run(...args);
+      scored.set(args[1], { outcome, row: attemptReportRow(task, outcome) });
+      return outcome;
+    } };
     const series = await runAttemptSeries({
-      task: { scenario, request, workflow }, driver, attempts: command.attempts, between: "as_left",
+      task, driver, attempts: command.attempts, between: "as_left",
       mayGoOn: async (outcome) => attemptCanGoOn(outcome, (await attemptBalanceFailures(stepsDirectory)).length > 0),
       ...(command.restartBetween ? { beforeLater: async () => { restarted = await restartAttemptCore({ topology: opened.topology, control: opened.control, browser: opened.browser, projectId: opened.projectId, log }); } } : {}),
     });
@@ -230,6 +242,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const notProven = continuation && !continuation.held ? [`That the second attempt started from the first's saved work is refused: ${continuation.refused.join(", ")}.`] : [];
     const report = renderAttemptSeries({ ...series.series, rows });
     await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuation, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
+    recorded = true;
     await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && (continuation === null || continuation.held);
@@ -240,7 +253,19 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const last = told.at(-1)!;
     process.stdout.write(`${JSON.stringify({ status: verdict, task: last.row.taskId, answerVerdict: last.row.answerVerdict, ended: last.attempt.status, live: last.row.live, standIns: last.row.standIns, ...(command.attempts === 1 ? {} : { attempts: told.map(({ row, attempt }) => ({ attempt: row.attempt, answerVerdict: row.answerVerdict, ended: attempt.status, path: row.path, calls: row.calls })), secondStartedFromFirst: series.series.secondStartedFromFirst, reseededBetween: false, restartedBetween: command.restartBetween === true }), evidence })}\n`);
   } catch (error) {
-    if (!(error instanceof AttemptProofStuck) && !(error instanceof AttemptScriptRefused)) throw error;
+    // An attempt that ended was paid for: what it was, what it cost and the ledger's line are kept whatever ended the series, a stuck follow, a refused request or a throw.
+    // A stuck or refused follow also says which attempt did not start or end; any other throw happened after its attempt ended.
+    verdict = "failed";
+    const stopped = error instanceof AttemptProofStuck || error instanceof AttemptScriptRefused;
+    const paid = side.live ? { runsDirectory: paths.runsDirectory, runId, startedAt, plan: side.live.describe().authorized, stepsDirectory } : undefined;
+    const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}) } : undefined;
+    const said = await writeUnscoredAttemptEvidence({ evidence, attempts: command.attempts, kept, error, recorded, scored, ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) })
+      .catch((failed: unknown) => `its evidence could not be written: ${failed instanceof Error ? failed.message : String(failed)}`);
+    if (!stopped) {
+      process.stdout.write(`[attempt] ${command.taskId}: the run failed, and ${said}; evidence ${evidence}\n`);
+      throw error;
+    }
+    process.stdout.write(`[attempt] ${command.taskId}: ${said}\n`);
     const words = error instanceof AttemptProofStuck ? `the proof stopped waiting, and the attempt was not judged: ${error.stood}` : `the script refused a request, so the attempt was not judged: ${error.message}`;
     process.stdout.write(`[attempt] ${command.taskId}: ${words}\n`);
     process.stdout.write(`${JSON.stringify({ status: "not_judged", task: command.taskId, why: error.name, evidence })}\n`);

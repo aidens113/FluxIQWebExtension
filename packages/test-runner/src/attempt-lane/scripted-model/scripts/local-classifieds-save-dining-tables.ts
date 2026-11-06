@@ -4,7 +4,8 @@
 // opening and the save over the read, the address bound to each row's own, and runs forward on the
 // rest. A row pressed twice would end up unsaved, so a repeat shows in the site's own state.
 //
-// `plain`: the Flow's read is the read the model explored with.
+// `plain`: the Flow's read is the read the model explored with. Its saved items are read back by their address, as steps of the
+// Flow, so a second attempt's run of the saved Flow can end the attempt (t869).
 // `reshape`: the Flow's own read is written after the hand save, under other column names and
 // without the price, so the row a pass carries really differs from the row the save was noted on.
 // `row-link`: the design a person writes first. The first table is opened by pressing its card's own
@@ -35,12 +36,14 @@
 // shown, because the point of this form is what the Lab's own oracle says. Since t869 the same words carry what landed: the saved
 // Flow's Saves read already done, and a press by hand is refused as already done, so nothing is unsaved and the run exits 0. Before,
 // an achieved attempt carried nothing and this form unsaved all three.
-// `run-again`: `again-check`'s Flow, with its second attempt started by a press of Run again on the first's answer, which the
-// Lab makes (`../../live/press-run-again.ts`). Run again starts with an empty act record and keeps each step's checked state, so
-// the Save finds each table saved and presses nothing: a person who asked for the tables saved gets them saved again, never
-// unsaved. The Lab judges the change with `judgeAskedAgain`, where a toggle pressed off is wrong. It takes `again-check`'s Flow
-// because a plain-press Flow's later runs stop at its row-bound open step before any Save, so the state Core stamps on a plain
-// Save is not reached in a browser yet (`docs/working/answer-first-plan/reports/attempt-road/restart-and-run-again.md`).
+// `run-again`: plain's Flow (a plain press of Save, each table opened by its own address), with its second attempt started by a
+// press of Run again on the first's answer, which the Lab makes (`../../live/press-run-again.ts`), and its saved items read as
+// steps of the Flow. Run again starts with an empty act record and keeps each step's checked state, which Core stamps on the plain
+// Save from the flip it saw, so the Save finds each table saved and presses nothing: a person who asked for the tables saved gets
+// them saved again, never unsaved. The Lab judges the change with `judgeAskedAgain`, where a toggle pressed off is wrong. Until
+// t869 a plain-press Flow's later runs stopped at its row-bound open step, because the read kept only the columns the request
+// named and not the address (`docs/working/answer-first-plan/reports/attempt-road/row-url-repeat.md`), so this form used
+// `again-check`'s Flow for a while.
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -150,7 +153,8 @@ const decideOf = (form: SaveDiningTablesForm): ScriptedReply => (request) => {
   const arriving = clearTheWay(request, page);
   if (arriving) return arriving;
   const made = callsMade(request);
-  if (made.has("forward")) return readBack(request, page, made, form === "again-press");
+  // Forms whose Flow is run again read the saved items back by address, as steps of the Flow (`readBack`).
+  if (made.has("forward")) return readBack(request, page, made, form === "plain" || form === "again-press" || form === "run-again");
   if (/^URL ~\/item\//mu.test(page)) return saveAndReturn(request, page, made, form);
   const reaching = reachTheList(request, page, made);
   if (reaching) return reaching;
@@ -209,12 +213,12 @@ function openSaveBackSteps(request: ScriptedModelRequest): { read: number; open:
   return { read: read.step, open: open.step, check: check.step, back: back.step, strays: steps.filter((step) => step !== open && strayPress(step)).map((step) => step.step) };
 }
 
-const decideOpenSaveBackOf = (form: "open-save-back" | "again-check" | "run-again"): ScriptedReply => (request) => {
+const decideOpenSaveBackOf = (form: "open-save-back" | "again-check"): ScriptedReply => (request) => {
   const page = currentPageOf(request);
   const arriving = clearTheWay(request, page);
   if (arriving) return arriving;
   const made = callsMade(request);
-  const settles = form === "again-check" || form === "run-again";
+  const settles = form === "again-check";
   if (made.has("forward")) return readBack(request, page, made, settles);
   const base = /\(~ = ([^)]+)\)/u.exec(page)?.[1];
   if (repeating(request)) {
@@ -317,7 +321,7 @@ function repeatSave(request: ScriptedModelRequest, form: SaveDiningTablesForm): 
   }
   const span = saveSpan(request, form);
   const repeat = { step: span.open, change: "repeat", through: span.save, over: span.read };
-  const readFirst = form === "plain" || form === "again-press";
+  const readFirst = form === "plain" || form === "again-press" || form === "run-again";
   const bind = { step: span.open, change: "bind", input: { url: { $row: readFirst ? "url" : "link" } } };
   const amendments = readFirst ? [repeat, bind] : [{ step: span.read, change: "reorder", to: span.open }, repeat, bind];
   return { kind: "evidence_tool_decision", summary: "Save each table the read keeps: open its page by its own address, press Save.", decision: { kind: "amend_draft", amendments } };
@@ -428,7 +432,7 @@ export function localClassifiedsSaveDiningTablesScript(form: string = "plain"): 
   if (form !== "plain" && form !== "reshape" && form !== "row-link" && form !== "open-save-back" && form !== "by-hand" && form !== "by-hand-unread" && form !== "again-check" && form !== "again-press" && form !== "run-again") throw new Error(`This script has no form "${form}". It has plain, reshape, row-link, open-save-back, by-hand, by-hand-unread, again-check, again-press and run-again`);
   const decide = form === "again-check" ? noRoundAfterAWholeRun(decideOpenSaveBackOf(form))
     : form === "again-press" ? pressedAgainInRounds(decideOf(form))
-    : form === "run-again" ? noRoundAfterAWholeRun(decideOpenSaveBackOf(form))
+    : form === "run-again" ? noRoundAfterAWholeRun(decideOf(form))
     : form === "open-save-back" ? decideOpenSaveBackOf(form)
     : form === "by-hand" || form === "by-hand-unread" ? decideByHand(form)
     : decideOf(form);
