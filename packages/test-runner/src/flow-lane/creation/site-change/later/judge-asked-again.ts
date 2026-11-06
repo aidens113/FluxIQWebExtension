@@ -1,6 +1,6 @@
 import type { AskedChange } from "../asked/index.js";
 import type { SiteChange } from "../change.js";
-import { judgeSiteChange, type SiteChangeJudgement } from "../judge-change.js";
+import { judgeSiteChange, type RepeatedAct, type SiteChangeJudgement } from "../judge-change.js";
 import { stillAsked } from "./still-asked.js";
 
 /** An attempt a person asked for again, judged on whether it left what they asked for, and how. */
@@ -25,6 +25,10 @@ export type AskedAgainJudgement = SiteChangeJudgement & Readonly<{
  *   presses a toggle off. This is the same-words oracle's reading of a toggle pressed again.
  * - an act an earlier attempt never reached is still asked, and is held to the plain oracle.
  *
+ * - an act that sets an end value (`sets`: "make the batteries three packs") already stands when asked again,
+ *   so a move further the asked way is a repeat (`repeatedActs`), as the same-words oracle reads it: three
+ *   packs made five is not three packs.
+ *
  * **Its limit:** the Lab's lasting view does not say which name is a count and which a state, so a count that
  * stood as asked and was not pressed again reads as found as asked here. Core's own tests hold that a count
  * presses again (`same-words.test.ts`, "a person's Run again").
@@ -39,22 +43,29 @@ export function judgeAskedAgain(asked: AskedChange, left: SiteChange, change: Si
   const foundAsAsked: string[] = [];
   const undone: string[] = [];
   const undoneNames = new Set<string>();
+  const repeatedActs: RepeatedAct[] = [...plain.repeatedActs];
+  const repeatedNames = new Set<string>();
   const notPressed = new Set(plain.missingActs);
   for (const act of asked.acts) {
     if (remaining.acts.some((still) => still.name === act.name)) continue;
     const moves = Object.entries(act.change).map(([name, wanted]) => ({ name, moved: change[name] ?? 0, wanted }));
     const back = moves.filter(({ moved, wanted }) => moved !== 0 && Math.sign(moved) !== Math.sign(wanted));
+    const further = moves.filter(({ moved, wanted }) => moved !== 0 && Math.sign(moved) === Math.sign(wanted));
     for (const { name } of back) undoneNames.add(name);
     if (back.length > 0) undone.push(act.name);
-    else if (moves.some(({ moved }) => moved !== 0)) pressedAgain.push(act.name);
+    else if (further.length > 0 && act.sets) {
+      // An end value already standing, moved further: a repeat, never a Run again's right press.
+      for (const { name } of further) repeatedNames.add(name);
+      if (!repeatedActs.some((repeat) => repeat.name === act.name)) repeatedActs.push({ name: act.name, asked: 0, landed: Math.max(...further.map(({ moved }) => Math.abs(moved))) });
+    } else if (further.length > 0) pressedAgain.push(act.name);
     else foundAsAsked.push(act.name);
   }
   const pressedNames = new Set(asked.acts.filter((act) => pressedAgain.includes(act.name)).flatMap((act) => Object.keys(act.change)));
-  const unaskedChanges = [...new Set([...plain.unaskedChanges.filter((name) => !pressedNames.has(name)), ...undoneNames])];
+  const unaskedChanges = [...new Set([...plain.unaskedChanges.filter((name) => !pressedNames.has(name) && !repeatedNames.has(name)), ...undoneNames])];
   const missingActs = [...notPressed];
   return Object.freeze({
-    held: asked.acts.length > 0 && plain.repeatedActs.length === 0 && missingActs.length === 0 && unaskedChanges.length === 0,
-    repeatedActs: plain.repeatedActs, missingActs, unaskedChanges,
+    held: asked.acts.length > 0 && repeatedActs.length === 0 && missingActs.length === 0 && unaskedChanges.length === 0,
+    repeatedActs, missingActs, unaskedChanges,
     pressedAgain, foundAsAsked, undone, notPressed: missingActs,
   });
 }

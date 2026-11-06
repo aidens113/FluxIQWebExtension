@@ -49,6 +49,8 @@ export type WebNodeOutcome = {
   actedOn?: string;
   /** That item's whole words, for the record to find its row by (`./press-effect/acted-on.ts`). */
   actedOnItem?: string;
+  /** For a press in no list, the words of the control's own card: what the person's line of the act names, and never a row tie (`./press-effect/acted-on-card.ts`). */
+  actedOnCard?: string;
   /**
    * One sentence, ahead of `changed`, when the press un-chose the very control
    * it pressed -- or chose it: `This press un-chose "Space Grey": it was chosen
