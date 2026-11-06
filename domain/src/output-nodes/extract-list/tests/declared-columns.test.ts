@@ -321,3 +321,33 @@ test("t510: the record output the dispatch runs, dispatched again, runs unchange
     assert.deepEqual(again.extractList, first.extractList);
   }
 });
+
+// t877, run `run-mw49972k-cebf67e5`: Core's build declared a schema of title
+// alone, cut short from "columns title and price exactly as the shop shows
+// them", and price was dropped from the saved read, `ok: true`. The answer keeps
+// exactly the declared columns; the narrowing now names what it dropped that
+// nothing used, for the caller to say.
+
+/** That run's saved read, in stand-in selectors: title and price, and a mark read only to filter by. */
+const listings = {
+  item: "li.listing",
+  fields: { title: { kind: "text", selector: "a.title" }, price: { kind: "text", selector: "span.amount" }, sponsored: { kind: "text", selector: ".sponsored", required: false } },
+  where: [{ field: "sponsored", is: "absent" }],
+  minItems: 0
+};
+const listingsRead = () => webAutomationExtractListRequestValue(listings)!;
+
+test("t877: a narrowing that drops a written column nothing uses names it, and not the column a condition reads", () => {
+  const narrowed = webAutomationDeclaredColumnsRead({ datasetId: "listings", writeMode: "append", schema: taskSchema("title") }, listingsRead());
+  assert.deepEqual(narrowed?.dropped, ["price"]);
+  // No widening: the read and the answer keep exactly the declared column.
+  assert.deepEqual(Object.keys(narrowed!.request.fields), ["title"]);
+  assert.deepEqual([...narrowed!.columns], ["title"]);
+});
+
+test("t877: a narrowing that drops only columns a condition, sort or dedupe uses names none", () => {
+  const narrowed = webAutomationDeclaredColumnsRead({ datasetId: "listings", writeMode: "append", schema: taskSchema("title", "price") }, listingsRead());
+  assert.deepEqual(narrowed?.dropped, []);
+  const sorted = webAutomationDeclaredColumnsRead({ datasetId: "listings", writeMode: "append", schema: taskSchema("title") }, { ...listingsRead(), sort: [{ field: "price", order: "asc" }] });
+  assert.deepEqual(sorted?.dropped, []);
+});

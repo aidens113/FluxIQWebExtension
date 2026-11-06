@@ -117,9 +117,14 @@ import { webAutomationRecordOutputIssues } from "./process-issues";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "./records-path";
 import { webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationStoredColumnName } from "./stored-columns";
 
-/** The dispatch payload's fields beside `outputId`, or the node's refusal when its record output cannot be saved. */
+/**
+ * The dispatch payload's fields beside `outputId`, or the node's refusal when its record output cannot be saved.
+ * `droppedColumns` names the read's columns the declared schema dropped that nothing uses (`./declared-columns.ts`,
+ * t877). It sits beside the payload, never in it, so the page and Core's dispatch effect never see it; the
+ * resolver says it in the step log when the Flow is saved (`runtime/llm-evidence/plan-resolution/extraction/run-record-output.ts`).
+ */
 export type WebAutomationExtractListDispatch =
-  | { ok: true; payload: JsonObject }
+  | { ok: true; payload: JsonObject; droppedColumns?: string[] }
   | { ok: false; result: AutomationNodeExecutionResult };
 
 /** Core's issue for a field asking to be encrypted, which nothing can do yet (`record_schema.encrypt_unavailable`). */
@@ -157,7 +162,8 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject, run
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
     : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns, narrowed?.shown);
   const timeout = commandTimeout(parameters.timeoutMs);
-  if (declared === undefined) return { ok: true, payload: { parameters, ...timeout } };
+  const dropped = narrowed?.dropped.length ? { droppedColumns: narrowed.dropped } : {};
+  if (declared === undefined) return { ok: true, payload: { parameters, ...timeout }, ...dropped };
   if (intermediate) {
     const original = parseAutomationStudioRecordOutput(declared);
     if (!original.ok) return { ok: false, result: recordOutputRefusal(original.issues, declared) };
@@ -174,7 +180,7 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject, run
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues, processed) };
   // The parsed output is plain JSON; its type only spells the optional keys.
   const recordOutput = parsed.output as unknown as JsonObject;
-  return { ok: true, payload: { parameters, ...timeout, recordOutput } };
+  return { ok: true, payload: { parameters, ...timeout, recordOutput }, ...dropped };
 }
 
 /** Keep the native minimum while mapping all collection processing through the normal reader. */
