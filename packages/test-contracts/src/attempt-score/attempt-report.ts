@@ -18,6 +18,19 @@ export type AttemptSimulationResult = (typeof attemptSimulationResults)[number];
 /** Loops caught by pattern, summed over the ladder. Core's patterns; a name it adds is kept. */
 export type AttemptLoopsCaught = Record<string, number>;
 
+/**
+ * An attempt that began on what an earlier one left. `reseeded` is always false here: it is
+ * said so that nothing can read the row as a fresh start. Each list is words the Lab wrote
+ * from its own table and the site's own record, never page text.
+ */
+export type AttemptAgainstEarlier = {
+  reseeded: false;
+  /** The asked acts the site already held when it began, by name. */
+  foundDone: string[];
+  /** What the site's own record says landed during it. Empty is a change of nothing. */
+  changed: string[];
+};
+
 export type AttemptReportRow = {
   schemaVersion: typeof ATTEMPT_REPORT_SCHEMA_VERSION;
   taskId: string;
@@ -41,6 +54,8 @@ export type AttemptReportRow = {
   loopsCaught: AttemptLoopsCaught;
   /** Lasting acts Core could not tie to a row, so that row may be pressed again (a measured known limit). Absent reads as zero. */
   actsWithNoRow?: number;
+  /** Said only of an attempt that began on what an earlier one left. */
+  against?: AttemptAgainstEarlier;
   /** The share of this attempt's input tokens read from the model service's cache, whole percent. Absent when no step said. */
   cacheHitPercent?: number;
   /** Empty when every input was read from Core and the real chat. */

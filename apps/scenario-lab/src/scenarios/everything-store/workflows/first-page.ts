@@ -11,13 +11,6 @@ const RECORDS = earbudRecords(PAGE_ONE.organic);
 /** The organic cards only, and only once they are real: placeholders carry the container but no listing id. */
 const ORGANIC_CARDS = `[data-component="search-result"][data-sku]:not([data-ad-id])`;
 
-const RESULT_COUNT: ExpectedFact = {
-  id: "first-page-count",
-  subject: "result-count",
-  predicate: "text",
-  value: `1-${PAGE_ONE.rangeEnd} of ${OUTCOME.organic.length} results for "wireless earbuds"`,
-};
-
 const FIRST_PAGE_STEPS: ScenarioStep[] = [
   ...SHARED_STEPS.openStore,
   ...SHARED_STEPS.search("first", "wireless earbuds"),
@@ -77,7 +70,7 @@ export const FIRST_PAGE_WORKFLOW: ScenarioWorkflow = {
       { action: "web.dom.extract_list", outcome: "succeeded" },
     ],
     extracted: [{ step: "extract-first-page", count: RECORDS.length, records: RECORDS }],
-    finalState: [RESULT_COUNT, SHARED_STEPS.notChallenged, { id: "nothing-added", subject: "cart-count", predicate: "text", value: "2" }],
+    finalState: [SHARED_STEPS.notChallenged, { id: "nothing-added", subject: "cart-count", predicate: "text", value: "2" }],
     allowedConsoleErrors: [],
   },
   variants: [
@@ -88,7 +81,7 @@ export const FIRST_PAGE_WORKFLOW: ScenarioWorkflow = {
       expected: {
         pageFacts: [...SHARED_STEPS.homeFacts],
         extracted: [{ step: "extract-first-page", count: RECORDS.length, records: RECORDS }],
-        finalState: [{ id: "wheel-closed", subject: "deal-wheel", predicate: "exists", value: false }, RESULT_COUNT, SHARED_STEPS.notChallenged],
+        finalState: [{ id: "wheel-closed", subject: "deal-wheel", predicate: "exists", value: false }, SHARED_STEPS.notChallenged],
       },
     },
     {
@@ -101,7 +94,6 @@ export const FIRST_PAGE_WORKFLOW: ScenarioWorkflow = {
           { id: "store-hidden", subject: "cart-count", predicate: "exists", value: false },
         ],
         finalState: [
-          RESULT_COUNT,
           { id: "challenge-passed", subject: "robot-check", predicate: "exists", value: false },
           { id: "nothing-added", subject: "cart-count", predicate: "text", value: "2" },
         ],

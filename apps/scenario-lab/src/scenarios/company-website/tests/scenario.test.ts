@@ -108,7 +108,7 @@ test("the seed renames every class and generated id and changes nothing a person
   const classes = new Set([...markup.matchAll(/class="([^"]+)"/gu)].flatMap((match) => (match[1] ?? "").split(" ")).filter(Boolean));
   assert.ok(classes.size > 30);
   for (const name of classes) assert.match(name, /^css-[a-z0-9]{7}$/u, `class ${name} reads as authored`);
-  assert.equal((home.match(/\sdata-testid="/gu) ?? []).length, 3, "consent, analytics submit and private account oracle carry test ids");
+  assert.equal((home.match(/\sdata-testid="/gu) ?? []).length, 6, "consent, analytics submit, the private account oracle and its three hidden record elements carry test ids");
 });
 
 test("the renderings the variants arm are the ones they describe", () => {

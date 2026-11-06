@@ -1,4 +1,4 @@
-import { checkoutSessionFacts, restoreClothsAccountFacts } from "../qualification/index.js";
+import { checkoutSessionFacts, placedOrdersFacts, restoreClothsAccountFacts } from "../qualification/index.js";
 import { escapeHtml, fixtureClient, page } from "../../../html.js";
 import { STORE_PATHS } from "../catalog/index.js";
 import { shellScript } from "../client/index.js";
@@ -56,12 +56,14 @@ ${footer(kit)}
 </div>
 <script type="application/json" data-testid="everything-saved-cloths-account">${restoreClothsAccountFacts(kit.state).replaceAll("<", "\\u003c")}</script>
 <script type="application/json" data-testid="everything-checkout-session">${checkoutSessionFacts(kit.state).replaceAll("<", "\\u003c")}</script>
+<script type="application/json" data-testid="everything-placed-orders">${placedOrdersFacts(kit.state).replaceAll("<", "\\u003c")}</script>
 ${consentBanner(kit)}
 <style>${storeStylesheet(css)}</style>`;
   const script = `${fixtureClient(kit.runToken, "everything-store")}
 // Readonly fixture account fact follows actual mutation responses; visible UI is unchanged.
 const qualificationAccountFacts = ${restoreClothsAccountFacts.toString()};
 const qualificationCheckoutFacts = ${checkoutSessionFacts.toString()};
+const qualificationOrdersFacts = ${placedOrdersFacts.toString()};
 const qualificationMutation = mutate;
 mutate = async (operation, payload = {}) => {
   const result = await qualificationMutation(operation, payload);
@@ -69,6 +71,8 @@ mutate = async (operation, payload = {}) => {
   if (fact) fact.textContent = qualificationAccountFacts(result.state);
   const checkout = document.querySelector('[data-testid="everything-checkout-session"]');
   if (checkout) checkout.textContent = qualificationCheckoutFacts(result.state);
+  const orders = document.querySelector('[data-testid="everything-placed-orders"]');
+  if (orders) orders.textContent = qualificationOrdersFacts(result.state);
   return result;
 };
 ${shellScript(kit.state, css, ids, { autoOpenChat: input.autoOpenChat === true })}

@@ -1,5 +1,8 @@
 export { apprenticesExpected, apprenticesWorkflow } from "./apprentices/index.js";
+export { companyBookingRecord } from "./booking-record.js";
 export { companyReviewAccountFacts } from "./facts.js";
+export { companyQuoteDetails } from "./quote-details.js";
+export { companyQuoteRecord } from "./quote-record.js";
 export { companyReviewExpected } from "./expected.js";
 export { firstVisitSteps } from "./first-visit.js";
 export { heatPumpQuoteExpected, heatPumpQuoteWorkflow } from "./heat-pump-quote/index.js";

@@ -5,6 +5,7 @@ import type { ExistingFluxIQControlClient } from "../../../existing-fluxiq-contr
 import { RunnerFailure } from "../../../failure.js";
 import { resolveLabPaths } from "../../../lab-instance/index.js";
 import { extensionStatus, pairExtensionWithColdEpochRecovery, runtimeMessage } from "../../../run-lifecycle/index.js";
+import { attemptStartupLogs } from "./startup-logs.js";
 
 /** A Core of this run's own, the real extension paired with it, and the real chat beside the page, visible. */
 export type LiveAttemptSession = {
@@ -29,6 +30,8 @@ export type LiveAttemptSessionInput = {
   environment: NodeJS.ProcessEnv;
   args: readonly string[];
   stepLogDirectory?: string;
+  /** Where a failed startup's process logs are kept, in the run's own folder (`./startup-logs.ts`). */
+  startupLogsDirectory?: string;
   /** The most model calls the run typed, for a run that typed one. */
   buildCallLimit?: number;
   /** Called once Core and the extension stand and before the chat opens: where a run's key goes into Secret Keys. */
@@ -48,6 +51,7 @@ export async function openLiveAttemptSession(input: LiveAttemptSessionInput): Pr
   let topology: RunningTopology | undefined;
   let proxy: CoreRecordingProxy | undefined;
   let browser: ChatBrowserSession | undefined;
+  const startupLogs = input.startupLogsDirectory === undefined ? undefined : attemptStartupLogs(input.startupLogsDirectory);
   const close = async (): Promise<void> => {
     await browser?.close().catch(/* best-effort: the result is written */ () => undefined);
     await proxy?.close().catch(/* best-effort: the result is written */ () => undefined);
@@ -66,6 +70,7 @@ export async function openLiveAttemptSession(input: LiveAttemptSessionInput): Pr
       ...(input.stepLogDirectory ? { stepLogDirectory: input.stepLogDirectory } : {}),
       ...(input.buildCallLimit === undefined ? {} : { buildCallLimit: input.buildCallLimit }),
       bootstrapIdentity: true,
+      ...(startupLogs ? { copyStartupFailureLogs: startupLogs.copy } : {}),
     });
     const { control, projectId, gatewayUrl } = topology;
     if (!control || !projectId || !gatewayUrl) throw new RunnerFailure("environment.missing", "The isolated Core started without a signed-in control, a project or a gateway");
@@ -100,6 +105,6 @@ export async function openLiveAttemptSession(input: LiveAttemptSessionInput): Pr
     };
   } catch (error) {
     await close();
-    throw error;
+    throw startupLogs ? startupLogs.named(error) : error;
   }
 }

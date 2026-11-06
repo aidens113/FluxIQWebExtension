@@ -1,4 +1,4 @@
-import { companyReviewAccountFacts } from "../qualification/index.js";
+import { companyBookingRecord, companyQuoteDetails, companyQuoteRecord, companyReviewAccountFacts } from "../qualification/index.js";
 import { buildClassNames } from "../../../build-classes.js";
 import { escapeHtml } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
@@ -68,12 +68,20 @@ ${footer(c)}
 </div>
 ${consentBanner(state, context.seed)}${winterNotice(state, c)}${interstitial(state, c)}
 <script type="application/json" data-testid="company-review-account">${companyReviewAccountFacts(state).replaceAll("<", "\\u003c")}</script>
+<script type="application/json" data-testid="company-quote-record">${companyQuoteRecord(state).replaceAll("<", "\\u003c")}</script>
+<script type="application/json" data-testid="company-quote-details">${companyQuoteDetails(state).replaceAll("<", "\\u003c")}</script>
+<script type="application/json" data-testid="company-booking-record">${companyBookingRecord(state).replaceAll("<", "\\u003c")}</script>
 <script type="module">
 const qualificationAccountFacts = ${companyReviewAccountFacts.toString()};
+const qualificationRecords = { 'company-quote-record': ${companyQuoteRecord.toString()}, 'company-quote-details': ${companyQuoteDetails.toString()}, 'company-booking-record': ${companyBookingRecord.toString()} };
 const qualificationMutate = mutate;
 mutate = async (operation, payload = {}) => {
   const result = await qualificationMutate(operation, payload);
   document.querySelector('[data-testid="company-review-account"]').textContent = qualificationAccountFacts(result.state);
+  for (const [testId, record] of Object.entries(qualificationRecords)) {
+    const element = document.querySelector('[data-testid="' + testId + '"]');
+    if (element) element.textContent = record(result.state);
+  }
   return result;
 };
 window.addEventListener('message', (event) => {

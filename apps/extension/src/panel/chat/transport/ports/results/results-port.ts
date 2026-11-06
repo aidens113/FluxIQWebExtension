@@ -12,6 +12,7 @@ import { mergedOutcomes } from "./merged-outcomes";
 import { outcomeOfRun } from "./outcome-of-run";
 import { readOneAttempt, readThreadAttempts } from "./read-core-outcomes";
 import { readExport } from "./read-export";
+import { runTaskAgain } from "./run-task-again";
 
 /**
  * The chat's answer turn. Core keeps a task's attempts, and each read asks it for them
@@ -31,6 +32,10 @@ import { readExport } from "./read-export";
  *
  * **Carrying on** (`addBudgetAndCarryOn`) is Core's too: it asks `carryOnTaskAttempt` and
  * answers at once.
+ *
+ * **Run again** on an attempt's answer is Core's `run-task-again` (`./run-task-again.ts`): a new attempt
+ * with an empty act record, which is what the press means. Only a run this panel read from a dataset,
+ * with no attempt behind it, runs its Flow again as a run, as it always has.
  */
 export function resultsPort(request: PanelStore["request"], listen: RuntimeListen, download: ChatDownload, now: () => number = Date.now): ChatResultsPort {
   const held = createThreadOutcomes();
@@ -95,7 +100,11 @@ export function resultsPort(request: PanelStore["request"], listen: RuntimeListe
     addBudgetAndCarryOn: (query) => carryOnAttempt(request, query),
     runAgain: async ({ projectId, taskId }): Promise<ChatResult<{ attemptId: string }>> => {
       await settled();
-      const flowId = held.byTask(projectId, taskId)?.attempt.flowId;
+      const run = held.byTask(projectId, taskId);
+      if (run === undefined) {
+        return runTaskAgain(request, { projectId, taskId });
+      }
+      const flowId = run.attempt.flowId;
       if (flowId === undefined) {
         return { ok: false, sentence: "I can't run this one again from here.", unsupported: true };
       }

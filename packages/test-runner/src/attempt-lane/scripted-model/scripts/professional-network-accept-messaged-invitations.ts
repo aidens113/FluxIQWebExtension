@@ -11,7 +11,7 @@ import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type 
  * and its control's name, shares no word with the row the record holds unless the whole item is compared. The
  * row pressed by hand must be left out and every other row pressed, each once.
  */
-export type AcceptMessagedForm = "plain" | "reshape" | "thin";
+export type AcceptMessagedForm = "plain" | "reshape" | "thin" | "notes-back";
 
 const ACT = ["modify_existing"];
 const READ_NODE = "web.output.dom-extract_list";
@@ -111,8 +111,45 @@ function readBack(request: ScriptedModelRequest, page: string): Record<string, u
   }));
 }
 
+/**
+ * `notes-back`, the second attempt: the first attempt's accepts are on the site, so the saved Flow finds no
+ * invitation left to answer and its read comes back empty. This attempt presses nothing. It opens Messaging,
+ * where each accepted invitation's note now stands as the first message of a conversation tagged "New
+ * connection", and reads the name and the message of those rows, which the list shows newest first.
+ */
+function readNotesBack(request: ScriptedModelRequest, page: string): Record<string, unknown> {
+  const made = callsMade(request);
+  if (pageLine(page, /Close your conversation/u)) return pressOf(request, "Close the conversation that opened over the page.", `back-close-${request.ordinal}`, /Close your conversation/u);
+  if (!/^PAGE "Messaging/mu.test(page)) return pressOf(request, "Open messaging, where the notes now are.", `back-open-messaging-${request.ordinal}`, /link .*Messaging/u);
+  const tagged = pageLine(page, /New connection/u);
+  if (!tagged) throw new Error("Messaging shows no conversation tagged New connection");
+  if (!made.has("back-detect")) return toolCall("See the shape of the conversations.", "back-detect", "web.detect_repeating_structure", { target: tagged.handle });
+  const detected = evidenceOf(request).find((entry) => entry.callId === "back-detect")!;
+  const fields = fieldsOf(detected);
+  const tag = keyOf(fields, (field) => field.sample === "New connection", "tag");
+  const nameField = fields.find((field) => field.key.endsWith("strong"));
+  if (!nameField) throw new Error("The conversations' fields hold no name");
+  // The message is the longest text of the row that is not the row as a whole: a field that holds the name too is the whole row.
+  const message = [...fields].filter((field) => !(field.sample ?? "").includes(nameField.sample ?? " ")).sort((left, right) => (right.sample ?? "").length - (left.sample ?? "").length)[0];
+  if (!message) throw new Error("The conversations' fields hold no message apart from the whole row");
+  const name = nameField.key;
+  if (!made.has("back-read")) {
+    return toolCall("Read the new connections' conversations, name and first message.", "back-read", "core.run_node", readOf(detected, { name, message: message.key }, [{ field: tag, contains: "New connection" }], {
+      recordOutput: { datasetId: "accepted", schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "name", valueType: "string" }, { id: "message", label: "message", valueType: "string" }] }, writeMode: "append" },
+    }));
+  }
+  return finish("Read the three accepted people and their notes from Messaging, pressing nothing.");
+}
+
+/** The first attempt has left the invitations answered: no invitation row of the person it began with is left to press. */
+function afterAnAnswer(request: ScriptedModelRequest, page: string): boolean {
+  const mine = [...callsMade(request)].some((callId) => callId.startsWith("back-"));
+  return mine || (/^PAGE "(Received invitations|My Network)/mu.test(page) && !pageLine(page, /"Ximena Ruiz View/u) && !evidenceOf(request).some((entry) => entry.toolId === "web.detect_repeating_structure"));
+}
+
 const decideOf = (form: AcceptMessagedForm): ScriptedReply => (request) => {
   const page = currentPageOf(request);
+  if (form === "notes-back" && afterAnAnswer(request, page)) return readNotesBack(request, page);
   const arriving = clearAndArrive(request, page);
   if (arriving) return arriving;
   const made = callsMade(request);
@@ -144,19 +181,29 @@ function repeating(request: ScriptedModelRequest): boolean {
 /** The judge: yes, on what the person asked for, which Core shows it from its own records. */
 const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The rows are the people accepted, with their messages." });
 
+/** The judge of a run that read by looking at what it holds: the rows it was given are the answer, and none is no answer. */
+const answersByRows: ScriptedReply = (request) => {
+  const summary = (request.payload?.context as { resultSummary?: { totalRecordCount?: number } } | undefined)?.resultSummary;
+  const rows = summary?.totalRecordCount;
+  if (typeof rows !== "number") throw new Error("The verification shows no count of rows");
+  return rows > 0
+    ? { kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The rows are the people accepted, with their messages." }
+    : { kind: "diagnosis", diagnosis: { answersRequest: "no", observed: "The run read no rows.", defects: [{ kind: "asked_missing", row: "the people accepted", requestWords: "a table of the people you accepted with columns name and message" }] }, summary: "The run read nothing, so the table asked for is missing." };
+};
+
 /** Enough for every step of its honest path, and few enough that a loop fails it. */
 const MOST_DECISIONS = 24;
 
 /** `professional-network-accept-messaged-invitations`, in the form asked for. A wrong form name is refused rather than run as another. */
 export function professionalNetworkAcceptMessagedScript(form: string = "plain"): ScriptedModelScript {
-  if (form !== "plain" && form !== "reshape" && form !== "thin") throw new Error(`This script has no form "${form}". It has plain, reshape and thin`);
+  if (form !== "plain" && form !== "reshape" && form !== "thin" && form !== "notes-back") throw new Error(`This script has no form "${form}". It has plain, reshape, thin and notes-back`);
   const decide = decideOf(form);
   return Object.freeze({
     taskId: "professional-network-accept-messaged-invitations",
     replies: {
-      panel_command: [startAttempt],
+      panel_command: form === "notes-back" ? [startAttempt, startAttempt] : [startAttempt],
       evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-      loop_verification: [answersRequest],
+      loop_verification: form === "notes-back" ? [answersByRows, answersByRows, answersByRows] : [answersRequest],
     },
   });
 }

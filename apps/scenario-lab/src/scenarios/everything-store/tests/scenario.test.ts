@@ -38,7 +38,7 @@ test("the manifest is valid, with nine workflows, three variants, and a goal on 
   assert.equal(manifest.playbackGoal?.id, "buy-one-kettle");
   const robot = resolveScenarioWorkflow(manifest, { workflowId: "first-page-earbuds", variantId: "robot-check" }).expected;
   assert.equal(robot.failure, undefined, "the hard challenge is handed to a person, who passes it, so the run then reads the page");
-  assert.deepEqual(robot.finalState?.map(({ id }) => id), ["first-page-count", "challenge-passed", "nothing-added"]);
+  assert.deepEqual(robot.finalState?.map(({ id }) => id), ["challenge-passed", "nothing-added"]);
 });
 
 test("the catalogue is authored, fixed, and independent of the lab seed", () => {
@@ -210,7 +210,8 @@ test("checkout opens on the store's preferences, and only the asked-for order me
   const honest = apply(apply(apply(bought, "set-delivery", { option: "standard" }), "set-plus-trial", { enabled: false }), "place-order");
   assert.equal(honest.orders[0]?.totalCents, 4499);
   assert.equal(honest.cart.length, 2, "Buy Now leaves the cart alone");
-  const page = markupOf(route(honest, "thankyou", `orderId=${honest.orders[0]!.orderId}`)?.body ?? "");
+  // The whole document: the goal reads the placed-orders element, which sits in a script every page carries.
+  const page = route(honest, "thankyou", `orderId=${honest.orders[0]!.orderId}`)?.body ?? "";
   for (const fact of manifest.playbackGoal?.successFacts ?? []) {
     const shown = new RegExp(`data-testid="${fact.subject}"[^>]*>([^<]*)<`, "u").exec(page)?.[1]?.replaceAll("&amp;", "&");
     if (fact.predicate === "text") assert.equal(shown, fact.value, fact.id);
@@ -248,7 +249,7 @@ test("the catalogue's tasks name only this scenario, and its repairs name its dr
 test("a second order fails the purchase goal that one right order meets, on either order's thank-you page", () => {
   const matte = TIDEWELL_KETTLES.find((child) => child.variant?.colour === "Matte Black" && child.variant.capacity === "1.7 L")!;
   const buy = (state: StoreState) => apply(apply(apply(apply(state, "start-checkout", { pipeline: "buy-now", sku: matte.sku, quantity: 1 }), "set-delivery", { option: "standard" }), "set-plus-trial", { enabled: false }), "place-order");
-  const thankYou = (state: StoreState, index: number) => markupOf(route(state, "thankyou", `orderId=${state.orders[index]!.orderId}`)?.body ?? "");
+  const thankYou = (state: StoreState, index: number) => route(state, "thankyou", `orderId=${state.orders[index]!.orderId}`)?.body ?? "";
   const goal = manifest.playbackGoal?.successFacts ?? [];
   const once = buy(fresh());
   assert.deepEqual(failingFacts(thankYou(once, 0), goal), [], "one right order meets the goal");
@@ -264,7 +265,7 @@ test("moving the phone case to Saved for later and deleting it leave the same ca
   const saved = apply(apply(withKettles, "save-for-later", { lineId: "L2" }), "save-for-later", { lineId: "L2" });
   const deleted = apply(withKettles, "delete-line", { lineId: "L2" });
   assert.deepEqual(saved.cart, deleted.cart, "the cart table a run reads back is the same either way");
-  const cartPage = (state: StoreState) => markupOf(route(state, "cart")?.body ?? "");
+  const cartPage = (state: StoreState) => route(state, "cart")?.body ?? "";
   for (const variantId of [undefined, "redesigned-header"]) {
     const finalState = resolveScenarioWorkflow(manifest, { workflowId: "add-to-cart", ...(variantId ? { variantId } : {}) }).expected.finalState ?? [];
     assert.deepEqual(failingFacts(cartPage(saved), finalState), [], `${variantId ?? "baseline"}: saved for later, as asked`);

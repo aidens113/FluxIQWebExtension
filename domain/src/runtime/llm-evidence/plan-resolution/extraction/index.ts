@@ -13,6 +13,8 @@ export { type WebExtractionColumnAssumption } from "./columns";
 export { keptWebExtractionConditions, type WebExtractionConditionColumns, type WebExtractionConditions } from "./conditions";
 export { resolveWebExtractionSlot, type WebExtractionSlotIssue, type WebExtractionSlotResolution } from "./slot";
 export { webPlanSlotRefusal, type WebPlanSlotRefusal } from "./slot-refusal";
+// What a saved read holds of its list, so it needs no handle in memory (t869).
+export { WEB_PLAN_EXTRACTION_BINDING_KEY, webPlanWithExtractionBinding } from "./saved-list";
 // The step's record output read as its dispatch reads it (t489).
 export { webPlanStoredColumns, webPlanUndispatchable, type WebPlanUndispatchable } from "./stored-columns";
 // The record output the step saves: the one its dispatch runs (t510).

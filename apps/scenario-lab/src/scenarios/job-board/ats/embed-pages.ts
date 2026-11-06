@@ -1,6 +1,7 @@
 import { escapeHtml, fixtureClient } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import { postingByKey, SUBMITTED_DATE_TEXT } from "../catalog/index.js";
+import { applicationReferences } from "../qualification/index.js";
 import type { JobBoardMode, JobBoardState, Posting, SubmittedApplication } from "../types.js";
 import { DIALLING_CODES, NOTICE_OPTIONS, SOURCE_OPTIONS } from "./application.js";
 import { extendedQuestions } from "./extended-questions.js";
@@ -96,6 +97,7 @@ export function renderConfirmation(state: JobBoardState, id: string): string | u
   const posting = application ? postingByKey(application.answers.jobKey) : undefined;
   if (!application || !posting) return undefined;
   const receipt = application.reference === null ? "" : `<dl class="tl-receipt"><dt>Role</dt><dd>${escapeHtml(posting.title)}</dd><dt>Company</dt><dd>${escapeHtml(posting.company)}</dd><dt>Reference</dt><dd data-testid="application-reference">${application.reference}</dd><dt>Submitted</dt><dd>${SUBMITTED_DATE_TEXT}</dd></dl><p>Keep your reference for any questions about this application.</p>`;
+  const record = `<script type="application/json" data-testid="job-application-references">${applicationReferences(state)}</script>`;
   const body = `<main class="tl"><h1>Thank you for applying, ${escapeHtml(application.answers.firstName)}!</h1><p>Your application for ${escapeHtml(posting.title)} at ${escapeHtml(posting.company)} has been received. The hiring team will review it and be in touch.</p>${receipt}</main>`;
-  return embedDocument("Application received", body, "");
+  return embedDocument("Application received", `${body}${record}`, "");
 }

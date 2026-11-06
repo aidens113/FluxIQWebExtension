@@ -18,6 +18,7 @@ test("sums what each model step recorded, and leaves out a step with none", asyn
     await step("0004-decide", "not whole yet");
     await mkdir(path.join(root, "0005-decide"));
     assert.deepEqual(await attemptCacheShare(root), { inputTokens: 10_000, readTokens: 8_300, writtenTokens: 1_200, hitPercent: 83 });
+    assert.deepEqual(await attemptCacheShare(root, 2), { inputTokens: 9_000, readTokens: 8_300, writtenTokens: 200, hitPercent: 92 });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

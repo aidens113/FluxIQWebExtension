@@ -32,6 +32,10 @@ const ELEMENT_SLOTS: readonly string[] = [...HANDLE_SLOTS, "visualTarget"];
  * had a build refused `web.handle.extraction_required` twenty-three times for
  * a fault in what Core had written down rather than in anything the model
  * wrote (`run-mudakzor-ec549d9d`).
+ *
+ * The handle alone would not outlive the process or leave the Flow, so `written`
+ * holds what it stands for beside it by the time it gets here, and a saved read
+ * needs nothing in memory (`../plan-resolution/extraction/saved-list.ts`, t869).
  */
 export function webNodeFlowParameters(written: JsonObject, ran: JsonObject): JsonObject {
   return written[EXTRACTION_SLOT] === undefined ? ran : { ...ran, [EXTRACTION_SLOT]: written[EXTRACTION_SLOT] };

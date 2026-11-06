@@ -6,7 +6,7 @@ const SCRIPTED = ["attempt", "company-website", "--task", "company-website-appre
 const PAID = ["attempt", "company-website", "--task", "company-website-apprentices", "--authoring-mode", "answer-first", "--live-llm", "--llm-max-cost-usd", "5"];
 
 test("the scripted form names one task and no model options", () => {
-  assert.deepEqual(parseLabCommand(SCRIPTED), { command: "attempt", scenarioId: "company-website", taskId: "company-website-apprentices", authoringMode: "answer-first", model: { kind: "scripted" } });
+  assert.deepEqual(parseLabCommand(SCRIPTED), { command: "attempt", scenarioId: "company-website", taskId: "company-website-apprentices", authoringMode: "answer-first", model: { kind: "scripted" }, attempts: 1 });
   assert.throws(() => parseLabCommand([...SCRIPTED, "--llm-max-cost-usd", "5"]), /--scripted-model takes no LLM options/u);
 });
 
@@ -18,6 +18,22 @@ test("the paid form defaults its profile and task, and keeps the budget it names
   assert.equal(parsed.model.llm.budget.maxEstimatedCostUsd, 5);
   assert.equal(parsed.model.llm.mode, "live");
   assert.equal(parseLabCommand([...PAID, "--dry-run"]).command, "attempt");
+});
+
+test("--attempts names the first attempt or the first and second, and one attempt stays the default", () => {
+  assert.deepEqual(parseLabCommand([...SCRIPTED, "--attempts", "2"]), { command: "attempt", scenarioId: "company-website", taskId: "company-website-apprentices", authoringMode: "answer-first", model: { kind: "scripted" }, attempts: 2 });
+  assert.equal((parseLabCommand([...SCRIPTED, "--attempts", "1"]) as { attempts: number }).attempts, 1);
+  assert.equal((parseLabCommand([...PAID, "--attempts", "2"]) as { attempts: number }).attempts, 2);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--attempts", "3"]), /--attempts takes 1 or 2/u);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--attempts"]), /--attempts|value/u);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--reseed"]), /Unknown option: --reseed/u);
+});
+
+test("--restart-between restarts Core between two attempts, and only between two", () => {
+  assert.deepEqual(parseLabCommand([...SCRIPTED, "--attempts", "2", "--restart-between"]), { command: "attempt", scenarioId: "company-website", taskId: "company-website-apprentices", authoringMode: "answer-first", model: { kind: "scripted" }, attempts: 2, restartBetween: true });
+  assert.equal((parseLabCommand([...PAID, "--restart-between", "--attempts", "2"]) as { restartBetween?: boolean }).restartBetween, true);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--restart-between"]), /needs --attempts 2/u);
+  assert.throws(() => parseLabCommand([...SCRIPTED, "--attempts", "2", "--restart-between", "--restart-between"]), /only be specified once/u);
 });
 
 test("it takes exactly one model, its task, and the mode it drives", () => {

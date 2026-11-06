@@ -745,6 +745,18 @@ or a detection with no shown page, has no `at`. No value or selector is added. A
 `extractList`, and the node is built from what the handle keeps
 (`plan-resolution/extraction/slot.ts`).
 
+**A saved read keeps what its handle stood for.** A handle is a counter in one
+process's store (16 kept), so a saved `extractList` that named only
+`extraction.N` could not assemble after a restart, and numbers restart, so the
+same name could come to mean another list. The step now keeps the binding
+beside it, under `extractionBinding`: the item, every detected column, the
+pager and the frame (`plan-resolution/extraction/saved-list.ts`). Where a step
+holds one it wins over the store on assembly, replay and forward runs; a
+number a step holds is never issued again. The key is on the denied list
+(`llm-evidence/denied-keys.ts`), so a model never sees it and one it writes is
+refused. An old draft that holds only the handle is refused after a restart and
+the model detects the list again.
+
 Definition-list columns retain an exact semantic term and whether they read
 that term or its associated value. Their keys, coverage and stored readers do
 not identify a numbered pair. The first-item capture walk follows the same
@@ -910,6 +922,33 @@ search reads as the same state as a look. `v7` (t724) names an element's
 empty field; the version moved so that projection change does not read as a
 state change. The route state names every dialog,
 every blocker and every control.
+
+**The controls line carries the headings (t869).** `state.page.controls` is a
+flat line of names, and an evidence history keeps it after the page view that
+showed the headings is gone: two listings under "Results outside your search"
+read as ordinary matches. The line (`route-state/controls-line.ts`) now writes
+the capture's own `heading` for a control (the nearest heading before it, left
+out where it only repeats the control's own words) in square brackets before
+the first control it covers, and again only where it changes:
+`... | [Results outside your search] £30 Small table | £55 White table`.
+Nothing is cut or renamed, a name seen once is written once (its heading goes
+with that sighting), and a page with no headings reads as before. The mark is
+taken off by one function, `webRouteControlName` (`route-state/control-mark.ts`),
+which the route signature, a step's effect and the page's own changes read
+through (`route-state/page-features.ts`), so a heading never changes what a page
+is compared by. The state digest and the loop guard read other fields and are
+untouched. A heading containing ` | ` has it written ` / `, and a `]` written
+`)`, so it cannot split the line or close its own mark.
+
+**A condition reads the bare names.** The marks are for the model reading its
+history. A saved Flow's Router condition (`state.page.controls contains "Sold
+out"`) must test what the page offers, so before a condition reads the observed
+state Core hands it to the host's `routeConditionState`
+(`route-state/condition-state.ts`, wired in `host-runtime.ts`), which takes
+every mark off the controls line and leaves every other key as it is. A
+heading's words therefore never satisfy a condition, and `equals`, `matches`
+and the rest read the line as they did before headings. Core's evaluator is
+unchanged: the seam is `resolveAutomationStudioRouterState`.
 
 A Flow node keeps a route signature of the page it started on and the page it
 left (t243). The host runtime's `signRouteState`

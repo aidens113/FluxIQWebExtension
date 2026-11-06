@@ -189,6 +189,26 @@ test("carrying an attempt on asks Core for exactly the attempt and the amount, a
   assert.deepEqual(sent, [{ type: AUTOMATION_PANEL_MESSAGES.carryOnTaskAttempt, projectId: "p1", attemptId: "attempt.1", addUsd: 0 }]);
 });
 
+test("run again on an attempt's answer asks Core to run the task again, with exactly the project and the task, and answers the new attempt", async () => {
+  const sent: PanelMessage[] = [];
+  const reply = (async (message: PanelMessage) => {
+    sent.push(message);
+    return message.type === AUTOMATION_PANEL_MESSAGES.runTaskAgain ? { ok: true, value: { ok: true, payload: { attemptId: "attempt.2" } } } : { ok: false, sentence: "unexpected" };
+  }) as PanelStore["request"];
+  const results = createExtensionChatTransport(reply, () => () => undefined).results!;
+  assert.deepEqual(await results.runAgain({ projectId: "p1", taskId: "task.1" }), { ok: true, value: { attemptId: "attempt.2" } });
+  assert.deepEqual(sent, [{ type: AUTOMATION_PANEL_MESSAGES.runTaskAgain, projectId: "p1", taskId: "task.1" }]);
+});
+
+test("a run again Core refuses is Core's sentence, and an answer with no attempt is a failed request", async () => {
+  const refusing = createExtensionChatTransport((async () => ({ ok: false, sentence: "This task is still going." })) as PanelStore["request"], () => () => undefined).results!;
+  assert.deepEqual(await refusing.runAgain({ projectId: "p1", taskId: "task.1" }), { ok: false, sentence: "This task is still going." });
+  for (const payload of [{}, { attemptId: "" }, { attemptId: 2 }]) {
+    const odd = createExtensionChatTransport((async () => ({ ok: true, value: { ok: true, payload } })) as PanelStore["request"], () => () => undefined).results!;
+    assert.equal((await odd.runAgain({ projectId: "p1", taskId: "task.1" })).ok, false, JSON.stringify(payload));
+  }
+});
+
 test("a carry-on Core refuses is Core's sentence, and an answer that is not the contract's is a failed request", async () => {
   const refusing = createExtensionChatTransport((async () => ({ ok: false, sentence: "That attempt is still going." })) as PanelStore["request"], () => () => undefined).results!;
   assert.deepEqual(await refusing.addBudgetAndCarryOn!({ projectId: "p1", attemptId: "attempt.1", addUsd: 0 }), { ok: false, sentence: "That attempt is still going." });

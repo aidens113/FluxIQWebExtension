@@ -15,6 +15,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { fnv1a } from "../hash";
+import { webRouteControlName } from "./control-mark";
 
 const LIST_SEPARATOR = " | ";
 const LONG_SEGMENT = 24;
@@ -29,7 +30,7 @@ type WebRoutePageFeatures = {
 export function webRoutePageFeatures(state: JsonObject): WebRoutePageFeatures {
   const page = isRecord(state.page) ? state.page : {};
   const layerNames = distinctNames([...listOf(page.dialog), ...listOf(page.blockedBy)]).sort();
-  const controlNames = distinctNames(listOf(page.controls));
+  const controlNames = distinctNames(listOf(page.controls).map(webRouteControlName));
   return {
     path: hex8(pathShape(pathOf(page))),
     layers: layerNames.length > 0 ? hex8(layerNames.join("\n")) : "",

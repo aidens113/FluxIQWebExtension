@@ -187,7 +187,7 @@ export const jobBoardManifest = createScenarioManifest({
           { action: "web.dom.extract_list", outcome: "succeeded" },
         ],
         extracted: [{ step: "extract-application", count: 1, records: [APPLICATION_RECORD] }],
-        finalState: [{ id: "application-reference", subject: "application-reference", predicate: "text", value: EXPECTED_REFERENCE }],
+        finalState: [{ id: "application-reference", subject: "job-application-references", predicate: "text", value: JSON.stringify([EXPECTED_REFERENCE]) }],
         allowedConsoleErrors: ALLOWED_CONSOLE_ERRORS,
       },
       variants: [{

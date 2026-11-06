@@ -5,6 +5,7 @@
 // (t243).
 export * from "./paths";
 export * from "./project";
+export { webAutomationRouteConditionState } from "./condition-state";
 export { WEB_ROUTE_SIGNATURE_FORMAT } from "./signature-format";
 export { webAutomationRouteSignature } from "./signature";
 export { compareWebAutomationRouteSignatures } from "./compare-signatures";

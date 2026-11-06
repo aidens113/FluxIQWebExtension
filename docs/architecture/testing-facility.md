@@ -2068,8 +2068,8 @@ real.
 ### A real attempt from the chat: `lab attempt`
 
 ```powershell
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--dry-run]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model [--attempts 2 [--restart-between]]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts 2 [--restart-between]] [--dry-run]
 ```
 
 One attempt at one realistic task, in a visible browser. `attempt-lane/live/` types the
@@ -2081,9 +2081,60 @@ baseline it recorded, the declared final state on the page the attempt left, and
 turn **read from the panel's DOM** (`li.answer-turn[data-attempt-id]`), so a right answer
 that never reached the person fails. It exits 0 only on a right answer. There is no build
 deadline: only a stretch with nothing moving stops the watch, and that reports where the
-attempt stood and judges nothing. The series runner takes this driver unchanged, but only
-attempt 1 is exercised, and a continuation cannot be proven until Core's read says what an
-attempt started from.
+attempt stood and judges nothing.
+
+**`--attempts 2`: the second attempt, on the site as the first left it.** The site is seeded
+once, before attempt 1, and never again. The second attempt is the same words typed into the
+same thread of the same workspace, which is what a person with the panel open does, and its
+turn sits under the first. Its baseline is read when it starts, and:
+
+- **What right is.** The task's end state still holds, no lasting act landed again, and the
+  rows are right and shown. So its change is judged against what is still asked
+  (`flow-lane/creation/site-change/later/`): with attempt 1's acts landed, a change of nothing.
+  A count pressed again is `repeated_act`, asked 0. A toggle pressed again is a change away from
+  the end state, named in `unaskedChanges`, and the absolute facts and the rows fail as well.
+  What attempt 1 left undone is still asked. Attempt 1's oracle is not touched: it never
+  comes here. A task that means "do it again" says so in its own words, which is another task
+  with another key and its own row in the asked table.
+- **What it reports.** One line per attempt, attempt 2's saying that it ran against what attempt 1
+  left with no reseed, what it found already done, the change it made, the path it took and
+  whether the digest proves it started from attempt 1's saved work. `attempt.json` holds both
+  attempts, `attempt-report.txt` both rows and the second beside the first, and each attempt's
+  `site.json` and picture are in `attempt-1/` and `attempt-2/`. In `site.json`, `activity` is the
+  site's record of that attempt alone, and `activityBefore` what it already held.
+- **How it is proven to have started from the first.** Core's own read: `get-task-attempt`'s
+  `attempt.startedFrom` (the digest of the saved steps it found, and what it did with them) against
+  `saved.stepsDigest` of the attempt before. A row with no such read is refused
+  (`proveContinuation`), and a refused proof exits 1 however right the answer.
+- **When it does not run.** A wrong first answer leaves the site in no known state, a person's
+  Stop or a wait with nobody coming has not left a settled task, and an empty balance stops paid
+  work. It says so and exits 1. A first attempt whose budget ran out goes on: the second is held to
+  what is still asked. `attemptCanGoOn` holds the list.
+- **`--restart-between`: attempt 2 the day after.** Once attempt 1 has ended, Core is stopped and
+  started again on the same ports and stores (`coordinator.ts`, `restartCore`), and the browser comes
+  back as a person's does (`attempt-lane/live/attempt/restart-core.ts`): nothing in it is touched while
+  Core is down, the extension reconnects by itself, and the chat that was open takes the next message.
+  Only a chat that cannot take one is opened again, as a person would, and the run says which. The
+  Lab's control client signs in again, since its session belonged to the Core that stopped.
+  `attempt.json` keeps it as `restartedBetween` (seconds to reconnect, the model key's reading, the
+  chat's state), and the report's first line says it. It needs `--attempts 2`. This is the proof that
+  a saved Flow, its saved reads and its checked states are all on disk and need nothing a process held.
+- **A person's Run again, with the script form `run-again`.** Attempt 2 is a press of Run again on
+  attempt 1's answer in the panel (`attempt-lane/live/press-run-again.ts`), not words typed. Core starts
+  it with an empty act record and keeps each step's checked state, so it is judged by `judgeAskedAgain`:
+  a count may move again the asked way (no repeat), a control already in its asked-for state stays as
+  it is, and a name moved back (a toggle pressed off) is wrong. The rows, the final state and the shown
+  answer are judged as for any attempt. Its line says which acts it did again, found as asked, undid or
+  did not do. The Lab's lasting view does not say which name is a count, so a count left as it stood
+  reads as found as asked.
+
+**What a second attempt finds, on the road as it stands.** Core runs what the task saved, trusted or
+not: `partly_works` and `unproven` does not stop it. Since t869 the same words carry what the task
+already did (`act-record/seed.ts`), so a saved Save reads already done and a press by hand is refused;
+a saved step on a control its attempt saw flip also checks its state before it presses, a Run again
+included. The Lab's oracle is what would catch a press that got through. The form `again-check` proves
+the road with a Save the model wrote as a state (`dom-check`), `again-press` the carry on a plain press,
+and `run-again` a person's Run again on a plain press that Core's own checked state keeps saved.
 
 **`--scripted-model` is provider-free, and is never a live result.** Everything is the
 product's except the model's choices:
@@ -2121,6 +2172,8 @@ and Core's `steps/` beside it), which is how to read the page words a step needs
 
 `FLUXIQ_ATTEMPT_SCRIPT_FORM` names which form of a task's script a `--scripted-model` run plays, for a task whose script has more than one
 (`scripted-model/scripts/index.ts`); a form its script does not have is refused by the script, and `lab attempt` takes no such option.
+A second attempt reaches the script only where Core's run of the saved Flow did not end it, plus the chat's request and the judge's, so a
+script's replies read the request and say so if a round comes they did not expect.
 Every attempt writes `site.json` into its evidence folder: the site's lasting view before and after the attempt, the change between them,
 and the activity the panel showed, kept so a verdict can be re-read without the site.
 

@@ -61,7 +61,7 @@ import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
 import { webNodeActVerb } from "./act-verb";
 import { webTargetSpot } from "../control-spot";
-import { resolveWebPlanNode, webPlanFirstTargetHandle, webPlanStepMustDeclare, type WebPlanNodeResolutionInput } from "../plan-resolution";
+import { resolveWebPlanNode, webPlanFirstTargetHandle, webPlanStepMustDeclare, webPlanWithExtractionBinding, type WebPlanNodeResolutionInput } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmToolRejectionCode } from "../tool-rejection";
@@ -75,7 +75,7 @@ import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
 import { webNodeShownControlWords } from "./control-words";
-import { webAnsweredLayer, webPressClearedLayer, webNodeActedOn, webNodeActedOnItem, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
+import { webAnsweredLayer, webPressClearedLayer, webNodeActedOn, webNodeActedOnCard, webNodeActedOnItem, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle, webPressToggleSignature } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow, webNodeOpeningPlaces, webNodePreparedEntry, webNodeRepairedFlow } from "./arrival";
 import { webNodeBuildOf, type WebNodeBuildKey } from "./build-state";
@@ -133,12 +133,10 @@ type WebNodeCallRecord = {
    * node's command went out, the state it left as well.
    */
   found?: WebLlmSnapshotBinding | undefined;
-  /**
-   * The node's command has gone to the page. From here a refusal cannot say
-   * the page is as it was found; only a page captured afterwards says what the
-   * call left.
-   */
+  /** The node's command has gone to the page. From here a refusal cannot say the page is as it was found; only a page captured afterwards says what the call left. */
   acted?: true;
+  /** The handle a lasting act on the page it stays on named, set as its command goes out: a robot check met after that still records the act's pre-act witness (t877). */
+  witness?: string | undefined;
   /**
    * The step as a succeeded call of this node would have stated it, written
    * just before its command goes out: what the model may be shown (`input`),
@@ -251,7 +249,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       capture?.publish(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, pageUnreadable: undefined, actedOn: undefined, actedOnItem: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, effectUncertain: undefined, skipped: undefined, pageUnreadable: undefined, actedOn: undefined, actedOnItem: undefined, actedOnCard: undefined, choice: undefined, toggle: undefined, layerCleared: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -321,6 +319,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       if (current) run.shown(current);
       return refusal(current, "target_unobserved", handleRefusal(written, resolved.issueCodes), record);
     }
+    written = webPlanWithExtractionBinding(written, { projectId: run.request.projectId, flowId: run.request.flowId }, run.stores.extractions); // A saved read holds what its handle stands for, unseen by the model (t869).
     // A node that acts on an element, whose parameters named no handle, is
     // acting on a locator the model invented: it has never been shown one.
     // Refused here, where the packet and the reason can be handed back, rather
@@ -409,8 +408,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       return refusal(current, "address_not_shown", webUnshownAddressRefusal(run.request.startLocation), record);
     }
     if (writing) return webWrittenStep({ node, value, written, ran, current, location: foundAt(current, run.request.startLocation, undefined), control: control.name, assumed });
-    // What this step is, should it meet a robot check: the statement a success
-    // would make, less what only the page it left can say.
+    // What this step is, should it meet a robot check: a success's statement, less what only the page it left can say.
     record.standing = {
       input: safeCall(value, written),
       ranWith: nodeCall(value, flowParameters(written, ran)),
@@ -426,6 +424,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle, parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
     if (frozen.kind === "selected" && !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
     record.acted = true;
+    record.witness = current && node.effect === "mutate" && !webMovesThePage(node) ? handle : undefined; // As `named` below, for the catch.
     // The look just taken is the page before the act; a capture after it is not compared with it (`../plan-resolution/self-changing/`).
     run.stores.targets.acting(buildOf(run));
     // A list read also asks for a few of the rows its conditions turned down,
@@ -536,11 +535,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // still have been the right step, and a model that is told so can decide.
       pageChanged: changed,
       unchangedPress: changed === false && pressed.noEffect === undefined && pressed.uncertain === undefined && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
-      noEffect: pressed.noEffect, pressedAgain: pressed.pressedAgain, effectUncertain: pressed.uncertain,
+      noEffect: pressed.noEffect, pressedAgain: pressed.pressedAgain, effectUncertain: pressed.uncertain, skipped: isJsonRecord(result.payload) && result.payload.skipped === "already_in_state" ? "already_in_state" : undefined,
       pageUnreadable: after === undefined ? true : undefined,
       // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
       actedOn: webNodeActedOn(node, current, named),
-      actedOnItem: webNodeActedOnItem(node, current, named),
+      actedOnItem: webNodeActedOnItem(node, current, named), actedOnCard: webNodeActedOnCard(node, current, named),
       // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`); one that cleared a layer over the page names it (`./press-effect/cleared-layer.ts`, t787).
       choice: webPressChoice(node, current, after, handle), toggle: webPressToggleSignature(node, current, after, handle, { targets: run.stores.targets, scope: buildOf(run) }),
       layerCleared: webPressClearedLayer(node, current, after, handle, (layer) => run.layers.owns(buildOf(run), layer)),
@@ -648,8 +647,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       if (page) run.shown(page);
       // A refusal the page wrote quotes what it wrote (`./press-effect/notice.ts`).
       const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record, actionAnswered ? undefined : error.failure, actionAnswered ? actionability : error.actionability);
-      // A robot check is the person's. The refusal is kept as the run's record
-      // says it, and Core puts the check to the person rather than to the model.
+      // A robot check is the person's: the refusal is kept as the run's record says it, and Core puts the check to the person.
+      // A lasting press that went out before it stands, so it keeps its pre-act witness as one that returned does; the page after was the check (t877).
+      if (error.personNeeded && record.acted && record.standing !== undefined && record.found !== undefined && record.witness !== undefined) run.stores.targets.acted(buildOf(run), record.witness, record.found, undefined);
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
     }
     throw error;

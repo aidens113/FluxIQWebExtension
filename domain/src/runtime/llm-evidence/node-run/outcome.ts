@@ -49,6 +49,8 @@ export type WebNodeOutcome = {
   actedOn?: string;
   /** That item's whole words, for the record to find its row by (`./press-effect/acted-on.ts`). */
   actedOnItem?: string;
+  /** For a press in no list, the words of the control's own card: what the person's line of the act names, and never a row tie (`./press-effect/acted-on-card.ts`). */
+  actedOnCard?: string;
   /**
    * One sentence, ahead of `changed`, when the press un-chose the very control
    * it pressed -- or chose it: `This press un-chose "Space Grey": it was chosen
@@ -139,6 +141,12 @@ export type WebNodeRanOutcome = WebNodeOutcome & {
    * own status stands: the page answered the press.
    */
   effectUncertain?: string;
+  /**
+   * The page said this press was not made, because its control already showed the
+   * state it asks for (`actions/types.ts`, `skipped`). Core reads it as nothing done:
+   * no act goes on the record (`AS/runtime/answer-first/act-record/gate/read-answer.ts`).
+   */
+  skipped?: "already_in_state";
   /**
    * Said on a press that cleared a layer covering the page, one this build's
    * own press did not open: the layer covered controls on the look before and

@@ -10,7 +10,7 @@ import { JOB_BOARD_LIVE_TASKS } from "../live-tasks.js";
 import { jobBoardScenario as scenario } from "../scenario.js";
 import type { JobBoardMode, JobBoardState } from "../types.js";
 
-const ORACLE_TEST_IDS = new Set(["saved-summary", "saved-list", "posting-status", "application-reference", "job-closed-account"]);
+const ORACLE_TEST_IDS = new Set(["saved-summary", "saved-list", "posting-status", "application-reference", "job-closed-account", "job-application-references"]);
 const context = (seed = 246) => ({ runToken: "job-board-unit-token", seed, alternateOrigin: "http://127.0.0.1:9" });
 const fresh = (mode: JobBoardMode = "baseline") => scenario.mutate(scenario.createState(246), "set-mode", { mode });
 
@@ -235,7 +235,7 @@ test("a filled honeypot is accepted and thanked, with no reference; a genuine ap
   assert.match(serve(genuine, "embed/confirmation", "app=app-1").body, new RegExp(`data-testid="application-reference">${EXPECTED_REFERENCE}<`, "u"));
   const thanked = serve(spam, "embed/confirmation", "app=app-1").body;
   assert.match(thanked, /Thank you for applying, Morgan!/u);
-  assert.doesNotMatch(thanked, /application-reference/u);
+  assert.doesNotMatch(thanked, /data-testid="application-reference"/u);
 });
 
 test("the filled posting takes no applications, its pane says so, and its careers page lists the roles still open", () => {

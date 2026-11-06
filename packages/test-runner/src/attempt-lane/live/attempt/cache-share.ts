@@ -42,10 +42,12 @@ async function usageOf(folder: string): Promise<Record<string, unknown> | undefi
 /**
  * Summed over the run's step folders, so it reads what the service reported on
  * every call, a judge's and the chat's included, rather than an account of Core's.
+ * `skip` leaves out the first folders in name order, which is the order they were
+ * logged in: what the attempts before this one in the same run wrote.
  */
-export async function attemptCacheShare(stepsDirectory: string): Promise<AttemptCacheShare> {
+export async function attemptCacheShare(stepsDirectory: string, skip = 0): Promise<AttemptCacheShare> {
   const totals = { inputTokens: 0, readTokens: 0, writtenTokens: 0 };
-  for (const folder of await stepFolders(stepsDirectory)) {
+  for (const folder of (await stepFolders(stepsDirectory)).sort().slice(skip)) {
     const usage = await usageOf(path.join(stepsDirectory, folder));
     totals.inputTokens += count(usage?.inputTokens);
     totals.readTokens += count(usage?.cacheHitInputTokens);

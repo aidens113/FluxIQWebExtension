@@ -24,6 +24,11 @@ export const ACCOUNT_LITERALS = {
   checkoutFact: (id: string, value: string): ExpectedFact => ({ id, subject: CHECKOUT, predicate: "text", value }),
   /** The batteries line raised to three, and the descaler a new line at the top. */
   toppedUp: `{"cart":[{"lineId":"L3","sku":"B0TWDESC04","offerId":null,"quantity":1,"selected":true},${CASE},${BATTERIES.replace(`"quantity":1`, `"quantity":3`)}],${SAVED},"nextLine":4,"checkoutOpen":false,"orderCount":0,"newsletter":"none"}`,
+  /**
+   * Two of one kettle added as a new top line (so the next line is 4), and the phone case moved from the cart to the
+   * front of Saved for later: the account the kettle-to-cart task must leave.
+   */
+  kettlesAddedCaseSaved: (kettleSku: string) => `{"cart":[{"lineId":"L3","sku":"${kettleSku}","offerId":null,"quantity":2,"selected":true},${BATTERIES}],"saved":[${CASE},${SAVED.slice(`"saved":[`.length)},"nextLine":4,"checkoutOpen":false,"orderCount":0,"newsletter":"none"}`,
   /** Nothing in the cart changed and no order was placed, with a checkout left open. */
   checkoutOpen: START.replace(`"checkoutOpen":false`, `"checkoutOpen":true`),
   /** Buy Now on the 1.5 L Basics kettle, to the office, standard delivery, gift card on, no trial, the Visa. */

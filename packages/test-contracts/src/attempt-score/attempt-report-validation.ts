@@ -3,8 +3,20 @@ import { ContractValidationError, type ValidationIssue, type ValidationResult } 
 import { answerVerdicts, attemptCountsAsLive, attemptStandIns, flowScores, type AttemptStandIn } from "./answer-score.js";
 import { ATTEMPT_REPORT_SCHEMA_VERSION, attemptPaths, attemptSimulationResults, type AttemptReportRow, type AttemptSeries } from "./attempt-report.js";
 
-const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "actsWithNoRow", "cacheHitPercent", "standIns", "live"] as const;
+const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "actsWithNoRow", "against", "cacheHitPercent", "standIns", "live"] as const;
 const SERIES_KEYS = ["schemaVersion", "taskId", "scenarioId", "rows", "firstRightAttempt", "attemptsUntilDeterministic", "spendDeltas", "secondStartedFromFirst"] as const;
+
+function checkAgainst(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (!isObject(input)) {
+    add(issues, path, "must be an object");
+    return;
+  }
+  keys(input as JsonObject, ["reseeded", "foundDone", "changed"], path, issues);
+  if (input.reseeded !== false) add(issues, `${path}.reseeded`, "must be false: this says an attempt began on what an earlier one left");
+  for (const key of ["foundDone", "changed"] as const) array(input[key], `${path}.${key}`, issues, (item, at, target) => {
+    if (typeof item !== "string" || item.length === 0) add(target, at, "must be a non-empty string");
+  });
+}
 
 function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (!isObject(input)) {
@@ -28,6 +40,7 @@ function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void
   });
   if (!isObject(value.loopsCaught)) add(issues, `${path}.loopsCaught`, "must be an object");
   if (value.actsWithNoRow !== undefined) finite(value.actsWithNoRow, `${path}.actsWithNoRow`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  if (value.against !== undefined) checkAgainst(value.against, `${path}.against`, issues);
   if (value.cacheHitPercent !== undefined) finite(value.cacheHitPercent, `${path}.cacheHitPercent`, issues, 0, 100, true);
   array(value.standIns, `${path}.standIns`, issues, (item, at, target) => enumeration(item, attemptStandIns, at, target));
   // A stand-in anywhere, and above all a scripted model, can never be counted as live.

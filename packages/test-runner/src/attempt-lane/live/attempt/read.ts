@@ -19,6 +19,8 @@ export type AttemptOutcomeRecord = {
   loopsCaught: Record<string, { steered: number; refused: number; changeApproach: number; askPerson: number }>;
   /** Lasting acts Core could not tie to a row (a known limit it measures); absent reads as zero. */
   actsWithNoRow?: number;
+  /** What it began from, in Core's word: the saved steps' digest, and what it did with them. Absent where it found none. */
+  startedFrom?: { route: "use" | "repair"; attemptId: string; stepsDigest: string };
   startedAtMs: number;
   endedAtMs?: number;
 };
@@ -35,7 +37,7 @@ export type AttemptResultRecord = {
 export type AttemptOutcomeRead = {
   attempt: AttemptOutcomeRecord;
   result?: AttemptResultRecord;
-  saved?: { state: "ready" | "partly_works" | "notes_only" | "needs_you"; flowId?: string };
+  saved?: { state: "ready" | "partly_works" | "notes_only" | "needs_you"; flowId?: string; stepsDigest?: string };
 };
 
 /** The one Core call these reads make; `ExistingFluxIQControlClient` satisfies it. */

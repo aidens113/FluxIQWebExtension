@@ -86,7 +86,7 @@ test("breadth: Wrenfield has exactly two free Saturday slots across three weeks;
 test("breadth: the heat pump request names the renewables branch and the confirmation shows the declared record", () => {
   const centre = BRANCHES.find(({ note }) => /heat pump centre/iu.test(note))!;
   assert.equal(centre.name, "Sallowmere");
-  assert.ok(heatPumpQuoteExpected.finalState!.some(({ subject, predicate, value }) => subject === "quote-details" && predicate === "contains" && value === centre.name));
+  assert.ok(heatPumpQuoteExpected.finalState!.some(({ subject, predicate, value }) => subject === "company-quote-details" && predicate === "contains" && value === centre.name));
   const details = heatPumpQuoteWorkflow.recordingScript.find(({ id }) => id === "heat-pump-details")!.value as string;
   const quote = { ...ADA, service: "Heat pump installation", contactBy: "Text message", marketing: false, privacy: true, verified: true, details };
   const sent = mutateCompanyWebsiteState(createCompanyWebsiteState(), "submit-quote", quote);

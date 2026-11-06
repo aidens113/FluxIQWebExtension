@@ -166,7 +166,8 @@ function servedText(html: string, testid: string): string | null {
 /** The goal facts that do not hold on the listing page a run ends on: its shell as served, and its panel as filled in. */
 function failingOn(state: ClassifiedsState, listingKey: string, facts: readonly ExpectedFact[]): string[] {
   const id = listingByKey(listingKey).id;
-  const html = `${markupOf(body(route(state, `item/${id}/`)))}${String(json(route(state, `item/${id}/detail.json`)).html)}`;
+  // The whole document, scripts included: the goal reads the account element every page carries, which sits in one.
+  const html = `${body(route(state, `item/${id}/`))}${String(json(route(state, `item/${id}/detail.json`)).html)}`;
   return facts.filter((fact) => fact.predicate !== "text" || servedText(html, fact.subject) !== fact.value).map(({ id: factId }) => factId);
 }
 

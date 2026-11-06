@@ -1,6 +1,7 @@
 import { escapeHtml, fixtureClient } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import { companyBySlug, POSTINGS, type Company } from "../catalog/index.js";
+import { closedJobsAccountFacts } from "../qualification/index.js";
 import type { JobBoardState, Posting } from "../types.js";
 
 export const CAREERS_ROOT = "/scenarios/job-board/careers";
@@ -42,7 +43,7 @@ ${posting.description.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join
 export function renderCareersIndex(state: JobBoardState, context: RenderContext, slug: string): string | undefined {
   const company = companyBySlug(slug);
   if (!company) return undefined;
-  return careersDocument(state, context, company, `Careers at ${company.name}`, `<h1>Careers at ${escapeHtml(company.name)}</h1><p>${escapeHtml(company.about)}</p>${rolesList(state, company)}`);
+  return careersDocument(state, context, company, `Careers at ${company.name}`, `<h1>Careers at ${escapeHtml(company.name)}</h1><p>${escapeHtml(company.about)}</p>${rolesList(state, company)}`, `<script type="application/json" data-testid="job-closed-account">${closedJobsAccountFacts(state).replaceAll("<", "\\u003c")}</script>`);
 }
 
 function rolesList(state: JobBoardState, company: Company): string {
@@ -50,7 +51,7 @@ function rolesList(state: JobBoardState, company: Company): string {
   return `<h2>Open roles</h2><ul class="roles">${roles.map((posting) => posting.apply.kind === "company" ? `<li><a href="${CAREERS_ROOT}/${company.slug}/jobs/${posting.apply.requisition}">${escapeHtml(posting.title)}</a> <span>${escapeHtml(posting.location)}</span></li>` : "").join("")}</ul>`;
 }
 
-function careersDocument(state: JobBoardState, context: RenderContext, company: Company, title: string, main: string): string {
+function careersDocument(state: JobBoardState, context: RenderContext, company: Company, title: string, main: string, readonlyFacts = ""): string {
   const cookieBar = state.careersConsent ? "" : `<div class="cookies"><p>We use cookies to understand how people use our careers site and to improve it.</p><button type="button">Accept</button><button type="button">Decline</button></div>`;
   return `<!doctype html>
 <html lang="en-GB">
@@ -70,7 +71,7 @@ iframe{width:100%;height:1760px;border:1px solid #ddd;background:#fff}
 <body>
 <header><strong>${escapeHtml(company.name)}</strong><a href="${CAREERS_ROOT}/${company.slug}">Careers</a><a href="#">Life at ${escapeHtml(company.name)}</a><a href="#">Benefits</a></header>
 <main>${main}</main>
-${cookieBar}
+${cookieBar}${readonlyFacts}
 <script type="module">
 ${fixtureClient(context.runToken, "job-board")}
 const bar = document.querySelector('.cookies');
