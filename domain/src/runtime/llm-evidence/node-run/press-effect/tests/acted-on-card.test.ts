@@ -60,6 +60,43 @@ test("an add after choosing an option that changes the item's heading names the 
   assert.equal(added.actedOnCard, "Table napkins, 500 Count");
 });
 
+test("a lone card's add, with no look-alike to publish its words, is named by its card", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(loneCardPage("Copper Kettle Cleaner, 4 Pack $7.50")));
+  const add = shownPageLines((await look(runtime)).evidence).find((line) => line.words === "Add to cart")!.target;
+  const pressed = (await press(runtime, add)).evidence as JsonObject;
+  assert.equal(pressed.actedOnCard, "Copper Kettle Cleaner, 4 Pack $7.50");
+});
+
+test("a lone card's words never reach the page view: the evidence and its lines are byte-identical whatever they are", async () => {
+  const seen = async (words: string) => {
+    const looked = await look(createWebAutomationLlmEvidenceRuntime(gatewayOf(loneCardPage(words))));
+    return { evidence: JSON.stringify(looked.evidence), lines: JSON.stringify(shownPageLines(looked.evidence)) };
+  };
+  const one = await seen("Copper Kettle Cleaner, 4 Pack $7.50");
+  const other = await seen("A different card altogether $1.00");
+  assert.equal(one.evidence, other.evidence);
+  assert.equal(one.lines, other.lines);
+  assert.equal(one.evidence.includes("Copper Kettle Cleaner"), false);
+});
+
+test("a press in a named dialog names the dialog, and the dialog's name stays out of what was published for it", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(dialogPage("New collection")));
+  const done = shownPageLines((await look(runtime)).evidence).find((line) => line.words === "Done")!.target;
+  const pressed = (await press(runtime, done)).evidence as JsonObject;
+  assert.equal(pressed.actedOnCard, "New collection");
+});
+
+test("naming a press by its dialog shows the model nothing new: the look is byte-identical whatever the dialog is called", async () => {
+  const seen = async (name: string) => {
+    const looked = await look(createWebAutomationLlmEvidenceRuntime(gatewayOf(dialogPage(name))));
+    return { evidence: JSON.stringify(looked.evidence), lines: JSON.stringify(shownPageLines(looked.evidence)) };
+  };
+  const one = await seen("New collection");
+  const other = await seen("Rename collection");
+  assert.equal(one.evidence, other.evidence);
+  assert.equal(one.lines, other.lines);
+});
+
 test("a tile with no card words on a page whose main heading names the page never takes that heading", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayOf(bareTilesPage()));
   const adds = shownPageLines((await look(runtime)).evidence).filter((line) => line.words === "Add to cart").map((line) => line.target);
@@ -119,6 +156,26 @@ function bareTilesPage(): JsonObject {
     { tagName: "h1", selector: "h1", visibleText: "Your basket", context: main },
     { tagName: "button", selector: "#tile1 button", visibleText: "Add to cart", context: { ...main, heading: "Your basket" } },
     { tagName: "button", selector: "#tile2 button", visibleText: "Add to cart", context: { ...main, heading: "Your basket" } }
+  ]);
+}
+
+/** A page with a picker dialog over it, its Done inside the dialog the capture names. */
+function dialogPage(name: string): JsonObject {
+  const main = { landmark: "main" };
+  const inDialog = { ...main, heading: "Saved", dialog: name };
+  return snapshot("Saved", [
+    { tagName: "h1", selector: "h1", visibleText: "Saved", context: main },
+    { tagName: "input", selector: "#name", attributes: { type: "text", placeholder: "Collection name" }, context: inDialog },
+    { tagName: "button", selector: "#done", visibleText: "Done", context: inDialog }
+  ]);
+}
+
+/** A results page with a single card: its add carries the card's words in the capture's record, and nothing on the page view repeats them. */
+function loneCardPage(cardWords: string): JsonObject {
+  const main = { landmark: "main" };
+  return snapshot("Search results", [
+    { tagName: "h1", selector: "h1", visibleText: "Results", context: main },
+    { tagName: "button", selector: "#card button", visibleText: "Add to cart", context: { ...main, heading: "Results", record: { text: cardWords } } }
   ]);
 }
 

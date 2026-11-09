@@ -1,6 +1,7 @@
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, pageLine, pressOf, toolCall } from "./evidence.js";
+import { scriptedJudgement } from "./judgement.js";
 
 /**
  * A script that means to fail: it does what the task asks and lands the descaler's add a second time by another route,
@@ -67,7 +68,7 @@ const decide: ScriptedReply = (request) => {
   });
 };
 
-const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "It says it is done, and this script's judge believes it, so only the Lab's own oracle can object." });
+const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "It says it is done, and this script's judge believes it, so only the Lab's own oracle can object." });
 
 export const EVERYTHING_STORE_DOUBLE_ADD_SCRIPT: ScriptedModelScript = Object.freeze({
   taskId: "everything-store-batteries-and-descaler",

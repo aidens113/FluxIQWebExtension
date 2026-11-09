@@ -54,6 +54,14 @@ test("readThread reads the thread's attempts from Core, and says how it asked", 
   assert.equal(outcome?.spendUnknown, undefined, "an attempt's spend is real");
 });
 
+test("saved steps that ran and had their stopping step repaired reach the chat as repaired (t878)", async () => {
+  const repaired = { ...SAVED, repaired: true };
+  const t = setup({ thread: outcomes({ attempt: attempt({ path: "run_flow_then_repair", runId: "flow.1" }), result: { ...confirmed(), source: "flow" }, saved: repaired }) });
+  const read = await t.results.readThread({ projectId: "p1", conversationId: "c1" });
+  assert.ok(read.ok);
+  assert.deepEqual(read.value.outcomes[0]?.saved, repaired);
+});
+
 test("a thread with no attempts is an empty list, and a working row is a row", async () => {
   const none = setup({ thread: outcomes() });
   assert.deepEqual(await none.results.readThread({ projectId: "p1", conversationId: "c1" }), { ok: true, value: { outcomes: [] } });

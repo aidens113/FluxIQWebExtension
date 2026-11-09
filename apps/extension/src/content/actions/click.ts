@@ -246,7 +246,7 @@ type PressOutcome = {
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   let measured: ActionabilityReport | undefined;
-  const measure = (): ActionabilityReport => (measured = deps.checkActionability(element));
+  const measure = (): ActionabilityReport => (measured = deps.checkActionability(liveTarget(element, action, deps)));
   const evidence = (): ActionResultEvidence => ({
     ...(measured ? { actionability: portableActionability(measured) } : {}),
     element: deps.describeElement(element),
@@ -357,13 +357,31 @@ async function pressInPlace(
     }
     return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
   }
-  const second = await press(element, report.point, action, deps, startedAt, false);
+  const second = await press(liveTarget(element, action, deps), report.point, action, deps, startedAt, false);
   if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
   if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
   if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
     return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
   }
   return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, PRESSED_ONCE_MORE), evidence());
+}
+
+/**
+ * The control a press is judged and pressed by: the pressed one while it is in
+ * the page; else the one the command names now, found again by its recorded
+ * identity, as when a widget swaps its button for an identical copy and ignores
+ * the first press after a change (t878, run-mw4foote-9cbea70e); else the pressed
+ * one, gone. Measuring the detached control read "hidden", and a press that did
+ * nothing passed as answered by whatever removed it.
+ */
+function liveTarget(element: Element, action: BrowserActionCommand, deps: ContentActionDependencies): Element {
+  if (element.isConnected !== false) return element;
+  try {
+    const again = deps.resolveTarget(action).element;
+    return again.isConnected === false ? element : again;
+  } catch {
+    return element;
+  }
 }
 
 /**

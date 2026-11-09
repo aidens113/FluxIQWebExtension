@@ -1,5 +1,6 @@
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, latestOf, pageLine, pressOf, toolCall } from "./evidence.js";
+import { scriptedJudgement } from "./judgement.js";
 
 /** The chat turn: what a model decides of the person's message, which is to start the attempt. Core saves the person's own words as the instruction. */
 const startAttempt: ScriptedReply = (request) => ({ do: "flow.createHere", with: { instruction: request.message } });
@@ -68,7 +69,7 @@ const decide: ScriptedReply = (request) => {
 };
 
 /** The judge: yes, on what the person asked for, which Core shows it from its own records. */
-const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The rows are the apprentices the person asked for." });
+const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The rows are the apprentices the person asked for." });
 
 /** The most decisions this script answers: enough for every step of its honest path, and few enough that a loop fails it. */
 const MOST_DECISIONS = 24;

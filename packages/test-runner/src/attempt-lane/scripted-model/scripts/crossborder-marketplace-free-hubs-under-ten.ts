@@ -11,6 +11,7 @@
 // Every handle, field key and filter label is read from the request's own evidence, never written here.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { scriptedJudgement } from "./judgement.js";
 import type { ScriptedModelRequest } from "../wire-request.js";
 
 const READ_NODE = "web.output.dom-extract_list";
@@ -95,7 +96,7 @@ const decide: ScriptedReply = (request) => {
 };
 
 /** The judge: yes, on what the person asked for, which Core shows it from its own records. */
-const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The rows are the free hubs at ten euros or less the person asked for." });
+const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The rows are the free hubs at ten euros or less the person asked for." });
 
 /** The most decisions this script answers: every step of its honest path, and few enough that a loop fails it. */
 const MOST_DECISIONS = 30;

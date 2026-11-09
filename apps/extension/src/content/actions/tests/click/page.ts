@@ -18,6 +18,8 @@ export type PageBehaviour = {
   moveTo?: string;
   /** The target is no command control -- a text box, a line of text -- so no selector but a link's finds it. */
   plain?: boolean;
+  /** The click takes the target out of the document, as a widget that swaps its button for a copy does (t878). */
+  detachOnClick?: boolean;
 };
 
 export type FakePage = { element: Element; events: string[] };
@@ -41,6 +43,7 @@ export function fakePage(behaviour: PageBehaviour): FakePage {
   const location = { href: PAGE };
   const anchor = { href: LINK_HREF, protocol: "http:", focus: () => undefined };
   const target = {
+    isConnected: true,
     ownerDocument: { location, defaultView: {} },
     closest: (selector: string) => {
       if (selector === "a[href]") return behaviour.link ? anchor : null;
@@ -50,6 +53,7 @@ export function fakePage(behaviour: PageBehaviour): FakePage {
     dispatchEvent(event: { type: string }): boolean {
       events.push(event.type);
       if (event.type !== "click") return true;
+      if (behaviour.detachOnClick) target.isConnected = false;
       if (behaviour.moveTo !== undefined) location.href = behaviour.moveTo;
       return !behaviour.prevent;
     }

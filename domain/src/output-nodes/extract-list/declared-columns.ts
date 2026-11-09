@@ -64,6 +64,16 @@
 //
 // A column the field map excludes (D12) is not a helper: it is never read, and
 // the schema keeps declaring it so the user's exclusion is remembered.
+//
+// **A column dropped that nothing uses is named (t877).** Run
+// `run-mw49972k-cebf67e5` read title and price under a schema of title alone:
+// Core's build had declared the instruction's column list, which its reader cut
+// short at "title" ("columns title and price exactly as the shop shows them").
+// Price left the read, and the answer lost it with `ok: true` and no word
+// anywhere. Run 12's helpers were each read by a condition; price was read by
+// nothing. The answer still keeps exactly the declared columns -- no widening --
+// but each column of the read that the narrowing drops and no condition, sort
+// or dedupe uses is handed back as `dropped`, so the caller can say so.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
@@ -86,6 +96,8 @@ export type WebAutomationDeclaredColumnsRead = {
    * columns, then any kept helper a `process.where` names (header).
    */
   shown?: string[];
+  /** The read's columns this narrowing drops that no condition, sort or dedupe uses, in field-map order (header, t877). */
+  dropped: string[];
 };
 
 /**
@@ -102,6 +114,8 @@ export function webAutomationDeclaredColumnsRead(authored: JsonValue | undefined
   const helpers = Object.entries(request.fields).filter(([key, field]) => !columns.has(key) && isReadAsColumn(field));
   if (helpers.length === 0) return undefined;
   const removed = new Map(helpers.filter(([key]) => !ordering.has(key)));
+  const conditioned = new Set((request.where ?? []).flatMap((condition) => condition.field === undefined ? [] : [condition.field]));
+  const dropped = [...removed.keys()].filter((key) => !conditioned.has(key));
   const narrowed: WebAutomationExtractListRequest = {
     ...request,
     fields: Object.fromEntries(Object.entries(request.fields).filter(([key]) => !removed.has(key))),
@@ -115,8 +129,8 @@ export function webAutomationDeclaredColumnsRead(authored: JsonValue | undefined
   const ordered = helpers.filter(([key]) => ordering.has(key)).map(([key]) => key);
   if (sent === undefined) return undefined;
   const stored = new Set([...columns, ...ordered]);
-  if (ordered.length === 0 || !process.columnsUnwritten) return { request: sent, columns: stored };
-  return { request: sent, columns: stored, shown: [...columns, ...ordered.filter((key) => process.filtered.has(key))] };
+  if (ordered.length === 0 || !process.columnsUnwritten) return { request: sent, columns: stored, dropped };
+  return { request: sent, columns: stored, shown: [...columns, ...ordered.filter((key) => process.filtered.has(key))], dropped };
 }
 
 /**
