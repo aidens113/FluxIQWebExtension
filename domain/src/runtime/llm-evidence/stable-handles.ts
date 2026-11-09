@@ -459,6 +459,7 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   const dialogNames = new Map<string, string>();
   const drawings = new Map<string, string>();
   const subjects = new Map<string, string>();
+  const cardWords = new Map<string, string>();
   const renamed = new Map<string, string>();
   const elements = binding.evidence.elements.map((element, index) => {
     const target = assigned[index] ?? element.target;
@@ -477,6 +478,8 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (drawing !== undefined) drawings.set(target, drawing);
     const subject = binding.subjects?.get(element.target);
     if (subject !== undefined) subjects.set(target, subject);
+    const card = binding.cardWords?.get(element.target);
+    if (card !== undefined) cardWords.set(target, card);
     return { ...element, target };
   });
   const rename = (handle: string): string => renamed.get(handle) ?? handle;
@@ -501,5 +504,5 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken, and so does the query.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: binding.captureProvenance === undefined ? undefined : structuredClone(binding.captureProvenance), shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: binding.captureProvenance === undefined ? undefined : structuredClone(binding.captureProvenance), shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, cardWords, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
 }

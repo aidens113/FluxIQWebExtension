@@ -77,6 +77,39 @@ test("identical observed controls stay ambiguous until one exact pre-act source 
   }
 });
 
+test("the same control acted on from two pages with one meaning resolves", async () => {
+  const { targets, capture, scope, resolve } = controlIntentHost();
+  const first = capture({ words: "Open folder" });
+  targets.remember(scope, first);
+  const original = await resolve();
+  if (original.status !== "resolved") assert.fail(JSON.stringify(original));
+  targets.acted(scope, "t2", first);
+  const second = capture({ words: "Open folder", location: "https://example.test/library", leading: 1 });
+  targets.remember(scope, second);
+  targets.acted(scope, "t3", second);
+  const saved = JSON.stringify(original.parameters);
+  const recovered = await resolve(structuredClone(original.parameters), { handleReach: "view_history" });
+  assert.equal(recovered.status, "resolved", JSON.stringify(recovered));
+  if (recovered.status !== "resolved") return;
+  assert.equal(JSON.stringify(recovered.parameters), saved);
+  assert.deepEqual(recovered.controlIntent, { intent: "neutral" });
+});
+
+test("two acted sources that disagree stay ambiguous", async () => {
+  const { targets, capture, scope, resolve } = controlIntentHost();
+  const first = capture({ consent: true });
+  targets.remember(scope, first);
+  const original = await resolve();
+  if (original.status !== "resolved") assert.fail(JSON.stringify(original));
+  targets.acted(scope, "t2", first);
+  const second = capture({ location: "https://example.test/library", leading: 1 });
+  targets.remember(scope, second);
+  targets.acted(scope, "t3", second);
+  const conflict = await resolve(structuredClone(original.parameters), { handleReach: "view_history" });
+  assert.equal(conflict.status, "refused", JSON.stringify(conflict));
+  if (conflict.status === "refused") assert.ok(conflict.issueCodes.includes("web.handle.ambiguous"));
+});
+
 test("pre-act lineage cannot choose a permissive annotation over a competing observed semantic source", async () => {
   const { targets, capture, scope, resolve } = controlIntentHost();
   const before = capture({ consent: true });

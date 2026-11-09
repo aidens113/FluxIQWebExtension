@@ -59,15 +59,20 @@ export function webPlanAbsoluteControlIntent(parameters: JsonObject, targets: It
     // Only the immutable pre-act records establish that lineage; observation,
     // model fields and a currently convenient page do not. A second acted
     // source or any retained semantic disagreement keeps the refusal closed.
+    // One control pressed from two pages leaves two witnesses (run
+    // run-mw4dsh8i-3fb9dc39: a back link acted from two pages). They resolve
+    // only when every one has an intent and all agree with each other and with
+    // every match; zero witnesses or any disagreement still refuses.
     const witnesses = new Map<string, Captured>();
     for (const before of acted) {
       if (!names(before)) continue;
       if (before.shared || before.intentConflict) return { status: "ambiguous" };
       witnesses.set(before.intentSource.key, before);
     }
-    const before = witnesses.size === 1 ? [...witnesses.values()][0] : undefined;
-    if (before?.controlIntent === undefined || [...matches.values()].some((captured) => !sameWebPlanControlIntent(before.controlIntent, captured.controlIntent))) return { status: "ambiguous" };
-    return { status: "found", controlIntent: { ...before.controlIntent } };
+    const agreed = [...witnesses.values()][0]?.controlIntent;
+    if (agreed === undefined || [...witnesses.values()].some((before) => !sameWebPlanControlIntent(agreed, before.controlIntent))
+      || [...matches.values()].some((captured) => !sameWebPlanControlIntent(agreed, captured.controlIntent))) return { status: "ambiguous" };
+    return { status: "found", controlIntent: { ...agreed } };
   }
   const only = [...matches.values()][0];
   return only?.controlIntent === undefined ? { status: "absent" } : { status: "found", controlIntent: { ...only.controlIntent } };

@@ -148,6 +148,12 @@ export type WebLlmSnapshotBinding = {
    */
   subjects?: Map<string, string>;
   pageSubject?: string;
+  /**
+   * The words of the record (row, card) each element sits in, as the capture read them: the same words the packet
+   * publishes as `within` only where they tell look-alikes apart. Never in the evidence a model reads, so the page view
+   * costs nothing more; read only for what a press acted on (`./node-run/press-effect/acted-on-card.ts`).
+   */
+  cardWords?: Map<string, string>;
   /** Trusted session+tab identity; never included in model evidence. */
   resetResource?: string;
   /**
@@ -216,6 +222,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const dialogNames = new Map<string, string>();
   const drawings = new Map<string, string>();
   const subjects = new Map<string, string>();
+  const cardWords = new Map<string, string>();
   let pageSubject: string | undefined;
   // What tells a look-alike apart, kept beside the packet and published only
   // on an element that needs it.
@@ -254,6 +261,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     if (described.dialog !== undefined) dialogNames.set(described.element.target, described.dialog);
     if (described.drawing !== undefined) drawings.set(described.element.target, described.drawing);
     if (described.subject !== undefined) subjects.set(described.element.target, described.subject);
+    if (described.within !== undefined) cardWords.set(described.element.target, described.within);
     // What the page is about: its first shown main heading, in the top frame and in no dialog (Core t719).
     if (pageSubject === undefined && described.subject !== undefined && described.element.tag === "h1" && described.element.hidden !== true
       && described.element.frameId === undefined && described.dialog === undefined && dialogOf(raw) === undefined) pageSubject = described.subject;
@@ -299,7 +307,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: undefined, shadowHosts, dialogNames, drawings, subjects, pageSubject, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: undefined, shadowHosts, dialogNames, drawings, subjects, pageSubject, cardWords, resetResource: undefined, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
 /**
