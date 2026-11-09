@@ -1,7 +1,7 @@
 # MVP Seal
 
 Status: Active
-Status detail: Plan written 2026-11-09 for the user's review; no source changed yet.
+Status detail: Revised 2026-11-09 with the user's second direction; Wave 1 started the same day (Core's plan lists it).
 Created: 2026-11-09
 Last updated: 2026-11-09
 Owner: Senior supervisor agent
@@ -35,9 +35,19 @@ Related: [Answer First](./answer-first-plan.md), [hosted production](./hosted-pr
 - The extension has no hosted connection code yet: no server list, sign-in screen or transport.
 - Store submission still needs the manifest edits, the privacy declaration and notice, a reviewer account, and the user's items: the developer account, the VM and DNS, and the legal copy.
 
-**Lanes.** The four live lanes (`task/t875`-`t878`) are 2 to 7 commits ahead of `dev` here and 2 to 8 in Core, all pushed. About $145 of Claude credit expires about 2026-11-10.
+**Lanes.** The four live lanes (`task/t875`-`t878`) are 2 to 7 commits ahead of `dev` here and 2 to 8 in Core, all pushed.
 
-**Next, once the user approves:** E0 and E1 today, then E2 to E5 in parallel with Core's P1 to P4.
+**Credit.** About $145 of Claude credit expires about 2026-11-10 and then refreshes to $200 at no cost to the user (user, 2026-11-09), so money sets no date. Live runs are still watched by an agent and stop at the first balance error.
+
+**Revised direction (user, 2026-11-09; words in Core's plan, "Direction").**
+- Work on FluxNodes starts at once.
+- Data pipelines become central.
+- Simulated Android, Linux and Windows test environments are built.
+- One key-based access system covers every client.
+- The panel is redesigned for setup, monitoring, security and an easy editor, with a panel-wide assistant.
+- "Subflow" retires: everything is a Flow in a project's folders.
+
+**Next.** E0 now, with E1 once E0 lands. E2 to E6 run alongside Core's Wave 2.
 
 ## The MVP Is Sealed When
 
@@ -47,8 +57,10 @@ Related: [Answer First](./answer-first-plan.md), [hosted production](./hosted-pr
    - run 2 with new inputs replays with zero model calls;
    - a perturbed site is repaired and the result still comes back.
    This holds on realistic scenarios, provider-free, plus one live proof per example.
-3. **Release.** Both repositories pass the full sweep and are promoted to `main` together.
-4. **Docs.** The developer docs (quickstart, concepts, API reference) and three examples are published in the repositories.
+   The same holds for a FluxNode on each simulated environment: Android, Linux and Windows (Core's P8).
+3. **Release.** All three repositories pass the full sweep and are promoted to `main` together.
+4. **Docs.** The developer docs (quickstart, concepts, API reference) and the examples are published in the repositories.
+5. **The panel.** The redesigned panel takes a new person from `fluxiq dev` to a running Flow through its wizard (Core's P9).
 
 ## Extension Finish
 
@@ -59,6 +71,7 @@ Related: [Answer First](./answer-first-plan.md), [hosted production](./hosted-pr
 | E2 Defaults and defects | Flip `authoring-mode.ts:48` to `answer-first` after the breadth proof. Fix Answer First's open items 3-8: carried-act item words; `answerRecords {asked:false}`; the carried set-up press; splitting `node-run/run.ts`; the table wrap; "$0.00" for $0.0012; the `keep`-only edit; the child-Flow deadline; the before-reading after a restart; the paging paragraph in judge calls | The default is flipped with the breadth evidence cited, and each item is fixed with a test beside it |
 | E3 Standalone extension | Nothing a normal user does needs the web panel, except signing in. The hosted connection: the server list, the sign-in screen, the transport work in the hosted plan (D2-D4), and the manifest edits (description, fixed e2e key, Firefox `gecko.id`) | A new person on a stand-in hosted Core signs in, runs a task and sees the result without opening the panel |
 | E4 Store package | The single-purpose statement, the `<all_urls>` justification, the privacy declaration, `docs/user/privacy-policy.md` corrected (it still says "operate no server"), a reviewer test account script, and the store text | Everything in the store form is ready; the upload waits on the user's developer account and the hosted deployment |
+| E6 Flows and keys in the extension | Core's P6 here: the Library screen becomes the project's Flow tree with folders, and "subflow" leaves the extension's UI, domain and Lab. Core's P3 here: pairing becomes approving the extension's own key, made in the browser and never extractable, keeping today's code entry as the approval step | No "subflow" in the extension; an already-paired extension keeps working through the migration, and a fresh one pairs by key |
 | E5 Acceptance record | Re-score the 26 criteria of the Final MVP Acceptance Test against current evidence; run what is missing on the realistic scenarios | Every criterion has evidence or a named gap |
 
 ## Managed Browser Host (Core's P5)
@@ -99,6 +112,15 @@ FluxNodes need a browser that Core can drive without a person opening one. The L
 - Validation: not validated; this is a plan. Lane distances from `git rev-list --count dev..<lane>` in both repositories; `main` from `git rev-list --count origin/main..dev` -> 133 here, 221 in Core.
 - Outcome: shown to the user for review.
 - Follow-up: E0 and E1 on approval.
+
+### 2026-11-09 - Revised with the user's second direction
+
+- Agent: lead.
+- Changed: this document: the credit note, the revised direction, the seal criteria (simulated environments, panel) and E6. No source.
+- Why: the user widened the scope and asked for work to start at once; Core's plan holds the design and Wave 1.
+- Validation: not validated; this is a plan.
+- Outcome: Wave 1 running.
+- Follow-up: E0.
 
 ## Open Questions
 
