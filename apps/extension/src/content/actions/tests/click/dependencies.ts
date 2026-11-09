@@ -17,14 +17,24 @@ export function dependencies(
   ignored: { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord },
   pressableAgain: boolean,
   againAs: ActionabilityRejectionCode = "covered",
-  judgedAs?: () => ActionabilityReport
+  judgedAs?: () => ActionabilityReport,
+  replaced?: { copy: Element | undefined }
 ): ContentActionDependencies {
   let judged = 0;
+  let resolved = 0;
   const provided: Partial<ContentActionDependencies> = {
-    resolveTarget: () => ({ element, resolution: {} as ReturnType<ContentActionDependencies["resolveTarget"]>["resolution"] }),
-    checkActionability: () => {
+    // With `replaced`, the command found again after the press names the copy the page put in the pressed one's place, or nothing (t878).
+    resolveTarget: () => {
+      resolved += 1;
+      const found = resolved > 1 && replaced ? replaced.copy : element;
+      if (!found) throw new Error("no target resolved");
+      return { element: found, resolution: {} as ReturnType<ContentActionDependencies["resolveTarget"]>["resolution"] };
+    },
+    checkActionability: (judgedElement: Element) => {
       judged += 1;
       if (judgedAs) return judgedAs();
+      // As the real gate (`actionability.ts`): a control out of the document is hidden; one in it can be pressed.
+      if (replaced) return (judgedElement as { isConnected?: boolean }).isConnected === false ? notPressable("hidden") : PRESSABLE;
       return judged === 1 || pressableAgain ? PRESSABLE : notPressable(againAs);
     },
     // The record the real builder writes for a gate's refusal (`results.ts`): its reason word leads `actual`.
