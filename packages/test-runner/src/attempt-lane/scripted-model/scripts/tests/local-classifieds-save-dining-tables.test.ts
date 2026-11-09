@@ -285,8 +285,19 @@ test("a form the script does not have is refused, and the default is the plain o
 
 const TABLES_PAGE = LIST;
 const note = (flowRun: Record<string, unknown>): EvidenceEntry => ({ callId: "core.attempt_note.1", toolId: "core.attempt_note", value: { flowRun } });
-const judge = (form: string, ordinal: number, recordSets: unknown) => scriptedModelScriptFor(TASK, form).replies.loop_verification![ordinal]!({ kind: "loop_verification", ordinal: ordinal + 1, model: "m", jsonText: true, message: "", payload: { context: { resultSummary: { recordSets } } } }) as { diagnosis: { answersRequest: string; defects: { row: string }[] } };
-const SAVED_ROWS = [{ sampleRows: [{ title: "Round pine dining table, 90cm" }, { title: "Glass dining table with chrome legs" }, { title: "Dining table, industrial style, 160cm" }] }];
+/** The saved items page as a judge's end view shows it, with `count` items listed and said. */
+const savedPage = (titles: readonly string[], said = true) => [
+  `URL ~/saved/   (~ = ${BASE})`,
+  't1464 link "Saved 5" current ~/saved/',
+  "[main]",
+  't1122 h2 "Saved items"',
+  ...(said ? [`t1123 "${titles.length} saved items"`] : []),
+  ...titles.flatMap((title, index) => [`- ${index + 1}/${titles.length}`, `t${1200 + index} link "${title}" ~/item/${1000 + index}/`]),
+].join("\n");
+type Judged = { diagnosis: { answersRequest: string; defects: { row: string }[]; checked: { row: string; column: string; value: string }[]; answerRecords: { asked: boolean; siteShows?: number } } };
+const judge = (form: string, ordinal: number, recordSets: unknown, endPage: string = savedPage(TITLES)) => scriptedModelScriptFor(TASK, form).replies.loop_verification![ordinal]!({ kind: "loop_verification", ordinal: ordinal + 1, model: "m", jsonText: true, message: "", payload: { context: { resultSummary: { recordSets, endView: { view: { page: endPage } } } } } }) as Judged;
+const TITLES = ["Round pine dining table, 90cm", "Glass dining table with chrome legs", "Dining table, industrial style, 160cm"];
+const SAVED_ROWS = [{ datasetId: "result", recordCount: 3, columns: ["title", "price"], sampleRows: TITLES.map((title, index) => ({ title, price: `£${45 + index}` })) }];
 
 test("the same words a second time go to the same command, and there are replies for a second attempt", () => {
   const script = scriptedModelScriptFor(TASK, "again-check");
@@ -306,10 +317,25 @@ test("its judge reads the real rows: the three saved tables are the answer, and 
   const short = judge("again-check", 1, [{ sampleRows: [{ title: "Round pine dining table, 90cm" }] }]);
   assert.equal(short.diagnosis.answersRequest, "no");
   assert.deepEqual(short.diagnosis.defects.map((defect) => defect.row), ["Glass dining table", "Dining table, industrial"]);
+  assert.deepEqual(short.diagnosis.checked, []);
+  assert.equal(short.diagnosis.answerRecords.asked, true);
+});
+
+test("its yes stands on the rows, as Core's judge schema requires since t875: each held row cited by its label, and the count the end view shows", () => {
+  const yes = judge("again-check", 1, SAVED_ROWS).diagnosis;
+  assert.deepEqual(yes.checked, TITLES.map((title) => ({ row: title, column: "title", value: title })));
+  assert.deepEqual(yes.answerRecords, { asked: true, siteShows: 3 });
+  // Two items saved before: the site shows five, so five is said and Core holds the three rows to it.
+  assert.deepEqual(judge("again-check", 1, SAVED_ROWS, savedPage(["Adjustable desk lamp, black", ...TITLES, "Rattan armchair"])).diagnosis.answerRecords, { asked: true, siteShows: 5 });
+  assert.deepEqual(judge("run-again", 1, SAVED_ROWS, savedPage(["Adjustable desk lamp", ...TITLES], false)).diagnosis.answerRecords, { asked: true, siteShows: 4 });
+  assert.throws(() => judge("again-check", 1, SAVED_ROWS, `URL ~/item/1003/   (~ = ${BASE})`), /end view is not the saved items page/u);
 });
 
 test("the form that presses again has a judge that says yes to whatever it is shown, so only the Lab's oracle can catch it", () => {
-  assert.equal(judge("again-press", 1, [{ sampleRows: [] }]).diagnosis.answersRequest, "yes");
+  const yes = judge("again-press", 1, [{ sampleRows: [] }]).diagnosis;
+  assert.equal(yes.answersRequest, "yes");
+  assert.deepEqual(yes.answerRecords, { asked: true, siteShows: 0 });
+  assert.deepEqual(judge("again-press", 1, SAVED_ROWS, "").diagnosis.answerRecords, { asked: true, siteShows: 3 });
 });
 
 test("the Run again form takes plain's Flow, a plain Save on each table opened by its address, reads its saved items as steps of the Flow, refuses any decision after the saved Flow's run, and its judge reads the real rows", () => {

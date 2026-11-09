@@ -1,6 +1,7 @@
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { scriptedJudgement } from "./judgement.js";
 
 /**
  * `plain`: the Flow's read is the read the model explored with, and its step is the press it made by hand.
@@ -179,7 +180,7 @@ function repeating(request: ScriptedModelRequest): boolean {
 }
 
 /** The judge: yes, on what the person asked for, which Core shows it from its own records. */
-const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The rows are the people accepted, with their messages." });
+const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The rows are the people accepted, with their messages." });
 
 /** The judge of a run that read by looking at what it holds: the rows it was given are the answer, and none is no answer. */
 const answersByRows: ScriptedReply = (request) => {
@@ -187,8 +188,8 @@ const answersByRows: ScriptedReply = (request) => {
   const rows = summary?.totalRecordCount;
   if (typeof rows !== "number") throw new Error("The verification shows no count of rows");
   return rows > 0
-    ? { kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The rows are the people accepted, with their messages." }
-    : { kind: "diagnosis", diagnosis: { answersRequest: "no", observed: "The run read no rows.", defects: [{ kind: "asked_missing", row: "the people accepted", requestWords: "a table of the people you accepted with columns name and message" }] }, summary: "The run read nothing, so the table asked for is missing." };
+    ? scriptedJudgement(request, { answersRequest: "yes", summary: "The rows are the people accepted, with their messages." })
+    : scriptedJudgement(request, { answersRequest: "no", observed: "The run read no rows.", defects: [{ kind: "asked_missing", row: "the people accepted", requestWords: "a table of the people you accepted with columns name and message" }], summary: "The run read nothing, so the table asked for is missing." });
 };
 
 /** Enough for every step of its honest path, and few enough that a loop fails it. */

@@ -47,6 +47,7 @@
 import type { ScriptedModelRequest } from "../wire-request.js";
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
+import { scriptedJudgement } from "./judgement.js";
 
 export type SaveDiningTablesForm = "plain" | "reshape" | "row-link" | "open-save-back" | "by-hand" | "by-hand-unread" | "again-check" | "again-press" | "run-again";
 
@@ -380,16 +381,35 @@ function currentSavedPage(request: ScriptedModelRequest): string {
   return page;
 }
 
-const answersRequest: ScriptedReply = () => ({ kind: "diagnosis", diagnosis: { answersRequest: "yes", defects: [] }, summary: "The saved items are listed, cheapest first." });
+/** A judge that believes what it is given: yes, citing the rows held and taking them to be what the site shows. */
+const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { answersRequest: "yes", summary: "The saved items are listed, cheapest first." });
 
 const SAVED_TABLES = ["Round pine dining table", "Glass dining table", "Dining table, industrial"] as const;
 
-/** A judge that reads what it is shown: the rows Core put in its summary must hold the three saved tables. */
+/**
+ * How many saved items the site showed at the end, read off the end view as a person reads it: the page's own
+ * "N saved items", or else the items it lists. The end view not being the saved items page is said and refused,
+ * since a judge of this request could not count them from it.
+ */
+function savedShownAtTheEnd(request: ScriptedModelRequest): number {
+  const context = request.payload?.context as { resultSummary?: { endView?: { view?: { page?: unknown } } } } | undefined;
+  const page = context?.resultSummary?.endView?.view?.page;
+  if (typeof page !== "string" || !/^URL ~\/saved\//mu.test(page)) throw new Error(`The judge's end view is not the saved items page, so it cannot count them: ${String(page).slice(0, 300)}`);
+  const said = /^t\d+ "(\d+) saved items?"$/mu.exec(page)?.[1];
+  if (said !== undefined) return Number(said);
+  const main = page.slice(Math.max(0, page.indexOf("[main]")));
+  return main.split("\n").filter((line) => /^t\d+ link ".*" ~\/item\//u.test(line)).length;
+}
+
+/**
+ * A judge that reads what it is shown: the rows Core put in its summary must hold the three saved tables, and its
+ * yes says how many saved items the end view shows, so Core holds the rows to the list the site shows.
+ */
 const answersFromTheRows: ScriptedReply = (request) => {
   const summary = JSON.stringify((request.payload?.context as { resultSummary?: { recordSets?: unknown } } | undefined)?.resultSummary?.recordSets ?? null);
   const missing = SAVED_TABLES.filter((title) => !summary.includes(title));
-  if (missing.length === 0) return answersRequest(request);
-  return { kind: "diagnosis", diagnosis: { answersRequest: "no", defects: missing.map((row) => ({ kind: "asked_missing", row, requestWords: "everything in my saved items" })) }, summary: `The table does not hold: ${missing.join(", ")}.` };
+  if (missing.length === 0) return scriptedJudgement(request, { answersRequest: "yes", summary: "The saved items are listed, cheapest first.", siteShows: savedShownAtTheEnd(request) });
+  return scriptedJudgement(request, { answersRequest: "no", defects: missing.map((row) => ({ kind: "asked_missing", row, requestWords: "everything in my saved items" })), summary: `The table does not hold: ${missing.join(", ")}.` });
 };
 
 /** `again-press`, on the second attempt: once the Flow's run has stopped, each of the first attempt's three tables pressed again by hand (header). */
