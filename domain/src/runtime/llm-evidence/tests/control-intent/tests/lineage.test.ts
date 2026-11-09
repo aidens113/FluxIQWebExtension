@@ -11,7 +11,7 @@ import {
 import { createWebAutomationLlmEvidenceRuntime } from "../../../tools";
 
 /** The real web binding records acts; only its capture/action transport is a unit stub. */
-function lineageHost() {
+function lineageHost(options: { consentOnFirstPage?: boolean } = {}) {
   const scope = { projectId: "project.lineage", flowId: "flow.lineage" };
   let location = "https://workspace.test/home";
   let document = 1;
@@ -19,17 +19,29 @@ function lineageHost() {
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.lineage"],
     executeAction: async (_sessionId, command) => {
-      if (command.actionType === "web.dom.capture_snapshot") return {
+      if (command.actionType === "web.dom.capture_snapshot") {
+        const consent = options.consentOnFirstPage === true;
+        const firstPage = document === 1;
+        const linkName = consent ? "Accept all" : "Open workspace";
+        const link: Record<string, string | number | Record<string, string>> = {
+          tagName: "a", selector: "#workspace-open", accessibleName: linkName, href: "https://workspace.test/library", context: { landmark: "navigation" }
+        };
+        if (consent && firstPage) link.parent = 0;
+        const openDialogs = consent && firstPage ? [{ selector: "#notice", modal: false, kind: "consent" }] : [];
+        const fillers = () => !consent ? [] : [firstPage ? { tagName: "div", role: "dialog", selector: "#notice" } : { tagName: "div", selector: "#filler" }];
+        return {
         status: "succeeded", payload: { sourceId: "tab:4:frame:0", snapshot: {
           url: location, title: "Workspace", frame: { isTop: true },
           viewport: { width: 1200, height: 800, scrollX: 0, scrollY: 0 },
           interactiveElements: [
-            { tagName: "a", selector: "#workspace-open", accessibleName: "Open workspace", href: "https://workspace.test/library", context: { landmark: "navigation" } },
+            ...fillers(),
+            link,
             { tagName: "a", selector: "#footer-open", accessibleName: "Open workspace", href: "https://workspace.test/help", context: { landmark: "contentinfo" } }
           ],
-          evidence: { navigation: { timeOrigin: document }, loading: { documentState: "complete", busy: false, pendingNavigation: false } }
+          evidence: { navigation: { timeOrigin: document }, dialogs: { open: openDialogs }, loading: { documentState: "complete", busy: false, pendingNavigation: false } }
         } }
-      };
+        };
+      }
       assert.equal(command.actionType, "web.dom.click");
       assert.equal(command.parameters.selector, "#workspace-open", "the duplicated label must not select the footer control");
       actions += 1;
@@ -103,11 +115,23 @@ test("public completion recovers one actual pre-act source and the Native execut
   assert.equal(host.actions(), 1, "completion and Native effect creation dispatch no extra act");
 });
 
-test("two actual pre-act sources for the same absolute target remain ambiguous through public completion", async () => {
+test("two actual pre-act sources for the same absolute target resolve through public completion when their witnesses agree", async () => {
   const host = lineageHost();
   await host.capture();
   const first = await host.act("t1");
   const second = await host.act("t3");
+  assert.equal(first.resultCode, "web.action.succeeded");
+  assert.equal(second.resultCode, "web.action.succeeded");
+  const completed = await host.complete(keptStep(first));
+  assert.equal(completed.ok, true, JSON.stringify(completed));
+  assert.equal(host.actions(), 2);
+});
+
+test("two actual pre-act sources for the same absolute target whose witnesses disagree remain ambiguous through public completion", async () => {
+  const host = lineageHost({ consentOnFirstPage: true });
+  await host.capture();
+  const first = await host.act("t2");
+  const second = await host.act("t5");
   assert.equal(first.resultCode, "web.action.succeeded");
   assert.equal(second.resultCode, "web.action.succeeded");
   const completed = await host.complete(keptStep(first));
