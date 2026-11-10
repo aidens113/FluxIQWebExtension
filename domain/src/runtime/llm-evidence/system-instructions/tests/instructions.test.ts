@@ -41,7 +41,7 @@ test("it teaches no realistic fixture", () => {
 
 test("the version is one Core's seam accepts, and names the web-only text", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-12");
+  assert.equal(version, "web-13");
 });
 
 // FluxIQ declines optional cookies by default (user, 2026-10-18): a consent
@@ -118,8 +118,15 @@ test("exploring a paged list reads one page and one Next page", () => {
   assert.ok(lists.includes("the loop reads the other pages when the Flow runs, so do not read every page while exploring"));
 });
 
-test("a robot check is never solved, and the model says that one blocks it", () => {
-  assert.match(text, /Never solve a robot check \(CAPTCHA\); say that one blocks you/u);
+// web-13 (t885, `run-mwaknxf9-7549d126`): told to "say that one blocks you",
+// the model completed four times on a check that cleared by itself seconds
+// later. A check is never touched, FluxIQ waits it out or hands it to the
+// person, and it is never a reason to complete or to stop.
+test("a robot check is never touched, is the person's or waited out, and is never a reason to complete", () => {
+  assert.match(text, /Never press, type into, solve or reload a robot check/u);
+  assert.match(text, /hands any other to the person/u);
+  assert.match(text, /never a reason to complete/u);
+  assert.doesNotMatch(text, /blocks you/u);
 });
 
 test("Core's own bind-time check accepts it unchanged", () => {

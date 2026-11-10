@@ -569,7 +569,10 @@ export async function captureEvidence(
   assertActive(signal);
   // A look that met a robot check is the person's, not the model's: it is not
   // "unreadable", and a model told so would look again and again at the check.
-  // Checks that clear themselves were already waited out by the client.
+  // A whole-tab look carries the check allowance (`../../actions/check-wait.ts`),
+  // so the client has already waited out a check that clears by itself and
+  // answers USER_INTERVENTION_REQUIRED only for one still standing
+  // (`apps/extension/src/runtime/look-check.ts`).
   if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true, webHostFailure(result.failure), webActionabilityFromPayload(result));
   // A page that cannot be read now -- still loading, mid-navigation -- is a
   // condition the model can wait out or work around, not a fault.
@@ -781,6 +784,10 @@ export async function pageRefusal(
     return new RecoverableToolRejection(refusal.code, refusal.detail, page, refusal.personNeeded, failure, actionability);
   } catch (error) {
     if (signal?.aborted) throw error;
-    return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, refusal.personNeeded, failure, actionability);
+    // A page that is now a robot check is the person's, whatever stopped the
+    // action: the mark the look raised is kept, so Core pauses for the person
+    // rather than showing the model a refusal with no page (t885).
+    const personNeeded = refusal.personNeeded ?? (error instanceof RecoverableToolRejection ? error.personNeeded : undefined);
+    return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, personNeeded, failure, actionability);
   }
 }

@@ -51,6 +51,13 @@
 // stating repeat in a draft or a written Flow, and efficiency -- moved to
 // Core's own task prose (`system-prompt.ts` in Core), which places each in the
 // task kinds that act or write steps. What remains here is web-only.
+// web-13 (t885, `run-mwaknxf9-7549d126`): told to "say that one blocks you",
+// the model met a robot check after a sort and completed four times with
+// "Stopped: a robot check blocks...", although the check cleared by itself
+// seconds later. FluxIQ now waits out a check that clears by itself and hands
+// any other to the person, pausing the attempt in place for any call, a look
+// included, so the Limits line became a Robot checks line that says so and
+// that a check is never a reason to complete or to stop.
 // The page-view terms are the
 // ones the renderer prints (`../page-view/header.ts`, `line/render.ts`,
 // `structure-markers.ts`, `element/kind.ts`, `element/state-tokens.ts`);
@@ -64,7 +71,7 @@
 // public 4,000-character bound.
 
 export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly text: string } = Object.freeze({
-  version: "web-12",
+  version: "web-13",
   text: [
     "You operate a real website in the person's own browser, through the FluxIQ extension, on their behalf, to build a Flow that does their instruction on that site.",
     "",
@@ -78,6 +85,6 @@ export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly t
     "",
     "Lists. Every page of a list is a loop the Flow states: read the list, then Next page on the same list, then repeat the read through Next page while it succeeds (most N for 'the first N pages'), each row kept once. Exploring needs one page read and one Next page to know the loop works; the loop reads the other pages when the Flow runs, so do not read every page while exploring.",
     "",
-    "Limits. Never solve a robot check (CAPTCHA); say that one blocks you."
+    "Robot checks. Never press, type into, solve or reload a robot check (a CAPTCHA, or any check that asks whether you are a person). FluxIQ waits out one that clears by itself and hands any other to the person, pausing your work where it is; once they complete it you are shown the page again and go on from there. A robot check is never a reason to complete or to stop."
   ].join("\n")
 });

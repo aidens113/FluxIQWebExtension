@@ -38,6 +38,18 @@
 // had before any allowance (`webAutomationBaseTimeoutMs`), so a command that
 // passes through two of these places carries it once.
 //
+// **A look carries it too** (t885, `run-mwaknxf9-7549d126`). A sort's reply
+// arrived from the old document, and the look after it captured bigbox's
+// "Robot or human?" page as an ordinary page; the model, shown the check as a
+// page, stopped on it although it lifted by itself seconds later. A whole-tab
+// look that carries `checkWaitMs` is judged by the extension as a landing is
+// (`apps/extension/src/runtime/look-check.ts`): a check that clears by itself
+// is waited out, and one only a person can answer comes back
+// USER_INTERVENTION_REQUIRED, which the domain turns into `personNeeded`. A
+// look that names no `checkWaitMs` -- a host state capture, a re-acquire, the
+// recorder -- reads a check page as a page, as before, and so does a look
+// addressed to one frame, whose scope is that frame and not the page.
+//
 // This follows the paginated read (`extraction/request.ts`), which scales its
 // `timeoutMs` for the same reason: Core sends the node's timeout as the
 // command's, and a default sized for one quick action cuts a longer honest one
@@ -54,6 +66,9 @@ export const WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS = 5_000;
 /** The actions whose command can land on a check: the ones that load or change the page. */
 export const WEB_AUTOMATION_CHECK_WAIT_ACTIONS: readonly string[] = ["web.dom.click", "web.browser.navigate"];
 
+/** A look at the page: given the allowance when it looks at the whole tab (`webAutomationCommandWaitsOutChecks`). */
+const WEB_AUTOMATION_LOOK_ACTION = "web.dom.capture_snapshot";
+
 /** Whether an action's command is given the check allowance. */
 export function webAutomationActionWaitsOutChecks(outputId: string): boolean {
   return WEB_AUTOMATION_CHECK_WAIT_ACTIONS.includes(outputId);
@@ -66,10 +81,16 @@ export function webAutomationActionWaitsOutChecks(outputId: string): boolean {
  * run 39 typed a bigbox search with `submit`, landed on the store's eight-second
  * "Robot or human?" check, and was handed it standing. Typing that sends
  * nothing, and any other key, keep the timeout they had.
+ *
+ * A look at the whole tab is given it as well, so a check it meets is waited
+ * out or handed to the person rather than shown as a page (t885). A look
+ * addressed to one frame is not: the extension never judges a frame's look for
+ * a page's check, so the allowance would only lengthen its deadline.
  */
 export function webAutomationCommandWaitsOutChecks(outputId: string, parameters: JsonObject): boolean {
   if (webAutomationActionWaitsOutChecks(outputId)) return true;
   if (outputId === "web.dom.type") return parameters.submit === true;
+  if (outputId === WEB_AUTOMATION_LOOK_ACTION) return parameters.browserFrameId === undefined && parameters.browserFrameUrlPath === undefined;
   return outputId === "web.dom.keypress" && (parameters.key ?? parameters.text) === "Enter";
 }
 

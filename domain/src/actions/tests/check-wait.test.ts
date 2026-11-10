@@ -50,3 +50,16 @@ test("typing that sends its form and an Enter are given the allowance; typing th
   const unsent = { selector: "#q", text: "towels", submit: false };
   assert.equal(webAutomationCheckWaitNode("web.dom.type", { parameters: unsent }).parameters, unsent);
 });
+
+// t885 (`run-mwaknxf9-7549d126`): the look after a sort captured bigbox's "Robot or human?" page as a
+// page, so the model stopped on a check that lifted by itself. A whole-tab look now carries the
+// allowance, which is what has the extension wait the check out or hand it to the person.
+test("a look at the whole tab is given the allowance; a look addressed to one frame is not", () => {
+  assert.deepEqual(webAutomationCheckWaitParameters("web.dom.capture_snapshot", {}), { checkWaitMs: 15_000 });
+  assert.deepEqual(webAutomationCheckWaitParameters("web.dom.capture_snapshot", { includeHidden: true, browserTabId: 4 }), { includeHidden: true, browserTabId: 4, checkWaitMs: 15_000 });
+  assert.deepEqual(webAutomationCheckWaitNode("web.dom.capture_snapshot", { parameters: {} }), { parameters: { checkWaitMs: 15_000 }, timeoutMs: 20_000 });
+  for (const framed of [{ browserTabId: 4, browserFrameId: 0 }, { browserFrameId: 3 }, { browserFrameUrlPath: "/widget" }]) {
+    const parameters = { ...framed, timeoutMs: 5_000 };
+    assert.equal(webAutomationCheckWaitParameters("web.dom.capture_snapshot", parameters), parameters, JSON.stringify(framed));
+  }
+});

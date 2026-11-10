@@ -26,20 +26,23 @@ const NEXT = "https://store.test/next";
 const NAVIGATE = "web.output.browser-navigate";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const CLICK = "web.output.dom-click";
+const SELECT = "web.output.dom-select";
 const PERMITTED = async () => ({ permitted: true as const });
 const CHECK = { code: WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, actual: "captcha: a robot check" };
 
-type Fails = { navigate?: JsonObject; click?: JsonObject; capture?: JsonObject; captureAfterClick?: JsonObject };
+type Fails = { navigate?: JsonObject; click?: JsonObject; capture?: JsonObject; captureAfterClick?: JsonObject; captureAfterSelect?: JsonObject; captureAfterRefusedClick?: JsonObject };
 
-/** A page with one button, whose navigation, press or look can each be made to fail with a given record. */
+/** A page with one button and one choice, whose navigation, press, choice or look can each be made to fail with a given record. */
 function site(fails: Fails, options: { blank?: boolean } = {}) {
-  const state = { location: options.blank ? undefined as string | undefined : HOME, clicked: false };
+  const state = { location: options.blank ? undefined as string | undefined : HOME, clicked: false, chose: false, refused: false };
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType === "web.dom.capture_snapshot") {
         if (fails.capture) return { status: "failed", failure: fails.capture, error: "no" };
         if (state.clicked && fails.captureAfterClick) return { status: "failed", failure: fails.captureAfterClick, error: "no" };
+        if (state.chose && fails.captureAfterSelect) return { status: "failed", failure: fails.captureAfterSelect, error: "no" };
+        if (state.refused && fails.captureAfterRefusedClick) return { status: "failed", failure: fails.captureAfterRefusedClick, error: "no" };
         if (state.location === undefined) return { status: "failed", error: "blank tab" };
         return { status: "succeeded", payload: { snapshot: page(state.location) } };
       }
@@ -49,8 +52,15 @@ function site(fails: Fails, options: { blank?: boolean } = {}) {
         return { status: "succeeded", payload: { url: state.location } };
       }
       if (command.actionType === "web.dom.click") {
-        if (fails.click) return { status: "failed", failure: fails.click, error: "no" };
+        if (fails.click) {
+          state.refused = true;
+          return { status: "failed", failure: fails.click, error: "no" };
+        }
         state.clicked = true;
+        return { status: "succeeded" };
+      }
+      if (command.actionType === "web.dom.select") {
+        state.chose = true;
         return { status: "succeeded" };
       }
       return { status: "succeeded" };
@@ -67,7 +77,8 @@ function page(url: string): JsonObject {
     interactiveElements: [
       { tagName: "button", selector: "#go", visibleText: "Go", attributes: { type: "button" }, bounds: { x: 1, y: 1, width: 10, height: 10 } },
       // The link that shows the build the next page's address, which is what lets it navigate there (`../shown-addresses.ts`).
-      { tagName: "a", selector: "#next", visibleText: "Next", href: NEXT, bounds: { x: 1, y: 20, width: 10, height: 10 } }
+      { tagName: "a", selector: "#next", visibleText: "Next", href: NEXT, bounds: { x: 1, y: 20, width: 10, height: 10 } },
+      { tagName: "select", selector: "#sort", accessibleName: "Sort by", selectedValue: "best", options: [{ value: "best", label: "Best match" }, { value: "rating", label: "Highest rating" }], bounds: { x: 1, y: 40, width: 40, height: 10 } }
     ]
   };
 }
@@ -131,6 +142,38 @@ test("a press that worked, whose page then shows a robot check, stands as a prop
   assert.equal(pressed.draft?.effect, "mutate");
   assert.equal(pressed.draft?.proposes, true);
   assert.deepEqual(pressed.draft?.replay, { from: { location: HOME } });
+});
+
+// t885 (`run-mwaknxf9-7549d126`): a sort's reply came back from the old document, and the look after
+// it met bigbox's "Robot or human?" page. The extension now answers that look USER_INTERVENTION_REQUIRED
+// when the check does not clear by itself, so the choice stands as the act it was and the person is asked.
+test("a choice that worked, whose look after it meets a robot check, needs a person and stands as a proposing choice", async () => {
+  const { runtime } = site({ captureAfterSelect: CHECK });
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const handle = shownHandle(looked.evidence, "Sort by");
+  const chosen = await runtime.executeTool({ ...PROJECT, callId: "call.sort", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SELECT, parameters: { target: { handle }, value: "Highest rating" }, consequences: [] } });
+
+  assert.equal(chosen.personNeeded, true, JSON.stringify(chosen));
+  assert.equal(chosen.resultCode, "web.action.rejected.needs_person");
+  assert.equal(chosen.draft?.actionId, SELECT);
+  assert.equal(chosen.draft?.effect, "mutate");
+  assert.equal(chosen.draft?.proposes, true);
+  assert.equal((chosen.draft?.ranWith?.parameters as JsonObject).selector, "#sort");
+  assert.deepEqual(chosen.draft?.replay, { from: { location: HOME } });
+});
+
+// An action refused for its own reason, whose page is then a robot check, keeps the look's mark
+// (`../../capture.ts`, `pageRefusal`): the person is next. The refusal keeps its own code, and the
+// press stands as a press that met the check does, since its command went out.
+test("a refused press whose page is then a robot check needs a person and keeps its refusal", async () => {
+  const { runtime } = site({ click: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND }, captureAfterRefusedClick: CHECK });
+  const handle = await goHandle(runtime);
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
+
+  assert.equal(pressed.personNeeded, true, JSON.stringify(pressed));
+  assert.equal(pressed.effectApplied, false);
+  assert.equal(pressed.resultCode, "web.action.rejected.target_not_found");
+  assert.equal(pressed.draft?.actionId, CLICK);
 });
 
 test("a look at a robot check needs a person and proposes nothing", async () => {
