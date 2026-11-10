@@ -124,11 +124,12 @@ export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailur
  * carries (`retryAfterMs`) and re-runs the node after it, which is the one place
  * the act is made again.
  *
- * A press that certainly did nothing is Core's to make once more for the same
- * reason the other way round: Core makes a lasting press so once only, and a
- * press this loop made again would be one Core never counted. So is a press
- * the page answered with nothing but its own notice (t743): Core makes it again
- * under its first attempt plus three retries, and counts each.
+ * A press that certainly did nothing is Core's to make again for the same
+ * reason the other way round: Core makes it again under its first attempt plus
+ * three retries (t528), and counts each, and a press this loop made again would
+ * be one Core never counted. Within one attempt the click has already pressed
+ * once more itself, only after a certain-nothing verdict (t896). So is a press
+ * the page answered with nothing but its own notice (t743).
  */
 const ABSORBED_ELSEWHERE: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["rate_limited", "no_effect", "page_reported_failure"]);
 

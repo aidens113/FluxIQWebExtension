@@ -83,14 +83,16 @@ export type IgnoredRecord = { made: number; settledWith: number[]; stopped: numb
 
 /**
  * An ignored-press watch that reports `seen` when the first press's watch is
- * settled and `secondSeen` for the press made once more, and records how the
- * verb used it.
+ * settled and `secondSeen` for the press made once more, and answers each
+ * press's settled look with `settledUnchanged` and `secondSettledUnchanged`,
+ * and records how the verb used it.
  */
 export function fakeIgnoredWatch(
   firstSeen: PressSignal[],
   events: string[],
   secondSeen: PressSignal[] = ["change"],
-  settledUnchanged: boolean | "announced" = false
+  settledUnchanged: boolean | "announced" = false,
+  secondSettledUnchanged: boolean | "announced" = false
 ): { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord; unchangedAsked: number[] } {
   const record: IgnoredRecord = { made: 0, settledWith: [], stopped: 0 };
   // The windows each press's settled look was asked to wait (t517); it answers `settledUnchanged`.
@@ -102,6 +104,7 @@ export function fakeIgnoredWatch(
       events.push("ignored-watch");
       record.made += 1;
       const seen = record.made === 1 ? firstSeen : secondSeen;
+      const unchanged = record.made === 1 ? settledUnchanged : secondSettledUnchanged;
       return {
         settle: async (windowMs) => {
           record.settledWith.push(windowMs);
@@ -109,7 +112,7 @@ export function fakeIgnoredWatch(
         },
         settleUnchanged: async (windowMs) => {
           unchangedAsked.push(windowMs);
-          return settledUnchanged;
+          return unchanged;
         },
         stop: () => {
           record.stopped += 1;
