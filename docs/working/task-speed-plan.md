@@ -13,7 +13,7 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 
 ## Current State
 
-**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. Next: that replay timing and the gaps' cause, then A2 (S2) and S6 once the live lane's fixes merge. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
+**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. The first four-attempt run (t889) measured each replay at 2 model calls (interpretation and judge) and 46-48 s for 18 steps; see S6 and the new S9. Next, once the live lane (t885) merges, since all three touch its Core files: replay timing and the gaps' cause, S6, and S9. A2 (S2) follows when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
 
 **The user's words (2026-11-10):**
 - "lets try and really increase efficiency, especially when it comes to time"
@@ -105,6 +105,26 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - **Where.** Core `runtime/conversations/` (the same-words road) and the Flow replay path.
 - **Saves.** About 3 seconds plus 0.5 seconds a step per replay. With S3-S5, a 5-step replay goes from about 25 seconds to under 10.
 - **Risk.** Low.
+
+**Measured 2026-11-10 (t889, the first four-attempt run, provider-free, local-classifieds dining tables, `run-mwaby832-3a6c67f5`).**
+- Each replay ran the saved Flow with no decisions: 18 live steps, path `run_flow`.
+- Each replay still made **2 model calls**:
+  - the chat's interpretation of the same typed words, which S6 removes;
+  - the judge, which S9 addresses.
+- The attempt row counted only the judge. t889 fixes that.
+- Each replay took 46-48 s against 52 s for the exploring attempt, with an instant scripted model, so a replay spends about 2.6 s per step in the browser and Core. That is the 53 s "second attempt gap" A1 saw, and it is S0's open replay-timing item.
+
+**S9. Every replay of an accepted Flow is judged again.**
+- **Cause.** The completion check judges each run's result, so a replay that ran exactly as its accepted, judged run did still pays a judge call: one of the two calls each replay makes.
+- **Fix (recommended).** A replay whose every step ran as saved, with each step's own checks passing and the result in the accepted run's shape, is accepted on its own record. The judge is asked only when the replay deviates:
+  - a step was repaired, retried past its first attempt, or routed by state to another node;
+  - a read returned a different shape;
+  - a FluxNode or the person asked for `judge: always`.
+
+  The judge's one judged whole run of the finished Flow is unchanged.
+- **Where.** Core `answer-first/completion/` and the flow-run record it reads, after the live lane (t885) merges, since it edits `completion/check.ts`.
+- **Saves.** One call and about 9-11 seconds per replay. With S6, a replay makes no model call.
+- **Risk.** Medium: a site whose data changed under an unchanged structure could return a wrong answer unjudged. The quality guard decides it: a replay series per realistic task must keep its right-answer rate, measured by the Lab's own oracle, which needs no model.
 
 **S7. Long tasks take 30 to 55 steps.** After S1-S5, step cost no longer sets the time; the step count does.
 - **Causes, each with evidence:**
