@@ -10,11 +10,13 @@ import { countSteps, LabRunRecord } from "../../lab-runs/index.js";
 import { beginLiveLlmRun, ensureLiveLlmSecretKey, type LiveLlmRun } from "../../live-llm/index.js";
 import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
+import type { AttemptOutcome, AttemptTask } from "../driver.js";
 import type { PersonHandOff } from "../../person-simulation/index.js";
-import { attemptReportRow, renderAttemptSeries } from "../report.js";
+import { attemptReportRow, laterAttemptNotes, renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
 import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, attemptSpeed, attemptSpeedLines, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type AttemptSpeed, type LiveAttemptSession } from "./attempt/index.js";
+import { partialSeries } from "./partial-series.js";
 import { attemptPersonFor } from "./attempt-person.js";
 import { attemptBalanceFailures } from "./balance-failures.js";
 import { attemptCanGoOn } from "./can-go-on.js";
@@ -115,11 +117,11 @@ type AttemptKept = { ended: LiveAttemptEnded; cache: AttemptCacheShare; speed: A
 const subtracted = (now: Readonly<Record<string, number>>, before: Readonly<Record<string, number>>): Record<string, number> => Object.fromEntries(Object.entries(now).flatMap(([kind, count]) => (count > (before[kind] ?? 0) ? [[kind, count - (before[kind] ?? 0)]] : [])));
 
 /**
- * `lab attempt`: one attempt at one task, or with `--attempts 2` its first and second, started
+ * `lab attempt`: a task's exploring attempt and then deterministic ones (`--attempts N`, default 4), started
  * from the real chat, followed to each ending, scored on `answerVerdict` and the double-act
  * oracle, with the evidence kept.
  *
- * **Two attempts are one workspace, one thread and one site, never reseeded between them.**
+ * **The attempts are one workspace, one thread and one site, never reseeded between them.**
  * The second is the same words typed into the same thread: that is what a person with the
  * panel open does, the second turn sits under the first where the two can be compared, and a
  * thread's reads are what follow it. It is judged against what the first left.
@@ -134,8 +136,9 @@ const subtracted = (now: Readonly<Record<string, number>>, before: Readonly<Reco
  * says attempt 2 works the day after attempt 1, with the real domain and service together. What the restart looked
  * like is in `attempt.json` as `restartedBetween`.
  *
- * Exits 0 only when every attempt asked for ran and answered right, and a second was proven to
- * start from the first's saved work. A proof that stopped waiting or a request the script did
+ * Exits 0 only when every attempt asked for ran and answered right, and each later one was proven to
+ * start from the one before. The status is `passed` only then, and only with two or more attempts: one
+ * attempt (`--attempts 1`) is a diagnosis, and ends `diagnosis_only` however well it went. A proof that stopped waiting or a request the script did
  * not expect says so and exits 1: neither is a judgement of the attempt.
  */
 export async function runAttemptCommand(input: AttemptCommandInput): Promise<number> {
@@ -163,6 +166,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   let session: LiveAttemptSession | undefined;
   const kept = new Map<number, AttemptKept>();
   const scored = new Map<number, ScoredAttempt>();
+  /** Set once the task is resolved, so a run that stops can still build the series of the attempts that ended. */
+  let ranTask: AttemptTask | undefined;
   let stepsSoFar = 0;
   let callsSoFar: Readonly<Record<string, number>> = {};
   let exitCode = 1;
@@ -218,8 +223,12 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     });
     // Each attempt's score is kept as it ends, so a series that ends early still keeps what its earlier attempts were judged to be.
     const task = { scenario, request, workflow };
+    ranTask = task;
     const driver = { ...live, run: async (...args: Parameters<typeof live.run>) => {
-      const outcome = await live.run(...args);
+      const ran = await live.run(...args);
+      // The model calls the step log attributes to this attempt that Core's record leaves out (the chat's reading of the instruction) and the judge, by the steps it logged between the attempts.
+      const speed = kept.get(args[1])?.speed;
+      const outcome: AttemptOutcome = speed ? { ...ran, modelCalls: { interpretation: speed.interpretationCalls, judge: speed.judgeCalls } } : ran;
       scored.set(args[1], { outcome, row: attemptReportRow(task, outcome) });
       return outcome;
     } };
@@ -232,38 +241,50 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       const hit = kept.get(row.attempt)?.cache.hitPercent ?? null;
       return hit === null ? row : { ...row, cacheHitPercent: hit };
     });
-    const startedFromFirst = series.series.secondStartedFromFirst ?? undefined;
+    const startedFrom = (attempt: number): boolean | undefined => (attempt > 1 ? series.continuations[attempt - 2]?.held : undefined);
     const told = series.outcomes.map((outcome, index) => {
       const row = rows[index]!, keeping = kept.get(row.attempt)!, attempt = keeping.ended.outcome.attempt;
       return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
     });
-    const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: row.attempt > 1 ? startedFromFirst : undefined, askedAgain }));
-    const continuation = series.continuations[0] ?? null;
+    const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: startedFrom(row.attempt), askedAgain }));
+    const { continuations } = series;
     const notRun = series.stoppedShort === undefined ? [] : [`Attempt ${told.length + 1} did not run: ${series.stoppedShort}.`];
     const restartWords = restarted ? [`Core restarted between the attempts: the extension connected again after ${Math.round(restarted.reconnectedAfterMs / 1000)} s, the model key read ${restarted.modelKey}, and the chat ${restarted.panel === "carried_on" ? "carried on by itself" : `was opened again (it stood at ${restarted.panelBefore})`}.`] : [];
-    const notProven = continuation && !continuation.held ? [`That the second attempt started from the first's saved work is refused: ${continuation.refused.join(", ")}.`] : [];
+    const notProven = continuations.filter((proof) => !proof.held).map((proof) => `That attempt ${proof.toAttempt} started from attempt ${proof.fromAttempt}'s saved work is refused: ${proof.refused.join(", ")}.`);
+    const deterministicNotes = laterAttemptNotes(series.series);
+    const diagnosisOnly = command.attempts === 1;
     const report = renderAttemptSeries({ ...series.series, rows });
     const speedLines = told.flatMap(({ row, speed }) => attemptSpeedLines(row.attempt, speed));
-    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuation, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
+    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuations, deterministic: series.series.deterministic, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
     recorded = true;
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...speedLines].join("\n")}\n`);
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...speedLines].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
-    const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && (continuation === null || continuation.held);
-    verdict = allRight ? "passed" : "failed";
+    const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && continuations.every((proof) => proof.held);
+    // One attempt never proves the loop: it is a diagnosis, and its status must not read as a pass.
+    verdict = !allRight ? "failed" : diagnosisOnly ? "diagnosis_only" : "passed";
     if (side.live) await writePaidAttemptBundle({ runsDirectory: paths.runsDirectory, runId, startedAt, verdict, plan: side.live.describe().authorized, spentUsd: told.reduce((sum, { attempt }) => sum + attempt.spend.usd, 0), stepsDirectory });
     exitCode = allRight ? 0 : 1;
-    for (const line of [...restartWords, ...lines, ...notRun, ...notProven]) process.stdout.write(`[attempt] ${line}\n`);
+    for (const line of [...restartWords, ...lines, ...notRun, ...notProven, ...deterministicNotes]) process.stdout.write(`[attempt] ${line}\n`);
     const last = told.at(-1)!;
-    process.stdout.write(`${JSON.stringify({ status: verdict, task: last.row.taskId, answerVerdict: last.row.answerVerdict, ended: last.attempt.status, live: last.row.live, standIns: last.row.standIns, ...(command.attempts === 1 ? {} : { attempts: told.map(({ row, attempt }) => ({ attempt: row.attempt, answerVerdict: row.answerVerdict, ended: attempt.status, path: row.path, calls: row.calls })), secondStartedFromFirst: series.series.secondStartedFromFirst, reseededBetween: false, restartedBetween: command.restartBetween === true }), evidence })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: verdict, task: last.row.taskId, answerVerdict: last.row.answerVerdict, ended: last.attempt.status, live: last.row.live, standIns: last.row.standIns, ...(command.attempts === 1 ? {} : { attempts: told.map(({ row, attempt }) => ({ attempt: row.attempt, answerVerdict: row.answerVerdict, ended: attempt.status, path: row.path, flowId: attempt.flowId ?? null, continuation: row.attempt > 1 ? continuations[row.attempt - 2] ?? null : null, calls: row.calls, ms: row.ms })), continuations, deterministic: series.series.deterministic, deterministicNotes, reseededBetween: false, restartedBetween: command.restartBetween === true }), evidence })}\n`);
   } catch (error) {
     // An attempt that ended was paid for: what it was, what it cost and the ledger's line are kept whatever ended the series, a stuck follow, a refused request or a throw.
     // A stuck or refused follow also says which attempt did not start or end; any other throw happened after its attempt ended.
     verdict = "failed";
     const stopped = error instanceof AttemptProofStuck || error instanceof AttemptScriptRefused;
     const paid = side.live ? { runsDirectory: paths.runsDirectory, runId, startedAt, plan: side.live.describe().authorized, stepsDirectory } : undefined;
-    const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}) } : undefined;
-    const said = await writeUnscoredAttemptEvidence({ evidence, attempts: command.attempts, kept, error, recorded, scored, ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) })
-      .catch((failed: unknown) => `its evidence could not be written: ${failed instanceof Error ? failed.message : String(failed)}`);
+    // An attempt the run typed and followed has started, however it ended: a refused request is not "did not start".
+    const refusal = side.server?.refusals()[0];
+    // Built inside the write, so a failure here is reported as the evidence's own and never replaces the error that stopped the run.
+    const said = await Promise.resolve().then(async () => {
+      const slice = stopped ? await attemptSpeed(stepsDirectory, stepsSoFar) : undefined;
+      const loggedSteps = stopped ? (await countSteps(stepsDirectory)) - stepsSoFar : 0;
+      const started = error instanceof AttemptScriptRefused ? { started: { loggedSteps, interpretationCalls: slice?.interpretationCalls ?? 0, ...(refusal ? { refusal: { kind: refusal.kind, ordinal: refusal.ordinal } } : {}) } } : {};
+      const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}), ...started } : undefined;
+      // The attempts that ended and were scored are still a series: their rows, continuations and deterministic summary are kept, whatever stopped the rest.
+      const partial = recorded ? undefined : partialSeries({ task: ranTask, scored, asked: command.attempts, cacheHitPercent: (attempt) => kept.get(attempt)?.cache.hitPercent ?? null });
+      return writeUnscoredAttemptEvidence({ evidence, attempts: command.attempts, kept, error, recorded, scored, ...(partial ? { series: partial } : {}), ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) });
+    }).catch((failed: unknown) => `its evidence could not be written: ${failed instanceof Error ? failed.message : String(failed)}`);
     if (!stopped) {
       process.stdout.write(`[attempt] ${command.taskId}: the run failed, and ${said}; evidence ${evidence}\n`);
       throw error;

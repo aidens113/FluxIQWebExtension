@@ -13,7 +13,7 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 
 ## Current State
 
-**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. Next: that replay timing and the gaps' cause, then A2 (S2) and S6 once the live lane's fixes merge. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
+**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. The first four-attempt run (t889) measured each replay at 2 model calls (interpretation and judge) and 46-48 s for 18 steps; see S6 and the new S9. **Top priority (user, 2026-11-10):** "the actual node execution times are very slow right now... it takes a long time for a click or any other action to actually register... it should be basically instant". Lane t890 (S10, below) owns that, including the replay step timing and gaps. Next, once the live lane (t885) merges, since both touch its Core files: S6 and S9. A2 (S2) follows when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
 
 **The user's words (2026-11-10):**
 - "lets try and really increase efficiency, especially when it comes to time"
@@ -106,6 +106,42 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - **Saves.** About 3 seconds plus 0.5 seconds a step per replay. With S3-S5, a 5-step replay goes from about 25 seconds to under 10.
 - **Risk.** Low.
 
+**Measured 2026-11-10 (t889, the first four-attempt run, provider-free, local-classifieds dining tables, `run-mwaby832-3a6c67f5`).**
+- Each replay ran the saved Flow with no decisions: 18 live steps, path `run_flow`.
+- Each replay still made **2 model calls**:
+  - the chat's interpretation of the same typed words, which S6 removes;
+  - the judge, which S9 addresses.
+- The attempt row counted only the judge. t889 fixes that.
+- Each replay took 46-48 s against 52 s for the exploring attempt, with an instant scripted model, so a replay spends about 2.6 s per step in the browser and Core. That is the 53 s "second attempt gap" A1 saw, and it is S0's open replay-timing item.
+
+**S9. Every replay of an accepted Flow is judged again.**
+- **Cause.** The completion check judges each run's result, so a replay that ran exactly as its accepted, judged run did still pays a judge call: one of the two calls each replay makes.
+- **Fix (recommended).** A replay whose every step ran as saved, with each step's own checks passing and the result in the accepted run's shape, is accepted on its own record. The judge is asked only when the replay deviates:
+  - a step was repaired, retried past its first attempt, or routed by state to another node;
+  - a read returned a different shape;
+  - a FluxNode or the person asked for `judge: always`.
+
+  The judge's one judged whole run of the finished Flow is unchanged.
+- **Where.** Core `answer-first/completion/` and the flow-run record it reads, after the live lane (t885) merges, since it edits `completion/check.ts`.
+- **Saves.** One call and about 9-11 seconds per replay. With S6, a replay makes no model call.
+- **Risk.** Medium: a site whose data changed under an unchanged structure could return a wrong answer unjudged. The quality guard decides it: a replay series per realistic task must keep its right-answer rate, measured by the Lab's own oracle, which needs no model.
+
+**S10. An action takes too long to land on the page (top priority, user, 2026-11-10).**
+- **Evidence.** After A1, a click's overhead is still 1.4-1.8 s:
+  - a fixed 300 ms wait after every click that does not navigate (`click-landing.ts` `NAVIGATION_START_GRACE_MS`);
+  - about 0.15 s more of messaging during the act;
+  - 0.13-0.27 s for the look before, when it is not kept, and 0.06-0.09 s of sanitizing per look;
+  - about 0.46 s for the look after.
+
+  A replayed step takes about 2.6 s with an instant model. Neither the decision-to-dispatch path nor the replay path is timed yet.
+- **Fix.** Time decision-to-press and every replay step. Then replace each fixed wait or poll with the event that ends it:
+  - the page's Navigation API `navigate` event or `webNavigation.onBeforeNavigate`, instead of the 300 ms grace;
+  - page settle from the page-changes counter, instead of a clock.
+
+  Retries, permission gates and fingerprint matching stay.
+- **Target.** Decision-to-press well under 200 ms when the page was already looked at; a replay step under 0.5 s when nothing navigates.
+- **Where.** Lane t890: the extension runtime, content and background; domain runtime (not `node-run/run.ts`, which t885 holds); Core step-log, the WebSocket gateway and the engine step loop.
+
 **S7. Long tasks take 30 to 55 steps.** After S1-S5, step cost no longer sets the time; the step count does.
 - **Causes, each with evidence:**
   - **One amendment at a time.** The draft Flow is written one amendment per decision: 87 `amend_draft` decisions at 10-20 seconds each.
@@ -168,6 +204,26 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - Validation: re-run by the lead. Core `vitest run src/runtime/llm/step-log/tests/` -> 64 passed; Core structure audit -> passed; domain `tsc` (src and tests) -> clean; `node scripts/test-domain.mjs llm-evidence/node-run/` -> 560/560; extension `node scripts/check-extension.mjs` -> exit 0; `node scripts/test-extension.mjs runtime/tests runtime/look-reuse runtime/navigation-events content/` -> 1993/1993; test-runner `tsc` -> clean; `speed.test.js` -> 2/2. Worker's provider-free `lab attempt --scripted-model --attempts 2` on local-classifieds, everything-store and company-website: same outcomes before and after, figures in the report.
 - Not verified: live runs, Firefox, seven of the ten sites, replay per-step timing (not built), time to first token. `docs/architecture/extension-client.md` and `testing-facility.md` are not yet updated for the readiness and speed changes.
 - Outcome: merged into both devs ("Merge task t888: speed-browser-step") and pushed.
+
+### 2026-11-10 - t889: deterministic attempts in the Lab
+
+- Agent: lead; worker lab-deterministic-runs (Sonnet). The lead added the scripted model's same-words reading (`scripted-model/model-server.ts`).
+- Why: standing user rule (2026-11-10), several deterministic runs after every exploration.
+- Changed:
+  - `lab attempt --attempts N`, default 4. One attempt ends `diagnosis_only` and never passes.
+  - Every later attempt's continuation is proven.
+  - Calls are split into interpretation, judge and decisions.
+  - A series that stops short still reports what ended.
+  - The live guards read `diagnosis_only`.
+  - `testing-facility.md` and `extension-client.md` are updated.
+- Validation: re-run by the lead in t889.
+  - test-runner `tsc` -> clean.
+  - `node --test` attempt-lane and lab-attempt-command -> 127/127.
+  - test-contracts `attempt-score.test.mjs` -> 8/8.
+  - Structure audit -> passed.
+  - The proof `pnpm lab attempt local-classifieds --task local-classifieds-save-dining-tables --authoring-mode answer-first --scripted-model` (run-mwad80ty-a5ca95cd): attempts 1-3 right. Calls 22 (interpretation 1, judge 1, decisions 20), then 2 and 2 (interpretation 1, judge 1, decisions 0), with continuations held. Attempt 4 was refused at its 4th judge request, a script limit.
+- Not verified: live call attribution; the reworded refusal line in a rerun.
+- Outcome: merged into dev ("Merge task t889: lab-deterministic-runs") and pushed.
 
 ## Open Questions
 

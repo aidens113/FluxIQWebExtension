@@ -36,6 +36,8 @@ test("splits an attempt's wall time into decisions, browser action and overhead,
     assert.deepEqual(speed.decisions, { calls: 1, ms: 6_000, thinkingMs: 5_940, outputMs: 60, uncachedInputTokens: 3_500 });
     assert.deepEqual(speed.browser, { steps: 1, ms: 3_000, actionMs: 400, overheadMs: 2_600, unsplitMs: 0 });
     assert.equal(speed.judgeMs, 7_000);
+    assert.equal(speed.judgeCalls, 1, "a judge step that called a model is one call");
+    assert.equal(speed.interpretationCalls, 1, "so is the chat's reading of the instruction");
     assert.equal(speed.interpretationMs, 2_000);
     assert.equal(speed.otherToolMs, 10);
     assert.equal(speed.gapsMs, 20_000 - 18_010);

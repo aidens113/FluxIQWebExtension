@@ -6,7 +6,7 @@ import test from "node:test";
 import type { AttemptReportRow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
 import type { AttemptOutcome } from "../../driver.js";
-import { AttemptProofStuck } from "../attempt/index.js";
+import { AttemptProofStuck, AttemptScriptRefused } from "../attempt/index.js";
 import type { LiveAttemptEnded } from "../live-driver.js";
 import { writeUnscoredAttemptEvidence } from "../unscored-attempt-evidence.js";
 
@@ -134,4 +134,33 @@ test("a stuck first attempt with nothing ended still writes its record and the l
   const [ledger] = await readRunOutcomes(runs, { sinceMs: now, knownRunIds: new Set() });
   assert.equal(ledger?.runId, runId);
   assert.equal(ledger?.verdict, "failed");
+});
+
+test("a series stopped by a refused judge keeps every ended attempt's lines and deterministic summary, and says the attempt started", async (t) => {
+  const { evidence } = await world(t);
+  const kinds = { interpretation: 1, judge: 1, decisions: 0 };
+  const rowOf = (attempt: number, path: AttemptReportRow["path"], calls: number, callKinds?: AttemptReportRow["callKinds"]): AttemptReportRow => ({
+    schemaVersion: "0.3", taskId: "task.one", scenarioId: "everything-store", attempt, path, calls, ...(callKinds ? { callKinds } : {}), inputTokens: 1, outputTokens: 1, usd: 0, ms: 1000, liveSteps: 1,
+    simulation: "not_run", answerVerdict: "right", oracleVerdict: null, flow: "unproven", repeatedActs: [], loopsCaught: {}, standIns: ["model"], live: false,
+  });
+  const series = {
+    schemaVersion: "0.3" as const, taskId: "task.one", scenarioId: "everything-store", rows: [rowOf(1, "explore", 22, { interpretation: 1, judge: 1, decisions: 20 }), rowOf(2, "run_flow", 2, kinds), rowOf(3, "run_flow", 2, kinds)], firstRightAttempt: 1, attemptsUntilDeterministic: null,
+    spendDeltas: [], continuations: [{ fromAttempt: 1, toAttempt: 2, held: true, refused: [] }, { fromAttempt: 2, toAttempt: 3, held: true, refused: [] }],
+    deterministic: { asked: 3, ran: 2, attempts: [2, 3].map((attempt) => ({ attempt, path: "run_flow" as const, flowId: "f", continuationHeld: true, calls: 2, callKinds: kinds, ms: 1000 })), zeroCallAttempts: 0, allHeld: false },
+  };
+  await writeUnscoredAttemptEvidence({
+    evidence, attempts: 4, kept: new Map([[1, { ended: ended(1, 0.5), cache: null, modelCalls: null }]]), error: new AttemptScriptRefused("The script for task.one expects no request 4 of kind loop_verification"), recorded: false,
+    series, didNotEnd: { ordinal: 4, started: { loggedSteps: 3, interpretationCalls: 1, refusal: { kind: "loop_verification", ordinal: 4 } } },
+  });
+  const report = await readFile(path.join(evidence, "attempt-report.txt"), "utf8");
+  assert.match(report, /deterministic attempt 2: path run_flow, flow f, continuation held, model calls 2 \(interpretation 1, judge 1, decisions 0\)/u);
+  assert.match(report, /deterministic attempt 3: .*model calls 2 \(interpretation 1, judge 1, decisions 0\)/u);
+  assert.match(report, /deterministic attempts: 2 of 3 ran, 0 with no model call, continuations all held for the ones that ran/u);
+  assert.match(report, /^Attempt 4 of 4 started \(the chat read the instruction in 1 model call\(s\); the run logged 3 steps for it\), then was refused at request 4 of kind loop_verification, and did not end: /mu);
+  assert.doesNotMatch(report, /did not start/u);
+  const record = JSON.parse(await readFile(path.join(evidence, "attempt.json"), "utf8")) as { series: { rows: unknown[] }; continuations: unknown[]; deterministic: { ran: number }; didNotEnd: { started: { loggedSteps: number } } };
+  assert.equal(record.series.rows.length, 3);
+  assert.equal(record.continuations.length, 2);
+  assert.equal(record.deterministic.ran, 2);
+  assert.equal(record.didNotEnd.started.loggedSteps, 3);
 });

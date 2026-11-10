@@ -3,7 +3,7 @@
 
 import type { AnswerVerdict, AttemptStandIn, FlowScore, RepeatedActReport } from "./answer-score.js";
 
-export const ATTEMPT_REPORT_SCHEMA_VERSION = "0.1" as const;
+export const ATTEMPT_REPORT_SCHEMA_VERSION = "0.3" as const;
 
 /**
  * The paths and simulation words of Core's attempt record
@@ -31,6 +31,13 @@ export type AttemptAgainstEarlier = {
   changed: string[];
 };
 
+/**
+ * The model calls of one attempt by kind. `interpretation` is the chat's reading of the typed instruction,
+ * `judge` the check that the answer holds, and `decisions` every other call Core's attempt record counts.
+ * Their sum is the row's `calls`, so no call is counted twice.
+ */
+export type AttemptCallKinds = { interpretation: number; judge: number; decisions: number };
+
 export type AttemptReportRow = {
   schemaVersion: typeof ATTEMPT_REPORT_SCHEMA_VERSION;
   taskId: string;
@@ -38,7 +45,10 @@ export type AttemptReportRow = {
   /** Which attempt at the task, from 1. */
   attempt: number;
   path: AttemptPath;
+  /** Every model call the attempt made: with `callKinds`, interpretation + judge + decisions. */
   calls: number;
+  /** Absent when the call source could not attribute the interpretation and judge calls to this attempt; `calls` is then Core's own count, unsplit. */
+  callKinds?: AttemptCallKinds;
   inputTokens: number;
   outputTokens: number;
   usd: number;
@@ -76,8 +86,10 @@ export type AttemptSeries = {
   attemptsUntilDeterministic: number | null;
   /** Each later attempt beside the one before it: negative is less. */
   spendDeltas: { attempt: number; calls: number; tokens: number; usd: number; ms: number; liveSteps: number }[];
-  /** Whether attempt 2 was proven to have started from what attempt 1 saved (`AttemptContinuation`); `null` with one attempt. */
-  secondStartedFromFirst: boolean | null;
+  /** One proof per later attempt, each against the attempt before it (`AttemptContinuation`); empty with one attempt. */
+  continuations: AttemptContinuation[];
+  /** What attempts 2..N say about determinism; `null` when no later attempt was asked for (a diagnosis-only run). */
+  deterministic: AttemptDeterministicSummary | null;
 };
 
 /** Why the Lab holds that a later attempt began from an earlier one's saved work, each named so a false claim has nowhere to hide. */
@@ -87,4 +99,34 @@ export type AttemptContinuation = {
   held: boolean;
   /** Empty when `held`. */
   refused: string[];
+};
+
+/** One later attempt, by what it ran and whether it was proven to start from the one before. */
+export type AttemptDeterministicEntry = {
+  attempt: number;
+  path: AttemptPath;
+  /** The Flow it ran; `null` when it ran none (it explored). */
+  flowId: string | null;
+  /** Whether `continuations` held for this attempt. */
+  continuationHeld: boolean;
+  calls: number;
+  /** The attempt's split of `calls`; `null` when it could not be attributed. */
+  callKinds: AttemptCallKinds | null;
+  ms: number;
+};
+
+/**
+ * Attempts 2..N, which the standing rule asks for after every exploration: that they use the saved Flow, and how
+ * many model calls they make. Nothing here is averaged: each attempt is listed.
+ */
+export type AttemptDeterministicSummary = {
+  /** The later attempts asked for (attempts - 1). */
+  asked: number;
+  /** The later attempts that ran; less than `asked` when the series stopped short. */
+  ran: number;
+  attempts: AttemptDeterministicEntry[];
+  /** How many of the later attempts made no model call. */
+  zeroCallAttempts: number;
+  /** True only when every later attempt asked for ran and every continuation held. */
+  allHeld: boolean;
 };

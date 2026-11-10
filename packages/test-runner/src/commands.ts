@@ -34,7 +34,7 @@ export type LabCommand =
   // `tracing: false` (`--no-tracing`) starts Core with client gateway tracing off, for the off-versus-on overhead measurement; absent, it is on as for every Lab Core.
   | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; variantId?: string; seed?: number; tracing?: false }
   // One attempt at a task from the real extension chat, scored on its answer: `lab attempt` (`attempt-lane/live/`). `model` is a scripted server (provider-free) or a live provider run.
-  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; attempts: 1 | 2; restartBetween?: true; dryRun?: true }
+  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; dryRun?: true }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
   | RecoveryMatrixCommand;
 
@@ -156,24 +156,30 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] [--no-tracing] | attempt <scenario> --task ID --authoring-mode answer-first (--scripted-model | --live-llm --llm-max-cost-usd N) [--attempts 1|2 [--restart-between]] [--dry-run] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] [--no-tracing] | attempt <scenario> --task ID --authoring-mode answer-first (--scripted-model | --live-llm --llm-max-cost-usd N) [--attempts N (default 4: one exploring attempt and three deterministic; 1 is diagnosis only and never passes) [--restart-between (N >= 2)]] [--dry-run] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
 }
 
 /**
  * `lab attempt`. It drives Answer First's attempt, so it names that mode as a live run
  * must, and it takes exactly one model: `--scripted-model`, which is provider-free and
  * takes no LLM option, or `--live-llm`, the paid form, whose profile and task default to
- * what this command always is. Only `--live-llm` counts as live. `--attempts 2` runs the
- * task's second attempt straight after its first, on the site as the first left it, and with
- * `--restart-between` Core is stopped and started again before the second, over the same stores.
+ * what this command always is. Only `--live-llm` counts as live. `--attempts N` (any whole
+ * number from 1; default 4, for a scripted and a live model alike) runs the task's exploring attempt
+ * and then N-1 deterministic ones, each straight after the one before, on the site as that one left it
+ * (user, 2026-11-10: several deterministic runs follow every exploration). `--attempts 1` is for
+ * diagnosis and never passes. With `--restart-between` (N >= 2) Core is stopped and started again
+ * before every later attempt, over the same stores.
  */
+/** One exploring attempt and three deterministic ones. */
+export const DEFAULT_ATTEMPTS = 4;
+
 function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "attempt" }> {
   rejectUnknownOptions(args, ["--task", "--scripted-model", "--dry-run", "--attempts", "--restart-between", ...llmOptionNames]);
   const attemptsGiven = option(args, "--attempts");
-  if (attemptsGiven !== undefined && attemptsGiven !== "1" && attemptsGiven !== "2") throw new Error("lab attempt --attempts takes 1 or 2: the task's first attempt, or its first and second on the site as the first left it");
-  const attempts = attemptsGiven === "2" ? 2 as const : 1 as const;
+  if (attemptsGiven !== undefined && !/^[1-9][0-9]{0,2}$/u.test(attemptsGiven)) throw new Error("lab attempt --attempts takes a whole number from 1 to 999: the exploring attempt and then the deterministic ones after it (default 4; 1 is diagnosis only and never passes)");
+  const attempts = attemptsGiven === undefined ? DEFAULT_ATTEMPTS : Number(attemptsGiven);
   const { present: restartBetween, rest: withoutRestart } = flagOption(args, "--restart-between");
-  if (restartBetween && attempts !== 2) throw new Error("lab attempt --restart-between restarts Core between two attempts, so it needs --attempts 2");
+  if (restartBetween && attempts < 2) throw new Error("lab attempt --restart-between restarts Core before each later attempt, so it needs --attempts 2 or more");
   const { dryRun, rest: withoutDryRun } = dryRunOption(withoutRestart);
   const { present: scripted, rest: withoutScripted } = flagOption(withoutDryRun, "--scripted-model");
   const attemptsAt = withoutScripted.indexOf("--attempts");

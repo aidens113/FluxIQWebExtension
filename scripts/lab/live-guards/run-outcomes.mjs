@@ -119,7 +119,7 @@ async function finalizedOutcome(directory, runId, startMs, labRunsDirectory, unp
     totalEstimatedCostUsd: costOf(liveLlm) ?? logged?.totalEstimatedCostUsd ?? null,
     ...perBuildOf(liveLlm),
     balanceFailure: failures === null ? logged?.balanceFailure ?? null : detectBalanceFailure(failures),
-    facilityFailureBeforeProvider: verdict === "passed" ? null : await facilityFailureBeforeProvider(directory, runId, liveLlm, labRunsDirectory),
+    facilityFailureBeforeProvider: verdict === "passed" || verdict === "diagnosis_only" ? null : await facilityFailureBeforeProvider(directory, runId, liveLlm, labRunsDirectory),
   };
 }
 

@@ -68,7 +68,19 @@ test("what the script does not expect fails loudly with its kind, and is never a
   assert.match(server.refusals()[1]!.refused!, /could not answer request 2 of kind evidence_tool_decision: the page shows no such control/u);
   const second_chat = await post(server.origin, body(JSON_TEXT));
   assert.equal(second_chat.status, 200);
-  assert.equal((await post(server.origin, body(JSON_TEXT))).status, 400, "a second chat turn was not scripted");
+  const otherWords = body({ ...JSON_TEXT, messages: [{ role: "user", content: "List the mentors" }] });
+  assert.equal((await post(server.origin, otherWords)).status, 400, "a second chat turn in other words was not scripted");
+});
+
+test("the same words in a later chat turn are read as before, and each such call is still counted", async (t) => {
+  const server = await startScriptedModelServer({ script: SCRIPT, key: KEY });
+  t.after(() => server.close());
+  const first = await streamed(await post(server.origin, body(JSON_TEXT)));
+  const again = await post(server.origin, body(JSON_TEXT));
+  assert.equal(again.status, 200);
+  assert.equal((await streamed(again)).text, first.text);
+  assert.deepEqual(server.counts(), { panel_command: 2 }, "a repeated reading is a model call the report must count");
+  assert.deepEqual(server.refusals(), []);
 });
 
 test("a call signed with any other key is refused", async (t) => {

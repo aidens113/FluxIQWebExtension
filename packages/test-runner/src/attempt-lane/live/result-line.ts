@@ -16,7 +16,7 @@ function againstWords(row: AttemptReportRow, startedFromFirst: boolean | undefin
   if (!against) return "";
   const found = against.foundDone.length > 0 ? `it found already done: ${quoted(against.foundDone)}` : "it found none of the asked acts already done";
   const change = against.changed.length > 0 ? `It changed the site: ${quoted(against.changed)}` : "It changed nothing on the site";
-  const proof = startedFromFirst === undefined ? "" : startedFromFirst ? " It started from the first attempt's saved work, proven by the digest." : " That it started from the first attempt's saved work is not proven.";
+  const proof = startedFromFirst === undefined ? "" : startedFromFirst ? ` It started from attempt ${row.attempt - 1}'s saved work, proven by the digest.` : ` That it started from attempt ${row.attempt - 1}'s saved work is not proven.`;
   return ` It ran against what attempt ${row.attempt - 1} left, with no reseed; ${found}. ${change}. ${PATH_WORDS[row.path]}.${proof}`;
 }
 
@@ -44,5 +44,5 @@ export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAns
   const ended = `${input.status}${input.waitingFor ? ` for ${input.waitingFor}` : ""}`;
   const counted = row.live ? "counted as live" : `NOT LIVE, stand-ins: ${row.standIns.join(", ")}`;
   const noRow = (input.actsWithNoRow ?? 0) > 0 ? ` ${input.actsWithNoRow} lasting acts could not be tied to a row.` : "";
-  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
+  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${row.callKinds ? ` (interpretation ${row.callKinds.interpretation}, judge ${row.callKinds.judge}, decisions ${row.callKinds.decisions})` : ""}${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
 }

@@ -16,13 +16,18 @@
 // (2026-10-14) -- matches no launch, so history from before then never
 // refuses a run under this rule.
 
+
 import { previousRun } from "../ledger-queries.mjs";
+
+/** A one-attempt `lab attempt` run that answered right: a diagnosis, not a failure, so it never refuses the run after it (`attempt-lane/live/run-attempt-command.ts`). */
+const DIAGNOSIS_ONLY_VERDICT = "diagnosis_only";
+
 
 /** @param {import("./guard-state.mjs").GuardState} state */
 export function checkUnchangedRerun(state) {
   const { instance, task, authoringMode } = state.launch;
   const previous = previousRun(state.entries, (entry) => entry.instance === instance && entry.task === task && typeof entry.authoringMode === "string" && entry.authoringMode === authoringMode && entry.killed !== true && !entry.facilityFailureBeforeProvider);
-  if (previous === null || previous.verdict === "passed" || typeof previous.fingerprint !== "string") return null;
+  if (previous === null || previous.verdict === "passed" || previous.verdict === DIAGNOSIS_ONLY_VERDICT || typeof previous.fingerprint !== "string") return null;
   if (previous.fingerprint !== state.fingerprint) return null;
   return {
     rule: "unchanged", overridable: true,

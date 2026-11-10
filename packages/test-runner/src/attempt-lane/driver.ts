@@ -48,6 +48,8 @@ export type AttemptOutcome = Readonly<{
   answer: RunAnswerScore;
   oracleVerdict: "passed" | "failed" | null;
   standIns: readonly AttemptStandIn[];
+  /** The model calls the run's step log attributes to this attempt that Core's attempt record leaves out: the chat's reading of the typed instruction (`interpretation`) and the judge. Absent when the source could not say. */
+  modelCalls?: Readonly<{ interpretation: number; judge: number }>;
   /** Said only of an attempt that began on what an earlier one left, with no reseed. */
   against?: AttemptAgainstEarlier;
   /** Said only of an attempt a person started with Run again: what became of each asked act. */

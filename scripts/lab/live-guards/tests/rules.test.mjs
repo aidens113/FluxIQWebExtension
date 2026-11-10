@@ -50,6 +50,7 @@ test("unchanged: a failed task is not rerun on the same source, but is after a c
   assert.match(refusal.why, /run-a, which ended failed/u);
   assert.equal(checkUnchangedRerun(state({ entries: failed, fingerprint: "sha256:changed" })), null);
   assert.equal(checkUnchangedRerun(state({ entries: [finish({ verdict: "passed" })] })), null);
+  assert.equal(checkUnchangedRerun(state({ entries: [finish({ verdict: "diagnosis_only" })] })), null, "a one-attempt diagnosis that answered right is no failure to refuse a rerun for");
   assert.equal(checkUnchangedRerun(state({ entries: [finish({ task: "other/task" })] })), null);
   assert.equal(checkUnchangedRerun(state({ entries: [finish({ instance: "slot-2" })] })), null);
   // Only the latest run of the task counts: a later pass clears an earlier failure.
