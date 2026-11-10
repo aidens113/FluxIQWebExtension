@@ -38,6 +38,16 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 
 Over a whole attempt, model decisions are 56-61% of the time, browser nodes 18-23%, the judge 7-9%, the chat's interpretation call about 2%, and Core's gaps between steps under 5%.
 
+**Latest measurement (towels on Haiku, `run-mwb2kkv5-1baeee11`, attempt 1, 490 s).**
+- Model decisions: 386.7 s (79%), 26 calls at about 14.9 s each, 337k uncached input tokens. Time to first token is not logged.
+- Browser: 68.5 s, of which 38.5 s is the actions and 30.0 s overhead.
+  - 11 list reads at 2.4 s each.
+  - 8 Next-page presses at 2.0 s each (0.78 s of it a snapshot send).
+  - 2 selects at 6.0 s each, where the sort lands on the site's self-clearing robot check, which is waited out.
+- Judge: 21.9 s (1 call). Gaps: 8.9 s. Interpretation: 3.1 s.
+
+S1 (effort per decision) is still the largest lever for a first attempt.
+
 ## Goal And How It Is Judged
 
 **The goal (the user's, a goal and not a hard limit).** A realistic task's first attempt gets working in under 3 minutes; most take a few minutes at most. Second attempts that replay a saved Flow take under 30 seconds.
