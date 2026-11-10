@@ -307,6 +307,24 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
   - Structure audit -> passed.
 - Outcome: merged into dev ("Merge task t892: web-instant-actions-3") and pushed.
 
+### 2026-11-10 - t894: replays without the interpretation call, optional steps passed at once (S6, S9 rule)
+
+- Agent: lead; worker replay-zero-calls (Opus).
+- Changed (Core):
+  - S6: a chat turn whose words fold to a known task key routes to the task with no model call (`runtime/conversations/instructions/known-task.ts`, `commands/answer-first/known-task.ts`). Paraphrases and other requests still reach the model.
+  - Optional steps: before an optional step's first dispatch, Core asks the host once, with no wait, whether its control is shown (`engine/automation/state-routing/optional-not-shown.ts`).
+  - S9's rule (`answer-first/completion/replay-stands.ts`, 12 named deviations) is written and tested but **not yet wired**. The flow-run record, task memory and the attempt must supply `replay()`, and those files are the live lane's.
+- Measured, provider-free, local-classifieds dining tables (`run-mwaw30ax-02e6fad1`):
+  - Replays 28.4/28.8 s -> 18.9/19.0 s, at 1 call each (interpretation 0, judge 1). One interpretation call across the series.
+  - The absent prompt step 5,109 -> about 20 ms.
+  - Crossborder timed-check `--attempts 2` passed, with the replay's judge still asked.
+- Validation: re-run by the lead.
+  - Core `vitest run` engine/automation, answer-first, conversations, conversation-requests -> 263 files, 2074 passed.
+  - fluxiq `tsc` -> exit 0. Core structure audit -> passed.
+  - After merging Core dev (act-gate fix): act-record, completion, conversations and state-routing -> 88 files, 820 passed.
+- Decided: a retried step counts as a deviation, so its replay is judged. Why a replayed step (s7) needed a retry (`web.action.no_effect`, then passed) is a determinism defect to trace.
+- Outcome: merged into both devs ("Merge task t894: replay-zero-calls") and pushed. Next: wire S9; trace the s7 retry.
+
 ## Open Questions
 
 None for the user. The quality guard decides S1 and S5 by measurement.
