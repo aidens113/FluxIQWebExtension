@@ -219,6 +219,21 @@ test("a click whose own document saw no navigation begin is returned at once, wi
   assert.equal(browser.listening(), 0);
 });
 
+test("a click whose page called window.open waits for its tab within the grace, though no navigation began", async (t) => {
+  installBrowser(t);
+  const created = new Set<(details: { sourceTabId: number; tabId: number }) => void>();
+  (globalThis as { chrome: { webNavigation: Record<string, unknown> } }).chrome.webNavigation.onCreatedNavigationTarget = {
+    addListener: (listener: (details: { sourceTabId: number; tabId: number }) => void) => void created.add(listener),
+    removeListener: (listener: (details: { sourceTabId: number; tabId: number }) => void) => void created.delete(listener)
+  };
+  const sentAt = Date.now();
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => ({ ...REPLY, navigation: { began: false, opened: true } }));
+  const waited = Date.now() - sentAt;
+  assert.equal(result.status, "succeeded");
+  assert.ok(waited >= START_GRACE_MS - 5, `waited ${waited} ms for a tab that never came`);
+  assert.equal(created.size, 0, "the listener goes with the call");
+});
+
 test("a click whose own document saw a navigation begin is judged by its landing as before", async (t) => {
   const browser = installBrowser(t, { "doc-blocked": 403 });
   const url = `${ORIGIN}/scenarios/failure-surfaces/blocked?to=%2Faccount`;

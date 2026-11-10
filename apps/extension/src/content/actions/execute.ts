@@ -91,6 +91,7 @@ import { clearableLayerOverPage, pressWaysOut, runOpenedLayers, type ClearingTar
 import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../action-runtime/recovery";
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { watchActionNavigation } from "../action-runtime/navigation-watch";
+import { actedClock } from "../action-runtime/acted-at";
 import { captureSnapshotAction } from "./capture-snapshot";
 import { waitForSelectorAction } from "./wait-for-selector";
 import { waitForTextAction } from "./wait-for-text";
@@ -149,6 +150,8 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
   // What the document says of its own navigation while the action runs, for the
   // worker's landing check (task speed S10, `action-runtime/navigation-watch.ts`).
   const navigation = watchActionNavigation();
+  // When the action first acts on the page, for the step's decision-to-press (task speed S10, `action-runtime/acted-at/`).
+  actedClock.begin();
   let resolved: Element | undefined;
   const watched = resolvedNoted(deps, (element) => { resolved = element; });
   // What the defence pressed between attempts, for the result's own record of it.
@@ -195,6 +198,8 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
   // A key sent with no target of its own goes to the focused control, whose form says where it submits.
   const seen = navigation.seen(resolved ?? focusedElement());
   if (seen) answered.navigation = seen;
+  const actedAt = actedClock.read();
+  if (actedAt !== undefined) answered.actedAt = actedAt;
   return answered;
 }
 

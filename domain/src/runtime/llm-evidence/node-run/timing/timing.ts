@@ -89,6 +89,16 @@ export function recordWebCommandSpans(actionType: string, sentAt: number, answer
   automationStudioLlmStepLogSpans.record(`send.${action}`, sentAt, answeredAt, typeof status === "string" ? status : undefined);
   const page = pageClock(clientPayload);
   if (page) automationStudioLlmStepLogSpans.record(`page.${action}`, page.startedAt, page.finishedAt);
+  // The moment the page was acted on, as a point: its `at` in the step is the step's decision-to-press (task speed S10).
+  const acted = actedAtOf(clientPayload, page);
+  if (acted !== undefined) automationStudioLlmStepLogSpans.record("pressed", acted, acted, action);
+}
+
+/** The client's `actedAt`, when it is a number inside the page's own start and end. */
+function actedAtOf(payload: unknown, page: { startedAt: number; finishedAt: number } | undefined): number | undefined {
+  if (page === undefined || typeof payload !== "object" || payload === null) return undefined;
+  const { actedAt } = payload as { actedAt?: unknown };
+  return typeof actedAt === "number" && actedAt >= page.startedAt && actedAt <= page.finishedAt ? actedAt : undefined;
 }
 
 /** `web.dom.capture_snapshot` as `capture_snapshot`: the last segment of the action type, which is all a span name needs. */

@@ -698,11 +698,22 @@ export type BrowserActionCommand = WebAutomationActionCommand;
  * no wait for a navigation to start (`runtime/click-landing.ts`); it is never
  * sent on to Core, whose payload names its fields one by one.
  */
-export type ActionNavigationSeen = { began: boolean };
+export type ActionNavigationSeen = {
+  began: boolean;
+  /** The page called `window.open` while the action ran (`page-world/window-opens.ts`): a tab of its own may be opening. */
+  opened?: boolean | undefined;
+};
 
 export type BrowserActionResult = WebAutomationActionResult<DomElementDescriptor, DomSnapshot> & {
   /** Absent where the page offers no Navigation API to watch, or the control opens its page in another browsing context. */
   navigation?: ActionNavigationSeen | undefined;
+  /**
+   * When the action first acted on the page -- the press, the key, the value
+   * set -- by the content script's clock; absent for an action that only read
+   * (`content/action-runtime/acted-at/`). Sent on to Core as the step's press
+   * moment (`domain/src/client/gateway-mapping.ts`), task speed S10.
+   */
+  actedAt?: number | undefined;
 };
 
 export type {

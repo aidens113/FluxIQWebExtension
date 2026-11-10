@@ -254,10 +254,12 @@ export async function sendClickCheckingLanding(
     // grace its own tab's landing is given anyway. A press whose own document
     // saw no navigation begin, answered after the press's answer windows, with
     // none reported by the browser either, waits for none (task speed S10).
+    // A page that called `window.open` is given the grace for its tab, which ends when the tab appears.
     const startWindowMs = pageSawNoNavigation(reply, watch) ? 0 : NAVIGATION_START_GRACE_MS;
+    const openWindowMs = startWindowMs === 0 && reply.navigation?.opened !== true ? 0 : NAVIGATION_START_GRACE_MS;
     const [verdict, openedTabId] = await Promise.all([
       judgeLanding(action, tabId, watch, access, pressed, "click", startWindowMs),
-      opened.settle(startWindowMs)
+      opened.settle(openWindowMs)
     ]);
     if (verdict === undefined && openedTabId !== undefined) {
       return await driveOpenedTab(action, reply, { sourceTabId: tabId, openedTabId, startedAt: watch.startedAt }, access, pressed);

@@ -30,7 +30,12 @@
 // the document ends the watch. So does the document starting to leave
 // (`beforeunload`, `pagehide`, or the Navigation API's `navigate`): a button
 // that submits a form navigates, and a result not sent before the document goes
-// is a result lost, which is why a followed link is answered at once too.
+// is a result lost, which is why a followed link is answered at once too. And
+// since 2026-11-10 (task speed S10) the window closes once the server has
+// answered every request the press began (`ignored-press/request-answers.ts`):
+// a refusal is one of those answers, so it is on the page by then. A press that
+// began no request, or one the page world cannot tell answered, keeps the
+// whole window.
 //
 // Nothing here presses anything. "Try again" on the notice does the refused act
 // on the page's initiative; the node's own re-run, after the wait, does it on
@@ -71,6 +76,7 @@
 import { composedParent } from "../shadow-dom";
 import { boundedLayerText, isPageRequirementText, isRateLimitLayerText, isTransientRefusalText, overlaysOverPage } from "./interference";
 import { watchWrittenLines, type WrittenLines } from "./written-lines";
+import type { PressAnswered } from "./ignored-press";
 
 /** A press the page refused -- for going too fast, because it was busy, or because it needs something first -- as far as it may be reported. */
 export type RateLimitNotice = {
@@ -89,9 +95,11 @@ export type RateLimitWatch = {
    * Resolves with the notice once one is seen within `windowMs`, or `undefined`
    * when none is, or as soon as the press has been answered otherwise. Checks
    * once at once, so a notice the press's own handler opened is answered without
-   * waiting. Stops the watch.
+   * waiting. With `answered`, the window also closes once every request the
+   * press began has answered (`ignored-press/request-answers.ts`), as at its
+   * end. Stops the watch.
    */
-  settle(windowMs: number): Promise<RateLimitNotice | undefined>;
+  settle(windowMs: number, answered?: PressAnswered): Promise<RateLimitNotice | undefined>;
   /** Stops without waiting; safe to call more than once. */
   stop(): void;
 };
@@ -243,7 +251,7 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
 
   return {
     stop,
-    settle(windowMs) {
+    settle(windowMs, answered) {
       const immediate = check();
       if (settles(immediate) || windowMs <= 0) {
         stop();
@@ -253,6 +261,8 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
         const finish = (found: RateLimitNotice | "answered" | undefined): void => {
           clearInterval(poll);
           clearTimeout(deadline);
+          clearTimeout(early);
+          stopAnswer();
           wake = undefined;
           stop();
           resolve(answer(found));
@@ -272,13 +282,26 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
         // One last look at the deadline, so a notice painted inside the final
         // interval is not reported as none; unless the control is still working
         // on the press, when the watch reads on (see the file comment).
-        const deadline = setTimeout(() => {
+        const closeWindow = (): void => {
+          if (overtime) return;
           if (stillWorking() && Date.now() - startedAt < BUSY_LIMIT_MS) {
             overtime = true;
             return;
           }
           finish(check());
-        }, windowMs);
+        };
+        const deadline = setTimeout(closeWindow, windowMs);
+        // The window also closes once the server has answered every request the
+        // press began (task speed S10): a refusal is the answer to one of them,
+        // so by then it is on the page, one task later, when the page's own
+        // handling of the answer has run. A notice already seen but still
+        // missing its wait keeps the window, for the countdown the page fills in.
+        let early: ReturnType<typeof setTimeout> | undefined;
+        const answeredNow = (): void => {
+          if (early === undefined && waitless === undefined && answered?.answered() === true) early = setTimeout(closeWindow, 0);
+        };
+        const stopAnswer = answered?.onAnswer(answeredNow) ?? (() => undefined);
+        answeredNow();
       });
     }
   };

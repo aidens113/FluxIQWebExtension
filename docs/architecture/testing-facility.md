@@ -2171,9 +2171,18 @@ turn sits under the first. The second attempt's baseline is read when it starts 
   thinking and output by token (time to first token is not logged); the browser's time split into the
   page's own action and the overhead around it, from the spans each node run records (`look.before`,
   `prepare`, `permission`, `act`, `look.after`, `press.settle`, `compose`, `send.*`, `page.*`,
-  `sanitize`); the judge, the chat's interpretation, other tools and Core's gaps between steps; and one
-  line per node type with the mean of every span. A saved Flow's replay is not split per step yet, so a
-  later attempt's browser time shows as gaps.
+  `sanitize`, and `pressed`, the moment the page was first acted on); the judge, the chat's
+  interpretation, other tools and Core's gaps between steps; and one line per node type with the mean
+  of every span. A saved Flow's replay is split per step too (task speed S10, t890 and t891). Core
+  writes each node of a Flow run as a `flow` step (`NNNN-flow-<definitionId>`), with the step loop's
+  parts (`arrival`, `execute`, `host.before`, `dispatch`, `host.after`, ...) and the domain's own
+  spans. The report counts each one as a browser step whose action is the page's share inside its
+  `dispatch`, on its own line as `<node> (Flow run)`. A control node that sent nothing (a Merge, a For
+  Each) counts as other tool time.
+- **Decision-to-press.** A step's `pressed` span is a point, and its `at` is how long after the step
+  began the page was acted on: from Core taking the call, or from a Flow run reaching the node. Task
+  speed S10 measures it per action kind, beside each step's overhead
+  (`docs/working/task-speed-plan/reports/instant-actions-2.md`).
 
 **What a second attempt finds, on the road as it stands.** Core runs what the task saved, trusted or
 not: `partly_works` and `unproven` does not stop it. Since t869 the same words carry what the task

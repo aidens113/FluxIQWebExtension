@@ -6,9 +6,10 @@
 export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
 export { challengeIn, robotCheckIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
+export { actedClock } from "./acted-at";
 export { executeAction } from "./execute-action";
 export { opensElsewhere, watchActionNavigation } from "./navigation-watch";
-export { extraPressesMade, noteExtraPress, pressAgain } from "./ignored-press";
+export { extraPressesMade, noteExtraPress, pressAgain, watchPressAnswered } from "./ignored-press";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
 export { resolveTarget, TargetResolutionError } from "./resolve-target";
 // The assertion's own page reads, shared with the fact check (`../facts/`).
@@ -30,7 +31,7 @@ export type { CheckableStateOutcome } from "./checkable-state";
 export type { DialogControl, ObservedDialog } from "./dialog-control";
 export type { ExtractedElementValue } from "./extract";
 export type { FileInputOutcome } from "./file-input";
-export type { IgnoredPressAnswer, IgnoredPressWatch, PressSignal } from "./ignored-press";
+export type { IgnoredPressAnswer, IgnoredPressWatch, PressAnswered, PressSignal } from "./ignored-press";
 export type { InPlaceEffect, InPlaceEffectWatch } from "./in-place-effect";
 export type { KeyboardCapability, KeyPressOutcome } from "./keyboard";
 export type { ActionNavigationWatch } from "./navigation-watch";

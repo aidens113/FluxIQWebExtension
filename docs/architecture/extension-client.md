@@ -2656,7 +2656,7 @@ page did instead of a fixed wait.
 `action-runner.ts`). The worker counts each tab's top-frame navigation events: `webNavigation`
 before-navigate, committed, history-state and fragment updates, and a tab replaced. A look's readiness
 proof records that count, and the proof now stands across the act until the page moves, with no age
-limit. A navigation event means a wait: `waitForTabReady` is unchanged. `tabs.onUpdated` is not used,
+limit. A navigation event means a wait (`waitForTabReady`, below). `tabs.onUpdated` is not used,
 because its `loading` also reports child frames. A proof left by a worker before a restart keeps the
 old rule: used once, and only within 10 seconds. Firefox reports no `documentId`, so it keeps no proof
 and waits as before.
@@ -2674,6 +2674,74 @@ navigation count is the same, and only reads were sent since. Any other action f
 the look after an act is always a fresh capture, and a look the page changed under while it was being
 taken is not kept. The Lab's speed section (`docs/architecture/testing-facility.md`) shows the time
 the looks take in each attempt.
+
+### Acting without fixed waits
+
+Task speed S10 (t890, t891) replaced each fixed wait left in a step with the event that ends it.
+Retries, permission gates and fingerprint matching are unchanged.
+
+**A page that moved is given a second to settle** (`runtime/automation-tab.ts` `waitForTabReady`).
+After a navigation event, the worker waits until the tab's load is complete and its address has
+stood still for one second. A wait that finds the tab settled leaves the same readiness proof a look
+does, so the next action on that document starts at once (t890). A saved Flow's replay takes no
+look, and before this it paid the second again before every act.
+
+The second itself stays. Task speed S10 (t891) tried ending the wait on the browser's events and the
+page world's request count instead, and two Lab runs showed what the second covers. The realistic
+sites draw part of a page after its load, from a timer and then a request: local-classifieds'
+listing panel and its sorted results. A look taken at the load event read a page without them
+(`run-mwaliwap-12e3ad05`, `run-mwalxlxu-efd58e23`). Only some of these pages mark themselves
+`aria-busy` while they work, and a scheduled timer gives no event until it fires. The evidence that
+would end the wait at the right moment is a page-world count of the timers a page schedules while it
+loads, as `page-world/press-work/` counts a press's; that is the next step
+(`docs/working/task-speed-plan/reports/instant-actions-2.md`).
+
+**A press reports what its own document saw** (`content/action-runtime/navigation-watch/`,
+`shared/protocol.ts` `ActionNavigationSeen`). From the start of each action to its reply, the content
+script watches its document:
+- the Navigation API's `navigate` event, when the navigation leaves the document;
+- `beforeunload` and `pagehide`;
+- the page world's `fluxiq:window-open` (`page-world/window-opens.ts`).
+
+The result carries `navigation: { began, opened }` to the worker, and is never sent on to Core. A
+reply that saw nothing begin, with no navigation reported by the browser, needs no 300 ms start grace
+(`runtime/click-landing.ts`). A page that called `window.open` is given the grace for its tab, which
+ends when the tab appears. A page with no Navigation API, or a control whose page opens in another
+browsing context (`target`, `formtarget`, `<base target>`), keeps the grace.
+
+**A press's windows end when its server has answered** (`page-world/request-starts.ts`,
+`content/action-runtime/ignored-press/request-answers.ts`, `shared/request-start-event.ts`). The page
+world counts each request it sees and when each one answers:
+- a `fetch` answers when its resource-timing entry arrives;
+- an XHR answers at its own `loadend`;
+- a beacon is never awaited;
+- a WebSocket message is never told answered.
+
+The page world announces each answer as `fluxiq:request-answered` on `window`. The rate-limit notice
+window (500 ms) and the robot-check window after a press close one task after every request the press
+began has answered. A refusal or a check is the server's answer to one of those requests, so it is on
+the page by then. A notice still missing its wait keeps the window. A press that began no request,
+and a page world that cannot say, keep the whole window.
+
+**The press moment** (`content/action-runtime/acted-at/`). Each action records when it first acted on
+the page (the press, the key, the value set) as `actedAt`. The domain's payload carries it
+(`domain/src/client/gateway-mapping.ts`), and the step log records it as a `pressed` point
+(`domain/src/runtime/llm-evidence/node-run/timing/`). Its offset in the step is the step's
+decision-to-press.
+
+**The page pace is set by evidence** (`background/page-pace/origin-pace.ts`). An origin that has
+never refused a load is not paced. A 429 or 503, whether to a read's page load or to a navigation's
+landing (`runtime/rate-limited-landing.ts`), holds the origin's next load for 8.5 s. It then spaces
+the origin's loads at 5 s, twice the 2.5 s base, and each later refusal doubles that up to 8 s for
+the worker's life. Until 2026-11-10 every origin was paced at 2.5 s from its first load (t194). On a
+limiter like the everything store's (six loads in eight seconds refused, the session flagged at the
+third refusal), the paced reads are refused at most twice and never flagged
+(`background/page-pace/tests/store-limiter-reads.test.ts`).
+
+**A saved Flow's run is timed per step.** Core writes each pass of its step loop as an
+`NNNN-flow-<definitionId>` step (Core `runtime/llm/step-log/flow-step.ts`). The domain's runtime
+adapter and host runtime record their commands into it as `send.<action>`, `page.<action>` and
+`pressed`, the way a node run's are.
 
 ### Extraction dialog lifecycle
 

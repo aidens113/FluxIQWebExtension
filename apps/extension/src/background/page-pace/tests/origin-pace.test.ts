@@ -1,6 +1,7 @@
-// Coverage of origin-pace.ts: loads on one origin are spaced and loads on
-// different origins are not; a refusal holds the origin's next load and slows it
-// for good, up to the cap; and an origin that never refuses never pays for one.
+// Coverage of origin-pace.ts: an origin that has never refused a load is not
+// paced at all (task speed S10); its first refusal holds its next load and
+// spaces it from then on, each later one slows it further up to the cap, for
+// good; and origins never slow each other.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -16,60 +17,37 @@ function paced(start = 1_000): { pace: OriginPace; clock: { now: number } } {
   return { pace: new OriginPace(PAGE_LOAD_PACE_SETTINGS, () => clock.now), clock };
 }
 
-test("loads on one origin are spaced from the start of the one before, and the first goes at once", () => {
+test("an origin that has never refused a load is not paced, however close its loads come", () => {
   const { pace, clock } = paced();
-  assert.equal(pace.reserve(STORE), 0);
-  assert.equal(pace.reserve(STORE), spacingMs, "a load asked for at the same moment waits one spacing");
-  clock.now += 1_000;
-  assert.equal(pace.reserve(STORE), 2 * spacingMs - 1_000, "the third is booked after the second's booked start");
-  clock.now += 10_000;
-  assert.equal(pace.reserve(STORE), 0, "a load long after the last goes at once");
-});
-
-test("loads on different origins do not wait for each other", () => {
-  const { pace } = paced();
-  assert.equal(pace.reserve(STORE), 0);
-  assert.equal(pace.reserve(OTHER), 0);
-  assert.equal(pace.reserve("https://third.test"), 0);
-  assert.equal(pace.reserve(STORE), spacingMs, "the store's own spacing still holds");
-});
-
-test("an origin that never refuses keeps the base spacing, and loads already that far apart never wait", () => {
-  const { pace, clock } = paced();
-  let waited = 0;
-  for (let load = 0; load < 50; load += 1) {
-    waited += pace.reserve(STORE);
-    clock.now += spacingMs + 500;
+  for (let load = 0; load < 20; load += 1) {
+    assert.equal(pace.reserve(STORE), 0);
+    clock.now += 100;
   }
-  assert.equal(waited, 0);
-  assert.equal(pace.spacingOf(STORE), spacingMs);
+  assert.equal(pace.spacingOf(STORE), 0);
   for (const served of [200, 204, 301, 404, 500]) assert.equal(pace.noteRefusal(STORE, served), false, `status ${served} is no refusal`);
-  assert.equal(pace.spacingOf(STORE), spacingMs, "a status that is not 429 or 503 slows nothing");
+  assert.equal(pace.reserve(STORE), 0, "a status that is not 429 or 503 paces nothing");
   assert.equal(pace.refusalsOf(STORE), 0);
 });
 
-test("an ordinary five-page read, about 2.2 s a page as live reads run, waits little over a second in all", () => {
-  const { pace, clock } = paced();
-  let waited = 0;
-  for (let load = 0; load < 5; load += 1) {
-    const wait = pace.reserve(STORE);
-    waited += wait;
-    clock.now += wait + 2_200;
-  }
-  assert.ok(waited <= 4 * (spacingMs - 2_200), `waited ${waited} ms`);
-});
-
-test("a 429 holds the origin's next load until it is waited out and doubles its spacing, up to the cap, for good", () => {
+test("a first refusal holds the origin's next load until it is waited out, then spaces each load from the one before", () => {
   const { pace, clock } = paced();
   pace.reserve(STORE);
   clock.now += 100;
   assert.equal(pace.noteRefusal(STORE, 429), true);
-  assert.equal(pace.spacingOf(STORE), 2 * spacingMs);
+  assert.equal(pace.spacingOf(STORE), 2 * spacingMs, "backed off to where a pace that had held the base all along would stand");
   assert.equal(pace.reserve(STORE), refusalWaitMs, "the next load waits out the refusal from when it was seen");
-  clock.now += refusalWaitMs;
-  assert.equal(pace.reserve(STORE), 2 * spacingMs, "and every load after it keeps the slower spacing");
+  assert.equal(pace.reserve(STORE), refusalWaitMs + 2 * spacingMs, "and the one asked for with it one spacing later");
+  clock.now += refusalWaitMs + 10_000;
+  assert.equal(pace.reserve(STORE), 0, "a load long after the last goes at once");
+  assert.equal(pace.reserve(STORE), 2 * spacingMs, "and the next is spaced from it");
+});
+
+test("each later refusal doubles the spacing, up to the cap, for good", () => {
+  const { pace, clock } = paced();
+  pace.noteRefusal(STORE, 429);
+  assert.equal(pace.spacingOf(STORE), 2 * spacingMs);
   pace.noteRefusal(STORE, 503);
-  assert.equal(pace.spacingOf(STORE), cooledSpacingCapMs, "a second refusal doubles again, held to the cap");
+  assert.equal(pace.spacingOf(STORE), cooledSpacingCapMs, "doubled again, held to the cap");
   pace.noteRefusal(STORE, 429);
   assert.equal(pace.spacingOf(STORE), cooledSpacingCapMs);
   assert.equal(pace.refusalsOf(STORE), 3);
@@ -83,18 +61,18 @@ test("a refusal on one origin does not slow another", () => {
   pace.reserve(STORE);
   pace.noteRefusal(STORE, 429);
   assert.equal(pace.reserve(OTHER), 0);
-  assert.equal(pace.reserve(OTHER), spacingMs);
-  assert.equal(pace.spacingOf(OTHER), spacingMs);
+  assert.equal(pace.reserve(OTHER), 0);
+  assert.equal(pace.spacingOf(OTHER), 0);
 });
 
-test("the wait before an origin's next load is read without booking it: none for an origin never seen, the refusal wait after a refusal", () => {
+test("the wait before an origin's next load is read without booking it: none until it refuses, the refusal wait after", () => {
   const { pace, clock } = paced();
   assert.equal(pace.waitBeforeNextLoad(STORE), 0, "an origin with no load booked waits for nothing");
   assert.equal(pace.reserve(STORE), 0);
-  assert.equal(pace.waitBeforeNextLoad(STORE), spacingMs, "one spacing after the load just booked");
-  assert.equal(pace.waitBeforeNextLoad(STORE), spacingMs, "and reading it books nothing");
+  assert.equal(pace.waitBeforeNextLoad(STORE), 0, "nor one that has never refused");
   pace.noteRefusal(STORE, 429);
   assert.equal(pace.waitBeforeNextLoad(STORE), refusalWaitMs);
+  assert.equal(pace.waitBeforeNextLoad(STORE), refusalWaitMs, "and reading it books nothing");
   clock.now += refusalWaitMs + 1;
   assert.equal(pace.waitBeforeNextLoad(STORE), 0, "a wait already over is no wait");
   assert.equal(pace.waitBeforeNextLoad(OTHER), 0, "other origins are untouched");

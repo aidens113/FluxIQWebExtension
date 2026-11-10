@@ -6,7 +6,11 @@
 // counted, and a third refusal in one session flags it for a robot check
 // (`apps/scenario-lab/src/scenarios/everything-store/state/throttle.ts`).
 //
-// - `spacingMs` 2.5 s. A load is refused when five others arrived in the eight
+// None of them applies to an origin that has never refused a load: it is not
+// paced (`origin-pace.ts`, since 2026-11-10).
+//
+// - `spacingMs` 2.5 s, the base an origin's first refusal doubles from (to 5 s,
+//   `origin-pace.ts`). A load is refused when five others arrived in the eight
 //   seconds before it, which any spacing of 1.6 s or more already prevents.
 //   At 2.5 s at most three paced loads precede any load inside a window, so
 //   two loads FluxIQ does not pace (a click that submits a search, a page's own
@@ -26,7 +30,7 @@
 
 /** The pace's numbers; see the header. */
 export type PageLoadPaceSettings = {
-  /** The least time between the starts of two loads on one origin that has never refused one. */
+  /** The least time between the starts of two loads on one origin, once it has refused one. */
   spacingMs: number;
   /** How long after a refusal is seen before the next load on that origin. */
   refusalWaitMs: number;

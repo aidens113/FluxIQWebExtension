@@ -29,3 +29,30 @@ export const REQUEST_SINCE_EVENT = "fluxiq:request-since";
 
 /** Separate positive-proof query; legacy marks/since retain their best-effort behavior. */
 export const REQUEST_HEALTH_EVENT = "fluxiq:request-health";
+
+// Since 2026-11-10 (task speed S10) the page world also knows when each request
+// it counted has answered: a `fetch` when its resource timing entry is written
+// (its response ended), an `XMLHttpRequest` at its own `loadend`. A beacon is
+// sent and forgotten, so it is never open; a `WebSocket` message has no answer
+// that can be tied to it, so it stays open for good. After a press the content
+// script asks, by dispatching `REQUEST_PENDING_EVENT` on the marked element,
+// whether a request begun since the mark is still open; the page world cancels
+// it when one is. As each request answers, the page world dispatches
+// `REQUEST_ANSWERED_EVENT` on `window`, with no detail, so the content script
+// can ask again at that moment instead of on a clock. A press whose requests
+// have all answered has had its server's answer, refusal or not
+// (`content/action-runtime/rate-limit-notice.ts`).
+
+/** Dispatched on a marked element; cancelled by the page world while a request begun since the mark has not answered. */
+export const REQUEST_PENDING_EVENT = "fluxiq:request-pending";
+
+/** Dispatched by the page world on `window` each time a request it counted answers. Carries nothing. */
+export const REQUEST_ANSWERED_EVENT = "fluxiq:request-answered";
+
+/**
+ * Dispatched by the page world on `window`, with no detail, each time the page
+ * calls `window.open`: a browsing context of its own may be opening, which the
+ * document's own navigation events never show
+ * (`content/action-runtime/navigation-watch/`).
+ */
+export const WINDOW_OPEN_EVENT = "fluxiq:window-open";
