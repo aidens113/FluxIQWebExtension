@@ -12,6 +12,7 @@
 // existed still branch on them, and a handler that sees `keyCode: 0` behaves
 // differently from one that sees a real key.
 
+import { actedClock } from "../acted-at";
 import type { WebAutomationKeyModifiers } from "../../types";
 
 /** The physical-key identifiers for the keys an action names by word rather than by character. */
@@ -42,6 +43,7 @@ export function dispatchKeyEvent(
   key: string,
   modifiers?: WebAutomationKeyModifiers | undefined
 ): boolean {
+  actedClock.note();
   const { code, keyCode } = keyIdentifiers(key);
   return target.dispatchEvent(new KeyboardEvent(type, {
     key,

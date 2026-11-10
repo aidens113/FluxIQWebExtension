@@ -67,6 +67,9 @@ test("a read's own page loads are booked on the pace by the sender's origin and 
   const listeners = installChromeStub(t);
   const clock = { now: 5_000 };
   const pace = new OriginPace(PAGE_LOAD_PACE_SETTINGS, () => clock.now);
+  // An origin is paced only once it has refused a load, and this one has, long enough ago that its hold is over.
+  pace.noteRefusal(STORE, 429);
+  clock.now += PAGE_LOAD_PACE_SETTINGS.refusalWaitMs;
   const sender = { tab: { id: TAB_ID }, frameId: 0, url: PAGE };
   const { value, tally } = await withPagePace(pace, TAB_ID, 0, async () => {
     const answers = [
@@ -78,12 +81,12 @@ test("a read's own page loads are booked on the pace by the sender's origin and 
     ];
     return answers;
   });
-  assert.deepEqual(value, [{ ok: true, waitMs: 0 }, { ok: true, waitMs: spacingMs }, "unanswered", "unanswered", "unanswered"]);
+  assert.deepEqual(value, [{ ok: true, waitMs: 0 }, { ok: true, waitMs: 2 * spacingMs }, "unanswered", "unanswered", "unanswered"]);
   assert.equal(tally.loads, 2);
   assert.equal(tally.waits, 1);
-  assert.equal(tally.waitedMs, spacingMs);
+  assert.equal(tally.waitedMs, 2 * spacingMs);
   assert.equal(listeners.size, 0, "the listener goes when the read ends");
-  assert.equal(pace.reserve(STORE), 2 * spacingMs, "the bookings were the origin's, keyed without its path");
+  assert.equal(pace.reserve(STORE), 4 * spacingMs, "the bookings were the origin's, keyed without its path");
 });
 
 test("a refused document slows its origin through the pace, and a status that is no refusal does not", async (t) => {
@@ -93,11 +96,11 @@ test("a refused document slows its origin through the pace, and a status that is
   const sender = { tab: { id: TAB_ID }, frameId: 0, url: PAGE };
   const { tally } = await withPagePace(pace, TAB_ID, 0, async () => {
     deliver(listeners, { type: PAGE_LOAD_PACE_MESSAGE, kind: "refused", status: 200 }, sender);
-    assert.equal(pace.spacingOf(STORE), spacingMs);
+    assert.equal(pace.spacingOf(STORE), 0, "a page that was served paces nothing");
     deliver(listeners, { type: PAGE_LOAD_PACE_MESSAGE, kind: "refused", status: 429 }, sender);
   });
   assert.equal(tally.refusals, 1);
-  assert.equal(pace.spacingOf(STORE), 2 * spacingMs);
+  assert.equal(pace.spacingOf(STORE), 2 * spacingMs, "the first refusal paces the origin");
   assert.equal(pace.refusalsOf(STORE), 1);
 });
 
@@ -113,11 +116,15 @@ test("a navigation waits out its booking in the worker, and a page that is not o
   const pauses: number[] = [];
   const pause = (ms: number): Promise<void> => { pauses.push(ms); return Promise.resolve(); };
   assert.equal((await paceNavigation(pace, PAGE, pause)).waits, 0);
+  assert.equal((await paceNavigation(pace, `${STORE}/everything-store/`, pause)).waits, 0, "an origin that never refused goes at once");
+  pace.noteRefusal(STORE, 429);
+  clock.now += PAGE_LOAD_PACE_SETTINGS.refusalWaitMs;
+  assert.equal((await paceNavigation(pace, PAGE, pause)).waits, 0, "the first load after the hold goes at once");
   const second = await paceNavigation(pace, `${STORE}/everything-store/`, pause);
-  assert.equal(second.waitedMs, spacingMs);
+  assert.equal(second.waitedMs, 2 * spacingMs);
   assert.equal((await paceNavigation(pace, "https://elsewhere.test/", pause)).waits, 0, "another origin goes at once");
   assert.equal((await paceNavigation(pace, "chrome://extensions", pause)).loads, 0);
-  assert.deepEqual(pauses, [spacingMs]);
+  assert.deepEqual(pauses, [2 * spacingMs]);
 });
 
 test("the result names what the pace held, in counts and seconds, and is unchanged when it held nothing", () => {

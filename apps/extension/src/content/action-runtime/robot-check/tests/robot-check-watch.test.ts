@@ -138,3 +138,25 @@ test("stop is safe to call more than once, and after settle", async (t) => {
   watch.stop();
   watch.stop();
 });
+
+// Task speed S10: a check the server puts up is its answer to the press's
+// requests, so once they have all answered with none on the page, the window
+// is over; a check seen by then is still followed.
+test("a press whose requests have all answered with no check is released then, not at the window's end", async () => {
+  const listeners = new Set<() => void>();
+  const answeredAt = Date.now() + 50;
+  const served = { answered: () => Date.now() >= answeredAt, onAnswer: (listener: () => void) => { listeners.add(listener);
+    return () => void listeners.delete(listener); } };
+  setTimeout(() => { for (const listener of listeners) listener(); }, 55);
+  const startedAt = Date.now();
+  assert.equal(await watchRobotCheck(pressedElement(), page(undefined, () => undefined)).settle(500, 5_000, served), undefined);
+  const waited = Date.now() - startedAt;
+  assert.ok(waited >= 50 && waited < 300, `waited ${waited} ms`);
+  assert.equal(listeners.size, 0, "the watch stops listening");
+});
+
+test("a check already up when the requests answer is followed as before", async () => {
+  const served = { answered: () => true, onAnswer: () => () => undefined };
+  const sighting = await watchRobotCheck(pressedElement(), page(undefined, () => "person_only")).settle(500, 5_000, served);
+  assert.equal(sighting?.outcome, "person_only");
+});

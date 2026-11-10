@@ -70,3 +70,27 @@ test("counts a look node's own capture as its action, a node step from before sp
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Task speed S10: a saved Flow's run writes each node as a `flow` step (Core
+// `step-log/flow-step.ts`), whose act is its `dispatch`; the host's captures
+// around it are overhead, and a control node that sent nothing is Core's.
+test("counts a Flow run's node as a browser step whose action is the page's share inside its dispatch", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "attempt-speed-"));
+  try {
+    await step(root, "0001-flow-web.output.dom-click", {
+      kind: "flow", toolId: "web.output.dom-click", startedAt: at(0), finishedAt: at(1_000), ms: 1_000,
+      spans: [
+        { name: "arrival", at: 0, ms: 1 }, { name: "execute", at: 1, ms: 990 },
+        { name: "dispatch", at: 5, ms: 600 }, { name: "send.click", at: 5, ms: 600 }, { name: "page.click", at: 20, ms: 450 },
+        { name: "host.after", at: 610, ms: 300 }, { name: "send.capture_snapshot", at: 610, ms: 280 }, { name: "page.capture_snapshot", at: 700, ms: 90 }
+      ]
+    });
+    await step(root, "0002-flow-builtin.control.merge", { kind: "flow", toolId: "builtin.control.merge", startedAt: at(1_000), finishedAt: at(1_002), ms: 2, spans: [{ name: "arrival", at: 0, ms: 1 }] });
+    const speed = await attemptSpeed(root);
+    assert.deepEqual(speed.browser, { steps: 1, ms: 1_000, actionMs: 450, overheadMs: 550, unsplitMs: 0 });
+    assert.equal(speed.otherToolMs, 2);
+    assert.deepEqual(speed.nodes.map(({ node, steps, actionMs }) => ({ node, steps, actionMs })), [{ node: "dom-click (Flow run)", steps: 1, actionMs: 450 }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
