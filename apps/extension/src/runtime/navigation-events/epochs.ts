@@ -25,6 +25,14 @@
 const TOP_FRAME_ID = 0;
 
 const epochs = new Map<number, number>();
+/**
+ * The tabs whose top frame has a navigation begun and not yet ended: set at
+ * `onBeforeNavigate`, cleared at `onCompleted` (its document loaded) or
+ * `onErrorOccurred` (it ended without one -- a download, a 204, an abort).
+ * What `../automation-tab.ts` `waitForTabReady` reads to know a page has
+ * finished moving, by the browser's own events (task speed S10).
+ */
+const inFlight = new Set<number>();
 let installed = false;
 
 /** This worker's count of navigation events: an epoch of another instance's means nothing here. */
@@ -43,7 +51,16 @@ function install(): void {
   installed = true;
   const browser = (globalThis as { chrome?: typeof chrome }).chrome;
   const navigation = browser?.webNavigation;
-  navigation?.onBeforeNavigate?.addListener(onTopFrame);
+  navigation?.onBeforeNavigate?.addListener((details) => {
+    if (details.frameId !== TOP_FRAME_ID) return;
+    bump(details.tabId);
+    inFlight.add(details.tabId);
+  });
+  const ended = (details: { tabId: number; frameId: number }): void => {
+    if (details.frameId === TOP_FRAME_ID) inFlight.delete(details.tabId);
+  };
+  navigation?.onCompleted?.addListener(ended);
+  navigation?.onErrorOccurred?.addListener(ended);
   navigation?.onCommitted?.addListener(onTopFrame);
   navigation?.onHistoryStateUpdated?.addListener(onTopFrame);
   navigation?.onReferenceFragmentUpdated?.addListener(onTopFrame);
@@ -54,6 +71,7 @@ function install(): void {
   browser?.tabs?.onRemoved?.addListener((tabId) => {
     // A closed tab's id is never given to another tab, so its count is never read again.
     epochs.delete(tabId);
+    inFlight.delete(tabId);
   });
 }
 
@@ -65,9 +83,15 @@ export const tabNavigationEpochs = {
     install();
     return epochs.get(tabId) ?? 0;
   },
+  /** Whether a top-frame navigation of the tab has begun and not yet ended, as this worker has heard. Adds the listeners on first use. */
+  inFlight(tabId: number): boolean {
+    install();
+    return inFlight.has(tabId);
+  },
   /** For a unit test: forget every count and listen again on the next read, against the `chrome` then present. */
   resetForTest(): void {
     epochs.clear();
+    inFlight.clear();
     installed = false;
   }
 };

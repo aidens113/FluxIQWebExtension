@@ -75,7 +75,12 @@ export type SettledLook = {
    * nothing else moved; `"announced"` when that held apart from a live region now holding new words (header,
    * t743); `false` otherwise. Stops the look.
    */
-  settle(windowMs: number): Promise<boolean | "announced">;
+  /**
+   * With `work`, a section is read as it stands once the press's own work has
+   * all run (`./request-answers.ts`): nothing the press started can still turn
+   * it back, so neither `QUIET_MS` nor `HELD_MS` is waited (task speed S10).
+   */
+  settle(windowMs: number, work?: { workDone(): boolean }): Promise<boolean | "announced">;
   /** A closed local diagnostic only; it grants no authority and survives stop. */
   rejection?(): "unreadable" | "outside_change" | "new_shadow" | "non_change_signal" | "not_restored" | "deadline" | "stopped" | undefined;
   /** Stops without settling; safe to call more than once. */
@@ -177,7 +182,7 @@ export function lookUntilSettled(
   return {
     stop,
     rejection: () => rejection,
-    settle(windowMs) {
+    settle(windowMs, work) {
       if (stopped || windowMs <= 0) {
         rejection ??= stopped ? "stopped" : "deadline";
         stop();
@@ -189,12 +194,15 @@ export function lookUntilSettled(
           read();
           const now = Date.now();
           const quietMs = now - lastChangeAt;
-          const current = quietMs >= QUIET_MS ? sectionState(scope, roots, notices) : undefined;
-          const same = quietMs >= QUIET_MS && current === before;
-          const verdict = stopped || answered ? false : same ? (announced() ? "announced" : true) : quietMs >= HELD_MS || now >= deadline ? false : undefined;
+          // The press's own work all run: what the section is now is what the press left (task speed S10).
+          const done = work?.workDone() === true;
+          const quiet = done || quietMs >= QUIET_MS;
+          const current = quiet ? sectionState(scope, roots, notices) : undefined;
+          const same = quiet && current === before;
+          const verdict = stopped || answered ? false : same ? (announced() ? "announced" : true) : done || quietMs >= HELD_MS || now >= deadline ? false : undefined;
           if (verdict === undefined) return;
           if (verdict === false) {
-            rejection ??= stopped ? "stopped" : now >= deadline ? "deadline" : quietMs >= QUIET_MS && current === undefined ? "unreadable" : "not_restored";
+            rejection ??= stopped ? "stopped" : now >= deadline ? "deadline" : quiet && current === undefined ? "unreadable" : "not_restored";
           }
           clearInterval(poll);
           stop();

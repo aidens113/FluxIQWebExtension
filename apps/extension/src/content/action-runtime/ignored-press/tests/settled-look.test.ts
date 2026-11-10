@@ -313,3 +313,27 @@ test("a request, navigation, focus or new open shadow remains protected despite 
     assert.equal(look.rejection?.(), cause === "shadow" ? "new_shadow" : "non_change_signal", cause);
   }
 });
+
+// Task speed S10: a press whose own work has all run (`../request-answers.ts`)
+// has left the section as it will stay; it is read at once.
+test("a press whose own work has all run is read at once: a section it changed is its answer, with no wait to hold still", async () => {
+  const page = composer();
+  const look = page.look();
+  page.show(POSTED);
+  const started = Date.now();
+  assert.equal(await look.settle(10_000, { workDone: () => true }), false);
+  assert.equal(look.rejection?.(), "not_restored");
+  assert.ok(Date.now() - started < 200, `read after ${Date.now() - started} ms`);
+});
+
+test("a press whose own work is still running is waited for as before, and a section that came back is certain", async () => {
+  const page = composer();
+  const look = page.look();
+  page.show(BUSY);
+  let running = true;
+  setTimeout(() => {
+    page.show(IDLE);
+    running = false;
+  }, 120);
+  assert.equal(await look.settle(10_000, { workDone: () => !running }), true);
+});

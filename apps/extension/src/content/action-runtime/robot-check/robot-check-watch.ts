@@ -55,7 +55,7 @@ export type RobotCheckWatch = {
    * (`../ignored-press/request-answers.ts`, task speed S10): a check the server
    * puts up is that answer. Stops the watch.
    */
-  settle(windowMs: number, waitMs: number, answered?: PressAnswered): Promise<RobotCheckSighting | undefined>;
+  settle(windowMs: number, waitMs: number, answered?: Pick<PressAnswered, "answered" | "onAnswer">): Promise<RobotCheckSighting | undefined>;
   /** Stops without waiting; safe to call more than once. */
   stop(): void;
 };
@@ -128,6 +128,7 @@ export function watchRobotCheck(pressed: Element, probe: RobotCheckProbe = pageP
       }
       return new Promise((resolve) => {
         const tick = (): void => {
+          answeredNow();
           const found = look(Date.now());
           if (found === "open") return;
           clearInterval(poll);

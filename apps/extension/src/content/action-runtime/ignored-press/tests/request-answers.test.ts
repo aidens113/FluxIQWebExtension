@@ -38,3 +38,19 @@ test("each answer is announced to a listener until it stops listening, and a pag
   assert.equal(watchPressAnswered(pressed(view), { begunSince: () => true }), undefined, "an older mark cannot tell pending");
   assert.equal(watchPressAnswered(pressed(view), undefined), undefined, "no page world");
 });
+
+// Task speed S10: a press that began no request is complete once its own work
+// has all run -- a handler that opened a list and was done.
+test("a press that began no request is complete once its own work has run, and only then", () => {
+  const work = { now: "pending" as "unknown" | "pending" | "idle", released: 0 };
+  const mark = { begunSince: () => false, pendingSince: () => false, healthy: () => true };
+  const watch = watchPressAnswered(pressed(new EventTarget()), mark, { state: () => work.now, stop: () => { work.released += 1; } })!;
+  assert.equal(watch.answered(), false, "its handler is still at work");
+  work.now = "unknown";
+  assert.equal(watch.answered(), false, "work the page world cannot follow is never complete");
+  work.now = "idle";
+  assert.equal(watch.answered(), true);
+  assert.equal(watch.workDone(), true);
+  watch.stop();
+  assert.equal(work.released, 1, "the mark is released");
+});
