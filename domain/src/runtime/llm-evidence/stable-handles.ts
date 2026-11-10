@@ -84,6 +84,28 @@
 // seen in (`navigation.timeOrigin`, `Seen.document`), and a control's place
 // says how deep in shadow roots it sits, which no reload changes (`placesOf`).
 //
+// **Never to another element of the same document, by any tier (t897).** Tier 3
+// keeps a number on the one element left at a loose address whose words
+// changed, so "Add to cart" that now reads "Added" keeps its handle. But a press
+// on social-network-feed's composer prompt first closed "Turn on
+// notifications?", and the composer's dialog opened where it had stood: one
+// dialog left at that loose address, one number given under it, and the
+// composer took the closed dialog's `t335`. The press's change walk then read
+// one dialog that now reads "Create post", Core took that as a press that
+// changed something that stays, and the composer's prompt was held as done on
+// every later attempt (`run-mwb5cnxg-003415b4`). The capture now says which
+// element of its document each one is (`DomElementDescriptor.nodeToken`, a
+// serial the content script keeps per element). A layer -- a dialog, or what
+// covers the page -- is mounted and taken away whole, so within one document a
+// layer's number goes only to the layer it was last seen as: a dialog whose own
+// title changes keeps its node and its number, and a dialog that took a closed
+// one's place is new. Only a layer: a page redraws the controls a person reads
+// as the same one on new nodes all the time (auction's header lists after a
+// Watch, whose count rose; a job board's field cloned on input; local
+// classifieds' Apply cloned), and their numbers are what tells a later step it
+// is the same control. Across documents the serials mean nothing, and the
+// tiers stand as they were.
+//
 // Handles were spelled `target.N` until t223, which is how the runs above
 // recorded them.
 //
@@ -156,7 +178,7 @@ type FlowHandles = {
  * which document it was last seen in (`navigation.timeOrigin`), where the
  * capture said: tier 4 never moves a number within one document.
  */
-type Seen = { loose: string; words: string; place: string; document?: number };
+type Seen = { loose: string; words: string; place: string; document?: number; node?: number };
 
 function emptyFlow(): FlowHandles {
   return { byAddress: new Map<string, number>(), spent: 0, seen: new Map(), byLoose: new Map() };
@@ -196,7 +218,9 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
       const words = binding.evidence.elements.map(identityWords);
       const places = placesOf(binding);
       const documentOrigin = binding.evidence.navigation?.timeOrigin;
-      const numbers = rebound(flow, order, addresses, loose, words, places, documentOrigin);
+      // A layer root's serial in its document (header, t897); every other element is matched as before.
+      const nodes = binding.evidence.elements.map((element) => (isLayer(element) ? binding.nodeTokens?.get(element.target) : undefined));
+      const numbers = rebound(flow, order, addresses, loose, words, places, documentOrigin, nodes);
       const assigned: string[] = [];
       for (const index of order) {
         let number = numbers[index];
@@ -213,6 +237,7 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
         flow.byAddress.set(addresses[index] as string, number);
         const seen: Seen = { loose: loose[index] as string, words: words[index] as string, place: places[index] as string };
         if (documentOrigin !== undefined) seen.document = documentOrigin;
+        if (nodes[index] !== undefined) seen.node = nodes[index];
         flow.seen.set(number, seen);
         assigned[index] = `t${number}`;
       }
@@ -297,10 +322,16 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
  *    load, a control that vanished is gone and one that appeared is new.
  * 5. Nothing: a control the page added, or one this cannot tell apart.
  */
-function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[], places: readonly string[], documentOrigin: number | undefined): Array<number | undefined> {
+function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[], places: readonly string[], documentOrigin: number | undefined, nodes: ReadonlyArray<number | undefined>): Array<number | undefined> {
   const numbers: Array<number | undefined> = [];
   const claimed = new Set<number>();
+  // Within one document a layer's number is never given to another layer (header, t897).
+  const another = (index: number, number: number): boolean => {
+    const seen = flow.seen.get(number);
+    return documentOrigin !== undefined && seen?.document === documentOrigin && seen.node !== undefined && nodes[index] !== undefined && seen.node !== nodes[index];
+  };
   const take = (index: number, number: number): void => {
+    if (another(index, number)) return;
     numbers[index] = number;
     claimed.add(number);
   };
@@ -428,6 +459,11 @@ function unpositioned(selector: string): string {
   return selector.replace(/:nth-(?:of-type|child)\(\d+\)/gu, "");
 }
 
+/** Whether an element is a layer over the page: a dialog, or something that covers the page (`./page-view/element/kind.ts`). */
+function isLayer(element: WebLlmEvidenceElement): boolean {
+  return element.isDialog !== undefined || element.covers !== undefined || element.coversCount !== undefined;
+}
+
 /** The words an element is known by: its name, else its text, label or link, whitespace collapsed. */
 function identityWords(element: WebLlmEvidenceElement): string {
   const words = [element.name, element.text, element.label, element.href].find((value) => value !== undefined && value.trim() !== "");
@@ -460,6 +496,7 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   const drawings = new Map<string, string>();
   const subjects = new Map<string, string>();
   const cardWords = new Map<string, string>();
+  const nodeTokens = new Map<string, number>();
   const renamed = new Map<string, string>();
   const elements = binding.evidence.elements.map((element, index) => {
     const target = assigned[index] ?? element.target;
@@ -480,6 +517,8 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (subject !== undefined) subjects.set(target, subject);
     const card = binding.cardWords?.get(element.target);
     if (card !== undefined) cardWords.set(target, card);
+    const token = binding.nodeTokens?.get(element.target);
+    if (token !== undefined) nodeTokens.set(target, token);
     return { ...element, target };
   });
   const rename = (handle: string): string => renamed.get(handle) ?? handle;
@@ -504,5 +543,5 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken, and so does the query.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: binding.captureProvenance === undefined ? undefined : structuredClone(binding.captureProvenance), shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, cardWords, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, recordIdentities, captureProvenance: binding.captureProvenance === undefined ? undefined : structuredClone(binding.captureProvenance), shadowHosts, dialogNames, drawings, subjects, pageSubject: binding.pageSubject, cardWords, resetResource: binding.resetResource, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery, nodeTokens: binding.nodeTokens === undefined ? undefined : nodeTokens });
 }

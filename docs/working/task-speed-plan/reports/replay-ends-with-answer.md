@@ -1,222 +1,142 @@
 # t897: a replay ends with its answer, and later attempts run the saved Flow
 
-Worker: t897 (worker-heavy). Live run diagnosed: `run-mwb5cnxg-003415b4` (social-network-feed,
-`social-network-feed-group-post`, Haiku, `--attempts 4`).
+Worker: t897 (worker-heavy). Diagnosed run: `run-mwb5cnxg-003415b4` (social-network-feed,
+`social-network-feed-group-post`, Haiku, `--attempts 4`). Proof run: `run-mwbadi79-d928f922`.
 
 ## Outcome
 
-Partial. Both root causes were found and both have fixes that pass their tests:
+Partial: all the work agreed for landing is done and checked. The live Post proof passed.
 
-- (a) The Lab misreported. Core did not end attempts 2 and 4 without an answer. The fix is in the Lab's
-  attempt follower, which this brief owns because the Lab misreports. It is in the tree and tested.
-- (b) The saved Flow's run passes over a carried press without saying the act was done. The fix is one
-  rule in `answer-first/run-acts/run-gate.ts` (plus its header and `engine/.../not-arisen.ts`'s
-  header). That file is outside the owned paths, so it is **not applied**. The exact patch is in
-  the scratchpad (below). It was proven with the patched gate swapped in at test time. The reproduction test,
-  which is in an owned path, fails until the patch is applied.
+Three items remain for this lane after the coordinator lands the work:
 
-Neither live run happened. The Lab's live guard refused the run (rule `behind-dev`) before any
-provider call. Both t897 trees are 4 commits behind their local `dev`, and `git merge dev` is a lead
-operation. The first try also stopped before any call: I edited a Core test while the Lab was
-building Core's web panel (`process.startup`, "Core's build inputs changed"). Nothing was spent: $0.
+1. **`act_not_done` on an interruption that is not there.**
+   - Found: the cookie step s2.
+   - The fix is written and set aside, not in the tree: `<scratchpad>/t897-steps-ran.next.ts`.
+2. **D2, the missing answer card:** diagnosed as most likely the Lab reading the panel too early. Not yet proven or fixed.
+3. **Dining at `--attempts 4`, naming the deviation:**
+   - The run stopped at startup, before any attempt: my brief edit to steps-ran changed Core's build inputs during its web build. Provider-free, nothing spent.
+   - Not rerun yet.
 
-## What happened in the live run (from its own evidence)
+Handed over to a new lane, as the coordinator decided:
+- **D1:** the chat shows "Click · Post — Done" for a step the run gate did not send.
+- **The run gate's cross-attempt act carry.**
 
-The step log (`lab-runs/2026-11-10/run-mwb5cnxg-003415b4/steps`) shows that Core did the same thing in attempts 2, 3
-and 4. The Lab's row says otherwise for 2 and 4 because the Lab stopped reading them early.
+## Root causes and fixes
 
-| Steps | Attempt | What Core did |
-| --- | --- | --- |
-| 0017-0024 | 2 | navigate, click group: passed; click "Write something...": **skipped, "already done earlier"** (no dispatch span in 0019); type: failed `web.target.not_found` x4; note "stopped at step 6" |
-| 0025-0028 | 2 | round: inspect, decide `complete`, judge yes (citation of a row the result does not hold, refused), judge again yes |
-| 0029-0039 | 3 | identical run, the same failure at step 6, then inspect, decide, judge yes, `achieved`, answer "Already done earlier: Post" |
-| 0040-0049 | 4 | identical run and failure, then inspect; decide 0049 never finished, because the Lab had already shut down |
+### (a) Attempts "ending" with no answer: a Lab misreport (fixed)
 
-The flow-run note in 0026's request has steps 1 passed, 3 passed, 4 skipped (already done), 6 failed
-and 7 not reached. The act record carried `"Write something..."` as `may_have_landed, undeclared,
-carried`.
+Core ended every attempt. The Lab's follower (`follow-attempt.ts`) stopped on `waiting_for_person`:
+- A saved Flow's run asks permission for the Post once before it starts.
+- The Lab's own person answered in the chat after 1.1–1.3 s.
+- When a 1 s poll landed in that window, the follower read the row mid-run: `working`, 1 live step, `ms` 1334, notes only, no answer card yet.
 
-## Root cause (a): an attempt "ending" with no answer
+How we know Core finished attempt 2: attempt 3's message could only be typed once the chat composer was enabled again. That happened 0.9 s after attempt 2's last judge.
 
-**It was the Lab's follower, not Core.** `attempt-lane/live/follow-attempt.ts` stopped on
-`waiting_for_person` whenever the scenario declares no person for checks (`playable: false` for
-social-network-feed). Each saved Flow's run asks permission once before it starts (`flow-run/permission.ts`,
-the Post's `send_or_publish`), so the attempt row reads `waiting_for_person` / `permission` until the
-person answers. The Lab's own person answered every one of those questions in the chat: each attempt's
-`person-hand-offs.json` has `permissionAnswers: grant via chat` after 1.3 s (attempt 2) and 1.1 s
-(attempts 1, 3 and 4). When a 1 s poll landed inside that window, the follower took the wait as the
-end. It happened in attempts 2 and 4 and missed in 1 and 3. The Lab then read the row at that moment, which explains every
-odd field: `status: working`, `liveSteps: 1`, `spend.ms: 1334` (the row Core writes when the first step goes
-out), `saved: notes_only / still_waiting`, `answer-turn.json: null` (read before Core drew it). Its
-step-count window (`speed`) ended at step 0025, which fits too.
+The fix: the follower keeps following a permission wait when the run's person answers permission questions. That is every task except `askFirst` ones (`attempt-person.ts` `answersPermissions`, `live-driver.ts`).
 
-**Core ended attempt 2 with its answer.** The Lab's `send` waits up to 30 s for the chat
-composer to be enabled, and the composer stays disabled while a turn runs (`extension-chat-check/panel-driver.ts:45`).
-Attempt 3's message went in at 20:35:16. That is 0.9 s after attempt 2's last judge (0028, finished 20:35:15.445).
-So attempt 2's turn had ended by then. Attempt 4 had no successor, and the Lab shut down mid-decision.
+Did S9 (t895) cause or expose (a)? Neither: it adds no wait and writes no status.
 
-The bad continuation proof for 2 -> 3 (`first_saved_nothing, second_found_something_else,
-second_ran_another_flow`) came from the same mid-run read of attempt 2's row.
+### (b) Later attempts abandoned the saved Flow (fixed, two parts)
 
-**Did S9 (t895, Core merge 090ad7e0d) cause or expose it?** Neither. `git show 3178cee35` touches
-only completion reads (`replay-of.ts`, `replay-stands.ts`, `read-shape.ts`, `check.ts`), the step
-facts in `flow-run/steps-ran.ts` (skip reason, retries, `personCleared`), and the saved Flow's
-`shape`. It writes no attempt status and adds no wait. In this run no S9 path even applied: the Flow
-was never proven whole, so `replayOf` fell through to the judge. The permission question that opens
-the window comes from the Flow run's permission step (D13), which predates S9. S6 (no model call to
-read the instruction) shortened the time before the run, which may make the window easier to hit. It
-is not the cause.
+**Gate (`run-acts/run-gate.ts`, `not-arisen.ts` header).** The run gate refused the carried composer press but said nothing of an act done. So `not-arisen` did not pass over the step typing into the composer's form, and that step failed four times with `target_not_found`.
 
-**The rule applied to how a replay ends** (the brief's question). The code already decides it, and
-the user rules agree: a task ends only with its result or its budget, and the change is judged rather
-than the absolute state. When the asked act is already on the site, the run:
+Now a refused carried act always says `skipped: "already_done"`. Every act the gate can refuse is declared, claimed, or held on repeat.
 
-1. does not press it again (the run gate, `already_done`);
-2. passes over the steps written on the page that act would bring about (`not-arisen.ts`);
-3. reaches the end.
+**Classification root (domain `stable-handles.ts`, content `dom-snapshot.ts`).** The composer press should never have been held:
+- It first closed "Turn on notifications?".
+- The composer's dialog opened where that dialog had stood.
+- Tier 3 of the handle allocator gave the new dialog the old one's handles (t334, t335).
+- The change walk then said `"Create post" reads`, and Core took that as "changed something that stays".
 
-It is then judged once against the change. The judge sees the act record ("Already done earlier: Post")
-and the before and after views. The attempt ends `achieved` with a `done_on_site` answer, "nothing
-changed this time". Once that run is the Flow's judged whole run (path `run_flow`, achieved: `ready` and
-`provisional`), each later replay that runs the same way stands on its record with no call
-(`replay-stands.ts`). S9 lists "an act already done" and "a step whose page never arose because the
-act before it was already done" as passed over as saved. Core never ends silently. The only silent
-ending in this run was the Lab's misreading.
+The content-harness probe reproduced this on dev's code. t896's click change did not contribute.
 
-## Root cause (b): the later attempts abandoned the saved Flow
+The fix:
+- Snapshots carry `nodeToken`, a WeakMap serial per document, through sanitize, capture and structure-detect into `binding.nodeTokens`.
+- Within one document, a layer root's number (dialog or cover) goes only to the layer it was last seen as.
+- Ordinary controls keep today's tiers. Applying the guard to all elements would break fixtures that redraw a control on a new node: auction's header counter, job-board's cloned fields, local-classifieds' Apply. The worst case is a double act (auction's Watch would lose its "rose" signal).
 
-Attempt 1 clicked "Write something..." to open the composer. The click declared no consequence, but
-its answer said it changed something that stays (`changedState`, `act-record/gate/read-answer.ts:81`).
-So `act-record/seed.ts` carried it to the next attempt and held it on repeat. In the replay,
-`run-acts/run-gate.ts` matched that held act and did not press the step, correctly: the post was
-already made. But it treated the step as a *plain* press: `skippedResult(..., lasting = act.classes.length > 0 ||
-claimsAct || declaresAct)` gave `false`, so it said nothing of an act done. The header gives the reason:
-"a banner's 'No thanks'... brings about no page of its own". `not-arisen.ts` passes over a follow-on
-step only after a step that said `skipped: "already_done"`. So the step that types into the composer's
-field, written on the form that press opens, failed four times on its missing control. The run stopped
-at step 6, and every later attempt went on to explore (decide plus judge, about 40 s and $0.003 each).
+The rejected alternative (LAYER_KINDS in the statement) is not applied.
 
-The banner reasoning does not hold for anything this gate can refuse. `carried()` returns only entries
-that `stands()`, and those are declared or claimed acts, or undeclared presses held on repeat. The
-record holds an undeclared press on repeat only because its answer said it changed something that stays.
-A press that only moved the view (a banner dismissal) is never carried, so it is pressed again as the
-Flow says. So every act the gate refuses brought about a state of its own, and its follow-on steps are
-exactly the `not_arisen` case.
+### How a replay over an act already done ends (the brief's question)
 
-**Fix (not applied, outside the owned paths):** the gate always says `skipped: "already_done"`
-when it refuses a carried act. `skippedResult` loses its `lasting` argument, and `declaresAct` and
-`DECLARED_CONSEQUENCES_METADATA` become unused and are removed. `claimsAct` is still used by settling. The
-header of `run-gate.ts` and the "Why a lasting act" paragraph of `not-arisen.ts` are reworded to
-match. The patch is:
+The rule applied: S9 together with "judge the change".
+1. The act is not pressed again.
+2. Steps whose page never came are passed over.
+3. The run reaches its end.
+4. It is judged once against the change. The answer is `done_on_site`, "nothing changed this time".
 
-`C:\Users\osrs_\AppData\Local\Temp\claude\bc302d3e1bd85154\1d7e40a9-22b4-41e1-ad74-ba7e457da62b\scratchpad\t897-gate\t897-run-gate.patch`
-(112 lines, `diff -u` of `packages/fluxiq/src/framework/automation-service/service/answer-first/run-acts/run-gate.ts`
-and `packages/fluxiq/src/engine/automation/state-routing/not-arisen.ts`, relative to Core's root,
-written with LF endings; the working files are CRLF). The code changes are these lines:
+Once the Flow is proven whole, later replays stand on their record. No path ends silently.
 
-```diff
--import { AUTOMATION_STUDIO_ALREADY_DONE_OUTPUT, AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, type AutomationStudioGraphExecutionOptions } from "../../../executor/index.ts";
-+import { AUTOMATION_STUDIO_ALREADY_DONE_OUTPUT, type AutomationStudioGraphExecutionOptions } from "../../../executor/index.ts";
--const DECLARED_CONSEQUENCES_METADATA = AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY;   (and its doc line)
--    return { result: skippedResult(label || act.what, act, settling !== undefined, act.classes.length > 0 || claimsAct(request.node) || declaresAct(request.node)) };
-+    return { result: skippedResult(label || act.what, act, settling !== undefined) };
--    return skippedResult(act.what, act, settling !== undefined, act.classes.length > 0);
-+    return skippedResult(act.what, act, settling !== undefined);
--function skippedResult(subject, act, inTheAttempt, lasting: boolean) ... outputs: lasting ? { skipped: AUTOMATION_STUDIO_ALREADY_DONE_OUTPUT } : {}
-+function skippedResult(subject, act, inTheAttempt) ... outputs: { skipped: AUTOMATION_STUDIO_ALREADY_DONE_OUTPUT }
--function declaresAct(...) { ... }   (removed, now unused)
-```
+### S9 verdict persisted (point 5, done)
 
-With it, attempt 2 runs the saved Flow to its end: the composer press not pressed again, the typing
-step passed over as `not_arisen`, Post already done. It is judged once (path `run_flow`, achieved,
-confirmed). Attempts 3 and 4 then stand on that record with **no model call**.
+The verdict is either `{stood:true}` or `{stood:false, deviation}`. It is written to:
+- the attempt row (`attempt-store/record.ts`, strict read in `attempt-store/replay-verdict.ts`);
+- the outcome (`AutomationStudioTaskOutcomeReplay` and the closed `AUTOMATION_STUDIO_TASK_REPLAY_DEVIATIONS` in `api-contracts/automation/task-attempt.ts`);
+- the step files, as a note written from `completion/check.ts`;
+- the Lab's `attempt.json` `replay` and an `attempt-report.txt` line "Replay of attempt N".
 
-A related cause was left as it is: whether a composer-opening press should count as "changed something that stays"
-at all (`read-answer.ts:81`: a `toggle`, or a `draft.changed` line that `reads` or `rose`). The live
-artifacts do not keep the host's `draft.changed` lines, so which signal fired is not known. With the
-fix above, a press held that way is harmless on replay, because its own state is passed over the same
-way as a lasting act's. So the heuristic does not need to change for this task.
+The barrel import is fixed. There is no import between attempt-store and completion; both read the contract.
 
-## What changed and why
+## Live Post proof: `run-mwbadi79-d928f922` (Haiku, $0.020, passed)
 
-Owned, applied:
+| attempt | path | calls | answer | replay verdict |
+| --- | --- | --- | --- | --- |
+| 1 | explore | 10 (interp 1, judge 1, decisions 8) | right | none |
+| 2 | run_flow | 1 judge | right | judged: flow_not_proven |
+| 3 | run_flow | 1 judge | right | judged: act_not_done |
+| 4 | run_flow | 1 judge | right | judged: act_not_done |
 
-- `packages/test-runner/src/attempt-lane/live/follow-attempt.ts` (extension): `stopsOn` reads what
-  the attempt waits for. A `waiting_for_person` with `waitingFor: "permission"` is followed on when the
-  run's person answers permission questions (new input `permissionsAnswered`). Any other wait is
-  played as before (`personPlaying`). The header records the run and the cause.
-- `.../live/attempt-person.ts`: the person says `answersPermissions` (true unless the task's permission
-  point is `askFirst`, where the person leaves the question, `person-simulation/permission-answer.ts`).
-- `.../live/live-driver.ts`: `LiveAttemptPerson.answersPermissions?`, passed to the follower.
-- `.../live/tests/follow-attempt.test.ts`: three cases. A permission wait the person answers is followed
-  to the ending. Answering permissions plays no other wait. A person that leaves permission questions
-  still stops on one.
-- Core `answer-first/flow-run/tests/replay-over-done-act.test.ts`: provider-free reproduction of (b)
-  on the real service, engine and scripted model (`../../tests/later-attempts.ts`). Attempt 1 opens a
-  form with an undeclared press whose answer reports a toggle, types a note on the form, and renews
-  the card (lasting). Attempts 2-4 run on the page as left, with the form closed. Expected: path `run_flow`,
-  no decision, acts "Already done earlier", confirmed; judge once on attempt 2 and 0 on 3 and 4 (on
-  record); nothing done twice.
+All continuations held. The run wrote 45 step folders in `lab-runs/2026-11-10/run-mwbadi79-d928f922/steps`; `run-mwb5cnxg` had 49.
 
-Not applied (outside owned paths): the run-gate patch above.
+Presses:
+- **Attempt 1:**
+  - composer opener pressed once, answered;
+  - Post's first press settled unchanged (the 450 ms trap) and was pressed once more inside the command (t896);
+  - the site recorded one group-post, and the post appeared.
+- **Attempts 2–4:**
+  - the cookie step s2 ended by state route (banner absent);
+  - the composer opener was pressed once;
+  - the text was typed;
+  - Post was NOT dispatched (already done);
+  - no group-post request; the post count stayed 1.
 
-## Commands run and observed results
+What the user saw is this reopened, unsent composer with the chat card "Click · Post — Done" (that wording is D1). It is not the trap, and not the old misclassification.
 
-- Reproduction (b), unpatched gate:
-  `npx vitest run src/.../flow-run/tests/replay-over-done-act.test.ts` -> 1 failed: `attempt 2:
-  expected ... path: "run_flow"`, received `"run_flow_then_explore"`. A debug print showed the live
-  shape exactly: step 2 skipped "already done earlier", step 3 failed "control was not found", step 4
-  not reached.
-- Reproduction (b), with the patched gate swapped in at test time (vitest `resolveId` plugin limited to
-  importers under `answer-first/run-acts/`, config in the scratchpad `t897-gate/vitest.alias.config.ts`):
-  1 passed; debug: attempt 2 one judge call, checkedWhat "already done earlier, against what was asked
-  for."; attempts 3 and 4 zero judge calls, checkedWhat the on-record words.
-- Patched gate against its neighbours, same config: `run-acts`, `engine/automation/state-routing`,
-  `project-parts/run` and the reproduction -> `Test Files 29 passed (29)`, `Tests 293 passed (293)`.
-  The first try used a plain alias and caught `service/instruction-led/run-gate.ts` too
-  (`instructionBoundRunGate is not a function` in `double-act.test.ts`). That was a harness artefact,
-  fixed by limiting the swap to its importer. Unpatched `double-act.test.ts` passed 6/6.
-- Reproduction (a), before and after: a scratch script ran the new follower case against t896's
-  compiled follower (the old code) -> `{"status":"waiting_for_person","waitingFor":"permission","liveSteps":2}`,
-  and against t897's -> `{"status":"achieved","waitingFor":null,"liveSteps":7}`.
-- `node --test dist/attempt-lane/live/tests/follow-attempt.test.js` (after `pnpm build`) -> 15 pass, 0 fail.
-- `pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/sdk --filter @fluxiq/ui-components build`
-  in Core, then `pnpm build` in the extension -> exit 0 (test-runner built with the follower change).
-- `NODE_OPTIONS=--max-old-space-size=6144 npx tsc -p tsconfig.json --noEmit` (packages/fluxiq) ->
-  exit 0, after typing the test's draft helper (the first run reported TS2375 in the new test).
-- `node scripts/structure-audit.mjs`: Core -> `passed (529 warning(s), 969 baselined)`; extension ->
-  `passed (245 warning(s), 552 baselined)`.
-- `npx vitest run src/framework/automation-service/service/answer-first src/runtime/conversations`
-  (packages/fluxiq), unpatched gate -> `Test Files 1 failed | 164 passed (165)`, `Tests 1 failed |
-  1192 passed (1193)`; the one failure is the new reproduction, as expected.
-- The same, with the patched gate swapped in (`--config <scratchpad>/t897-gate/vitest.alias.config.ts`)
-  -> `Test Files 165 passed (165)`, `Tests 1193 passed (1193)`.
-- `pnpm lab attempt social-network-feed --task social-network-feed-group-post --authoring-mode answer-first --live-llm --llm-provider anthropic --llm-model claude-haiku-5-5 --llm-max-cost-usd 5 --attempts 4`
-  (`FLUXIQ_LAB_INSTANCE=t897`): `--dry-run` -> ready (Haiku, $5 ceiling, key from `.env.local`).
-  Try 1 -> `process.startup` before any call (my Core edit during the web build). Try 2 -> refused
-  by `behind-dev`, `spentUsd: 0`.
+## Remaining items (diagnosis so far)
+
+- **`act_not_done`:** the engine marks any press passed over as "not done", because the domain floor says every press commits (`step-skip/act-not-done.ts`). The consent step is a saved `interruption`, so its absence is the accepted page.
+  - The fix, in `flow-run/steps-ran.ts`: when the saved step is an interruption with no claimed act, an absent target reads as `absent`.
+  - A step that does a person's act keeps `absent_not_done`.
+  - Untested.
+- **D2:** the panel reads attempts on its own cycle (`panel/chat/transport/ports/results/results-port.ts`), so the card draws after the turn ends.
+  - The Lab's `pictureOfAnswer` reads once with no wait. Only the scoring's chat port waits (30 s), and only when records or asked acts are judged.
+  - Attempt 1 got the wait; attempts 2–4 did not.
+  - Proposed fix: the evidence read waits up to the same draw window on every attempt. Prove it on dining's or Post's later attempts.
+
+## Checks run on the landed tree state (observed)
+
+- **Core:**
+  - vitest `answer-first` (run-acts included) + `runtime/conversations` + `engine/automation/state-routing` + `task-attempt-wiring`: 184 files, 1320/1320.
+  - `NODE_OPTIONS=--max-old-space-size=6144 npx tsc -p tsconfig.json --noEmit`: exit 0.
+  - Structure audit: passed (530 warnings).
+  - Library rebuild: exit 0.
+- **Domain:**
+  - `domain check`: exit 0.
+  - Tests `stable-handles press-effect sanitize page-view`: 240/240.
+  - With the guard disabled, the two layer cases fail; restored.
+- **Extension:**
+  - `extension check`: exit 0 (after keeping `nodeToken` off `WireElementTarget`).
+  - `test-runner check` and build: exit 0; follower tests 15/15.
+  - Content harness `replaced-dialog-change.spec.ts`: 2/2. With the guard off, case 1 fails with the false `{"words":"Create post","how":"reads"}`.
+  - Content harness `evidence snapshot-fidelity press-answers`: 76 passed.
+  - Unit `gateway-payloads dom-element`: 21/21.
+  - Extension structure audit: passed.
+- **Reproduction tests that fail before their fixes:**
+  - `flow-run/tests/replay-over-done-act.test.ts`: `run_flow_then_explore` before the gate fix; passes after, with verdicts `flow_not_proven`, then stood.
+  - The follower case against t896's compiled follower stops at `waiting_for_person`/`permission`.
 
 ## Not verified
 
-- No live run: blocked by `behind-dev`. Live proof of (a) and (b) together still needs the lead to
-  run `git merge dev` in both t897 trees (dev's 4 new commits each touch only `answer-first/rows/**`
-  and a Lab script, with no overlap here), apply the run-gate patch, rebuild, and run the command above.
-  Expected: attempt 1 explores; attempt 2 `run_flow` with 1 judge call; attempts 3 and 4 `run_flow` with 0
-  calls; every attempt has an answer turn; all continuations held.
-- The run-gate patch was never applied to the file itself. It was run swapped in at test time over
-  answer-first, conversations, run-acts, state-routing and project-parts/run. Core's whole vitest run,
-  and tsc with the patch applied, were not run.
-- Which signal made attempt 1's composer press `changedState` (toggle, `reads` or `rose`) is unknown,
-  because the host's `draft.changed` lines are not in the step log.
-- A provider-free Lab script for this task was not written: the Core-level reproduction covered (b) more
-  cheaply, and the follower case covered (a).
-
-## Open questions or contradictions found
-
-- The `run-gate.ts` header says a banner's "No thanks" can be carried and refused as a plain press,
-  but `seed.ts` never carries an undeclared press that changed nothing that stays. The two headers
-  disagreed, and the patch makes them agree.
-- `docs/architecture/testing-facility.md` ("A real attempt from the chat", around line 2078) says the
-  follower stops on `waiting_for_person`. It should add "except a wait for a permission answer the
-  Lab's person gives". This is a shared doc, so it was left for the lead.
-- This lane's trees are behind `dev`. The live guard will refuse every live run until they are merged.
+- A full content-harness and extension unit suite run. The full suites wait for the twice-daily sweep.
+- The steps-ran interruption fix and the D2 fix (neither written into the tree).
+- Dining at `--attempts 4`.

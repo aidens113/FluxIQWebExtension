@@ -249,7 +249,29 @@ function hiddenDescriptor(element: Element, parent: number | undefined): DomElem
   return descriptor;
 }
 
+/**
+ * Each element's serial in this document, given the first time a snapshot
+ * describes it and kept while the element lives (`DomElementDescriptor.nodeToken`,
+ * t897). A content script lives as long as its document, so the map does too,
+ * and an element that is removed takes its serial with it: a new element at the
+ * same place gets a new one. On social-network-feed a press closed "Turn on
+ * notifications?" and the composer opened where it stood; told apart by nothing
+ * else, the domain gave the composer the closed dialog's handle and read the
+ * swap as one dialog that now reads "Create post" (`run-mwb5cnxg-003415b4`).
+ */
+const nodeTokens = new WeakMap<Element, number>();
+let lastNodeToken = 0;
+
+function nodeTokenOf(element: Element): number {
+  const known = nodeTokens.get(element);
+  if (known !== undefined) return known;
+  lastNodeToken += 1;
+  nodeTokens.set(element, lastNodeToken);
+  return lastNodeToken;
+}
+
 function withStructure(element: Element, descriptor: DomElementDescriptor, parent: number | undefined): DomElementDescriptor {
+  descriptor.nodeToken = nodeTokenOf(element);
   const ownText = ownTextBeside(element, descriptor.text);
   if (ownText !== undefined) descriptor.ownText = ownText;
   const readableText = readableTextBeside(element, descriptor.text);

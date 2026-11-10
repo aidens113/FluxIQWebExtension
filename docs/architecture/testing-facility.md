@@ -2107,7 +2107,11 @@ turn sits under the first. The second attempt's baseline is read when it starts 
   whether the digest proves it started from the attempt before's saved work. `attempt.json` holds every
   attempt, `attempt-report.txt` every row and each later one beside the one before, and each attempt's
   `site.json` and picture are in `attempt-1/`, `attempt-2/` and so on. In `site.json`, `activity` is the
-  site's record of that attempt alone, and `activityBefore` what it already held.
+  site's record of that attempt alone, and `activityBefore` what it already held. Each attempt's `replay`
+  in `attempt.json` is Core's record of how its replay of the saved Flow was checked (task speed S9,
+  t897): `{ stood: true }` on its record with no judge call, `{ stood: false, deviation }` judged for that
+  closed reason, or `null` where it closed no replay; `attempt-report.txt` says it as one `Replay of
+  attempt N` line, and the run's step files as a note step.
 - **Every attempt is proven against the one before.** `runAttemptSeries` runs `proveContinuation` on
   each consecutive pair and keeps all of them (`series.continuations`, one per later attempt, each held
   or refused with its reasons). The run passes only when every attempt's answer is right, no attempt
