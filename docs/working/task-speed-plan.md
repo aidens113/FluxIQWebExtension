@@ -250,6 +250,32 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 
   Left for Core after t885 merges: prompt steps absent on replay cost about 4.5 s each, and the look before an act re-sends the kept snapshot.
 
+### 2026-11-10 - t891: instant actions, round 2 (S10)
+
+- Agent: lead; worker web-instant-actions (Opus).
+- Changed:
+  - The 500 ms post-press window now closes once the press's requests have answered, tracked in the page world (`request-starts.ts`, `ignored-press/request-answers.ts`).
+  - `window.open` is announced, so the click grace is kept only when a tab opened.
+  - Page pacing starts only after a 429/503 refusal (`background/page-pace/`). The always-on 2.5 s pace was an agent's cap from 2026-09-30, not a user rule.
+  - `actedAt` reaches Core, so decision-to-press ends at the press.
+  - The Lab counts Flow-run steps.
+  - Docs updated.
+- Tried and reverted: ending the navigation's 1 s clock on events. It lost content the sites draw from timers after load. Next: the page world counts load-time timers.
+- Measured, provider-free, local-classifieds:
+  - Exploration 41.0 -> 35.9 s; an exploring click step 1584 -> 1230 ms.
+  - Replayed navigate 2200 -> 1529 ms.
+  - Decision-to-press: 275 ms exploring, 77 ms replayed.
+  - Replays look flat (33.5/34.8 s) because the exploration saved one more prompt step, which costs about 4.5 s per replay (S10 Core item).
+  - Everything-store click step 1058 -> 940 ms.
+- Validation: re-run by the lead.
+  - `check-extension.mjs` -> exit 0.
+  - `test-extension.mjs runtime content/actions content/action-runtime background/page-pace page-world shared` -> 1135/1135.
+  - Domain `tsc` (src and tests) -> clean; `test-domain.mjs client runtime/llm-evidence/node-run/timing runtime/tests/host-runtime-timing.test.ts` -> 86/86.
+  - test-runner `tsc` -> clean; `speed.test.js` -> 3/3.
+  - Structure audit -> passed.
+- Not verified: live, Firefox, a real 429 meeting the evidence pace (simulation only), window.open on a realistic page.
+- Outcome: merged into dev ("Merge task t891: web-instant-actions-2") and pushed.
+
 ## Open Questions
 
 None for the user. The quality guard decides S1 and S5 by measurement.
