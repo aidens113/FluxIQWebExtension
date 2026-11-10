@@ -276,3 +276,46 @@ test("a click's lost reply is still judged as a press: it never asks the page ab
   assert.equal(result.message, "The click navigated its page before it could answer.");
   assert.equal(page.factChecks, 0);
 });
+
+// t885 (`run-mwaknxf9-7549d126`): a sort answered "Option selected." from the old document, which then
+// committed onto a robot check. A reply that arrived is judged by its landing too.
+test("a choice that answered, then committed onto a person-only robot check, fails as needing a person", async (t) => {
+  const browser = installBrowser(t, { "doc-check": 200 });
+  const page = landedPage(HOLDS, { challenge: "captcha", robotCheck: "person_only" });
+  const reply: BrowserActionResult = { ...REPLY, commandId: "c-select", actionType: "web.dom.select", message: "Option selected." };
+  const result = await sendClickCheckingLanding(SELECT, TAB_ID, async () => {
+    reload(browser, "doc-check");
+    return reply;
+  }, page);
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.intervention.required");
+  assert.match(result.message ?? "", /^The choice was made and landed on a robot check/u);
+  assert.equal(browser.listening(), 0);
+});
+
+test("a choice that answered, then landed on a check that cleared by itself, is the reply plus the wait", async (t) => {
+  const browser = installBrowser(t, { "doc-clearing": 200 });
+  const answers: Array<Record<string, unknown>> = [{ challenge: "captcha", robotCheck: "self_clearing" }, { challenge: null }];
+  const access: LandedTabAccess = {
+    send: <T>() => Promise.resolve((answers.length > 1 ? answers.shift() : answers[0]) as T),
+    settle: () => Promise.resolve()
+  };
+  const result = await sendClickCheckingLanding(SELECT, TAB_ID, async () => {
+    reload(browser, "doc-clearing");
+    return { ...REPLY, commandId: "c-select", actionType: "web.dom.select" };
+  }, access);
+  assert.equal(result.status, "succeeded");
+  assert.equal(typeof result.checkWait?.waitedMs, "number");
+  assert.equal(result.failure, undefined);
+});
+
+test("a choice whose reply says its page saw no navigation begin returns at once, with no start grace", async (t) => {
+  const browser = installBrowser(t);
+  const page = landedPage(HOLDS);
+  const reply: BrowserActionResult = { ...REPLY, commandId: "c-select", actionType: "web.dom.select", navigation: { began: false } };
+  const sentAt = Date.now();
+  const result = await sendClickCheckingLanding(SELECT, TAB_ID, async () => reply, page);
+  assert.equal(result, reply);
+  assert.ok(Date.now() - sentAt < START_GRACE_MS, "a choice that navigates nowhere pays no start grace");
+  assert.equal(browser.listening(), 0);
+});

@@ -89,6 +89,8 @@ export function webAutomationActionWaitsOutChecks(outputId: string): boolean {
  */
 export function webAutomationCommandWaitsOutChecks(outputId: string, parameters: JsonObject): boolean {
   if (webAutomationActionWaitsOutChecks(outputId)) return true;
+  // A check or a choice may reload its page onto a check (t885), and the extension judges that landing.
+  if (outputId === "web.dom.select" || outputId === "web.dom.check") return true;
   if (outputId === "web.dom.type") return parameters.submit === true;
   if (outputId === WEB_AUTOMATION_LOOK_ACTION) return parameters.browserFrameId === undefined && parameters.browserFrameUrlPath === undefined;
   return outputId === "web.dom.keypress" && (parameters.key ?? parameters.text) === "Enter";

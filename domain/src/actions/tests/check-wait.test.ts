@@ -63,3 +63,11 @@ test("a look at the whole tab is given the allowance; a look addressed to one fr
     assert.equal(webAutomationCheckWaitParameters("web.dom.capture_snapshot", parameters), parameters, JSON.stringify(framed));
   }
 });
+
+// t885 (`run-mwaknxf9-7549d126`): a "Highest rating" select landed on a robot check; the extension
+// now judges a select's or check's landing, so its command carries the allowance to wait it out.
+test("a select and a check are given the allowance", () => {
+  assert.deepEqual(webAutomationCheckWaitParameters("web.dom.select", { selector: "#sort", value: "rating", timeoutMs: 5_000 }), { selector: "#sort", value: "rating", timeoutMs: 20_000, checkWaitMs: 15_000 });
+  assert.deepEqual(webAutomationCheckWaitParameters("web.dom.check", { selector: "#f", checked: true }), { selector: "#f", checked: true, checkWaitMs: 15_000 });
+  assert.deepEqual(webAutomationCheckWaitNode("web.dom.select", { parameters: { selector: "#sort" } }), { parameters: { selector: "#sort", checkWaitMs: 15_000 }, timeoutMs: 20_000 });
+});

@@ -66,9 +66,12 @@
 //
 // A check or a choice that navigates its page (t407) -- `web.dom.check` and
 // `web.dom.select`, which declare a state rather than press -- is watched the
-// same way, but only for a reply lost to that navigation, and only in the top
-// frame: a check or choice that answered is judged by its own read-back, and
-// pays nothing here. Its landing is judged first, as a press's is: a robot
+// same way, in the top frame only. A reply that arrived is judged by its landing
+// too, since it came from the old document and says nothing of where the page
+// went next: one whose own document saw no navigation begin waits for none
+// (`pageSawNoNavigation`), so a choice that navigates nowhere pays nothing. A
+// reply lost to the navigation is judged by the landing and then by the
+// requested state, below. Its landing is judged first, as a press's is: a robot
 // check, a refusal for coming too fast, a refused page fail it in the same
 // words with "check" or "choice" for "click". A landing nothing speaks against
 // is then asked whether the requested state holds on the new document
@@ -278,7 +281,9 @@ export async function sendClickCheckingLanding(
 
 /**
  * A check or a choice, sent with its tab's top frame watched. A reply that
- * arrives is its own verdict, whatever the tab did next. A reply lost because
+ * arrives stands unless the landing that followed speaks against it (a robot
+ * check, a refusal), in which case it fails in the landing's words; a landing
+ * that stands, or none, returns the reply as it was. A reply lost because
  * the page unloaded under the delivered message is judged by the landing, as
  * a click's is, and a landing nothing speaks against by whether the requested
  * state now holds there. Any other refusal, and a lost reply with no committed
@@ -295,8 +300,9 @@ async function sendStateCheckingLanding(
   const watch = watchTopFrameNavigation(tabId);
   try {
     const pressed: PressedPage = { url: await readTabUrl(tabId), pace };
+    let reply: BrowserActionResult;
     try {
-      return await send();
+      reply = await send();
     } catch (error) {
       // Undelivered, the act never reached the page; refused otherwise, it is
       // the act's own failure. Neither is the navigation's doing.
@@ -311,6 +317,19 @@ async function sendStateCheckingLanding(
       const read = workerActionResult(action, watch.startedAt, requestedStateOutcome(noun, state));
       return verdict.kind === "check_cleared" ? clickAfterClearedCheck(read, verdict.wait) : read;
     }
+    if (reply.status !== "succeeded") return reply;
+    // A reply that arrived came from the document the act ran in (t885,
+    // `run-mwaknxf9-7549d126`: a sort answered from the old page, which then
+    // committed onto a robot check). A navigation that commits is judged as a
+    // press's is; a reply whose own document saw none begin waits for none.
+    const startWindowMs = pageSawNoNavigation(reply, watch) ? 0 : NAVIGATION_START_GRACE_MS;
+    const verdict = await judgeLanding(action, tabId, watch, access, pressed, noun, startWindowMs);
+    if (verdict === undefined || verdict.kind === "stood") return reply;
+    if (verdict.kind === "failed") {
+      const failed = failedClick(reply, verdict.outcome);
+      return verdict.wait ? clickAfterClearedCheck(failed, verdict.wait) : failed;
+    }
+    return clickAfterClearedCheck(reply, verdict.wait);
   } finally {
     watch.stop();
   }
