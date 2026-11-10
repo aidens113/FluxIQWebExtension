@@ -4,10 +4,10 @@
 // and then a request (`run-mwalxlxu-efd58e23`), and its sorted results after an
 // address rewritten in place, a short delay and a request (`run-mwaliwap-12e3ad05`).
 // The page world counts that work (`page-world/page-work/`); a function injected
-// into the top frame asks it and waits on it (`./page-settled.ts`).
+// into the top frame asks it and waits on it (`../../shared/scheduled-work-settled.ts`).
 
 import { PAGE_WORK_BUSY_EVENT, PAGE_WORK_DRAINED_EVENT, PAGE_WORK_WATCHED_EVENT } from "../../shared/scheduled-work-event";
-import { pageSettledInPage } from "./page-settled";
+import { pageSettledInPage } from "../../shared/scheduled-work-settled";
 
 /** Whether the tab's top document has finished its own work; false when no page world can say, or the page cannot be reached. */
 export async function pageWorkSettled(tabId: number): Promise<boolean> {

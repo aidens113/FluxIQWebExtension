@@ -109,6 +109,7 @@
 // leave it to be reconstructed.
 
 import type { WebAutomationExtractListPagination } from "../types";
+import { askPageQuiet } from "../action-runtime/page-work";
 import { waitUntil } from "./list-wait";
 
 /** Whether the page arrived, or the command's deadline passed first. */
@@ -159,7 +160,7 @@ export type RenderProgress = { deadline: number | undefined; hasUnreadItem(): bo
 const RENDER_WINDOW_MS = 10_000;
 /** How long a page must show its pagination controls and no unread item to be read as holding none. */
 const EMPTY_PAGE_SETTLE_MS = 2_000;
-/** How long a one-page read's list must stop growing to be read: the window `pagination.ts` gives a lazy list to grow. */
+/** How long a one-page read's list must stop growing to be read where the page cannot say it is done: the window `pagination.ts` gives a lazy list to grow. */
 const LIST_GROWTH_SETTLE_MS = 900;
 /**
  * How long the document must hold still, with *some* of the list drawn and the
@@ -271,24 +272,37 @@ async function searchForList(item: string, wanted: number, progress: RenderProgr
   }
 }
 
-/** Waits for a one-page read's list to stop growing on its own; see `awaitListPresent`. */
+/**
+ * Waits for a one-page read's list to stop growing on its own; see
+ * `awaitListPresent`. The page ends it as soon as it says it has finished what
+ * it set in motion (task speed S10, t893, `action-runtime/page-work/`): a list
+ * the page is still loading is work it counts, and a page with none left adds
+ * nothing on its own. A page that cannot say has the list hold still
+ * `LIST_GROWTH_SETTLE_MS`.
+ */
 async function awaitListStoppedGrowing(item: string, progress: RenderProgress): Promise<void> {
   let count = matchCount(item);
   let stableSince = Date.now();
-  await waitUntil(
-    () => {
-      const now = matchCount(item);
-      if (now !== count) {
-        count = now;
-        stableSince = Date.now();
-        return false;
-      }
-      return Date.now() - stableSince >= LIST_GROWTH_SETTLE_MS;
-    },
-    RENDER_WINDOW_MS,
-    RENDER_POLL_MS,
-    progress.deadline
-  );
+  const quiet = askPageQuiet(Math.min(Date.now() + RENDER_WINDOW_MS, progress.deadline ?? Number.MAX_SAFE_INTEGER), { afterFrames: true });
+  try {
+    await waitUntil(
+      () => {
+        const now = matchCount(item);
+        if (now !== count) {
+          count = now;
+          stableSince = Date.now();
+          return false;
+        }
+        return Date.now() - stableSince >= LIST_GROWTH_SETTLE_MS;
+      },
+      RENDER_WINDOW_MS,
+      RENDER_POLL_MS,
+      progress.deadline,
+      quiet.settled
+    );
+  } finally {
+    quiet.stop();
+  }
 }
 
 /**

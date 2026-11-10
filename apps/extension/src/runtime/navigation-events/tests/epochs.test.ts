@@ -76,3 +76,24 @@ test("a top-frame navigation is in flight from its beginning until it loads or e
   fire(listeners, "error", { tabId: 7, frameId: 0 });
   assert.equal(tabNavigationEpochs.inFlight(7), false, "a download or an abort ends it too");
 });
+
+// Task speed S10 (t893): a readiness proof follows its document across a move that stays in it.
+test("the document epoch moves when the top document is replaced, and not when the address moves within it", (t) => {
+  const listeners = stubEvents(t);
+  assert.equal(tabNavigationEpochs.documentOf(7), 0);
+  fire(listeners, "historyState", { tabId: 7, frameId: 0 });
+  fire(listeners, "fragment", { tabId: 7, frameId: 0 });
+  assert.equal(tabNavigationEpochs.documentOf(7), 0, "pushState and a fragment stay in the document");
+  assert.equal(tabNavigationEpochs.of(7), 2, "though the navigation epoch counts them");
+  fire(listeners, "beforeNavigate", { tabId: 7, frameId: 3 });
+  fire(listeners, "committed", { tabId: 7, frameId: 3 });
+  assert.equal(tabNavigationEpochs.documentOf(7), 0, "a child frame's document is not the page's");
+  fire(listeners, "beforeNavigate", { tabId: 7, frameId: 0 });
+  fire(listeners, "committed", { tabId: 7, frameId: 0 });
+  assert.equal(tabNavigationEpochs.documentOf(7), 2);
+  fire(listeners, "replaced", 9, 7);
+  assert.equal(tabNavigationEpochs.documentOf(7), 3);
+  assert.equal(tabNavigationEpochs.documentOf(9), 1);
+  fire(listeners, "removed", 7);
+  assert.equal(tabNavigationEpochs.documentOf(7), 0, "a closed tab is forgotten");
+});

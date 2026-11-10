@@ -33,6 +33,14 @@ const epochs = new Map<number, number>();
  * finished moving, by the browser's own events (task speed S10).
  */
 const inFlight = new Set<number>();
+/**
+ * A tab's count of the events that replace its top document -- a navigation
+ * beginning or committing, the tab replaced -- leaving out a move that stays in
+ * the document (`history.pushState`, a fragment). A readiness proof follows its
+ * document across such a move (`../automation-tab.ts` `readyFromSnapshot`,
+ * task speed S10): the document it proved ready is still the one there.
+ */
+const documents = new Map<number, number>();
 let installed = false;
 
 /** This worker's count of navigation events: an epoch of another instance's means nothing here. */
@@ -42,8 +50,18 @@ function bump(tabId: number): void {
   epochs.set(tabId, (epochs.get(tabId) ?? 0) + 1);
 }
 
+/** An event that replaces the tab's document: it moves both counts. */
+function replaced(tabId: number): void {
+  bump(tabId);
+  documents.set(tabId, (documents.get(tabId) ?? 0) + 1);
+}
+
 function onTopFrame(details: { tabId: number; frameId: number }): void {
   if (details.frameId === TOP_FRAME_ID) bump(details.tabId);
+}
+
+function onTopFrameDocument(details: { tabId: number; frameId: number }): void {
+  if (details.frameId === TOP_FRAME_ID) replaced(details.tabId);
 }
 
 function install(): void {
@@ -53,7 +71,7 @@ function install(): void {
   const navigation = browser?.webNavigation;
   navigation?.onBeforeNavigate?.addListener((details) => {
     if (details.frameId !== TOP_FRAME_ID) return;
-    bump(details.tabId);
+    replaced(details.tabId);
     inFlight.add(details.tabId);
   });
   const ended = (details: { tabId: number; frameId: number }): void => {
@@ -61,16 +79,17 @@ function install(): void {
   };
   navigation?.onCompleted?.addListener(ended);
   navigation?.onErrorOccurred?.addListener(ended);
-  navigation?.onCommitted?.addListener(onTopFrame);
+  navigation?.onCommitted?.addListener(onTopFrameDocument);
   navigation?.onHistoryStateUpdated?.addListener(onTopFrame);
   navigation?.onReferenceFragmentUpdated?.addListener(onTopFrame);
   browser?.tabs?.onReplaced?.addListener((added, removed) => {
-    bump(added);
-    bump(removed);
+    replaced(added);
+    replaced(removed);
   });
   browser?.tabs?.onRemoved?.addListener((tabId) => {
     // A closed tab's id is never given to another tab, so its count is never read again.
     epochs.delete(tabId);
+    documents.delete(tabId);
     inFlight.delete(tabId);
   });
 }
@@ -83,6 +102,11 @@ export const tabNavigationEpochs = {
     install();
     return epochs.get(tabId) ?? 0;
   },
+  /** How many events that replace the tab's top document this worker has seen: `of` without the moves that stay in the document. Adds the listeners on first use. */
+  documentOf(tabId: number): number {
+    install();
+    return documents.get(tabId) ?? 0;
+  },
   /** Whether a top-frame navigation of the tab has begun and not yet ended, as this worker has heard. Adds the listeners on first use. */
   inFlight(tabId: number): boolean {
     install();
@@ -91,6 +115,7 @@ export const tabNavigationEpochs = {
   /** For a unit test: forget every count and listen again on the next read, against the `chrome` then present. */
   resetForTest(): void {
     epochs.clear();
+    documents.clear();
     inFlight.clear();
     installed = false;
   }

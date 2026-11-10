@@ -92,6 +92,7 @@ import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../act
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { watchActionNavigation } from "../action-runtime/navigation-watch";
 import { actedClock } from "../action-runtime/acted-at";
+import { settleAddressMove } from "../action-runtime/page-work";
 import { captureSnapshotAction } from "./capture-snapshot";
 import { waitForSelectorAction } from "./wait-for-selector";
 import { waitForTextAction } from "./wait-for-text";
@@ -146,6 +147,10 @@ class UnsupportedActionTypeError extends Error implements WebAutomationFailureCa
  * one, which made the member of the closed set a promise nothing kept.
  */
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
+  // A page that moved its address in place since the last action is let finish
+  // its redraw first (task speed S10, `action-runtime/page-work/`): the wait the
+  // worker made before, now made here, before the action's own clock starts.
+  await addressSettled();
   const startedAt = Date.now();
   // What the document says of its own navigation while the action runs, for the
   // worker's landing check (task speed S10, `action-runtime/navigation-watch.ts`).
@@ -201,6 +206,15 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
   const actedAt = actedClock.read();
   if (actedAt !== undefined) answered.actedAt = actedAt;
   return answered;
+}
+
+/** `settleAddressMove`, which never fails an action: a page it cannot ask is acted on as it stands, as the worker's wait did on its deadline. */
+async function addressSettled(): Promise<void> {
+  try {
+    await settleAddressMove();
+  } catch {
+    /* best-effort: the wait only delays an action; a document it cannot observe is acted on as it stands */
+  }
 }
 
 /** The focused element, where there is a document to ask. */

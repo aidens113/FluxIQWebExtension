@@ -37,6 +37,8 @@ type SnapshotReadinessProof = {
   capturedAt: number;
   /** The tab's navigation epoch when the look answered, and the worker that counted it (`./navigation-events/`). */
   epoch?: number;
+  /** The tab's document epoch then: the proof stands while no event has replaced the document (task speed S10). */
+  documentEpoch?: number;
   watcher?: string;
 };
 
@@ -259,7 +261,7 @@ export async function noteSnapshotReadiness(tabId: number, url: string | undefin
   if (!url) return;
   const documentId = await readTopDocumentId(tabId);
   if (!documentId) return;
-  snapshotReadinessProof = { tabId, url, documentId, capturedAt: Date.now(), epoch: tabNavigationEpochs.of(tabId), watcher: tabNavigationEpochs.instance };
+  snapshotReadinessProof = { tabId, url, documentId, capturedAt: Date.now(), epoch: tabNavigationEpochs.of(tabId), documentEpoch: tabNavigationEpochs.documentOf(tabId), watcher: tabNavigationEpochs.instance };
   try {
     await chrome.storage?.session?.set({ [SNAPSHOT_READINESS_STORAGE_KEY]: snapshotReadinessProof });
   } catch {
@@ -269,10 +271,15 @@ export async function noteSnapshotReadiness(tabId: number, url: string | undefin
 
 /**
  * Whether the tab is ready from the last look's proof: the same complete
- * document at the same address, and no navigation event of the tab since. A
- * proof this worker counted stands for every action after it until the page
- * moves; one from a worker before a restart is used once. A failed check
- * forgets the proof and falls back to waitForTabReady.
+ * document, and no event of the tab since that replaced it. A proof this worker
+ * counted stands for every action after it until the document is replaced, and
+ * follows it across an address the page rewrote in place (`history.pushState`,
+ * a fragment): that is the same document, and the worker need not wait for it
+ * (task speed S10, t893). The first action after such a move waits for the
+ * page's own redraw in the content script instead, where an idle page costs
+ * nothing (`content/action-runtime/page-work/address-settle.ts`). One from a
+ * worker before a restart is used once, at the address it proved. A failed
+ * check forgets the proof and falls back to waitForTabReady.
  */
 export async function readyFromSnapshot(tabId: number): Promise<boolean> {
   let stored: unknown;
@@ -284,17 +291,31 @@ export async function readyFromSnapshot(tabId: number): Promise<boolean> {
     }
   }
   const proof = snapshotReadinessProof ?? (isSnapshotReadinessProof(stored) ? stored : undefined);
-  const counted = proof?.watcher === tabNavigationEpochs.instance && proof.epoch !== undefined;
+  const counted = proof?.watcher === tabNavigationEpochs.instance && proof.epoch !== undefined && proof.documentEpoch !== undefined;
   // Another worker's proof is the old one-shot proof; this worker's stands until the page moves.
   if (!counted) await clearSnapshotReadiness();
   if (!proof || proof.tabId !== tabId) return false;
-  if (counted ? tabNavigationEpochs.of(tabId) !== proof.epoch : Date.now() - proof.capturedAt > SNAPSHOT_READINESS_MAX_AGE_MS) return await notReady(counted);
+  if (counted ? tabNavigationEpochs.documentOf(tabId) !== proof.documentEpoch : Date.now() - proof.capturedAt > SNAPSHOT_READINESS_MAX_AGE_MS) return await notReady(counted);
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (tab.status !== "complete" || tab.url !== proof.url || isTransientNavigationUrl(tab.url)) return await notReady(counted);
-    return await readTopDocumentId(tabId) === proof.documentId || await notReady(counted);
+    // A proof this worker counted follows its document across an address the page rewrote in place: the document is the one it proved.
+    const followsDocument = counted && tab.url !== proof.url;
+    if (tab.status !== "complete" || (!counted && tab.url !== proof.url) || isTransientNavigationUrl(tab.url)) return await notReady(counted);
+    if (await readTopDocumentId(tabId) !== proof.documentId) return await notReady(counted);
+    if (followsDocument && tab.url) await keepFollowedProof({ ...proof, url: tab.url, epoch: tabNavigationEpochs.of(tabId) });
+    return true;
   } catch {
     return await notReady(counted);
+  }
+}
+
+/** The proof, moved to the address its document now shows. */
+async function keepFollowedProof(proof: SnapshotReadinessProof): Promise<void> {
+  snapshotReadinessProof = proof;
+  try {
+    await chrome.storage?.session?.set({ [SNAPSHOT_READINESS_STORAGE_KEY]: proof });
+  } catch {
+    /* best-effort: the in-memory proof remains safe for the immediate command */
   }
 }
 
