@@ -6,6 +6,11 @@
 // press was answered forbids a second one, and a request above all: a request
 // is the press reaching the server, whatever the page shows. Only a press after
 // which nothing whatever was seen is pressed again, and only once per command.
+// A press whose only sign was a change in its section that came and went, after
+// which the settled look (`settled-look.ts`) found the page exactly as before,
+// certainly did nothing, and the click asks here with no signs for it (t896):
+// its change was no answer. That press made once more is the same one extra
+// press, never an addition to it.
 //
 // Why a press can be ignored at all: bigbox-retail's `vr.wake()` swallows the
 // first add-to-cart press after every page load and does nothing -- no
