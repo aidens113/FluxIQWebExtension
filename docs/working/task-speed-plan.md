@@ -225,6 +225,31 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - Not verified: live call attribution; the reworded refusal line in a rerun.
 - Outcome: merged into dev ("Merge task t889: lab-deterministic-runs") and pushed.
 
+### 2026-11-10 - t890: instant actions, round 1 (S10)
+
+- Agent: lead; worker web-instant-actions (Opus).
+- Changed:
+  - Core `engine/automation/step-loop/` and `runtime/llm/step-log/`: every replay step is now timed. These steps cover 44.2 s of a 44.1 s replay, so A1's "53 s of gaps" was untimed replay steps.
+  - Extension `runtime/automation-tab.ts`: a settled ready wait now counts as readiness proof. A replayed navigate's overhead fell from 1364 to 309 ms.
+  - `runtime/click-landing.ts` and `content/action-runtime/navigation-watch/`: the 300 ms click grace now ends on evidence. The gap after a replayed click fell from about 440 to 110-180 ms.
+  - Domain adapter and host runtime: each replayed command is timed.
+- Measured, provider-free:
+  - Local-classifieds dining tables: replays 44.0 and 46.5 s -> 35.4 and 34.7 s; exploration 48.9 -> 41.0 s; same outcomes.
+  - Everything-store: click step 1789 -> 1058 ms.
+  - Exploring decision-to-press is about 180 ms. A replayed non-navigating click is still 1.2-1.4 s.
+- Validation: re-run by the lead.
+  - Core `vitest run` node-execution, step-loop, step-log and engine tests -> 415/415. Core `tsc` -> exit 0. Core structure audit -> passed.
+  - Domain `tsc` (src and tests) -> clean. `test-domain.mjs` timing and runtime tests -> 175/175.
+  - Extension `check-extension.mjs` -> exit 0. `test-extension.mjs` content/actions, content/action-runtime and runtime/tests -> 989/989. Extension structure audit -> passed.
+- Not verified: live, Firefox, the other eight sites.
+- Outcome: merged into both devs ("Merge task t890: web-instant-actions") and pushed. Round 2 (t891), extension only:
+  - the 500 ms post-press window, ended on page-world request evidence;
+  - the 2.5 s per-origin page pace, traced to its cause;
+  - the navigation 1 s clock;
+  - `actedAt`, and the Lab counting flow steps.
+
+  Left for Core after t885 merges: prompt steps absent on replay cost about 4.5 s each, and the look before an act re-sends the kept snapshot.
+
 ## Open Questions
 
 None for the user. The quality guard decides S1 and S5 by measurement.
