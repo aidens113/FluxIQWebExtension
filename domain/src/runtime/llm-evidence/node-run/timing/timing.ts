@@ -48,10 +48,7 @@ export function webNodeTiming(gateway: WebLlmEvidenceGateway): WebNodeTiming {
       const sentAt = Date.now();
       const result = await gateway.executeAction(sessionId, command);
       answeredAt = Date.now();
-      const action = actionWord(command.actionType);
-      record(`send.${action}`, sentAt, answeredAt, typeof result.status === "string" ? result.status : undefined);
-      const page = pageClock(result.payload);
-      if (page) record(`page.${action}`, page.startedAt, page.finishedAt);
+      recordWebCommandSpans(command.actionType, sentAt, answeredAt, result.status, result.payload);
       return result;
     }
   };
@@ -77,6 +74,21 @@ export function webNodeTiming(gateway: WebLlmEvidenceGateway): WebNodeTiming {
       });
     }
   };
+}
+
+/**
+ * One command's spans in the current step: `send.<action>` from sent to
+ * answered, with the command's status as its detail, and `page.<action>`, the
+ * part the page's content script spent by its own clock. Both the node run's
+ * timed gateway and a Flow run's dispatch (`../../../adapter.ts`, which a saved
+ * Flow's replay takes) record through here, so a replayed step and an explored
+ * one are split the same way.
+ */
+export function recordWebCommandSpans(actionType: string, sentAt: number, answeredAt: number, status: unknown, clientPayload: unknown): void {
+  const action = actionWord(actionType);
+  automationStudioLlmStepLogSpans.record(`send.${action}`, sentAt, answeredAt, typeof status === "string" ? status : undefined);
+  const page = pageClock(clientPayload);
+  if (page) automationStudioLlmStepLogSpans.record(`page.${action}`, page.startedAt, page.finishedAt);
 }
 
 /** `web.dom.capture_snapshot` as `capture_snapshot`: the last segment of the action type, which is all a span name needs. */

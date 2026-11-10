@@ -90,6 +90,7 @@ import { TargetResolutionError } from "../action-runtime";
 import { clearableLayerOverPage, pressWaysOut, runOpenedLayers, type ClearingTarget } from "../action-runtime/interference";
 import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../action-runtime/recovery";
 import { observePageIdentity, reportPageChange } from "./page-identity";
+import { watchActionNavigation } from "../action-runtime/navigation-watch";
 import { captureSnapshotAction } from "./capture-snapshot";
 import { waitForSelectorAction } from "./wait-for-selector";
 import { waitForTextAction } from "./wait-for-text";
@@ -145,42 +146,61 @@ class UnsupportedActionTypeError extends Error implements WebAutomationFailureCa
  */
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
   const startedAt = Date.now();
+  // What the document says of its own navigation while the action runs, for the
+  // worker's landing check (task speed S10, `action-runtime/navigation-watch.ts`).
+  const navigation = watchActionNavigation();
+  let resolved: Element | undefined;
+  const watched = resolvedNoted(deps, (element) => { resolved = element; });
   // What the defence pressed between attempts, for the result's own record of it.
   const cleared: WebAutomationClearedLayer[] = [];
-  const { result, account } = await runWithRecovery(
-    action,
-    startedAt,
-    async () => {
-      const startedOn = observePageIdentity();
-      if (!pressesControl(action)) return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
-      const before = runOpenedLayers.snapshot();
-      let pressed: Element | undefined;
-      const outcome = reportPageChange(await routeContentAction(action, resolvedNoted(deps, (element) => { pressed = element; }), startedAt), startedOn);
-      if (outcome.status === "succeeded") runOpenedLayers.note(pressed, before);
-      return outcome;
-    },
-    undefined,
-    undefined,
-    // Every intervention, and the probe that decides whether a missing target
-    // is worth one, is told what the step says of its target, so the layer the
-    // step works in is never cleared (`interference/clearing-target.ts`). A
-    // target the page has not drawn (`target_absent`) was not resolved by the
-    // attempt that just failed, so it is not resolved again here -- the layer
-    // probe is asked for that fault alone -- and it is spared by its selector
-    // and its recorded names instead. The wall that hides it holds neither, so
-    // that wall is still cleared (`presence.ts`); the prompt a "Not now" step
-    // is aimed at is not. For that fault only a wall is pressed at all, and no
-    // clearing presses a layer an earlier press of the run opened (t656,
-    // `interference/clearable-layers.ts`).
-    (fault) => {
-      const missing = faultMayHideBehindLayer(fault);
-      const pressed = pressWaysOut(clearingTarget(action, deps, !missing), missing ? "walls" : "any");
-      cleared.push(...pressed);
-      return pressed.length;
-    },
-    () => clearableLayerOverPage(clearingTarget(action, deps, false))
-  );
-  return measuredShown(recordRecovery(result, account, cleared));
+  let ran: Awaited<ReturnType<typeof runWithRecovery>>;
+  try {
+    ran = await runWithRecovery(
+      action,
+      startedAt,
+      async () => {
+        const startedOn = observePageIdentity();
+        if (!pressesControl(action)) return reportPageChange(await routeContentAction(action, watched, startedAt), startedOn);
+        const before = runOpenedLayers.snapshot();
+        let pressed: Element | undefined;
+        const outcome = reportPageChange(await routeContentAction(action, resolvedNoted(watched, (element) => { pressed = element; }), startedAt), startedOn);
+        if (outcome.status === "succeeded") runOpenedLayers.note(pressed, before);
+        return outcome;
+      },
+      undefined,
+      undefined,
+      // Every intervention, and the probe that decides whether a missing target
+      // is worth one, is told what the step says of its target, so the layer the
+      // step works in is never cleared (`interference/clearing-target.ts`). A
+      // target the page has not drawn (`target_absent`) was not resolved by the
+      // attempt that just failed, so it is not resolved again here -- the layer
+      // probe is asked for that fault alone -- and it is spared by its selector
+      // and its recorded names instead. The wall that hides it holds neither, so
+      // that wall is still cleared (`presence.ts`); the prompt a "Not now" step
+      // is aimed at is not. For that fault only a wall is pressed at all, and no
+      // clearing presses a layer an earlier press of the run opened (t656,
+      // `interference/clearable-layers.ts`).
+      (fault) => {
+        const missing = faultMayHideBehindLayer(fault);
+        const pressed = pressWaysOut(clearingTarget(action, deps, !missing), missing ? "walls" : "any");
+        cleared.push(...pressed);
+        return pressed.length;
+      },
+      () => clearableLayerOverPage(clearingTarget(action, deps, false))
+    );
+  } finally {
+    navigation.stop();
+  }
+  const answered = measuredShown(recordRecovery(ran.result, ran.account, cleared));
+  // A key sent with no target of its own goes to the focused control, whose form says where it submits.
+  const seen = navigation.seen(resolved ?? focusedElement());
+  if (seen) answered.navigation = seen;
+  return answered;
+}
+
+/** The focused element, where there is a document to ask. */
+function focusedElement(): Element | undefined {
+  return typeof document === "undefined" ? undefined : document.activeElement ?? undefined;
 }
 
 /** A click is the press whose opened layers are the run's own (`interference/run-opened.ts`). */

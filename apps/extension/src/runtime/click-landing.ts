@@ -44,8 +44,12 @@
 // - The listeners go on before the click is sent, because a local page can
 //   commit within milliseconds of the click.
 // - A click that starts no navigation gets NAVIGATION_START_GRACE_MS to start
-//   one and is then returned as it was; that grace is the whole cost such a
-//   click pays. A navigation that ends without a commit (a download, a 204, one
+//   one and is then returned as it was. Since 2026-11-10 (task speed S10) it
+//   gets none when its own document, watched until its reply, saw no
+//   navigation begin and the browser reported none
+//   (`content/action-runtime/navigation-watch.ts`): the grace is kept only for
+//   a reply that cannot say -- no Navigation API, a control that opens its page
+//   elsewhere. A navigation that ends without a commit (a download, a 204, one
 //   the page cancels) is returned as it was too.
 // - The status is read from the committed document itself, addressed by the
 //   `documentId` its commit named, so a document that replaced it cannot answer
@@ -183,8 +187,13 @@ type LandingVerdict =
 
 type NavigationWatch = {
   startedAt: number;
-  /** The top frame's commit, or undefined when none started in the grace or the navigation ended without one. */
-  landing(): Promise<Commit | undefined>;
+  /** Whether the browser has reported a top-frame navigation of the tab since the watch began. */
+  started(): boolean;
+  /**
+   * The top frame's commit, or undefined when none started within `startWindowMs`
+   * (the grace, unless the page said none began) or the navigation ended without one.
+   */
+  landing(startWindowMs?: number): Promise<Commit | undefined>;
   stop(): void;
 };
 
@@ -242,10 +251,13 @@ export async function sendClickCheckingLanding(
     }
     if (reply.status !== "succeeded") return reply;
     // Read together, so a click that opens no tab waits no longer than the
-    // grace its own tab's landing is given anyway.
+    // grace its own tab's landing is given anyway. A press whose own document
+    // saw no navigation begin, answered after the press's answer windows, with
+    // none reported by the browser either, waits for none (task speed S10).
+    const startWindowMs = pageSawNoNavigation(reply, watch) ? 0 : NAVIGATION_START_GRACE_MS;
     const [verdict, openedTabId] = await Promise.all([
-      judgeLanding(action, tabId, watch, access, pressed, "click"),
-      opened.settle(NAVIGATION_START_GRACE_MS)
+      judgeLanding(action, tabId, watch, access, pressed, "click", startWindowMs),
+      opened.settle(startWindowMs)
     ]);
     if (verdict === undefined && openedTabId !== undefined) {
       return await driveOpenedTab(action, reply, { sourceTabId: tabId, openedTabId, startedAt: watch.startedAt }, access, pressed);
@@ -394,9 +406,10 @@ async function judgeLanding(
   watch: NavigationWatch,
   access: LandedTabAccess,
   pressed: PressedPage,
-  noun: ActNoun
+  noun: ActNoun,
+  startWindowMs: number = NAVIGATION_START_GRACE_MS
 ): Promise<LandingVerdict | undefined> {
-  const commit = await watch.landing();
+  const commit = await watch.landing(startWindowMs);
   if (commit === undefined) return undefined;
   const first = await readCommittedLanding(tabId, access.send);
   const settled = await settleLandedReading(first, tabId, access, checkWaitBudgetMs(action, watch.startedAt));
@@ -426,6 +439,19 @@ async function readCommittedLanding(tabId: number, send: FrameSender): Promise<L
     if (reading.kind !== "unread" || Date.now() + LANDING_READ_RETRY_MS >= deadline) return reading;
     await new Promise<void>((resolve) => setTimeout(resolve, LANDING_READ_RETRY_MS));
   }
+}
+
+/**
+ * Whether the press's own document, watched from the start of the action to its
+ * reply (`content/action-runtime/navigation-watch.ts`), saw no navigation begin
+ * and the browser has reported none either. The reply comes after the press's
+ * answer windows, so a navigation or a new tab the press began by then has
+ * reached this worker already: the grace has nothing left to catch. A reply
+ * that says nothing -- no Navigation API, a control that opens elsewhere, an
+ * older content script -- keeps the grace.
+ */
+function pageSawNoNavigation(reply: BrowserActionResult, watch: NavigationWatch): boolean {
+  return reply.navigation?.began === false && !watch.started();
 }
 
 function watchTopFrameNavigation(tabId: number): NavigationWatch {
@@ -478,8 +504,9 @@ function watchTopFrameNavigation(tabId: number): NavigationWatch {
 
   return {
     startedAt,
-    async landing() {
-      await until(() => started, NAVIGATION_START_GRACE_MS);
+    started: () => started,
+    async landing(startWindowMs = NAVIGATION_START_GRACE_MS) {
+      await until(() => started, startWindowMs);
       if (!started) return undefined;
       await until(() => commit !== undefined || inFlight === 0, NAVIGATION_END_TIMEOUT_MS);
       return commit;

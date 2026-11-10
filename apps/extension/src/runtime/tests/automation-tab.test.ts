@@ -17,7 +17,8 @@ import {
   noteSnapshotReadiness,
   readyFromSnapshot,
   resolveAutomationTab,
-  setAutomationTab
+  setAutomationTab,
+  waitForTabReady
 } from "../automation-tab";
 import { tabNavigationEpochs } from "../navigation-events";
 
@@ -178,7 +179,7 @@ function stubSnapshotDocument(t: TestContext): { replaceDocument(): void; naviga
   const stored: Record<string, unknown> = {};
   let documentId = "document.one";
   const beforeNavigate: Array<(details: { tabId: number; frameId: number }) => void> = [];
-  const quiet = { addListener: () => undefined };
+  const quiet = { addListener: () => undefined, removeListener: () => undefined };
   holder.chrome = {
     runtime: {},
     tabs: {
@@ -238,6 +239,18 @@ test("a page that navigates late ends the proof at the navigation event, and eve
   // A look on the new document proves it in turn.
   await noteSnapshotReadiness(7, "https://example.test/form");
   assert.equal(await readyFromSnapshot(7), true);
+});
+
+// Task speed S10: a saved Flow's replay takes no look, so the wait itself must
+// leave the proof, or every act of the replay waits its second again.
+test("a tab found settled by waiting proves the following actions ready, until the page moves", async (t) => {
+  const page = stubSnapshotDocument(t);
+  assert.equal(await readyFromSnapshot(7), false, "nothing has proven the tab yet");
+  await waitForTabReady(7);
+  assert.equal(await readyFromSnapshot(7), true, "the act after the wait");
+  assert.equal(await readyFromSnapshot(7), true, "and the one after it, on the same document");
+  page.navigationBegins(7);
+  assert.equal(await readyFromSnapshot(7), false, "a navigation event ends it");
 });
 
 test("another tab's or a child frame's navigation leaves the proof standing", async (t) => {

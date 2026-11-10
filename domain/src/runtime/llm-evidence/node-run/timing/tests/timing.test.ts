@@ -12,7 +12,7 @@ import { automationStudioLlmStepLogSpans, automationStudioLlmStepLogTool } from 
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../../..";
 import { shownPageLines } from "../../../page-view/tests/shown-page-lines";
-import { webNodeTiming } from "..";
+import { recordWebCommandSpans, webNodeTiming } from "..";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -80,4 +80,20 @@ test("outside a step nothing is recorded, and the timed gateway answers exactly 
   }));
   await collected.done;
   assert.deepEqual(collected.spans().map((span) => span.name).sort(), ["look", "page.capture_snapshot", "sanitize", "send.capture_snapshot"]);
+});
+
+// Task speed S10: a saved Flow's replay sends its commands through the runtime
+// adapter and the host runtime, not a node run; both record through this, so a
+// replayed step is split as an explored one is.
+test("a command recorded outside a node run is split into its send and the page's own share", async () => {
+  const collected = automationStudioLlmStepLogSpans.collect(async () => {
+    recordWebCommandSpans("web.dom.click", 1_000, 1_050, "succeeded", { startedAt: 1_010, finishedAt: 1_040 });
+    recordWebCommandSpans("web.dom.capture_snapshot", 1_060, 1_070, undefined, undefined);
+  });
+  await collected.done;
+  assert.deepEqual(collected.spans().map((span) => [span.name, span.startedAt, span.finishedAt, span.detail]), [
+    ["send.click", 1_000, 1_050, "succeeded"],
+    ["page.click", 1_010, 1_040, undefined],
+    ["send.capture_snapshot", 1_060, 1_070, undefined]
+  ]);
 });
