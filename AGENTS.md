@@ -213,6 +213,12 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
 
 ## Engineering Structure And Modularity
 
+- **Fix the root cause, never cap the symptom (user, 2026-11-10):** "we should NEVER
+  attempt to fix these problems by simply capping the symptoms. Instead we should come
+  up with ways to fix the root cause, always". Lowering a timeout or a fixed wait,
+  capping retries, calls, rounds or budget, suppressing a repeat, hiding an error, or
+  special-casing one task, site or input is not a fix; trace why it happens and change
+  that. If the cause is not yet fixable, report it plainly instead of shipping a cap.
 - Organize code by narrow, cohesive responsibility. Extend the module that
   owns a capability or introduce a focused one rather than placing behavior in
   a convenient catch-all file. Split modules that mix unrelated
