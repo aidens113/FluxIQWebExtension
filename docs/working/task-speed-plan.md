@@ -13,7 +13,7 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 
 ## Current State
 
-**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. The first four-attempt run (t889) measured each replay at 2 model calls (interpretation and judge) and 46-48 s for 18 steps; see S6 and the new S9. Next, once the live lane (t885) merges, since all three touch its Core files: replay timing and the gaps' cause, S6, and S9. A2 (S2) follows when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
+**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. The first four-attempt run (t889) measured each replay at 2 model calls (interpretation and judge) and 46-48 s for 18 steps; see S6 and the new S9. **Top priority (user, 2026-11-10):** "the actual node execution times are very slow right now... it takes a long time for a click or any other action to actually register... it should be basically instant". Lane t890 (S10, below) owns that, including the replay step timing and gaps. Next, once the live lane (t885) merges, since both touch its Core files: S6 and S9. A2 (S2) follows when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
 
 **The user's words (2026-11-10):**
 - "lets try and really increase efficiency, especially when it comes to time"
@@ -125,6 +125,22 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - **Where.** Core `answer-first/completion/` and the flow-run record it reads, after the live lane (t885) merges, since it edits `completion/check.ts`.
 - **Saves.** One call and about 9-11 seconds per replay. With S6, a replay makes no model call.
 - **Risk.** Medium: a site whose data changed under an unchanged structure could return a wrong answer unjudged. The quality guard decides it: a replay series per realistic task must keep its right-answer rate, measured by the Lab's own oracle, which needs no model.
+
+**S10. An action takes too long to land on the page (top priority, user, 2026-11-10).**
+- **Evidence.** After A1, a click's overhead is still 1.4-1.8 s:
+  - a fixed 300 ms wait after every click that does not navigate (`click-landing.ts` `NAVIGATION_START_GRACE_MS`);
+  - about 0.15 s more of messaging during the act;
+  - 0.13-0.27 s for the look before, when it is not kept, and 0.06-0.09 s of sanitizing per look;
+  - about 0.46 s for the look after.
+
+  A replayed step takes about 2.6 s with an instant model. Neither the decision-to-dispatch path nor the replay path is timed yet.
+- **Fix.** Time decision-to-press and every replay step. Then replace each fixed wait or poll with the event that ends it:
+  - the page's Navigation API `navigate` event or `webNavigation.onBeforeNavigate`, instead of the 300 ms grace;
+  - page settle from the page-changes counter, instead of a clock.
+
+  Retries, permission gates and fingerprint matching stay.
+- **Target.** Decision-to-press well under 200 ms when the page was already looked at; a replay step under 0.5 s when nothing navigates.
+- **Where.** Lane t890: the extension runtime, content and background; domain runtime (not `node-run/run.ts`, which t885 holds); Core step-log, the WebSocket gateway and the engine step loop.
 
 **S7. Long tasks take 30 to 55 steps.** After S1-S5, step cost no longer sets the time; the step count does.
 - **Causes, each with evidence:**
