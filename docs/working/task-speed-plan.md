@@ -205,6 +205,26 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - Not verified: live runs, Firefox, seven of the ten sites, replay per-step timing (not built), time to first token. `docs/architecture/extension-client.md` and `testing-facility.md` are not yet updated for the readiness and speed changes.
 - Outcome: merged into both devs ("Merge task t888: speed-browser-step") and pushed.
 
+### 2026-11-10 - t889: deterministic attempts in the Lab
+
+- Agent: lead; worker lab-deterministic-runs (Sonnet). The lead added the scripted model's same-words reading (`scripted-model/model-server.ts`).
+- Why: standing user rule (2026-11-10), several deterministic runs after every exploration.
+- Changed:
+  - `lab attempt --attempts N`, default 4. One attempt ends `diagnosis_only` and never passes.
+  - Every later attempt's continuation is proven.
+  - Calls are split into interpretation, judge and decisions.
+  - A series that stops short still reports what ended.
+  - The live guards read `diagnosis_only`.
+  - `testing-facility.md` and `extension-client.md` are updated.
+- Validation: re-run by the lead in t889.
+  - test-runner `tsc` -> clean.
+  - `node --test` attempt-lane and lab-attempt-command -> 127/127.
+  - test-contracts `attempt-score.test.mjs` -> 8/8.
+  - Structure audit -> passed.
+  - The proof `pnpm lab attempt local-classifieds --task local-classifieds-save-dining-tables --authoring-mode answer-first --scripted-model` (run-mwad80ty-a5ca95cd): attempts 1-3 right. Calls 22 (interpretation 1, judge 1, decisions 20), then 2 and 2 (interpretation 1, judge 1, decisions 0), with continuations held. Attempt 4 was refused at its 4th judge request, a script limit.
+- Not verified: live call attribution; the reworded refusal line in a rerun.
+- Outcome: merged into dev ("Merge task t889: lab-deterministic-runs") and pushed.
+
 ## Open Questions
 
 None for the user. The quality guard decides S1 and S5 by measurement.
