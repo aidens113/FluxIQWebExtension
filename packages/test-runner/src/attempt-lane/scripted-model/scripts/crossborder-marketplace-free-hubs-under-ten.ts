@@ -18,6 +18,12 @@
 // pass covers the first page a moment after it loads, with nothing done there. It looks at the page before its first
 // press, so the hand-off comes from a look, and refuses to go on otherwise (`lookAtTheCheckFirst`).
 //
+// **The `left-out` form** answers four attempts, the later three replays of the saved Flow, and its judge stands on what
+// each read left out (run-mwaudvnh-c208d32c: a saved Flow's replay kept the non-ad rows and left the ads out, rightly,
+// and its judge was told what each read kept and never what it left out). Before it answers, the judge requires every
+// read page of the result to say, under the ad condition, the rows it left out (`leftOutOnEveryReadPage`), and refuses
+// by name a page that says none, so a replay whose reads reach the judge without that account fails the proof.
+//
 // Every handle, field key and filter label is read from the request's own evidence, never written here.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -164,14 +170,32 @@ function lookAtTheCheckFirst(plain: ScriptedReply): ScriptedReply {
   };
 }
 
+/** A read page of the result as the judge is shown it (Core `flow-less/read-pages-shown.ts`). */
+type ShownReadPage = { place?: string; kept?: number; keptRows?: readonly string[]; leftOut?: readonly { by?: string; rows?: readonly string[] }[] };
+
+/**
+ * The `left-out` form's judge: it answers as `plain` does only where every read page of the result says what its
+ * conditions left out (header), and throws, naming the pages, where one does not. A page that kept no row is held to
+ * it too: it was read the same way.
+ */
+const leftOutOnEveryReadPage: ScriptedReply = (request) => {
+  const context = request.payload?.context as { resultSummary?: { readPages?: readonly ShownReadPage[] } } | undefined;
+  const pages = context?.resultSummary?.readPages ?? [];
+  if (!pages.length) throw new Error("The judge was shown no read page of the result");
+  const silent = pages.flatMap((page, index) => (page.leftOut?.some((set) => (set.rows?.length ?? 0) > 0) ? [] : [`read page ${index + 1}${page.place ? ` (${page.place})` : ""}, kept ${page.kept ?? "?"}`]));
+  if (silent.length) throw new Error(`The judge was not told what these reads left out: ${silent.join("; ")}`);
+  return answersRequest(request);
+};
+
 const LATER_ATTEMPTS = 3;
 
 /**
  * The task's script, for the unarmed read or its `timed-check` variant (`taskId` names which). `plain` is the read's
- * honest path for two attempts; `timed-check` is that path behind a look at the timed check, for the default four.
+ * honest path for two attempts; `timed-check` is that path behind a look at the timed check, for the default four;
+ * `left-out` is the plain path for the default four, judged on what each read page left out.
  */
 export function crossborderMarketplaceFreeHubsUnderTenScript(taskId: string, form: string = "plain"): ScriptedModelScript {
-  if (form !== "plain" && form !== "timed-check") throw new Error(`This script has no form "${form}". It has plain and timed-check`);
+  if (form !== "plain" && form !== "timed-check" && form !== "left-out") throw new Error(`This script has no form "${form}". It has plain, timed-check and left-out`);
   if (form === "plain") {
     return Object.freeze({
       taskId,
@@ -183,6 +207,16 @@ export function crossborderMarketplaceFreeHubsUnderTenScript(taskId: string, for
     });
   }
   const attempts = 1 + LATER_ATTEMPTS;
+  if (form === "left-out") {
+    return Object.freeze({
+      taskId,
+      replies: {
+        panel_command: Array.from({ length: attempts }, () => startAttempt),
+        evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
+        loop_verification: Array.from({ length: 2 * attempts }, () => leftOutOnEveryReadPage),
+      },
+    });
+  }
   const decideTimed = lookAtTheCheckFirst(decide);
   return Object.freeze({
     taskId,
