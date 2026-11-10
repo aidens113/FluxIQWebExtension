@@ -8,8 +8,10 @@
 //
 // Two lists, because two callers need different amounts of Core.
 //
-// `CORE_PACKAGES` is what a worktree needs to compile and to run: the four
-// libraries the domain, the runner and the extension import. A task worktree and the Lab's
+// `CORE_PACKAGES` is what a worktree needs to compile and to run: the five
+// libraries of Core's build, four of which the domain, the runner and the extension import
+// (the SDK is built because Core's build cache, and so every freshness gate, counts it).
+// The tests hold both lists to Core's own root `build` script. A task worktree and the Lab's
 // checkout pair build these and stop, which is what keeps a second worktree at
 // seconds rather than minutes.
 //
@@ -25,7 +27,7 @@
 // duplicate web builds four worktrees were each running are stopped by sharing
 // that cache, not by this.
 //
-// The four libraries go through the build cache (scripts/build-cache): each is
+// The five libraries go through the build cache (scripts/build-cache): each is
 // fingerprinted over its own sources, Core's lockfiles and the `dist/` of the
 // Core packages it depends on (`resolve-core-library.mjs`), reused when its
 // stamp still stands, restored from the shared store when another Core
@@ -61,6 +63,9 @@ export const CORE_PACKAGES = [
   { filter: "@fluxiq/contracts", directory: "contracts" },
   { filter: "fluxiq", directory: "fluxiq" },
   { filter: "@fluxiq/client-gateway-websocket", directory: "client-gateway-websocket" },
+  // Nothing downstream imports the SDK, but Core's build cache counts it, so a Core
+  // built without it reads as stale to the Lab and to every check's freshness gate.
+  { filter: "@fluxiq/sdk", directory: "sdk" },
   { filter: "@fluxiq/ui-components", directory: "ui-components" }
 ];
 

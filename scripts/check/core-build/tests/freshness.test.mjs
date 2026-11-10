@@ -41,7 +41,7 @@ test("a refusal names the command it refused, so a build or test is not told to 
 });
 
 test("the rebuild command builds Core's libraries in order", () => {
-  assert.equal(CORE_REBUILD_COMMAND, "pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/ui-components build");
+  assert.equal(CORE_REBUILD_COMMAND, "pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/sdk --filter @fluxiq/ui-components build");
 });
 
 test("a Core that was never built is refused before its build cache is asked", async () => {
