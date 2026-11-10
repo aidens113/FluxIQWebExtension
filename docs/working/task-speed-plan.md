@@ -19,6 +19,7 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 - "lets try and really increase efficiency, especially when it comes to time"
 - "most of those tasks should take a few mins max, ideally less than 3 to get it working (thats just a goal ofc, not a hard requirement)"
 - "we should NEVER attempt to fix these problems by simply capping the symptoms. Instead we should come up with ways to fix the root cause, always"
+- On S1: "yes very good thinking, most requests wont need more than light thinking". So S1's default for a routine step is `low` effort, with the model's default kept for the hard cases S1 lists.
 
 **Where time goes now.** A first attempt averages 3.1 minutes (median 2.1). The long tasks take 8 to 13 minutes. A step costs about 10 seconds:
 - about 7 seconds is the model deciding, of which 80% (Sonnet) to 93% (Haiku) is hidden thinking;
