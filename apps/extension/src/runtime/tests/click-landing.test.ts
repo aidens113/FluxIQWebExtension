@@ -203,6 +203,46 @@ test("a click that commits nothing is returned as it was once the start grace ha
   assert.equal(browser.listening(), 0);
 });
 
+// Task speed S10: the page's own document watched the press until its reply
+// (`content/action-runtime/navigation-watch.ts`), so a reply that says no
+// navigation began needs no grace for one to start.
+test("a click whose own document saw no navigation begin is returned at once, without the start grace", async (t) => {
+  const browser = installBrowser(t);
+  const quiet: BrowserActionResult = { ...REPLY, navigation: { began: false } };
+  const sentAt = Date.now();
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => quiet);
+  const waited = Date.now() - sentAt;
+  t.diagnostic(`a click whose page saw no navigation waited ${waited} ms`);
+  assert.equal(result, quiet);
+  assert.ok(waited < START_GRACE_MS / 2, `waited ${waited} ms`);
+  assert.deepEqual(browser.injections, []);
+  assert.equal(browser.listening(), 0);
+});
+
+test("a click whose own document saw a navigation begin is judged by its landing as before", async (t) => {
+  const browser = installBrowser(t, { "doc-blocked": 403 });
+  const url = `${ORIGIN}/scenarios/failure-surfaces/blocked?to=%2Faccount`;
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    void later(20)
+      .then(() => browser.fire("onBeforeNavigate", { url }))
+      .then(() => later(40))
+      .then(() => browser.fire("onCommitted", { url, documentId: "doc-blocked" }));
+    return { ...REPLY, navigation: { began: true } };
+  });
+  assert.equal(result.failure?.code, "web.navigation.unexpected");
+});
+
+test("a navigation the browser reported before the reply is judged, whatever the page said", async (t) => {
+  const browser = installBrowser(t, { "doc-blocked": 403 });
+  const url = `${ORIGIN}/scenarios/failure-surfaces/blocked`;
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    browser.fire("onBeforeNavigate", { url });
+    void later(40).then(() => browser.fire("onCommitted", { url, documentId: "doc-blocked" }));
+    return { ...REPLY, navigation: { began: false } };
+  });
+  assert.equal(result.failure?.code, "web.navigation.unexpected");
+});
+
 test("a navigation that ends without a commit, as a download does, is returned as it was without waiting it out", async (t) => {
   const browser = installBrowser(t, { top: 404 });
   const sentAt = Date.now();

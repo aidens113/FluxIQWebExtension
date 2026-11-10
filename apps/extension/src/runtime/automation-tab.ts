@@ -327,10 +327,23 @@ function readTopDocumentId(tabId: number): Promise<string | undefined> {
   });
 }
 
+/**
+ * Waits until the tab has held one address for a second with its load
+ * complete, or 20 s have passed.
+ *
+ * A tab found settled is proven ready as a look proves it
+ * (`noteSnapshotReadiness`): while no navigation event of the tab follows, the
+ * same document is the tab this wait just found settled, so the next action on
+ * it starts at once (task speed S10). Until 2026-11-10 only a look left that
+ * proof, and a saved Flow's replay, which takes no look, paid this wait's whole
+ * second again before every act on a page nothing had navigated since the last.
+ * A wait that ends on its deadline, or on a tab that closed, proves nothing.
+ */
 export function waitForTabReady(tabId: number): Promise<void> {
   return new Promise((resolve) => {
     let lastUrl: string | undefined;
     let stableSince = 0;
+    let settling = false;
     const interval = setInterval(checkSettled, 250);
     const timeout = setTimeout(done, 20_000);
     function done(): void {
@@ -361,7 +374,10 @@ export function waitForTabReady(tabId: number): Promise<void> {
         }
         if (tab.status !== "complete") return;
         if (isTransientNavigationUrl(url)) return;
-        if (now - stableSince >= 1_000) done();
+        if (now - stableSince < 1_000 || settling) return;
+        settling = true;
+        await noteSnapshotReadiness(tabId, url);
+        done();
       } catch {
         done();
       }

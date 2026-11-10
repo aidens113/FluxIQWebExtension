@@ -98,6 +98,7 @@ import { webAutomationActLanded } from "./act-landing";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
 import { createWebAutomationHostResourcePort } from "./host-resources";
+import { recordWebCommandSpans } from "./llm-evidence/node-run/timing";
 import { publishedWebLlmPage, webResetResource, sanitizeWebLlmSnapshot, sanitizeWebLlmSnapshotWithBindings, screenedEvidenceUrl } from "./llm-evidence";
 import { webLlmPageOptionGroups, webLlmPageResultCount } from "./llm-evidence/page-groups";
 import {
@@ -185,7 +186,18 @@ const HOST_RUNTIME_CAPABILITIES = Object.freeze(["action-dispatch", "state-snaps
  * port grants a lease from; absent, there is no browser to lend and every
  * acquisition answers `at_capacity`.
  */
-export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway, sessions: () => readonly ClientGatewaySession[] = () => []): WebAutomationHostRuntime {
+export function createWebAutomationHostRuntime(untimed: WebAutomationHostRuntimeGateway, sessions: () => readonly ClientGatewaySession[] = () => []): WebAutomationHostRuntime {
+  // Every page read this boundary makes for a Flow run (the state around each
+  // step, expectations, facts) is timed into the run's step as the dispatch it
+  // reads around is (task speed S0, `llm-evidence/node-run/timing/`).
+  const gateway: WebAutomationHostRuntimeGateway = {
+    dispatch: async (request) => {
+      const sentAt = Date.now();
+      const result = await untimed.dispatch(request);
+      recordWebCommandSpans(request.outputId, sentAt, Date.now(), result.status, isRecord(result.payload?.result) ? result.payload.result : undefined);
+      return result;
+    }
+  };
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
   const factEvaluator = createWebAutomationFactEvaluator(gateway.dispatch);
   const places = createWebStatePlacesMemo();
