@@ -84,8 +84,20 @@ test("the variant row has a script too, the plain form is the read's, and a form
   assert.equal(scriptedModelScriptFor(TIMED).taskId, TIMED);
   assert.equal(scriptedModelScriptFor(TIMED, "timed-check").taskId, TIMED);
   assert.equal(scriptedModelScriptFor(TIMED).replies.panel_command?.length, 2);
-  assert.throws(() => scriptedModelScriptFor(TIMED, "by-hand"), /no form "by-hand"\. It has plain and timed-check/u);
+  assert.throws(() => scriptedModelScriptFor(TIMED, "by-hand"), /no form "by-hand"\. It has plain, timed-check and left-out/u);
   assert.throws(() => scriptedModelScriptFor("crossborder-marketplace-free-hubs-under-ten", "by-hand"), /no form "by-hand"/u);
+});
+
+// The `left-out` form (run-mwaudvnh-c208d32c): four attempts, judged only where every read page says what it left out.
+test("left-out answers four attempts, and its judge refuses a read page that says nothing of what it left out", () => {
+  const script = scriptedModelScriptFor("crossborder-marketplace-free-hubs-under-ten", "left-out");
+  assert.equal(script.replies.panel_command?.length, 4);
+  const judge = script.replies.loop_verification![0]!;
+  const asked = (readPages: unknown[]) => ({ kind: "loop_verification", ordinal: 1, model: "m", jsonText: true, message: "", payload: { taskKind: "loop_verification", context: { resultSummary: { recordSets: [], readPages } } } }) as unknown as ScriptedModelRequest;
+  const told = { kept: 2, keptRows: ["Keelson Hub"], leftOut: [{ by: "condition 1 (ad is present, not) by itself", rows: ["Arden Hub"] }] };
+  assert.equal((judge(asked([told, { ...told, place: "page=2" }])) as { diagnosis: { answersRequest: string } }).diagnosis.answersRequest, "yes");
+  assert.throws(() => judge(asked([told, { place: "page=2", kept: 3, keptRows: ["Keelson Hub"] }])), /not told what these reads left out: read page 2 \(page=2\), kept 3/u);
+  assert.throws(() => judge(asked([])), /shown no read page/u);
 });
 
 test("timed-check answers the default four attempts", () => {
