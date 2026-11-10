@@ -16,7 +16,9 @@ export const FLASH_DEAL_LISTING_ID = "1005008403519";
  * the live site would not: the page's script binds its handlers to the
  * elements it stamps, by position, the way a component framework does. The
  * close controls are glyphs in plain elements, the chat's minimise control has
- * only a `title`, and every button is a styled div.
+ * only a `title`, and every button is a styled div. The one exception is the
+ * timed check (`state/timed-check.ts`), which is a modal dialog because the
+ * checks it stands for draw theirs as one.
  */
 export function overlayMarkup(state: MarketState, c: MarketClasses, kind: string, storeName: string | null): string {
   const parts: string[] = [];
@@ -26,7 +28,25 @@ export function overlayMarkup(state: MarketState, c: MarketClasses, kind: string
   if (kind === "item" && storeName !== null) parts.push(`<template id="fb-tpl-chat">${chatWidget(c, storeName)}</template>`);
   if (kind === "item" && state.mode === "flash-deal" && state.flashDeal === "pending") parts.push(`<template id="fb-tpl-flash">${flashDeal(c)}</template>`);
   if (interruptionDue(state.interruption, kind)) parts.push(`<template id="fb-tpl-interrupt">${flashDeal(c)}</template>`);
+  if (state.timedCheck?.status === "waiting") parts.push(`<template id="fb-tpl-timed-check">${timedCheck(c)}</template>`);
   return parts.join("\n");
+}
+
+/**
+ * The timed check: a box over the whole page, above every other layer, asking
+ * the visitor to confirm they are human. It asks the visitor to prove
+ * something and never says it is checking by itself, so only a person may
+ * answer it. It has no close control, and nothing behind it can be pressed.
+ * Its question stays on screen until the layer goes, so a person who pressed
+ * the box sees the check as standing until its own check has finished.
+ */
+function timedCheck(c: MarketClasses): string {
+  return `<div class="${c.scrim}" style="z-index:90"><div class="${c.modal}" role="dialog" aria-modal="true" aria-label="Security check">
+<div style="font-weight:800;font-size:22px;color:#e62e04">farbazaar</div>
+<h2 class="${c.modalTitle}">Please confirm you are human</h2>
+<div class="${c.modalBody}">We noticed unusual activity. To keep shopping, press the box below.</div>
+<div class="${c.verifyCheck}"><i style="width:18px;height:18px;border:2px solid #999;border-radius:3px;display:inline-block"></i><span>Verify you are human</span></div>
+</div></div>`;
 }
 
 function consentBanner(c: MarketClasses): string {

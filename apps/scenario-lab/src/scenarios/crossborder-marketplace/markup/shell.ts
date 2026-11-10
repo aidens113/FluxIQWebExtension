@@ -66,6 +66,7 @@ export function marketDocument(input: ShellInput): string {
     chat: state.chat,
     flashDeal: state.mode === "flash-deal" ? state.flashDeal : "none",
     interruption: interruptionDue(state.interruption, input.kind) ? { dismiss: state.interruption!.dismiss, delayMs: state.interruption!.delayMs } : null,
+    timedCheck: state.timedCheck?.status === "waiting" ? { delayMs: state.timedCheck.delayMs } : null,
     build: buildFor(state.mode),
   };
   return `<!doctype html>

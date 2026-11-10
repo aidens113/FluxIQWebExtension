@@ -13,7 +13,9 @@
 //    shows no Next, the load-more control found around the list, or a scroll
 //    where it shows neither (`./found-way.ts`). A scroll waits on while the
 //    page shows the list still loading (`./list-loading.ts`). A Next that drops the narrowing with no
-//    following page that keeps it fails `page_fault`, pressing nothing.
+//    following page that keeps it fails `page_fault`, pressing nothing. A
+//    numbered way whose pages match no control on a settled list has no
+//    following page: `ended`.
 // 3. A disabled or absent control is never pressed: the list has ended, and the
 //    answer says why (`control_absent`, `control_disabled`,
 //    `no_following_page`, `scrolled_to_end`).
@@ -34,6 +36,7 @@ import { arriveAfterMove, awaitListItems } from "./arrival";
 import { deadlineFor } from "./list-change";
 import { failedMove, stoppedMove, type PageMoveOptions, type PageMoveOutcome } from "./move-outcome";
 import { PaginationFault, paginationStopOf } from "./pagination-fault";
+import { watchListLoading } from "./list-loading";
 import { pageShownNow } from "./shown-page";
 import { stepPage } from "./step-page";
 import type { PageStep, PaginationProgress } from "./types";
@@ -62,7 +65,14 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
   const way = request.pagination;
   const current = pageShownNow(way, request.item);
   if (way?.mode === "numbered" && current === undefined) {
-    return failedMove("page_fault", `The pager ${JSON.stringify(way.pages)} does not say which page is showing, so the page after it is not known.`);
+    // No page control at all is a list that fits one page, not a pager that
+    // does not say where it is: nothing is pressed and the list has ended. Only
+    // a settled list says so; one still loading may not have drawn its pager.
+    if (document.querySelector(way.pages) === null) {
+      if (!watchListLoading(request.item, shown[0]).shown()) return { outcome: "ended", stop: "no_following_page" };
+      return failedMove("page_fault", `The list is still loading and the pager ${JSON.stringify(way.pages)} has not shown, so whether a page follows is not known.`, undefined, true);
+    }
+    return failedMove("page_fault", `The pager ${JSON.stringify(way.pages)} does not say which page is showing, so the page after it is not known.`, undefined, true);
   }
   const before = new Set(shown);
   const mark = options.mark;

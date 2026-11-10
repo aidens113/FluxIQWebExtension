@@ -115,3 +115,18 @@ test("a read that is no list, and a click, are shown as they were", () => {
   const click: JsonObject = { actionType: "web.dom.click", url: PAGE, message: "Element clicked." };
   assert.deepEqual(webNodeReadWithRejectedRows(click).read, click);
 });
+
+// Live run `run-mwaf6gnt-638d90a0` (step 0053): an exploring read whose conditions kept none of 20 items
+// answered the 20 rejected rows, and the model was told "extracted holds all 20 kept rows".
+test("a read that answered rows its conditions rejected says it kept none of them, and why", () => {
+  const extraction = { recordCount: 3, pagesRead: 1, conditions: { applied: 3, kept: 0, rejected: [3], unfiltered: true } };
+  const read = webNodeReadWithRejectedRows(listRead(3, { extraction })).read as JsonObject;
+  assert.match(read.restOfRows as string, /kept none of the 3 rows/u);
+  assert.doesNotMatch(read.restOfRows as string, /holds all|kept rows/u);
+  assert.equal(read.firstRows, undefined, "rejected rows are not shown as the first kept rows");
+  assert.equal((read.extracted as unknown[]).length, 3);
+
+  // The same read whose conditions kept its rows is told as before.
+  const kept = webNodeReadWithRejectedRows(listRead(70, { extraction: { recordCount: 70, pagesRead: 1, conditions: { applied: 90, kept: 70, rejected: [20], unfiltered: false } } })).read as JsonObject;
+  assert.equal(kept.restOfRows, "extracted holds all 70 kept rows.");
+});

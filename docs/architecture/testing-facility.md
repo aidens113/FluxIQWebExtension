@@ -2072,7 +2072,7 @@ pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted
 pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts N [--restart-between]] [--dry-run]
 ```
 
-A task's exploring attempt and then several deterministic ones, in a visible browser (default `--attempts 4`: one exploring attempt and three deterministic). `attempt-lane/live/` types the
+A task's exploring attempt and then several deterministic ones, in a visible browser (default `--attempts 4`: one exploring attempt and three deterministic). A task row named on a variant runs on that variant: the attempt arms it after each reset of the site (`run-attempt-command.ts`, `resetSite`; before t885 `lab attempt` never armed one). `attempt-lane/live/` types the
 instruction into the real extension chat, follows the attempt with the read the extension
 uses (`list-conversation-task-attempts`, `get-task-attempt`) until it stops on `achieved`,
 `budget_out`, `stopped_by_person` or `waiting_for_person`, and scores it with
@@ -2509,6 +2509,7 @@ with Playwright. The typed shape is `ScenarioPersonChecks` in
 | --- | --- | --- |
 | `everything-store` | "Enter the characters you see below" | Reads the characters from the store's state (`robotCode(challengeSeed, guard.robot.image)`, from `/__control/final-state` with the controller token), types them into "Type characters" and presses Continue shopping. Never "Try different image". |
 | `crossborder-marketplace` | "I'm not a robot" | Presses the box and waits for the reload. |
+| `crossborder-marketplace`, variant `timed-check` | "Please confirm you are human" | Presses "Verify you are human"; the check clears in place after about 2 s, with no reload, and never returns. |
 | `company-website` | "Confirm you are human" | Presses the box, which submits the quote. |
 | `bigbox-retail` | "Robot or human?" | Holds Press & Hold for 2.5 s. The check also passes itself for an automation that waits, so only a hand-off FluxIQ raised anyway reaches it. |
 
@@ -2576,6 +2577,7 @@ because `ScenarioExpected`'s validator is closed.
 | `everything-store` `first-page-earbuds/robot-check` | completes, required | The store answers every page with its check until a person passes it. The row then expects the workflow's own sixteen records and a page the check has left, and repair task `everything-store-refuse-robot-check` is `expect: "hand-off"`: it passes on a hand-off at the check, no patch around it, and the final state after the person's pass. |
 | `crossborder-marketplace` `spain-hubs` (and `list-layout`), tasks `-spain-hubs` and `-spain-hubs-list-layout` | completes, not required | The filters the honest path narrows by are the third results load, which the traffic screen replaces; a Flow that reaches the filtered results in fewer loads never meets it. |
 | `company-website` primary (and `redesigned-quote-submit`), both quote-request tasks | completes, not required | Sending the quote form raises the human check. |
+| `crossborder-marketplace` `free-hubs-under-ten/timed-check`, task `crossborder-marketplace-free-hubs-under-ten-timed-check` | completes, required | The variant raises a person-only check on a timer 1.5 s after a storefront page's script starts, with no action behind it, so FluxIQ meets it in a look, not an action: the proof that a look hands a check to the person and the attempt resumes in place (t885). The oracle is the unarmed one. The scripted form `FLUXIQ_ATTEMPT_SCRIPT_FORM=timed-check` refuses to press anything until Core's `personCompletedCheck` note shows the hand-off came from a look. |
 
 A task whose honest path meets no check, such as `crossborder-marketplace-hub-to-cart`,
 declares nothing. A hand-off there at a real check still passes the invariant

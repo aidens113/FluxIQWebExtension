@@ -552,6 +552,11 @@ function namedUrlClaim(action: BrowserActionCommand): boolean {
  * make a missing target the person's. A navigation that lands on a robot check
  * is reported by the worker, which asks this frame the same question
  * (`runtime/landed-challenge.ts`).
+ *
+ * What the original failure said about the act survives the rewrite: one that
+ * stated `effect: "unacted"` (never pressed, its target absent because the page
+ * was the check) still does, so Core does not read an unpressed control as
+ * possibly pressed; nothing is stated where the original stated nothing.
  */
 function challengeGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
   const sought = soughtSelector(action);
@@ -561,10 +566,11 @@ function challengeGateFailure(action: BrowserActionCommand, failure: FailureReco
   const challenge = body ? challengeIn(body, "page") : undefined;
   if (!challenge) return undefined;
   const what = challenge === "captcha" ? "a robot check" : "a prompt for a verification code";
-  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+  const record = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
     expected: failure.expected ?? (missing ? (sought ? `an element matching ${sought}` : "the action's target") : "the page URL the Flow claimed"),
     actual: `${missing ? failure.actual ?? "nothing matched the target" : "the page is not at the URL the Flow claimed"}; the document is ${what}, which only a person can answer`
   });
+  return failure.effect === "unacted" ? { ...record, effect: "unacted" } : record;
 }
 
 /** True when nothing in this document matches the selector. An unparseable selector is no answer at all, so it says false. */

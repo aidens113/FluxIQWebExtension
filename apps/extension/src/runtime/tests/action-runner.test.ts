@@ -5,9 +5,10 @@
 // thing that must be right is an argument to `chrome.tabs.sendMessage` -- which
 // frame the message is addressed to -- and a page cannot observe its own
 // delivery. So the chrome API the runner drives is stubbed and the calls it
-// makes are read back. What this cannot prove is that an addressed message
-// really arrives at that frame and nowhere else; `e2e/content/tests/frames.spec.ts`
-// proves the receiving half against a real page of iframes.
+// makes are read back (`runner-chrome-stub.ts`). What this cannot prove is
+// that an addressed message really arrives at that frame and nowhere else;
+// `e2e/content/tests/frames.spec.ts` proves the receiving half against a real
+// page of iframes.
 //
 // The same goes for the readiness probe a child-frame action now runs first:
 // the stub can say a frame is not listening and that injecting into it makes it
@@ -23,12 +24,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation";
-import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
+import type { BrowserActionCommand } from "../../shared/protocol";
 import { browserActionFailure, runBrowserActionCommand } from "../action-runner";
 import { browserActionFromGatewayCommand } from "../result-mapping";
 import { forgetAutomationTab } from "../automation-tab";
-import { keptLooks } from "../look-reuse";
 import type { ListedFrame } from "../frame-address";
+import { CONNECTION_ERROR, FRAME_REPLY, installChromeStub, runAgainstStub, TAB_ID, type ChromeCalls } from "./runner-chrome-stub";
 
 test("a failure is reported against its command, finished the moment it started", (t) => {
   t.mock.method(Date, "now", () => 9_000);
@@ -67,171 +69,6 @@ test("the failure it reports survives Core's parser, which drops a record it ref
   const result = browserActionFailure({ commandId: "c-9", actionType: "web.dom.click" }, "Runtime action failed.");
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });
-
-const TAB_ID = 41;
-
-/** What a `fluxiq.ping` must answer before `background/tabs.ts` calls a frame ready. */
-const CONTENT_SCRIPT_VERSION = 2;
-
-/** Chrome's own words when a message reaches a frame with no listener. */
-const CONNECTION_ERROR = "Could not establish connection. Receiving end does not exist.";
-
-/** One `chrome.tabs.sendMessage` the runner made: the tab, the body, and the frame it addressed. */
-type SentToTab = { tabId: number; message: Record<string, unknown>; frameId: number | undefined };
-
-/**
- * What the runner did to the browser. Readiness pings are kept apart from
- * actions: every child-frame action now pings the frame first, and a row about
- * where an action was delivered should not have to filter that out.
- */
-type ChromeCalls = { sent: SentToTab[]; pinged: number[]; injected: number[][]; timeline: Array<"wait" | "send"> };
-
-/** The content script's answer. Returned verbatim, so a test can tell the runner's own result from the frame's. */
-const FRAME_REPLY: BrowserActionResult = {
-  commandId: "c-frame",
-  actionType: "web.dom.click",
-  status: "succeeded",
-  message: "Element clicked.",
-  validation: { status: "passed", expected: "the click lands on the target", actual: "it did" },
-  startedAt: 1,
-  finishedAt: 2
-};
-
-/**
- * The chrome API the runner drives, reduced to what one in-page action touches,
- * with every call recorded.
- *
- * `tabs.get` answers a tab with no URL, which is a shape the runner already has
- * a rule for: an unreadable URL means "judge the action by its own outcome", so
- * the page guard stands aside. It is also what makes `waitForTabReady` settle
- * at once -- its stability window compares the URL with the last one it saw,
- * and two unknowns are already stable -- so a routing test costs no wall clock.
- *
- * `frames` is what `webNavigation.getAllFrames` reports; `undefined` is the
- * browser declining to answer, which the runner reads as "unknown", not "none".
- *
- * `silent` names the frames with no FluxIQ content script listening -- what an
- * extension reload leaves behind, since the frames survive it and their scripts
- * do not. Injecting into one makes it answer, unless it is also `uninjectable`,
- * which is a frame whose origin the manifest does not cover.
- *
- * `refusals` are the errors successive action sends meet, in order; a send past
- * the list is answered. `timeline` puts each `waitForTabReady` among the sends.
- *
- * `landing` is where an action's send takes the tab: its top frame commits
- * there, served with that status, before the frame replies. Without it nothing
- * navigates, and a click returns once `click-landing.ts`'s start grace ends.
- */
-function installChromeStub(
-  frames: Array<number | ListedFrame> | undefined,
-  silent: number[] = [],
-  uninjectable: number[] = [],
-  refusals: string[] = [],
-  landing?: { status: number; url: string }
-): ChromeCalls {
-  // Every stub is a page of its own: no look kept from another test's stands on it.
-  keptLooks.forget(undefined);
-  const calls: ChromeCalls = { sent: [], pinged: [], injected: [], timeline: [] };
-  const injectedInto = new Set<number>();
-  const pendingRefusals = [...refusals];
-  const runtime: { lastError?: { message: string } } = {};
-  type NavigationListener = (details: Record<string, unknown>) => void;
-  const navigation = { before: new Set<NavigationListener>(), committed: new Set<NavigationListener>(), error: new Set<NavigationListener>() };
-  const navigationEvent = (listeners: Set<NavigationListener>) => ({
-    addListener: (listener: NavigationListener) => void listeners.add(listener),
-    removeListener: (listener: NavigationListener) => void listeners.delete(listener)
-  });
-  const stub = {
-    runtime,
-    tabs: {
-      get: (tabId: number) => Promise.resolve({ id: tabId, status: "complete" }),
-      onUpdated: { addListener: () => void calls.timeline.push("wait"), removeListener: () => undefined },
-      sendMessage: (tabId: number, message: unknown, third?: unknown, fourth?: unknown) => {
-        const options = typeof third === "object" && third !== null ? third as { frameId?: number } : undefined;
-        const callback = (typeof third === "function" ? third : fourth) as ((response: unknown) => void) | undefined;
-        const frameId = options?.frameId;
-        if ((message as { type?: string }).type === "fluxiq.ping") {
-          const target = frameId ?? 0;
-          calls.pinged.push(target);
-          if (silent.includes(target) && !injectedInto.has(target)) {
-            runtime.lastError = { message: CONNECTION_ERROR };
-            callback?.(undefined);
-            delete runtime.lastError;
-            return;
-          }
-          callback?.({ ok: true, active: true, version: CONTENT_SCRIPT_VERSION });
-          return;
-        }
-        // A click's landing is asked whether it is a robot check
-        // (`click-landing.ts`); the landed page here is an ordinary one.
-        if ((message as { type?: string }).type === "fluxiq.pageChallenge") {
-          callback?.({ challenge: null });
-          return;
-        }
-        // A look first asks each frame whether the page moved since the last
-        // one (`look-reuse/`): answered here, and not an action the page was sent.
-        if ((message as { type?: string }).type === "fluxiq.pageChanges") {
-          callback?.({ instance: `frame-${frameId ?? 0}`, changes: 0 });
-          return;
-        }
-        calls.sent.push({ tabId, message: message as Record<string, unknown>, frameId });
-        calls.timeline.push("send");
-        if (landing !== undefined) {
-          for (const listener of navigation.before) listener({ tabId, frameId: 0, url: landing.url });
-          for (const listener of navigation.committed) listener({ tabId, frameId: 0, url: landing.url, documentId: "doc-landed" });
-        }
-        const refusal = pendingRefusals.shift();
-        if (refusal !== undefined) {
-          runtime.lastError = { message: refusal };
-          callback?.(undefined);
-          delete runtime.lastError;
-          return;
-        }
-        callback?.(FRAME_REPLY);
-      }
-    },
-    scripting: {
-      executeScript: (details: { target: { tabId: number; frameIds?: number[] }; files?: string[]; func?: () => unknown }) => {
-        // A `func` injection is click-landing reading the landed document's status.
-        if (details.func !== undefined) return Promise.resolve([{ frameId: 0, result: landing?.status }]);
-        const frameIds = details.target.frameIds ?? [];
-        calls.injected.push([...frameIds]);
-        if (frameIds.some((frameId) => uninjectable.includes(frameId))) {
-          return Promise.reject(new Error("Cannot access contents of the page."));
-        }
-        for (const frameId of frameIds) injectedInto.add(frameId);
-        return Promise.resolve([]);
-      }
-    },
-    webNavigation: {
-      // A bare number is a frame whose URL the row does not care about.
-      getAllFrames: (_details: { tabId: number }, callback: (found: ListedFrame[] | undefined) => void) => {
-        callback(frames?.map((frame) => (typeof frame === "number" ? { frameId: frame } : frame)));
-      },
-      onBeforeNavigate: navigationEvent(navigation.before),
-      onCommitted: navigationEvent(navigation.committed),
-      onErrorOccurred: navigationEvent(navigation.error)
-    }
-  };
-  (globalThis as { chrome?: unknown }).chrome = stub;
-  return calls;
-}
-
-/** Runs one in-page action against the stub and hands back the result and every browser call it made. */
-async function runAgainstStub(
-  action: BrowserActionCommand,
-  frames: Array<number | ListedFrame> | undefined,
-  silent: number[] = [],
-  uninjectable: number[] = []
-): Promise<ChromeCalls & { run: Awaited<ReturnType<typeof runBrowserActionCommand>> }> {
-  const calls = installChromeStub(frames, silent, uninjectable);
-  try {
-    const run = await runBrowserActionCommand({ action, attachTabForRecording: () => Promise.resolve() });
-    return { run, ...calls };
-  } finally {
-    delete (globalThis as { chrome?: unknown }).chrome;
-  }
-}
 
 test("an action naming no frame is delivered to the top frame, and says so twice", async () => {
   const { run, sent } = await runAgainstStub(
@@ -786,4 +623,73 @@ test("a navigate to the extension's own address is refused as an invalid paramet
   assert.equal(run.result.failure?.code, "web.action.invalid_parameter");
   assert.match(run.result.failure?.actual ?? "", /the extension's own address/u);
   assert.doesNotMatch(JSON.stringify(run.result), /permission|policy/u);
+});
+
+// t885 (`run-mwaknxf9-7549d126`): a look took bigbox's "Robot or human?" page as an ordinary page, so the
+// model stopped on a check that cleared by itself. A whole-tab look that carries the check allowance
+// now meets a check as a landing does (`look-check/`); every other look reads the page as it is.
+const PERSON_ONLY_PAGE = { challenge: "captcha", robotCheck: "person_only" };
+const SELF_CLEARING_PAGE = { challenge: "captcha", robotCheck: "self_clearing" };
+
+/** Runs looks one after another on one stubbed tab whose top frame answers `challenges`. */
+async function looksAgainst(challenges: unknown[], frames: number[], ...actions: BrowserActionCommand[]) {
+  const calls = installChromeStub(frames, [], [], [], undefined, challenges);
+  const runs: Array<Awaited<ReturnType<typeof runBrowserActionCommand>>> = [];
+  try {
+    for (const action of actions) runs.push(await runBrowserActionCommand({ action, attachTabForRecording: () => Promise.resolve() }));
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  }
+  return { runs, ...calls };
+}
+
+const ALLOWED_LOOK: BrowserActionCommand = { commandId: "c-look", actionType: "web.dom.capture_snapshot", tabId: TAB_ID, checkWaitMs: 15_000 };
+const HOST_LOOK: BrowserActionCommand = { commandId: "c-host", actionType: "web.dom.capture_snapshot", tabId: TAB_ID };
+
+test("a look that carries the check allowance, on a check only a person can clear, fails USER_INTERVENTION_REQUIRED and is never sent", async () => {
+  const { runs, sent, challenged } = await looksAgainst([PERSON_ONLY_PAGE], [0], ALLOWED_LOOK);
+  const run = runs[0]!;
+  assert.deepEqual(sent, []);
+  assert.deepEqual(challenged, [0]);
+  assert.equal(run.result.commandId, "c-look");
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
+  assert.match(run.result.failure?.actual ?? "", /^captcha: /u);
+  assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
+  assert.equal(run.tabId, TAB_ID);
+  assert.equal(run.frameId, 0);
+});
+
+test("the same look without the allowance -- a host state capture -- takes the check page as a page, unasked", async () => {
+  const { runs, sent, challenged } = await looksAgainst([PERSON_ONLY_PAGE], [0], HOST_LOOK);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(challenged, []);
+  assert.deepEqual(runs[0], { result: FRAME_REPLY, tabId: TAB_ID, frameId: 0 });
+});
+
+test("a look addressed to one frame is that frame's, and the page is not asked about a check", async () => {
+  const { runs, sent, challenged } = await looksAgainst([PERSON_ONLY_PAGE], [0, 3], { ...ALLOWED_LOOK, frameId: 3 });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.frameId, 3);
+  assert.deepEqual(challenged, []);
+  assert.equal(runs[0]?.result.status, "succeeded");
+});
+
+test("a look on a check that clears by itself is taken once it has, and carries how long it stood", async () => {
+  const { runs, sent, challenged } = await looksAgainst([SELF_CLEARING_PAGE, SELF_CLEARING_PAGE, { challenge: null }], [0], ALLOWED_LOOK);
+  const run = runs[0]!;
+  assert.equal(sent.length, 1);
+  // The first reading, a poll still on the check, a poll past it, and the settled page's confirmation.
+  assert.equal(challenged.length, 4);
+  assert.equal(run.result.status, "succeeded");
+  assert.ok((run.result.checkWait?.waitedMs ?? 0) >= 400, JSON.stringify(run.result.checkWait));
+  assert.deepEqual({ ...run.result, checkWait: undefined }, { ...FRAME_REPLY, checkWait: undefined });
+});
+
+test("a check page a host capture kept is still judged for a look that carries the allowance, and is not answered from the kept look", async () => {
+  const { runs, sent } = await looksAgainst([PERSON_ONLY_PAGE], [0], HOST_LOOK, ALLOWED_LOOK);
+  assert.equal(runs[0]?.result.status, "succeeded");
+  assert.equal(sent.length, 1, "the host capture alone reached the page");
+  assert.equal(runs[1]?.result.status, "failed");
+  assert.equal(runs[1]?.result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
 });

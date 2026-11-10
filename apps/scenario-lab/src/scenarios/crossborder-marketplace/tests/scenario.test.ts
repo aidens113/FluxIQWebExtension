@@ -57,15 +57,19 @@ const INTERRUPTION_VARIANTS: Readonly<Record<string, unknown>> = {
   "flash-deal-stuck": INTERRUPTIONS.stuck,
 };
 
-test("the manifest is valid, with eight workflows and six variants, each arming one mode or one interruption, and only the stuck interruption judged on failing", () => {
+test("the manifest is valid, with eight workflows and seven variants, each arming one mode, one interruption or the timed check, and only the stuck interruption judged on failing", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
   assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["spain-hubs", "place-order", "collect-official-coupon-only", "free-hubs-under-ten", "follow-official-store", "mint-hub-fallback", "uk-express-quote"]);
-  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal", ...Object.keys(INTERRUPTION_VARIANTS)], ["list-layout"], [], [], [], [], [], []]);
+  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal", ...Object.keys(INTERRUPTION_VARIANTS)], ["list-layout"], [], [], ["timed-check"], [], [], []]);
   for (const variant of [...(manifest.variants ?? []), ...(manifest.workflows ?? []).flatMap(({ variants }) => variants ?? [])]) {
     const interruption = INTERRUPTION_VARIANTS[variant.id];
     if (interruption !== undefined) {
       assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: "baseline", interruption } });
+      continue;
+    }
+    if (variant.id === "timed-check") {
+      assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: "baseline", timedCheck: { delayMs: 1500 } } });
       continue;
     }
     assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: variant.id } });

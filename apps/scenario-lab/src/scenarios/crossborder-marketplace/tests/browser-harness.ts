@@ -28,8 +28,8 @@ export type Session = {
   /** The facts that do not hold on the active tab, each as `id: actual`. */
   failingFacts(facts: readonly ExpectedFact[]): Promise<string[]>;
   arm(mode: string): Promise<void>;
-  /** Arms a declared variant of the primary workflow the way a Lab run does, through the controller's `/__control/arm`. */
-  armVariant(variantId: string): Promise<void>;
+  /** Arms a declared variant the way a Lab run does, through the controller's `/__control/arm`: of the primary workflow, or of `workflowId`'s. */
+  armVariant(variantId: string, workflowId?: string): Promise<void>;
   finalState(): Promise<Record<string, unknown>>;
   close(): Promise<void>;
 };
@@ -93,8 +93,8 @@ async function openTab(lab: RunningScenarioLab, context: BrowserContext, runToke
       const response = await fetch(`${lab.origin}/api/crossborder-marketplace/set-mode`, { method: "POST", headers: { authorization: `Bearer ${runToken}`, "content-type": "application/json" }, body: JSON.stringify({ mode }) });
       if (!response.ok) throw new Error(`Arming ${mode} failed: ${response.status}`);
     },
-    async armVariant(variantId) {
-      const response = await fetch(`${lab.origin}/__control/arm`, { method: "POST", headers: { authorization: `Bearer ${runToken}`, "content-type": "application/json" }, body: JSON.stringify({ scenarioId: "crossborder-marketplace", variantId }) });
+    async armVariant(variantId, workflowId) {
+      const response = await fetch(`${lab.origin}/__control/arm`, { method: "POST", headers: { authorization: `Bearer ${runToken}`, "content-type": "application/json" }, body: JSON.stringify({ scenarioId: "crossborder-marketplace", variantId, ...(workflowId === undefined ? {} : { workflowId }) }) });
       if (!response.ok) throw new Error(`Arming ${variantId} failed: ${response.status}`);
     },
     async finalState() {

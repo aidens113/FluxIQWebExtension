@@ -218,7 +218,7 @@ test("a Run Output click or navigation a model wrote carries the check allowance
   assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.type", parameters: { selector: NAME_SELECTOR, text: "Ada" } }), { status: "unchanged" });
 });
 
-test("a click or navigation the build runs goes to the page with the check allowance, and nothing else does", async () => {
+test("a click or navigation the build runs goes to the page with the check allowance, and so does a look; typing that sends nothing does not", async () => {
   const sent: Array<{ actionType: string; parameters: JsonObject }> = [];
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
@@ -242,9 +242,11 @@ test("a click or navigation the build runs goes to the page with the check allow
   assert.equal(click.parameters.checkWaitMs, 15_000);
   assert.equal(click.parameters.timeoutMs, 20_000, "the model's 5 s, with the 15 s allowance on top");
   assert.equal(sent.find((command) => command.actionType === "web.browser.navigate")?.parameters.checkWaitMs, 15_000);
-  for (const command of sent.filter((entry) => entry.actionType === "web.dom.type" || entry.actionType === "web.dom.capture_snapshot")) {
-    assert.equal("checkWaitMs" in command.parameters, false, command.actionType);
+  // A look the model asked for carries it too, so a check the page lands on is waited out or handed to the person (t885).
+  for (const command of sent.filter((entry) => entry.actionType === "web.dom.capture_snapshot")) {
+    assert.equal(command.parameters.checkWaitMs, 15_000, command.actionType);
   }
+  assert.equal("checkWaitMs" in (sent.find((command) => command.actionType === "web.dom.type")?.parameters ?? {}), false, "typing that sends nothing");
   assert.equal(sent.find((command) => command.actionType === "web.dom.type")?.parameters.timeoutMs, 5_000);
   // What the step records is what the model wrote, not the allowance: the
   // Flow's own node adds it again when it runs (`output-nodes/native-runtime.ts`).

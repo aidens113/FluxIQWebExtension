@@ -2,6 +2,7 @@ import { isKnownChoice, listingById, skuStock, STORES, type ShipOrigin, type Sku
 import { isRegionCode } from "../locale/index.js";
 import { createMarketState } from "./create.js";
 import { closeInterruption, countInterruptionLoad, readInterruption } from "./interruption.js";
+import { readTimedCheck } from "./timed-check.js";
 import { orderNumber, sessionTotals } from "./totals.js";
 import { marketModes, type CartLine, type MarketMode, type MarketState, type ShippingMethod } from "./types.js";
 
@@ -19,7 +20,8 @@ type Payload = Record<string, unknown>;
 type Operation = (state: MarketState, payload: Payload) => MarketState;
 
 /**
- * One operation per thing the pages can do, plus the route-level ones the
+ * One operation per thing the pages can do (`timed-check` is the timed box's
+ * own check finishing after a person pressed it), plus the route-level ones the
  * server applies when it serves a page (`page-view`, `search-load`,
  * `search-challenge`, `feed-request`) and `set-mode`, which arms a rendering.
  *
@@ -54,6 +56,7 @@ const OPERATIONS: Readonly<Record<string, Operation>> = {
     const closed = action === "close" ? closeInterruption(state.interruption) : state.interruption;
     return closed === state.interruption ? state : { ...state, interruption: closed };
   },
+  "timed-check": (state, { action }) => (action === "pass" && state.timedCheck?.status === "waiting" ? { ...state, timedCheck: { ...state.timedCheck, status: "passed" } } : state),
   region: (state, { region }) => (isRegionCode(region) && region !== state.region ? { ...state, region } : state),
   "claim-coupon": claimCoupon,
   "follow-store": followStore,
@@ -93,14 +96,16 @@ const OPERATIONS: Readonly<Record<string, Operation>> = {
 
 /**
  * Arms a rendering, starting the visit over. An `interruption` beside the mode
- * adds the interruption switch to it (`interruption.ts`); one the switch cannot
- * read leaves the state alone, as an unknown mode does.
+ * adds the interruption switch to it (`interruption.ts`), and a `timedCheck`
+ * the timed "confirm you are human" box (`timed-check.ts`); either one the
+ * fixture cannot read leaves the state alone, as an unknown mode does.
  */
-function setMode(state: MarketState, { mode, interruption }: Payload): MarketState {
+function setMode(state: MarketState, { mode, interruption, timedCheck }: Payload): MarketState {
   if (!isMode(mode)) return state;
-  if (interruption === undefined) return createMarketState(state.seed, mode);
-  const armed = readInterruption(interruption);
-  return armed ? { ...createMarketState(state.seed, mode), interruption: armed } : state;
+  const switched = interruption === undefined ? null : readInterruption(interruption);
+  const checked = timedCheck === undefined ? null : readTimedCheck(timedCheck);
+  if (switched === undefined || checked === undefined) return state;
+  return { ...createMarketState(state.seed, mode), interruption: switched, timedCheck: checked };
 }
 
 /** The first press of a store's claim button always fails ("Network busy"); the second collects the coupon. */

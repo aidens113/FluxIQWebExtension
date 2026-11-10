@@ -30,6 +30,7 @@ import { sendNextPageAcrossDocuments } from "./next-page-continuation";
 import { readLandedPage } from "./landed-challenge";
 import type { LandedTabAccess } from "./landed-check-wait";
 import { lookAcrossFrames, prepareFrameSnapshots, type MergeFrameSnapshots } from "./look-across-frames";
+import { judgeLookCheck } from "./look-check";
 import { metNavigatingPage } from "./navigating-page";
 import { navigationAddress, navigationTargetTab, verifyNavigationLanding } from "./navigation";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
@@ -153,6 +154,14 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   if (!await readyFromSnapshot(tabId)) await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
   const addressed = frameId !== undefined || frameUrlPathForAction(action) !== undefined;
+  // A whole-tab look a build or a Flow takes (`checkWaitMs`, `domain/src/actions/check-wait.ts`)
+  // meets a robot check as an action does (`look-check/`): one that clears by itself is waited
+  // out, and one still standing is the person's. Judged before a kept look can answer for the
+  // page, since a look taken without the allowance keeps a check page as a page.
+  const lookCheck = action.actionType === "web.dom.capture_snapshot" && action.checkWaitMs !== undefined && !addressed
+    ? await judgeLookCheck(action, tabId, startedAt, LANDED_TAB_ACCESS)
+    : undefined;
+  if (lookCheck?.kind === "check_standing") return withTarget(lookCheck.result, tabId, TOP_FRAME_ID);
   const runOnPage = async (): Promise<BrowserActionRunResult> => {
     // A throw is reported by the command router as the browser worded it; one
     // whose action never reached the page also says nothing was done
@@ -171,7 +180,9 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   // A whole-tab look the page has not moved since the last one is that look (task speed S4, `look-reuse/`).
   let taken: BrowserActionRunResult | undefined;
   const looked = await keptLooks.look(tabId, action, addressed, LOOK_REUSE_ACCESS, async () => (taken = await runOnPage()).result);
-  const run = taken !== undefined && !looked.reused ? taken : withTarget(looked.result, tabId, TOP_FRAME_ID);
+  const answered = taken !== undefined && !looked.reused ? taken : withTarget(looked.result, tabId, TOP_FRAME_ID);
+  // The wait is this look's alone, so it goes on the result after the look is kept, never into it.
+  const run = lookCheck?.kind === "check_cleared" && answered.result.status === "succeeded" ? { ...answered, result: { ...answered.result, checkWait: lookCheck.checkWait } } : answered;
   if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
     await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
   }

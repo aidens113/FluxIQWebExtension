@@ -13,7 +13,8 @@
 //   `page_fault` ACTION_FAILED; a page fault that is a Next dropping the
 //   filters the page shows applied also carries how many, as `filtersDropped`
 //   on the answer (t626), which the domain names to the model. None is retried by the page's recovery loop:
-//   this verb moves the page, and none of them is decided before the press.
+//   this verb moves the page. A fault the page decided before pressing anything carries `noEffect` and
+//   fails as NO_EFFECT, so it never reads as a press whose outcome is uncertain (run-mwaf6gnt-638d90a0).
 // - A move out of time is `timed_out`, with no answer, as every verb's is.
 //
 // Nothing read off the page is in the result: the words, how the list moved,
@@ -71,7 +72,7 @@ export async function nextPageAction(action: BrowserActionCommand, deps: Content
         return { ...result, nextPage: { outcome: "ended", stop: answer.stop }, route: "ended" };
       }
       case "failed":
-        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped, loaderSettlement.consume(answer, request));
+        return failed(action, deps, startedAt, answer.stop, answer.reason, answer.filtersDropped, loaderSettlement.consume(answer, request) || answer.noEffect === true);
       default:
         return deps.timedOut(action, startedAt, answer.reason, { status: "failed", expected: EXPECTED, actual: "the time ran out before the move finished" });
     }

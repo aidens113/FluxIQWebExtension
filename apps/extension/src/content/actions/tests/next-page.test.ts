@@ -140,6 +140,13 @@ test("a command without nextPage parameters fails without touching the page", as
   assert.deepEqual(asked, []);
 });
 
+test("a fault the page decided before any press is reported as no effect, never as an uncertain press (run-mwaf6gnt-638d90a0)", async () => {
+  const { result } = await run({ outcome: "failed", stop: "page_fault", reason: "Nothing was pressed.", noEffect: true });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT);
+  assert.deepEqual(result.nextPage, { outcome: "failed", stop: "page_fault" });
+});
+
 test("a page fault whose Next would drop applied filters carries the count onto the wire, and only that (t626)", async () => {
   const { result } = await run({ outcome: "failed", stop: "page_fault", reason: "leaves out 2 query parameters", filtersDropped: 2 });
   assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);

@@ -232,7 +232,7 @@ test("every real detection becomes a selector-free packet and a handle that reso
 
     assert.equal(result.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE, name);
     assert.equal(result.effectApplied, false, name);
-    assert.deepEqual(commands, [{ actionType: "web.dom.capture_snapshot", parameters: { detectStructure: {} } }], name);
+    assert.deepEqual(commands, [{ actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000, detectStructure: {} } }], name);
     const packet = result.evidence as WebLlmRepeatingStructure;
     assertNothingAddressable(packet, page.structure as WebAutomationStructureDetection);
     assert.equal(packet.schemaVersion, "web-llm-structure.v1");
@@ -281,8 +281,8 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assert.equal(around.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
   assert.equal((around.evidence as WebLlmRepeatingStructure).target, "t2");
   assert.deepEqual(commands, [
-    { actionType: "web.dom.capture_snapshot", parameters: {} },
-    { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' } } }
+    { actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000 } },
+    { actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000, detectStructure: { selector: '[data-testid="product-link"]' } } }
   ]);
   assertNothingAddressable(around.evidence, page.structure as WebAutomationStructureDetection);
 
@@ -293,8 +293,8 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assert.equal(legacy.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
   assert.equal((legacy.evidence as WebLlmRepeatingStructure).target, "t2");
   assert.deepEqual(commands, [
-    { actionType: "web.dom.capture_snapshot", parameters: {} },
-    { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' } } }
+    { actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000 } },
+    { actionType: "web.dom.capture_snapshot", parameters: { checkWaitMs: 15_000, detectStructure: { selector: '[data-testid="product-link"]' } } }
   ]);
   assert.deepEqual(await detect(runtime, { target: "target.8" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t8" }));
 
@@ -496,9 +496,9 @@ test("a page refusal about the target says which way the handle stopped naming o
     reason: "nothing_repeats_on_page", target, groupsSeen: 0, rowsSeen: 0, controlsSeen: 4
   }), "no repeating run around the target, nor anywhere on the page");
   assert.deepEqual(commands.map((command) => command.parameters), [
-    {},
-    { detectStructure: { selector: '[data-testid="card-link"]' } },
-    { detectStructure: {} }
+    { checkWaitMs: 15_000 },
+    { checkWaitMs: 15_000, detectStructure: { selector: '[data-testid="card-link"]' } },
+    { checkWaitMs: 15_000, detectStructure: {} }
   ], "the page was searched as a whole before anything was refused");
 
   // The selector the handle stands for names nothing in the frame the capture
@@ -548,9 +548,9 @@ test("a target with no list around it gets the page's list, which names no targe
   assert.equal(packet.target, undefined, "the list was found on the page, not around the target, and the packet does not claim otherwise");
   assert.equal(packet.itemCount, proposalOf(page.structure as WebAutomationStructureDetection).proposal.itemCount);
   assert.deepEqual(commands.map((command) => command.parameters), [
-    {},
-    { detectStructure: { selector: "main h1" } },
-    { detectStructure: {} }
+    { checkWaitMs: 15_000 },
+    { checkWaitMs: 15_000, detectStructure: { selector: "main h1" } },
+    { checkWaitMs: 15_000, detectStructure: {} }
   ]);
   assertNothingAddressable(packet, page.structure as WebAutomationStructureDetection);
   const binding = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });

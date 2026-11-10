@@ -6,9 +6,10 @@
  * Timings are the live site's, not a test's: the welcome coupons two seconds
  * after load, the chat a second after a product page loads, the notification
  * prompt three and a half seconds in, the flash deal at one and a half (the
- * interruption switch at whatever delay its arm set, at load by default). A
- * visitor who has answered one never sees it again, because the answer is
- * posted to the server and the next page is rendered from it.
+ * interruption switch at whatever delay its arm set, at load by default; the
+ * timed check at the delay its arm set, never at load). A visitor who has
+ * answered one never sees it again, because the answer is posted to the
+ * server and the next page is rendered from it.
  *
  * `refreshFlyouts` reloads the cart and account flyouts after a change. It
  * leaves the number on the cart icon alone: that number is only ever right on
@@ -146,6 +147,24 @@ if (boot.interruption && document.getElementById('fb-tpl-interrupt')) {
   const show = () => openFlashDeal('fb-tpl-interrupt', () => { if (closes) mutate('interruption', { action: 'close' }); return closes; });
   if (boot.interruption.delayMs > 0) setTimeout(show, boot.interruption.delayMs); else show();
 }
+
+// The timed check (state/timed-check.ts): a "confirm you are human" layer over the whole page, on a timer after load,
+// with nothing the visitor did behind it. Pressing its box runs a two-second check, tells the server, and takes the
+// layer away in place, with no reload; until then it stays, and every page load brings it back.
+if (boot.timedCheck && document.getElementById('fb-tpl-timed-check')) setTimeout(() => {
+  const layer = stamp('fb-tpl-timed-check');
+  if (!layer) return;
+  const box = byClass('verifyCheck', layer);
+  let checking = false;
+  box.addEventListener('click', async () => {
+    if (checking) return;
+    checking = true;
+    box.innerHTML = '<span class="' + css.spinner + '"></span><span>Verifying…</span>';
+    await sleep(2000);
+    await mutate('timed-check', { action: 'pass' });
+    layer.remove();
+  });
+}, boot.timedCheck.delayMs);
 
 // The region picker is a web component from the storefront's shared header library, with its own shadow root.
 const REGION_NAMES = { DE: ['🇩🇪', 'Germany', 'EUR'], ES: ['🇪🇸', 'Spain', 'EUR'], GB: ['🇬🇧', 'United Kingdom', 'GBP'], US: ['🇺🇸', 'United States', 'USD'] };

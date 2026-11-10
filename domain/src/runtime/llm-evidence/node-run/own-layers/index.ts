@@ -1,2 +1,3 @@
-// Barrel for the layers a press of this build opened itself (`./memory.ts`).
+// Barrel for the layers an act of this build opened itself (`./memory.ts`), and the act it is told of (`./act.ts`).
 export { createWebNodeOwnLayers, type WebNodeOwnLayers } from "./memory";
+export type { WebNodeLayerAct } from "./act";
