@@ -299,12 +299,12 @@ const judge = (form: string, ordinal: number, recordSets: unknown, endPage: stri
 const TITLES = ["Round pine dining table, 90cm", "Glass dining table with chrome legs", "Dining table, industrial style, 160cm"];
 const SAVED_ROWS = [{ datasetId: "result", recordCount: 3, columns: ["title", "price"], sampleRows: TITLES.map((title, index) => ({ title, price: `£${45 + index}` })) }];
 
-test("the same words a second time go to the same command, and there are replies for a second attempt", () => {
+test("the same words again go to the same command, and there are replies for every attempt of the Lab's default series", () => {
   const script = scriptedModelScriptFor(TASK, "again-check");
-  assert.equal(script.replies.panel_command!.length, 2);
+  assert.equal(script.replies.panel_command!.length, 4);
   const message = "Save the tables.";
   assert.deepEqual(script.replies.panel_command![1]!({ kind: "panel_command", ordinal: 2, model: "m", jsonText: false, message, payload: undefined }), { do: "flow.createHere", with: { instruction: message } });
-  assert.ok(script.replies.loop_verification!.length >= 2);
+  assert.ok(script.replies.loop_verification!.length >= 4);
 });
 
 test("the two-attempt form that saves by setting a state refuses any decision after the saved Flow's run: it never presses to get there", () => {
