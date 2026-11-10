@@ -13,7 +13,7 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 
 ## Current State
 
-**State (2026-11-10).** Planned. Nothing is built yet. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
+**State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. Next: that replay timing and the gaps' cause, then A2 (S2) and S6 once the live lane's fixes merge. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
 
 **The user's words (2026-11-10):**
 - "lets try and really increase efficiency, especially when it comes to time"
@@ -160,6 +160,14 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - Why: the user asked for a full plan to make tasks fast by fixing root causes.
 - Validation: not validated; this is a plan. Its numbers come from `mvp-seal-plan/reports/time-breakdown.md` (44 runs' step logs) and the lead's parse of 57 attempt reports (`attempt-report.txt` under `test-runs/instances/*/attempts/`): live attempts mean 2.9 min, median 2.0.
 - Outcome: shown to the user.
+
+### 2026-11-10 - A1: spans, event readiness, kept look (t888)
+
+- Agent: lead; worker speed-a1-browser-step (Opus).
+- Changed: Core `runtime/llm/step-log/` (spans); domain `node-run/` (timing, refusal-detail split); extension `runtime/{automation-tab,action-runner}.ts`, `runtime/{navigation-events,look-reuse}/`, `content/page-changes/`, `shared/page-changes-message.ts`; Lab `attempt-lane/live/attempt/speed.ts`.
+- Validation (re-run by the lead): Core `vitest run src/runtime/llm/step-log/tests/` -> 64 passed; Core structure audit -> passed; domain `tsc` (src and tests) -> clean; `node scripts/test-domain.mjs llm-evidence/node-run/` -> 560/560; extension `node scripts/check-extension.mjs` -> exit 0; `node scripts/test-extension.mjs runtime/tests runtime/look-reuse runtime/navigation-events content/` -> 1993/1993; test-runner `tsc` -> clean; `speed.test.js` -> 2/2. Worker's provider-free `lab attempt --scripted-model --attempts 2` on local-classifieds, everything-store and company-website: same outcomes before and after, figures in the report.
+- Not verified: live runs, Firefox, seven of the ten sites, replay per-step timing (not built), time to first token. `docs/architecture/extension-client.md` and `testing-facility.md` are not yet updated for the readiness and speed changes.
+- Outcome: merged into both devs ("Merge task t888: speed-browser-step") and pushed.
 
 ## Open Questions
 
