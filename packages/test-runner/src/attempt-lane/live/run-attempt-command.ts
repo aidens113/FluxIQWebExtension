@@ -14,7 +14,7 @@ import type { PersonHandOff } from "../../person-simulation/index.js";
 import { attemptReportRow, renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
-import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type LiveAttemptSession } from "./attempt/index.js";
+import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, attemptSpeed, attemptSpeedLines, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type AttemptSpeed, type LiveAttemptSession } from "./attempt/index.js";
 import { attemptPersonFor } from "./attempt-person.js";
 import { attemptBalanceFailures } from "./balance-failures.js";
 import { attemptCanGoOn } from "./can-go-on.js";
@@ -110,7 +110,7 @@ async function pictureOfAnswer(session: LiveAttemptSession, ended: LiveAttemptEn
 }
 
 /** What the run keeps of each attempt as it ends: the ending, the cache share of its own steps, and the model calls it made by kind. */
-type AttemptKept = { ended: LiveAttemptEnded; cache: AttemptCacheShare; modelCalls: Record<string, number> | null; handOffs: readonly PersonHandOff[] };
+type AttemptKept = { ended: LiveAttemptEnded; cache: AttemptCacheShare; speed: AttemptSpeed; modelCalls: Record<string, number> | null; handOffs: readonly PersonHandOff[] };
 
 const subtracted = (now: Readonly<Record<string, number>>, before: Readonly<Record<string, number>>): Record<string, number> => Object.fromEntries(Object.entries(now).flatMap(([kind, count]) => (count > (before[kind] ?? 0) ? [[kind, count - (before[kind] ?? 0)]] : [])));
 
@@ -204,9 +204,11 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
         await mkdir(folder, { recursive: true });
         // Kept first: a picture that fails must not lose what the attempt was and what it spent.
         const cache = await attemptCacheShare(stepsDirectory, stepsSoFar);
+        // Where its time went, from the same steps (task speed S0).
+        const speed = await attemptSpeed(stepsDirectory, stepsSoFar);
         stepsSoFar = await countSteps(stepsDirectory);
         const calls = side.server?.counts() ?? null;
-        kept.set(attempt.ordinal, { ended: attempt, cache, modelCalls: calls && subtracted(calls, callsSoFar), handOffs: person.snapshotOf(attempt.ordinal)?.handOffs ?? [] });
+        kept.set(attempt.ordinal, { ended: attempt, cache, speed, modelCalls: calls && subtracted(calls, callsSoFar), handOffs: person.snapshotOf(attempt.ordinal)?.handOffs ?? [] });
         callsSoFar = calls ?? {};
         await writeFile(path.join(folder, "site.json"), JSON.stringify(attempt.site, null, 2));
         // What the Lab's person did at each check this attempt handed it, or nothing where the scenario declares none.
@@ -233,7 +235,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const startedFromFirst = series.series.secondStartedFromFirst ?? undefined;
     const told = series.outcomes.map((outcome, index) => {
       const row = rows[index]!, keeping = kept.get(row.attempt)!, attempt = keeping.ended.outcome.attempt;
-      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
+      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
     });
     const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: row.attempt > 1 ? startedFromFirst : undefined, askedAgain }));
     const continuation = series.continuations[0] ?? null;
@@ -241,9 +243,10 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const restartWords = restarted ? [`Core restarted between the attempts: the extension connected again after ${Math.round(restarted.reconnectedAfterMs / 1000)} s, the model key read ${restarted.modelKey}, and the chat ${restarted.panel === "carried_on" ? "carried on by itself" : `was opened again (it stood at ${restarted.panelBefore})`}.`] : [];
     const notProven = continuation && !continuation.held ? [`That the second attempt started from the first's saved work is refused: ${continuation.refused.join(", ")}.`] : [];
     const report = renderAttemptSeries({ ...series.series, rows });
+    const speedLines = told.flatMap(({ row, speed }) => attemptSpeedLines(row.attempt, speed));
     await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuation, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
     recorded = true;
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven].join("\n")}\n`);
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...speedLines].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && (continuation === null || continuation.held);
     verdict = allRight ? "passed" : "failed";

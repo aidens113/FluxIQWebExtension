@@ -45,7 +45,9 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 // watching. It is a display, so it is answered at once and changes nothing
 // the page or the automation can see.
 
-import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
+import { CONTENT_INSTANCE_ID, CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
+import { pageChangeCounter } from "./page-changes";
+import { PAGE_CHANGES_MESSAGE } from "../shared/page-changes-message";
 import { captureSettings } from "./capture-settings";
 import { AUTOMATION_STUDIO_DEFAULT_RECORDING_CAPTURE_POLICY, clampAutomationStudioRecordingCaptureSettings, type AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { setRecordingState } from "./recorder";
@@ -116,6 +118,11 @@ export function installMessageHandler(): void {
       return false;
     }
     if (!isActiveContentInstance()) return false;
+    if (typed.type === PAGE_CHANGES_MESSAGE) {
+      // Synchronous and cheap: which copy answers and how many changes it has counted (`page-changes/`).
+      sendResponse(pageChangeCounter.mark(CONTENT_INSTANCE_ID));
+      return false;
+    }
     if (typed.type === BUILD_IDENTITY_MESSAGE) {
       if (!isTopFrame()) return false;
       sendResponse(currentBuildIdentity());

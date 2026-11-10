@@ -27,6 +27,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../../shared/pro
 import { browserActionFailure, runBrowserActionCommand } from "../action-runner";
 import { browserActionFromGatewayCommand } from "../result-mapping";
 import { forgetAutomationTab } from "../automation-tab";
+import { keptLooks } from "../look-reuse";
 import type { ListedFrame } from "../frame-address";
 
 test("a failure is reported against its command, finished the moment it started", (t) => {
@@ -128,6 +129,8 @@ function installChromeStub(
   refusals: string[] = [],
   landing?: { status: number; url: string }
 ): ChromeCalls {
+  // Every stub is a page of its own: no look kept from another test's stands on it.
+  keptLooks.forget(undefined);
   const calls: ChromeCalls = { sent: [], pinged: [], injected: [], timeline: [] };
   const injectedInto = new Set<number>();
   const pendingRefusals = [...refusals];
@@ -163,6 +166,12 @@ function installChromeStub(
         // (`click-landing.ts`); the landed page here is an ordinary one.
         if ((message as { type?: string }).type === "fluxiq.pageChallenge") {
           callback?.({ challenge: null });
+          return;
+        }
+        // A look first asks each frame whether the page moved since the last
+        // one (`look-reuse/`): answered here, and not an action the page was sent.
+        if ((message as { type?: string }).type === "fluxiq.pageChanges") {
+          callback?.({ instance: `frame-${frameId ?? 0}`, changes: 0 });
           return;
         }
         calls.sent.push({ tabId, message: message as Record<string, unknown>, frameId });

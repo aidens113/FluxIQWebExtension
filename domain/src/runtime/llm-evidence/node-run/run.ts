@@ -67,7 +67,8 @@ import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
-import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION } from "./catalog";
+import { webRunnableNode, WEB_LLM_OBSERVATION_NODE_ACTION } from "./catalog";
+import { webNodeRefusalDetail } from "./refusal-detail";
 import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
 import { webLayerOwnControls, webRuntimeClearsLayers } from "./layer";
@@ -90,9 +91,8 @@ import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, 
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
 import { webNodeCurrentPage as currentPage, webNodeReadablePage as readablePage } from "./frozen-execution/page";
+import { webNodeTiming } from "./timing";
 
-/** The shapes a handle is written in, as a refusal names them (`./handle-shape/` puts a bare one into the first). */
-const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'];
 /** The keys the library verb takes (`Core runtime/llm/node-tools/`), as a refusal names them. */
 const CALL_KEYS = ["node", "parameters", "consequences"];
 /** And all it accepts: `write` asks for the step to be written rather than run (`./written-step.ts`). */
@@ -154,6 +154,9 @@ type WebNodeCallRecord = {
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
+  // Every command this run sends is timed, and its parts below, as spans of its step (`./timing/`, task speed S0).
+  const timing = webNodeTiming(run.gateway);
+  run = { ...run, gateway: timing.gateway };
   // A selected private capsule is checked before any opening/replay/handle path.
   // An active refusal never becomes an ordinary call with the same old handle.
   const frozen = run.frozenExecution?.select(run) ?? { kind: "ordinary" as const };
@@ -213,7 +216,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   const node = webRunnableNode(frozen.kind === "selected" ? frozen.call.definitionId : value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
-  if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), { call: value });
+  if (!node) return refusal(undefined, "invalid_input", webNodeRefusalDetail.unknownNode(value.node), { call: value });
   // A declaration written inside `parameters` is the call's, for every reader below (`./nested-consequences.ts`).
   value = webNodeCallWithDeclarationBeside(value, node);
   const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
@@ -242,7 +245,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         const before = await readablePage(run, run.request, { scope: { ...frozen.call.scope, kind: "single-frame" } });
         if (webNodeFrozenSubject(frozen.call, before) === undefined || !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
       }
-      const looked = await readablePage(run, run.request, frozen.kind === "selected" ? { scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined, frozen.kind === "selected" ? frozen.capture : capture);
+      const looked = await timing.look("look", () => readablePage(run, run.request, frozen.kind === "selected" ? { scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined, frozen.kind === "selected" ? frozen.capture : capture));
       if (!looked) return notThereYet(run, record);
       if (frozen.kind === "selected" && webNodeFrozenSubject(frozen.call, looked) === undefined) return refusal(undefined, "target_unobserved", undefined, record);
       run.shown(looked);
@@ -262,7 +265,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         { resultReason: undefined, nodeId: undefined, assumed: undefined }
       ), looked, looked);
     }
-    current = await currentPage(run, run.request, frozen.kind === "selected" ? { includeHidden: true, scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined);
+    current = await timing.look("look.before", () => currentPage(run, run.request, frozen.kind === "selected" ? { includeHidden: true, scope: { ...frozen.call.scope, kind: "single-frame" } } : undefined));
+    const preparing = Date.now();
     // Absent from nowhere, which leaves the state this call found unsaid.
     record.found = current;
     // From nowhere, the only call that runs is the one that goes to the start
@@ -317,7 +321,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // instead are on it, so the next call need not be a look to learn them
       // (`run-mup2i28c-6c7fc209`, C3).
       if (current) run.shown(current);
-      return refusal(current, "target_unobserved", handleRefusal(written, resolved.issueCodes), record);
+      return refusal(current, "target_unobserved", webNodeRefusalDetail.handle(written, resolved.issueCodes), record);
     }
     written = webPlanWithExtractionBinding(written, { projectId: run.request.projectId, flowId: run.request.flowId }, run.stores.extractions); // A saved read holds what its handle stands for, unseen by the model (t869).
     // A node that acts on an element, whose parameters named no handle, is
@@ -327,14 +331,14 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // step saved: it reruns as saved, as playback runs it (t439, `./held-literals/`).
     if (resolved.status === "unchanged" && node.definition.metadata?.elementTarget === true && !run.held.heldElement(resolving)) {
       return refusal(undefined, "target_unobserved", rejectionDetail({
-        reason: "target_not_a_handle", target: undefined, instead: HANDLE_SHAPE, missing: undefined, requestId: undefined
+        reason: "target_not_a_handle", target: undefined, instead: webNodeRefusalDetail.handleShape, missing: undefined, requestId: undefined
       }), record);
     }
     // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
     handle = webPlanFirstTargetHandle(written);
     ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, handle);
     const refusedRead = webListReadFlowRefused(node.actionType, ran); // Told where it is written, not when its loop finds no rows (`./list-read/flow-refused.ts`).
-    if (refusedRead) return refusal(current, "target_unobserved", handleRefusal(written, refusedRead), record);
+    if (refusedRead) return refusal(current, "target_unobserved", webNodeRefusalDetail.handle(written, refusedRead), record);
     }
     // A press on a control the look just taken shows covered is sent when the
     // runtime's own defence clears every cover over it: the extension's click
@@ -375,7 +379,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // A written step does nothing, so nobody is asked; it is held to its declaration and the node's parameters instead.
     const writeIssue = writing ? webWrittenStepIssue(node, ran, declared) : undefined;
     if (writeIssue) return refusal(undefined, "invalid_input", writeIssue, record);
-    const permission = writing ? { kind: "no_consequence" as const } : await webActionPermission({
+    const permission = writing ? { kind: "no_consequence" as const } : await timing.phase("permission", () => webActionPermission({
       check: run.request.permission,
       declared,
       control: { ...control, ...spot },
@@ -384,7 +388,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // cannot have left anything behind, so what it declared is recorded and disregarded (`../permission.ts`).
       effect: node.effect,
       actionEffect: webAutomationResolvedActionEffect(node.actionType, written)
-    });
+    }));
     if (permission.kind === "invalid") {
       return refusal(undefined, "invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), record);
     }
@@ -423,6 +427,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const dispatchParameters = frozen.kind === "selected" ? webNodeFrozenDispatchParameters(frozen.call, ran) : capture?.parameters ?? webNodeDispatchParameters(node, ran);
     const reacquire = await webNodeScopedReacquire(run, { definitionId: node.definitionId, handle, parameters: dispatchParameters, before: current, look: (options) => readablePage(run, run.request, options) });
     if (frozen.kind === "selected" && !frozen.consume()) return refusal(undefined, "target_unobserved", undefined, record);
+    timing.record("prepare", preparing, Date.now());
     record.acted = true;
     record.witness = current && node.effect === "mutate" && !webMovesThePage(node) ? handle : undefined; // As `named` below, for the catch.
     // The look just taken is the page before the act; a capture after it is not compared with it (`../plan-resolution/self-changing/`).
@@ -431,7 +436,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
     // A lasting act whose answer was lost is checked against the step's own
     // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3); a control the page re-rendered is looked for again by its identity (t786).
-    const { result, attempts, lastingAct, failure } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), reacquire, frozen.kind === "selected" ? frozen.capture : capture);
+    const { result, attempts, lastingAct, failure } = await timing.phase("act", () => webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran), reacquire, frozen.kind === "selected" ? frozen.capture : capture));
     actionability = webActionabilityFromPayload(result);
     assertActive(run.request.signal);
     // One the check showed landed counts as done, whatever its lost answer said.
@@ -483,13 +488,15 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       actionability = webActionabilityFromPayload(repeated.result);
       return repeated.result.status === "succeeded";
     };
-    const pressed = await webPressSettled(node, current, await look(), handle, {
+    const left = await timing.look("look.after", look);
+    const pressed = await timing.phase("press.settle", () => webPressSettled(node, current, left, handle, {
       look, pressAgain, lasting, now: () => Date.now(),
       sleep: async (ms) => {
         await new Promise((resolve) => setTimeout(resolve, ms));
         assertActive(run.request.signal);
       }
-    });
+    }));
+    const composing = Date.now();
     const after = pressed.after;
     if (after) run.shown(after);
     // What the node read, whole, for a node that reads. Never the raw page:
@@ -552,7 +559,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // The state the node found is the read before it acted, and the state it
     // left is the read after -- unsaid where the page could not be read in time.
     if (pressed.noEffect === undefined && pressed.uncertain === undefined && lastingAct === undefined) capture?.publish();
-    return withClearedWait(result.payload, withCallStates(toolExecution(
+    const answered = withClearedWait(result.payload, withCallStates(toolExecution(
       // No page, no packet: the outcome alone, which says why.
       after === undefined ? outcome as unknown as JsonValue : nodeEvidence(after.evidence, outcome),
       // The node ran and the command succeeded, so this step worked -- which is
@@ -636,6 +643,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       undefined,
       actionability
     ), current, after));
+    timing.record("compose", composing, Date.now());
+    return answered;
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
       // Only a refusal the page caused carries the page, and only the page the
@@ -748,30 +757,6 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     // The page after it was the robot check, compared with nothing: no line is said changed, as no toggle is.
     changed: undefined,
     conditions: undefined
-  });
-}
-
-/** What the call could have named instead: every node this domain can run. */
-function unknownNode(named: unknown) {
-  return rejectionDetail({
-    reason: "node_not_runnable_here",
-    target: typeof named === "string" ? named.slice(0, 200) : undefined,
-    instead: webRunnableNodeIds(),
-    missing: undefined,
-    requestId: undefined
-  });
-}
-
-/** The handle refusal, carrying the handle the call named and the resolver's own codes. */
-function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
-  return rejectionDetail({
-    reason: "parameters_not_resolved",
-    target: webPlanFirstTargetHandle(parameters),
-    // The codes, and then the shapes a handle is accepted in. A live build was refused `web.handle.extraction_required` fifteen times
-    // and never once corrected the shape, because a code is a name for a mistake and not a statement of what is accepted instead (`run-mudabxqd-266e728d`).
-    instead: [...issueCodes.map((code) => String(code).slice(0, 100)).slice(0, 12), ...HANDLE_SHAPE],
-    missing: undefined,
-    requestId: undefined
   });
 }
 

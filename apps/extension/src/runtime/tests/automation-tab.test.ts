@@ -11,14 +11,15 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import {
-  consumeSnapshotReadiness,
   currentAutomationTabId,
   forgetAutomationTab,
   latestOpenAutomationTab,
   noteSnapshotReadiness,
+  readyFromSnapshot,
   resolveAutomationTab,
   setAutomationTab
 } from "../automation-tab";
+import { tabNavigationEpochs } from "../navigation-events";
 
 function stubOpenTabs(t: TestContext, open: ReadonlySet<number>): void {
   const holder = globalThis as { chrome?: unknown };
@@ -171,18 +172,23 @@ test("a navigation somewhere else drives the tab there, and does not reload", as
   );
 });
 
-function stubSnapshotDocument(t: TestContext): { replaceDocument(): void } {
+function stubSnapshotDocument(t: TestContext): { replaceDocument(): void; navigationBegins(tabId: number, frameId?: number): void; storeProof(proof: Record<string, unknown>): Promise<void> } {
   const holder = globalThis as { chrome?: unknown };
   const previous = holder.chrome;
   const stored: Record<string, unknown> = {};
   let documentId = "document.one";
+  const beforeNavigate: Array<(details: { tabId: number; frameId: number }) => void> = [];
+  const quiet = { addListener: () => undefined };
   holder.chrome = {
     runtime: {},
     tabs: {
-      get: async () => ({ id: 7, url: "https://example.test/form", status: "complete" })
+      get: async () => ({ id: 7, url: "https://example.test/form", status: "complete" }),
+      onUpdated: quiet, onReplaced: quiet, onRemoved: quiet
     },
     webNavigation: {
-      getAllFrames: (_details: unknown, callback: (frames: unknown[]) => void) => callback([{ frameId: 0, documentId }])
+      getAllFrames: (_details: unknown, callback: (frames: unknown[]) => void) => callback([{ frameId: 0, documentId }]),
+      onBeforeNavigate: { addListener: (listener: (details: { tabId: number; frameId: number }) => void) => beforeNavigate.push(listener) },
+      onCommitted: quiet, onHistoryStateUpdated: quiet, onReferenceFragmentUpdated: quiet
     },
     storage: {
       session: {
@@ -192,18 +198,54 @@ function stubSnapshotDocument(t: TestContext): { replaceDocument(): void } {
       }
     }
   };
+  // Each test counts navigation events against its own stub, and starts with no proof.
+  tabNavigationEpochs.resetForTest();
+  forgetAutomationTab();
   t.after(() => {
     holder.chrome = previous;
+    tabNavigationEpochs.resetForTest();
   });
-  return { replaceDocument: () => { documentId = "document.two"; } };
+  return {
+    replaceDocument: () => { documentId = "document.two"; },
+    navigationBegins: (tabId, frameId = 0) => { for (const listener of beforeNavigate) listener({ tabId, frameId }); },
+    storeProof: async (proof) => {
+      forgetAutomationTab();
+      await Promise.resolve();
+      stored.runtimeSnapshotReadinessProof = proof;
+    }
+  };
 }
 
-test("a successful snapshot proves only the immediately following action on the same document is ready", async (t) => {
+// Task speed S3: a look's proof stands across the act it precedes, so the look
+// after the act needs no wait, until the browser reports the page moving.
+test("a successful snapshot proves every following action on the same document ready, the look after an act included", async (t) => {
   stubSnapshotDocument(t);
   await noteSnapshotReadiness(7, "https://example.test/form");
 
-  assert.equal(await consumeSnapshotReadiness(7), true);
-  assert.equal(await consumeSnapshotReadiness(7), false, "the proof is consumed once");
+  assert.equal(await readyFromSnapshot(7), true, "the act after the look");
+  assert.equal(await readyFromSnapshot(7), true, "the look after the act: the proof survives the act");
+  assert.equal(await readyFromSnapshot(8), false, "another tab is not proven by this one's look");
+});
+
+test("a page that navigates late ends the proof at the navigation event, and every action after it waits", async (t) => {
+  const page = stubSnapshotDocument(t);
+  await noteSnapshotReadiness(7, "https://example.test/form");
+  assert.equal(await readyFromSnapshot(7), true, "nothing has navigated yet");
+  // The press's own navigation begins after its look was taken: the document and address still read the same.
+  page.navigationBegins(7);
+  assert.equal(await readyFromSnapshot(7), false);
+  assert.equal(await readyFromSnapshot(7), false, "the proof is forgotten, not merely refused once");
+  // A look on the new document proves it in turn.
+  await noteSnapshotReadiness(7, "https://example.test/form");
+  assert.equal(await readyFromSnapshot(7), true);
+});
+
+test("another tab's or a child frame's navigation leaves the proof standing", async (t) => {
+  const page = stubSnapshotDocument(t);
+  await noteSnapshotReadiness(7, "https://example.test/form");
+  page.navigationBegins(9);
+  page.navigationBegins(7, 3);
+  assert.equal(await readyFromSnapshot(7), true);
 });
 
 test("a same-URL replacement document cannot reuse the snapshot readiness proof", async (t) => {
@@ -211,5 +253,14 @@ test("a same-URL replacement document cannot reuse the snapshot readiness proof"
   await noteSnapshotReadiness(7, "https://example.test/form");
   page.replaceDocument();
 
-  assert.equal(await consumeSnapshotReadiness(7), false);
+  assert.equal(await readyFromSnapshot(7), false);
+});
+
+test("a proof a worker kept before it restarted is used once, and only while it is fresh", async (t) => {
+  const page = stubSnapshotDocument(t);
+  await page.storeProof({ tabId: 7, url: "https://example.test/form", documentId: "document.one", capturedAt: Date.now(), epoch: 0, watcher: "a.worker.before" });
+  assert.equal(await readyFromSnapshot(7), true);
+  assert.equal(await readyFromSnapshot(7), false, "another worker's proof is consumed once");
+  await page.storeProof({ tabId: 7, url: "https://example.test/form", documentId: "document.one", capturedAt: Date.now() - 60_000 });
+  assert.equal(await readyFromSnapshot(7), false, "and refused once stale");
 });

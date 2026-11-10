@@ -3,7 +3,9 @@
 // which the background worker depends on:
 //
 //   1. claim the window for this instance (on import of ./instance) so a
-//      superseded copy of the script falls silent before it can send anything;
+//      superseded copy of the script falls silent before it can send anything,
+//      and start counting what could change a look at this frame, so the
+//      worker can tell a look that still stands (`./page-changes/`);
 //   2. announce readiness, so the worker learns this frame exists even when
 //      recording is off;
 //   3. open the cross-frame geometry bridge, so a child frame can resolve its
@@ -18,7 +20,9 @@ import { installFrameGeometryBridge } from "./frame-geometry";
 import { installMessageHandler } from "./message-handler";
 import { installRecordingEventListeners } from "./dom-events";
 import { sendReady } from "./recorder";
+import { pageChangeCounter } from "./page-changes";
 
+pageChangeCounter.install();
 sendReady();
 installFrameGeometryBridge();
 installMessageHandler();
