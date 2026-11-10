@@ -489,6 +489,15 @@ extension chat, the judged whole run, a zero-call replay) is time-intensive, so 
 about one task per site end to end, plus reruns of tasks whose failures were fixed; every other task
 is proven provider-free by the audit above (a browser path reaching its oracle, unambiguous wording).
 
+**Several deterministic runs follow every exploration** (user, 2026-11-10): "you should always be
+testing multiple deterministic runs after initial exploration runs on each task to make sure it
+successfully uses the right flow, see how many model calls are made if any". Every task check, live
+or provider-free, runs its first (exploring) attempt and then at least three more on the site as the
+first left it (`lab attempt --attempts 4`). Each later attempt must be proven to run the
+Flow its predecessor saved (the continuation proof), and its report names its path, Flow, model
+calls (ideally none), and time. A single attempt is a diagnosis, never a task's acceptance. A later
+attempt that strays from the saved Flow, or spends calls, is a defect to trace to its root.
+
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is
