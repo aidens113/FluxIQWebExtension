@@ -1,4 +1,5 @@
 import type { LiveInstructionTask } from "../live-instructions.js";
+import { TIMED_CHECK_MET } from "./person-check.js";
 
 const SPAIN_HUBS = "On Farbazaar, search for \"usb c hub\" and collect every item that ships from Spain, has free shipping and is rated 4.5 stars or higher, across all of the results. Leave out the ads and list each item only once, keeping the order the search ranks them in by default (Best Match), with columns title, store, price and rating, written exactly as the results show them.";
 const HUB_TO_CART = "On Farbazaar, put three of the Voltbay USB-C hub sold by Voltbay Official Store in my cart: Space Grey, the 7-in-1 version, shipped from Spain. Collect that store's coupon while you are on the item. Do not buy anything.";
@@ -53,6 +54,12 @@ const BUY_HUB = "On Farbazaar, buy two of the Voltbay USB-C hub sold by Voltbay 
  *   results, a listing's option, the checkout's shipping choice, and a read
  *   in pounds, stopping before "Place order" -- the instruction rules out the
  *   purchase, so no permission is asked for.
+ * - `-free-hubs-under-ten-timed-check` is the same read with a check only a
+ *   person may pass coming up on its own a second and a half after the first page loads
+ *   (the `timed-check` variant), armed for the build as well, so nothing a run
+ *   does raises it and the first thing to meet it is a read of the page. It
+ *   proves the hand-off that comes from a look and the attempt going on from
+ *   where it stood. Its words, dataset and oracle are the read's own.
  */
 export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] = [
   {
@@ -133,6 +140,16 @@ export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] 
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-free-hubs-under-ten",
     personCheck: { person: "completes", required: false, because: "Narrowing the search by free shipping and a price ceiling is the third results load, which the traffic screen replaces." },
+  },
+  {
+    id: "crossborder-marketplace-free-hubs-under-ten-timed-check",
+    scenarioId: "crossborder-marketplace",
+    variantId: "timed-check",
+    kind: "navigate-and-extract",
+    instruction: FREE_HUBS_UNDER_TEN,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-free-hubs-under-ten",
+    personCheck: { person: "completes", required: true, because: TIMED_CHECK_MET },
   },
   {
     id: "crossborder-marketplace-follow-official-store",

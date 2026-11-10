@@ -14,6 +14,10 @@
 // there would turn it off again. The calls this round made still guard each press, so a step is never sent twice
 // in one round.
 //
+// **The `timed-check` form** plays the same path for the `-timed-check` variant row, where a check only a person may
+// pass covers the first page a moment after it loads, with nothing done there. It looks at the page before its first
+// press, so the hand-off comes from a look, and refuses to go on otherwise (`lookAtTheCheckFirst`).
+//
 // Every handle, field key and filter label is read from the request's own evidence, never written here.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -115,11 +119,77 @@ const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { 
 /** The most decisions this script answers: every step of its honest path, and few enough that a loop fails it. */
 const MOST_DECISIONS = 30;
 
-export const CROSSBORDER_MARKETPLACE_FREE_HUBS_UNDER_TEN_SCRIPT: ScriptedModelScript = Object.freeze({
-  taskId: "crossborder-marketplace-free-hubs-under-ten",
-  replies: {
-    panel_command: [startAttempt, startAttempt],
-    evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-    loop_verification: [answersRequest, answersRequest, answersRequest],
-  },
-});
+/** The timed check's words as the page view writes them: the question it puts, and the box it asks a person to press. */
+const TIMED_CHECK = /confirm you are human|Verify you are human/iu;
+/** The node a look runs: it reads the page and is never a step of the Flow. */
+const LOOK_NODE = "web.output.dom-capture_snapshot";
+/** This form's own look, and the round's opening call, whose look after it landed reads the page it arrived on. */
+const LOOK_CALL = "look-at-the-page";
+const OPENING_CALL = "initial.core.run_node";
+
+/**
+ * The `timed-check` form, for the task's `timed-check` variant: a check only a person may pass comes up over the
+ * first page on its own timer, with nothing done there. Before its first press of the run, this form requires that a
+ * look handed the check to the person and that it then stood past it, and it presses nothing while the check shows.
+ *
+ * - A round whose evidence shows the person completed a check (`personCompletedCheck`, Core's note on the call that
+ *   met it) on its opening call or on this form's look goes on as the plain form does, from the page as it stands.
+ *   Any other call is not a look, and is refused by name.
+ * - Otherwise the round looks at the page, once: with the check standing, that look is what meets it. A look that
+ *   comes back with no hand-off is refused, saying whether the check stood (no look sees it as the person's) or did not
+ *   (the variant was not armed, or its timer had not run). Never an answer from the plain path: a run that met the
+ *   check through a press would prove the action path, which is not what this form is for.
+ *
+ * Whether a look has handed the check over is kept for the run, so the later attempts, which start past the check the
+ * person passed, go on as the plain form does. Four attempts are answered, the `lab attempt` default.
+ */
+function lookAtTheCheckFirst(plain: ScriptedReply): ScriptedReply {
+  let handedOff = false;
+  return (request) => {
+    if (!handedOff) {
+      const completed = evidenceOf(request).find((entry) => entry.value.personCompletedCheck === true);
+      if (completed) {
+        if (completed.callId !== OPENING_CALL && completed.callId !== LOOK_CALL) throw new Error(`The person completed the check from ${completed.callId}, which is not a look`);
+        handedOff = true;
+      } else {
+        const shows = TIMED_CHECK.test(currentPageOf(request));
+        if (callsMade(request).has(LOOK_CALL)) {
+          throw new Error(shows ? "The round looked at the page while the check stood, and the look handed nothing to the person" : "The round looked at the page and no check stood over it: the variant was not armed, or its timer had not run");
+        }
+        return toolCall(shows ? "A check covers the page. Look at the page as it stands, pressing nothing." : "Look at the page as it stands before doing anything on it.", LOOK_CALL, "core.run_node", { node: LOOK_NODE, parameters: {}, consequences: [] });
+      }
+    }
+    if (TIMED_CHECK.test(currentPageOf(request))) throw new Error("The check still covers the page after the person completed it");
+    return plain(request);
+  };
+}
+
+const LATER_ATTEMPTS = 3;
+
+/**
+ * The task's script, for the unarmed read or its `timed-check` variant (`taskId` names which). `plain` is the read's
+ * honest path for two attempts; `timed-check` is that path behind a look at the timed check, for the default four.
+ */
+export function crossborderMarketplaceFreeHubsUnderTenScript(taskId: string, form: string = "plain"): ScriptedModelScript {
+  if (form !== "plain" && form !== "timed-check") throw new Error(`This script has no form "${form}". It has plain and timed-check`);
+  if (form === "plain") {
+    return Object.freeze({
+      taskId,
+      replies: {
+        panel_command: [startAttempt, startAttempt],
+        evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
+        loop_verification: [answersRequest, answersRequest, answersRequest],
+      },
+    });
+  }
+  const attempts = 1 + LATER_ATTEMPTS;
+  const decideTimed = lookAtTheCheckFirst(decide);
+  return Object.freeze({
+    taskId,
+    replies: {
+      panel_command: Array.from({ length: attempts }, () => startAttempt),
+      evidence_tool_decision: Array.from({ length: MOST_DECISIONS + 2 }, () => decideTimed),
+      loop_verification: Array.from({ length: 2 * attempts }, () => answersRequest),
+    },
+  });
+}

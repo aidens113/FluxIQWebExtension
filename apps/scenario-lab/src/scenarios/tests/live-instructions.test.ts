@@ -298,6 +298,7 @@ test("every task that expects a hand-off is on a scenario whose person module kn
     "company-website-quote-request": "completes:false",
     "company-website-quote-request-redesigned-after-creation": "completes:false",
     "crossborder-marketplace-free-hubs-under-ten": "completes:false",
+    "crossborder-marketplace-free-hubs-under-ten-timed-check": "completes:true",
     "company-website-heat-pump-quote": "completes:false",
   });
   for (const task of LIVE_INSTRUCTION_TASKS.filter(({ personCheck }) => personCheck)) {

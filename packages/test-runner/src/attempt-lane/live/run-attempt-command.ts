@@ -5,6 +5,7 @@ import { DEFAULT_LLM_MODEL, llmProviderForModel, resolveScenarioWorkflow, type A
 import type { LabCommand } from "../../commands.js";
 import { captureBrowserWindows } from "../../extension-chat-check/index.js";
 import { loadCreatedFlowRequest, resetScenarioLab, type CreatedFlowRequest } from "../../flow-lane/index.js";
+import { armScenarioVariant } from "../../lab-control/index.js";
 import { resolveLabPaths } from "../../lab-instance/index.js";
 import { countSteps, LabRunRecord } from "../../lab-runs/index.js";
 import { beginLiveLlmRun, ensureLiveLlmSecretKey, type LiveLlmRun } from "../../live-llm/index.js";
@@ -193,6 +194,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       control: opened.control, session: opened.browser, projectId: opened.projectId, origin: opened.topology.scenarioOrigin, runToken: opened.topology.allocation.controllerToken,
       resetSite: async () => {
         await resetScenarioLab(opened.topology.scenarioOrigin, opened.topology.allocation.controllerToken);
+        // A task named on a variant runs on that variant: the reset puts the site back to its baseline, so arm it again.
+        if (workflow.variant) await armScenarioVariant(opened.topology.scenarioOrigin, opened.topology.allocation.controllerToken, scenario.id, workflow.variant);
         await opened.browser.scenario.goto(startUrl, { waitUntil: "domcontentloaded" });
       },
       send: opened.send,

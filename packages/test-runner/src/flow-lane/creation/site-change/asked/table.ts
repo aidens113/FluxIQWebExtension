@@ -31,6 +31,7 @@ export const ASKED_TABLE: Readonly<Record<string, readonly AskedAct[]>> = Object
   "crossborder-marketplace-buy-hub": [{ name: "One order placed for two hubs", change: { "orders": 1, "ordered:1005008123450:Space Grey/7-in-1/Spain": 2 } }],
   "crossborder-marketplace-collect-official-coupon-only": [{ name: "The official store coupon collected", change: { "coupon:voltbay-official": 1 } }],
   "crossborder-marketplace-free-hubs-under-ten": [],
+  "crossborder-marketplace-free-hubs-under-ten-timed-check": [],
   "crossborder-marketplace-follow-official-store": [{ name: "The official store followed", change: { "following:voltbay-official": 1 } }],
   "crossborder-marketplace-mint-hub-fallback": [{ name: "Two Mint 7-in-1 hubs put in the cart", change: { "cart:1005008123450:Mint/7-in-1/Spain": 2 } }],
   "crossborder-marketplace-uk-express-quote": [{ name: "Shipping country changed to the United Kingdom", change: { "region:DE": -1, "region:GB": 1 } }],

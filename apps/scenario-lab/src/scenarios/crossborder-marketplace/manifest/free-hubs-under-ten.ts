@@ -64,6 +64,13 @@ const SCRIPT: ScenarioWorkflow["recordingScript"] = [
   { id: "free-hubs-under-ten-read", operation: "checkpoint" },
 ];
 
+/**
+ * How long after a page's script starts the timed check comes up: after a page
+ * arrived at has been read as it lands, and before a person, or a run, has done
+ * anything on it.
+ */
+const TIMED_CHECK_DELAY_MS = 1500;
+
 /** A filtered extraction: every free-shipping hub at 10,00 € or less, no ads, each once, cheapest first. */
 export const freeHubsUnderTenWorkflow: ScenarioWorkflow = {
   id: "free-hubs-under-ten",
@@ -76,4 +83,12 @@ export const freeHubsUnderTenWorkflow: ScenarioWorkflow = {
     finalState: [cartCount(0), ordersShipped(0)],
     allowedConsoleErrors: SITE_NOISE,
   },
+  // The variant changes the site, never the answer: its expected adds nothing to the workflow's own, so the ten records,
+  // the final state and the console allowance are the workflow's (`resolveScenarioWorkflow` merges them).
+  variants: [{
+    id: "timed-check",
+    description: "A check only a person may pass comes up on its own: a second and a half after any page loads, with nothing the visitor did behind it, a \"Please confirm you are human\" box covers the page. It stays, and comes back on every load, until a person presses Verify you are human and its two-second check finishes, when it leaves in place; once passed it never shows again. The answer is the same ten records, which only a run that hands the check to the person and goes on from where it stood reaches.",
+    arm: { operation: "set-mode", payload: { mode: "baseline", timedCheck: { delayMs: TIMED_CHECK_DELAY_MS } } },
+    expected: { pageFacts: FIRST_VISIT },
+  }],
 };

@@ -2,7 +2,7 @@
 // with. Test fixtures: they name their task, and nothing in product guidance sees them.
 import type { ScriptedModelScript } from "../script.js";
 import { COMPANY_WEBSITE_APPRENTICES_SCRIPT } from "./company-website-apprentices.js";
-import { CROSSBORDER_MARKETPLACE_FREE_HUBS_UNDER_TEN_SCRIPT } from "./crossborder-marketplace-free-hubs-under-ten.js";
+import { crossborderMarketplaceFreeHubsUnderTenScript } from "./crossborder-marketplace-free-hubs-under-ten.js";
 import { EVERYTHING_STORE_DOUBLE_ADD_SCRIPT } from "./everything-store-batteries-and-descaler.js";
 import { professionalNetworkAcceptMessagedScript } from "./professional-network-accept-messaged-invitations.js";
 import { localClassifiedsSaveDiningTablesScript } from "./local-classifieds-save-dining-tables.js";
@@ -14,7 +14,8 @@ export const SCRIPTED_MODEL_FORM_ENV = "FLUXIQ_ATTEMPT_SCRIPT_FORM";
 
 const SCRIPTS: Readonly<Record<string, (form?: string) => ScriptedModelScript>> = Object.freeze({
   "company-website-apprentices": () => COMPANY_WEBSITE_APPRENTICES_SCRIPT,
-  "crossborder-marketplace-free-hubs-under-ten": () => CROSSBORDER_MARKETPLACE_FREE_HUBS_UNDER_TEN_SCRIPT,
+  "crossborder-marketplace-free-hubs-under-ten": (form) => crossborderMarketplaceFreeHubsUnderTenScript("crossborder-marketplace-free-hubs-under-ten", form),
+  "crossborder-marketplace-free-hubs-under-ten-timed-check": (form) => crossborderMarketplaceFreeHubsUnderTenScript("crossborder-marketplace-free-hubs-under-ten-timed-check", form),
   "everything-store-batteries-and-descaler": () => EVERYTHING_STORE_DOUBLE_ADD_SCRIPT,
   "professional-network-accept-messaged-invitations": professionalNetworkAcceptMessagedScript,
   "local-classifieds-save-dining-tables": localClassifiedsSaveDiningTablesScript,

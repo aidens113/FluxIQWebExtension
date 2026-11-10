@@ -22,9 +22,11 @@ function thirdLoad(): { body: string; state: MarketState } {
 }
 
 test("the Lab recognises the traffic screen by what it shows, and presses the box a person presses", () => {
-  const [check] = PERSON_CHECKS.checks;
-  assert.equal(PERSON_CHECKS.checks.length, 1);
+  assert.deepEqual(PERSON_CHECKS.checks.map(({ id }) => id), ["traffic-screen", "timed-check"]);
+  const check = PERSON_CHECKS.checks.find(({ id }) => id === "traffic-screen");
   const { body, state } = thirdLoad();
+  const timed = PERSON_CHECKS.checks.find(({ id }) => id === "timed-check")!;
+  assert.ok(!body.includes(timed.shows), "the traffic screen is never taken for the timed check, whichever the Lab looks for first");
   assert.ok(body.includes(check!.shows), "the screen shows the text the Lab looks for");
   assert.deepEqual(check!.steps, [{ action: "click", text: "I'm not a robot" }]);
   assert.ok(body.includes("I'm not a robot"));
@@ -36,7 +38,7 @@ test("the Lab recognises the traffic screen by what it shows, and presses the bo
   assert.ok(check!.clearsWithinMs >= 2_300, "the wait covers the page's own two-second check and its reload");
 });
 
-test("the spain-hubs and free-hubs-under-ten rows expect a hand-off but do not require one", () => {
-  assert.deepEqual(PERSON_CHECKS.handOffs.map(({ workflowId, variantId, person, required }) => `${workflowId}/${variantId ?? "-"}:${person}:${required}`), ["spain-hubs/-:completes:false", "spain-hubs/list-layout:completes:false", "free-hubs-under-ten/-:completes:false"]);
+test("the spain-hubs and free-hubs-under-ten rows expect a hand-off but do not require one; the timed check, which every path meets, is required", () => {
+  assert.deepEqual(PERSON_CHECKS.handOffs.map(({ workflowId, variantId, person, required }) => `${workflowId}/${variantId ?? "-"}:${person}:${required}`), ["spain-hubs/-:completes:false", "spain-hubs/list-layout:completes:false", "free-hubs-under-ten/-:completes:false", "free-hubs-under-ten/timed-check:completes:true"]);
   assert.equal(PERSON_CHECKS.answer, undefined, "nothing on this check is read and typed");
 });

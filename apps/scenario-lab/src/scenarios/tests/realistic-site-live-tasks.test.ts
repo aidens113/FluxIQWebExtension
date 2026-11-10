@@ -38,8 +38,8 @@ const DATASET_TASKS = REALISTIC_SITE_LIVE_TASKS.filter(({ judgeBy }) => judgeBy 
  * unfiltered first page can have exactly the right number of rows.
  */
 test("every realistic-site dataset task is judged record by record, never by a count alone", () => {
-  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 108);
-  assert.equal(DATASET_TASKS.length, 87);
+  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 109);
+  assert.equal(DATASET_TASKS.length, 88);
   for (const task of DATASET_TASKS) {
     const dataset = datasetOf(task);
     assert.ok(Array.isArray(dataset.records), `${task.id}: dataset ${task.expectedDatasetId} declares no records, so a table of the right length with the wrong rows would pass`);
@@ -93,6 +93,7 @@ test("qualification additions preserve the complete ordered original 57 tasks", 
     "crossborder-marketplace-collect-official-coupon-only",
     "crossborder-marketplace-follow-official-store",
     "crossborder-marketplace-free-hubs-under-ten",
+    "crossborder-marketplace-free-hubs-under-ten-timed-check",
     "crossborder-marketplace-hub-to-cart-flash-deal-during-build",
     "crossborder-marketplace-mint-hub-fallback",
     "crossborder-marketplace-uk-express-quote",
@@ -127,5 +128,5 @@ test("qualification additions preserve the complete ordered original 57 tasks", 
     "social-network-feed-hide-suggested-posts",
     "social-network-feed-recent-group-posts",
   ]);
-  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 108);
+  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 109);
 });
