@@ -13,6 +13,16 @@ export type RectDescriptor = {
 export type DomElementDescriptor = {
   tagName: string;
   selector: string;
+  /**
+   * Which element of its document this is, as a serial the content script
+   * gives each element the first time a snapshot describes it and keeps for the
+   * document's life (`content/dom-snapshot.ts`, t897). Two descriptors of one
+   * document with one token are one element; with two tokens, two elements,
+   * however alike they read. It is a counter, never page content, and means
+   * nothing across documents or frames. The domain reads it so a handle names
+   * one element (`domain/.../stable-handles.ts`). Snapshot descriptors only.
+   */
+  nodeToken?: number | undefined;
   xpath?: string | undefined;
   id?: string | undefined;
   classNames?: string[] | undefined;
@@ -276,6 +286,9 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  *   a hover style or a chosen option changes them with the element unchanged.
  * - `listWayOn` is how one capture found a list going on (l1 D1): a page
  *   loading more of it changes it with the list element unchanged.
+ * - `nodeToken` is which element of one document the snapshot described
+ *   (t897): a serial that means nothing past that document, so a recorded
+ *   target carrying it would name nothing on a replay's page.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
@@ -285,7 +298,7 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
 type UnwiredElementField =
   | "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted"
   | "repeatCount" | "frontLayer" | "leadStatement" | "ownText" | "readableText" | "parent" | "hidden"
-  | "cursor" | "setApart" | "listWayOn";
+  | "cursor" | "setApart" | "listWayOn" | "nodeToken";
 
 /**
  * The recorded element's identity as it crosses the client gateway.
