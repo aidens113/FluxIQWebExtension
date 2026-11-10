@@ -2,7 +2,10 @@
 
 ## Outcome
 
-Partial. The work is held for the dining rerun, which waits on lane t885's rows-rule fix.
+Partial. The dining rerun (after dev was merged with t885's rows fix) is below, under "Dining rerun on dev".
+- Attempts 1 and 2 met the target.
+- Apply ran as one command with no Core retry in every replay.
+- Attempts 3 and 4 still asked the judge once each. The cause is narrowed to one step but not proven, because Core keeps the deviation only in memory.
 - **Done.** The extension change, under the coordinator's decision that the user's retry rule (t528) wins:
   - A first press the settled look finds certainly did nothing is pressed once more inside the same command.
   - If that press also certainly did nothing, the command fails as `web.action.no_effect` (`certainNoEffect`), and Core gives it its first attempt plus three retries.
@@ -12,7 +15,7 @@ Partial. The work is held for the dining rerun, which waits on lane t885's rows-
 - **Live Lab, Post on Haiku** (`run-mwb5cnxg-003415b4`, $0.0164, no balance error): every answer was right.
   - The series posted exactly once, in attempt 1. Attempts 2-4 found the post already made, since attempts are not reseeded, and posted nothing; none posted twice.
   - Attempt 3 was not deterministic (judge 3 calls, `run_flow_then_explore`). That is a Core answer-first issue, outside this lane.
-- **Dining tables:** held. Attempt 1's answer is wrong on this tree, with or without this change (control run below). Suspect: Core `150aa58ef`, lane t885's rows rule. The rerun at `--attempts 4` waits for the coordinator.
+- **Dining tables before the fix:** attempt 1's answer was wrong, with or without this change (control run below). The cause was Core `150aa58ef`, fixed by t885's `f75373940`.
 
 ## What changed and why
 
@@ -161,9 +164,51 @@ Two related cases:
   - Attempts 2 and 4 ended with status `working`, and their `answer-turn.json` is `null`, though the Lab scored the answer right.
   - The click is not involved in either: no press was made in attempts 2-4.
 
+## Dining rerun on dev (Core `02c8a2164`, extension `4caf1cf92`)
+
+**Builds.** Core libraries rebuilt (exit 0), the domain built (exit 0), and the extension built (exit 0, each target "verified 22 files").
+
+**Run.** `FLUXIQ_LAB_INSTANCE=t896 FLUXIQ_TEST_ENV_FILES=none pnpm lab attempt local-classifieds --task local-classifieds-save-dining-tables --authoring-mode answer-first --scripted-model --attempts 4` (`run-mwb81x8q-432e8389`, launched at 3.17 GB free, visible browser). Exit 0, `status: passed`, every answer right with 5 rows stored and shown.
+
+| Attempt | Path | Flow | Calls by kind | Time | Continuation | S9 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | explore | `flow.b4bdf43b-e242-4c28-8509-70982e8c0290` | 22 (interpretation 1, judge 1, decisions 20) | 29.1 s | n/a | (exploration) |
+| 2 | run_flow | same | 1 (judge 1) | 18.0 s | held, steps digest `90ea3762…` | judged: `flow_not_proven` (expected; the saved Flow then reads `ready`/`provisional`, so it is proven whole) |
+| 3 | run_flow | same | 1 (judge 1) | 18.3 s | held | **judged: deviated** |
+| 4 | run_flow | same | 1 (judge 1) | 17.7 s | held | **judged: deviated** |
+
+- Answers: attempt 1 is right, with the 5 saved rows (title, price, status).
+- Every later attempt found "The three cheapest dining tables saved" already done, changed nothing on the site, and was proven by the steps digest to start from the attempt before it.
+- **Apply ran as one command, with no Core retry, in every replay.**
+  - Step `s7`: steps 0054, 0088 and 0122 took 915, 886 and 911 ms, `succeeded`.
+  - No step in any replay has a failed-attempt or retry span.
+  - In exploration, `apply-1` was one `succeeded` command.
+
+**Why attempts 3 and 4 were judged: the trace.**
+- `check.ts` sets `state.deviation`, but nothing persists or emits it (attempt store, Lab evidence, chat). So it is read off the run and Core's code by elimination, in the rule's order:
+  - **`judge_always` and `asked_again`: no.** No caller judge setting, no Run again.
+  - **`flow_not_proven`: no.** After attempt 2, `attempt.json` reads the saved Flow as `ready`/`provisional`. `saved-state.ts` gives that only for `best.provenWhole`, and `better-flow.ts` carries it for the same digest, which all four attempts share.
+  - **`flow_not_confirmed`: no.** The label is `confirmed` whenever the attempt was achieved (`attempt/keep.ts:61`), and attempt 2 was.
+  - **`run_not_whole` and `step_failed`: no.** Every replay step `succeeded` or `ended`, the run reached its end, and the path was `run_flow` with "needed nothing else".
+  - **`step_retried` and `check_cleared`: no.** There is no retry or failed-attempt span, and no person hand-off. This is the deviation that blocked t895, and t896 removed it.
+  - **Save loop (`s14`): not a deviation.**
+    - The read keeps 4 rows (`read-tables`, kept 4), so the loop made 4 passes.
+    - Passes 1-3 were stopped at the task's run gate ("Already done earlier: Save", nothing sent). Pass 4 was skipped at arrival as `already_done` by the run's completed-act ledger (1 ms).
+    - `steps-ran.ts` (`watch.askedCount > 0 && sentCount === 0`) reads that as skipped `already_done`, which is not a deviation.
+  - **Left: step 2, "Allow all cookies" (`s2`, steps 0049, 0083, 0117: `ended` with arrival, facts, `state-route`, never dispatched).**
+    - Exploration saved it as a plain step: the draft has no `optional`, and the only amendment made steps 11-12 a loop.
+    - On a replay the consent is already given (no reseed), so the banner is absent and the step cannot run. The state router then either:
+      - routes the run on (`skipped.reason: "state_routed"` → `routed_elsewhere` → **`step_routed`**), or
+      - if Core counts it as a sometimes-present step, passes it over as absent; because a click "lasts" (`web.dom.click` is `effectClass: "commit"`), it is `absent_not_done` → **`act_not_done`**, unless the page shows its effect.
+  - **Not fully excluded: `shape_differs`.** It would fire if attempt 2's saved shape (`completion.state.held.rows`) was taken from the url-bearing `read-tables` rows rather than the saved list. The rows rule just changed (`f75373940`), so I cannot rule it out without the deviation itself.
+- **Proving which one** needs `state.deviation` to leave Core: for example, kept on the attempt's row in the task memory and read into the Lab's `attempt.json`, which t895 also flagged as missing. That is a Core change (`answer-first/completion/check.ts`, `attempt/remember.ts` or `attempt-store/`, lane t885's `attempt/**`), outside my paths, so I did not make it. With it, one more provider-free run names the deviation.
+- **If it is `s2`:** the fix belongs in Core's S9 rule or in how a dismissal step is saved, not in the click.
+  - A step passed over because the page was already in the state it brings about (an interruption that is not there) should read as passed over as saved, the same as `absent`.
+  - Alternatively, the build should save a dismissal it pressed once as sometimes-present.
+
 ## Not verified
 
-- **Dining attempts 3 and 4 standing on their record with 0 calls**, and the continuation proof. Held for the rows-rule fix in lane t885; the coordinator will say when to merge dev and rerun.
+- **Dining attempts 3 and 4 standing on their record with 0 calls.** They were judged once each. The deviation is narrowed above but not proven; proving it needs the Core diagnostic described there.
 - **A control that certainly ignores both presses, on a real page.** Shown by unit tests only. Core's handling, up to 4 attempts × 2 presses, is traced from the code, not run end to end.
 - **No full suites** (twice-a-day rule).
 
