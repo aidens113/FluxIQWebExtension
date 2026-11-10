@@ -213,6 +213,12 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
 
 ## Engineering Structure And Modularity
 
+- **Fix the root cause, never cap the symptom (user, 2026-11-10):** "we should NEVER
+  attempt to fix these problems by simply capping the symptoms. Instead we should come
+  up with ways to fix the root cause, always". Lowering a timeout or a fixed wait,
+  capping retries, calls, rounds or budget, suppressing a repeat, hiding an error, or
+  special-casing one task, site or input is not a fix; trace why it happens and change
+  that. If the cause is not yet fixable, report it plainly instead of shipping a cap.
 - Organize code by narrow, cohesive responsibility. Extend the module that
   owns a capability or introduce a focused one rather than placing behavior in
   a convenient catch-all file. Split modules that mix unrelated
@@ -482,6 +488,15 @@ fixture. Prove the positive matching browser path provider-free before paid exec
 extension chat, the judged whole run, a zero-call replay) is time-intensive, so a breadth round runs
 about one task per site end to end, plus reruns of tasks whose failures were fixed; every other task
 is proven provider-free by the audit above (a browser path reaching its oracle, unambiguous wording).
+
+**Several deterministic runs follow every exploration** (user, 2026-11-10): "you should always be
+testing multiple deterministic runs after initial exploration runs on each task to make sure it
+successfully uses the right flow, see how many model calls are made if any". Every task check, live
+or provider-free, runs its first (exploring) attempt and then at least three more on the site as the
+first left it (`lab attempt --attempts 4`). Each later attempt must be proven to run the
+Flow its predecessor saved (the continuation proof), and its report names its path, Flow, model
+calls (ideally none), and time. A single attempt is a diagnosis, never a task's acceptance. A later
+attempt that strays from the saved Flow, or spends calls, is a defect to trace to its root.
 
 **Every node retries automatically** (user, 2026-10-07): the first attempt plus
 3 retries on every path (exploration, mid-build tests, candidate trials,

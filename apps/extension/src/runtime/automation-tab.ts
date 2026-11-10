@@ -1,6 +1,13 @@
 // The tab FluxIQ drives, and the waiting that keeps actions off a half-loaded
 // page.
 //
+// An action waits only when the page has begun to move (task speed S3): a look
+// that answered from this document is its readiness proof, and the proof stands
+// for as long as the browser reports no navigation of the tab's top frame
+// (`./navigation-events/`), across the act it precedes, so the look after the
+// act needs no wait either. Only an action after a navigation began waits for
+// the tab to settle (`waitForTabReady`).
+//
 // The automation tab is remembered so a Flow's actions land on the page the
 // previous action left behind: navigate reuses it by default, a tab switch
 // re-points it, and closing it goes back to the tab driven before it. Before
@@ -12,6 +19,8 @@
 // again or nothing happened at all, which is how a navigate that never left
 // the page it was already on was reported as a success. `navigation/outcome.ts`
 // judges the record.
+
+import { tabNavigationEpochs } from "./navigation-events";
 
 const DEFAULT_AUTOMATION_URL = "about:blank";
 
@@ -26,14 +35,25 @@ type SnapshotReadinessProof = {
   url: string;
   documentId: string;
   capturedAt: number;
+  /** The tab's navigation epoch when the look answered, and the worker that counted it (`./navigation-events/`). */
+  epoch?: number;
+  watcher?: string;
 };
 
 /**
  * A successful DOM snapshot is stronger evidence than another tab poll: the
  * target document was complete enough for its content script to answer. The
- * proof is deliberately one-shot and names Chrome's document UUID. A worker
- * restart may preserve it in session storage, but any new document fails the
- * identity check and keeps the ordinary settling wait.
+ * proof names Chrome's document UUID and the tab's navigation epoch. While this
+ * worker has seen no navigation event of the tab since, the same complete
+ * document at the same address is ready, however many actions have run on it:
+ * an act that navigates moves the epoch, and the next action waits
+ * (task speed S3). Until 2026-11-10 the proof was used once, by the act after a
+ * look, and the look after the act then polled a full second of address
+ * stability although nothing had navigated.
+ *
+ * A proof kept by a worker before a restart (session storage) was counted by
+ * another worker, which may have missed the events in between: it is held to
+ * the old rule, used once and within `SNAPSHOT_READINESS_MAX_AGE_MS`.
  */
 let snapshotReadinessProof: SnapshotReadinessProof | undefined;
 const SNAPSHOT_READINESS_MAX_AGE_MS = 10_000;
@@ -236,7 +256,7 @@ export async function noteSnapshotReadiness(tabId: number, url: string | undefin
   if (!url) return;
   const documentId = await readTopDocumentId(tabId);
   if (!documentId) return;
-  snapshotReadinessProof = { tabId, url, documentId, capturedAt: Date.now() };
+  snapshotReadinessProof = { tabId, url, documentId, capturedAt: Date.now(), epoch: tabNavigationEpochs.of(tabId), watcher: tabNavigationEpochs.instance };
   try {
     await chrome.storage?.session?.set({ [SNAPSHOT_READINESS_STORAGE_KEY]: snapshotReadinessProof });
   } catch {
@@ -245,10 +265,13 @@ export async function noteSnapshotReadiness(tabId: number, url: string | undefin
 }
 
 /**
- * Consumes the immediately preceding snapshot proof when Chrome still reports
- * the same complete document. A failed check falls back to waitForTabReady.
+ * Whether the tab is ready from the last look's proof: the same complete
+ * document at the same address, and no navigation event of the tab since. A
+ * proof this worker counted stands for every action after it until the page
+ * moves; one from a worker before a restart is used once. A failed check
+ * forgets the proof and falls back to waitForTabReady.
  */
-export async function consumeSnapshotReadiness(tabId: number): Promise<boolean> {
+export async function readyFromSnapshot(tabId: number): Promise<boolean> {
   let stored: unknown;
   if (snapshotReadinessProof === undefined) {
     try {
@@ -258,15 +281,24 @@ export async function consumeSnapshotReadiness(tabId: number): Promise<boolean> 
     }
   }
   const proof = snapshotReadinessProof ?? (isSnapshotReadinessProof(stored) ? stored : undefined);
-  await clearSnapshotReadiness();
-  if (!proof || proof.tabId !== tabId || Date.now() - proof.capturedAt > SNAPSHOT_READINESS_MAX_AGE_MS) return false;
+  const counted = proof?.watcher === tabNavigationEpochs.instance && proof.epoch !== undefined;
+  // Another worker's proof is the old one-shot proof; this worker's stands until the page moves.
+  if (!counted) await clearSnapshotReadiness();
+  if (!proof || proof.tabId !== tabId) return false;
+  if (counted ? tabNavigationEpochs.of(tabId) !== proof.epoch : Date.now() - proof.capturedAt > SNAPSHOT_READINESS_MAX_AGE_MS) return await notReady(counted);
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (tab.status !== "complete" || tab.url !== proof.url || isTransientNavigationUrl(tab.url)) return false;
-    return await readTopDocumentId(tabId) === proof.documentId;
+    if (tab.status !== "complete" || tab.url !== proof.url || isTransientNavigationUrl(tab.url)) return await notReady(counted);
+    return await readTopDocumentId(tabId) === proof.documentId || await notReady(counted);
   } catch {
-    return false;
+    return await notReady(counted);
   }
+}
+
+/** A check that failed: this worker's proof no longer stands, and is forgotten. */
+async function notReady(counted: boolean): Promise<false> {
+  if (counted) await clearSnapshotReadiness();
+  return false;
 }
 
 async function clearSnapshotReadiness(): Promise<void> {
