@@ -22,7 +22,12 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 - t895: S9 wired. A replay that ran exactly as the run the person accepted stands on that record with no judge call. A Flow's first replay is still its one judged whole run, and a person's Run again is always judged.
 - The live lane t885 was integrated again: rows that met every condition stay the result, a wait no longer reads as a failed save, and the judge sees a saved Flow run's left-out rows.
 
-**Lane t896 is running.** local-classifieds' radius Apply swallows the first press after the select changes, so every replay retried that step once and S9 judged it. Fix: the click presses once more inside the same command when the first press provably did nothing (the one extra press Core makes today), so the replay stands on its record at 0 calls.
+**t896 landed (2026-11-10).** local-classifieds' radius Apply swallows the first press after the select changes. The click now presses once more inside the same command when the first press certainly did nothing. Dining replays then ran Apply as one command with no retry (`run-mwb81x8q-432e8389`). When both presses certainly did nothing, the command still fails as no-effect, so Core's first attempt plus three retries hold.
+
+Dining attempts 3 and 4 were still judged once each, for a deviation Core does not yet persist. **Lane t897** persists the S9 deviation on the attempt's record and step files, names this one, and fixes it. It also fixes:
+- the Lab reading a replay mid-run during its permission wait;
+- the run gate not saying "already done" for a carried act;
+- handles reused by a different element (a per-document node token), which made a composer opener look like a lasting act.
 
 **Next.** Phase B (S1 effort per decision, S5 judge verdict-first) and A2 (S2), when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
 
@@ -353,6 +358,24 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
   - fluxiq `tsc` -> exit 0. Core structure audit -> passed. Core libraries rebuilt -> exit 0.
   - Domain `tsc` -> exit 0. Extension check -> exit 0. Extension structure audit -> passed.
 - Outcome: merged into both devs ("Merge task t895: wire-replay-on-record") and pushed. Next: t896, so dining replays stand on their record at 0 calls.
+
+### 2026-11-10 - t896: a swallowed press is pressed once more inside the click (S9, S10)
+
+- Agent: lead; worker press-once-in-command (Opus).
+- Changed: extension `content/actions/click.ts`, `pressInPlace`.
+  - A first press the settled look finds certainly did nothing is pressed once more in the same command.
+  - When the second press also certainly did nothing, the command fails as `web.action.no_effect`, so Core's first attempt plus three retries (t528) still apply.
+  - A press is only ever made after a certain-nothing verdict on the one before.
+  - `wake-press-post.spec.ts` now expects one Post command that posts once.
+  - Stale "once only" comments in `recovery/fault.ts` and the domain now state the rule.
+- Decided: the brief's "one extra press in total" was stale (t517, superseded by the user's t528 rule). Every Core attempt keeps its retries.
+- Measured:
+  - Provider-free dining (`run-mwb81x8q-432e8389`): Apply ran as one command in 886-915 ms with no retry; all answers right.
+  - Live Post on Haiku (`run-mwb5cnxg-003415b4`, $0.0164): the series posted once.
+- Validation:
+  - Lead re-run: `node scripts/test-extension.mjs src/content/actions/tests src/content/action-runtime` -> 742/742; extension check -> exit 0; structure audit -> passed.
+  - `node scripts/test-content.mjs -- e2e/content/tests/press-answers` -> 8 passed.
+- Outcome: merged into both devs ("Merge task t896: press-once-in-command") and pushed. Dining attempts 3-4 still judged once each (deviation not persisted), handed to t897.
 
 ## Open Questions
 
