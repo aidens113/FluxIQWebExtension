@@ -8,6 +8,12 @@
 // was made, so this script never presses or reads a check and meets it nowhere. A second attempt runs the saved
 // Flow and meets the same screen on its first search, which the person clears again.
 //
+// **What is already applied is read off the page's address**, as a person reads the filter chips: the site writes
+// each filter and the sort into the search URL (`freeShipping=y`, `maxPrice=10`, `sort=price_asc`). A second attempt's
+// rounds start on the page its saved Flow left, with some of the filters already on, and a press of Free shipping
+// there would turn it off again. The calls this round made still guard each press, so a step is never sent twice
+// in one round.
+//
 // Every handle, field key and filter label is read from the request's own evidence, never written here.
 import type { ScriptedModelScript, ScriptedReply } from "../script.js";
 import { currentPageOf, evidenceOf, latestOf, pageLine, pressOf, toolCall, type EvidenceEntry } from "./evidence.js";
@@ -53,9 +59,16 @@ function cardColumns(fields: readonly Field[]) {
   };
 }
 
+/** The search address's own parameters, from the page's `URL` line; none on a page with no search address. */
+function searchParams(page: string): URLSearchParams {
+  const query = /^URL ~\/search\?(\S*)/mu.exec(page)?.[1];
+  return new URLSearchParams(query ?? "");
+}
+
 const decide: ScriptedReply = (request) => {
   const page = currentPageOf(request);
   const made = callsMade(request);
+  const applied = searchParams(page);
   if (made.has("read-hubs")) return finish("The free hubs at ten euros or less are read, cheapest first.");
   for (const cover of COVERS) {
     if (!made.has(cover.callId) && pageLine(page, cover.words)) return pressOf(request, cover.summary, cover.callId, cover.words);
@@ -66,14 +79,15 @@ const decide: ScriptedReply = (request) => {
     return toolCall("Search for the hubs.", "search", "core.run_node", { node: "web.output.dom-type", parameters: { target: { handle: box.handle }, text: "usb c hub", submit: true }, consequences: [] }, true);
   }
   // Each step once, by the calls made: after a check a person cleared, the page a decision reads may still be the one before the press, and a press made twice is a step the Flow cannot place.
-  if (!made.has("free-shipping")) return pressOf(request, "Narrow to hubs that ship free.", "free-shipping", /clickable "Free shipping"$/u);
-  if (!made.has("ceiling-typed")) {
+  if (!made.has("free-shipping") && applied.get("freeShipping") !== "y") return pressOf(request, "Narrow to hubs that ship free.", "free-shipping", /clickable "Free shipping"$/u);
+  const ceilingOn = applied.get("maxPrice") === String(CEILING);
+  if (!made.has("ceiling-typed") && !ceilingOn) {
     const max = pageLine(page, /field.*"Max"/u);
     if (!max) throw new Error("The page shows no Max price box");
-    return toolCall("Type the price ceiling.", "ceiling-typed", "core.run_node", { node: "web.output.dom-type", parameters: { target: { handle: max.handle }, text: String(CEILING) }, consequences: [] }, true);
+    if (!max.line.includes(`="${CEILING}"`)) return toolCall("Type the price ceiling.", "ceiling-typed", "core.run_node", { node: "web.output.dom-type", parameters: { target: { handle: max.handle }, text: String(CEILING) }, consequences: [] }, true);
   }
-  if (!made.has("ceiling-applied")) return pressOf(request, "Apply the price ceiling.", "ceiling-applied", /clickable "OK"$/u);
-  if (!made.has("sort-by-price")) return pressOf(request, "Sort the hubs cheapest first.", "sort-by-price", /clickable "Price ↑"$/u);
+  if (!made.has("ceiling-applied") && !ceilingOn) return pressOf(request, "Apply the price ceiling.", "ceiling-applied", /clickable "OK"$/u);
+  if (!made.has("sort-by-price") && applied.get("sort") !== "price_asc") return pressOf(request, "Sort the hubs cheapest first.", "sort-by-price", /clickable "Price ↑"$/u);
   const structure = latestOf(request, "web.detect_repeating_structure");
   if (!structure) {
     const card = pageLine(page, /^t\d+ link ".*\bHub\b.*" same href/u);

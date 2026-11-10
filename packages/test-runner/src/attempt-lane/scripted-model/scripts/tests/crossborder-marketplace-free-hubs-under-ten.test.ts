@@ -59,3 +59,13 @@ test("it never answers a traffic screen, and a page without what it needs fails 
   assert.throws(() => decision('URL ~/search?q=usb+c+hub\nt1 "I\'m not a robot"', made("free-shipping")), /Max price box|shows nothing/u);
   assert.throws(() => decision('URL ~/search?q=usb+c+hub\nt1 "Hub"'), /shows nothing matching/u);
 });
+
+test("a second attempt's round starts where its saved Flow left the page, and never presses again what the address says is on", () => {
+  const typed = 'URL ~/search?q=usb+c+hub&freeShipping=y\nt30 clickable "Free shipping"\nt31 field placeholder "Max" ="10"\nt32 clickable "OK"\nt33 clickable "Price ↑"\nt40 link "Keelson USB C Hub 7 in 1" same href';
+  // Free shipping on and the ceiling typed, not applied: Free shipping is not pressed (it would turn off), and the ceiling is applied.
+  assert.equal(decision(typed).callId, "ceiling-applied");
+  assert.equal(decision(typed).input?.parameters?.target.handle, "t32");
+  const filtered = typed.replace("freeShipping=y", "freeShipping=y&maxPrice=10");
+  assert.equal(decision(filtered).callId, "sort-by-price");
+  assert.equal(decision(filtered.replace("maxPrice=10", "maxPrice=10&sort=price_asc")).toolId, "web.detect_repeating_structure");
+});
