@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { anthropicStreamBody, scriptedModelReplyText, scriptedModelUsage } from "./anthropic-stream.js";
-import type { ScriptedModelScript } from "./script.js";
+import type { ScriptedModelScript, ScriptedReply } from "./script.js";
 import { readScriptedModelRequest, type ScriptedModelKind, type ScriptedModelRequest } from "./wire-request.js";
 
 /** One request as it went: its kind and count, and why it was refused. Never its contents. */
@@ -47,6 +47,8 @@ function refuse(response: ServerResponse, status: number, message: string): void
 export async function startScriptedModelServer(input: { script: ScriptedModelScript; key: string; logDirectory?: string; onCall?: (call: ScriptedModelCall) => void }): Promise<ScriptedModelServer> {
   const calls: ScriptedModelCall[] = [];
   const counts: Record<ScriptedModelKind, number> = {};
+  /** A chat turn's words, by the scripted reply that first read them. */
+  const answeredWords = new Map<string, ScriptedReply>();
   if (input.logDirectory) await mkdir(input.logDirectory, { recursive: true });
   const note = (call: ScriptedModelCall): void => {
     calls.push(call);
@@ -77,7 +79,13 @@ export async function startScriptedModelServer(input: { script: ScriptedModelScr
         return;
       }
       if (input.logDirectory) await writeFile(path.join(input.logDirectory, `${read.kind}-${String(read.ordinal).padStart(3, "0")}.request.json`), read.payload ? JSON.stringify(read.payload, null, 1) : read.message).catch(/* best-effort: a request kept for the next script decides nothing */ () => undefined);
-      const reply = input.script.replies[read.kind]?.[read.ordinal - 1];
+      const scripted = input.script.replies[read.kind]?.[read.ordinal - 1];
+      // A person's same words, put again in a later attempt, are read as they were read before, as a
+      // model reading them the same way would. So a series of deterministic attempts runs to its end and
+      // its report counts each interpretation call a later attempt still makes, instead of stopping at
+      // the first one the script did not write out.
+      const reply = scripted ?? (read.kind === "panel_command" ? answeredWords.get(read.message) : undefined);
+      if (scripted !== undefined && read.kind === "panel_command" && !answeredWords.has(read.message)) answeredWords.set(read.message, scripted);
       if (reply === undefined) {
         refused(read.kind, read.ordinal, `The script for ${input.script.taskId} expects no request ${read.ordinal} of kind ${read.kind}`);
         return;

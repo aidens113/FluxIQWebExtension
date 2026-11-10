@@ -2646,6 +2646,35 @@ not request detail or claim focus. A flow absent from a confirmed current list
 keeps its conversation and remembered name with disabled Run and current-list
 unavailability feedback. Loading, offline and failed reads do not imply deletion.
 
+### Page readiness and the kept look
+
+Two clocks used to sit inside every browser step (task speed lane 1, t888). Both now follow what the
+page did instead of a fixed wait.
+
+**Readiness from navigation events**
+(`apps/extension/src/runtime/navigation-events/`, `automation-tab.ts` `readyFromSnapshot`,
+`action-runner.ts`). The worker counts each tab's top-frame navigation events: `webNavigation`
+before-navigate, committed, history-state and fragment updates, and a tab replaced. A look's readiness
+proof records that count, and the proof now stands across the act until the page moves, with no age
+limit. A navigation event means a wait: `waitForTabReady` is unchanged. `tabs.onUpdated` is not used,
+because its `loading` also reports child frames. A proof left by a worker before a restart keeps the
+old rule: used once, and only within 10 seconds. Firefox reports no `documentId`, so it keeps no proof
+and waits as before.
+
+**The page-change counter** (`content/page-changes/`, `shared/page-changes-message.ts`). Each frame
+counts what could change a look: DOM mutations (open shadow roots included); `input`, `change`,
+`scroll`, `focusin`/`focusout`, `toggle`, `load`, `error`, the end of a transition or animation and
+fonts loading; and on the window `resize`, `pagehide`, `beforeunload`, `pageshow`, `popstate` and
+`hashchange`. FluxIQ's own closed UI host is excluded. A frame answers the page-changes message with
+its content-script copy and its count.
+
+**The kept look** (`runtime/look-reuse/`). The worker keeps the last plain whole-tab look of each tab.
+It reuses that look for the next look only when every frame answers the same script copy and count, the
+navigation count is the same, and only reads were sent since. Any other action forgets the kept look, so
+the look after an act is always a fresh capture, and a look the page changed under while it was being
+taken is not kept. The Lab's speed section (`docs/architecture/testing-facility.md`) shows the time
+the looks take in each attempt.
+
 ### Extraction dialog lifecycle
 
 The Open FluxIQ utility serializes pending requests and scopes refusal feedback

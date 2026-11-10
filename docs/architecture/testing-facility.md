@@ -2068,25 +2068,29 @@ real.
 ### A real attempt from the chat: `lab attempt`
 
 ```powershell
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model [--attempts 2 [--restart-between]]
-pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts 2 [--restart-between]] [--dry-run]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --scripted-model [--attempts N [--restart-between]]
+pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm --llm-max-cost-usd <n> [--attempts N [--restart-between]] [--dry-run]
 ```
 
-One attempt at one realistic task, in a visible browser. `attempt-lane/live/` types the
+A task's exploring attempt and then several deterministic ones, in a visible browser (default `--attempts 4`: one exploring attempt and three deterministic). `attempt-lane/live/` types the
 instruction into the real extension chat, follows the attempt with the read the extension
 uses (`list-conversation-task-attempts`, `get-task-attempt`) until it stops on `achieved`,
 `budget_out`, `stopped_by_person` or `waiting_for_person`, and scores it with
 `judgeAttemptAnswer`: the rows in the attempt's own dataset, the site's change since the
 baseline it recorded, the declared final state on the page the attempt left, and the answer
 turn **read from the panel's DOM** (`li.answer-turn[data-attempt-id]`), so a right answer
-that never reached the person fails. It exits 0 only on a right answer. There is no build
+that never reached the person fails. A run exits 0 and reports `passed` only when every attempt answered right and every later attempt was proven to start from the one before. There is no build
 deadline: only a stretch with nothing moving stops the watch, and that reports where the
 attempt stood and judges nothing.
 
-**`--attempts 2`: the second attempt, on the site as the first left it.** The site is seeded
-once, before attempt 1, and never again. The second attempt is the same words typed into the
+**`--attempts N`: the later attempts, each on the site as the one before left it.** `N` is any whole
+number from 1, and the default is 4, for a scripted and a live model alike (user, 2026-11-10: "you
+should always be testing multiple deterministic runs after initial exploration runs on each task to
+make sure it successfully uses the right flow, see how many model calls are made if any"). Attempt 1
+explores; attempts 2 to N are the deterministic ones. The site is seeded
+once, before attempt 1, and never again. Each later attempt is the same words typed into the
 same thread of the same workspace, which is what a person with the panel open does, and its
-turn sits under the first. Its baseline is read when it starts, and:
+turn sits under the first. The second attempt's baseline is read when it starts (each later one reads its own), and:
 
 - **What right is.** The task's end state still holds, no lasting act landed again, and the
   rows are right and shown. So its change is judged against what is still asked
@@ -2098,11 +2102,45 @@ turn sits under the first. Its baseline is read when it starts, and:
   with another key and its own row in the asked table.
 - **What it reports.** One line per attempt, attempt 2's saying that it ran against what attempt 1
   left with no reseed, what it found already done, the change it made, the path it took and
-  whether the digest proves it started from attempt 1's saved work. `attempt.json` holds both
-  attempts, `attempt-report.txt` both rows and the second beside the first, and each attempt's
-  `site.json` and picture are in `attempt-1/` and `attempt-2/`. In `site.json`, `activity` is the
+  whether the digest proves it started from the attempt before's saved work. `attempt.json` holds every
+  attempt, `attempt-report.txt` every row and each later one beside the one before, and each attempt's
+  `site.json` and picture are in `attempt-1/`, `attempt-2/` and so on. In `site.json`, `activity` is the
   site's record of that attempt alone, and `activityBefore` what it already held.
-- **How it is proven to have started from the first.** Core's own read: `get-task-attempt`'s
+- **Every attempt is proven against the one before.** `runAttemptSeries` runs `proveContinuation` on
+  each consecutive pair and keeps all of them (`series.continuations`, one per later attempt, each held
+  or refused with its reasons). The run passes only when every attempt's answer is right, no attempt
+  waits for a person and every continuation held. A refusal on any pair exits 1.
+- **The deterministic summary.** `AttemptSeries.deterministic` covers attempts 2..N: how many were
+  asked and ran (a series that stops short says so), and for each its path, the Flow it ran, whether
+  its continuation held, its model calls by kind and its time, with the count of zero-call attempts and
+  whether all held. `attempt.json`, the stdout JSON line and `renderAttemptSeries` list every later
+  attempt, so one that spent calls is never averaged away. One plain line, `NOT DETERMINISTIC: ...`,
+  names each later attempt that spent model calls, took any path other than `run_flow`, or was not
+  proven to start from the one before; it is absent when none did. `ATTEMPT_REPORT_SCHEMA_VERSION` is
+  `0.3`: `continuations` replaced `secondStartedFromFirst`, and validation checks that the summary says
+  what the rows and continuations say.
+- **An attempt's calls are all of them, by kind.** A row's `calls` is the chat's reading of the typed
+  instruction (`interpretation`) plus the judge plus the decisions, shown as
+  `calls 2 (interpretation 1, judge 1, decisions 0)` (`callKinds`). Core's attempt record counts the
+  decisions and the judge but not the interpretation, so the Lab adds the interpretation once and takes
+  the judge out of Core's count to get the decisions: nothing is counted twice. The interpretation and
+  judge counts come from the run's step log (`steps/`, the model-backed `chat` and `judge` steps logged
+  between one attempt's end and the next's), the same slice the speed section reads, for a scripted and a
+  live run alike. That attribution assumes attempts run one after another, as they do here. When the log
+  cannot say, `callKinds` is absent and the row says `(not split by kind)`: Core's own count, unsplit.
+  `NOT DETERMINISTIC` is the line's prefix when a later attempt made decisions, took another path, was
+  not proven to continue the one before or did not run; when later attempts made only the interpretation and
+  the judge, the line says exactly that and is not worded as exploring.
+- **A run that stops short keeps what ended.** When a request the script did not expect, a stuck wait or
+  a throw ends the run, `attempt.json` and `attempt-report.txt` still carry the series of every attempt that
+  ended and was scored (rows, continuations, per-attempt deterministic lines and summary). An attempt the
+  run had typed and followed is reported as started, with its browser steps and the request refused
+  ("refused at request 4 of kind loop_verification"), never as "did not start".
+- **`--attempts 1` is diagnosis only.** One attempt cannot show the loop pays off, so its status is
+  `diagnosis_only` (never `passed`) however right the answer, and the report says so. It exits 0 when
+  the answer was right and 1 otherwise. The live guards read `diagnosis_only` as no failure: it does
+  not trip the `unchanged` rule and is not a facility failure.
+- **How it is proven to have started from the one before.** Core's own read: `get-task-attempt`'s
   `attempt.startedFrom` (the digest of the saved steps it found, and what it did with them) against
   `saved.stepsDigest` of the attempt before. A row with no such read is refused
   (`proveContinuation`), and a refused proof exits 1 however right the answer.
@@ -2110,14 +2148,14 @@ turn sits under the first. Its baseline is read when it starts, and:
   Stop or a wait with nobody coming has not left a settled task, and an empty balance stops paid
   work. It says so and exits 1. A first attempt whose budget ran out goes on: the second is held to
   what is still asked. `attemptCanGoOn` holds the list.
-- **`--restart-between`: attempt 2 the day after.** Once attempt 1 has ended, Core is stopped and
+- **`--restart-between`: each later attempt the day after.** Before every later attempt, once the one before has ended, Core is stopped and
   started again on the same ports and stores (`coordinator.ts`, `restartCore`), and the browser comes
   back as a person's does (`attempt-lane/live/attempt/restart-core.ts`): nothing in it is touched while
   Core is down, the extension reconnects by itself, and the chat that was open takes the next message.
   Only a chat that cannot take one is opened again, as a person would, and the run says which. The
   Lab's control client signs in again, since its session belonged to the Core that stopped.
   `attempt.json` keeps it as `restartedBetween` (seconds to reconnect, the model key's reading, the
-  chat's state), and the report's first line says it. It needs `--attempts 2`. This is the proof that
+  chat's state), and the report's first line says it. It needs `--attempts 2` or more. This is the proof that
   a saved Flow, its saved reads and its checked states are all on disk and need nothing a process held.
 - **A person's Run again, with the script form `run-again`.** Attempt 2 is a press of Run again on
   attempt 1's answer in the panel (`attempt-lane/live/press-run-again.ts`), not words typed. Core starts
@@ -2127,6 +2165,15 @@ turn sits under the first. Its baseline is read when it starts, and:
   answer are judged as for any attempt. Its line says which acts it did again, found as asked, undid or
   did not do. The Lab's lasting view does not say which name is a count, so a count left as it stood
   reads as found as asked.
+- **Where each attempt's time went: the speed section (task speed S0, t888).** After each attempt the
+  report adds `Speed of attempt N` (`attempt-lane/live/attempt/speed.ts`, kept in `attempt.json` as
+  `speed`), summed from the step logs the attempt wrote: wall time; the model's decisions, split into
+  thinking and output by token (time to first token is not logged); the browser's time split into the
+  page's own action and the overhead around it, from the spans each node run records (`look.before`,
+  `prepare`, `permission`, `act`, `look.after`, `press.settle`, `compose`, `send.*`, `page.*`,
+  `sanitize`); the judge, the chat's interpretation, other tools and Core's gaps between steps; and one
+  line per node type with the mean of every span. A saved Flow's replay is not split per step yet, so a
+  later attempt's browser time shows as gaps.
 
 **What a second attempt finds, on the road as it stands.** Core runs what the task saved, trusted or
 not: `partly_works` and `unproven` does not stop it. Since t869 the same words carry what the task
