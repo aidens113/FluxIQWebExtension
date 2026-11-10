@@ -45,6 +45,7 @@ import {
 } from "./failure";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl, screenedWebLlmText, type WebLlmPageEvidence } from "./llm-evidence";
 import { webLastingActStatement } from "./lasting-act-statement";
+import { recordWebCommandSpans } from "./llm-evidence/node-run/timing";
 
 export type WebAutomationRuntimeAdapterOptions = {
   fluxiq: FluxIQ;
@@ -105,6 +106,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   // sent, so the client keeps its own default, as it did before.
   if (command.timeoutMs !== undefined && Number.isFinite(command.timeoutMs) && command.timeoutMs > 0) request.timeoutMs = command.timeoutMs;
   const result = await dispatchWebAutomationOutput(fluxiq, request);
+  // Timed as an explored step is, into the Flow run's step when one is open (task speed S0, `llm-evidence/node-run/timing/`).
+  recordWebCommandSpans(outputId, startedAt, Date.now(), result.status, jsonObject(result.payload?.result));
   const message = result.error ?? dispatchPayloadMessage(result.payload);
   // The command's own status, never a success flag. `timed_out` and
   // `cancelled` reach Core as themselves so `failureForCommandStatus`

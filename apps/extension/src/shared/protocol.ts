@@ -690,7 +690,20 @@ export type BrowserActionType = WebAutomationActionType;
  */
 export type BrowserActionCommand = WebAutomationActionCommand;
 
-export type BrowserActionResult = WebAutomationActionResult<DomElementDescriptor, DomSnapshot>;
+/**
+ * What the content script saw of its own document's navigation while an action
+ * ran (task speed S10, `content/action-runtime/navigation-watch.ts`): `began`
+ * when the page's Navigation API reported a navigation leaving the document,
+ * or the document began to unload. The worker reads it to know a press needs
+ * no wait for a navigation to start (`runtime/click-landing.ts`); it is never
+ * sent on to Core, whose payload names its fields one by one.
+ */
+export type ActionNavigationSeen = { began: boolean };
+
+export type BrowserActionResult = WebAutomationActionResult<DomElementDescriptor, DomSnapshot> & {
+  /** Absent where the page offers no Navigation API to watch, or the control opens its page in another browsing context. */
+  navigation?: ActionNavigationSeen | undefined;
+};
 
 export type {
   WebAutomationActionStatus as BrowserActionStatus,
