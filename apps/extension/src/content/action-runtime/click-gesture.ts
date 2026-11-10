@@ -11,6 +11,8 @@
 // never sees a bare click at all. That is as true of a promotion's close glyph
 // as of a product link.
 
+import { actedClock } from "./acted-at";
+
 /** A viewport coordinate the press is aimed at. */
 export type ClickPoint = { x: number; y: number };
 
@@ -20,6 +22,7 @@ export type ClickPoint = { x: number; y: number };
  * where a link's in-place watch starts.
  */
 export function dispatchClickGesture(element: Element, point: ClickPoint, beforePress?: () => void): boolean {
+  actedClock.note();
   const base: PointerEventInit = {
     bubbles: true,
     cancelable: true,

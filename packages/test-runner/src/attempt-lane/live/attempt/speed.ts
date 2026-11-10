@@ -95,7 +95,8 @@ function spansOf(meta: Record<string, unknown>): Span[] {
 /** The page's own work on a step's act: `page.*` spans inside its `act` span, or, for a look with no act, every `page.*` span. */
 function actionMs(spans: readonly Span[]): number {
   const pages = spans.filter((span) => span.name.startsWith("page."));
-  const act = spans.find((span) => span.name === "act");
+  // A node run's act is `act`; a Flow run's step dispatches its act as `dispatch` (Core `engine/automation/node-execution/attempt.ts`).
+  const act = spans.find((span) => span.name === "act") ?? spans.find((span) => span.name === "dispatch");
   const inAct = act ? pages.filter((span) => span.at >= act.at && span.at <= act.at + act.ms) : pages;
   return inAct.reduce((sum, span) => sum + span.ms, 0);
 }
@@ -140,7 +141,8 @@ export async function attemptSpeed(stepsDirectory: string, skip = 0): Promise<At
       speed.decisions.thinkingMs += thinking;
       speed.decisions.outputMs += ms - thinking;
       speed.decisions.uncachedInputTokens += number(usage.cacheMissInputTokens);
-    } else if (kind === "tool" || kind === "test") {
+    } else if (kind === "tool" || kind === "test" || kind === "flow") {
+      // A `flow` step is one node of a saved Flow's run, which no tool call wraps (Core `step-log/flow-step.ts`, task speed S10).
       const spans = spansOf(meta);
       const browser = spans.some((span) => span.name.startsWith("send."));
       if (!browser && spans.length > 0) {
@@ -161,7 +163,8 @@ export async function attemptSpeed(stepsDirectory: string, skip = 0): Promise<At
       speed.browser.ms += ms;
       speed.browser.actionMs += action;
       speed.browser.overheadMs += Math.max(0, ms - action);
-      const key = (node ?? "unknown").replace(/^web\.output\./u, "");
+      const named = (node ?? "unknown").replace(/^web\.output\./u, "");
+      const key = kind === "flow" ? `${named} (Flow run)` : named;
       const entry = nodes.get(key) ?? { steps: 0, stepMs: 0, actionMs: 0, spans: new Map<string, number>() };
       entry.steps += 1;
       entry.stepMs += ms;

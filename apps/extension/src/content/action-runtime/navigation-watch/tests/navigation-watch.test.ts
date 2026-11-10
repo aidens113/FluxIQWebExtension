@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { opensElsewhere, watchActionNavigation } from "..";
+import { WINDOW_OPEN_EVENT } from "../../../../shared/request-start-event";
 
 type Attributes = Record<string, string>;
 
@@ -35,7 +36,7 @@ function control(own: Attributes = {}, around: { link?: Attributes; form?: Attri
 test("a press that leaves nothing says no navigation began", () => {
   const { view } = page();
   const watch = watchActionNavigation(view);
-  assert.deepEqual(watch.seen(control()), { began: false });
+  assert.deepEqual(watch.seen(control()), { began: false, opened: false });
 });
 
 test("a navigation leaving the document, or the document unloading, says one began", () => {
@@ -43,7 +44,7 @@ test("a navigation leaving the document, or the document unloading, says one beg
     const current = page();
     const watch = watchActionNavigation(current.view);
     begin(current);
-    assert.deepEqual(watch.seen(control()), { began: true });
+    assert.deepEqual(watch.seen(control()), { began: true, opened: false });
   }
 });
 
@@ -51,15 +52,15 @@ test("a fragment or history move stays in the document and is no navigation", ()
   const current = page();
   const watch = watchActionNavigation(current.view);
   current.navigate(true);
-  assert.deepEqual(watch.seen(control()), { began: false });
+  assert.deepEqual(watch.seen(control()), { began: false, opened: false });
 });
 
 test("what happens after the reply is not the action's", () => {
   const current = page();
   const watch = watchActionNavigation(current.view);
-  assert.deepEqual(watch.seen(control()), { began: false });
+  assert.deepEqual(watch.seen(control()), { began: false, opened: false });
   current.navigate(false);
-  assert.deepEqual(watch.seen(control()), { began: false });
+  assert.deepEqual(watch.seen(control()), { began: false, opened: false });
 });
 
 test("a page with no Navigation API says nothing, so the worker keeps its wait", () => {
@@ -73,11 +74,18 @@ test("a control whose page opens in another browsing context says nothing", () =
     assert.equal(watchActionNavigation(view).seen(opens), undefined);
   }
   assert.equal(watchActionNavigation(page({ baseTarget: "_blank" }).view).seen(control()), undefined, "the document's <base target>");
-  assert.deepEqual(watchActionNavigation(view).seen(control({}, { link: { target: "_self" } })), { began: false }, "its own context");
+  assert.deepEqual(watchActionNavigation(view).seen(control({}, { link: { target: "_self" } })), { began: false, opened: false }, "its own context");
 });
 
 test("an action with no control of its own is answered for the document", () => {
   const { view } = page();
-  assert.deepEqual(watchActionNavigation(view).seen(undefined), { began: false });
+  assert.deepEqual(watchActionNavigation(view).seen(undefined), { began: false, opened: false });
   assert.equal(opensElsewhere(control({}, { link: { target: " _SELF " } }), undefined), false);
+});
+
+test("a window.open the page world announces is reported, so the worker waits for its tab", () => {
+  const current = page();
+  const watch = watchActionNavigation(current.view);
+  (current.view as unknown as EventTarget).dispatchEvent(new Event(WINDOW_OPEN_EVENT));
+  assert.deepEqual(watch.seen(control()), { began: false, opened: true });
 });

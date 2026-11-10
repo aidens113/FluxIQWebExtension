@@ -32,6 +32,7 @@
 // Nothing here presses, types into or reloads the check. What leaves the frame
 // is only what was concluded and when, never the check's words.
 
+import type { PressAnswered } from "../ignored-press";
 import { robotCheckIn, type RobotCheckKind } from "../challenge-evidence";
 
 /** What a press's robot check came to, as far as it may be reported. */
@@ -49,9 +50,12 @@ export type RobotCheckWatch = {
    * Resolves once the press's answer is known: a sighting, or `undefined` when
    * no check appeared within `windowMs`, the press was answered otherwise, or
    * the document began to leave. A self-clearing check is followed for up to
-   * `waitMs` from when it was seen. Stops the watch.
+   * `waitMs` from when it was seen. With `answered`, the window also closes
+   * once every request the press began has answered
+   * (`../ignored-press/request-answers.ts`, task speed S10): a check the server
+   * puts up is that answer. Stops the watch.
    */
-  settle(windowMs: number, waitMs: number): Promise<RobotCheckSighting | undefined>;
+  settle(windowMs: number, waitMs: number, answered?: PressAnswered): Promise<RobotCheckSighting | undefined>;
   /** Stops without waiting; safe to call more than once. */
   stop(): void;
 };
@@ -85,7 +89,9 @@ export function watchRobotCheck(pressed: Element, probe: RobotCheckProbe = pageP
 
   return {
     stop,
-    settle(windowMs, waitMs) {
+    settle(windowMs, waitMs, answered) {
+      /** Set once the press's requests have all answered: the window is over, as at its end. */
+      let closedEarly = false;
       /** When a self-clearing check was first seen, once one has been. */
       let seenAt: number | undefined;
       const sighting = (outcome: RobotCheckSighting["outcome"], now: number): RobotCheckSighting => ({
@@ -103,7 +109,7 @@ export function watchRobotCheck(pressed: Element, probe: RobotCheckProbe = pageP
             seenAt = now;
             return "open";
           }
-          if (leaving || !pressed.isConnected || now - startedAt >= windowMs) return "none";
+          if (leaving || !pressed.isConnected || closedEarly || now - startedAt >= windowMs) return "none";
           return "open";
         }
         if (leaving) return "none";
@@ -126,13 +132,26 @@ export function watchRobotCheck(pressed: Element, probe: RobotCheckProbe = pageP
           if (found === "open") return;
           clearInterval(poll);
           clearTimeout(windowEnd);
+          clearTimeout(early);
+          stopAnswer();
           stop();
           resolve(answer(found));
         };
+        // One task after the last answer, when the page's own handling of it has run.
+        let early: ReturnType<typeof setTimeout> | undefined;
+        const answeredNow = (): void => {
+          if (early !== undefined || answered?.answered() !== true) return;
+          early = setTimeout(() => {
+            closedEarly = true;
+            tick();
+          }, 0);
+        };
+        const stopAnswer = answered?.onAnswer(answeredNow) ?? (() => undefined);
         const poll = setInterval(tick, CHECK_INTERVAL_MS);
         // One look exactly as the window closes, so a press that put no check
         // up is released then, not up to an interval later.
         const windowEnd = setTimeout(tick, Math.max(0, startedAt + windowMs - Date.now()));
+        answeredNow();
       });
     }
   };

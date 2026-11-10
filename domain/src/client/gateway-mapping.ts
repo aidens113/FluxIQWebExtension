@@ -378,8 +378,16 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     toggleBefore: result.status === "succeeded" && result.skipped === undefined ? webToggleSignatureValue(result.toggleBefore) as JsonObject | undefined : undefined,
     route: result.route === "ended" && nextPage?.outcome === "ended" ? "ended" : undefined,
     startedAt: result.startedAt,
-    finishedAt: result.finishedAt
+    finishedAt: result.finishedAt,
+    // When the page was first acted on, by the same clock: a step's decision-to-press ends here (task speed S10).
+    actedAt: actedAtOf(result)
   });
+}
+
+/** The client's `actedAt`, a number and nothing else; the result's type predates it, so it is read off the value. */
+function actedAtOf(result: WebAutomationActionResult): number | undefined {
+  const actedAt = (result as { actedAt?: unknown }).actedAt;
+  return typeof actedAt === "number" && Number.isFinite(actedAt) ? actedAt : undefined;
 }
 
 /**

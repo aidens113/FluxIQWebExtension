@@ -306,3 +306,45 @@ test("a line saying the page needs something first wins over a busy line seen in
   const found = await watchRateLimitNotice(pressedElement(), probe).settle(200);
   assert.equal(found?.needs, true);
 });
+
+// Task speed S10: once the server has answered every request the press began
+// (`ignored-press/request-answers.ts`), the window is over.
+/** A press's requests, all answered once `at` has passed, announced through `announce`. */
+function serverAnswers(at: number): { answered(): boolean; onAnswer(listener: () => void): () => void; announce(): void } {
+  const listeners = new Set<() => void>();
+  return {
+    answered: () => Date.now() >= at,
+    onAnswer(listener) { listeners.add(listener);
+      return () => listeners.delete(listener); },
+    announce() { for (const listener of listeners) listener(); }
+  };
+}
+
+test("a press whose requests have all answered with no notice ends the window then, not at its end", async () => {
+  const watch = watchRateLimitNotice(pressedElement(), page({ after: () => [], words: {} }));
+  const server = serverAnswers(Date.now() + 60);
+  const startedAt = Date.now();
+  setTimeout(() => server.announce(), 60);
+  assert.equal(await watch.settle(500, server), undefined);
+  const waited = Date.now() - startedAt;
+  assert.ok(waited >= 55 && waited < 300, `waited ${waited} ms`);
+});
+
+test("a refusal the server's answer brought is still found when the answer ends the window", async () => {
+  const notice = { name: "notice" };
+  const shownAt = Date.now() + 40;
+  const watch = watchRateLimitNotice(pressedElement(), page({ after: () => (Date.now() >= shownAt ? [notice] : []), words: { notice: FEED_NOTICE } }));
+  const server = serverAnswers(shownAt);
+  setTimeout(() => server.announce(), 45);
+  const found = await watch.settle(500, server);
+  assert.equal(found?.retryAfterMs, 12_500);
+});
+
+test("a press that began no request, or whose requests are still out, keeps the whole window", async () => {
+  const watch = watchRateLimitNotice(pressedElement(), page({ after: () => [], words: {} }));
+  const never = serverAnswers(Number.POSITIVE_INFINITY);
+  const startedAt = Date.now();
+  setTimeout(() => never.announce(), 20);
+  assert.equal(await watch.settle(200, never), undefined);
+  assert.ok(Date.now() - startedAt >= 195);
+});

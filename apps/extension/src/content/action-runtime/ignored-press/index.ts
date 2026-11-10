@@ -13,6 +13,7 @@ export { extraPressesMade, noteExtraPress } from "./command-presses";
 export { MAX_EXTRA_PRESSES, pressAgain } from "./press-again";
 export { pressScope } from "./press-scope";
 export { markRequestStarts } from "./request-start-mark";
+export { watchPressAnswered } from "./request-answers";
 export { scopeRoots } from "./scope-roots";
 export { lookUntilSettled } from "./settled-look";
 export { listenForPressAnswer } from "./page-press-listener";
@@ -22,4 +23,5 @@ export type { IgnoredPressAnswer, IgnoredPressProbe, IgnoredPressWatch } from ".
 export type { PressListener, PressPage } from "./page-press-listener";
 export type { PressSignal } from "./press-again";
 export type { RequestStartMark } from "./request-start-mark";
+export type { PressAnswered } from "./request-answers";
 export type { SettledLook, SettledLookPage } from "./settled-look";

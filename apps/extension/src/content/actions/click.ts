@@ -143,6 +143,7 @@ import type {
   IgnoredPressWatch,
   InPlaceEffect,
   InPlaceEffectWatch,
+  PressAnswered,
   RateLimitNotice,
   RateLimitWatch,
   RobotCheckSighting,
@@ -429,16 +430,20 @@ async function press(
   let notice = undefined as RateLimitWatch | undefined;
   let check = undefined as RobotCheckWatch | undefined;
   let ignored = undefined as IgnoredPressWatch | undefined;
+  // Whether the server has answered every request the press began, which closes
+  // the notice and check windows as their end does (task speed S10).
+  let served = undefined as PressAnswered | undefined;
   try {
     const accepted = dispatchClickGesture(element, point, () => {
       notice = deps.watchRateLimitNotice(element);
       check = deps.watchRobotCheck(element);
       ignored = deps.watchIgnoredPress(element);
+      served = deps.watchPressAnswered?.(element);
     });
     const windowMs = rateLimitWindowMs(action);
     const [refused, sighting, answer] = await Promise.all([
-      notice ? notice.settle(windowMs) : undefined,
-      check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt)) : undefined,
+      notice ? notice.settle(windowMs, served) : undefined,
+      check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt), served) : undefined,
       ignored ? ignored.settle(windowWithin(action, IGNORED_PRESS_WINDOW_MS)) : undefined
     ]);
     const changedOnly = answer !== undefined && answer.seen.length === 1 && answer.seen[0] === "change";

@@ -14,8 +14,10 @@ import { installDialogOverride } from "./dialog-override";
 import { installPressListenerWatch } from "./press-listeners";
 import { installRequestStartWatch } from "./request-starts";
 import { installPressWorkWatch } from "./press-work";
+import { installWindowOpenWatch } from "./window-opens";
 
 installDialogOverride();
 installPressListenerWatch();
 installRequestStartWatch();
 installPressWorkWatch();
+installWindowOpenWatch();

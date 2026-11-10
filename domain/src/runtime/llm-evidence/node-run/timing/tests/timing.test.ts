@@ -97,3 +97,15 @@ test("a command recorded outside a node run is split into its send and the page'
     ["send.capture_snapshot", 1_060, 1_070, undefined]
   ]);
 });
+
+// Task speed S10: the page's own moment of acting, as a point in the step, is
+// where a step's decision-to-press ends; a moment outside the page's own start
+// and end is not one.
+test("a command whose page says when it acted records that moment as a point", async () => {
+  const collected = automationStudioLlmStepLogSpans.collect(async () => {
+    recordWebCommandSpans("web.dom.click", 1_000, 1_050, "succeeded", { startedAt: 1_010, finishedAt: 1_040, actedAt: 1_020 });
+    recordWebCommandSpans("web.dom.click", 1_100, 1_150, "succeeded", { startedAt: 1_110, finishedAt: 1_140, actedAt: 2_000 });
+  });
+  await collected.done;
+  assert.deepEqual(collected.spans().filter((span) => span.name === "pressed").map((span) => [span.startedAt, span.finishedAt, span.detail]), [[1_020, 1_020, "click"]]);
+});

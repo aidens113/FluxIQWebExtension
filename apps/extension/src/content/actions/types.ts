@@ -20,6 +20,7 @@ import type {
   IgnoredPressWatch,
   InPlaceEffectWatch,
   KeyboardCapability,
+  PressAnswered,
   RateLimitNotice,
   RateLimitWatch,
   ResolvedTarget,
@@ -129,6 +130,13 @@ export type ContentActionDependencies = {
    * is the one the click verb makes once more.
    */
   watchIgnoredPress(pressed: Element): IgnoredPressWatch;
+  /**
+   * Whether the server has answered every request a press began, made just
+   * before the press (`action-runtime/ignored-press/request-answers.ts`, task
+   * speed S10). Absent, or undefined where the page world cannot say, the
+   * press's notice and check windows run to their end.
+   */
+  watchPressAnswered?(pressed: Element): PressAnswered | undefined;
 
   /**
    * Succeeds, or fails with `output_not_observed` when the validation did not

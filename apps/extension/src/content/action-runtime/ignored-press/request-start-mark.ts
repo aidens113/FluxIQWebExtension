@@ -7,10 +7,14 @@
 // ignored and was pressed again. The page world sees the request as the page
 // makes it, and that is the press reaching the server, whatever the page shows.
 
-import { REQUEST_HEALTH_EVENT, REQUEST_MARK_EVENT, REQUEST_SINCE_EVENT } from "../../../shared/request-start-event";
+import { REQUEST_HEALTH_EVENT, REQUEST_MARK_EVENT, REQUEST_PENDING_EVENT, REQUEST_SINCE_EVENT } from "../../../shared/request-start-event";
 
-/** A mark made on a pressed element: `begunSince` is true once the page has begun any request after it. */
-export type RequestStartMark = { begunSince(): boolean; healthy?(): boolean };
+/**
+ * A mark made on a pressed element: `begunSince` is true once the page has
+ * begun any request after it, and `pendingSince` while one of those has not
+ * answered (task speed S10).
+ */
+export type RequestStartMark = { begunSince(): boolean; healthy?(): boolean; pendingSince?(): boolean };
 
 /**
  * Marks `pressed` in the page world. Undefined where nothing answers -- a
@@ -21,5 +25,5 @@ export function markRequestStarts(pressed: Element): RequestStartMark | undefine
   if (typeof CustomEvent !== "function" || typeof pressed.dispatchEvent !== "function") return undefined;
   const ask = (type: string): boolean => !pressed.dispatchEvent(new CustomEvent(type, { cancelable: true, composed: true }));
   if (!ask(REQUEST_MARK_EVENT)) return undefined;
-  return { begunSince: () => ask(REQUEST_SINCE_EVENT), healthy: () => ask(REQUEST_HEALTH_EVENT) };
+  return { begunSince: () => ask(REQUEST_SINCE_EVENT), healthy: () => ask(REQUEST_HEALTH_EVENT), pendingSince: () => ask(REQUEST_PENDING_EVENT) };
 }

@@ -21,6 +21,7 @@
 // is the new tab's and fires no event here.
 
 import type { ActionNavigationSeen } from "../../../shared/protocol";
+import { WINDOW_OPEN_EVENT } from "../../../shared/request-start-event";
 import { opensElsewhere } from "./opens-elsewhere";
 
 export type ActionNavigationWatch = {
@@ -45,9 +46,15 @@ export function watchActionNavigation(view: Window | undefined = typeof window =
   const onLeave = (): void => {
     began = true;
   };
+  // A browsing context the page opens with `window.open` fires nothing here; the page world says it (`page-world/window-opens.ts`).
+  let opened = false;
+  const onOpen = (): void => {
+    opened = true;
+  };
   navigation.addEventListener("navigate", onNavigate);
   view.addEventListener("beforeunload", onLeave);
   view.addEventListener("pagehide", onLeave);
+  view.addEventListener(WINDOW_OPEN_EVENT, onOpen);
   let stopped = false;
   const stop = (): void => {
     if (stopped) return;
@@ -55,12 +62,13 @@ export function watchActionNavigation(view: Window | undefined = typeof window =
     navigation.removeEventListener("navigate", onNavigate);
     view.removeEventListener("beforeunload", onLeave);
     view.removeEventListener("pagehide", onLeave);
+    view.removeEventListener(WINDOW_OPEN_EVENT, onOpen);
   };
   return {
     seen(target) {
       stop();
       if (target !== undefined && opensElsewhere(target, view.document)) return undefined;
-      return { began };
+      return { began, opened };
     },
     stop
   };
