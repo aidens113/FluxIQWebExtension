@@ -36,6 +36,6 @@ export async function runAttemptSeries(input: { task: AttemptTask; driver: Attem
     if (ordinal < input.attempts) stoppedShort = await input.mayGoOn?.(outcome);
   }
   const continuations = outcomes.slice(1).map((later, index) => proveContinuation(outcomes[index]!, later));
-  const series = attemptSeries(task, outcomes.map((outcome) => attemptReportRow(task, outcome)), continuations[0] ?? null);
+  const series = attemptSeries(task, outcomes.map((outcome) => attemptReportRow(task, outcome)), continuations, input.attempts, new Map(outcomes.map((outcome) => [outcome.record.ordinal, outcome.record.flowId ?? null])));
   return Object.freeze({ series, outcomes, continuations, ...(stoppedShort === undefined ? {} : { stoppedShort }) });
 }

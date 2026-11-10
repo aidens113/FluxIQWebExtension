@@ -4,7 +4,7 @@ import type { AttemptReportRow, RunAnswerScore } from "@fluxiq-web-extension/tes
 import { attemptResultLine } from "../result-line.js";
 
 const ANSWER: RunAnswerScore = { verdict: "right", ending: "result", wrongBecause: [], records: "held", finalState: "held", change: "held", shown: "held", repeatedActs: [], missingActs: [], unaskedChanges: [], storedRows: 5, shownRows: 5, flow: "unproven", standIns: ["model", "spend"] };
-const ROW = { schemaVersion: "0.1", taskId: "task-a", scenarioId: "local-classifieds", attempt: 1, path: "explore", calls: 26, inputTokens: 10, outputTokens: 1, usd: 1.31, ms: 70_000, liveSteps: 32, simulation: "not_run", answerVerdict: "right", oracleVerdict: null, flow: "unproven", repeatedActs: [], loopsCaught: {}, standIns: ["model", "spend"], live: false } satisfies AttemptReportRow;
+const ROW = { schemaVersion: "0.2", taskId: "task-a", scenarioId: "local-classifieds", attempt: 1, path: "explore", calls: 26, inputTokens: 10, outputTokens: 1, usd: 1.31, ms: 70_000, liveSteps: 32, simulation: "not_run", answerVerdict: "right", oracleVerdict: null, flow: "unproven", repeatedActs: [], loopsCaught: {}, standIns: ["model", "spend"], live: false } satisfies AttemptReportRow;
 const LATER: AttemptReportRow = { ...ROW, attempt: 2, path: "run_flow", calls: 1, against: { reseeded: false, foundDone: ["Three saved"], changed: [] } };
 
 test("a first attempt's line says nothing of an earlier one, and names its stand-ins", () => {

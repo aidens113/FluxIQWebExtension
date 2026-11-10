@@ -3,7 +3,7 @@
 
 import type { AnswerVerdict, AttemptStandIn, FlowScore, RepeatedActReport } from "./answer-score.js";
 
-export const ATTEMPT_REPORT_SCHEMA_VERSION = "0.1" as const;
+export const ATTEMPT_REPORT_SCHEMA_VERSION = "0.2" as const;
 
 /**
  * The paths and simulation words of Core's attempt record
@@ -76,8 +76,10 @@ export type AttemptSeries = {
   attemptsUntilDeterministic: number | null;
   /** Each later attempt beside the one before it: negative is less. */
   spendDeltas: { attempt: number; calls: number; tokens: number; usd: number; ms: number; liveSteps: number }[];
-  /** Whether attempt 2 was proven to have started from what attempt 1 saved (`AttemptContinuation`); `null` with one attempt. */
-  secondStartedFromFirst: boolean | null;
+  /** One proof per later attempt, each against the attempt before it (`AttemptContinuation`); empty with one attempt. */
+  continuations: AttemptContinuation[];
+  /** What attempts 2..N say about determinism; `null` when no later attempt was asked for (a diagnosis-only run). */
+  deterministic: AttemptDeterministicSummary | null;
 };
 
 /** Why the Lab holds that a later attempt began from an earlier one's saved work, each named so a false claim has nowhere to hide. */
@@ -87,4 +89,32 @@ export type AttemptContinuation = {
   held: boolean;
   /** Empty when `held`. */
   refused: string[];
+};
+
+/** One later attempt, by what it ran and whether it was proven to start from the one before. */
+export type AttemptDeterministicEntry = {
+  attempt: number;
+  path: AttemptPath;
+  /** The Flow it ran; `null` when it ran none (it explored). */
+  flowId: string | null;
+  /** Whether `continuations` held for this attempt. */
+  continuationHeld: boolean;
+  calls: number;
+  ms: number;
+};
+
+/**
+ * Attempts 2..N, which the standing rule asks for after every exploration: that they use the saved Flow, and how
+ * many model calls they make. Nothing here is averaged: each attempt is listed.
+ */
+export type AttemptDeterministicSummary = {
+  /** The later attempts asked for (attempts - 1). */
+  asked: number;
+  /** The later attempts that ran; less than `asked` when the series stopped short. */
+  ran: number;
+  attempts: AttemptDeterministicEntry[];
+  /** How many of the later attempts made no model call. */
+  zeroCallAttempts: number;
+  /** True only when every later attempt asked for ran and every continuation held. */
+  allHeld: boolean;
 };

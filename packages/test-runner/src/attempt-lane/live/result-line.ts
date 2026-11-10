@@ -16,7 +16,7 @@ function againstWords(row: AttemptReportRow, startedFromFirst: boolean | undefin
   if (!against) return "";
   const found = against.foundDone.length > 0 ? `it found already done: ${quoted(against.foundDone)}` : "it found none of the asked acts already done";
   const change = against.changed.length > 0 ? `It changed the site: ${quoted(against.changed)}` : "It changed nothing on the site";
-  const proof = startedFromFirst === undefined ? "" : startedFromFirst ? " It started from the first attempt's saved work, proven by the digest." : " That it started from the first attempt's saved work is not proven.";
+  const proof = startedFromFirst === undefined ? "" : startedFromFirst ? ` It started from attempt ${row.attempt - 1}'s saved work, proven by the digest.` : ` That it started from attempt ${row.attempt - 1}'s saved work is not proven.`;
   return ` It ran against what attempt ${row.attempt - 1} left, with no reseed; ${found}. ${change}. ${PATH_WORDS[row.path]}.${proof}`;
 }
 

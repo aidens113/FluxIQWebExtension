@@ -1,4 +1,4 @@
-import { assertAttemptSeries, ATTEMPT_REPORT_SCHEMA_VERSION, attemptCountsAsLive, type AttemptContinuation, type AttemptLoopsCaught, type AttemptReportRow, type AttemptSeries } from "@fluxiq-web-extension/test-contracts";
+import { assertAttemptSeries, ATTEMPT_REPORT_SCHEMA_VERSION, attemptCountsAsLive, type AttemptContinuation, type AttemptDeterministicSummary, type AttemptLoopsCaught, type AttemptReportRow, type AttemptSeries } from "@fluxiq-web-extension/test-contracts";
 import type { AttemptOutcome, AttemptTask } from "./driver.js";
 
 /** Core's ladder counts per pattern, summed: how many times each kind of loop was caught, however it was answered. */
@@ -34,8 +34,18 @@ export function attemptReportRow(task: AttemptTask, outcome: AttemptOutcome): At
   };
 }
 
-/** A task's rows in attempt order, with what follows from them and nothing else. */
-export function attemptSeries(task: AttemptTask, rows: readonly AttemptReportRow[], continuation: AttemptContinuation | null): AttemptSeries {
+/** What attempts 2..N say, in the order they ran. `null` when no later attempt was asked for. */
+export function deterministicSummary(rows: readonly AttemptReportRow[], continuations: readonly AttemptContinuation[], flowIds: ReadonlyMap<number, string | null>, asked: number): AttemptDeterministicSummary | null {
+  if (asked < 1) return null;
+  const attempts = rows.slice(1).map((row, index) => ({ attempt: row.attempt, path: row.path, flowId: flowIds.get(row.attempt) ?? null, continuationHeld: continuations[index]?.held === true, calls: row.calls, ms: row.ms }));
+  return { asked, ran: attempts.length, attempts, zeroCallAttempts: attempts.filter((entry) => entry.calls === 0).length, allHeld: attempts.length === asked && attempts.every((entry) => entry.continuationHeld) };
+}
+
+/**
+ * A task's rows in attempt order, with what follows from them and nothing else. `asked` is the number of attempts the
+ * run asked for in all; `flowIds` is the Flow each attempt ran, by attempt number.
+ */
+export function attemptSeries(task: AttemptTask, rows: readonly AttemptReportRow[], continuations: readonly AttemptContinuation[], asked: number, flowIds: ReadonlyMap<number, string | null>): AttemptSeries {
   const ordered = [...rows].sort((left, right) => left.attempt - right.attempt);
   const series: AttemptSeries = {
     schemaVersion: ATTEMPT_REPORT_SCHEMA_VERSION,
@@ -55,7 +65,8 @@ export function attemptSeries(task: AttemptTask, rows: readonly AttemptReportRow
         liveSteps: row.liveSteps - before.liveSteps,
       };
     }),
-    secondStartedFromFirst: continuation === null ? null : continuation.held,
+    continuations: continuations.map((proof) => ({ ...proof, refused: [...proof.refused] })),
+    deterministic: deterministicSummary(ordered, continuations, flowIds, asked - 1),
   };
   assertAttemptSeries(series);
   return series;
@@ -71,6 +82,36 @@ function comparedWords(series: AttemptSeries): string[] {
   ].join(", ")}`);
 }
 
+/** Each later attempt, one line, with its path, Flow, continuation (held, or refused with its reasons), model calls and time. */
+function deterministicLines(series: AttemptSeries): string[] {
+  const { deterministic } = series;
+  if (deterministic === null) return ["deterministic attempts: none asked for (a diagnosis-only run, which is never a pass)"];
+  const each = deterministic.attempts.map((entry, index) => {
+    const proof = series.continuations[index];
+    const continuation = proof === undefined ? "not proven" : proof.held ? "held" : `refused (${proof.refused.join(", ")})`;
+    return `deterministic attempt ${entry.attempt}: path ${entry.path}, flow ${entry.flowId ?? "none"}, continuation ${continuation}, ${entry.calls} model calls, ${(entry.ms / 1000).toFixed(1)} s`;
+  });
+  const summary = `deterministic attempts: ${deterministic.ran} of ${deterministic.asked} ran, ${deterministic.zeroCallAttempts} with no model call, continuations ${deterministic.allHeld ? "all held" : "not all held"}`;
+  return [...each, summary];
+}
+
+/** One plain line naming each later attempt that spent model calls or strayed from the saved Flow. Never averaged away; empty when none did. */
+export function laterAttemptNotes(series: AttemptSeries): string[] {
+  const { deterministic } = series;
+  if (deterministic === null) return [];
+  const notes = deterministic.attempts.flatMap((entry, index) => {
+    const reasons = [
+      ...(entry.calls > 0 ? [`it spent ${entry.calls} model calls`] : []),
+      ...(entry.path !== "run_flow" ? [`it did not just run the saved Flow (path ${entry.path})`] : []),
+      ...(series.continuations[index]?.held === false ? [`it was not proven to start from the attempt before (${series.continuations[index]!.refused.join(", ")})`] : []),
+    ];
+    return reasons.length === 0 ? [] : [`attempt ${entry.attempt}: ${reasons.join("; ")}`];
+  });
+  const stoppedShort = deterministic.ran < deterministic.asked ? [`${deterministic.asked - deterministic.ran} of the ${deterministic.asked} later attempts asked for did not run`] : [];
+  const all = [...notes, ...stoppedShort];
+  return all.length === 0 ? [] : [`NOT DETERMINISTIC: ${all.join(". ")}.`];
+}
+
 /** The series as a person reads it. Stand-ins are named beside the numbers they produced. */
 export function renderAttemptSeries(series: AttemptSeries): string {
   const header = "attempt | path | calls | tokens | from cache | usd | ms | live steps | simulation | answer | oracle | flow | repeated acts | loops caught | counted as | stand-ins";
@@ -81,6 +122,5 @@ export function renderAttemptSeries(series: AttemptSeries): string {
     row.live ? "live" : "not live",
     row.standIns.join(",") || "none",
   ].join(" | "));
-  const started = series.secondStartedFromFirst === null ? "" : `second attempt started from the first's draft: ${series.secondStartedFromFirst ? "proven" : "refused"}`;
-  return [`task ${series.taskId} on ${series.scenarioId}`, header, ...lines, ...comparedWords(series), ...(started ? [started] : [])].join("\n");
+  return [`task ${series.taskId} on ${series.scenarioId}`, header, ...lines, ...comparedWords(series), ...deterministicLines(series), ...laterAttemptNotes(series)].join("\n");
 }

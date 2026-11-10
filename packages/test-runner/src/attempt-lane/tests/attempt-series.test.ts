@@ -8,7 +8,7 @@ import { resolveCreatedFlowRequest } from "../../flow-lane/index.js";
 import { catalogScenario, datasetTask } from "../../flow-lane/creation/tests/scenario-fixture.js";
 import type { AttemptDriver, AttemptOutcome, AttemptTask } from "../driver.js";
 import { proveContinuation } from "../continuation.js";
-import { attemptReportRow, attemptSeries, renderAttemptSeries } from "../report.js";
+import { attemptReportRow, attemptSeries, laterAttemptNotes, renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { scriptedSpend } from "../scripted/index.js";
 
@@ -61,7 +61,8 @@ test("the series reseeds the site before each attempt, on one workspace, and rep
   };
   const { series, continuations } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "reseed" });
   assert.deepEqual(calls, ["seed", "attempt-1", "seed", "attempt-2"]);
-  assert.equal(series.secondStartedFromFirst, true);
+  assert.deepEqual(series.continuations.map((proof) => proof.held), [true]);
+  assert.equal(series.deterministic?.allHeld, true);
   assert.equal(continuations[0]?.held, true);
   assert.deepEqual(series.spendDeltas.map(({ attempt, calls: delta }) => [attempt, delta]), [[2, -9]]);
   assert.equal(series.firstRightAttempt, 1);
@@ -78,7 +79,7 @@ test("left as it was, the site is seeded once, before the first attempt and neve
   };
   const { series, stoppedShort } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "as_left" });
   assert.deepEqual(calls, ["seed", "attempt-1", "attempt-2"]);
-  assert.equal(series.secondStartedFromFirst, true);
+  assert.equal(series.deterministic?.allHeld, true);
   assert.equal(stoppedShort, undefined);
 });
 
@@ -104,22 +105,66 @@ test("a series can stop short with its reason, and what ran is still reported", 
   const { series, outcomes, stoppedShort } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 2, between: "as_left", mayGoOn: async () => "the first was wrong" });
   assert.equal(outcomes.length, 1);
   assert.equal(stoppedShort, "the first was wrong");
-  assert.equal(series.secondStartedFromFirst, null);
+  assert.deepEqual(series.continuations, []);
+  assert.deepEqual(series.deterministic, { asked: 1, ran: 0, attempts: [], zeroCallAttempts: 0, allHeld: false }, "one later attempt asked for and none ran: not held");
+  assert.match(laterAttemptNotes(series).join(" "), /1 of the 1 later attempts asked for did not run/u);
+});
+
+const LATER_ZERO = (flowId = "f") => ({ path: "run_flow" as const, flowId, calls: 0, startedFrom: { state: "partly_works" as const, flowId: "f", draftDigest: "abc" } });
+
+test("four attempts prove each later one against the one before, and list every one of them", async () => {
+  const driver: AttemptDriver = { seedSite: async () => undefined, run: async (_task, ordinal) => (ordinal === 1 ? outcome(1) : outcome(ordinal, LATER_ZERO())) };
+  const { series, continuations } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 4, between: "as_left" });
+  assert.equal(continuations.length, 3);
+  assert.deepEqual(series.continuations.map(({ fromAttempt, toAttempt, held }) => [fromAttempt, toAttempt, held]), [[1, 2, true], [2, 3, true], [3, 4, true]]);
+  assert.deepEqual(series.deterministic, { asked: 3, ran: 3, attempts: [2, 3, 4].map((attempt) => ({ attempt, path: "run_flow", flowId: "f", continuationHeld: true, calls: 0, ms: 1000 })), zeroCallAttempts: 3, allHeld: true });
+  assert.deepEqual(laterAttemptNotes(series), [], "nothing to name when every later attempt only ran the saved Flow with no call");
+  const text = renderAttemptSeries(series);
+  for (const attempt of [2, 3, 4]) assert.match(text, new RegExp(`deterministic attempt ${attempt}: path run_flow, flow f, continuation held, 0 model calls`, "u"));
+  assert.match(text, /deterministic attempts: 3 of 3 ran, 3 with no model call, continuations all held/u);
+});
+
+test("a later attempt that spent calls or strayed is named, and one refused continuation means not all held", async () => {
+  const driver: AttemptDriver = {
+    seedSite: async () => undefined,
+    run: async (_task, ordinal) => {
+      if (ordinal === 1) return outcome(1);
+      if (ordinal === 3) return outcome(3, { path: "run_flow_then_repair", flowId: "f", calls: 5, startedFrom: { state: "partly_works", flowId: "f", draftDigest: "abc" }, saved: { state: "partly_works", flowId: "f", draftDigest: "abc" } });
+      if (ordinal === 4) return outcome(4, { path: "run_flow", flowId: "other", calls: 0, startedFrom: { state: "partly_works", flowId: "f", draftDigest: "abc" } });
+      return outcome(2, LATER_ZERO());
+    },
+  };
+  const { series } = await runAttemptSeries({ task: { ...task, scenario: { ...catalogScenario, id: "everything-store" } }, driver, attempts: 4, between: "as_left" });
+  assert.equal(series.deterministic?.allHeld, false);
+  assert.equal(series.deterministic?.zeroCallAttempts, 2);
+  assert.deepEqual(series.continuations.map((proof) => proof.held), [true, true, false]);
+  assert.deepEqual(series.continuations[2]?.refused, ["second_ran_another_flow"]);
+  const [note, ...more] = laterAttemptNotes(series);
+  assert.equal(more.length, 0, "one line");
+  assert.match(note!, /^NOT DETERMINISTIC: attempt 3: it spent 5 model calls; it did not just run the saved Flow \(path run_flow_then_repair\)\. attempt 4: it was not proven to start from the attempt before \(second_ran_another_flow\)\.$/u);
+  assert.match(renderAttemptSeries(series), /deterministic attempt 4: path run_flow, flow other, continuation refused \(second_ran_another_flow\), 0 model calls/u);
+});
+
+test("a series of one attempt has no deterministic summary, and says it is a diagnosis", () => {
+  const one = attemptSeries(task, [attemptReportRow(task, outcome(1))], [], 1, new Map());
+  assert.equal(one.deterministic, null);
+  assert.match(renderAttemptSeries(one), /none asked for \(a diagnosis-only run, which is never a pass\)/u);
 });
 
 test("a second attempt's row says it began on what the first left, and that is validated", () => {
   const against = { reseeded: false as const, foundDone: ["Three saved"], changed: [] };
   const row = attemptReportRow(task, { ...outcome(2, SECOND), against });
   assert.deepEqual(row.against, against);
-  assert.doesNotThrow(() => attemptSeries(task, [attemptReportRow(task, outcome(1)), row], null));
+  assert.doesNotThrow(() => attemptSeries(task, [attemptReportRow(task, outcome(1)), row], [proveContinuation(outcome(1), outcome(2, SECOND))], 2, new Map([[2, "f"]])));
   const reseeded: unknown = { ...row, against: { ...against, reseeded: true } };
-  assert.throws(() => attemptSeries(task, [attemptReportRow(task, outcome(1)), reseeded as AttemptReportRow], null), /reseeded/u);
+  assert.throws(() => attemptSeries(task, [attemptReportRow(task, outcome(1)), reseeded as AttemptReportRow], [proveContinuation(outcome(1), outcome(2, SECOND))], 2, new Map([[2, "f"]])), /reseeded/u);
 });
 
 test("what is printed sets the second beside the first", () => {
-  const text = renderAttemptSeries(attemptSeries(task, [attemptReportRow(task, outcome(1)), attemptReportRow(task, outcome(2, SECOND))], { fromAttempt: 1, toAttempt: 2, held: true, refused: [] }));
+  const text = renderAttemptSeries(attemptSeries(task, [attemptReportRow(task, outcome(1)), attemptReportRow(task, outcome(2, SECOND))], [{ fromAttempt: 1, toAttempt: 2, held: true, refused: [] }], 2, new Map([[2, "f"]])));
   assert.match(text, /attempt 2 beside attempt 1: 9 less calls/u);
-  assert.match(text, /second attempt started from the first's draft: proven/u);
+  assert.match(text, /deterministic attempt 2: path run_flow, flow f, continuation held, 1 model calls/u);
+  assert.match(text, /NOT DETERMINISTIC: attempt 2: it spent 1 model calls\./u, "a later attempt that made a call is named, not averaged away");
 });
 
 test("the lane refuses a scenario that is not one of the ten realistic ones", async () => {
@@ -131,8 +176,8 @@ test("a row carries the count of acts with no row only when the attempt had one,
   assert.equal("actsWithNoRow" in attemptReportRow(task, plain), false);
   const counted = attemptReportRow(task, { ...plain, record: { ...plain.record, actsWithNoRow: 2 } });
   assert.equal(counted.actsWithNoRow, 2);
-  assert.doesNotThrow(() => attemptSeries(task, [counted], null));
-  assert.throws(() => attemptSeries(task, [{ ...counted, actsWithNoRow: -1 }], null));
+  assert.doesNotThrow(() => attemptSeries(task, [counted], [], 1, new Map()));
+  assert.throws(() => attemptSeries(task, [{ ...counted, actsWithNoRow: -1 }], [], 1, new Map()));
 });
 
 test("a row carries every column the plan names, and the series follows from its rows", () => {
@@ -141,21 +186,21 @@ test("a row carries every column the plan names, and the series follows from its
   assert.equal(row.simulation, "not_run", "an attempt with no simulation says so");
   assert.equal(row.live, false, "a row with a stand-in is not live");
   assert.equal(row.loopsCaught.near_repeat, 2, "each pattern's ladder counts, summed");
-  const series = attemptSeries(task, [attemptReportRow(task, outcome(1, { answer: { verdict: "wrong", wrongBecause: ["records"], records: "failed" } })), attemptReportRow(task, outcome(2, { ...SECOND, answer: { flow: "replay_held" } }))], null);
+  const series = attemptSeries(task, [attemptReportRow(task, outcome(1, { answer: { verdict: "wrong", wrongBecause: ["records"], records: "failed" } })), attemptReportRow(task, outcome(2, { ...SECOND, answer: { flow: "replay_held" } }))], [{ fromAttempt: 1, toAttempt: 2, held: true, refused: [] }], 2, new Map([[2, "f"]]));
   assert.equal(series.firstRightAttempt, 2);
   assert.equal(series.attemptsUntilDeterministic, 2);
-  assert.equal(series.secondStartedFromFirst, null);
+  assert.equal(series.deterministic?.zeroCallAttempts, 0);
 });
 
 test("what is printed names each stand-in beside the numbers it produced", () => {
-  const text = renderAttemptSeries(attemptSeries(task, [attemptReportRow(task, outcome(1, { answer: { verdict: "wrong", wrongBecause: ["repeated_act"], repeatedActs: [{ name: "Two kettles", asked: 2, landed: 4 }] } }))], null));
+  const text = renderAttemptSeries(attemptSeries(task, [attemptReportRow(task, outcome(1, { answer: { verdict: "wrong", wrongBecause: ["repeated_act"], repeatedActs: [{ name: "Two kettles", asked: 2, landed: 4 }] } }))], [], 1, new Map()));
   assert.match(text, /Two kettles \(asked 2, landed 4\)/u);
   assert.match(text, /\| spend$/mu);
 });
 
 test("the report prints how much of the input came from the cache, and says when no step said", () => {
   const row = attemptReportRow(task, outcome(1));
-  const series = attemptSeries(task, [row], null);
+  const series = attemptSeries(task, [row], [], 1, new Map());
   assert.match(renderAttemptSeries(series), /tokens \| from cache \| usd/u);
   assert.match(renderAttemptSeries(series), /\| unknown \|/u);
   assert.match(renderAttemptSeries({ ...series, rows: [{ ...row, cacheHitPercent: 83 }] }), /\| 83% \|/u);

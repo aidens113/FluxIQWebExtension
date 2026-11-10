@@ -4,7 +4,7 @@ import { answerVerdicts, attemptCountsAsLive, attemptStandIns, flowScores, type 
 import { ATTEMPT_REPORT_SCHEMA_VERSION, attemptPaths, attemptSimulationResults, type AttemptReportRow, type AttemptSeries } from "./attempt-report.js";
 
 const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "actsWithNoRow", "against", "cacheHitPercent", "standIns", "live"] as const;
-const SERIES_KEYS = ["schemaVersion", "taskId", "scenarioId", "rows", "firstRightAttempt", "attemptsUntilDeterministic", "spendDeltas", "secondStartedFromFirst"] as const;
+const SERIES_KEYS = ["schemaVersion", "taskId", "scenarioId", "rows", "firstRightAttempt", "attemptsUntilDeterministic", "spendDeltas", "continuations", "deterministic"] as const;
 
 function checkAgainst(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (!isObject(input)) {
@@ -48,6 +48,61 @@ function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void
   else if (Array.isArray(value.standIns) && value.live !== attemptCountsAsLive(value.standIns as AttemptStandIn[])) add(issues, `${path}.live`, "must be true only with no stand-in at all");
 }
 
+function checkContinuations(input: unknown, rows: unknown, issues: ValidationIssue[]): void {
+  array(input, "$.continuations", issues, (item, at, target) => {
+    if (!isObject(item)) return add(target, at, "must be an object");
+    keys(item as JsonObject, ["fromAttempt", "toAttempt", "held", "refused"], at, target);
+    finite(item.fromAttempt, `${at}.fromAttempt`, target, 1, Number.MAX_SAFE_INTEGER, true);
+    finite(item.toAttempt, `${at}.toAttempt`, target, 2, Number.MAX_SAFE_INTEGER, true);
+    if (typeof item.held !== "boolean") add(target, `${at}.held`, "must be a boolean");
+    array(item.refused, `${at}.refused`, target, (reason, where, inner) => {
+      if (typeof reason !== "string" || reason.length === 0) add(inner, where, "must be a non-empty reason");
+    });
+    if (typeof item.held === "boolean" && Array.isArray(item.refused) && item.held !== (item.refused.length === 0)) add(target, `${at}.held`, "must be true exactly when nothing is refused");
+  });
+  if (!Array.isArray(input) || !Array.isArray(rows)) return;
+  if (input.length !== Math.max(0, rows.length - 1)) add(issues, "$.continuations", "must hold one proof for each later attempt");
+  input.forEach((item, index) => {
+    if (isObject(item) && (item.fromAttempt !== index + 1 || item.toAttempt !== index + 2)) add(issues, `$.continuations[${index}]`, "must prove attempt n+1 against attempt n, in order");
+  });
+}
+
+function checkDeterministic(input: unknown, rows: unknown, continuations: unknown, issues: ValidationIssue[]): void {
+  if (input === null) {
+    if (Array.isArray(rows) && rows.length > 1) add(issues, "$.deterministic", "must say what the later attempts did: it is null only for a series of one attempt");
+    return;
+  }
+  if (!isObject(input)) return add(issues, "$.deterministic", "must be an object or null");
+  keys(input as JsonObject, ["asked", "ran", "attempts", "zeroCallAttempts", "allHeld"], "$.deterministic", issues);
+  for (const key of ["asked", "ran", "zeroCallAttempts"] as const) finite(input[key], `$.deterministic.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  if (typeof input.allHeld !== "boolean") add(issues, "$.deterministic.allHeld", "must be a boolean");
+  if (typeof input.asked === "number" && input.asked < 1) add(issues, "$.deterministic.asked", "must be at least 1, or the summary must be null");
+  if (typeof input.asked === "number" && typeof input.ran === "number" && input.ran > input.asked) add(issues, "$.deterministic.ran", "cannot exceed asked");
+  const entries = input.attempts;
+  array(entries, "$.deterministic.attempts", issues, (item, at, target) => {
+    if (!isObject(item)) return add(target, at, "must be an object");
+    keys(item as JsonObject, ["attempt", "path", "flowId", "continuationHeld", "calls", "ms"], at, target);
+    finite(item.attempt, `${at}.attempt`, target, 2, Number.MAX_SAFE_INTEGER, true);
+    enumeration(item.path, attemptPaths, `${at}.path`, target);
+    if (item.flowId !== null && (typeof item.flowId !== "string" || item.flowId === "")) add(target, `${at}.flowId`, "must be a Flow id or null");
+    if (typeof item.continuationHeld !== "boolean") add(target, `${at}.continuationHeld`, "must be a boolean");
+    for (const key of ["calls", "ms"] as const) finite(item[key], `${at}.${key}`, target, 0, Number.MAX_SAFE_INTEGER, true);
+  });
+  if (!Array.isArray(entries) || !Array.isArray(rows) || !Array.isArray(continuations)) return;
+  if (input.ran !== entries.length || entries.length !== rows.length - 1) add(issues, "$.deterministic.ran", "must count the later attempts listed, which are every row after the first");
+  let zero = 0, held = true;
+  entries.forEach((item, index) => {
+    const row = rows[index + 1], proof = continuations[index];
+    if (!isObject(item) || !isObject(row) || !isObject(proof)) return;
+    if (item.attempt !== row.attempt || item.path !== row.path || item.calls !== row.calls || item.ms !== row.ms) add(issues, `$.deterministic.attempts[${index}]`, "must say what the attempt's own row says");
+    if (item.continuationHeld !== proof.held) add(issues, `$.deterministic.attempts[${index}].continuationHeld`, "must say what its continuation says");
+    if (item.calls === 0) zero += 1;
+    if (proof.held !== true) held = false;
+  });
+  if (input.zeroCallAttempts !== zero) add(issues, "$.deterministic.zeroCallAttempts", "must count the later attempts with no model call");
+  if (typeof input.asked === "number" && input.allHeld !== (held && entries.length === input.asked)) add(issues, "$.deterministic.allHeld", "must be true only when every later attempt asked for ran and every continuation held");
+}
+
 export function validateAttemptReportRow(input: unknown): ValidationResult<AttemptReportRow> {
   const issues: ValidationIssue[] = [];
   checkRow(input, "$", issues);
@@ -71,7 +126,8 @@ export function validateAttemptSeries(input: unknown): ValidationResult<AttemptS
     });
   }
   for (const key of ["firstRightAttempt", "attemptsUntilDeterministic"] as const) if (value[key] !== null) finite(value[key], `$.${key}`, issues, 1, Number.MAX_SAFE_INTEGER, true);
-  if (value.secondStartedFromFirst !== null && typeof value.secondStartedFromFirst !== "boolean") add(issues, "$.secondStartedFromFirst", "must be a boolean or null");
+  checkContinuations(value.continuations, value.rows, issues);
+  checkDeterministic(value.deterministic, value.rows, value.continuations, issues);
   return result(input, issues);
 }
 
