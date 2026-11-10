@@ -14,7 +14,7 @@ function stubEvents(t: TestContext): Record<string, Listener[]> {
   const holder = globalThis as { chrome?: unknown };
   const previous = holder.chrome;
   holder.chrome = {
-    webNavigation: { onBeforeNavigate: event("beforeNavigate"), onCommitted: event("committed"), onHistoryStateUpdated: event("historyState"), onReferenceFragmentUpdated: event("fragment") },
+    webNavigation: { onBeforeNavigate: event("beforeNavigate"), onCommitted: event("committed"), onCompleted: event("completed"), onErrorOccurred: event("error"), onHistoryStateUpdated: event("historyState"), onReferenceFragmentUpdated: event("fragment") },
     tabs: { onUpdated: event("updated"), onReplaced: event("replaced"), onRemoved: event("removed") }
   };
   tabNavigationEpochs.resetForTest();
@@ -60,4 +60,19 @@ test("a replaced tab moves both ids, and a closed tab is forgotten", (t) => {
   fire(listeners, "removed", 9);
   assert.equal(tabNavigationEpochs.of(9), 0);
   assert.equal((listeners.beforeNavigate ?? []).length, 1, "listeners are added once");
+});
+
+// Task speed S10: whether a tab's page is still moving, by the same events.
+test("a top-frame navigation is in flight from its beginning until it loads or ends without a document", (t) => {
+  const listeners = stubEvents(t);
+  assert.equal(tabNavigationEpochs.inFlight(7), false);
+  fire(listeners, "beforeNavigate", { tabId: 7, frameId: 0 });
+  fire(listeners, "beforeNavigate", { tabId: 8, frameId: 3 });
+  assert.equal(tabNavigationEpochs.inFlight(7), true);
+  assert.equal(tabNavigationEpochs.inFlight(8), false, "a child frame's navigation is not the page's");
+  fire(listeners, "completed", { tabId: 7, frameId: 0 });
+  assert.equal(tabNavigationEpochs.inFlight(7), false);
+  fire(listeners, "beforeNavigate", { tabId: 7, frameId: 0 });
+  fire(listeners, "error", { tabId: 7, frameId: 0 });
+  assert.equal(tabNavigationEpochs.inFlight(7), false, "a download or an abort ends it too");
 });

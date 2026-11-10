@@ -99,7 +99,7 @@ export type RateLimitWatch = {
    * press began has answered (`ignored-press/request-answers.ts`), as at its
    * end. Stops the watch.
    */
-  settle(windowMs: number, answered?: PressAnswered): Promise<RateLimitNotice | undefined>;
+  settle(windowMs: number, answered?: Pick<PressAnswered, "answered" | "onAnswer">): Promise<RateLimitNotice | undefined>;
   /** Stops without waiting; safe to call more than once. */
   stop(): void;
 };
@@ -270,6 +270,7 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
         /** Set once the window has closed on a control still working on the press. */
         let overtime = false;
         const look = (): void => {
+          answeredNow();
           const found = check();
           if (settles(found)) return finish(found);
           // Past the window, the watch ends when the control stops working --

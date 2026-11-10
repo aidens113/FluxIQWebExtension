@@ -276,6 +276,28 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
 - Not verified: live, Firefox, a real 429 meeting the evidence pace (simulation only), window.open on a realistic page.
 - Outcome: merged into dev ("Merge task t891: web-instant-actions-2") and pushed.
 
+### 2026-11-10 - t892: instant actions, round 3 (S10)
+
+- Agent: lead; worker web-instant-actions (Opus).
+- Changed:
+  - The page world counts the work a page schedules while loading: timers due within 1 s, animation frames, fetches and XHRs. Repeating work is left out on evidence.
+  - A tab is ready when the browser says it finished moving and that work has drained. The old 1 s clock stays only where nothing can speak for the page.
+  - A press that began no request completes once its handlers' work ran, so synchronous in-place controls skip the 500 ms and 700 ms windows.
+- Measured, provider-free:
+  - Local-classifieds: exploration 37.3 -> 31.4 s; replays 30.3/29.1 -> 28.4/28.8 s; same outcomes, including round 2's two lost explorations.
+  - A navigate's page time 1.27 -> 0.54-0.68 s; the location chip's in-page time 851 -> 159 ms.
+  - Crossborder exploration 24.6 -> 21.7 s.
+- Open:
+  - A ~200 ms wait now precedes some replayed acts, cause unconfirmed.
+  - Replayed select and list-read steps got slower on average.
+  - Crossborder's scripted replay fails on plain dev: a cleared check during the replay leaves the free-shipping filter unapplied. Handed to t885.
+- Validation: re-run by the lead.
+  - `check-extension.mjs` -> exit 0.
+  - `test-extension.mjs runtime content background page-world shared` -> 2805/2805.
+  - Domain `tsc` (src and tests) -> clean.
+  - Structure audit -> passed.
+- Outcome: merged into dev ("Merge task t892: web-instant-actions-3") and pushed.
+
 ## Open Questions
 
 None for the user. The quality guard decides S1 and S5 by measurement.

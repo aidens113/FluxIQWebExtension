@@ -17,6 +17,7 @@ import { test, type TestContext } from "node:test";
 import { OriginPace, PAGE_LOAD_PACE_SETTINGS } from "../../background/page-pace";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
+import { tabNavigationEpochs } from "../navigation-events";
 import { sendClickCheckingLanding } from "../click-landing";
 import { fluxiqOpenedTabs } from "../fluxiq-opened-tabs";
 import type { LandedTabAccess } from "../landed-check-wait";
@@ -82,8 +83,10 @@ function installBrowser(t: TestContext, statuses: Record<number, number | undefi
       for (const listener of [...listeners.onCreatedNavigationTarget]) listener({ sourceTabId, sourceFrameId: 0, tabId: OPENED_TAB, url: ITEM });
     },
     removed: [],
-    listening: () => Object.values(listeners).reduce((sum, set) => sum + set.size, 0)
+    // The navigation epochs listen for the worker's life (`../navigation-events/`); only a click's own listeners must go with it.
+    listening: () => Object.values(listeners).reduce((sum, set) => sum + set.size, 0) - permanent
   };
+  let permanent = 0;
   (globalThis as { chrome?: unknown }).chrome = {
     webNavigation: {
       onBeforeNavigate: event("onBeforeNavigate"),
@@ -102,6 +105,8 @@ function installBrowser(t: TestContext, statuses: Record<number, number | undefi
     },
     scripting: {
       executeScript: (details: { target: { tabId: number }; func: () => unknown }) => {
+        // The opened tab's readiness asks its page world (`../navigation-events/page-work.ts`); this page has none.
+        if (details.func.name === "pageSettledInPage") return Promise.resolve([{ frameId: 0, result: false }]);
         served = statuses[details.target.tabId];
         try {
           return Promise.resolve([{ frameId: 0, result: details.func() }]);
@@ -111,10 +116,15 @@ function installBrowser(t: TestContext, statuses: Record<number, number | undefi
       }
     }
   };
+  // Installed here, before the click, so they are counted as the worker's and not the click's.
+  tabNavigationEpochs.resetForTest();
+  tabNavigationEpochs.of(CLICKED_TAB);
+  permanent = Object.values(listeners).reduce((sum, set) => sum + set.size, 0);
   t.after(() => {
     delete (globalThis as { chrome?: unknown }).chrome;
     forgetAutomationTab();
     fluxiqOpenedTabs.forget(OPENED_TAB);
+    tabNavigationEpochs.resetForTest();
   });
   fluxiqOpenedTabs.forget(OPENED_TAB);
   forgetAutomationTab();
