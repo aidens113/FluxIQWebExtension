@@ -1,8 +1,7 @@
 import type { AttemptContinuation, AttemptSeries } from "@fluxiq-web-extension/test-contracts";
 import { assertRealisticScenarios } from "../realistic-scenarios/index.js";
 import type { AttemptDriver, AttemptOutcome, AttemptTask } from "./driver.js";
-import { proveContinuation } from "./continuation.js";
-import { attemptReportRow, attemptSeries } from "./report.js";
+import { seriesOfOutcomes } from "./series-of-outcomes.js";
 
 export type AttemptSeriesResult = Readonly<{
   series: AttemptSeries;
@@ -35,7 +34,6 @@ export async function runAttemptSeries(input: { task: AttemptTask; driver: Attem
     outcomes.push(outcome);
     if (ordinal < input.attempts) stoppedShort = await input.mayGoOn?.(outcome);
   }
-  const continuations = outcomes.slice(1).map((later, index) => proveContinuation(outcomes[index]!, later));
-  const series = attemptSeries(task, outcomes.map((outcome) => attemptReportRow(task, outcome)), continuations, input.attempts, new Map(outcomes.map((outcome) => [outcome.record.ordinal, outcome.record.flowId ?? null])));
+  const { series, continuations } = seriesOfOutcomes(task, outcomes, input.attempts);
   return Object.freeze({ series, outcomes, continuations, ...(stoppedShort === undefined ? {} : { stoppedShort }) });
 }

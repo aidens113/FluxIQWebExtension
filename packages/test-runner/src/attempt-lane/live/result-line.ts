@@ -44,5 +44,5 @@ export function attemptResultLine(input: { row: AttemptReportRow; answer: RunAns
   const ended = `${input.status}${input.waitingFor ? ` for ${input.waitingFor}` : ""}`;
   const counted = row.live ? "counted as live" : `NOT LIVE, stand-ins: ${row.standIns.join(", ")}`;
   const noRow = (input.actsWithNoRow ?? 0) > 0 ? ` ${input.actsWithNoRow} lasting acts could not be tied to a row.` : "";
-  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
+  return `${row.taskId} attempt ${row.attempt}: answer ${answer.verdict}${why}.${askedAgainWords(input.askedAgain)}${againstWords(row, input.startedFromFirst)} Ended ${ended}${rows}, ${row.liveSteps} live steps, ${row.calls} calls${row.callKinds ? ` (interpretation ${row.callKinds.interpretation}, judge ${row.callKinds.judge}, decisions ${row.callKinds.decisions})` : ""}${cached}, $${row.usd.toFixed(4)}, ${Math.round(row.ms / 1000)} s. ${counted}.${noRow}`;
 }

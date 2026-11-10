@@ -3,10 +3,10 @@ import test from "node:test";
 import { attemptCountsAsLive, attemptStandIns, flowScoreOf, validateAttemptReportRow, validateAttemptSeries, validateRunAnswerScore } from "../../dist/index.js";
 
 const row = (attempt, changed = {}) => ({
-  schemaVersion: "0.2", taskId: "task-one", scenarioId: "everything-store", attempt, path: "explore", calls: 10, inputTokens: 100, outputTokens: 10, usd: 0.1, ms: 1000, liveSteps: 5,
+  schemaVersion: "0.3", taskId: "task-one", scenarioId: "everything-store", attempt, path: "explore", calls: 10, inputTokens: 100, outputTokens: 10, usd: 0.1, ms: 1000, liveSteps: 5,
   simulation: "not_run", answerVerdict: "right", oracleVerdict: null, flow: "unproven", repeatedActs: [], loopsCaught: { exact_repeat: 0 }, standIns: [], live: true, ...changed,
 });
-const series = (rows, changed = {}) => ({ schemaVersion: "0.2", taskId: "task-one", scenarioId: "everything-store", rows, firstRightAttempt: 1, attemptsUntilDeterministic: null, spendDeltas: [], continuations: [], deterministic: null, ...changed });
+const series = (rows, changed = {}) => ({ schemaVersion: "0.3", taskId: "task-one", scenarioId: "everything-store", rows, firstRightAttempt: 1, attemptsUntilDeterministic: null, spendDeltas: [], continuations: [], deterministic: null, ...changed });
 
 test("a row holds every column, and refuses one it does not know or a word outside the closed lists", () => {
   assert.equal(validateAttemptReportRow(row(1)).valid, true);
@@ -33,7 +33,7 @@ test("a row with any stand-in can never be counted as live, and a scripted model
 });
 
 const proof = (to, held = true) => ({ fromAttempt: to - 1, toAttempt: to, held, refused: held ? [] : ["second_ran_another_flow"] });
-const later = (attempt, held = true, calls = 0) => ({ attempt, path: "run_flow", flowId: "flow-1", continuationHeld: held, calls, ms: 1000 });
+const later = (attempt, held = true, calls = 0) => ({ attempt, path: "run_flow", flowId: "flow-1", continuationHeld: held, calls, callKinds: null, ms: 1000 });
 const three = (changed = {}) => series([row(1), row(2, { path: "run_flow", calls: 0 }), row(3, { path: "run_flow", calls: 0 })], {
   continuations: [proof(2), proof(3)],
   deterministic: { asked: 2, ran: 2, attempts: [later(2), later(3)], zeroCallAttempts: 2, allHeld: true }, ...changed,
@@ -62,6 +62,18 @@ test("a series holds one continuation per later attempt and a deterministic summ
   assert.equal(validateAttemptSeries(three({ deterministic: { ...deterministic, surprise: 1 } })).valid, false);
   assert.equal(validateAttemptSeries(three({ secondStartedFromFirst: true })).valid, false, "the old field is gone");
   assert.equal(validateAttemptSeries(three({ deterministic: null })).valid, false, "no later attempt may go unsaid");
+});
+
+test("a row's call kinds add up to its calls, and the deterministic summary carries them as the row has them", () => {
+  const kinds = { interpretation: 1, judge: 1, decisions: 0 };
+  assert.equal(validateAttemptReportRow(row(2, { calls: 2, callKinds: kinds })).valid, true);
+  assert.equal(validateAttemptReportRow(row(2, { calls: 3, callKinds: kinds })).valid, false, "a call counted twice, or left out");
+  assert.equal(validateAttemptReportRow(row(2, { calls: 2, callKinds: { ...kinds, surprise: 1 } })).valid, false);
+  assert.equal(validateAttemptReportRow(row(2, { calls: 2, callKinds: { interpretation: 1, judge: 1 } })).valid, false);
+  const split = series([row(1), row(2, { path: "run_flow", calls: 2, callKinds: kinds })], { continuations: [proof(2)], deterministic: { asked: 1, ran: 1, attempts: [{ ...later(2), calls: 2, callKinds: kinds }], zeroCallAttempts: 0, allHeld: true } });
+  assert.equal(validateAttemptSeries(split).valid, true);
+  const unsaid = { ...split, deterministic: { ...split.deterministic, attempts: [{ ...later(2), calls: 2 }] } };
+  assert.equal(validateAttemptSeries(unsaid).valid, false, "the summary may not drop the split its row has");
 });
 
 test("a score is refused when its verdict does not follow from its parts", () => {

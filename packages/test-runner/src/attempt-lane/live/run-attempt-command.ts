@@ -10,11 +10,13 @@ import { countSteps, LabRunRecord } from "../../lab-runs/index.js";
 import { beginLiveLlmRun, ensureLiveLlmSecretKey, type LiveLlmRun } from "../../live-llm/index.js";
 import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
+import type { AttemptOutcome, AttemptTask } from "../driver.js";
 import type { PersonHandOff } from "../../person-simulation/index.js";
 import { attemptReportRow, laterAttemptNotes, renderAttemptSeries } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
 import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, attemptSpeed, attemptSpeedLines, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type AttemptSpeed, type LiveAttemptSession } from "./attempt/index.js";
+import { partialSeries } from "./partial-series.js";
 import { attemptPersonFor } from "./attempt-person.js";
 import { attemptBalanceFailures } from "./balance-failures.js";
 import { attemptCanGoOn } from "./can-go-on.js";
@@ -164,6 +166,8 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   let session: LiveAttemptSession | undefined;
   const kept = new Map<number, AttemptKept>();
   const scored = new Map<number, ScoredAttempt>();
+  /** Set once the task is resolved, so a run that stops can still build the series of the attempts that ended. */
+  let ranTask: AttemptTask | undefined;
   let stepsSoFar = 0;
   let callsSoFar: Readonly<Record<string, number>> = {};
   let exitCode = 1;
@@ -219,8 +223,12 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     });
     // Each attempt's score is kept as it ends, so a series that ends early still keeps what its earlier attempts were judged to be.
     const task = { scenario, request, workflow };
+    ranTask = task;
     const driver = { ...live, run: async (...args: Parameters<typeof live.run>) => {
-      const outcome = await live.run(...args);
+      const ran = await live.run(...args);
+      // The model calls the step log attributes to this attempt that Core's record leaves out (the chat's reading of the instruction) and the judge, by the steps it logged between the attempts.
+      const speed = kept.get(args[1])?.speed;
+      const outcome: AttemptOutcome = speed ? { ...ran, modelCalls: { interpretation: speed.interpretationCalls, judge: speed.judgeCalls } } : ran;
       scored.set(args[1], { outcome, row: attemptReportRow(task, outcome) });
       return outcome;
     } };
@@ -265,9 +273,18 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     verdict = "failed";
     const stopped = error instanceof AttemptProofStuck || error instanceof AttemptScriptRefused;
     const paid = side.live ? { runsDirectory: paths.runsDirectory, runId, startedAt, plan: side.live.describe().authorized, stepsDirectory } : undefined;
-    const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}) } : undefined;
-    const said = await writeUnscoredAttemptEvidence({ evidence, attempts: command.attempts, kept, error, recorded, scored, ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) })
-      .catch((failed: unknown) => `its evidence could not be written: ${failed instanceof Error ? failed.message : String(failed)}`);
+    // An attempt the run typed and followed has started, however it ended: a refused request is not "did not start".
+    const refusal = side.server?.refusals()[0];
+    // Built inside the write, so a failure here is reported as the evidence's own and never replaces the error that stopped the run.
+    const said = await Promise.resolve().then(async () => {
+      const slice = stopped ? await attemptSpeed(stepsDirectory, stepsSoFar) : undefined;
+      const loggedSteps = stopped ? (await countSteps(stepsDirectory)) - stepsSoFar : 0;
+      const started = error instanceof AttemptScriptRefused ? { started: { loggedSteps, interpretationCalls: slice?.interpretationCalls ?? 0, ...(refusal ? { refusal: { kind: refusal.kind, ordinal: refusal.ordinal } } : {}) } } : {};
+      const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}), ...started } : undefined;
+      // The attempts that ended and were scored are still a series: their rows, continuations and deterministic summary are kept, whatever stopped the rest.
+      const partial = recorded ? undefined : partialSeries({ task: ranTask, scored, asked: command.attempts, cacheHitPercent: (attempt) => kept.get(attempt)?.cache.hitPercent ?? null });
+      return writeUnscoredAttemptEvidence({ evidence, attempts: command.attempts, kept, error, recorded, scored, ...(partial ? { series: partial } : {}), ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) });
+    }).catch((failed: unknown) => `its evidence could not be written: ${failed instanceof Error ? failed.message : String(failed)}`);
     if (!stopped) {
       process.stdout.write(`[attempt] ${command.taskId}: the run failed, and ${said}; evidence ${evidence}\n`);
       throw error;

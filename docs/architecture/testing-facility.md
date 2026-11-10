@@ -2112,13 +2112,30 @@ turn sits under the first. The second attempt's baseline is read when it starts 
   waits for a person and every continuation held. A refusal on any pair exits 1.
 - **The deterministic summary.** `AttemptSeries.deterministic` covers attempts 2..N: how many were
   asked and ran (a series that stops short says so), and for each its path, the Flow it ran, whether
-  its continuation held, its model calls and its time, with the count of zero-call attempts and
+  its continuation held, its model calls by kind and its time, with the count of zero-call attempts and
   whether all held. `attempt.json`, the stdout JSON line and `renderAttemptSeries` list every later
   attempt, so one that spent calls is never averaged away. One plain line, `NOT DETERMINISTIC: ...`,
   names each later attempt that spent model calls, took any path other than `run_flow`, or was not
   proven to start from the one before; it is absent when none did. `ATTEMPT_REPORT_SCHEMA_VERSION` is
-  `0.2`: `continuations` replaced `secondStartedFromFirst`, and validation checks that the summary says
+  `0.3`: `continuations` replaced `secondStartedFromFirst`, and validation checks that the summary says
   what the rows and continuations say.
+- **An attempt's calls are all of them, by kind.** A row's `calls` is the chat's reading of the typed
+  instruction (`interpretation`) plus the judge plus the decisions, shown as
+  `calls 2 (interpretation 1, judge 1, decisions 0)` (`callKinds`). Core's attempt record counts the
+  decisions and the judge but not the interpretation, so the Lab adds the interpretation once and takes
+  the judge out of Core's count to get the decisions: nothing is counted twice. The interpretation and
+  judge counts come from the run's step log (`steps/`, the model-backed `chat` and `judge` steps logged
+  between one attempt's end and the next's), the same slice the speed section reads, for a scripted and a
+  live run alike. That attribution assumes attempts run one after another, as they do here. When the log
+  cannot say, `callKinds` is absent and the row says `(not split by kind)`: Core's own count, unsplit.
+  `NOT DETERMINISTIC` is the line's prefix when a later attempt made decisions, took another path, was
+  not proven to continue the one before or did not run; when later attempts made only the interpretation and
+  the judge, the line says exactly that and is not worded as exploring.
+- **A run that stops short keeps what ended.** When a request the script did not expect, a stuck wait or
+  a throw ends the run, `attempt.json` and `attempt-report.txt` still carry the series of every attempt that
+  ended and was scored (rows, continuations, per-attempt deterministic lines and summary). An attempt the
+  run had typed and followed is reported as started, with its browser steps and the request refused
+  ("refused at request 4 of kind loop_verification"), never as "did not start".
 - **`--attempts 1` is diagnosis only.** One attempt cannot show the loop pays off, so its status is
   `diagnosis_only` (never `passed`) however right the answer, and the report says so. It exits 0 when
   the answer was right and 1 otherwise. The live guards read `diagnosis_only` as no failure: it does

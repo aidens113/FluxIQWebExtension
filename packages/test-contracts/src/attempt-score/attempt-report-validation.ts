@@ -3,8 +3,14 @@ import { ContractValidationError, type ValidationIssue, type ValidationResult } 
 import { answerVerdicts, attemptCountsAsLive, attemptStandIns, flowScores, type AttemptStandIn } from "./answer-score.js";
 import { ATTEMPT_REPORT_SCHEMA_VERSION, attemptPaths, attemptSimulationResults, type AttemptReportRow, type AttemptSeries } from "./attempt-report.js";
 
-const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "actsWithNoRow", "against", "cacheHitPercent", "standIns", "live"] as const;
+const ROW_KEYS = ["schemaVersion", "taskId", "scenarioId", "attempt", "path", "calls", "callKinds", "inputTokens", "outputTokens", "usd", "ms", "liveSteps", "simulation", "answerVerdict", "oracleVerdict", "flow", "repeatedActs", "loopsCaught", "actsWithNoRow", "against", "cacheHitPercent", "standIns", "live"] as const;
 const SERIES_KEYS = ["schemaVersion", "taskId", "scenarioId", "rows", "firstRightAttempt", "attemptsUntilDeterministic", "spendDeltas", "continuations", "deterministic"] as const;
+
+function checkCallKinds(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (!isObject(input)) return add(issues, path, "must be an object");
+  keys(input as JsonObject, ["interpretation", "judge", "decisions"], path, issues);
+  for (const key of ["interpretation", "judge", "decisions"] as const) finite(input[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+}
 
 function checkAgainst(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (!isObject(input)) {
@@ -41,6 +47,11 @@ function checkRow(input: unknown, path: string, issues: ValidationIssue[]): void
   if (!isObject(value.loopsCaught)) add(issues, `${path}.loopsCaught`, "must be an object");
   if (value.actsWithNoRow !== undefined) finite(value.actsWithNoRow, `${path}.actsWithNoRow`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.against !== undefined) checkAgainst(value.against, `${path}.against`, issues);
+  if (value.callKinds !== undefined) {
+    checkCallKinds(value.callKinds, `${path}.callKinds`, issues);
+    const kinds = value.callKinds as Record<string, unknown>;
+    if (isObject(kinds) && [kinds.interpretation, kinds.judge, kinds.decisions].every((count) => typeof count === "number") && value.calls !== (kinds.interpretation as number) + (kinds.judge as number) + (kinds.decisions as number)) add(issues, `${path}.calls`, "must be interpretation + judge + decisions, so no call is counted twice");
+  }
   if (value.cacheHitPercent !== undefined) finite(value.cacheHitPercent, `${path}.cacheHitPercent`, issues, 0, 100, true);
   array(value.standIns, `${path}.standIns`, issues, (item, at, target) => enumeration(item, attemptStandIns, at, target));
   // A stand-in anywhere, and above all a scripted model, can never be counted as live.
@@ -81,12 +92,13 @@ function checkDeterministic(input: unknown, rows: unknown, continuations: unknow
   const entries = input.attempts;
   array(entries, "$.deterministic.attempts", issues, (item, at, target) => {
     if (!isObject(item)) return add(target, at, "must be an object");
-    keys(item as JsonObject, ["attempt", "path", "flowId", "continuationHeld", "calls", "ms"], at, target);
+    keys(item as JsonObject, ["attempt", "path", "flowId", "continuationHeld", "calls", "callKinds", "ms"], at, target);
     finite(item.attempt, `${at}.attempt`, target, 2, Number.MAX_SAFE_INTEGER, true);
     enumeration(item.path, attemptPaths, `${at}.path`, target);
     if (item.flowId !== null && (typeof item.flowId !== "string" || item.flowId === "")) add(target, `${at}.flowId`, "must be a Flow id or null");
     if (typeof item.continuationHeld !== "boolean") add(target, `${at}.continuationHeld`, "must be a boolean");
     for (const key of ["calls", "ms"] as const) finite(item[key], `${at}.${key}`, target, 0, Number.MAX_SAFE_INTEGER, true);
+    if (item.callKinds !== null) checkCallKinds(item.callKinds, `${at}.callKinds`, target);
   });
   if (!Array.isArray(entries) || !Array.isArray(rows) || !Array.isArray(continuations)) return;
   if (input.ran !== entries.length || entries.length !== rows.length - 1) add(issues, "$.deterministic.ran", "must count the later attempts listed, which are every row after the first");
@@ -94,7 +106,7 @@ function checkDeterministic(input: unknown, rows: unknown, continuations: unknow
   entries.forEach((item, index) => {
     const row = rows[index + 1], proof = continuations[index];
     if (!isObject(item) || !isObject(row) || !isObject(proof)) return;
-    if (item.attempt !== row.attempt || item.path !== row.path || item.calls !== row.calls || item.ms !== row.ms) add(issues, `$.deterministic.attempts[${index}]`, "must say what the attempt's own row says");
+    if (item.attempt !== row.attempt || item.path !== row.path || item.calls !== row.calls || item.ms !== row.ms || JSON.stringify(item.callKinds) !== JSON.stringify(row.callKinds ?? null)) add(issues, `$.deterministic.attempts[${index}]`, "must say what the attempt's own row says");
     if (item.continuationHeld !== proof.held) add(issues, `$.deterministic.attempts[${index}].continuationHeld`, "must say what its continuation says");
     if (item.calls === 0) zero += 1;
     if (proof.held !== true) held = false;

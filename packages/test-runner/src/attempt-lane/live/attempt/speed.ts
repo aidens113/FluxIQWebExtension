@@ -26,6 +26,9 @@ export type AttemptSpeed = {
   decisions: { calls: number; ms: number; thinkingMs: number; outputMs: number; uncachedInputTokens: number };
   browser: { steps: number; ms: number; actionMs: number; overheadMs: number; unsplitMs: number };
   judgeMs: number;
+  /** Model calls the step log attributes to this attempt by their kind: the chat's reading of the typed instruction, and the judge. The decisions are `decisions.calls`. */
+  interpretationCalls: number;
+  judgeCalls: number;
   interpretationMs: number;
   otherToolMs: number;
   otherMs: number;
@@ -106,7 +109,7 @@ export async function attemptSpeed(stepsDirectory: string, skip = 0): Promise<At
     wallMs: 0,
     decisions: { calls: 0, ms: 0, thinkingMs: 0, outputMs: 0, uncachedInputTokens: 0 },
     browser: { steps: 0, ms: 0, actionMs: 0, overheadMs: 0, unsplitMs: 0 },
-    judgeMs: 0, interpretationMs: 0, otherToolMs: 0, otherMs: 0, gapsMs: 0, nodes: []
+    judgeMs: 0, interpretationCalls: 0, judgeCalls: 0, interpretationMs: 0, otherToolMs: 0, otherMs: 0, gapsMs: 0, nodes: []
   };
   const nodes = new Map<string, { steps: number; stepMs: number; actionMs: number; spans: Map<string, number> }>();
   let first: number | undefined;
@@ -120,8 +123,13 @@ export async function attemptSpeed(stepsDirectory: string, skip = 0): Promise<At
     if (Number.isFinite(finishedAt)) last = last === undefined ? finishedAt : Math.max(last, finishedAt);
     covered += ms;
     const kind = String(meta.kind);
-    if (kind === "judge") speed.judgeMs += ms;
-    else if (kind === "chat") speed.interpretationMs += ms;
+    if (kind === "judge") {
+      speed.judgeMs += ms;
+      if (typeof meta.provider === "string") speed.judgeCalls += 1;
+    } else if (kind === "chat") {
+      speed.interpretationMs += ms;
+      if (typeof meta.provider === "string") speed.interpretationCalls += 1;
+    }
     else if (typeof meta.provider === "string") {
       const usage = (meta.usage ?? {}) as Record<string, unknown>;
       const output = number(usage.outputTokens);

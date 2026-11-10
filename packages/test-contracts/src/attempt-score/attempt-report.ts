@@ -3,7 +3,7 @@
 
 import type { AnswerVerdict, AttemptStandIn, FlowScore, RepeatedActReport } from "./answer-score.js";
 
-export const ATTEMPT_REPORT_SCHEMA_VERSION = "0.2" as const;
+export const ATTEMPT_REPORT_SCHEMA_VERSION = "0.3" as const;
 
 /**
  * The paths and simulation words of Core's attempt record
@@ -31,6 +31,13 @@ export type AttemptAgainstEarlier = {
   changed: string[];
 };
 
+/**
+ * The model calls of one attempt by kind. `interpretation` is the chat's reading of the typed instruction,
+ * `judge` the check that the answer holds, and `decisions` every other call Core's attempt record counts.
+ * Their sum is the row's `calls`, so no call is counted twice.
+ */
+export type AttemptCallKinds = { interpretation: number; judge: number; decisions: number };
+
 export type AttemptReportRow = {
   schemaVersion: typeof ATTEMPT_REPORT_SCHEMA_VERSION;
   taskId: string;
@@ -38,7 +45,10 @@ export type AttemptReportRow = {
   /** Which attempt at the task, from 1. */
   attempt: number;
   path: AttemptPath;
+  /** Every model call the attempt made: with `callKinds`, interpretation + judge + decisions. */
   calls: number;
+  /** Absent when the call source could not attribute the interpretation and judge calls to this attempt; `calls` is then Core's own count, unsplit. */
+  callKinds?: AttemptCallKinds;
   inputTokens: number;
   outputTokens: number;
   usd: number;
@@ -100,6 +110,8 @@ export type AttemptDeterministicEntry = {
   /** Whether `continuations` held for this attempt. */
   continuationHeld: boolean;
   calls: number;
+  /** The attempt's split of `calls`; `null` when it could not be attributed. */
+  callKinds: AttemptCallKinds | null;
   ms: number;
 };
 
