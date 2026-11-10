@@ -481,7 +481,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // A press that changed nothing is looked at again for a moment and pressed once more before it is said to have had
     // no effect (`./press-effect/settled.ts`, t511) -- never one whose call declared a lasting consequence, or on a control
     // whose state a press flips: read through the wait, it is said to be uncertain (`./press-effect/repeat-press.ts`,
-    // t778). A lasting press the page truly ignored is made again by Core's retries on its `certainNoEffect` (t517).
+    // t778). A lasting press the page truly ignored is pressed once more by the click itself after a certain-nothing
+    // verdict (t896), and made again by Core's first attempt plus three retries on its `certainNoEffect` (t517, t528).
     const lasting = Array.isArray(declared) && declared.some((entry) => typeof entry === "string" && entry !== "");
     const pressAgain = async () => {
       const repeated = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: dispatchParameters, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran), undefined, frozen.kind === "selected" ? frozen.capture : capture);

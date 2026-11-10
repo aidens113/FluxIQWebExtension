@@ -177,15 +177,19 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    * was before the press, a spinner that came and went included -- and the
    * command control is still there, shown and enabled. Produced by
    * `content/actions/click.ts` from what
-   * `content/action-runtime/ignored-press/settled-look.ts` saw, only on a
-   * press the click made once (t517).
+   * `content/action-runtime/ignored-press/settled-look.ts` saw (t517): since
+   * t896 only once the click has pressed once more itself, after a first press
+   * the look found certainly did nothing, and that press made once more
+   * settled exactly as before too.
    *
    * social-network-feed's Post takes its first press only as a wake-up: the
    * button spins for 450 ms, turns back into Post, and nothing is posted; the
    * second press posts. A person presses again, so this row states the act did
    * not happen (`effect: "unacted"`) and is retryable, and it carries
-   * `certainNoEffect`, which Core reads to make a lasting press once more and
-   * only once (`executor/defensive/assess.ts`). Until t517 trials and playback
+   * `certainNoEffect`, which Core reads to make even a lasting press again under
+   * its first attempt plus three retries (t528, `defensive/assess.ts`); within
+   * one attempt the click presses once more only after a certain-nothing
+   * verdict, so Post's second press is the click's own (t896). Until t517 trials and playback
    * read the spinner as the page's answer, passed the press, and posted
    * nothing (`run-mv6v2jh4-69244ffb`).
    */

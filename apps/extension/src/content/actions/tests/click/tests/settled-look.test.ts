@@ -1,8 +1,10 @@
 // T1 coverage of the click verb's settled look (`click.ts`,
 // `action-runtime/ignored-press/settled-look.ts`): a first press the page
-// answered for a moment and then left as it was fails as certainly without
-// effect (t517), and one it answered only with its own notice fails as the page
-// reporting it failed (t743); a press answered by anything lasting passes.
+// answered for a moment and then left as it was certainly did nothing (t517),
+// and is pressed once more in the same command (t896, whose rows are
+// `swallowed-first-press.test.ts`); one it answered only with its own notice
+// fails as the page reporting it failed (t743); a press answered by anything
+// lasting passes.
 // Moved out of `actions/tests/click.test.ts` on 2026-10-20; the faked page and
 // watches are `actions/tests/click/`'s.
 
@@ -12,25 +14,16 @@ import type { ActionabilityRejectionCode, PressSignal } from "../../../../action
 import { click, CLICK, FIRST_PRESS, SECOND_PRESS } from "..";
 
 // A press that certainly did nothing (t517): social-network-feed's Post spins on its first press and turns back,
-// posting nothing. The settled look (`ignored-press/settled-look.ts`) decides, and such a press fails as NO_EFFECT,
-// marked certainNoEffect, for Core to make once more. Take the look out of `clickAction` and the first row goes red.
+// posting nothing. The settled look (`ignored-press/settled-look.ts`) decides, and such a press is pressed once more
+// in the same command (t896). Take the look out of `clickAction` and the first row below goes red.
 const SETTLE_MS = 1_500; // `NO_EFFECT_SETTLE_MS` in the verb
 
-test("a button that shows a brief busy state and then reverts, leaving the page as it was, fails as certainly without effect", async (t) => {
+test("a button that shows a brief busy state and then reverts, leaving the page as it was, is pressed once more, never handed to Core as no effect", async (t) => {
   const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true });
-  assert.equal(result.status, "failed");
-  assert.deepEqual(events, FIRST_PRESS, "the click itself presses once: the press made once more is Core's");
-  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
-  assert.deepEqual(result.failure, {
-    category: "action_failed",
-    code: "web.action.no_effect",
-    retryable: true,
-    stage: "execution",
-    expected: "the page answers the press",
-    actual: "the point 10,20 landed on the target; the page changed only for a moment, and once it settled nothing on it had changed: no request, no navigation, no focus move, nothing outside the control's section, and the section exactly as before the press; the control can still be pressed",
-    effect: "unacted",
-    certainNoEffect: true
-  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.failure, undefined);
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS], "the press made once more is the click's own, in the same command");
+  assert.deepEqual(unchangedAsked, [SETTLE_MS, SETTLE_MS]);
 });
 
 test("a press whose answer stayed on the page passes as before, after the settled look", async (t) => {
@@ -48,28 +41,35 @@ test("a press answered by a request, a navigation or a focus move is never looke
   }
 });
 
-test("no command control is held to an answer, and a control no longer pressable once settled was answered", async (t) => {
+test("no command control is held to an answer, and a control now disabled or gone once settled was answered", async (t) => {
   const plain = await click(t, { link: false, prevent: false, plain: true }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true });
   assert.equal(plain.result.status, "succeeded");
+  assert.deepEqual(plain.events, FIRST_PRESS);
   // Looked at since t743, for a notice that may answer any control; an unchanged page alone fails none but a command control.
   assert.deepEqual(plain.unchangedAsked, [SETTLE_MS]);
-  for (const againAs of ["disabled", "hidden", "covered"] as ActionabilityRejectionCode[]) {
-    const { result } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, pressableAgain: false, againAs });
+  for (const againAs of ["disabled", "hidden"] as ActionabilityRejectionCode[]) {
+    const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, pressableAgain: false, againAs });
     assert.equal(result.status, "succeeded", againAs);
+    assert.deepEqual(events, FIRST_PRESS, againAs);
   }
+  // A press that certainly did nothing is no more answered by a layer than one with no sign at all (t476, t896):
+  // refused as covered, for the recovery to close the layer and make the press once more.
+  const covered = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, pressableAgain: false, againAs: "covered" });
+  assert.equal(covered.result.status, "failed");
+  assert.equal(covered.result.failure?.code, "web.target.not_actionable");
+  assert.deepEqual(covered.events, FIRST_PRESS);
 });
 
 // A widget that swaps its button for an identical copy and ignores the first press after a change (t878,
 // run-mw4foote-9cbea70e: an Apply in a location panel). The pressed control is gone, but the command names a
-// pressable copy in the same place and the page settled exactly as it was: nothing happened, and the press fails as
-// NO_EFFECT for Core to make once more on the copy. Measure the detached control instead and the first row goes red.
-test("a press whose control was swapped for a pressable copy, on a page settled exactly as it was, fails as certainly without effect", async (t) => {
-  const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, replaced: "copy" });
-  assert.equal(result.status, "failed");
-  assert.equal(result.failure?.code, "web.action.no_effect");
-  assert.equal(result.failure?.certainNoEffect, true);
-  assert.deepEqual(events, FIRST_PRESS, "the click presses once: the press on the copy is Core's");
-  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
+// pressable copy in the same place and the page settled exactly as it was: nothing happened, and the press is made
+// once more on the copy, in the same command (t896). Measure the detached control instead and the first row goes red.
+test("a press whose control was swapped for a pressable copy, on a page settled exactly as it was, is pressed once more on the copy", async (t) => {
+  const { result, ignored, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: true, replaced: "copy" });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.failure, undefined);
+  assert.equal(ignored.made, 2, "the second press is the click's own, on the copy");
+  assert.deepEqual(unchangedAsked, [SETTLE_MS, SETTLE_MS]);
 });
 
 test("a press whose control was swapped for a copy and whose page changed landed, and is never pressed again", async (t) => {

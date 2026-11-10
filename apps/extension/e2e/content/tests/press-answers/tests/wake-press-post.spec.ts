@@ -1,16 +1,19 @@
-// A press that certainly did nothing is reported as such (t517), on
-// social-network-feed's group composer through the real content-script and
-// page-world bundles (T2 harness: no background worker, no Core, no model).
+// A press that certainly did nothing is pressed once more inside the same
+// command (t517, t896), on social-network-feed's group composer through the
+// real content-script and page-world bundles (T2 harness: no background worker,
+// no Core, no model).
 //
 // The composer's Post takes its first press only as a wake-up: it spins for
 // 450 ms, turns back into Post, and posts nothing; the second press posts
 // (`client/composer-script.ts`). Until t517 the spinner read as the page's
 // answer, so trials and playback passed the press with nothing posted
-// (`run-mv6v2jh4-69244ffb`). Now the first press fails as
-// `web.action.no_effect`, marked `certainNoEffect`, which Core makes once more;
-// the second press here stands in for that one press more. The oracle is the
-// page's own traffic -- how many group-post requests reached the network --
-// and the group's pending box, never the reply alone.
+// (`run-mv6v2jh4-69244ffb`). From t517 the first press failed as
+// `web.action.no_effect` for Core to make again; since t896 the click's settled
+// look reads it as certainly nothing and presses once more itself, so one
+// command posts. The press that posts began a request, so it is never pressed
+// again. The oracle is the page's own traffic -- how many group-post requests
+// reached the network, and still only one after a wait -- and the group's
+// pending box, never the reply alone.
 
 import type { BrowserActionResult } from "../../../../../src/shared/protocol.js";
 import { expect, test } from "../../../index.js";
@@ -32,7 +35,7 @@ async function apply(harness: ContentHarness, operation: string, payload: object
   expect(response.ok, `${operation} answered ${response.status}`).toBe(true);
 }
 
-test("a Post that only wakes on its first press is reported as certainly without effect, and the press made once more posts", async ({ openHarness, page }) => {
+test("a Post that only wakes on its first press is pressed once more in the same command, and posts exactly once", async ({ openHarness, page }) => {
   test.setTimeout(60_000);
   const harness = await openHarness("social-network-feed");
   await apply(harness, "consent", { choice: "all" });
@@ -52,15 +55,14 @@ test("a Post that only wakes on its first press is reported as certainly without
   await page.locator('[role="dialog"] [contenteditable="true"]').pressSequentially(TEXT);
   await expect(page.locator(POST)).toHaveAttribute("aria-disabled", "false");
 
-  const first = await harness.runAction({ commandId: "post-1", actionType: "web.dom.click", selector: POST, element: { selector: POST } });
-  expect(first.status, actualOf(first)).toBe("failed");
-  expect(first.failure).toMatchObject({ code: "web.action.no_effect", retryable: true, effect: "unacted", certainNoEffect: true });
-  expect(actualOf(first)).toMatch(/once it settled nothing on it had changed/u);
-  expect(posts, "group-post requests after the first press").toBe(0);
-  await expect(page.locator('[role="dialog"]')).toHaveCount(1);
-
-  const again = await harness.runAction({ commandId: "post-2", actionType: "web.dom.click", selector: POST, element: { selector: POST } });
-  expect(again.status, actualOf(again)).toBe("succeeded");
+  const post = await harness.runAction({ commandId: "post-1", actionType: "web.dom.click", selector: POST, element: { selector: POST } });
+  expect(post.status, actualOf(post)).toBe("succeeded");
+  expect(post.failure).toBeUndefined();
+  expect(actualOf(post)).toMatch(/the first press changed the page only for a moment and left it exactly as before, so it was pressed once more$/u);
   await expect.poll(() => posts, { timeout: 5_000 }).toBe(1);
   await expect(page.locator('[data-testid="pending-posts"]').getByText(TEXT)).toHaveCount(1, { timeout: 5_000 });
+  // Nothing posts a second time afterwards: the press that posted is never pressed again.
+  await page.waitForTimeout(2_000);
+  expect(posts, "group-post requests in all").toBe(1);
+  await expect(page.locator('[data-testid="pending-posts"]').getByText(TEXT)).toHaveCount(1);
 });

@@ -447,6 +447,8 @@ const noRoundAfterAWholeRun = (decide: ScriptedReply): ScriptedReply => (request
 
 /** Rounds of both attempts: each kind's replies are counted across a run, and two attempts are one run. */
 const MOST_DECISIONS = 80;
+/** Attempts in the Lab's default series (`lab attempt`, `--attempts 4`): one exploring attempt and three deterministic ones. */
+const SERIES_ATTEMPTS = 4;
 
 export function localClassifiedsSaveDiningTablesScript(form: string = "plain"): ScriptedModelScript {
   if (form !== "plain" && form !== "reshape" && form !== "row-link" && form !== "open-save-back" && form !== "by-hand" && form !== "by-hand-unread" && form !== "again-check" && form !== "again-press" && form !== "run-again") throw new Error(`This script has no form "${form}". It has plain, reshape, row-link, open-save-back, by-hand, by-hand-unread, again-check, again-press and run-again`);
@@ -460,9 +462,10 @@ export function localClassifiedsSaveDiningTablesScript(form: string = "plain"): 
   return Object.freeze({
     taskId: "local-classifieds-save-dining-tables",
     replies: {
-      panel_command: [startAttempt, startAttempt],
+      // One chat reading and one judge per attempt, for the Lab's default series (`--attempts 4`).
+      panel_command: Array.from({ length: SERIES_ATTEMPTS }, () => startAttempt),
       evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-      loop_verification: [judge, judge, judge],
+      loop_verification: Array.from({ length: SERIES_ATTEMPTS }, () => judge),
     },
   });
 }

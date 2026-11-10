@@ -16,10 +16,11 @@
 // round 6 slot 2, `run-mvrj7qg9-b6dc94f6`, t772 w11). The read that can say a
 // lasting press was ignored is the extension's: it watches the press for a
 // request, a navigation, a focus move and a change in the control's section,
-// presses once more itself when none came, and answers a press that settled
-// exactly as it was `web.action.no_effect`, `certainNoEffect`, which Core's
-// retries make once more (`apps/extension/src/content/actions/click.ts`, t517)
-// -- social's Post. A press that reaches here was answered by the page in
+// presses once more itself when none came or when the press settled exactly as
+// it was (t517, t896) -- social's Post -- and answers a press made once more
+// that settled exactly as it was too `web.action.no_effect`, `certainNoEffect`,
+// which Core's retries make again under the first attempt plus three retries
+// (`apps/extension/src/content/actions/click.ts`, t528). A press that reaches here was answered by the page in
 // some way the extension saw. So:
 //
 // - a press whose call declared a lasting consequence is never made again

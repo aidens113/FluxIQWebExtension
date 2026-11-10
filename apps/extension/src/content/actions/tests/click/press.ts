@@ -30,10 +30,13 @@ export async function click(
   const checks = fakeCheckWatch(sighting, page.events);
   // A page that answers the press unless a row says it ignored it, so every
   // row written before the extra press existed keeps its meaning.
-  const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events, pressing.secondSeen, pressing.settledUnchanged);
+  const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events, pressing.secondSeen, pressing.settledUnchanged, pressing.secondSettledUnchanged);
   const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true, pressing.againAs, undefined, replaced);
-  const result = await clickAction(action, deps, startedAt);
-  return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record, unchangedAsked: ignored.unchangedAsked };
+  // A command of its own, as each command Core sends is: the verb counts its extra press against the object
+  // (`action-runtime/ignored-press/command-presses.ts`), and the shared CLICK would carry one row's into the next.
+  const command = action === CLICK ? { ...CLICK } : action;
+  const result = await clickAction(command, deps, startedAt);
+  return { result, command, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record, unchangedAsked: ignored.unchangedAsked };
 }
 
 /** What the page did about the first press, for the rows about pressing once more. */
@@ -52,6 +55,8 @@ export type PressOptions = {
   secondSeen?: PressSignal[];
   /** Whether the page, once settled, was exactly as before the press (t517), or so but for its own notice (t743); it was not unless a row says so. */
   settledUnchanged?: boolean | "announced";
+  /** The same, for the press made once more when it is looked at (t896); it was not unless a row says so. */
+  secondSettledUnchanged?: boolean | "announced";
 };
 
 /** The events of one press, from the hover to the click, with the watches a first press on a button starts. */

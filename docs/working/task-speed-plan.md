@@ -15,14 +15,21 @@ Related: [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), [Answer Fi
 
 **State (2026-11-10).** Phase A lane A1 has landed on both devs (task t888): S0's spans and the Lab speed report, S3's event-based readiness, and S4's kept look. Provider-free on three realistic sites, click overhead fell from 2.2-2.6 s to 1.4-1.8 s, and browser overhead per attempt from 38.2 to 28.5 s, 18.5 to 11.0 s and 19.4 to 13.6 s, with the same outcomes ([report](./task-speed-plan/reports/browser-step.md)). Not yet run live. Still open from S0: per-step timing for a saved Flow's replay, whose hook lives in `domain/src/runtime/adapter.ts` or Core's answer-first flow-run. Each second attempt still shows about 53 s of unexplained gaps. The first four-attempt run (t889) measured each replay at 2 model calls (interpretation and judge) and 46-48 s for 18 steps; see S6 and the new S9. **Top priority (user, 2026-11-10):** "the actual node execution times are very slow right now... it takes a long time for a click or any other action to actually register... it should be basically instant". S10 rounds 1-3 have landed (t890-t892).
 
-**Round 4 (t893) is held, not merged.** It fixes the pushState readiness drop and the list read's two 900 ms windows (a replayed list read went from 1.9 s to 0.7 s). But the faster read changes a popup's timing on professional-network, which exposes a Core act-gate defect: "Close" was refused as "act already done: Accept". The live lane is fixing that defect, and t893 lands once professional-network passes with it.
+**Round 4 (t893) is held, not merged** (committed on its own branch as 2fedc0d14). It fixes the pushState readiness drop and the list read's two 900 ms windows (a replayed list read went from 1.9 s to 0.7 s). The faster read exposed a Core act-gate defect on professional-network, now fixed in dev. t893 lands once professional-network passes with that fix. The re-proof needs the shared Core synced, and a leftover `next start` server from an ended session (pid 17772, ports 49216/49217) inside the shared Core blocks that; it waits for the user.
 
-**Integration.** The live lane (t885) was merged into dev on 2026-11-10. **Lane t894 is running:**
-- S6: exact words skip the interpretation call;
-- S9: a replay is judged only when it deviates;
-- conditional prompt steps are passed over at once on replay.
+**Landed 2026-11-10:**
+- t894: S6 (exact words skip the interpretation call), optional steps passed over at once, the S9 rule.
+- t895: S9 wired. A replay that ran exactly as the run the person accepted stands on that record with no judge call. A Flow's first replay is still its one judged whole run, and a person's Run again is always judged.
+- The live lane t885 was integrated again: rows that met every condition stay the result, a wait no longer reads as a failed save, and the judge sees a saved Flow run's left-out rows.
 
-The target is replays at 0 model calls. A2 (S2) follows when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
+**t896 landed (2026-11-10).** local-classifieds' radius Apply swallows the first press after the select changes. The click now presses once more inside the same command when the first press certainly did nothing. Dining replays then ran Apply as one command with no retry (`run-mwb81x8q-432e8389`). When both presses certainly did nothing, the command still fails as no-effect, so Core's first attempt plus three retries hold.
+
+Dining attempts 3 and 4 were still judged once each, for a deviation Core does not yet persist. **Lane t897** persists the S9 deviation on the attempt's record and step files, names this one, and fixes it. It also fixes:
+- the Lab reading a replay mid-run during its permission wait;
+- the run gate not saying "already done" for a carried act;
+- handles reused by a different element (a per-document node token), which made a composer opener look like a lasting act.
+
+**Next.** Phase B (S1 effort per decision, S5 judge verdict-first) and A2 (S2), when memory allows. The measurements are in the [time breakdown](./mvp-seal-plan/reports/time-breakdown.md), which draws on 44 live Claude runs (2026-11-04 to 11-09), per-step logs and 57 attempt reports.
 
 **The user's words (2026-11-10):**
 - "lets try and really increase efficiency, especially when it comes to time"
@@ -36,7 +43,15 @@ The target is replays at 0 model calls. A2 (S2) follows when memory allows. The 
 
 Over a whole attempt, model decisions are 56-61% of the time, browser nodes 18-23%, the judge 7-9%, the chat's interpretation call about 2%, and Core's gaps between steps under 5%.
 
-**Next:** Phase A. Its lanes touch files no running lane owns.
+**Latest measurement (towels on Haiku, `run-mwb2kkv5-1baeee11`, attempt 1, 490 s).**
+- Model decisions: 386.7 s (79%), 26 calls at about 14.9 s each, 337k uncached input tokens. Time to first token is not logged.
+- Browser: 68.5 s, of which 38.5 s is the actions and 30.0 s overhead.
+  - 11 list reads at 2.4 s each.
+  - 8 Next-page presses at 2.0 s each (0.78 s of it a snapshot send).
+  - 2 selects at 6.0 s each, where the sort lands on the site's self-clearing robot check, which is waited out.
+- Judge: 21.9 s (1 call). Gaps: 8.9 s. Interpretation: 3.1 s.
+
+S1 (effort per decision) is still the largest lever for a first attempt.
 
 ## Goal And How It Is Judged
 
@@ -306,6 +321,61 @@ Each item names the cause, the evidence, the fix, where it lives, the time it sh
   - Domain `tsc` (src and tests) -> clean.
   - Structure audit -> passed.
 - Outcome: merged into dev ("Merge task t892: web-instant-actions-3") and pushed.
+
+### 2026-11-10 - t894: replays without the interpretation call, optional steps passed at once (S6, S9 rule)
+
+- Agent: lead; worker replay-zero-calls (Opus).
+- Changed (Core):
+  - S6: a chat turn whose words fold to a known task key routes to the task with no model call (`runtime/conversations/instructions/known-task.ts`, `commands/answer-first/known-task.ts`). Paraphrases and other requests still reach the model.
+  - Optional steps: before an optional step's first dispatch, Core asks the host once, with no wait, whether its control is shown (`engine/automation/state-routing/optional-not-shown.ts`).
+  - S9's rule (`answer-first/completion/replay-stands.ts`, 12 named deviations) is written and tested but **not yet wired**. The flow-run record, task memory and the attempt must supply `replay()`, and those files are the live lane's.
+- Measured, provider-free, local-classifieds dining tables (`run-mwaw30ax-02e6fad1`):
+  - Replays 28.4/28.8 s -> 18.9/19.0 s, at 1 call each (interpretation 0, judge 1). One interpretation call across the series.
+  - The absent prompt step 5,109 -> about 20 ms.
+  - Crossborder timed-check `--attempts 2` passed, with the replay's judge still asked.
+- Validation: re-run by the lead.
+  - Core `vitest run` engine/automation, answer-first, conversations, conversation-requests -> 263 files, 2074 passed.
+  - fluxiq `tsc` -> exit 0. Core structure audit -> passed.
+  - After merging Core dev (act-gate fix): act-record, completion, conversations and state-routing -> 88 files, 820 passed.
+- Decided: a retried step counts as a deviation, so its replay is judged. Why a replayed step (s7) needed a retry (`web.action.no_effect`, then passed) is a determinism defect to trace.
+- Outcome: merged into both devs ("Merge task t894: replay-zero-calls") and pushed. Next: wire S9; trace the s7 retry.
+
+### 2026-11-10 - t895: replays stand on their record (S9 wired)
+
+- Agent: lead; worker replay-on-record (Opus).
+- Changed (Core answer-first):
+  - `flow-run/steps-ran.ts`: each step carries a closed skip reason, whether a person cleared a check, and its retry count.
+  - `task-memory/saved-flow.ts`: the saved Flow keeps the shape of what it read (`shape: {columns, empty}`, written in `attempt/remember.ts`).
+  - `completion/replay-of.ts`: supplies `replay()` from the attempt (`attempt/run-attempt.ts`).
+  - The chat says "Ran as accepted" (`completion/on-record.ts`, `conversations/commands/answer-first/outcome.ts`).
+  - New deviation `asked_again`: a person's Run again is always judged.
+- Measured, provider-free (`run-mwazisjn-ab645012`, dining tables):
+  - Replays used 0 interpretation calls and 1 judge call each: attempt 2 was `flow_not_proven` (the Flow's one judged whole run), attempt 3 `step_retried` (Apply).
+  - Crossborder timed-check passed at `--attempts 2` and 3, judged because a person cleared checks (`check_cleared`).
+- Cause of the s7/s9 retry: the site swallows the first Apply after a select changes, on purpose. Handed to lane t896 (`click.ts`), not tolerated in S9.
+- Validation:
+  - t895 merged with dev: Core `vitest run` answer-first, result-verification, engine/automation, conversations -> 482 files, 3776 passed.
+  - fluxiq `tsc` -> exit 0. Core structure audit -> passed. Core libraries rebuilt -> exit 0.
+  - Domain `tsc` -> exit 0. Extension check -> exit 0. Extension structure audit -> passed.
+- Outcome: merged into both devs ("Merge task t895: wire-replay-on-record") and pushed. Next: t896, so dining replays stand on their record at 0 calls.
+
+### 2026-11-10 - t896: a swallowed press is pressed once more inside the click (S9, S10)
+
+- Agent: lead; worker press-once-in-command (Opus).
+- Changed: extension `content/actions/click.ts`, `pressInPlace`.
+  - A first press the settled look finds certainly did nothing is pressed once more in the same command.
+  - When the second press also certainly did nothing, the command fails as `web.action.no_effect`, so Core's first attempt plus three retries (t528) still apply.
+  - A press is only ever made after a certain-nothing verdict on the one before.
+  - `wake-press-post.spec.ts` now expects one Post command that posts once.
+  - Stale "once only" comments in `recovery/fault.ts` and the domain now state the rule.
+- Decided: the brief's "one extra press in total" was stale (t517, superseded by the user's t528 rule). Every Core attempt keeps its retries.
+- Measured:
+  - Provider-free dining (`run-mwb81x8q-432e8389`): Apply ran as one command in 886-915 ms with no retry; all answers right.
+  - Live Post on Haiku (`run-mwb5cnxg-003415b4`, $0.0164): the series posted once.
+- Validation:
+  - Lead re-run: `node scripts/test-extension.mjs src/content/actions/tests src/content/action-runtime` -> 742/742; extension check -> exit 0; structure audit -> passed.
+  - `node scripts/test-content.mjs -- e2e/content/tests/press-answers` -> 8 passed.
+- Outcome: merged into both devs ("Merge task t896: press-once-in-command") and pushed. Dining attempts 3-4 still judged once each (deviation not persisted), handed to t897.
 
 ## Open Questions
 
