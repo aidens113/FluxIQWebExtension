@@ -46,7 +46,7 @@ test("find_on_page is offered with the view described, searches a capture that i
   assert.match(tool.description, /handle \(tN/u);
 
   const found = await runtime.executeTool({ ...PROJECT, callId: "call.find", toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID, value: { query: "menu-orders" } });
-  assert.deepEqual(captures, [{ includeHidden: true }]);
+  assert.deepEqual(captures, [{ includeHidden: true, checkWaitMs: 15_000 }]);
   assert.equal(found.resultCode, "web.inspect.succeeded");
   assert.equal(found.effectApplied, false);
   const evidence = found.evidence as { schemaVersion: string; location: string; found: string };

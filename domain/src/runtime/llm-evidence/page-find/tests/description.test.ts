@@ -73,7 +73,7 @@ test("describe_element is offered, captures with hidden elements, and describes 
   const element = (described.evidence as { schemaVersion: string; element: string }).element;
   assert.match(element, /^t2 <a> link "Your orders"$/mu);
   assert.match(element, /^attributes: href="https:\/\/shop\.test\/orders" data-testid="menu-orders"$/mu);
-  assert.deepEqual(captures, [{ includeHidden: true }, { includeHidden: true }]);
+  assert.deepEqual(captures, [{ includeHidden: true, checkWaitMs: 15_000 }, { includeHidden: true, checkWaitMs: 15_000 }]);
   assert.equal(JSON.stringify(described.evidence).includes("#orders"), false, "no selector reaches the model");
 
   const refused = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.describe.bad", toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID, value: { target: "#orders" } });

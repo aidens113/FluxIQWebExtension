@@ -176,3 +176,77 @@ test("a target refused as hidden is kept beside its result for the retry loop to
   assert.deepEqual(asked, [], "a disabled refusal's target is not noted for the reveal");
   assert.equal(JSON.stringify(hidden).includes("isConnected"), false, "nothing of the element is on the result");
 });
+
+// A failure turned into a robot-check failure keeps what the original said about the act:
+// `effect: "unacted"` stays, and nothing is invented where the original stated nothing. Core reads
+// an unpressed filter as possibly pressed when it is lost (run-mwapfy0i-d64b26db). The page is a
+// hand-built tree with only the members `challenge-evidence.ts` reads.
+
+class RobotCheckElement {
+  readonly shadowRoot = null;
+  constructor(readonly tagName: string, readonly children: readonly (RobotCheckElement | string)[] = []) {}
+  matches(): boolean {
+    return false;
+  }
+  getClientRects(): unknown[] {
+    return [{}];
+  }
+  querySelectorAll(selector: string): RobotCheckElement[] {
+    const all = this.descendants();
+    if (selector === "*") return all;
+    if (selector.startsWith("h1, h2")) return all.filter((element) => /^H[1-6]$/.test(element.tagName));
+    return [];
+  }
+  get textContent(): string {
+    return this.children.map((child) => typeof child === "string" ? child : child.textContent).join("");
+  }
+  get innerText(): string {
+    const text = this.children.map((child) => typeof child === "string" ? child : child.innerText).join("");
+    return this.tagName === "BODY" || /^H[1-6]$/.test(this.tagName) || this.tagName === "P" ? `\n${text}\n` : text;
+  }
+  private descendants(): RobotCheckElement[] {
+    return this.children.flatMap((child) => typeof child === "string" ? [] : [child, ...child.descendants()]);
+  }
+}
+
+const ROBOT_CHECK_BODY = new RobotCheckElement("BODY", [
+  new RobotCheckElement("H1", ["Please verify you are human"]),
+  new RobotCheckElement("P", ["Confirm you are not a robot to continue."])
+]);
+
+async function installRobotCheckPage(t: TestContext): Promise<typeof import("../results").actionRejected> {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  const before = { document: scope.document, location: scope.location, window: scope.window, HTMLElement: scope.HTMLElement };
+  const view: Record<string, unknown> = { innerWidth: 1280, innerHeight: 800, addEventListener: () => undefined };
+  view.top = view;
+  scope.window = view;
+  scope.HTMLElement = RobotCheckElement;
+  scope.document = { title: "Check", body: ROBOT_CHECK_BODY, querySelector: () => null, querySelectorAll: () => [], addEventListener: () => undefined };
+  scope.location = { href: "http://127.0.0.1:4000/check" };
+  t.after(() => {
+    scope.document = before.document;
+    scope.location = before.location;
+    scope.window = before.window;
+    if (before.HTMLElement === undefined) delete scope.HTMLElement;
+    else scope.HTMLElement = before.HTMLElement;
+  });
+  return (await import("../results")).actionRejected;
+}
+
+const FILTER_CLICK = { commandId: "c1", actionType: "web.dom.click", selector: "#filter-in-stock" } as BrowserActionCommand;
+const GATE_UNACTED: ActionResultEvidence = { snapshot: {} as DomSnapshot, refusedBeforeDispatch: true };
+const GATE_UNSTATED: ActionResultEvidence = { snapshot: {} as DomSnapshot };
+
+test("a missing target that stated unacted keeps it when the page is a robot check", async (t) => {
+  const reject = await installRobotCheckPage(t);
+  const result = reject(FILTER_CLICK, 0, "disabled", "enabled", "disabled", GATE_UNACTED);
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
+  assert.equal(result.failure?.effect, "unacted");
+});
+
+test("a failure that did not state unacted gets no effect from the robot-check rewrite", async (t) => {
+  const reject = await installRobotCheckPage(t);
+  const result = reject(FILTER_CLICK, 0, "disabled", "enabled", "disabled", GATE_UNSTATED);
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
+  assert.equal(result.failure?.effect, undefined);
+});

@@ -141,6 +141,11 @@ export function createWebAutomationLlmEvidenceRuntime(
   // navigation the model runs carries the same room to wait out a robot check
   // that clears by itself as the Flow's own (`actions/check-wait.ts`).
   const gateway = webNodeFinalGateway(sessions);
+  // The passive readers -- a result check, the start state, a post-failure
+  // capture -- read a check page as a page: a failed one throws in Core's
+  // engine, so they go out as they always did, without the check allowance
+  // (`actions/check-wait.ts`).
+  const passiveGateway = sessions;
   const frozenExecution = createWebNodeFrozenExecution();
   // Which node one free look runs, read from this domain's own definitions
   // rather than named here (`./node-run/catalog.ts`).
@@ -210,13 +215,13 @@ export function createWebAutomationLlmEvidenceRuntime(
   return {
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     observeResult: (input) => observeWebLlmResult(
-      (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()),
+      (request) => captureEvidence(passiveGateway, selectSession(gateway.eligibleSessionIds()),
         { ...request, toolId: "web.result_observation", value: {} }, request.signal, undefined, { includeHidden: true }), input),
     clearedControlHandles: webLlmClearedControlHandles({ wayOuts: clearedWayOuts, stable: (scope, binding) => stableHandles.restamp(scope, binding), remember: (scope, binding) => targetPackets.rememberLook(scope, binding) }),
     // The page a build began on and what differs from it now (t462): the same
     // passive capture, so nothing is restamped, retained or shown.
     startState: (input) => observeWebStartState(
-      (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()),
+      (request) => captureEvidence(passiveGateway, selectSession(gateway.eligibleSessionIds()),
         { ...request, toolId: "web.start_state", value: {} }, request.signal, undefined, { includeHidden: true }), input),
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
@@ -493,7 +498,7 @@ export function createWebAutomationLlmEvidenceRuntime(
       boundedIdentifier(input.failedAction.nodeId, "failedAction.nodeId");
       boundedIdentifier(input.failedAction.definitionId, "failedAction.definitionId");
       const sessionId = selectSession(gateway.eligibleSessionIds());
-      const result = await gateway.executeAction(sessionId, {
+      const result = await passiveGateway.executeAction(sessionId, {
         actionType: "web.dom.capture_snapshot",
         parameters: {},
         metadata: {

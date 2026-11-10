@@ -28,7 +28,8 @@ test("production binding carries a passive result reader while ordinary snapshot
   assert.deepEqual(commands.map(x => [x.actionType, x.parameters]), [["web.dom.capture_snapshot", { includeHidden: true }]]);
   const ordinary = await bound.executeTool({ projectId: "project", flowId: "flow", callId: "ordinary", toolId: "core.run_node", value: bound.runsNodes!.initial! });
   assert.doesNotMatch(String((ordinary.evidence as JsonObject).page), /Ledger/u);
-  assert.deepEqual(commands[1]?.parameters, {});
+  // The model's own look carries the check allowance; the passive reader above does not (t885).
+  assert.deepEqual(commands[1]?.parameters, { checkWaitMs: 15_000 });
   const refused = await bound.executeTool({ projectId: "project", flowId: "flow", callId: "unissued", toolId: "core.run_node", value: { node: "web.output.dom-click", parameters: { target: { handle: "t2" } }, consequences: [] } });
   assert.equal(refused.effectApplied, false, "passive hidden state issued no executable handle");
   assert.ok(commands.every(command => command.actionType === "web.dom.capture_snapshot"));
