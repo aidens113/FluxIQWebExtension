@@ -20,7 +20,7 @@
 // the page it was already on was reported as a success. `navigation/outcome.ts`
 // judges the record.
 
-import { tabNavigationEpochs } from "./navigation-events";
+import { pageWorkSettled, refreshDeclaredSoon, tabNavigationEpochs } from "./navigation-events";
 
 const DEFAULT_AUTOMATION_URL = "about:blank";
 
@@ -124,7 +124,8 @@ export async function resolveAutomationTab(input: AutomationTabRequest = {}): Pr
   if (tab.id === undefined) throw new Error("Unable to create FluxIQ automation tab.");
   setAutomationTab(tab.id);
   if (!initialUrl) return { tabId: tab.id };
-  await waitForTabReady(tab.id);
+  // A new tab has had no navigation of its own before this one.
+  await waitForTabReady(tab.id, { epochBefore: 0 });
   // A tab opened at the URL is a move by construction: there was no document
   // before it, and the one it now holds is the navigation's own.
   return {
@@ -230,6 +231,8 @@ async function updateTabUrl(tabId: number, url: string, holdsRobotCheck?: (tabId
   const urlBefore = await readTabUrl(tabId);
   const documentBefore = await readTopDocumentId(tabId);
   const reloaded = urlBefore === url;
+  // Read before the drive, so the wait knows the browser has begun this navigation and not an earlier one.
+  const epochBefore = tabNavigationEpochs.of(tabId);
   if (reloaded && holdsRobotCheck !== undefined && await holdsRobotCheck(tabId)) {
     await chrome.tabs.update(tabId, { active: true });
     return { urlBefore, documentBefore, urlAfter: urlBefore, documentAfter: documentBefore, opened: false, reloaded: false, heldForCheck: true };
@@ -240,7 +243,7 @@ async function updateTabUrl(tabId: number, url: string, holdsRobotCheck?: (tabId
   } else {
     await chrome.tabs.update(tabId, { url, active: true });
   }
-  await waitForTabReady(tabId);
+  await waitForTabReady(tabId, { epochBefore });
   return {
     urlBefore,
     documentBefore,
@@ -328,18 +331,31 @@ function readTopDocumentId(tabId: number): Promise<string | undefined> {
 }
 
 /**
- * Waits until the tab has held one address for a second with its load
- * complete, or 20 s have passed.
+ * Waits until the tab has finished moving and the page has finished drawing
+ * itself, or 20 s have passed (task speed S10):
+ * - by the browser's events: its load complete, no address pending, no
+ *   top-frame navigation begun and not ended (`./navigation-events/epochs.ts`),
+ *   and, for a tab FluxIQ drove (`drive`), the navigation heard beginning;
+ * - by the page's own work: every timer it set within the horizon, animation
+ *   frame, fetch and XHR it began done, recurring work left out, and its
+ *   document unchanged across a task (`./navigation-events/page-work.ts`,
+ *   `page-world/page-work/`). local-classifieds draws a listing's panel from a
+ *   timer then a request, and its sorted results after an address rewritten in
+ *   place and a delay; the load event alone said neither was there.
+ *
+ * Until 2026-11-10 it waited instead for the address to stand still a whole
+ * second. That second is kept only where nothing can speak for the page: a
+ * drive the browser ignored (it begins nothing), a page with no page world
+ * counting, and a page that declares a refresh due within it
+ * (`./navigation-events/declared-refresh.ts`).
  *
  * A tab found settled is proven ready as a look proves it
  * (`noteSnapshotReadiness`): while no navigation event of the tab follows, the
  * same document is the tab this wait just found settled, so the next action on
- * it starts at once (task speed S10). Until 2026-11-10 only a look left that
- * proof, and a saved Flow's replay, which takes no look, paid this wait's whole
- * second again before every act on a page nothing had navigated since the last.
- * A wait that ends on its deadline, or on a tab that closed, proves nothing.
+ * it starts at once. A wait that ends on its deadline, or on a tab that closed,
+ * proves nothing.
  */
-export function waitForTabReady(tabId: number): Promise<void> {
+export function waitForTabReady(tabId: number, drive?: { epochBefore: number }): Promise<void> {
   return new Promise((resolve) => {
     let lastUrl: string | undefined;
     let stableSince = 0;
@@ -350,6 +366,8 @@ export function waitForTabReady(tabId: number): Promise<void> {
       clearTimeout(timeout);
       clearInterval(interval);
       chrome.tabs.onUpdated.removeListener(listener);
+      chrome.webNavigation?.onCompleted?.removeListener(ended);
+      chrome.webNavigation?.onErrorOccurred?.removeListener(ended);
       resolve();
     }
     function listener(updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo): void {
@@ -360,7 +378,13 @@ export function waitForTabReady(tabId: number): Promise<void> {
       }
       if (changeInfo.status === "complete") void checkSettled();
     }
+    // The top frame's navigation ending is an event this wait is for: asked again at once, not at the next poll.
+    function ended(details: { tabId: number; frameId: number }): void {
+      if (details.tabId === tabId && details.frameId === 0) void checkSettled();
+    }
     chrome.tabs.onUpdated.addListener(listener);
+    chrome.webNavigation?.onCompleted?.addListener(ended);
+    chrome.webNavigation?.onErrorOccurred?.addListener(ended);
     void checkSettled();
 
     async function checkSettled(): Promise<void> {
@@ -372,10 +396,14 @@ export function waitForTabReady(tabId: number): Promise<void> {
           lastUrl = url;
           stableSince = now;
         }
-        if (tab.status !== "complete") return;
+        if (tab.status !== "complete" || tab.pendingUrl) return;
         if (isTransientNavigationUrl(url)) return;
-        if (now - stableSince < 1_000 || settling) return;
+        if (settling) return;
         settling = true;
+        if (!await settledOnEvidence(tabId, drive) && Date.now() - stableSince < 1_000) {
+          settling = false;
+          return;
+        }
         await noteSnapshotReadiness(tabId, url);
         done();
       } catch {
@@ -383,6 +411,19 @@ export function waitForTabReady(tabId: number): Promise<void> {
       }
     }
   });
+}
+
+/**
+ * Whether the tab's settling is told by evidence, waiting on the page's own
+ * work when it is: false when the drive was not heard beginning, a navigation is
+ * still in flight, the page declares a refresh due soon, or no page world can
+ * speak for the page -- and the old second then decides.
+ */
+async function settledOnEvidence(tabId: number, drive: { epochBefore: number } | undefined): Promise<boolean> {
+  if (drive !== undefined && tabNavigationEpochs.of(tabId) === drive.epochBefore) return false;
+  if (tabNavigationEpochs.inFlight(tabId)) return false;
+  if (await refreshDeclaredSoon(tabId)) return false;
+  return await pageWorkSettled(tabId);
 }
 
 function isTransientNavigationUrl(url: string | undefined): boolean {

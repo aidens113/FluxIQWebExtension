@@ -450,13 +450,14 @@ async function press(
     // Looked at on any control, since a notice may answer one that is not a
     // command control (t743); an unchanged page fails only a command control.
     const looked = lookAgain && changedOnly && !refused && !sighting && ignored !== undefined
-      ? await ignored.settleUnchanged(windowWithin(action, NO_EFFECT_SETTLE_MS))
+      ? await ignored.settleUnchanged(windowWithin(action, NO_EFFECT_SETTLE_MS), served)
       : false;
     return { accepted, refused, sighting, answer, settledUnchanged: looked === true && expectsAnswer(element), noticeOnly: looked === "announced" };
   } finally {
     notice?.stop();
     check?.stop();
     ignored?.stop();
+    served?.stop();
   }
 }
 

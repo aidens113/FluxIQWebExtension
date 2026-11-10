@@ -2680,21 +2680,43 @@ the looks take in each attempt.
 Task speed S10 (t890, t891) replaced each fixed wait left in a step with the event that ends it.
 Retries, permission gates and fingerprint matching are unchanged.
 
-**A page that moved is given a second to settle** (`runtime/automation-tab.ts` `waitForTabReady`).
-After a navigation event, the worker waits until the tab's load is complete and its address has
-stood still for one second. A wait that finds the tab settled leaves the same readiness proof a look
-does, so the next action on that document starts at once (t890). A saved Flow's replay takes no
-look, and before this it paid the second again before every act.
+**A page is ready when it has finished moving and finished drawing itself**
+(`runtime/automation-tab.ts` `waitForTabReady`, `runtime/navigation-events/`, `page-world/page-work/`,
+`shared/scheduled-work-event.ts`). Two kinds of evidence decide it, and both must hold.
 
-The second itself stays. Task speed S10 (t891) tried ending the wait on the browser's events and the
-page world's request count instead, and two Lab runs showed what the second covers. The realistic
-sites draw part of a page after its load, from a timer and then a request: local-classifieds'
-listing panel and its sorted results. A look taken at the load event read a page without them
-(`run-mwaliwap-12e3ad05`, `run-mwalxlxu-efd58e23`). Only some of these pages mark themselves
-`aria-busy` while they work, and a scheduled timer gives no event until it fires. The evidence that
-would end the wait at the right moment is a page-world count of the timers a page schedules while it
-loads, as `page-world/press-work/` counts a press's; that is the next step
-(`docs/working/task-speed-plan/reports/instant-actions-2.md`).
+The browser's events say the tab has finished moving: the tab reads `complete` with no `pendingUrl`;
+no top-frame navigation is in flight (it begins at `onBeforeNavigate` and ends at `onCompleted` or
+`onErrorOccurred`); and, for a navigation FluxIQ drove (`updateTabUrl`, a new tab), the drive has been
+heard beginning.
+
+The page says it has finished drawing itself. The page world counts the work the page schedules for
+itself, each piece until it is done:
+- a timer due within `PAGE_WORK_HORIZON_MS` (1 s);
+- an animation frame;
+- a `fetch`, until its resource-timing entry;
+- an XHR, until its `loadend`.
+
+Recurring work is never counted: a callback scheduled again once it has run, an interval once it has
+fired, and whatever such a callback begins. That is how a page that polls forever leaves readiness
+alone, by its own evidence rather than a time limit. The worker injects a function that asks the page
+world and waits for its count to drain (`fluxiq:page-work-drained`). It confirms one task later, with
+the document unchanged across that task by a `MutationObserver`.
+
+This is what the realistic sites need. local-classifieds draws a listing's panel from a 500-1000 ms
+timer and then a request, and draws its sorted results after rewriting the address in place, a short
+delay and a request. The load event alone said neither was there (`run-mwaliwap-12e3ad05`,
+`run-mwalxlxu-efd58e23`).
+
+Until 2026-11-11 the wait needed the address to stand still for one second instead. That second is
+kept only where nothing can speak for the page:
+- a drive the browser ignored, which begins nothing;
+- a page with no page world counting;
+- a page that declares a `<meta http-equiv="refresh">` due within it
+  (`navigation-events/declared-refresh.ts`).
+
+A move the page makes by itself afterwards is a navigation event, and the next action waits it out. A
+wait that finds the tab settled leaves the same readiness proof a look does (t890), so the next action
+on that document starts at once.
 
 **A press reports what its own document saw** (`content/action-runtime/navigation-watch/`,
 `shared/protocol.ts` `ActionNavigationSeen`). From the start of each action to its reply, the content
@@ -2720,8 +2742,14 @@ world counts each request it sees and when each one answers:
 The page world announces each answer as `fluxiq:request-answered` on `window`. The rate-limit notice
 window (500 ms) and the robot-check window after a press close one task after every request the press
 began has answered. A refusal or a check is the server's answer to one of those requests, so it is on
-the page by then. A notice still missing its wait keeps the window. A press that began no request,
-and a page world that cannot say, keep the whole window.
+the page by then. A notice still missing its wait keeps the window.
+
+A press that began no request is complete once its own causal work has run, as
+`page-world/press-work/` follows it (t892): a handler that opened a dialog or a list and was done.
+Then the windows close, and the settled look (`ignored-press/settled-look.ts`) reads the press's
+section as it stands, with no `QUIET_MS` or `HELD_MS` to wait. Before this, local-classifieds'
+location chip and its sort box each spent 0.8-1.2 s in the content script after the press. Work still
+running, and work the page world cannot follow (an `async` handler), keep the waits they had.
 
 **The press moment** (`content/action-runtime/acted-at/`). Each action records when it first acted on
 the page (the press, the key, the value set) as `actedAt`. The domain's payload carries it

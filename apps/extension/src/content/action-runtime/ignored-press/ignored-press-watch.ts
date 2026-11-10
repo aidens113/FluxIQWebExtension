@@ -39,7 +39,7 @@ export type IgnoredPressWatch = {
    * own notice regions (t743), and `false` otherwise (`settled-look.ts`).
    * Stops the look.
    */
-  settleUnchanged(windowMs: number): Promise<boolean | "announced">;
+  settleUnchanged(windowMs: number, work?: { workDone(): boolean }): Promise<boolean | "announced">;
   /** Stops without waiting, the settled look included; safe to call more than once. */
   stop(): void;
 };
@@ -79,7 +79,7 @@ export function watchIgnoredPress(
       stop();
       settledLook.stop();
     },
-    settleUnchanged: (windowMs) => settledLook.settle(windowMs),
+    settleUnchanged: (windowMs, work) => settledLook.settle(windowMs, work),
     settle(windowMs) {
       if (!stopped) listener.flush();
       if (seen.length > 0 || windowMs <= 0 || stopped) {
