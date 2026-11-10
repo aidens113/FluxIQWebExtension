@@ -9,15 +9,17 @@ import {
   workerBlockedFailure
 } from "./action-results";
 import {
-  consumeSnapshotReadiness,
   currentAutomationTabId,
   latestOpenAutomationTab,
   noteSnapshotReadiness,
   readTabUrl,
+  readyFromSnapshot,
   resolveAutomationTab,
   setAutomationTab,
   waitForTabReady
 } from "./automation-tab";
+import { keptLooks, type LookReuseAccess } from "./look-reuse";
+import { tabNavigationEpochs } from "./navigation-events";
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
 import { sendClickCheckingLanding } from "./click-landing";
@@ -81,6 +83,9 @@ const TOP_FRAME_ID = 0;
 /** How a landing's robot check is read and waited out: the runner's own sender and settling wait. */
 const LANDED_TAB_ACCESS: LandedTabAccess = { send: sendToTab, settle: waitForTabReady };
 
+/** How a kept look is vouched for: every frame's change mark, and the tab's navigation epoch (`look-reuse/`). */
+const LOOK_REUSE_ACCESS: LookReuseAccess = { frames: allTabFrames, send: (tabId, message, frameId) => sendToTab(tabId, message, frameId), epoch: (tabId) => tabNavigationEpochs.of(tabId) };
+
 export async function runBrowserActionCommand(request: BrowserActionRunRequest): Promise<BrowserActionRunResult> {
   let action = request.action;
 
@@ -89,6 +94,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   // to open it from -- and the page guard, which is about the document an
   // action needs, does not apply to them.
   if (action.actionType === "web.browser.tab") {
+    // Opening, closing or switching tabs is no read: no kept look stands past it.
+    keptLooks.forget(undefined);
     const result = await runBrowserTabAction(action, { attachTabForRecording: request.attachTabForRecording, verifyLanding: (tabId, url, startedAt) => verifyNavigationLanding(action, startedAt, tabId, url, { opened: true, reloaded: false }, { frames: allTabFrames, send: sendToTab }, request.pace) });
     const selected = currentAutomationTabId();
     const operation = tabRequestForAction(action);
@@ -97,6 +104,7 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     return withTarget(result, selected, undefined);
   }
   if (action.actionType === "web.browser.download") {
+    keptLooks.forget(undefined);
     return withTarget(await runBrowserDownloadAction(action), currentAutomationTabId(), undefined);
   }
 
@@ -123,6 +131,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   const drivenBefore = currentAutomationTabId();
   const tabRequest = await tabRequestFor(action, runOn, isNavigation);
   const { tabId, drive } = await resolveAutomationTab(tabRequest);
+  // Anything but a read sent to the tab ends its kept look: the look after an act is always a fresh capture (`look-reuse/`).
+  keptLooks.forget(tabId, action);
   // A Flow's new-tab navigate opened this tab, so it is FluxIQ's to close.
   if (tabRequest?.forceNew === true && drive?.opened === true) fluxiqOpenedTabs.note(tabId, drivenBefore);
   const frameId = frameIdForAction(action);
@@ -139,22 +149,29 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     return withTarget(navigationPace ? withPaceNote(result, navigationPace) : result, tabId, frameId);
   }
 
-  if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
+  // Ready at once while the last look's document stands and nothing has navigated the tab since (task speed S3).
+  if (!await readyFromSnapshot(tabId)) await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
   const addressed = frameId !== undefined || frameUrlPathForAction(action) !== undefined;
-  // A throw is reported by the command router as the browser worded it; one
-  // whose action never reached the page also says nothing was done
-  // (`page-delivery.ts`), so Core may make it again.
-  const frameMerge = await prepareFrameSnapshots(action, tabId, addressed, startedAt, request.mergeFrameSnapshots);
-  const delivery = trackActionDelivery(sendToTab);
-  let inFrame: BrowserActionRunResult;
-  try {
-    inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace, delivery, request.noteDispatch);
-  } catch (error) {
-    if (delivery.mayHaveReachedPage()) throw error;
-    return withTarget(undeliveredActionFailure(action, error), tabId, frameId);
-  }
-  const run = await lookAcrossFrames(action, inFrame, addressed, startedAt, frameMerge);
+  const runOnPage = async (): Promise<BrowserActionRunResult> => {
+    // A throw is reported by the command router as the browser worded it; one
+    // whose action never reached the page also says nothing was done
+    // (`page-delivery.ts`), so Core may make it again.
+    const frameMerge = await prepareFrameSnapshots(action, tabId, addressed, startedAt, request.mergeFrameSnapshots);
+    const delivery = trackActionDelivery(sendToTab);
+    let inFrame: BrowserActionRunResult;
+    try {
+      inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace, delivery, request.noteDispatch);
+    } catch (error) {
+      if (delivery.mayHaveReachedPage()) throw error;
+      return withTarget(undeliveredActionFailure(action, error), tabId, frameId);
+    }
+    return await lookAcrossFrames(action, inFrame, addressed, startedAt, frameMerge);
+  };
+  // A whole-tab look the page has not moved since the last one is that look (task speed S4, `look-reuse/`).
+  let taken: BrowserActionRunResult | undefined;
+  const looked = await keptLooks.look(tabId, action, addressed, LOOK_REUSE_ACCESS, async () => (taken = await runOnPage()).result);
+  const run = taken !== undefined && !looked.reused ? taken : withTarget(looked.result, tabId, TOP_FRAME_ID);
   if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
     await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
   }
