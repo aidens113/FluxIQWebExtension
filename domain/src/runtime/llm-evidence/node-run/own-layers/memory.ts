@@ -1,4 +1,4 @@
-// Which layers this build opened itself, by its own press, for the life of the
+// Which layers this build opened itself, by its own act, for the life of the
 // build (t193, C17).
 //
 // **The problem this closes.** A press inside a layer that the press then
@@ -15,8 +15,11 @@
 // consent wall, a chat card, an email offer.
 //
 // **What is remembered.** For each build Core names (`../build-state/`), the handle
-// of every layer a press of this build opened: a layer on the look after the
-// press that was not a layer on the look before it, on the same page. A layer
+// of every layer an act of this build opened: of the layers on the look after
+// the act that were not layers on the look before it, on the same page, those
+// `./opened-by.ts` says the act opened -- tied to its control, or, untied, after
+// an act whose effect the page defines (a press), never after one that only set
+// a value (t885: a timed card that rose as a field was typed in). A layer
 // is what `../layer/element.ts` says it is, or a dialog an element was captured
 // inside (`inDialog`), as `../press-effect/answered-layer.ts` reads one.
 //
@@ -44,12 +47,15 @@
 // out answered nothing, its step was required, and a later run on a page that
 // remembered declining stopped there. So where a new layer's own controls are
 // covered by another new layer, the covered one is what the press opened, and
-// what stands over it came from elsewhere. It reads as an interruption, which
-// makes its step optional, and the run's defence may clear it. A dialog and the
-// backdrop under it are not this: nothing covers the dialog's controls.
+// what stands over it came from elsewhere (`./beneath.ts`). It reads as an
+// interruption, which makes its step optional, and the run's defence may clear
+// it. A dialog and the backdrop under it are not this: nothing covers the
+// dialog's controls.
 //
 // **What it does not know.** An unmarked layer that opens on a timer in the
-// instant between a press and the look after it, over nothing else new, is read as opened by that press. And a
+// instant between a press and the look after it, over nothing else new and tied
+// to nothing, is read as opened by that press; and one a set value raised with
+// no tie to its control is read as an interruption (`./opened-by.ts`). And a
 // build Core starts anew to continue a Flow (a stopped build continued later,
 // under a new build id) starts with nothing remembered, so a layer a held step
 // opened is not known to be the Flow's own. Both read as an interruption,
@@ -63,22 +69,21 @@
 import type { JsonValue } from "fluxiq/core";
 import type { WebLlmPageEvidence } from "../../sanitize";
 import { createWebNodeBuildMemory, type WebNodeBuildKey, type WebNodeBuildStatePersistence, type WebNodeOpening } from "../build-state";
-import type { WebLlmEvidenceElement } from "../../elements";
-import { webInLayer, webIsLayer } from "../layer";
+import { webIsLayer } from "../layer";
+import type { WebNodeLayerAct } from "./act";
+import { webLayersOpenedBy } from "./opened-by";
 
 /** How many builds this process remembers at once, as arrival remembers them. */
 const REMEMBERED_BUILDS = 16;
-/** How far up the `parent` chain a layer's own control is looked for, as `../layer/member.ts` looks. */
-const MOST_DEPTH = 40;
 
 export type WebNodeOwnLayers = {
   /** Read this build's layers back from Core's store when this process holds none of them (`../build-state/memory.ts`). */
   restore(build: WebNodeBuildKey): Promise<void>;
   /** Forget the layers this build opened, when this call is Core's opening of a fresh round. */
   opening(build: WebNodeBuildKey, opening: WebNodeOpening | undefined): void;
-  /** A press of this build ran: remember each layer on `after` that was not one on `before`, on the same page. */
-  pressed(build: WebNodeBuildKey, before: WebLlmPageEvidence | undefined, after: WebLlmPageEvidence | undefined): void;
-  /** Whether the layer with handle `layer` was opened by a press of this build. */
+  /** An act of this build on the page ran: remember each layer on `after`, not one on `before`, on the same page, that it opened (`./opened-by.ts`). */
+  acted(build: WebNodeBuildKey, before: WebLlmPageEvidence | undefined, after: WebLlmPageEvidence | undefined, act: WebNodeLayerAct): void;
+  /** Whether the layer with handle `layer` was opened by an act of this build. */
   owns(build: WebNodeBuildKey, layer: string): boolean;
 };
 
@@ -96,11 +101,11 @@ export function createWebNodeOwnLayers(persistence?: WebNodeBuildStatePersistenc
     opening(build, opening) {
       if (opening === "fresh") builds.forget(build);
     },
-    pressed(build, before, after) {
+    acted(build, before, after, act) {
       if (before === undefined || after === undefined || before.location !== after.location) return;
       const already = layersOn(before);
       const byHandle = new Map(after.elements.map((element) => [element.target, element] as const));
-      const opened = openedOf([...layersOn(after)].filter((layer) => !already.has(layer) && !recognisedByKind(byHandle.get(layer))), after);
+      const opened = webLayersOpenedBy(act, before, after, [...layersOn(after)].filter((layer) => !already.has(layer) && !recognisedByKind(byHandle.get(layer))));
       if (opened.length === 0) return;
       const held = builds.entry(build, () => new Set<string>());
       const count = held.size;
@@ -109,31 +114,6 @@ export function createWebNodeOwnLayers(persistence?: WebNodeBuildStatePersistenc
     },
     owns: (build, layer) => builds.get(build)?.has(layer) === true
   };
-}
-
-/** Of the layers new after one press, those it opened: where one's own controls are covered by another of them, the covered ones (header). */
-function openedOf(fresh: readonly string[], page: WebLlmPageEvidence): readonly string[] {
-  if (fresh.length < 2) return fresh;
-  const byHandle = new Map(page.elements.map((element) => [element.target, element] as const));
-  const coveredByAnother = (element: WebLlmEvidenceElement, layer: string) => fresh.some((other) => other !== layer && element.coveredBy?.includes(other) === true);
-  const covered = fresh.filter((layer) => page.elements.some((element) => element.target !== layer && !fresh.includes(element.target) && coveredByAnother(element, layer) && heldBy(byHandle, element, layer)));
-  return covered.length > 0 ? covered : fresh;
-}
-
-/**
- * Whether `element` is `layer`'s own: inside it by the page's structure, or, for a dialog, within its box.
- * Never by the box alone otherwise: a backdrop's box holds the whole page, and what a dialog
- * covers behind it is no control of the backdrop's.
- */
-function heldBy(byHandle: ReadonlyMap<string, WebLlmEvidenceElement>, element: WebLlmEvidenceElement, layer: string): boolean {
-  if (element.inDialog === layer) return true;
-  if (byHandle.get(layer)?.isDialog !== undefined) return webInLayer(byHandle, element, layer);
-  let at = element.parent;
-  for (let depth = 0; at !== undefined && depth < MOST_DEPTH; depth += 1) {
-    if (at === layer) return true;
-    at = byHandle.get(at)?.parent;
-  }
-  return false;
 }
 
 /** Whether the capture recognised this layer by kind (consent, promotion, robot check, rate limit, assistant). */
