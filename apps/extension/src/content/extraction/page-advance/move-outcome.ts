@@ -16,7 +16,7 @@ export type PageMoveOutcome =
   | { outcome: "needs_person"; sighting: RobotCheckSighting }
   | { outcome: "moved"; by: WebAutomationNextPageBy; page?: number | undefined }
   | { outcome: "ended"; stop: WebAutomationNextPageEnd }
-  | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string; filtersDropped?: number | undefined }
+  | { outcome: "failed"; stop: WebAutomationNextPageFault; reason: string; filtersDropped?: number | undefined; noEffect?: true | undefined }
   | { outcome: "timed_out"; reason: string };
 
 export type PageMoveOptions = {
@@ -33,9 +33,14 @@ export type PageMoveOptions = {
 /** The capability the verb is granted: one step of the list to its next page. */
 export type PageMove = (request: WebAutomationNextPageRequest, options?: PageMoveOptions) => Promise<PageMoveOutcome>;
 
-/** A failed move; `filtersDropped`, on a `page_fault` only, is how many applied filters its Next would have dropped. */
-export function failedMove(stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number): PageMoveOutcome {
-  return stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed", stop, reason, filtersDropped } : { outcome: "failed", stop, reason };
+/**
+ * A failed move; `filtersDropped`, on a `page_fault` only, is how many applied
+ * filters its Next would have dropped. `noEffect` marks a fault decided before
+ * anything was pressed, so it is never read as a press whose effect is uncertain.
+ */
+export function failedMove(stop: WebAutomationNextPageFault, reason: string, filtersDropped?: number, noEffect?: boolean): PageMoveOutcome {
+  const failed: PageMoveOutcome = stop === "page_fault" && filtersDropped !== undefined ? { outcome: "failed", stop, reason, filtersDropped } : { outcome: "failed", stop, reason };
+  return noEffect === true ? { ...failed, noEffect: true } : failed;
 }
 
 /**

@@ -27,8 +27,10 @@ export function webNodeReadOutcome(read: JsonValue | undefined, links: WebNodeRe
   // Copies, never the same objects `extracted` holds: Core's evidence check
   // reads a value met twice as a cycle and refuses the whole result as
   // `evidence_not_json` (live run 14, `run-muqiho7e-13be6c03`: every read refused).
-  if (Array.isArray(rows) && rows.length > 0) account.firstRows = rows.slice(0, WEB_NODE_READ_FIRST_ROWS).map(copied);
-  const rest = restOfRows(rows, read.rejectedRows !== undefined);
+  // Rows the conditions rejected are not kept rows, so they are not shown as the first of them.
+  const unfiltered = answeredUnfiltered(read);
+  if (Array.isArray(rows) && rows.length > 0 && !unfiltered) account.firstRows = rows.slice(0, WEB_NODE_READ_FIRST_ROWS).map(copied);
+  const rest = restOfRows(rows, read.rejectedRows !== undefined, unfiltered);
   if (rest !== undefined) account.restOfRows = rest;
   const out: JsonObject = {};
   for (const [key, value] of Object.entries(read)) {
@@ -51,10 +53,22 @@ function writtenRow(row: JsonValue, links: WebNodeReadLinks): JsonValue {
   return out;
 }
 
+/**
+ * Whether the read answered with rows its conditions rejected because they kept
+ * none (`extraction.conditions.unfiltered`, `content/extraction/filtered-answer.ts`):
+ * its `extracted` then holds no kept row.
+ */
+function answeredUnfiltered(read: JsonObject): boolean {
+  const extraction = read.extraction;
+  if (!isJsonObject(extraction) || !isJsonObject(extraction.conditions)) return false;
+  return extraction.conditions.unfiltered === true;
+}
+
 /** The sentence accounting for all kept rows and any rejected rows. */
-function restOfRows(rows: JsonValue | undefined, rejected: boolean): string | undefined {
+function restOfRows(rows: JsonValue | undefined, rejected: boolean, unfiltered: boolean): string | undefined {
   const count = Array.isArray(rows) ? rows.length : undefined;
   if (count === undefined) return undefined;
+  if (unfiltered) return `the read kept none of the ${count} row${count === 1 ? "" : "s"} in extracted: the conditions turned every one down, and extracted shows them unfiltered, so none of them is a result row.`;
   const more = count > WEB_NODE_READ_FIRST_ROWS;
   if (!more && !rejected) return undefined;
   const kept = `extracted holds all ${count} kept row${count === 1 ? "" : "s"}`;

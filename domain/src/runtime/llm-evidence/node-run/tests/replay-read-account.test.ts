@@ -436,3 +436,10 @@ test("sparse rejection groups preserve the original predicate index", () => {
   assert.equal(entries?.[0]?.conditionIndex, 1);
   assert.equal(entries?.[0]?.observations?.[0]?.conditionIndex, 1);
 });
+
+// Live run `run-mwaf6gnt-638d90a0` (step 0044): pass 2 of a read loop read page 2, whose 20 items all cost more than
+// the ceiling, so the conditions kept none. The replay compared it with page 1's 10 rows and stopped the run.
+test("a read whose list is there and whose conditions kept none of its items is the page, not a change", async () => {
+  const replayed = await replay(liveRead({ recordCount: 0, itemsSeen: 20, unfiltered: false }), { records: 10, itemsSeen: 20, unfiltered: false });
+  assert.equal(replayed.resultCode, "core.replay.replayed");
+});

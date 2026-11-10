@@ -214,7 +214,9 @@ function recordedProduced(value: JsonValue | undefined): RecordedProduced {
  * the step and not the page, or nothing.
  *
  * Read something, then read nothing: the step ran and the Flow would still
- * answer with an empty hand. A list that was there and now is not
+ * answer with an empty hand -- unless the list was there and its conditions
+ * kept none of its items (`keptNoneOfItemsSeen`), which is a page with nothing
+ * to collect, as a later page of a loop can be. A list that was there and now is not
  * (`itemsSeen` to 0) is the same defect seen one step earlier, and holds even
  * where the build's conditions kept no row. A read whose conditions kept rows
  * and now kept none, so it answered with the rows they rejected
@@ -226,10 +228,22 @@ function recordedProduced(value: JsonValue | undefined): RecordedProduced {
  */
 function readChange(before: RecordedProduced, now: WebNodeProduced | undefined): string | undefined {
   if (now === undefined) return undefined;
-  if (before.records !== undefined && before.records > 0 && now.records === 0) return `the step read nothing where it read ${before.records}`;
+  if (before.records !== undefined && before.records > 0 && now.records === 0 && !keptNoneOfItemsSeen(now)) return `the step read nothing where it read ${before.records}`;
   if (before.itemsSeen !== undefined && before.itemsSeen > 0 && now.itemsSeen === 0) return `the step found no list where it found ${before.itemsSeen} items`;
   if (before.unfiltered === false && before.records !== undefined && before.records > 0 && now.unfiltered === true) return "the step's conditions kept no row, so it answered with rows they rejected, where they kept rows before";
   return undefined;
+}
+
+/**
+ * Whether a read found the list and its conditions, answered as asked, kept none
+ * of its items: an honest page that held nothing to collect. It is the page and
+ * not the step, as a later page of a loop is when every item on it costs more
+ * than the ceiling (live run `run-mwaf6gnt-638d90a0`, pass 2 of a read whose
+ * page 1 kept 10). A list that was not there (`itemsSeen` 0) or an answer of
+ * rows the conditions rejected (`unfiltered`) is not this.
+ */
+function keptNoneOfItemsSeen(now: WebNodeProduced): boolean {
+  return now.itemsSeen !== undefined && now.itemsSeen > 0 && now.unfiltered === false;
 }
 
 /** A non-negative whole number, as every count in a read's account is. */
