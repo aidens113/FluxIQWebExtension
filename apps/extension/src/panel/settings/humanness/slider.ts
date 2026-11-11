@@ -26,10 +26,10 @@ export function createHumannessControl(): HumannessControl {
   };
   input.addEventListener("input", show);
   const element = createElement("div", { className: "field humanness" }, [
-    createElement("div", { className: "humanness-head" }, [createElement("label", { text: "Humanness", attrs: { for: "humanness" } }), readout]),
+    createElement("div", { className: "humanness-head" }, [createElement("label", { text: "Starting humanness for new Flows and tasks", attrs: { for: "humanness" } }), readout]),
     input,
     createElement("div", { className: "humanness-ends", attrs: { "aria-hidden": "true" } }, [createElement("span", { text: "Fastest" }), createElement("span", { text: "Most human-like" })]),
-    createElement("p", { id: "humannessHint", className: "field-hint", text: "0 is the fastest. Higher adds human-like timing, click positions and occasional harmless misclicks, for sites that limit robots. Robot checks always pause for you." })
+    createElement("p", { id: "humannessHint", className: "field-hint", text: "Each Flow and task can set its own level; this is where they start." })
   ]);
   return {
     element,

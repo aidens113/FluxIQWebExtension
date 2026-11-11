@@ -50,6 +50,24 @@ test("the 128 px icon has an amber node and transparent corners", () => {
   assert.equal(pixel(127, 127)[3], 0);
 });
 
+test("the 16 and 32 px icons keep the amber node clear of the middle bar", () => {
+  for (const size of [16, 32]) {
+    const png = inflateSync(renderIconPng(size).subarray(41, -16));
+    const pixel = (x, y) => [...png.subarray(y * (size * 4 + 1) + 1 + x * 4).subarray(0, 4)];
+    const isAmber = ([r, g, b]) => r > 200 && g > 140 && b < 120;
+    const isLight = ([r, g, b]) => r > 150 && g > 150 && b > 150;
+    // The row through the middle bar: bar (light), then clear background, then the node.
+    const y = Math.round(((64 + 12 * 16.5) / 512) * size);
+    const row = Array.from({ length: size }, (_, x) => pixel(x, y));
+    const firstAmber = row.findIndex(isAmber);
+    assert.ok(firstAmber > 0, `${size}px: an amber node is on the middle row`);
+    const lastLight = row.map(isLight).lastIndexOf(true);
+    assert.ok(lastLight >= 0 && firstAmber - lastLight >= (size === 16 ? 3 : 6), `${size}px: the bar ends ${firstAmber - lastLight} px before the node`);
+    const amber = Array.from({ length: size * size }, (_, i) => pixel(i % size, Math.floor(i / size))).filter(isAmber).length;
+    assert.ok(amber >= (size * size) / 48, `${size}px: the node is a node of roughly a quarter of the tile across (${amber} px)`);
+  }
+});
+
 test("the build stamp is current until an input changes, then names it", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "fluxiq-build-info-"));
   try {

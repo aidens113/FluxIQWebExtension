@@ -193,6 +193,8 @@ export type ExtensionStatus = {
   recordingBlock?: RecordingBlockState | undefined;
   lastError?: string | undefined;
   lastMessageAt?: number | undefined;
+  /** How long the pairing lasts: "browser_session" when this browser cannot keep it between sessions. Absent or "lasting": nothing to say. */
+  credentialDurability?: "lasting" | "browser_session" | undefined;
 };
 
 /** The panel's conversation requests (`panel-conversation.ts`). */
@@ -203,6 +205,8 @@ export type {
   PanelConversationRenameRequest,
   PanelConversationSendRequest
 } from "./panel-conversation";
+/** The panel's humanness requests for one Flow or one task (`panel-humanness.ts`). */
+export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel-humanness";
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
@@ -267,7 +271,7 @@ export type PanelRelayFailureCode = "forbidden" | "not_paired" | "no_project" | 
 /** Every panel relay's reply, in the `{ ok: true } & T | { ok: false; error }` envelope the panel already reads. */
 export type PanelRelayResponse<TPayload = unknown> =
   | { ok: true; payload: TPayload }
-  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined; diagnosticCode?: string };
+  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined; diagnosticCode?: string; coreCode?: string };
 
 /**
  * Automation panel requests, by their short names; the strings live in

@@ -1,15 +1,16 @@
 // The worker half of the panel's own requests: saving settings, opening
-// FluxIQ, the conversation and its thread list, Stop, Take over / Hand back, and FluxIQ's live activity.
+// FluxIQ, the conversation and its thread list, Stop, Take over / Hand back, a Flow's or a task's own
+// humanness, and FluxIQ's live activity.
 //
 // Shaped like `extraction/control.ts`: one `handled` / `response` answer per
 // message, so `background/index.ts` gains two lines.
 //
 // **Only the panel may ask.** Every one of these is accepted from the side
-// panel or the popup and from nothing else (`control-page.ts`). Eight of them
+// panel or the popup and from nothing else (`control-page.ts`). Eleven of them
 // spend the pairing token, and a page under test that could send them would be
 // able to talk to FluxIQ as the person who paired this browser, read their
-// threads, rename or delete them, answer a question FluxIQ asked them, or stop
-// their run. Saving
+// threads, rename or delete them, answer a question FluxIQ asked them, stop
+// their run, or change how human-like a Flow or a task acts. Saving
 // settings is no less sharp: whoever sets the FluxIQ address decides where the
 // token is sent next. `tests/panel-control.test.ts` proves each refusal happens
 // before anything is touched. The activity requests spend no token, but the
@@ -29,6 +30,7 @@ import type { ExtensionStatus, FluxIQSettings, PanelHandBackRunRequest, PanelSto
 import { isActivityOverlayPreference } from "../activity/index";
 import { isControlPage } from "../control-page";
 import { relayConversation } from "./conversation-relay";
+import { HUMANNESS_MESSAGES, relayHumanness } from "./humanness-relay";
 import { fluxIQKeysAddress, fluxIQWebAddress } from "./open-fluxiq";
 import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
@@ -69,6 +71,9 @@ const PANEL_MESSAGES: ReadonlySet<string> = new Set([
   RUNTIME_MESSAGES.panelConversationAnswer,
   RUNTIME_MESSAGES.panelConversationRename,
   RUNTIME_MESSAGES.panelConversationDelete,
+  RUNTIME_MESSAGES.panelFlowHumannessRead,
+  RUNTIME_MESSAGES.panelFlowHumannessSet,
+  RUNTIME_MESSAGES.panelTaskHumannessSet,
   RUNTIME_MESSAGES.panelStopRun,
   RUNTIME_MESSAGES.panelTakeOverRun,
   RUNTIME_MESSAGES.panelHandBackRun,
@@ -133,6 +138,7 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   if (message.type === RUNTIME_MESSAGES.panelConversationRename || message.type === RUNTIME_MESSAGES.panelConversationDelete) {
     return relayThreadChange(message, deps.relay);
   }
+  if (HUMANNESS_MESSAGES.includes(message.type ?? "")) return relayHumanness(message, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelConversationSend && message.kind !== "open" && deps.activity.sending) {
     return deps.activity.sending(() => relayConversation(message, deps.relay));
   }

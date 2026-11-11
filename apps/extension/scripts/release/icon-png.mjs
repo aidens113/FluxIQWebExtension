@@ -10,9 +10,11 @@
 // It is drawn from geometry rather than shipped as a binary asset: every stroke
 // is a distance-to-segment / distance-to-arc test, each size is rendered at its
 // own resolution (4x4 supersampled for anti-aliasing), and the output is
-// deterministic. At 32 px and below the strokes are thickened slightly (and the
-// node a little larger) so the mark stays legible in a toolbar; 48 px and up
-// use the exact artwork proportions.
+// deterministic. At 32 px and below a small-size variant is drawn: heavier
+// strokes, a shorter middle bar that ends well clear of the node, and a node
+// about a quarter of the tile across, so the F and the dot each read at 1x
+// instead of merging into a speck. 48 px and up use the exact artwork (the
+// website mark).
 
 import { crc32, deflateSync } from "node:zlib";
 
@@ -31,15 +33,18 @@ const SEGMENTS = [
   [14, 6, 26, 6],
   [9, 16.5, 18, 16.5]
 ];
+// The small-size variant: the middle bar stops at x 12.5 and the node moves out to x 26.5.
+const SMALL_SEGMENTS = [SEGMENTS[0], [14, 6, 24, 6], [9, 16.5, 12.5, 16.5]];
+const SMALL_NODE = { x: 26.5, y: 17 };
 const ARC = { cx: 14, cy: 11, r: 5 }; // the quarter from (9,11) to (14,6): the top-left quadrant
 const NODE = { x: 23.5, y: 16.5, r: 3 };
 const STROKE_HALF_WIDTH = 1.75;
 
-/** Small sizes get a heavier stroke and node so the mark survives a 16 px toolbar slot. */
+/** Small sizes (up to 32 px) get their own drawing: heavier strokes, a short middle bar, a node a quarter of the tile wide (r 5 of the mark's 42.7 units across the tile). */
 function markWeights(size) {
-  if (size <= 16) return { half: 2.7, node: 3.6 };
-  if (size <= 32) return { half: 2.3, node: 3.3 };
-  return { half: STROKE_HALF_WIDTH, node: NODE.r };
+  if (size <= 16) return { half: 2.7, node: 5, node_at: SMALL_NODE, segments: SMALL_SEGMENTS };
+  if (size <= 32) return { half: 2.4, node: 5, node_at: SMALL_NODE, segments: SMALL_SEGMENTS };
+  return { half: STROKE_HALF_WIDTH, node: NODE.r, node_at: NODE, segments: SEGMENTS };
 }
 
 /**
@@ -85,13 +90,13 @@ function insideTile(x, y) {
 
 /** The colour at a point of the mark's 32-unit space (inside the tile). */
 function sampleColor(mx, my, weights) {
-  if ((mx - NODE.x) ** 2 + (my - NODE.y) ** 2 <= weights.node ** 2) return AMBER;
-  return strokeDistance(mx, my) <= weights.half ? STROKE : BACKGROUND;
+  if ((mx - weights.node_at.x) ** 2 + (my - weights.node_at.y) ** 2 <= weights.node ** 2) return AMBER;
+  return strokeDistance(mx, my, weights.segments) <= weights.half ? STROKE : BACKGROUND;
 }
 
-function strokeDistance(x, y) {
+function strokeDistance(x, y, segments) {
   let best = Infinity;
-  for (const [x0, y0, x1, y1] of SEGMENTS) best = Math.min(best, distanceToSegment(x, y, x0, y0, x1, y1));
+  for (const [x0, y0, x1, y1] of segments) best = Math.min(best, distanceToSegment(x, y, x0, y0, x1, y1));
   return Math.min(best, distanceToArc(x, y));
 }
 

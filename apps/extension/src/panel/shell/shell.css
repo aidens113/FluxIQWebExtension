@@ -10,6 +10,9 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+/* The page is the panel: the canvas colour fills the whole side panel page, with no margin,
+   radius or border of our own around it. */
+html { margin: 0; background: var(--canvas); }
 html, body { height: 100%; }
 body {
   min-width: 320px;

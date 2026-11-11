@@ -1297,6 +1297,28 @@ before the status names a project. The
 message shapes are `PanelConversation*Request` in `shared/panel-conversation.ts`,
 re-exported from `shared/protocol.ts`.
 
+**Humanness per Flow and per task** (t900; user, 2026-11-11: "humanness slider
+should be for each individual fluxnode/task/flow"). The level is 0-100; a run
+uses its run option, else the task's level, else the Flow's, else the person's
+starting value (Settings, "Starting humanness for new Flows and tasks",
+`FluxIQSettings.humanness`), else 0. Core's `createHumannessControl` draws every
+slider: on a task's answer card in the chat (through the transport's
+`taskSettings` port) and in the open automation's strip, each behind a
+"Humanness · N" disclosure that reads "Uses your starting value (N)" when the
+Flow or task has no level of its own. The relays, panel-only like every panel
+message, one Core call each:
+
+| Panel message | Core endpoint and body |
+| --- | --- |
+| `flowHumannessRead` (`fluxiq.panel.flowHumannessRead`) `{ projectId?, flowId }` | `get-flow-metadata-detail`; answers `metadata.humanness` |
+| `flowHumannessSet` `{ projectId?, flowId, humanness: number \| null }` | `update-flow-settings` `{ projectId, flowId, flow: { flowId, metadata: { humanness } } }`; `null` clears |
+| `taskHumannessSet` `{ projectId?, taskId, humanness: number \| null }` | `update-task-settings` `{ projectId, taskId, humanness }` |
+
+A task's level is read from its `list-project-tasks` row. Core refuses an
+out-of-range level by name; the panel shows Core's sentence and carries its code
+as `coreCode` (`background/connection/core-api.ts`, `panel/state/request.ts`).
+The shapes are in `shared/panel-humanness.ts`, re-exported from `shared/protocol.ts`.
+
 The mounted extension view accepts the bounded project-only navigation event fluxiq:chat-project with exactly { projectId }. It opens the ordinary chat tab and exposes data-fluxiq-chat-project plus data-fluxiq-chat-scope-state (loading, ready, error) for setup validation. Ready follows a successful authorized thread read; the event itself grants no permissions and executes no model capability. The Lab uses this same view and the ordinary composer.
 
 **The chat builds and runs automations** (t198). The background relay

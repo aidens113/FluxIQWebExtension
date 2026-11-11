@@ -76,7 +76,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   };
   const { threadMemory, ...chatOptions } = options;
   const memory = threadMemory ?? sessionThreadMemory();
-  const extension = createExtensionChatTransport(request);
+  // A task's humanness falls back to the starting value the latest status carries, read at each card's read.
+  const extension = createExtensionChatTransport(request, undefined, undefined, () => latest);
   // The chat does not exist yet while its transport is made; the restore asks for it once the list is read.
   let mounted: ChatWidget | undefined;
   const transport = { ...extension, conversation: restoringThreadList(extension.conversation, memory, () => mounted) };

@@ -82,3 +82,9 @@ test("a failure with no code keeps the panel's own sentence and cause", async ()
     cause: "the extension's background didn't answer"
   });
 });
+
+test("Core's refusal code reaches the list as coreCode, and the code stays failed, never refused", async (t) => {
+  replyWith(t, { ok: false, code: "failed", httpStatus: 409, coreCode: "conversation_run_active", error: RUN_ACTIVE });
+  const port = createExtensionChatTransport(panelRequest, NO_PUSHES).conversation;
+  assert.deepEqual(await port.deleteThread!({ conversationId: "c1" }), { ok: false, sentence: RUN_ACTIVE, detail: RUN_ACTIVE, code: "failed", coreCode: "conversation_run_active" });
+});

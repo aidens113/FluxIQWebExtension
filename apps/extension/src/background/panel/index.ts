@@ -5,6 +5,7 @@ export { chatPageLocation, type ChatPageDeps, type ChatPageTab } from "./chat-pa
 export { relayConversation } from "./conversation-relay";
 export { fluxIQWebAddress } from "./open-fluxiq";
 export { acceptedPageUrl } from "./page-url";
+export { HUMANNESS_MESSAGES, relayHumanness } from "./humanness-relay";
 export { handlePanelControl, type PanelControlDeps } from "./panel-control";
 export { panelControlDeps } from "./panel-control-deps";
 export type { PanelRelayContext } from "./relay-context";

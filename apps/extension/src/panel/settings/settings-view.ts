@@ -37,9 +37,13 @@ import { modelKeyLine } from "./model-key-line";
 import { createProblemReportSection } from "./problem-report-section";
 import { forgetOutcomeWords } from "./forget-outcome-words";
 import { createHumannessControl, readHumanness, withHumanness, type HumannessSettings } from "./humanness";
+import { durabilityLine } from "./durability-line";
 import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
 import "./settings.css";
+
+/** What the save action shows; its accessible name stays "Save", the name the Lab presses. */
+const SAVE_LABEL = "Save changes";
 
 /** The mounted settings screen; `shown` and `hidden` start and stop what it reads. */
 export type SettingsView = { readonly element: HTMLElement; shown(): void; hidden(): void };
@@ -63,11 +67,12 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const stateLine = createElement("p", { className: "settings-state-text", text: "Checking the connection..." });
   const approval = createElement("p", { className: "card-line" });
   const project = createElement("p", { className: "card-line" });
+  const durability = createElement("p", { className: "card-line", hidden: true });
   const keyLine = createElement("p", { className: "card-line" });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
   const form = createSettingsForm();
   const humanness = createHumannessControl();
-  const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: "Save", attrs: { type: "button" } });
+  const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button", "aria-label": "Save" } });
   const disconnectButton = createElement("button", { id: "disconnectButton", className: "small-button", text: "Disconnect", attrs: { type: "button" } });
   const message = createElement("p", { className: "card-line success-line", hidden: true, attrs: { role: "status" } });
   const notice = createElement("div", { className: "notice danger", hidden: true, attrs: { role: "alert" } });
@@ -77,6 +82,13 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: "model-key" });
   const advanced = createAdvancedSection([form.parts.addresses, forget.element]);
 
+  // Sticks to the bottom of the scroll; shows only while something is unsaved or an outcome is on screen.
+  const saveBar = createElement("section", { className: "settings-save", hidden: true, attrs: { "aria-label": "Save" } }, [draftLine, createElement("div", { className: "card-actions" }, [saveButton]), message, notice]);
+  const syncSave = (): void => {
+    saveButton.hidden = !dirty;
+    saveBar.hidden = !dirty && message.hidden && notice.hidden;
+  };
+
   const element = createElement("section", { className: "settings-screen", hidden: true, attrs: { "aria-label": "Settings" } }, [
     createElement("div", { className: "settings-column" }, [
       createElement("header", { className: "settings-head" }, [back, createElement("h2", { className: "settings-title", text: "Settings" })]),
@@ -84,6 +96,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         createElement("h3", { className: "settings-group-title", text: "Connection" }),
         createElement("div", { className: "settings-state" }, [dot, stateLine]),
         approval,
+        durability,
         project,
         form.parts.reconnect,
         createElement("div", { className: "card-actions" }, [disconnectButton])
@@ -102,15 +115,10 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         createElement("h3", { className: "settings-group-title", text: "Permissions" }),
         form.parts.permissions
       ]),
-      createElement("section", { className: "settings-save", attrs: { "aria-label": "Save" } }, [
-        draftLine,
-        createElement("div", { className: "card-actions" }, [saveButton]),
-        message,
-        notice
-      ]),
       createAppearanceSection(),
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Help" } }, [createProblemReportSection(context)]),
-      advanced.element
+      advanced.element,
+      saveBar
     ])
   ]);
 
@@ -119,6 +127,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     dirty = true;
     draftLine.hidden = false;
     message.hidden = true;
+    syncSave();
     form.markInvalid(undefined);
     writeConnectionDraft(form.read());
   };
@@ -128,11 +137,13 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   function clearOutcome(): void {
     message.hidden = true;
     notice.hidden = true;
+    syncSave();
   }
 
   function showSuccess(text: string): void {
     message.textContent = text;
     message.hidden = false;
+    syncSave();
   }
 
   function showFailure(sentence: string, detail?: string): void {
@@ -140,6 +151,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     // The raw text sits beside the sentence, for whoever is fixing the connection.
     if (detail !== undefined && detail !== sentence) notice.append(createElement("span", { className: "notice-detail", text: detail }));
     notice.hidden = false;
+    syncSave();
   }
 
   function failed(result: PanelResult<unknown>): boolean {
@@ -171,6 +183,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
         dirty = false;
         draftLine.hidden = true;
         writeConnectionDraft(undefined);
+        syncSave();
         form.fill(plan.settings);
         humanness.fill(readHumanness(settings));
         showSuccess("Saved.");
@@ -221,7 +234,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
 
   function renderBusy(): void {
     saveButton.disabled = mutation !== undefined;
-    saveButton.textContent = mutation === "save" ? "Saving..." : "Save";
+    saveButton.textContent = mutation === "save" ? "Saving..." : SAVE_LABEL;
     disconnectButton.disabled = mutation !== undefined || store.current()?.connectionState === "disconnected";
     forget.setBusy(mutation !== undefined);
   }
@@ -238,6 +251,8 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     stateLine.textContent = copy.sentence;
     approval.textContent = approvalLine(status);
     project.textContent = projectLine(status);
+    durability.textContent = durabilityLine(status);
+    durability.hidden = durability.textContent === "";
     keyLine.textContent = modelKeyLine(modelKey, status.connectionState === "connected");
     open.observe(status);
     // Before filling, so a switch Core's policy forbids fills as off.
@@ -263,6 +278,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     render();
   }
 
+  syncSave();
   store.subscribe(render);
   globalThis.addEventListener?.("focus", () => { if (isShown) void readKey(); });
   void readConnectionDraft().then((draft) => {
@@ -273,6 +289,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     form.fill(draft);
     humanness.fill(readHumanness(store.current()?.settings));
     advanced.reveal();
+    syncSave();
   });
 
   return {

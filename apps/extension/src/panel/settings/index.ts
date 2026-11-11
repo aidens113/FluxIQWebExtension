@@ -3,6 +3,7 @@
 // Forget this pairing sit under Advanced.
 export { ADVANCED_KEY, ADVANCED_STARTS_OPEN, createAdvancedSection, type AdvancedSection } from "./advanced-section";
 export { approvalLine } from "./approval-line";
+export { BROWSER_SESSION_PAIRING_LINE, durabilityLine } from "./durability-line";
 export { modelKeyLine } from "./model-key-line";
 export { projectLine } from "./project-line";
 export { CONNECTION_DRAFT_KEY, parseConnectionDraft } from "./draft-store";

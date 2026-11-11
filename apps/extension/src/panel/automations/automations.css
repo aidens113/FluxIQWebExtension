@@ -51,3 +51,10 @@
 .segment-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .automations-pane, .automations-group { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
 .automations-pane[hidden], .automations-group[hidden], .automations-controls[hidden] { display: none; }
+
+/* The open Flow's own humanness on the strip, folded behind "Humanness · N" (humanness/). The control's own rules are Core's. */
+.flow-humanness { display: grid; gap: var(--space-2); justify-items: start; }
+.flow-humanness-toggle { min-height: 26px; padding: 3px 12px; font-variant-numeric: tabular-nums; }
+.flow-humanness-panel { box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface); }
+.flow-humanness-problem { margin: 0; color: var(--danger-text); font-size: 12.5px; }
+.flow-humanness[hidden], .flow-humanness-panel[hidden], .flow-humanness-problem[hidden] { display: none; }

@@ -145,3 +145,107 @@ Done in code, with one end-to-end gap. Two of the three gates are verified by me
   - `press-run-again.ts:39`.
   - If run controls should also require activation later, these move to the same trusted press.
 - Commit message suggestion: "Answers require a person's activation".
+
+## Checkpoint 3: refusal codes, B5 brand review and fixes, per-Flow and per-task humanness (2026-11-11)
+
+### Worker summary
+- **rc-refusal-codes** (worker, Sonnet). Core's `errorCode` now travels `core-api.ts` -> relay -> `panelRequest` -> panel result as `coreCode`, because `code` already carries relay failure codes and `"refused"` triggers the browser-refused fallback. The sentence people see is unchanged. Authority, project-domain, 401 and 403 handling are as before; invalid or oversized codes are dropped. Touched `shared/protocol.ts` for one optional field.
+- **b5a-capture** (worker, Sonnet). About 100 screenshots in `reports/w4-brand-extension-ui/screens/`:
+  - harness captures (the real panel over a scripted background, on company-website) in Chrome at 400 px and Firefox at 380x580, dark and light;
+  - the real Chrome side panel (360x655) for chat, drawer, settings and getting started;
+  - the real toolbar icon.
+  - **Not captured: the real Firefox popup.** Playwright's Firefox cannot navigate to the temporary add-on's `moz-extension://` popup (`goto` times out, even on the unmodified build), and the add-on shows no toolbar button there. The Firefox pictures are the same panel in Firefox's engine at the popup's CSS size, not the popup frame.
+  - It added the capture tooling under `apps/extension/e2e/` (two specs, a config and a scripted entry), and `panel-frame.ts` now loads `.woff2` so the existing screens specs bundle again.
+- **My review** of the real Chrome panel:
+  - Good: top bar, mark, tabs, drawer, step cards, mono section labels, amber accents.
+  - Defects:
+    - a light surround around a rounded dark panel;
+    - system-blue checkboxes, light scrollbars and blue text selection;
+    - Permissions labels at 16 px against 13 px hints;
+    - a Save button that didn't say what it saved;
+    - developer wording on getting-started step 1 ("run pnpm dev");
+    - the extraction preview below the fold;
+    - the 16 px icon's node merging into the F's bar.
+- **Core tokens (mine).** `accent-color: var(--accent)` and `scrollbar-color: var(--edge) transparent` on `:root`, and `::selection` amber at 35%, as the website does.
+- **b5b-brand-fixes** (worker, Sonnet):
+  - the panel page now has the canvas background, with no outer margin or radius;
+  - one type scale in Settings;
+  - one save model: "Save changes" shows only when something changed (its accessible name stays "Save" for the Lab and six e2e specs);
+  - the slider is relabelled "Starting humanness for new Flows and tasks";
+  - the Connection line for `credentialDurability: "browser_session"`, built against an optional status field (`shared/protocol.ts`); W6's copy is used verbatim;
+  - getting-started steps in plain words;
+  - the extraction preview moved into view;
+  - a small-size icon variant (<= 32 px): shorter middle bar, larger node with a clear gap;
+  - both capture specs repaired for the audit.
+  - The light Chrome header above the panel is Chrome's own frame and cannot be changed from the page.
+- **h1-humanness-control** (worker-heavy, Opus):
+  - Core `createHumannessControl` (0-100 in steps of 5, Fastest to Most human-like, "Uses your starting value (N)", "Use starting value" sends null, one commit on release, refusal reverts with the person's words);
+  - mounted on each task's answer card behind "Humanness · N";
+  - new optional port `ChatTransport.taskSettings { read, setHumanness }`.
+- **h2-humanness-wiring** (worker-heavy, Opus):
+  - relays `fluxiq.panel.flowHumannessRead` (get-flow-metadata-detail), `flowHumannessSet` (update-flow-settings `{ projectId, flowId, flow: { flowId, metadata: { humanness } } }`) and `taskHumannessSet` (update-task-settings), all panel-only;
+  - the extension's `taskSettings` port;
+  - the Flow control in the open automation's strip;
+  - the task level read from the existing `listTasks` row;
+  - one line in `chat-panel.ts` passes the status to the transport.
+
+### Integration changes I made
+- Core `tokens.css`: native-control accent, scrollbar colour and `::selection`, as above.
+- Core `ui-components/package.json` `files`: added `src/chat/controls/humanness/humanness.css`, which `chat.css` imports.
+- Repaired `all-screens-capture-company-website.spec.ts:26`, where a `"\n"` inside a string had become a real line break: a syntax error that would have failed every typecheck. Then parsed every new or changed extension `.ts`/`.mjs` with esbuild: all clean.
+- `pnpm structure:baseline` (extension): `automation-strip.test.ts` statement-packing lowered from 7 to 6.
+- `docs/architecture/extension-client.md`: a "Humanness per Flow and per task" paragraph and a message table.
+
+### Commands run and observed results (mine)
+- `node scripts/test-extension.mjs background/panel background/connection panel/state panel/chat panel/automations panel/tasks panel/shell/tests panel/settings/tests panel/getting-started panel/extraction panel/theme-choice release/tests panel/tests/css-tokens` -> 1068 tests, 1068 pass, 0 fail.
+- Core ui-components `pnpm exec vitest run src/chat/controls src/chat/answer src/chat/tests/lease-transport.test.ts src/chat/view/tests src/theme` -> 24 files, 169 passed.
+- Slot: `node scripts/check-extension.mjs` -> CHECK_EXIT=0. This covers everything up to H2, after the spec repair, so it includes SEC1, as you asked.
+- Slot: the extension build was refused by Core's currency guard ("Core's build cache would rebuild ui-components:build: inputs changed"), because my tokens edit and the `files` line came after H1's dist build. I rebuilt ui-components first and re-ran the build and captures; results below.
+- `node scripts/structure-audit.mjs` -> Core `passed (530 warning(s), 969 baselined)`; extension `passed (245 warning(s), 552 baselined)`, before the baseline update.
+
+### Open items for the lead
+1. **Core paired-client allowlist** (`server/program-route/program-route.ts`) lacks `get-flow-metadata-detail` and `update-flow-settings`, so the Flow control is refused for a paired browser. The first is a read. The second must come with a narrowing in `narrowPairedClientRequest` that accepts exactly `{ projectId, flowId, flow: { flowId?, metadata: { humanness } } }`, or a paired token could change any Flow setting. W2 owns these endpoints, so this goes to W2 or t898.
+2. **The starting value is dropped until t898 lands:**
+   - `FluxIQSettings` has no `humanness`;
+   - `background/panel/settings-save.ts` `mergeSettings` drops it;
+   - `background/saved-state.ts` `readSavedSettings` rebuilds from defaults.
+   - So "Uses your starting value (N)" shows 0 until t898's field and normalisation merge here. Then I swap `panel/settings/humanness/limits.ts` to Core's constants.
+3. **An open task card does not follow a Settings change**; it re-reads when opened. The Flow strip does follow it. A live refresh would need a Core hook; I judged it not worth it now.
+4. **`credentialDurability`**: the panel reads optional `status.credentialDurability`; the background must set it from W6's `credentialDurability()` at integration.
+5. **The real Firefox popup is not captured** (Playwright Firefox cannot open the add-on's pages). The Lab's window-capture helper also lists only chrome.exe and msedge.exe, so it cannot photograph Firefox. A manual check in Firefox, or a web-ext based capture, is needed for real popup pixels.
+6. **Manifest name.** Chrome's side-panel header shows the manifest name; the e2e build reads "FluxIQ Web Automation Client (E2E)". Whether the store build should be just "FluxIQ" is a listing decision; manifests are not W4's.
+7. **Save's accessible name.** The Save button keeps the accessible name "Save" because the Lab and six e2e specs press it by that exact name. Renaming it to "Save changes" means updating those callers.
+8. **Screenshots in the repo.** `screens/` is about 5.5 MB of PNG and JPEG evidence (fixture sites only, no user data). Decide whether to commit them or keep only the "after" set.
+
+### B5 after the fixes (recaptured)
+- Slot chain: Core ui-components `pnpm build` -> CORE_BUILD_EXIT=0; extension build -> BUILD_EXIT=0; harness capture -> `2 passed (1.9m)`, `CAPTURE-DONE chrome problems=[]`, `CAPTURE-DONE firefox problems=[]`; real Chrome capture -> `1 passed (1.9m)`.
+- Pictures: `screens/after/` (harness, Chrome and Firefox, dark and light) and `screens/after/real-raw/` (real Chrome window photographs, side panel open).
+- My review of the real Chrome panel (`after/real-raw/chrome-panel-settings-2-dark.jpg`):
+  - the Permissions checkboxes and the Dark radio are amber;
+  - the scrollbar is dark;
+  - labels and hints sit on one scale;
+  - the getting-started steps are plain words.
+  - The rounded edge around the panel is Chrome's own side-panel container.
+- **Toolbar icon** (`after/real-raw/chrome-window-toolbar-nopanel.jpg`): at 1x the 16 px icon now shows a clear F with a separate, visible amber node beside Chrome's puzzle button. Accepted.
+- Firefox remains harness-only (open item 5).
+
+## Checkpoint 3b: panel-assistant threads (for W5)
+
+- **pa-panel-threads** (worker-heavy, Opus). New web-panel endpoints:
+
+| Endpoint | Body | Answer | Class | Refusal codes |
+| --- | --- | --- | --- | --- |
+| `get-panel-thread-attachment` | `{ conversationId, turnId, projectId? }` | `{ attachment: { attachment, payload } \| null }` | `programs.read`, read | as get-conversation-attachment |
+| `rename-panel-thread` | `{ conversationId, title }` | `{ conversation }` | `programs.write`, authoring | `conversation_title_required`, `conversation_title_too_long`, `conversation_not_found` |
+| `delete-panel-thread` | `{ conversationId }` | `{ deleted: true, conversationId }` | `programs.write`, authoring | `conversation_run_active`, `conversation_not_found` |
+
+- **Authorisation:** as the other panel-assistant endpoints (`selfUser`, the signed-in actor). Each person's threads are in their own database, so another person's thread answers exactly like a missing id. All three refuse a paired client; none is on the paired-client allowlist.
+- **Delete:** reuses the conversation store's one-transaction delete. A new panel migration `9004_panel_waiting_calls_follow_thread` adds a trigger that also removes the thread's waiting card calls, which hold the person's words. It is refused while the assistant's own work holds the thread (`PanelAssistantThreadUse`, in this process).
+- **Attachment:** a proposed Flow change (`flow-graph-diff`) is read only in the project the request names, decided by IAM and checked for domain access. It is refused for `"panel"` or no project.
+- **Checks:**
+  - Worker: 14 + 65 + 51 tests; fluxiq `tsc --noEmit` (slot) exit 0; audit passed.
+  - Mine: `pnpm exec vitest run` on thread-use, panel-threads and panel-assistant tests -> 5 files, 31 passed; Core `node scripts/structure-audit.mjs` -> `passed (530 warning(s), 969 baselined)`.
+- **For the lead / W5:**
+  1. Under the `service` profile, `FluxIQUserAccess` (`platform/iam/predefined/user-access.ts`) grants no panel-assistant endpoint at all, old or new; an existing test pins `list-panel-threads` as forbidden. So as it stands a hosted user cannot use the dock. Granting the panel actions on the caller's own user is an IAM policy change outside W4.
+  2. The dock must send the proposal's real `projectId`, not `"panel"`, to read a `flow-graph-diff`. Nothing in Core writes such a turn into a panel thread yet, so W5's fixture must plant one.
+  3. A delete racing work in another process is not covered: the hold is per process.
