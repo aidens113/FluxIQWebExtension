@@ -610,3 +610,88 @@ test("a reload that rewrites a control's selector still keeps its handle when bo
   document = RECIPE_DOCUMENT + 5_000;
   assert.deepEqual(handlesOf(await inspect(runtime), ["×"]), [first], "a new document is a reload, and tier 4 finds the control again");
 });
+
+// A layer's handle names the layer it was given to, within one document (t897, `../stable-handles.ts`).
+//
+// Live run `run-mwb5cnxg-003415b4`: a press on social-network-feed's composer prompt first closed
+// "Turn on notifications?", and the composer's dialog opened where it had stood. Tier 3 gave the
+// composer the closed dialog's number, the press's change walk read one dialog that now reads
+// "Create post", and Core held the composer's prompt as a press that changed something that stays.
+// The capture now says which element of its document each one is (`nodeToken`), and a layer's number
+// goes only to the layer it was seen as. Every other control is matched as before: a page redraws the
+// controls a person reads as one on new nodes, and their numbers must hold.
+
+const LAYER_URL = "https://social.test/groups/allotments/";
+const LAYER_SCOPE = { projectId: "p", flowId: "f" };
+const DIALOG = "body > div:nth-of-type(2) > div";
+const PROMPT: JsonObject = { tagName: "div", role: "button", selector: "main > div", visibleText: "Write something...", nodeToken: 3 };
+
+/** A page whose one open dialog is `name`, given the node token `node`, in document `document`. */
+function page(name: string, node: number, document = 1, extra: JsonObject[] = []): JsonObject {
+  return {
+    url: LAYER_URL, title: "Allotments",
+    interactiveElements: [PROMPT, { tagName: "div", role: "dialog", selector: DIALOG, accessibleName: name, nodeToken: node }, ...extra],
+    evidence: { navigation: { timeOrigin: document }, dialogs: { open: [{ selector: DIALOG, modal: true }] } }
+  };
+}
+
+function dialogHandle(binding: WebLlmSnapshotBinding): string {
+  const dialog = binding.evidence.elements.find((element) => element.isDialog !== undefined);
+  assert.ok(dialog, "the dialog is marked");
+  return dialog.target;
+}
+
+test("a dialog that opened where a closed one stood, in the same document, is a new layer with a handle of its own", () => {
+  const handles = createWebLlmStableTargetHandles();
+  const before = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Turn on notifications?", 41)));
+  const after = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Create post", 57)));
+  assert.notEqual(dialogHandle(after), dialogHandle(before));
+});
+
+test("a dialog that retitles itself keeps its node, and so its handle", () => {
+  const handles = createWebLlmStableTargetHandles();
+  const before = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Checkout", 41)));
+  const after = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Order placed", 41)));
+  assert.equal(dialogHandle(after), dialogHandle(before));
+});
+
+test("a control the page redraws on a new node keeps its handle: only a layer is told apart by its node", () => {
+  const handles = createWebLlmStableTargetHandles();
+  const counter = (words: string, node: number): JsonObject => ({ tagName: "a", selector: "header > ul > li > a", visibleText: words, nodeToken: node });
+  const before = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Turn on notifications?", 41, 1, [counter("Watchlist (2)", 9)])));
+  const after = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Turn on notifications?", 41, 1, [counter("Watchlist (3)", 77)])));
+  const handleOf = (binding: WebLlmSnapshotBinding) => binding.evidence.elements.find((element) => (element.text ?? "").startsWith("Watchlist"))?.target;
+  assert.equal(handleOf(after), handleOf(before));
+});
+
+test("across a reload the node tokens mean nothing, and a retitled dialog is matched as before", () => {
+  const handles = createWebLlmStableTargetHandles();
+  const before = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Checkout", 41, 1)));
+  const after = handles.restamp(LAYER_SCOPE, sanitizeWebLlmSnapshotWithBindings(page("Order placed", 5, 2)));
+  assert.equal(dialogHandle(after), dialogHandle(before));
+});
+
+test("a press after which one dialog took another's place did something: its page changed, and no line is said to read otherwise", async () => {
+  let shown = page("Turn on notifications?", 41);
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") {
+        shown = page("Create post", 57, 1, [{ tagName: "span", selector: `${DIALOG} > span`, visibleText: "Add to your post", nodeToken: 58 }]);
+        return { status: "succeeded" };
+      }
+      return { status: "succeeded", payload: { snapshot: shown } };
+    }
+  });
+  const call = (callId: string, node: string, parameters: JsonObject) => runtime.executeTool({ ...LAYER_SCOPE, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node, parameters, consequences: [] } });
+  const looked = await call("look", "web.output.dom-capture_snapshot", {});
+  const prompt = shownPageLines(looked.evidence).find((line) => line.words === "Write something...");
+  assert.ok(prompt, "the prompt is shown");
+  const pressed = await call("press", "web.output.dom-click", { target: { handle: prompt.target } });
+  const evidence = pressed.evidence as JsonObject;
+  assert.equal(evidence.ok, true, JSON.stringify(evidence));
+  assert.equal(evidence.pageChanged, true);
+  assert.equal(pressed.failure, undefined);
+  assert.equal((pressed.draft?.changed ?? []).some((line) => line.how === "reads" || line.how === "rose"), false, JSON.stringify(pressed.draft?.changed));
+  assert.ok((pressed.draft?.changed ?? []).some((line) => line.how === "appeared" && line.words.includes("Add to your post")), JSON.stringify(pressed.draft?.changed));
+});

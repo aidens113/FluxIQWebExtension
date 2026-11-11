@@ -615,6 +615,7 @@ export async function captureEvidence(
     subjects: sanitized.subjects,
     pageSubject: sanitized.pageSubject,
     cardWords: sanitized.cardWords,
+    nodeTokens: sanitized.nodeTokens,
     resetResource: webResetResource(sessionId, payload.sourceId),
     stateDigest: states.stateDigest,
     routeState: states.routeState,

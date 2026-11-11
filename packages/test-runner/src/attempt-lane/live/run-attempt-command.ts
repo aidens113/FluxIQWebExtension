@@ -247,7 +247,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const startedFrom = (attempt: number): boolean | undefined => (attempt > 1 ? series.continuations[attempt - 2]?.held : undefined);
     const told = series.outcomes.map((outcome, index) => {
       const row = rows[index]!, keeping = kept.get(row.attempt)!, attempt = keeping.ended.outcome.attempt;
-      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
+      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, replay: keeping.ended.outcome.replay ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
     });
     const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: startedFrom(row.attempt), askedAgain }));
     const { continuations } = series;
@@ -258,9 +258,11 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const diagnosisOnly = command.attempts === 1;
     const report = renderAttemptSeries({ ...series.series, rows });
     const speedLines = told.flatMap(({ row, speed }) => attemptSpeedLines(row.attempt, speed));
+    // How each replay of the saved Flow was checked, from Core's own record of it (t897): why a replay was judged is otherwise said nowhere.
+    const replayLines = told.flatMap(({ row, replay }) => replay === null ? [] : [replay.stood ? `Replay of attempt ${row.attempt}: stood on its record, no judge asked.` : `Replay of attempt ${row.attempt}: judged, because it deviated from the accepted run: ${replay.deviation}.`]);
     await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuations, deterministic: series.series.deterministic, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
     recorded = true;
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...speedLines].join("\n")}\n`);
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...replayLines, ...speedLines].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && continuations.every((proof) => proof.held);
     // One attempt never proves the loop: it is a diagnosis, and its status must not read as a pass.
