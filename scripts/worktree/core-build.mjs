@@ -61,11 +61,12 @@ import { noteProgress } from "./progress-note.mjs";
 
 export const CORE_PACKAGES = [
   { filter: "@fluxiq/contracts", directory: "contracts" },
-  { filter: "fluxiq", directory: "fluxiq" },
-  { filter: "@fluxiq/client-gateway-websocket", directory: "client-gateway-websocket" },
   // Nothing downstream imports the SDK, but Core's build cache counts it, so a Core
   // built without it reads as stale to the Lab and to every check's freshness gate.
+  // It builds before fluxiq because fluxiq's tests import it, as Core's own order does.
   { filter: "@fluxiq/sdk", directory: "sdk" },
+  { filter: "fluxiq", directory: "fluxiq" },
+  { filter: "@fluxiq/client-gateway-websocket", directory: "client-gateway-websocket" },
   { filter: "@fluxiq/ui-components", directory: "ui-components" }
 ];
 
