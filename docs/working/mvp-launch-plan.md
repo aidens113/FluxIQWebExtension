@@ -23,13 +23,23 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 - Extension: "REALLY refine the UI... rebrand it so it matches the website stuff" (getfluxiq.com, FluxIQWebsite); "see all chats, easily navigate everything, set user settings that are important for extension".
 - Panel: "users will be able to use the core fluxiq panel hosted in the cloud & customized for that specific usecase."
 
-**Next.** Each workstream reports at its first checked point; the lead verifies, merges and records it here. W6 (handlers and add-ons, added 2026-11-10) starts with its design document.
+**Promoted (2026-11-11).** The day's first full sweep passed on Core b445ad6f4 and extension 42da23a9f, and both mains were fast-forwarded: 337 Core and 247 extension commits since 2026-11-03. The sweep failures before it were fixed by lane t904, all in tests: tests never moved with intended changes, a stub whose check never cleared, and load-dependent tests.
+
+**Lanes (2026-11-11), all committed on their branches:**
+- W1: t885 lands next (judge sees whole looks, an assemblable Flow wins, loop refusals name an ending, never a cap); t903 has the one-element read and hover, re-proved across all ten sites; t904 continues with test-quality defects.
+- W2 (t898): humanness end to end, per FluxNode, task and Flow (user, 2026-11-11: "humanness slider should be for each individual fluxnode/task/flow"). Precedence: run option, then task, then Flow, then the person's starting value, then 0. Measured provider-free at 0, 50 and 100.
+- W3 (t899): every override wired, pinning enforced, secret inputs never seen or saved, 16 pages of FluxNode docs.
+- W4 (t900): brand, conversation list, settings, "answers require a person's activation"; B5 on-screen review next.
+- W5 (t901): Data and Security screens, hosting files, account screens, audit; chat list next.
+- W6 (t902): seven security fixes and the handler chain, held local until all land (both repositories are public).
+
+**Next.** Land t885, then the service.ts round (W2, W6, W3 lines), then t898, t899, t903, t900, t901 in turn, with today's second sweep after them.
 
 ---
 
 ## Shared Interfaces (fixed before dispatch)
 
-**I1. Humanness.** One integer `humanness` from 0 to 100.
+**I1. Humanness.** One integer `humanness` from 0 to 100, stored per FluxNode, task and Flow (user, 2026-11-11); the person's extension setting is only the starting value for new ones.
 - 0 is today's code path exactly: no added waits, centre-first click points, synchronous typing. 0 is the default everywhere, because speed is the user's top priority and a person raises it per site or per use.
 - Core: `@fluxiq/contracts` exports the type, bounds and default. It travels on a run's options, a FluxNode's options and per-run overrides, and the answer-first caller options. The engine reads it for node timing.
 - Extension: `FluxIQSettings.humanness` (shared/protocol.ts, normalised in background storage). It is sent to Core with the run, and to the content script on each `BrowserActionCommand` as `humanness`, so click, type and scroll read it.
@@ -130,3 +140,10 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 - Changed: this document.
 - Validation: surveys only; no code changed.
 - Outcome: W2-W5 dispatched as sub-supervisors; W1 continues.
+
+### 2026-11-11 - Main promoted on a green sweep
+
+- Agent: lead; lane t904 (sweep triage, Opus).
+- Changed: tests and scripts only (t904); both mains fast-forwarded.
+- Validation: promotion sweep on Core b445ad6f4 / extension 42da23a9f -> core build 0, core check 0, core test 0, ext build 0, ext check 0, ext test 0.
+- Outcome: main promoted in both repositories (Core 1ae3240d3 -> b445ad6f4, extension 186c028b4 -> 42da23a9f). Known and routed: four content-harness specs that also fail on the dev base (photo-social load-more, professional-network Rotterdam) and two chat-UI assertions, to t904.
