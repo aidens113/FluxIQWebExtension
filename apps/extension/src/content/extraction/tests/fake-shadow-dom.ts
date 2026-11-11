@@ -3,10 +3,12 @@
 // `textContent` that -- as in a browser -- never enters a shadow root, and a
 // `querySelectorAll` that understands the selectors inference writes (`*`,
 // `tag.class`, any number of `[attr]`, `[attr="v"]`, `[attr^="v"]` and
-// `:not([attr])` tests, `tag:nth-of-type(n)`, `:scope > a > b` chains and a
-// `:scope a` descendant step) and, as in a browser, never crosses a shadow
-// boundary. Anything else throws, so a test cannot pass on a selector this
-// fake only pretended to read.
+// `:not([attr])` tests, the disabled condition `:is([aria-disabled="true"],
+// :disabled)`, `tag:nth-of-type(n)`, `:scope > a > b` chains, a `:scope a`
+// descendant step, and `:scope` with a condition, which names no descendant)
+// and, as in a browser, never crosses a shadow boundary. `matches` reads one
+// compound and `closest` a chain joined by `>`. Anything else throws, so a
+// test cannot pass on a selector this fake only pretended to read.
 //
 // Elements can be redrawn (`replaceChildren`, `setAttribute`), which is what a
 // test that presses a disclosure control stands in for.
@@ -48,6 +50,8 @@ class FakeParentNode {
     this.append(...nodes);
   }
   querySelectorAll(selector: string): FakeElement[] {
+    // `:scope` with a condition names the element searched from, which is never one of its descendants.
+    if (/^:scope[[.:#]/u.test(selector)) return [];
     if (selector.startsWith(":scope > ")) {
       let current: FakeElement[] = this.children;
       const steps = selector.slice(":scope > ".length).split(" > ");
@@ -56,9 +60,11 @@ class FakeParentNode {
       return current;
     }
     if (selector.startsWith(":scope ")) return this.querySelectorAll(selector.slice(":scope ".length));
+    // A list of compounds names any of them, in document order.
+    const alternatives = topLevelAlternatives(selector);
     const found: FakeElement[] = [];
     const walk = (element: FakeElement): void => {
-      if (selector === "*" || element.matchesStep(selector)) found.push(element);
+      if (selector === "*" || alternatives.some((alternative) => element.matchesStep(alternative))) found.push(element);
       element.children.forEach(walk);
     };
     this.children.forEach(walk);
@@ -78,8 +84,28 @@ class FakeShadowRoot extends FakeParentNode {
 
 const STEP_TAG = /^[a-z][a-z0-9-]*/u;
 
-/** One test of a compound after its tag: a class, an attribute test, a position, or an absent attribute. */
-const STEP_PART = /^(?:\.([\w-]+)|\[([\w-]+)(?:(\^?)="((?:[^"\\]|\\.)*)")?\]|:nth-of-type\((\d+)\)|:not\(\[([\w-]+)\]\))/u;
+/** A selector list split at its commas, leaving a comma inside brackets, parentheses or quotes in its compound. */
+function topLevelAlternatives(selector: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let start = 0;
+  for (let index = 0; index < selector.length; index += 1) {
+    const character = selector[index];
+    if (character === "\"" && selector[index - 1] !== "\\") quoted = !quoted;
+    else if (!quoted && (character === "[" || character === "(")) depth += 1;
+    else if (!quoted && (character === "]" || character === ")")) depth -= 1;
+    else if (!quoted && depth === 0 && character === ",") {
+      parts.push(selector.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  parts.push(selector.slice(start).trim());
+  return parts;
+}
+
+/** One test of a compound after its tag: a class, an attribute test, a position, an absent attribute, or the disabled condition. */
+const STEP_PART = /^(?:\.([\w-]+)|\[([\w-]+)(?:(\^?)="((?:[^"\\]|\\.)*)")?\]|:nth-of-type\((\d+)\)|:not\(\[([\w-]+)\]\)|(:is\(\[aria-disabled="true"\], :disabled\)))/u;
 
 class FakeElement extends FakeParentNode {
   readonly nodeType = 1;
@@ -114,8 +140,23 @@ class FakeElement extends FakeParentNode {
   setAttribute(name: string, value: string): void {
     this.attrs.set(name, value);
   }
-  closest(): null {
+  /** The nearest of this element and its ancestors that a compound, or a chain of compounds joined by `>`, names; a list separated by commas names any of them. */
+  closest(selector: string): FakeElement | null {
+    const chains = topLevelAlternatives(selector).map((alternative) => alternative.split(/\s*>\s*/u));
+    for (let current: FakeElement | null = this; current; current = current.parentElement) {
+      const at: FakeElement = current;
+      if (chains.some((chain) => at.matchesChain(chain))) return current;
+    }
     return null;
+  }
+  /** Whether one compound names this element. */
+  matches(selector: string): boolean {
+    return this.matchesStep(selector);
+  }
+  private matchesChain(steps: readonly string[]): boolean {
+    const last = steps.at(-1);
+    if (last === undefined || !this.matchesStep(last)) return false;
+    return steps.length === 1 || (this.parentElement?.matchesChain(steps.slice(0, -1)) ?? false);
   }
   /** Light-tree containment, as `Node.contains`: it never crosses a shadow boundary. */
   contains(other: FakeElement | null): boolean {
@@ -142,7 +183,8 @@ class FakeElement extends FakeParentNode {
     }
     return matches;
   }
-  private matchesPart([, className, attribute, prefix, value, nth, absent]: RegExpExecArray): boolean {
+  private matchesPart([, className, attribute, prefix, value, nth, absent, disabled]: RegExpExecArray): boolean {
+    if (disabled !== undefined) return this.attrs.get("aria-disabled") === "true" || this.attrs.has("disabled");
     if (className !== undefined) return this.classList.includes(className);
     if (absent !== undefined) return !this.attrs.has(absent);
     if (nth !== undefined) {

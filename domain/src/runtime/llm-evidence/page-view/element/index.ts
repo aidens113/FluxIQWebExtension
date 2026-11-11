@@ -12,6 +12,7 @@ export { meaningfulWords } from "./meaningful";
 export { normalisedWords } from "./normalised";
 export { quotedWords } from "./quoted";
 export { webLlmReadableWords } from "./readable-words";
+export { webLlmRepeatFolds } from "./repeat-fold";
 export { webLlmStateTokens } from "./state-tokens";
 export { webLlmViewTraits, type WebLlmLineRole, type WebLlmViewTraits } from "./traits";
 export { webLlmElementWhere, type WebLlmElementWhere } from "./where";

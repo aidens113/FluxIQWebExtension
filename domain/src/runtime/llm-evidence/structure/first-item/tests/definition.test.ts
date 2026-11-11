@@ -14,7 +14,7 @@ const value = (text: string, attributes?: Record<string, string>, children?: Ent
 const pair = (label: string, text: string): Entry => ({ tag: "div", children: [term(label), value(text)] });
 const list = (...children: Entry[]): Entry => ({ tag: "dl", children });
 const field = (part: "term" | "value" = "value", selector?: string, label = "Edition"): WebAutomationExtractionProposalFieldSpec => present<WebAutomationExtractionProposalFieldSpec>({
-  kind: "text", definition: { term: label, part }, selector, attribute: undefined, header: undefined,
+  kind: "text", definition: { term: label, part }, selector, group: undefined, attribute: undefined, header: undefined,
   required: undefined, handling: undefined, lines: undefined, identity: undefined, mark: undefined
 });
 
