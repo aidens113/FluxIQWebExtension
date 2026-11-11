@@ -249,3 +249,52 @@ Done in code, with one end-to-end gap. Two of the three gates are verified by me
   1. Under the `service` profile, `FluxIQUserAccess` (`platform/iam/predefined/user-access.ts`) grants no panel-assistant endpoint at all, old or new; an existing test pins `list-panel-threads` as forbidden. So as it stands a hosted user cannot use the dock. Granting the panel actions on the caller's own user is an IAM policy change outside W4.
   2. The dock must send the proposal's real `projectId`, not `"panel"`, to read a `flow-graph-diff`. Nothing in Core writes such a turn into a panel thread yet, so W5's fixture must plant one.
   3. A delete racing work in another process is not covered: the hold is per process.
+
+## Checkpoint 4: the name, Save's accessible name, screenshots out of the repo, the real Firefox popup (2026-11-11)
+
+### Screenshots moved
+All B5 pictures are now in the worktree's ignored `test-runs/w4-brand-screens/`, not under `docs/`. The paths are:
+- `test-runs/w4-brand-screens/` (first capture);
+- `after/` and `after/real-raw/` (after the fixes);
+- `firefox-real/` (the real Firefox popup).
+
+Where this report and the worker reports say `screens/...`, read `test-runs/w4-brand-screens/...`.
+
+### Worker summary
+- **n1-name-and-save** (worker, Sonnet). Outcome Partial: its heavy checks waited 90 minutes in the queue and were stopped; I ran them (below).
+  - Manifests: Chrome and Firefox are named "FluxIQ", and e2e is "FluxIQ (E2E)". The docs were updated: `docs/architecture/testing-facility.md`, and `docs/user/{store-listing,install,privacy-policy}.md`.
+  - The Settings save button's accessible name is now its visible label, "Save changes" (the `aria-label` override is removed; the id is kept).
+  - Callers updated:
+    - `packages/test-runner/src/demo-workspace/browser-session.ts`;
+    - `apps/extension/e2e/install-and-content.spec.ts`;
+    - `e2e/runtime/tests/lab-settings-driver.spec.ts`;
+    - `e2e/runtime/tests/requests-settings.spec.ts`;
+    - `e2e/content/tests/screens/tests/recording-settings-photo-social.spec.ts`.
+  - That is five callers, not six: `tasks-local-classifieds.spec.ts:144` presses a task-rename Save, so it was left alone.
+- **fx-firefox-popup** (worker, Sonnet). Outcome Done.
+  - **Why b5a failed:** Playwright's Firefox (Juggler) cannot navigate to `moz-extension://` pages.
+  - **What worked:** web-ext 10.8.0, installed in a scratch folder (no repo dependency change), ran Playwright's bundled Firefox 135, since there is no desktop Firefox on this machine. It loaded the add-on temporarily, pinned the button through `prefs.js` (web-ext writes the pin pref to `user.js` unescaped and needs `--keep-profile-changes`), opened the popup with `browser.action.openPopup()`, and photographed the screen rectangle with PowerShell. The Lab's window capture photographs only the main window, and the popup is a separate native window.
+  - The popup view is 380x580. Pictures in `test-runs/w4-brand-screens/firefox-real/`: getting started, chat empty and thread, drawer, three settings scrolls, dark and light, and the toolbar.
+- **My review of the real Firefox popup** (`window-drawer-dark.jpg`, `popup-settings-2-light.png`, `toolbar-icon-zoom8x.png`):
+  - ink ground, amber accent and Geist type;
+  - the drawer with New chat, an amber-focused search box, Rename and Delete;
+  - Permissions checkboxes amber in the light theme, and an even type scale;
+  - the 16 px toolbar icon reads as an F with a separate amber dot. Accepted.
+- **Not exercised:** a real mouse click on the Firefox toolbar button (the popup was opened by `openPopup()`), and a connected Core. Manual checks for these are listed in `fx-firefox-popup.md`.
+
+### Commands run and observed results (mine)
+- `node scripts/test-extension.mjs panel/settings/tests release/tests` -> 74 tests, 74 pass, 0 fail.
+- Slot chain:
+  - `node scripts/build-cache/cli.mjs test-runner:build` -> TR_EXIT=0;
+  - `node scripts/build-extension.mjs` -> BUILD_EXIT=0. Built manifest names: chrome "FluxIQ", firefox "FluxIQ", e2e-chromium "FluxIQ (E2E)";
+  - `node scripts/check-extension.mjs` -> CHECK_EXIT=0.
+- `node scripts/structure-audit.mjs` (extension) -> passed (245 warning(s), 552 baselined).
+- `git status`: no screenshots are tracked or untracked under `docs/`; they live only in the ignored `test-runs/`.
+
+### Not verified
+- The Playwright specs whose Save presses changed: compiled by check-extension, not run.
+- A real mouse click on the Firefox toolbar button.
+- A connected Core in either browser.
+
+### Open
+- `limits.ts` switches to Core's humanness constants when t898 lands here.

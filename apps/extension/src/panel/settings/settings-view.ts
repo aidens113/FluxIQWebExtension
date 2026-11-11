@@ -7,7 +7,7 @@
 // (`advanced-section.ts`). There is no
 // spending setting here: none exists behind any port. Nothing here edits a Flow.
 //
-// The labels, "Save", "Saved.", "Forget this pairing" and "Forget" are the
+// The labels, "Save changes", "Saved.", "Forget this pairing" and "Forget" are the
 // names the Lab presses and waits for (packages/test-runner/src/demo-workspace/
 // browser-session.ts, ui-e2e/journeys/extension-project.ts), and the ids are
 // kept from the old drawer.
@@ -42,7 +42,7 @@ import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
 import "./settings.css";
 
-/** What the save action shows; its accessible name stays "Save", the name the Lab presses. */
+/** What the save action shows; its accessible name is the same words, the name the Lab presses. */
 const SAVE_LABEL = "Save changes";
 
 /** The mounted settings screen; `shown` and `hidden` start and stop what it reads. */
@@ -72,7 +72,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
   const form = createSettingsForm();
   const humanness = createHumannessControl();
-  const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button", "aria-label": "Save" } });
+  const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: SAVE_LABEL, attrs: { type: "button" } });
   const disconnectButton = createElement("button", { id: "disconnectButton", className: "small-button", text: "Disconnect", attrs: { type: "button" } });
   const message = createElement("p", { className: "card-line success-line", hidden: true, attrs: { role: "status" } });
   const notice = createElement("div", { className: "notice danger", hidden: true, attrs: { role: "alert" } });

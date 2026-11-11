@@ -48,7 +48,7 @@ function mount(current: ExtensionStatus) {
   return fake(view.element);
 }
 
-test("Save changes is hidden until something changes, keeps the Save name and id, and goes away after saving", async () => {
+test("Save changes is hidden until something changes, has no aria-label override and keeps its id, and goes away after saving", async () => {
   await withChrome(() => withFakeDocument(async () => {
     const root = mount(status());
     await tick();
@@ -58,7 +58,7 @@ test("Save changes is hidden until something changes, keeps the Save name and id
     assert.equal(save.hidden, true);
     assert.equal(bar.hidden, true);
     assert.equal(save.textContent, "Save changes");
-    assert.equal(save.getAttribute("aria-label"), "Save");
+    assert.equal(save.getAttribute("aria-label"), null);
     const slider = find("humanness");
     slider.value = "35";
     slider.dispatch("input");
