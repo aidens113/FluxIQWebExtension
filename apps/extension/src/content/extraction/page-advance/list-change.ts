@@ -18,6 +18,7 @@ import { awaitPageRendered } from "../page-render";
 import { linkAddress, sameDocument } from "../pager-reading";
 import { PaginationFault } from "./pagination-fault";
 import type { PageStep, PaginationProgress } from "./types";
+import type { PagerPress } from "./pager-press";
 import { PageMovePersonCheck } from "./person-check";
 import { recordMeaning } from "./record-meaning";
 
@@ -75,6 +76,12 @@ export async function afterListChange(
   by: WebAutomationNextPageBy
 ): Promise<PageStep> {
   const { item, shown, deadline } = progress;
+  // Above humanness 0, the misclick and the aim come first; the press is then
+  // marked again, so a document a link loads records it as made (`./pager-press.ts`).
+  if (progress.press !== undefined) {
+    await progress.press.prepare(control);
+    await progress.beforeFollow?.(by);
+  }
   const movedAt = Date.now();
   // Capture before pressing: shown contains live Elements whose fields may be
   // replaced in place. Comparing those Elements after pressing loses page one.
@@ -85,7 +92,7 @@ export async function afterListChange(
   let outcome: WaitOutcome;
   let byAddress = false;
   try {
-    const cancelled = clickNoticingCancel(control);
+    const cancelled = clickNoticingCancel(control, progress.press);
     await PageMovePersonCheck.awaitClear(movedAt, deadline);
     const changed = (): boolean => {
       PageMovePersonCheck.assertClear(movedAt);
@@ -134,21 +141,23 @@ function renderedAs(way: WebAutomationNextPageWay | undefined): WebAutomationExt
 }
 
 /**
- * Clicks the control and says whether the page cancelled the click.
+ * Clicks the control and says whether the page cancelled the click: with
+ * `press` above humanness 0 (`./pager-press.ts`), else `control.click()`.
  *
  * The page's own listeners see the click first and may cancel it and stop it
  * propagating, so the event is caught on its way down, at the window, and read
  * once `click()` has returned: dispatch is synchronous, so by then every
  * listener has had its say.
  */
-function clickNoticingCancel(control: HTMLElement): boolean {
+function clickNoticingCancel(control: HTMLElement, press: PagerPress | undefined): boolean {
   let clicked: Event | undefined;
   const notice = (event: Event): void => {
     if (clicked === undefined && event.target instanceof Node && (event.target === control || control.contains(event.target))) clicked = event;
   };
   window.addEventListener("click", notice, true);
   try {
-    control.click();
+    if (press === undefined) control.click();
+    else press.press(control);
   } finally {
     window.removeEventListener("click", notice, true);
   }

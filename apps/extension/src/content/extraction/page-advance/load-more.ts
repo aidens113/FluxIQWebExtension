@@ -86,6 +86,8 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   if (bound !== undefined && progress.pagesRead >= bound) return { outcome: "truncated", stop: "page_limit" };
   let control = clickable(found, way.control);
   await clearCover(control, progress.deadline);
+  // Above humanness 0, the misclick and the aim before the mark (`./pager-press.ts`).
+  await progress.press?.prepare(control);
   if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };
   await progress.beforeFollow?.("loadMore");
   let binding = loadMoreContinuations.bind(control, progress.item, progress.shown);
@@ -96,7 +98,7 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
   for (let extra = 0; ; extra += 1) {
     let settled: Awaited<ReturnType<typeof settlement.settle>>;
     try {
-      control.click();
+      pressControl(control, progress);
       settled = await settlement.settle();
     } finally {
       settlement.stop();
@@ -139,7 +141,7 @@ export async function pressLoadMore(way: Extract<WebAutomationNextPageWay, { mod
       outcome = "changed";
       break;
     }
-    if (paused !== "retried") control.click();
+    if (paused !== "retried") pressControl(control, progress);
     outcome = await waitForMoreItems(control, progress, hasNewItem);
   }
   if (outcome === "unchanged") {
@@ -197,4 +199,10 @@ async function waitForMoreItems(control: HTMLElement, progress: PaginationProgre
     retried += 1;
     offered.retry.click();
   }
+}
+
+/** Presses the load-more control: as the step's humanness asks (`./pager-press.ts`), else `control.click()`. */
+function pressControl(control: HTMLElement, progress: PaginationProgress): void {
+  if (progress.press === undefined) control.click();
+  else progress.press.press(control);
 }

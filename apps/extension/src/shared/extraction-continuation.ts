@@ -268,6 +268,18 @@ export const PAGE_MOVE_MARK_MESSAGE = "fluxiq.nextPage.mark";
 export type PageMoveMark = {
   by: WebAutomationNextPageBy;
   refusals?: ExtractionCheckpointRefusals | undefined;
+  /** How the press was made above humanness 0 (absent at 0), so a document it loaded records it as the press's own did. */
+  press?: PageMovePress | undefined;
+};
+
+/**
+ * What a mark carries of a press made above humanness 0: whether its point came
+ * from the humanness aim, and the point of the one misclick made before it. The
+ * level is the command's own, which the worker sends again with the mark.
+ */
+export type PageMovePress = {
+  aimed: boolean;
+  misclick?: { x: number; y: number } | undefined;
 };
 
 /** What an `executeAction` message carries beside a `web.dom.next_page`: the token its marks go under, and the mark a document reached by its press goes on from. */
@@ -287,15 +299,30 @@ export type PageMoveMarkMessage = {
  * `value` as a mark, or `undefined` when it is not one. Both ends read what the
  * other sent through this. A member it does not know refuses the mark rather
  * than being dropped, so nothing rides along with a mark -- no row, no page
- * text -- and `by` must be one of the answer's own words.
+ * text -- and `by` must be one of the answer's own words. A `press` is exactly
+ * `aimed` and, when there was one, a misclick's finite point.
  */
 export function readPageMoveMark(value: unknown): PageMoveMark | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const { by, refusals, ...rest } = value as Record<string, unknown>;
+  const { by, refusals, press, ...rest } = value as Record<string, unknown>;
   if (Object.keys(rest).length > 0) return undefined;
   const moved = webAutomationNextPageAnswerValue({ outcome: "moved", by });
   if (moved?.outcome !== "moved") return undefined;
   const refusalCounts = refusals === undefined ? undefined : refusalCountsValue(refusals);
   if (refusals !== undefined && refusalCounts === undefined) return undefined;
-  return { by: moved.by, ...(refusalCounts === undefined ? {} : { refusals: refusalCounts }) };
+  const pressed = press === undefined ? undefined : pageMovePressValue(press);
+  if (press !== undefined && pressed === undefined) return undefined;
+  return { by: moved.by, ...(refusalCounts === undefined ? {} : { refusals: refusalCounts }), ...(pressed === undefined ? {} : { press: pressed }) };
+}
+
+/** `value` as a mark's `press`, or `undefined` when it is not exactly one. */
+function pageMovePressValue(value: unknown): PageMovePress | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const { aimed, misclick, ...rest } = value as Record<string, unknown>;
+  if (Object.keys(rest).length > 0 || typeof aimed !== "boolean") return undefined;
+  if (misclick === undefined) return { aimed };
+  if (typeof misclick !== "object" || misclick === null || Array.isArray(misclick)) return undefined;
+  const { x, y, ...more } = misclick as Record<string, unknown>;
+  if (Object.keys(more).length > 0 || typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+  return { aimed, misclick: { x, y } };
 }

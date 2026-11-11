@@ -21,13 +21,24 @@
 //
 // The store refuses a sixth results page in eight seconds, so the spec spaces
 // its presses as the worker's page-load pace would.
+//
+// Humanness (t908): at 100 each press of the pager is aimed as a person aims
+// it, and every Next page result records `{level: 100, aimed: true}`, the
+// documents a press loaded included, which learn it from the press's mark. At
+// 0 the press is the one it always was, `control.click()`: a lone untrusted
+// click at no point, with no pointer events and no record. The spec watches
+// each document from outside (`watchPager`), since the page's own copy of what
+// it sent dies with it, and its stand-in worker hands on the last mark the page
+// sent, as the worker does.
 
 import type {
   WebAutomationExtractField,
   WebAutomationExtractListRequest,
   WebAutomationStructureDetection
 } from "@fluxiq-web-extension/domain/client";
+import type { Page } from "@playwright/test";
 import type { BrowserActionCommand, BrowserActionResult } from "../../../../../src/shared/protocol.js";
+import type { PageMoveMark } from "../../../../../src/shared/extraction-continuation.js";
 import { expect, test } from "../../../index.js";
 import type { ContentHarness } from "../../../index.js";
 
@@ -76,16 +87,62 @@ function pageOf(url: string): number {
   return Number(new URL(url).searchParams.get("page") ?? "1");
 }
 
+/** One pointer or mouse event on the pager's control, as the page saw it, with the control's box at that moment. */
+type PressEvent = { type: string; x: number; y: number; trusted: boolean; box: { left: number; top: number; right: number; bottom: number } };
+
+/** What the spec sees of every document the pager's presses go through: their press events and the marks the page sent. */
+type PagerWatch = { events: PressEvent[]; marks: PageMoveMark[] };
+
+/**
+ * Watches every document `page` loads from now on: each pointer and mouse event
+ * whose target is in the store's pager, and each Next page mark the content
+ * script sends. Exposed functions outlive a document, which the page's own
+ * record of what it sent does not.
+ */
+async function watchPager(page: Page): Promise<PagerWatch> {
+  const watch: PagerWatch = { events: [], marks: [] };
+  await page.exposeFunction("__nextPageSpecPress", (event: PressEvent) => void watch.events.push(event));
+  await page.exposeFunction("__nextPageSpecMark", (mark: PageMoveMark) => void watch.marks.push(mark));
+  await page.addInitScript(() => {
+    const host = window as unknown as Record<string, (value: unknown) => void> & { chrome?: { runtime?: { sendMessage?: (message: unknown) => unknown } } };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      window.addEventListener(type, (event) => {
+        const target = event.target instanceof Element ? event.target.closest("nav a, nav button, nav span") : null;
+        if (!target) return;
+        const rect = target.getBoundingClientRect();
+        const { clientX, clientY } = event as MouseEvent;
+        host["__nextPageSpecPress"]?.({ type, x: clientX, y: clientY, trusted: event.isTrusted, box: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } });
+      }, true);
+    }
+    // The harness's runtime stub is installed before this script, so its sender can be wrapped.
+    const runtime = host.chrome?.runtime;
+    const send = runtime?.sendMessage?.bind(runtime);
+    if (runtime && send) {
+      runtime.sendMessage = (message: unknown) => {
+        const body = message as { type?: unknown; mark?: unknown } | undefined;
+        if (body?.type === "fluxiq.nextPage.mark") host["__nextPageSpecMark"]?.(body.mark);
+        return send(message);
+      };
+    }
+  });
+  return watch;
+}
+
 /**
  * Presses Next page as the worker sends it: with a token, so the press is
  * marked; and when the press took the document away, once more in the new
  * document with a mark, which asks whether the list arrived and presses nothing.
+ * The mark is the last the page sent when the spec watches for it, as the
+ * worker's is; otherwise one saying `next`.
  */
-async function nextPage(harness: ContentHarness, item: string, step: number): Promise<BrowserActionResult> {
-  const action: BrowserActionCommand = { commandId: `next-page-${step}`, actionType: "web.dom.next_page", timeoutMs: 30_000, nextPage: { item } };
+async function nextPage(harness: ContentHarness, item: string, step: number, humanness?: number, watch?: PagerWatch): Promise<BrowserActionResult> {
+  const action: BrowserActionCommand = { commandId: `next-page-${step}`, actionType: "web.dom.next_page", timeoutMs: 30_000, nextPage: { item }, ...(humanness === undefined ? {} : { humanness }) };
+  const marked = watch?.marks.length ?? 0;
   const sent = await harness.deliver({ type: "executeAction", topFrameOnly: true, extraction: { token: TOKEN }, action }).catch(() => undefined);
   if (sent?.responded) return sent.response as BrowserActionResult;
-  const asked = await deliverToNewDocument(harness, { type: "executeAction", topFrameOnly: true, extraction: { token: TOKEN, resume: { by: "next" } }, action });
+  expect(watch === undefined || watch.marks.length > marked, "the page marked its press before it left").toBe(true);
+  const resume = watch === undefined ? { by: "next" } : watch.marks.at(-1);
+  const asked = await deliverToNewDocument(harness, { type: "executeAction", topFrameOnly: true, extraction: { token: TOKEN, resume }, action });
   expect(asked.responded, "the document the press loaded answered for it").toBe(true);
   return asked.response as BrowserActionResult;
 }
@@ -113,6 +170,7 @@ async function deliverToNewDocument(harness: ContentHarness, message: unknown): 
 test("a read and Next page go through all five results pages, and Next page ends on the last without pressing", async ({ openHarness, page }) => {
   test.setTimeout(240_000);
   const harness = await openHarness("everything-store");
+  const watch = await watchPager(page);
   await openSearch(harness);
   await page.waitForTimeout(1_500);
   const read = readOf(await detect(harness));
@@ -126,7 +184,9 @@ test("a read and Next page go through all five results pages, and Next page ends
     pagesRead.push(pageOf(page.url()));
 
     await page.waitForTimeout(PACE_MS);
-    last = await nextPage(harness, read.item, step);
+    last = await nextPage(harness, read.item, step, undefined, watch);
+    // Humanness 0, named by none: no record on any result (t908).
+    expect("humanness" in last, `step ${step} records no humanness`).toBe(false);
     if (last.nextPage?.outcome !== "moved") break;
     expect(last.status, JSON.stringify(last.validation)).toBe("succeeded");
     expect(last.route).toBeUndefined();
@@ -137,6 +197,55 @@ test("a read and Next page go through all five results pages, and Next page ends
   // Page five's Next is a disabled span: the list ended, which succeeds down the `ended` route.
   expect(last).toMatchObject({ status: "succeeded", route: "ended", nextPage: { outcome: "ended", stop: "control_disabled" } });
   expect(pageOf(page.url()), "nothing was pressed on the last page").toBe(5);
+  // At humanness 0 each of the four presses is `control.click()`, as before t908: one untrusted
+  // click at no point and nothing else, under a mark that says only how the list moved.
+  expect(watch.events.map(({ type, x, y, trusted }) => ({ type, x, y, trusted }))).toEqual(Array.from({ length: 4 }, () => ({ type: "click", x: 0, y: 0, trusted: false })));
+  expect(watch.marks.map((mark) => Object.keys(mark).sort())).toEqual(Array.from({ length: 4 }, () => ["by"]));
+});
+
+test("at humanness 100 every Next page press is aimed inside its control, and every result records it, across documents", async ({ openHarness, page }) => {
+  test.setTimeout(240_000);
+  const harness = await openHarness("everything-store");
+  const watch = await watchPager(page);
+  await openSearch(harness);
+  await page.waitForTimeout(1_500);
+  const read = readOf(await detect(harness));
+
+  const results: BrowserActionResult[] = [];
+  const pagesRead: number[] = [];
+  for (let step = 1; step <= 6; step += 1) {
+    pagesRead.push(pageOf(page.url()));
+    await page.waitForTimeout(PACE_MS);
+    const pressedBefore = watch.events.length;
+    const result = await nextPage(harness, read.item, step, 100, watch);
+    results.push(result);
+    if (result.nextPage?.outcome !== "moved") {
+      expect(watch.events.length, "nothing was pressed on the last page").toBe(pressedBefore);
+      break;
+    }
+    expect(result.status, JSON.stringify(result.validation)).toBe("succeeded");
+    // Each press loaded a new document, which recorded the press its mark brought.
+    expect(result.humanness, `step ${step}'s result records the aimed press`).toEqual({ level: 100, aimed: true });
+    expect(watch.marks.at(-1), `step ${step}'s last mark carries the press`).toEqual({ by: result.nextPage?.by, press: { aimed: true } });
+    // The press is the click gesture at one point inside the control: never control.click()'s, at no point.
+    const press = watch.events.slice(pressedBefore);
+    expect(press.map((event) => event.type)).toEqual(["pointerdown", "mousedown", "pointerup", "mouseup", "click"]);
+    for (const event of press) {
+      expect(event.x, `${event.type} at step ${step} is inside the control`).toBeGreaterThanOrEqual(event.box.left);
+      expect(event.x).toBeLessThan(event.box.right);
+      expect(event.y, `${event.type} at step ${step} is inside the control`).toBeGreaterThanOrEqual(event.box.top);
+      expect(event.y).toBeLessThan(event.box.bottom);
+    }
+    expect(new Set(press.map((event) => `${event.x},${event.y}`)).size, "every event of one press is at the same point").toBe(1);
+  }
+
+  // The same five pages, the same ending, as at humanness 0.
+  expect(pagesRead).toEqual([1, 2, 3, 4, 5]);
+  const ended = results.at(-1);
+  expect(ended).toMatchObject({ status: "succeeded", route: "ended", nextPage: { outcome: "ended", stop: "control_disabled" } });
+  // A step that pressed nothing says so: the level, and not aimed.
+  expect(ended?.humanness).toEqual({ level: 100, aimed: false });
+  expect(results.filter((result) => result.nextPage?.outcome === "moved")).toHaveLength(4);
 });
 
 test("from page two the step follows the pager's page three rather than the Next that leads back",async ({ openHarness, page }) => {
