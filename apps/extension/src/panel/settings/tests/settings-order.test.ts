@@ -48,7 +48,7 @@ function view(current: ExtensionStatus, reading: ModelKeyReading | "none") {
   return createSettingsView({ store, surface: "popup" } as PanelContext, () => undefined, reading === "none" ? {} : { setup: { readModelKey: async () => reading } });
 }
 
-test("settings read top down: connection, project, model key, on the page, help, then Advanced holding the addresses, switches and Forget", async () => {
+test("settings read top down: connection, model, behaviour, permissions, appearance, help, then Advanced holding the addresses and Forget", async () => {
   await withChrome(() => withFakeDocument(async () => {
     modelDocument();
     const settings = view(status(), "ready");
@@ -56,10 +56,16 @@ test("settings read top down: connection, project, model key, on the page, help,
     await tick();
     const root = fake(settings.element);
     const groups = root.descendants().filter((node) => node.className.includes("settings-group ") || node.className === "settings-group").map((node) => node.getAttribute("aria-label"));
-    assert.deepEqual(groups, ["Connection", "Project", "Model key", "Status on the page", "Help", "Advanced"]);
+    assert.deepEqual(groups, ["Connection", "Model", "Behaviour", "Permissions", "Appearance", "Help", "Advanced"]);
     const advanced = root.descendants().find((node) => node.tagName === "DETAILS")!;
     const inside = (id: string) => advanced.descendants().some((node) => node.id === id);
-    for (const id of ["gatewayUrl", "coreApiUrl", "autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots", "saveSettingsButton", "disconnectButton"]) assert.equal(inside(id), true, id);
+    for (const id of ["gatewayUrl", "coreApiUrl"]) assert.equal(inside(id), true, id);
+    for (const id of ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled", "saveSettingsButton", "disconnectButton", "humanness"]) {
+      assert.equal(inside(id), false, `${id} is out of Advanced`);
+      assert.equal(root.descendants().some((node) => node.id === id), true, `${id} keeps its id`);
+    }
+    const permissions = root.descendants().find((node) => node.getAttribute("aria-label") === "Permissions")!;
+    for (const id of ["captureMutations", "captureInputValues", "captureSnapshots", "requestsEnabled"]) assert.equal(permissions.descendants().some((node) => node.id === id), true, `${id} is under Permissions`);
     assert.equal(advanced.descendants().some((node) => node.textContent === "Forget this pairing"), true);
     assert.equal(advanced.textContent.includes("spend"), false, "no spending setting is drawn");
     assert.equal(root.textContent.includes("Your model key is ready."), true);

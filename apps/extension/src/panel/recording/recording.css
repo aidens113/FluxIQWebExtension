@@ -12,7 +12,7 @@
 .recording-bar .rec-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
 .recording-bar-extract .extract-button { width: auto; min-height: 28px; padding: 3px 10px; }
 .recording-bar .small-button { min-height: 28px; padding: 3px 10px; }
-.danger-fill { border-color: var(--danger); background: var(--danger); color: #ffffff; }
+.danger-fill { border-color: var(--danger); background: var(--danger); color: var(--canvas); }
 .recording-block { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .recording-block-text { min-width: 0; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: no-preference) {
@@ -37,12 +37,12 @@
 .recording-actions .primary-button { flex: 1 1 100%; }
 
 .recording-description-dialog {
-  border: 1px solid var(--border, #bbb);
+  border: 1px solid var(--edge);
   border-radius: 12px;
   width: min(90vw, 420px);
   padding: 12px;
 }
-.recording-description-dialog::backdrop { background: rgba(0, 0, 0, .4); }
+.recording-description-dialog::backdrop { background: color-mix(in srgb, var(--canvas) 72%, transparent); }
 .recording-description-dialog textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); color: var(--text); padding: 7px 9px; }
 .recording-description { display: grid; gap: var(--space-2); border: 0; padding: 0; background: transparent; color: var(--text); }
 .recording-description .small-button { justify-self: start; }
