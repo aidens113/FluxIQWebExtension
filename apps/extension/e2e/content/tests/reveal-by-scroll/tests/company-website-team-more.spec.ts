@@ -78,7 +78,7 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
     const firstSaid = `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`;
     expect(first.status, firstSaid).toBe("succeeded");
     expect(firstSaid, "the account says the target was scrolled toward until it could be pressed").toMatch(/scrolling \d+ times? toward where the target would be/u);
-    await expect(page.locator(MORE)).toBeVisible();
+    expect(firstSaid, "the page's swallowed first press was pressed once more").toMatch(/pressed once more/u);
     await expect.poll(() => people(page), { message: "the one command's second press loaded more people", timeout: 10_000 }).toBeGreaterThan(Math.max(before, 8));
   });
 
@@ -86,7 +86,8 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
   // team page and presses "Show more people" about 0.7 s after it loads. Nothing is left to scroll,
   // and the page is still loading its people behind skeleton cards, waiting out its own 429s; it
   // shows the button seconds later. The press waited the dismissed-dialog ladder (about 1.35 s) and
-  // gave up, so Core retried the step. It now waits while the page shows that work, and lands.
+  // gave up, so Core retried the step. It now waits while the page shows that work, and lands; the
+  // page's swallowed first press is then pressed once more inside the same command (t898).
   test("Show more people, pressed at the end of the page right after it loads: the press waits while the page loads its people, and lands", async ({ openHarness, page }) => {
     const harness = await openHarness("company-website");
     await apply(harness, "set-consent", { choice: "essential" });
@@ -100,11 +101,12 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
 
     const first = await harness.runAction({ commandId: "more-end-1", actionType: "web.dom.click", selector: MORE, timeoutMs: 10_000 });
     const said = `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`;
-    // The press reached the button inside this one command: the page's own swallowed first press
-    // (t743) is what answers, never `web.target.not_shown`.
+    // The press reached the button inside this one command, never `web.target.not_shown`; the
+    // page's own swallowed first press (t743) is pressed once more in the same command (t898), so
+    // the command lands.
     expect(first.failure?.code, said).not.toBe("web.target.not_shown");
-    expect(first.failure?.code, said).toBe("web.action.page_reported_failure");
-    await expect(page.locator(MORE)).toBeVisible();
+    expect(first.status, said).toBe("succeeded");
+    expect(said, "the page's swallowed first press was pressed once more").toMatch(/pressed once more/u);
     expect(await people(page), "the page loaded its batches while the press waited").toBeGreaterThan(8);
   });
 

@@ -489,3 +489,79 @@ Each level-100 run was followed straight away by a baseline, as the control.
 ### Live series: refused by the Lab's guard, nothing spent
 - `pnpm lab attempt company-website --task company-website-apprentices --authoring-mode answer-first --live-llm --llm-model claude-haiku-5-5 --llm-max-cost-usd 5 --attempts 4 --humanness 0`, with `--priority` -> refused by rule `behind-dev`: "this repository ... is at 7761985, which lacks 10 commit(s) of its local dev (685d0eb); the FluxIQ Core ... is at dac4563, which lacks 3 commit(s) of its local dev (8feb5ab)". `spentUsd: 0`, no provider call.
 - **Needed:** commit checkpoint 8 and merge dev into both t898 trees. I then rebuild through the queue and run the two live series (level 0, then level 100), watching each to the end.
+
+## Checked point 9: live series, control-node pauses, a person's starting humanness, paired answer, notice-press specs (2026-11-11)
+
+### Live series (approved, watched to the end)
+- **Level 0, run-mwcdkd7h-832d9262:** 4 of 4 right; attempts 3 and 4 made 0 calls; about $0.02. No step failed, and no step carries humanness.
+- **Level 100, run-mwcess01-e0124be6:** 4 of 4 right; about $0.04.
+  - Attempt 2 needed a repair. Attempt 1's answer applied the apprentice filter through two draft amendments, but the saved Flow's read kept all 28 cards. That is an authoring defect, routed to E1; humanness is excluded (the Flow's click is the "Our team" link).
+  - Replays took 49-61 s against 23-30 s at level 0, because Core paused before its own control nodes too.
+  - Both debug files are under `docs/working/language-driven-flow-loop-plan/debugs/`.
+- **Fixed:** `engine/automation/pacing/arrival-pause.ts` pauses only before nodes that act through a client (a domain's nodes and `builtin.policy.*`). The `arrival.ts` hook passes the node. Tests are in `pacing/tests/humanness-helpers.test.ts`, and `docs/architecture/humanness.md` is updated.
+
+### A person's starting humanness (worker-heavy, Opus; names approved and sent to W5)
+- **Storage:** `startingHumanness?` on the identity-access User record. It comes back from `validateSession` and `authenticate`, and never in other people's views (the snapshot, update-user, create-user, the authenticator endpoints).
+- **Endpoints:** `get-my-preferences` and `update-my-preferences` in program identity-access.
+  - IAM: `iam:GetMyPreferences` (Read) and `iam:UpdateMyPreferences` (Write). Permission `programs.read`, which every role holds. Resource `selfUser()`. Hidden from the assistant.
+  - Any payload key other than `startingHumanness` is refused with `preferences.self_only`, the caller's own id included. The one exception is the panel route's own `authSessionId`, and only when it is the caller's session.
+  - Bad values are refused with `preferences.starting_humanness_invalid`; null clears.
+  - Setting a preference does not move `updatedAtMs`.
+- **Precedence:** `resolveHumanness` ends with `person`: run option, task, Flow, request value, person, none.
+  - Answer-first chat attempts use the caller's stored value when the request carries none.
+  - Run-session runs too. The person is the authenticated caller: run-session passes `personUserId` from `request.actor`, never from the body, so even a signed-in run with no unlocked key gets it.
+- **My integration:**
+  - The host binding in `programs/_shared/runtime.ts`: `AutomationStudioPersonHumanness.bind(automationStudio, (userId) => identityAccess.preferences.startingHumanness(userId))`.
+  - `personUserId` on the run-session input, set in `run-requests/run-session.ts` from the actor and read in `service.ts`'s run-session expression.
+  - Both actions added to `FluxIQUserAccess`'s `SelfService` statement.
+  - Tests: the run-request harness keeps `personUserId` apart, and two new cases cover the caller (locked or not) and a body naming another person (dropped). The person-humanness run-session test gains a case with no unlocked key.
+- **New module, outside the brief** but forced by `service.ts`'s audit limits (4,304 lines, 221 methods): `framework/automation-service/service/person-humanness/`, keyed by the service object.
+- **Not done:** `FluxIQReadOnlyAccess` stays at v1 though its generated list gained `iam:GetMyPreferences`. Its comment asks for a bump, but no check enforces it, earlier list changes left it at v1, and a test pins v1.
+
+### Paired callers get a humanness-only Flow detail (worker-heavy, Opus)
+- **The cut:** `program-route.ts` `projectPairedClientResponse` (paired callers only) answers `get-flow-metadata-detail` with exactly `{ flow: { flowId, metadata: { humanness? } } }`. It is built from scratch, so a field the handler adds later is never handed out. A missing Flow answers `{ flow: null }`; a failure keeps only `error` and `errorCode`.
+- **The read request:** a paired read may carry only `{ projectId, flowId }`; any other key is refused, named.
+- **Also cut, beyond the brief and accepted by me:** the answer of `update-flow-settings` for paired callers. Its handler reads the full detail back after saving, so re-sending the current level would otherwise hand out every input default and variable initial value.
+- **Unchanged:** cookie callers' bodies are byte-identical, and tests show it.
+- **Tests:** 7 in `program-route.test.ts`; 6 in `handle-program-request.test.ts` against a real registry and store, with seeded input defaults and variable values.
+- **Mutation check:** with the cut disabled, all 7 projection tests fail.
+
+### Notice-press follow-ups (granted)
+- `apps/extension/e2e/content/tests/reveal-by-scroll/tests/company-website-team-more.spec.ts`: one command that succeeds on its second press.
+- `docs/architecture/extension-client.md` (~1474): the press-again rule.
+- `apps/extension/e2e/site-reset/tests/job-failed-save.spec.ts`: the header, the comments, and the attempts assertion now 1 (accepted).
+
+### Test fixes of my own
+- `flows-humanness.test.ts`: my checkpoint-7 "one write" test compared a non-existent `revision` field (`undefined` with `undefined`). It now counts `service.saveFlow` calls: a level-40 create makes exactly as many as a plain one, so the old two-write handler would fail it. It also checks that `createFlow` is called once carrying 40.
+- `humanness-helpers.test.ts`: a typing fix.
+
+### Notice-press specs (worker-heavy, Opus): both pass
+- **`company-website-team-more.spec.ts`:** both "Show more people" tests now expect one command that succeeds, with "pressed once more" in its account. The old button-visible check went: once the second press loads the rest of the team, the page hides the button. 3 of 3 passed.
+- **`job-failed-save.spec.ts`:**
+  - It was already broken on dev by two Core changes on 2026-10-30, before t898:
+    - Core `0bef3866f` and `f6760d4c3`: a toggle step must name its `ensureState`, so the scripted save without one was refused with `candidate.toggle_state_required`, which ended the build in `evidence_repeat_without_progress`;
+    - Core `879ec6584` (t811): a brief completes as soon as its judged trial answers yes, so the builder gets no later turn.
+  - My own expectations were also wrong: one attempt reports no `attempts` field (the domain's `run.ts:558`), and the click counter counts commands, not presses (`instrumented-runtime.ts:67`).
+  - Now: the save's `attempts` is undefined, its click count is +1, and its account names "pressed once more"; the scripted save names its `ensureState`; the trial checks read the supervisor's `project.dispatch` answer, the judge's two views and the site's My jobs before and after. 1 passed.
+  - `tsc -p tsconfig.test.json --noEmit` -> exit 0.
+- **For their owners, routing asked:**
+  - other site-reset specs (`judged-change-save-then-read`, `office-site-reverted-toggle`, `job-undo-redraws-on-load`) probably share the two Core drifts;
+  - the comment at `instrumented-runtime.ts:48` says the counter sees a trial's clicks, but trial playback bypasses it.
+- **A mistake of mine, no harm done:** while chasing the job-failed-save failure on a wrong theory, I edited `click.ts` and then reverted it (restored byte for byte from HEAD). The Lab's staleness guard refused the provider-free run it overlapped, before anything ran.
+
+### Level 100 with the control-node fix (approved provider-free run; live rerun refused behind-dev)
+- **Provider-free run-mwckoxsx-f273a2ff** (`--scripted-model --attempts 4 --humanness 100`): passed, 4 of 4 right, every continuation held. Replays took 29.6, 22.4 and 12.7 s; attempts 3 and 4 made 0 calls.
+  - Control nodes now wait 0-1 ms on arrival (merge steps 0023-0051), against up to 3.5 s before the fix.
+  - Page steps get the designed pause before arrival, now end to end from the extension's level: navigate 1.0 s, clicks 0.7-2.2 s, scrolls 0.3-1.9 s, extract 3.1 s.
+  - The level is recorded on 12 page steps (level 100; 6 aimed).
+- **Live level-100 rerun:** refused by `behind-dev` (extension ff991c1, 12 behind dev 008efac; Core e39e2d3, 9 behind dev 236c058). $0 spent, no provider call. It needs dev merged into both trees again.
+
+### Validation for checked point 9 (run by me unless noted)
+- `pnpm --filter fluxiq exec vitest run src/engine/automation/pacing src/engine/automation/step-loop src/engine/automation/tests/graph-run.test.ts` -> 12 files, 96 passed (the control-node fix).
+- `... src/programs/automation-studio/api/handlers/tests/flow-settings` -> 18 passed (the create-flow test now counts saves).
+- `... src/framework/automation-service/service/run-requests src/framework/automation-service/tests/person-humanness` -> 4 files, 33 passed; then person-humanness -> 2 files, 9 passed (after the locked-key case).
+- `... src/platform/iam src/programs/identity-access` -> 38 files, 345 passed.
+- `pnpm --filter @fluxiq/contracts exec vitest run src/humanness src/iam src/program-api` -> 35 files, 170 passed.
+- Core library build through the queue -> exit 0, which typechecks all of this round. An earlier `pnpm --filter fluxiq check` had shown 6 errors in two of my test files: a typing issue, and a test reading a non-existent `revision`. Both are fixed, and this build includes them.
+- `pnpm structure:check` -> passed (534 warnings, 969 baselined). Docs links -> passed.
+- Workers: paired detail 78 passed (program-route); the notice-press specs 3 of 3 and 1 of 1, with the e2e tsc at exit 0.

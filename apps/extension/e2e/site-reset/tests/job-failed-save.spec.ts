@@ -3,7 +3,7 @@ import { postingById } from "../../../../scenario-lab/src/scenarios/job-board/ca
 import { viewJobHref } from "../../../../scenario-lab/src/scenarios/job-board/board/index.js";
 import { expect, test } from "../../fixtures/extension-context";
 import { retiredCodesIn } from "../change-proof";
-import { actsUnder, bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, rowTitles, startInstalledBuild, startedWithActs, trialCode, type BuilderTurn, type ScriptedAnswer } from "../index";
+import { bindInstrumentedRuntime, keepDiagnostic, bindScriptedProvider, pageHandleWhere, projectBuild, rowControl, rowTitles, startInstalledBuild, type BuilderTurn, type ScriptedAnswer } from "../index";
 
 const TASK = "Save one job to my saved jobs.";
 /** A job nobody saved: the build presses its heart, and the board's first save of a page load fails. */
@@ -23,15 +23,25 @@ const record = (value: unknown): JsonObject => typeof value === "object" && valu
  *
  * Named, the save is admitted. The board fails the first save of each page load
  * with only a notice in its own status region. Since t898 that press, certain to have
- * done nothing, is pressed once more inside the same command, and the second press lands:
- * two clicks for one call and one attempt (before t898 it failed
- * `web.action.page_reported_failure` and Core's retry made the second click), and My jobs
- * reads 2 -> 3 rows. So the act is in
+ * done nothing, is pressed once more inside the same click command, and the second
+ * press lands. So the browser receives one click command, which presses twice: the
+ * instrumented runtime counts commands, not presses. The node runs one attempt, and
+ * its answer leaves `attempts` out (it is named only above one,
+ * `domain/src/runtime/llm-evidence/node-run/run.ts`). Its account says the page's first
+ * press brought only a notice and was pressed once more. Before t898, the first press
+ * failed `web.action.page_reported_failure` and the node's retry sent a second click
+ * command: two commands, two attempts. My jobs reads 2 -> 3 rows. So the act is in
  * place, and Core's settle points at My jobs: undo it there, naming it under
  * `undoes`. An undo on a row My jobs held before the build is refused unrun,
  * naming the closed condition it failed; the new row's own Unsave job is the
- * undo, admitted and landing, and My jobs reads its two rows again. The trial
- * then runs on a clean site and answers yes.
+ * undo, admitted and landing, and My jobs reads its two rows again.
+ *
+ * The heart flips a class when pressed, so the save answers with the toggle states it
+ * saw. Core then refuses a submitted step on that control without `ensureState`
+ * (`candidate.toggle_state_required`, since 2026-10-30; the same whether the save took
+ * one command or two). The Flow's save step therefore names the state the press left,
+ * the saved heart, copied exactly from the save's answer. The trial then runs on a
+ * clean site and answers yes.
  */
 test("installed gateway project build retries the page's failed save, and undoes it on its own row", async ({ extensionSession }, testInfo) => {
   test.setTimeout(300_000);
@@ -47,7 +57,11 @@ test("installed gateway project build retries the page's failed save, and undoes
   const clicks: Record<string, { before: number; after?: number }> = {};
   let destinationReference = "", heartHandle = "";
   let baseline: string | undefined, baselineTitles: string[] = [], undoneHash: string | undefined;
-  const tests: JsonObject[] = [];
+  /** The heart's state after the save's press, as the save's answer observed it: the save step's `ensureState`. */
+  let savedState: JsonObject = {};
+  /** What the supervisor's dispatch answered once the build brief returned; what each trial's judge was shown. */
+  let dispatched: JsonObject | undefined;
+  const judged: string[] = [];
   try {
     await page.goto(new URL("/scenarios/job-board/", installed.origin).href);
     await page.getByRole("button", { name: "Accept all", exact: true }).click();
@@ -63,7 +77,8 @@ test("installed gateway project build retries the page's failed save, and undoes
       clicks[callId] = { before: observed.clicks() };
       return made;
     };
-    const flow = (heart: string) => [`flow: Save job`, `step open: open the job`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(viewJob)}`, `step save: save the job`, `  node: web.dom.click`, `  target: ${heart}`, `  consequences: modify_existing`].join("\n");
+    // The save step names the state its press leaves: the heart saved, as the save's own answer observed it.
+    const flow = (heart: string, saved: JsonObject) => [`flow: Save job`, `step open: open the job`, `  node: web.browser-navigate`, `  url: ${JSON.stringify(viewJob)}`, `step save: save the job`, `  node: web.dom.click`, `  target: ${heart}`, `  consequences: modify_existing`, `  ensureState: ${JSON.stringify(saved)}`].join("\n");
     const builder = (turn: BuilderTurn) => {
       const { last, node, call } = turn;
       pages[`step-${turn.step}`] = turn.shownPage();
@@ -106,22 +121,46 @@ test("installed gateway project build retries the page's failed save, and undoes
       if (turn.step === 7) return send("undone.look", node("undone.look", "web.output.browser-navigate", { url: myJobs }));
       if (turn.step === 8) {
         undoneHash = reads.at(-1)?.hash;
-        return send("submit", call("submit", "core.submit_subflow", { flow: flow(heartHandle) }));
+        savedState = record(record(answers["save"]?.toggle).signature);
+        if (!Object.keys(savedState).length) throw new Error("diagnostic.observed_toggle_state_missing");
+        return send("submit", call("submit", "core.submit_subflow", { flow: flow(heartHandle, savedState) }));
       }
       const submitted = answers["submit"];
       if (typeof submitted?.revision !== "number" || typeof submitted.digest !== "string") throw new Error("diagnostic.submission_refused");
       const candidate = { revision: submitted.revision, digest: submitted.digest };
+      // The build's judged whole run. Its yes completes the brief at once, with no further builder turn (Core t811,
+      // 2026-10-30): its verdict reaches the supervisor's dispatch answer, never this builder.
       if (turn.step === 9) return send("trial.clean", call("trial.clean", "core.test_subflow", candidate));
-      tests.push(answers["trial.clean"] ?? {});
+      // Reached only when the trial did not complete the brief; its answer is kept above for the diagnostic.
       return turn.complete({ subflowKey: "main", ...candidate });
     };
-    const provider = bindScriptedProvider(installed, { task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder });
+    const provider = bindScriptedProvider(installed, {
+      task: TASK, permitted: ["modify_existing"], instructionSourceId: build.instructionSourceId, maxIterations: 20, maxCallsPerRun: 30, builder,
+      // The default judge's bare yes, keeping what each trial showed it.
+      verify: shown => {
+        judged.push(shown);
+        return { summary: "Diagnostic trial completed.", diagnosis: { answersRequest: "yes" } };
+      },
+      // The default one-part plan and single build brief, keeping the dispatch's answer, which says how the brief's test ended.
+      supervisor: turn => {
+        if (turn.step === 1) return turn.call("plan", "project.write_plan", turn.plan());
+        if (turn.step === 2) {
+          const brief = { kind: "build", subflowKey: "main", parts: ["p1"], entry: { caseId: "observed-current", predecessors: [] }, permittedActs: ["modify_existing"], maxIterations: 20 };
+          return turn.call("dispatch", "project.dispatch", { reason: "Exercise the transport.", briefs: [brief] });
+        }
+        dispatched = turn.last("project.dispatch");
+        return turn.complete(record(dispatched?.complete));
+      }
+    });
     const { ending, failure } = await build.run();
     const savedReads = reads.filter(read => read.location?.includes("/job-board/myjobs") === true);
-    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), destinationReference, baseline, baselineTitles, undoneHash, clicks, answers, tests, reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
+    // The site after the build: the trial's own save, made on a clean site, is on My jobs.
+    await page.goto(myJobs);
+    const savedAfterTrial = await page.getByText(TARGET.title, { exact: true }).count();
+    const diagnostic = { ending, failure, builderStep: provider.builderSteps(), destinationReference, baseline, baselineTitles, undoneHash, clicks, savedAfterTrial, answers, dispatched, judged, reads, declarations: observed.declarations, outcomes: observed.outcomes, receipts: provider.receipts, gatewayErrors: installed.gatewayErrors, pages };
     await keepDiagnostic(testInfo, "reset-job.json", diagnostic);
     const coded = (callId: string) => answers[callId]?.code ?? (answers[callId]?.ok === true ? "ok" : undefined);
-    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, saveAttempts: answers["save"]?.attempts, saveClicks: clicks["save"], undoHeld: [coded("undo.held"), answers["undo.held"]?.failed], undo: [coded("undo"), answers["undo"]?.failed], tests: tests.map(trialCode) } }));
+    console.log(JSON.stringify({ resetDiagnostic: { ending, failure, saveAttempts: answers["save"]?.attempts, saveClicks: clicks["save"], submit: answers["submit"]?.issueCodes ?? (answers["submit"]?.digest ? "accepted" : undefined), undoHeld: [coded("undo.held"), answers["undo.held"]?.failed], undo: [coded("undo"), answers["undo"]?.failed], builderSteps: provider.builderSteps(), judged: judged.length, savedAfterTrial, complete: dispatched?.complete ?? null, returns: (dispatched?.returns as JsonObject[] | undefined)?.map(entry => entry.outcome) ?? null } }));
 
     // My jobs is a plain list: read complete with no aria set attributes, its two saved jobs, and a ref issued.
     expect(destinationReference).toMatch(/^destination-[1-9][0-9]{0,3}$/u);
@@ -129,18 +168,25 @@ test("installed gateway project build retries the page's failed save, and undoes
     const original = reads.find(read => read.hash === baseline);
     expect(original?.sizes).toEqual([2]);
     expect(baselineTitles).toEqual(expect.arrayContaining([JSON.stringify(HELD.title)]));
+    expect(baselineTitles).not.toContain(JSON.stringify(TARGET.title));
 
     // t775: no exploration call is refused for naming no ref, and no retired reset code shows anywhere in the log.
     expect(retiredCodesIn(answers, observed.outcomes, provider.receipts)).toEqual([]);
 
     // The save naming the ref: declared modify_existing, admitted once; the board answered the first press with only
-    // its own notice, and the same command pressed again and landed (t898). One call, two clicks, one attempt.
+    // its own notice, and the same command pressed again and landed (t898). One call, one attempt (its answer names
+    // attempts only above one), one click command sent to the browser, and two presses inside it, as its account says.
     const save = observed.declarations.filter(declaration => declaration.call === "save");
     expect(save.map(declaration => [declaration.consequences, declaration.permitted])).toEqual([[["modify_existing"], true]]);
     expect(answers["save"]?.ok).toBe(true);
     expect(answers["save"]?.status).toBe("succeeded");
-    expect(answers["save"]?.attempts).toBe(1);
-    expect(clicks["save"]?.after).toBe(clicks["save"]!.before + 2);
+    expect(answers["save"]?.attempts).toBeUndefined();
+    expect(clicks["save"]?.after).toBe(clicks["save"]!.before + 1);
+    const saveAccount = String(record(record(answers["save"]?.read).validation).actual ?? "");
+    expect(saveAccount, "the page's notice-only first press was pressed once more inside the command").toContain("answered the first press with nothing but a notice in one of its own status or alert regions and left everything else exactly as before, so it was pressed once more");
+    // The press flipped the heart: the save answered with the state it left, which the Flow's save step names.
+    expect(Object.keys(savedState).length).toBeGreaterThan(0);
+    expect(record(answers["save"]?.toggle).signature).toEqual(savedState);
 
     // The save landed: My jobs now holds a third row, the two it held before kept.
     const afterSave = savedReads.find(read => read.hash !== baseline);
@@ -171,13 +217,33 @@ test("installed gateway project build retries the page's failed save, and undoes
     expect(clicks["undo"]?.after).toBe(clicks["undo"]!.before + 1);
     expect(undoneHash).toBe(baseline);
 
-    // The trial then runs on a clean site, with nothing to undo or restore, and answers yes.
-    expect(trialCode(tests[0])).toBe("yes");
-    expect(startedWithActs(tests[0]).some(act => act.call === "save")).toBe(false);
-    expect(actsUnder(tests[0], "actsToUndo")).toEqual([]);
-    expect(actsUnder(tests[0], "actsToRestore")).toEqual([]);
-    const steps = (record(tests[0]?.feedback).steps as JsonObject[] | undefined) ?? [];
-    expect(steps.some(step => step.label === "save the job" && step.status === "succeeded")).toBe(true);
+    // The trial then runs on the clean site the undo left (above), and answers yes. Since Core t811 (2026-10-30) a yes on
+    // the judged whole run completes the brief before any further builder turn, so the trial's own answer never reaches
+    // this builder: the builder's ninth turn, the trial, is its last. The dispatch says the brief is done on one trial
+    // answered yes, proposing the revision the builder submitted, and gives `complete`, which Core gives only when that
+    // brief's own test was the passing whole test of the Flow assembled from it (`project-agents/supervisor/dispatch-tool.ts`,
+    // `singleYes`): it names that assembly, so its digest is the assembled Flow's, not the subflow submission's.
+    expect(provider.builderSteps()).toBe(9);
+    const returned = (dispatched?.returns as JsonObject[] | undefined) ?? [];
+    expect(returned.map(entry => entry.outcome)).toEqual(["done"]);
+    expect((returned[0]?.trialsAnswered as JsonObject[] | undefined)?.map(entry => entry.verdict)).toEqual(["yes"]);
+    expect(record(returned[0]?.proposal).revision).toBe(answers["submit"]?.revision);
+    expect(record(dispatched?.complete).revision).toBe(answers["submit"]?.revision);
+    expect(record(dispatched?.complete).digest).toMatch(/^[a-f0-9]{64}$/u);
+    // The judge was asked about that trial, and then once more with the converse question that confirms a yes (Core's
+    // recheck). Each time it was shown the Flow's two steps as the trial ran them, the save step having changed the page
+    // to say the job was saved.
+    const judgeSummaries = judged.map(shown => record(record(record(JSON.parse(shown)).context).resultSummary));
+    expect(judgeSummaries.map(summary => typeof summary.recheck === "string")).toEqual([false, true]);
+    for (const summary of judgeSummaries) {
+      const shape = (summary.flowShape as JsonObject[] | undefined) ?? [];
+      expect(shape.map(step => step.label)).toEqual(["open the job", "save the job"]);
+      expect(JSON.stringify(shape[1]?.changed ?? [])).toContain("Job saved");
+    }
+    // The scripted judge says yes to anything, so the site is the oracle too: the job My jobs did not hold before the
+    // trial (the undo restored its baseline, above) is on it afterwards. The trial's own clicks are not in `clicks`: its
+    // playback does not dispatch through the instrumented evidence runtime.
+    expect(savedAfterTrial).toBeGreaterThan(0);
     expect(ending).toBe("proposed");
   } finally {
     await build.stop();
