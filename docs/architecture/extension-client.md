@@ -1270,6 +1270,33 @@ the work. The 4 s poll stays as the fallback.
 
 Chat can also hold an explicit project scope, independently of the browser recording session. Its list/get/send/answer requests use that project through the existing authenticated conversation relay. Switching projects clears the displayed thread and ignores late reads for the old target; an empty authorized thread list is ready for the first message. Send stays disabled while that scope loads or fails. Question/back navigation preserves the selected project, and activity from another project is excluded. An unsent draft from another project remains behind the existing adoption controls.
 
+**The conversation list** (t900, interface I3). The chat shows every thread the
+paired person can see in a drawer ("Chats" over the thread), with New chat,
+search, and per-thread rename and delete; the component is Core's
+(`ui-components/src/chat/view/thread-list/`, README "Conversation list"), and
+the extension supplies its four optional ports
+(`panel/chat/transport/ports/conversation.ts`). Each is one relayed Core call,
+fields written by name and Core's payload returned as sent:
+
+| Panel message | Core endpoint and body |
+| --- | --- |
+| `panelConversationRead`, `kind: "list-all"` | `list-conversations` `{ projectId ?? null, limit }` (every permitted project when absent) |
+| `panelConversationSend`, `kind: "open"`, `fresh: true` (New chat) | `open-conversation` with `fresh: true`; never shown as "sending" |
+| `panelConversationRename` (`fluxiq.panel.conversationRename`) | `rename-conversation` `{ projectId?, conversationId, title }` |
+| `panelConversationDelete` (`fluxiq.panel.conversationDelete`) | `delete-conversation` `{ projectId?, conversationId }` |
+
+Rename and delete are accepted only from the side panel or popup, like every
+panel message. Core refuses a delete while a run still uses the thread
+(`conversation_run_active`) and answers a thread the caller may not change as
+not found; the panel shows Core's own sentence
+(`transport/reply/thread-change-of.ts`). The thread on screen is remembered per
+window in `chrome.storage.session` (`fluxiq.chatThread.<windowId>`). The
+extension gives the list no `unavailableReason`: its relays name the session's
+project for a message that names none, so the latest chat takes a first message
+before the status names a project. The
+message shapes are `PanelConversation*Request` in `shared/panel-conversation.ts`,
+re-exported from `shared/protocol.ts`.
+
 The mounted extension view accepts the bounded project-only navigation event fluxiq:chat-project with exactly { projectId }. It opens the ordinary chat tab and exposes data-fluxiq-chat-project plus data-fluxiq-chat-scope-state (loading, ready, error) for setup validation. Ready follows a successful authorized thread read; the event itself grants no permissions and executes no model capability. The Lab uses this same view and the ordinary composer.
 
 **The chat builds and runs automations** (t198). The background relay

@@ -1,26 +1,46 @@
 // Renders the FluxIQ toolbar/store icon as a PNG at an exact pixel size.
 //
-// The build used to write one 128x128 placeholder under every icon name, so the
-// 16, 32 and 48 entries in each manifest pointed at a 128-pixel image and the
-// store listing had no mark at all. The icon is drawn here from geometry instead
-// -- a rounded indigo-to-sky square carrying a white "F" and a dot -- so each
-// size is rendered at its own resolution (4x4 supersampled for anti-aliasing),
-// the output is deterministic, and no binary asset has to be tracked.
+// The icon is the website's brand mark (FluxIQWebsite design/brand/fluxiq-mark.svg):
+// a near-black rounded tile (#0c0d0f, rx 112 of 512) carrying a light bracket
+// stroke (#e8e6e3, width 3.5 in the mark's 32-unit space, round caps) -- a
+// vertical stem rising from (9,26) to a quarter-arc corner and a bar to (26,6),
+// plus a short crossbar at y 16.5 -- and an amber node (#f5b83d, r 3) at
+// (23.5,16.5). The mark sits at translate(64 64) scale(12) inside the 512 tile.
+//
+// It is drawn from geometry rather than shipped as a binary asset: every stroke
+// is a distance-to-segment / distance-to-arc test, each size is rendered at its
+// own resolution (4x4 supersampled for anti-aliasing), and the output is
+// deterministic. At 32 px and below the strokes are thickened slightly (and the
+// node a little larger) so the mark stays legible in a toolbar; 48 px and up
+// use the exact artwork proportions.
 
 import { crc32, deflateSync } from "node:zlib";
 
-const TOP = [0x4f, 0x46, 0xe5];
-const BOTTOM = [0x0e, 0xa5, 0xe9];
 const SUPERSAMPLE = 4;
+const TILE = 512;
+const TILE_RADIUS = 112;
+const BACKGROUND = [0x0c, 0x0d, 0x0f];
+const STROKE = [0xe8, 0xe6, 0xe3];
+const AMBER = [0xf5, 0xb8, 0x3d];
 
-/** Glyph rectangles in unit coordinates: [x0, y0, x1, y1]. */
-const GLYPH_RECTS = [
-  [0.29, 0.23, 0.43, 0.77],
-  [0.29, 0.23, 0.72, 0.36],
-  [0.29, 0.45, 0.63, 0.57]
+// The mark, in its 32-unit space (mapped by translate(64) scale(12) into the tile).
+const MARK_OFFSET = 64;
+const MARK_SCALE = 12;
+const SEGMENTS = [
+  [9, 26, 9, 11],
+  [14, 6, 26, 6],
+  [9, 16.5, 18, 16.5]
 ];
-const DOT = { x: 0.69, y: 0.7, r: 0.075 };
-const CORNER = 0.22;
+const ARC = { cx: 14, cy: 11, r: 5 }; // the quarter from (9,11) to (14,6): the top-left quadrant
+const NODE = { x: 23.5, y: 16.5, r: 3 };
+const STROKE_HALF_WIDTH = 1.75;
+
+/** Small sizes get a heavier stroke and node so the mark survives a 16 px toolbar slot. */
+function markWeights(size) {
+  if (size <= 16) return { half: 2.7, node: 3.6 };
+  if (size <= 32) return { half: 2.3, node: 3.3 };
+  return { half: STROKE_HALF_WIDTH, node: NODE.r };
+}
 
 /**
  * @param {number} size  edge length in pixels
@@ -28,46 +48,66 @@ const CORNER = 0.22;
  */
 export function renderIconPng(size) {
   if (!Number.isInteger(size) || size < 8 || size > 1024) throw new Error(`icon: unsupported size ${size}`);
+  const weights = markWeights(size);
   const stride = size * 4 + 1;
   const raw = Buffer.alloc(stride * size);
+  const samples = SUPERSAMPLE * SUPERSAMPLE;
   for (let y = 0; y < size; y += 1) {
     raw[y * stride] = 0; // filter: none
     for (let x = 0; x < size; x += 1) {
-      let shape = 0;
-      let glyph = 0;
+      let covered = 0;
+      const sum = [0, 0, 0];
       for (let sy = 0; sy < SUPERSAMPLE; sy += 1) {
         for (let sx = 0; sx < SUPERSAMPLE; sx += 1) {
-          const u = (x + (sx + 0.5) / SUPERSAMPLE) / size;
-          const v = (y + (sy + 0.5) / SUPERSAMPLE) / size;
-          if (!insideRoundedSquare(u, v)) continue;
-          shape += 1;
-          if (insideGlyph(u, v)) glyph += 1;
+          const tx = ((x + (sx + 0.5) / SUPERSAMPLE) / size) * TILE;
+          const ty = ((y + (sy + 0.5) / SUPERSAMPLE) / size) * TILE;
+          if (!insideTile(tx, ty)) continue;
+          covered += 1;
+          const color = sampleColor((tx - MARK_OFFSET) / MARK_SCALE, (ty - MARK_OFFSET) / MARK_SCALE, weights);
+          for (let channel = 0; channel < 3; channel += 1) sum[channel] += color[channel];
         }
       }
-      const samples = SUPERSAMPLE * SUPERSAMPLE;
-      const alpha = shape / samples;
-      const white = shape === 0 ? 0 : glyph / shape;
-      const t = (y + 0.5) / size;
       const offset = y * stride + 1 + x * 4;
-      for (let channel = 0; channel < 3; channel += 1) {
-        const base = TOP[channel] + (BOTTOM[channel] - TOP[channel]) * t;
-        raw[offset + channel] = Math.round(base + (255 - base) * white);
-      }
-      raw[offset + 3] = Math.round(alpha * 255);
+      for (let channel = 0; channel < 3; channel += 1) raw[offset + channel] = covered === 0 ? 0 : Math.round(sum[channel] / covered);
+      raw[offset + 3] = Math.round((covered / samples) * 255);
     }
   }
   return encodePng(size, size, raw);
 }
 
-function insideRoundedSquare(u, v) {
-  const cx = Math.min(Math.max(u, CORNER), 1 - CORNER);
-  const cy = Math.min(Math.max(v, CORNER), 1 - CORNER);
-  return (u - cx) ** 2 + (v - cy) ** 2 <= CORNER ** 2;
+function insideTile(x, y) {
+  const lo = TILE_RADIUS;
+  const hi = TILE - TILE_RADIUS;
+  const cx = Math.min(Math.max(x, lo), hi);
+  const cy = Math.min(Math.max(y, lo), hi);
+  return (x - cx) ** 2 + (y - cy) ** 2 <= TILE_RADIUS ** 2;
 }
 
-function insideGlyph(u, v) {
-  if (GLYPH_RECTS.some(([x0, y0, x1, y1]) => u >= x0 && u <= x1 && v >= y0 && v <= y1)) return true;
-  return (u - DOT.x) ** 2 + (v - DOT.y) ** 2 <= DOT.r ** 2;
+/** The colour at a point of the mark's 32-unit space (inside the tile). */
+function sampleColor(mx, my, weights) {
+  if ((mx - NODE.x) ** 2 + (my - NODE.y) ** 2 <= weights.node ** 2) return AMBER;
+  return strokeDistance(mx, my) <= weights.half ? STROKE : BACKGROUND;
+}
+
+function strokeDistance(x, y) {
+  let best = Infinity;
+  for (const [x0, y0, x1, y1] of SEGMENTS) best = Math.min(best, distanceToSegment(x, y, x0, y0, x1, y1));
+  return Math.min(best, distanceToArc(x, y));
+}
+
+function distanceToSegment(px, py, x0, y0, x1, y1) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const t = Math.min(1, Math.max(0, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
+}
+
+/** Distance to the top-left quarter arc; outside that quadrant the nearest point is an end of the arc. */
+function distanceToArc(px, py) {
+  const dx = px - ARC.cx;
+  const dy = py - ARC.cy;
+  if (dx <= 0 && dy <= 0) return Math.abs(Math.hypot(dx, dy) - ARC.r);
+  return Math.min(Math.hypot(px - (ARC.cx - ARC.r), py - ARC.cy), Math.hypot(px - ARC.cx, py - (ARC.cy - ARC.r)));
 }
 
 function encodePng(width, height, raw) {

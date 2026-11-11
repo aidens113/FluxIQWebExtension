@@ -149,6 +149,12 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
     target: ["chrome109", "firefox109"],
     sourcemap: true,
     legalComments: "none",
+    // The brand fonts (ui-components styles/fonts.css) are url() references in
+    // CSS. The file loader copies each beside the page's index.css under
+    // assets/, and rewrites the url() to "./assets/<name>-<hash>.woff2", so the
+    // packed extension resolves them with no remote request.
+    loader: { ".woff2": "file" },
+    assetNames: "assets/[name]-[hash]",
     logLevel: options.logLevel ?? "info",
     write: options.write ?? true,
     // The guard goes first so it sees every import, including the ones the

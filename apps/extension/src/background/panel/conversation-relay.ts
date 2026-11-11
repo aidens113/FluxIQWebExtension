@@ -12,6 +12,15 @@
 // "project"` alone): that id is the project id, which the panel does not know
 // before its first read.
 //
+// The chat's thread list reads with `kind: "list-all"`: the project it names, or
+// every project when it names none -- never the session's project in its place,
+// because a list with no project open is the list of every thread. Its New chat
+// is an open with `fresh: true`, which Core answers with a new thread rather
+// than the subject's open one. Core opens no `panel` subject: the chat with no
+// project open asks for one, and gets the session project's own thread, as an
+// open naming no subject does. Renaming and deleting a thread are
+// `thread-change-relay.ts`.
+//
 // Every message offers Core what the chat can do and says where the person is:
 // - `capabilities` is always `CHAT_CAPABILITIES` (ids only: Core executes each
 //   one server-side and supplies its own descriptor), followed by any object
@@ -48,6 +57,9 @@ type ConversationMessage = { readonly type?: string; readonly [key: string]: unk
 /** Core's subject kind for a thread about the project itself; its subject id is the project id. */
 const PROJECT_SUBJECT = "project";
 
+/** The chat's own subject kind for a thread about no one project, which Core does not open. */
+const PANEL_SUBJECT = "panel";
+
 /** Relays one of the three conversation messages. Undefined for any other message type. */
 export async function relayConversation(message: ConversationMessage, context: PanelRelayContext): Promise<PanelRelayResponse | undefined> {
   if (message.type === RUNTIME_MESSAGES.panelConversationRead) return read(message as Partial<PanelConversationReadRequest>, context);
@@ -57,6 +69,10 @@ export async function relayConversation(message: ConversationMessage, context: P
 }
 
 async function read(message: Partial<PanelConversationReadRequest> & { conversationId?: unknown }, context: PanelRelayContext): Promise<PanelRelayResponse> {
+  if (message.kind === "list-all") {
+    const all = message as Partial<Extract<PanelConversationReadRequest, { kind: "list-all" }>>;
+    return context.call("list-conversations", defined({ projectId: text(all.projectId) ?? null, limit: whole(all.limit) }));
+  }
   if (message.kind === "get" || message.conversationId !== undefined) {
     const projectId = await projectFor(message.projectId, context);
     if (!projectId) return relayFailure("no_project");
@@ -89,6 +105,7 @@ async function send(message: Partial<PanelConversationSendRequest>, context: Pan
   const projectId = await projectFor(message.projectId, context);
   if (!projectId) return relayFailure("no_project");
   const opening = defined({ projectId, subjectKind: text(message.subjectKind), subjectId: text(message.subjectId), title: text(message.title) });
+  if (message.kind === "open" && message.fresh === true) return context.call("open-conversation", freshOpening(projectId, message));
   if (message.kind === "open") return context.call("open-conversation", opening);
 
   const body = text(message.text);
@@ -120,6 +137,21 @@ async function answer(message: Partial<PanelConversationAnswerRequest> & { autho
     value: typeof message.value === "string" ? message.value : undefined,
     authorizationPin: typeof message.authorizationPin === "string" && message.authorizationPin !== "" ? message.authorizationPin : undefined
   }));
+}
+
+// New chat's open. A subject of `panel`, or `project` with no id, leaves the
+// subject out, and Core opens the project's own thread; any other is sent whole.
+function freshOpening(projectId: string, message: Partial<PanelConversationSendRequest>): Record<string, unknown> {
+  const subjectKind = text(message.subjectKind);
+  const subjectId = text(message.subjectId);
+  const projectOwn = subjectKind === undefined || subjectKind === PANEL_SUBJECT || (subjectKind === PROJECT_SUBJECT && subjectId === undefined);
+  return defined({
+    projectId,
+    subjectKind: projectOwn ? undefined : subjectKind,
+    subjectId: projectOwn ? undefined : subjectId,
+    title: text(message.title),
+    fresh: true
+  });
 }
 
 // `capabilities` is never empty: with it Core reads the message, may run one of

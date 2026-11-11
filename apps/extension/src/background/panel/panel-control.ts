@@ -1,14 +1,15 @@
 // The worker half of the panel's own requests: saving settings, opening
-// FluxIQ, the conversation, Stop, Take over / Hand back, and FluxIQ's live activity.
+// FluxIQ, the conversation and its thread list, Stop, Take over / Hand back, and FluxIQ's live activity.
 //
 // Shaped like `extraction/control.ts`: one `handled` / `response` answer per
 // message, so `background/index.ts` gains two lines.
 //
 // **Only the panel may ask.** Every one of these is accepted from the side
-// panel or the popup and from nothing else (`control-page.ts`). Six of them
+// panel or the popup and from nothing else (`control-page.ts`). Eight of them
 // spend the pairing token, and a page under test that could send them would be
 // able to talk to FluxIQ as the person who paired this browser, read their
-// threads, answer a question FluxIQ asked them, or stop their run. Saving
+// threads, rename or delete them, answer a question FluxIQ asked them, or stop
+// their run. Saving
 // settings is no less sharp: whoever sets the FluxIQ address decides where the
 // token is sent next. `tests/panel-control.test.ts` proves each refusal happens
 // before anything is touched. The activity requests spend no token, but the
@@ -18,7 +19,8 @@
 // A message the person sends passes through the activity relay's `sending`,
 // which puts the starting status on the page as it leaves and takes it down
 // when Core answers without starting work (`activity/send-start.ts`). Opening
-// a thread alone is not a message and does not.
+// a thread alone is not a message and does not, and neither does the thread
+// list's New chat, which is an open (`kind: "open"`, `fresh: true`).
 
 import type { AutomationStudioRecordingCapturePolicy } from "fluxiq/components/automation";
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
@@ -32,6 +34,7 @@ import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
 import { handBackRun, stopRun, takeOverRun } from "./run-control";
 import { mergeSettings } from "./settings-save";
+import { relayThreadChange } from "./thread-change-relay";
 
 type ControlResult = { readonly handled: false } | { readonly handled: true; readonly response: unknown };
 
@@ -64,6 +67,8 @@ const PANEL_MESSAGES: ReadonlySet<string> = new Set([
   RUNTIME_MESSAGES.panelConversationRead,
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
+  RUNTIME_MESSAGES.panelConversationRename,
+  RUNTIME_MESSAGES.panelConversationDelete,
   RUNTIME_MESSAGES.panelStopRun,
   RUNTIME_MESSAGES.panelTakeOverRun,
   RUNTIME_MESSAGES.panelHandBackRun,
@@ -125,6 +130,9 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   if (message.type === RUNTIME_MESSAGES.panelStopRun) return stopRun(message as Partial<PanelStopRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelTakeOverRun) return takeOverRun(message as Partial<PanelTakeOverRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelHandBackRun) return handBackRun(message as Partial<PanelHandBackRunRequest>, deps.relay);
+  if (message.type === RUNTIME_MESSAGES.panelConversationRename || message.type === RUNTIME_MESSAGES.panelConversationDelete) {
+    return relayThreadChange(message, deps.relay);
+  }
   if (message.type === RUNTIME_MESSAGES.panelConversationSend && message.kind !== "open" && deps.activity.sending) {
     return deps.activity.sending(() => relayConversation(message, deps.relay));
   }

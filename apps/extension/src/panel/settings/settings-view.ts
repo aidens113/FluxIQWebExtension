@@ -1,9 +1,10 @@
 // Settings, opened by the gear in place of the chat, read top down by what a
-// person cares about: whether FluxIQ is connected and has approved this browser,
-// which project, whether the model key is ready (with Open FluxIQ), the status
-// on the page, and Report a problem. Under Advanced, the technical things: the
-// two addresses and the capture switches with an explicit Save, Disconnect, and
-// Forget this pairing behind a confirmation (`advanced-section.ts`). There is no
+// person cares about: Connection (state, approval, project, reconnect, Disconnect),
+// Model (key status, Open FluxIQ), Behaviour (the Humanness slider, status on the
+// page), Permissions (what FluxIQ may record or request), one Save, Appearance
+// (theme, applied at once and kept per browser), and Report a problem. Under
+// Advanced, the two addresses and Forget this pairing behind a confirmation
+// (`advanced-section.ts`). There is no
 // spending setting here: none exists behind any port. Nothing here edits a Flow.
 //
 // The labels, "Save", "Saved.", "Forget this pairing" and "Forget" are the
@@ -27,6 +28,7 @@ import { createOpenFluxIQButton } from "../open-fluxiq";
 import type { PanelContext } from "../shell";
 import type { PanelResult } from "../state";
 import { createAdvancedSection } from "./advanced-section";
+import { createAppearanceSection } from "./appearance-section";
 import { createSettingsForm } from "./address-form";
 import { approvalLine } from "./approval-line";
 import { readConnectionDraft, writeConnectionDraft } from "./draft-store";
@@ -34,6 +36,7 @@ import { createForgetConfirmation } from "./forget-confirmation";
 import { modelKeyLine } from "./model-key-line";
 import { createProblemReportSection } from "./problem-report-section";
 import { forgetOutcomeWords } from "./forget-outcome-words";
+import { createHumannessControl, readHumanness, withHumanness, type HumannessSettings } from "./humanness";
 import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
 import "./settings.css";
@@ -63,6 +66,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const keyLine = createElement("p", { className: "card-line" });
   const draftLine = createElement("p", { className: "card-line", text: "You have changes that aren't saved yet.", hidden: true });
   const form = createSettingsForm();
+  const humanness = createHumannessControl();
   const saveButton = createElement("button", { id: "saveSettingsButton", className: "primary-button", text: "Save", attrs: { type: "button" } });
   const disconnectButton = createElement("button", { id: "disconnectButton", className: "small-button", text: "Disconnect", attrs: { type: "button" } });
   const message = createElement("p", { className: "card-line success-line", hidden: true, attrs: { role: "status" } });
@@ -71,14 +75,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
   const onPage = createOnPageStatusSetting(store.request);
   const forget = createForgetConfirmation(forgetPairing);
   const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small", purpose: "model-key" });
-  const advanced = createAdvancedSection([
-    draftLine,
-    form.element,
-    createElement("div", { className: "card-actions" }, [saveButton, disconnectButton]),
-    message,
-    notice,
-    forget.element
-  ]);
+  const advanced = createAdvancedSection([form.parts.addresses, forget.element]);
 
   const element = createElement("section", { className: "settings-screen", hidden: true, attrs: { "aria-label": "Settings" } }, [
     createElement("div", { className: "settings-column" }, [
@@ -86,31 +83,47 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Connection" } }, [
         createElement("h3", { className: "settings-group-title", text: "Connection" }),
         createElement("div", { className: "settings-state" }, [dot, stateLine]),
-        approval
+        approval,
+        project,
+        form.parts.reconnect,
+        createElement("div", { className: "card-actions" }, [disconnectButton])
       ]),
-      createElement("section", { className: "settings-group", attrs: { "aria-label": "Project" } }, [
-        createElement("h3", { className: "settings-group-title", text: "Project" }),
-        project
-      ]),
-      createElement("section", { className: "settings-group", attrs: { "aria-label": "Model key" } }, [
-        createElement("h3", { className: "settings-group-title", text: "Model key" }),
+      createElement("section", { className: "settings-group", attrs: { "aria-label": "Model" } }, [
+        createElement("h3", { className: "settings-group-title", text: "Model" }),
         keyLine,
         open.element
       ]),
-      createElement("section", { className: "settings-group", attrs: { "aria-label": "Status on the page" } }, [onPage.element]),
+      createElement("section", { className: "settings-group", attrs: { "aria-label": "Behaviour" } }, [
+        createElement("h3", { className: "settings-group-title", text: "Behaviour" }),
+        humanness.element,
+        onPage.element
+      ]),
+      createElement("section", { className: "settings-group", attrs: { "aria-label": "Permissions" } }, [
+        createElement("h3", { className: "settings-group-title", text: "Permissions" }),
+        form.parts.permissions
+      ]),
+      createElement("section", { className: "settings-save", attrs: { "aria-label": "Save" } }, [
+        draftLine,
+        createElement("div", { className: "card-actions" }, [saveButton]),
+        message,
+        notice
+      ]),
+      createAppearanceSection(),
       createElement("section", { className: "settings-group", attrs: { "aria-label": "Help" } }, [createProblemReportSection(context)]),
       advanced.element
     ])
   ]);
 
-  form.onEdit(() => {
+  const edited = (): void => {
     editRevision += 1;
     dirty = true;
     draftLine.hidden = false;
     message.hidden = true;
     form.markInvalid(undefined);
     writeConnectionDraft(form.read());
-  });
+  };
+  form.onEdit(edited);
+  humanness.onEdit(edited);
 
   function clearOutcome(): void {
     message.hidden = true;
@@ -127,7 +140,6 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     // The raw text sits beside the sentence, for whoever is fixing the connection.
     if (detail !== undefined && detail !== sentence) notice.append(createElement("span", { className: "notice-detail", text: detail }));
     notice.hidden = false;
-    advanced.reveal();
   }
 
   function failed(result: PanelResult<unknown>): boolean {
@@ -140,8 +152,11 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     if (mutation !== undefined) return;
     clearOutcome();
     const plan = savePlan(form.read(), store.current());
+    // Humanness rides with the settings (interface I1); clamped and rounded here, absent elsewhere reads as 0.
+    const settings = plan.ok ? withHumanness<HumannessSettings>(plan.settings, humanness.read()) : undefined;
     if (!plan.ok) {
       form.markInvalid(plan.field);
+      advanced.reveal();
       showFailure(plan.sentence);
       return;
     }
@@ -150,13 +165,14 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     mutation = "save";
     renderBusy();
     try {
-      const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: plan.settings });
+      const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: settings as FluxIQSettings });
       if (failed(saved)) return;
       if (submittedRevision === editRevision) {
         dirty = false;
         draftLine.hidden = true;
         writeConnectionDraft(undefined);
         form.fill(plan.settings);
+        humanness.fill(readHumanness(settings));
         showSuccess("Saved.");
       } else showSuccess("Saved the earlier settings. Your newer changes aren't saved yet.");
       // The open socket still points at the old address; `connect` dials the stored one.
@@ -226,7 +242,10 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     open.observe(status);
     // Before filling, so a switch Core's policy forbids fills as off.
     form.allow(status.captureAllowed);
-    if (!dirty) form.fill(savedSettings(status));
+    if (!dirty) {
+      form.fill(savedSettings(status));
+      humanness.fill(readHumanness(status.settings));
+    }
   }
 
   /** Reads the model key again (settings just opened, or the panel came back from FluxIQ); the newest read wins. */
@@ -252,6 +271,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     dirty = true;
     draftLine.hidden = false;
     form.fill(draft);
+    humanness.fill(readHumanness(store.current()?.settings));
     advanced.reveal();
   });
 

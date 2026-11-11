@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { inflateSync } from "node:zlib";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -36,6 +37,17 @@ test("each icon is a PNG of exactly its size", () => {
     assert.equal(png.readUInt32BE(16), size);
     assert.equal(png.readUInt32BE(20), size);
   }
+});
+
+test("the 128 px icon has an amber node and transparent corners", () => {
+  const png = inflateSync(renderIconPng(128).subarray(41, -16)); // IDAT payload: after signature, IHDR chunk and IDAT header; before its CRC and IEND
+  const pixel = (x, y) => [...png.subarray(y * (128 * 4 + 1) + 1 + x * 4).subarray(0, 4)];
+  // The node is at (23.5,16.5) of the 32-unit mark inside the 512 tile: (64 + 12 * n) / 512 of the edge.
+  const nodeX = Math.round(((64 + 12 * 23.5) / 512) * 128);
+  const nodeY = Math.round(((64 + 12 * 16.5) / 512) * 128);
+  assert.deepEqual(pixel(nodeX, nodeY), [0xf5, 0xb8, 0x3d, 255]);
+  assert.equal(pixel(0, 0)[3], 0, "the tile's rounded corner is transparent");
+  assert.equal(pixel(127, 127)[3], 0);
 });
 
 test("the build stamp is current until an input changes, then names it", async () => {

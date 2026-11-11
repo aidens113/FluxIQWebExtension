@@ -13,6 +13,7 @@
 import type { ExtensionStatus } from "../../shared/protocol";
 import { connectionCopy } from "../copy";
 import { createElement } from "../dom";
+import { logoMark } from "../icons";
 import type { ShellScreen, ShellTab } from "./screen-state";
 
 /** The mounted bar. */
@@ -73,7 +74,7 @@ export function createTopBar(parts: TopBarParts): TopBar {
 
   const element = createElement("header", { className: "top-bar" }, [
     createElement("div", { className: "top-brand" }, [
-      createElement("span", { className: "brand-mark", text: "F", attrs: { "aria-hidden": "true" } }),
+      createElement("span", { className: "brand-mark", attrs: { "aria-hidden": "true" } }, [logoMark(24)]),
       createElement("h1", { className: "top-name", text: "FluxIQ" })
     ]),
     tablist,
