@@ -25,15 +25,22 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 **Promoted (2026-11-11).** The day's first full sweep passed on Core b445ad6f4 and extension 42da23a9f, and both mains were fast-forwarded: 337 Core and 247 extension commits since 2026-11-03. The sweep failures before it were fixed by lane t904, all in tests: tests never moved with intended changes, a stub whose check never cleared, and load-dependent tests.
 
-**Lanes (2026-11-11), all committed on their branches:**
-- W1: t885 lands next (judge sees whole looks, an assemblable Flow wins, loop refusals name an ending, never a cap); t903 has the one-element read and hover, re-proved across all ten sites; t904 continues with test-quality defects.
-- W2 (t898): humanness end to end, per FluxNode, task and Flow (user, 2026-11-11: "humanness slider should be for each individual fluxnode/task/flow"). Precedence: run option, then task, then Flow, then the person's starting value, then 0. Measured provider-free at 0, 50 and 100.
-- W3 (t899): every override wired, pinning enforced, secret inputs never seen or saved, 16 pages of FluxNode docs.
-- W4 (t900): brand, conversation list, settings, "answers require a person's activation"; B5 on-screen review next.
-- W5 (t901): Data and Security screens, hosting files, account screens, audit; chat list next.
-- W6 (t902): seven security fixes and the handler chain, held local until all land (both repositories are public).
+**Lanes (2026-11-11, evening).** Landed on dev today: t904, t885, t903, t897, t899 (W3) and t900 (W4).
+- W1, live checks (E1): Saturday causes R1-R7, including the ending (a caught loop is steered onto a new approach, never parked for a person); reruns of follow-official-store and priya; breadth tasks 5-10; the Lab recording each run's exact model, which it does not do today.
+- W1, structural: one design for the class the live review found (`reports/result-evidence-design.md`, Opus, read-only). Its build follows E1's current round, because both touch Core's answer-first rows and judge.
+- W2 (t898): humanness end to end, per FluxNode, task and Flow (user, 2026-11-11: "humanness slider should be for each individual fluxnode/task/flow"). Open: the run-session security fix, the person's preferences, and a rerun at level 100, whose first replay needed a repair.
+- W4 follow-ups: the Firefox popup manual check (user), and the limits.ts swap after t898.
+- W5 (t901): dock project threads, members' model and send, case-insensitive usernames; the mirrored route test after t898.
+- W6 (t902, local while security findings are open): checkpoint 10, a check inside a called Flow survives a restart. Core dev is merged (dfdfbf7ec). Checkpoint 11 covers the deferred store patch, the panel-transport test, one step per resumed Call, no withheld secret reaching a step, and checks inside handler bodies surviving a restart. The child seed becomes a declared field after t898.
 
-**Next.** Land t885, then the service.ts round (W2, W6, W3 lines), then t898, t899, t903, t900, t901 in turn, with today's second sweep after them.
+**Live review (2026-11-09 to 11-11).** 22 launches, $11.79. Zero-call replays are proven on towels, auction, Post and apprentices (humanness 0 and 100). Of 8 failed or costly runs, the model had the answer in nearly all of them. The causes:
+- how found rows become the result: 7 of 8;
+- the judge seeing part of the evidence: 4 of 8;
+- capture gaps, where the model saw a value no read could hold: 3 of 8.
+
+A judge's wrong no starts the 50-120-call retry storms. Even the passing towels exploration took 38 browser steps against its Flow's 8.
+
+**Next.** Land t898, then t901, then today's second sweep and promotion. t902 lands and pushes once all its security fixes are in.
 
 ---
 
@@ -147,3 +154,10 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 - Changed: tests and scripts only (t904); both mains fast-forwarded.
 - Validation: promotion sweep on Core b445ad6f4 / extension 42da23a9f -> core build 0, core check 0, core test 0, ext build 0, ext check 0, ext test 0.
 - Outcome: main promoted in both repositories (Core 1ae3240d3 -> b445ad6f4, extension 186c028b4 -> 42da23a9f). Known and routed: four content-harness specs that also fail on the dev base (photo-social load-more, professional-network Rotterdam) and two chat-UI assertions, to t904.
+
+### 2026-11-11 - Live-test review and the t902 Core merge
+
+- Agent: lead; W6 checkpoint 10 (worker-heavy); result-evidence design (worker-heavy, running).
+- Changed: t902 Core branch, local only: the checkpoint 10 commit and the dev merge dfdfbf7ec. Conflicts: contracts `automation.ts`, where both barrels were kept, and `service.ts`, where W6's run-endings structure was kept and dev's judge-model choice was carried into `run-ending/run-endings.ts`. Also this document.
+- Validation: `heavy-slot.mjs run lead-t902-merge` -> contracts check 0, fluxiq check 0, the tests beside both changes 47 files / 476 passed plus 2 / 12, structure audit passed (537 warnings, 969 baselined), Core libraries 0.
+- Outcome: the review of 22 live launches since 11-09 ($11.79) traced the failures to FluxIQ's result and evidence plumbing, not model reasoning, and a structural design was dispatched. The Lab records no model per run, which breaks the testing-facility rule; that went to E1. A hung t897 finish process was stopped, and the t897 branch was deleted locally and on origin after the ancestor check.
