@@ -115,10 +115,14 @@ test.describe("a dialog the page opened over itself", () => {
     expect(reply.status, reply.message).toBe("succeeded");
     expect(validationActual(reply)).toMatch(CLOSED_ONE);
     await expect(wheel).toBeHidden();
+    // Since W6 (de843929d, t799) a cleared layer carries Core's generic kind (`obstruction/generic-kind.ts`), a stable `id` and the pressed control's `controlRef`. A promotion no
+    // classifier names is `other`.
     expect(reply.clearedLayers).toMatchObject([{
-      kind: "dialog",
+      kind: "other",
+      id: expect.stringMatching(/^layer:/u),
       name: "Spin to win up to 20% off!",
       controlName: "No thanks, I would rather pay full price",
+      controlRef: { selector: expect.any(String) },
       wayOut: { element: { selector: expect.any(String) } }
     }]);
   });

@@ -134,11 +134,15 @@ test.describe("company-website", () => {
     const reply = await harness.runAction({ commandId: "click-under-wall", actionType: "web.dom.click", selector: COMPANY_QUOTE_BUTTON });
 
     expect(reply.status, `${reply.message}`).toBe("succeeded");
+    // Since W6 (de843929d, t799) a cleared layer carries Core's generic kind (`obstruction/generic-kind.ts`), a stable `id` and the pressed control's `controlRef`. A consent
+    // wall is `overlay`.
     expect(reply.clearedLayers).toEqual([expect.objectContaining({
-      kind: "consent",
+      kind: "overlay",
+      id: expect.stringMatching(/^layer:/u),
       name: "Your privacy choices",
       control: "Reject",
       controlName: "Reject non-essential",
+      controlRef: expect.objectContaining({ selector: expect.any(String), element: expect.objectContaining({ accessibleName: "Reject non-essential" }) }),
       wayOut: { url: expect.any(String), element: expect.objectContaining({ selector: expect.any(String) }) }
     })]);
     // The step's own effect: the drawer it opens, which nothing cleared on the way.

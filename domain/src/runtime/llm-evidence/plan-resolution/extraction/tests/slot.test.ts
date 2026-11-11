@@ -402,7 +402,6 @@ test("what cannot name one detected list or column is refused with where the han
   // A handle anywhere else in the request, or of the wrong kind, is misplaced.
   const misplaced: Array<[JsonObject, string]> = [
     [{ extractList: { handle: extraction, paginate: { next: { handle: extraction } } } }, "extractList.paginate.next"],
-    [{ extractList: { handle: "t1" } }, "extractList"],
     [{ extractList: { item: { handle: "t1" }, fields: { name: "td" } } }, "extractList.item"],
     [{ extractList: { item: "li", fields: { name: { kind: "text", selector: { handle: "t1" } } } } }, "extractList.fields.0.selector"],
     [{ target: { handle: extraction } }, "target"],

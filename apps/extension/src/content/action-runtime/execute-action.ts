@@ -33,8 +33,11 @@ import { watchRateLimitNotice } from "./rate-limit-notice";
 import { watchRobotCheck } from "./robot-check";
 import { actionFailure, actionNeedsPerson, actionNotImplemented, actionRateLimited, actionRefusedByPage, actionRejected, actionTimedOut, success } from "./results";
 import { listReadFor } from "./extraction-continuation";
+import { hoverState } from "./hover-state";
 
 export async function executeAction(action: BrowserActionCommand, extractionContinuation?: unknown): Promise<BrowserActionResult> {
+  // A hover lasts until the next action that acts, as a resting pointer lasts until the hand moves (t903).
+  hoverState.releaseFor(action.actionType);
   return executeContentAction(action, {
     captureSnapshot,
     resolveTarget,

@@ -27,6 +27,7 @@ import type { WebToggleSignature } from "./toggle-signature";
 export type WebAutomationActionType =
   | "web.browser.navigate"
   | "web.dom.click"
+  | "web.dom.hover"
   | "web.dom.type"
   | "web.dom.clear"
   | "web.dom.select"
@@ -676,6 +677,7 @@ export const WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4_194_304;
 export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
   "web.browser.navigate",
   "web.dom.click",
+  "web.dom.hover",
   "web.dom.type",
   "web.dom.clear",
   "web.dom.select",
@@ -704,6 +706,7 @@ export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
 export const WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.navigate": "browser.navigate",
   "web.dom.click": "dom.click",
+  "web.dom.hover": "dom.hover",
   "web.dom.type": "dom.type",
   "web.dom.clear": "dom.clear",
   "web.dom.select": "dom.select",

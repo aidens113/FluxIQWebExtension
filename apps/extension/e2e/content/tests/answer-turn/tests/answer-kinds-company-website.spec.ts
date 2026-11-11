@@ -65,7 +65,9 @@ test("company-website: every kind of answer turn, drawn and looked at", async ({
   await mountNamed(frame, site, "doneOnSite");
   await expect(locator.locator(".answer-check-words").first()).toContainText("may have happened");
   await expect(locator.locator("[data-action=run-again]")).toHaveCount(1);
-  await expect(locator.locator(".answer-again-note")).toHaveText("Running this again may repeat what was done on the site.");
+  // Core's words since adf398c3c ("Make every line of the answer card true"): Run again starts with an empty
+  // record, so it says what it repeats (`ui-components/src/chat/answer/words/repeatable-acts.ts`).
+  await expect(locator.locator(".answer-again-note")).toHaveText("Run again does the task again. Something already in the state you asked for is checked, not done again, but a count on the site, such as items in a cart, can go up again.");
 });
 
 test("company-website: Show all expands, CSV and JSON hand over the rows as files", async ({ openHarness, page }, testInfo) => {

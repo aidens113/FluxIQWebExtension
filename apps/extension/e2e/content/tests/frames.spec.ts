@@ -177,7 +177,16 @@ test.describe("on bigbox-retail's guest checkout, a cross-origin card frame", ()
 
     const delivery = await deliverTo(child, { type: "executeAction", action: command, frameId: A_CHILD_FRAME });
     expect(delivery.responded).toBe(true);
-    expect(delivery.response).toMatchObject({ commandId: "use-card", status: "succeeded" });
+    // The press is made in the card frame and lands on its button. With no card entered the form answers only with a
+    // notice in its status region, which since t743 (d2302b5f2, `content/action-runtime/ignored-press/`) is the page
+    // reporting the press failed, not a success: what the frame did is read from the frame's own answer.
+    expect(delivery.response).toMatchObject({
+      commandId: "use-card",
+      status: "failed",
+      url: expect.stringContaining("/checkout/payment-frame"),
+      failure: { code: "web.action.page_reported_failure", effect: "unacted" },
+      validation: { actual: expect.stringContaining("landed on the target") }
+    });
 
     // The press reached the provider's form: with no card entered it says so, inside the frame, and hands the store no token.
     await expect(page.frameLocator(CARD_FRAME).getByRole("status")).toHaveText("Check your card details.");

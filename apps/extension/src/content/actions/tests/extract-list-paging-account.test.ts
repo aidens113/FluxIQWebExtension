@@ -178,3 +178,17 @@ test("a read stopped at the domain's own bound says so, and does not offer a lar
   const below = await run(outcome({ pagesRead: WEB_AUTOMATION_EXTRACT_MAX_PAGES - 1, truncated: true, paginationStop: "page_limit" }), command);
   assert.match(actual(below), /input: \{extractList: \{paginate: \{maxPages: N\}\}\}/u);
 });
+
+// t903: professional-network's read stopped at a check on page 2 and answered `succeeded` with
+// 10 of 23 people, `truncated: false`, and an account that blamed a server refusing pages. A
+// read a paging fault ended is truncated (`../../extraction/list-reader.ts`), and says the fault
+// in the move's own words.
+test("a read a paging fault ended is truncated on its summary, and says what stopped it", async () => {
+  const said = "The page stopped the list at a check only a person can answer (a session check, a password or a robot check). The list has not ended.";
+  const seen = await run(outcome({ pageFault: true, truncated: true, paginationStop: "rate_limited", pagingFault: said }));
+  const summary = (seen.evidence as { extraction?: { truncated?: boolean } } | undefined)?.extraction;
+  assert.equal(summary?.truncated, true);
+  assert.match(actual(seen), /paging stopped: The page stopped the list at a check only a person can answer/u);
+  assert.match(actual(seen), /the read is incomplete/u);
+  assert.doesNotMatch(actual(seen), /server kept refusing/u);
+});
