@@ -174,3 +174,17 @@ test("a 503 landing is reloaded at most twice across documents", async () => {
     assert.deepEqual(answer.outcome === "failed" ? answer.stop : answer, "list_vanished");
   });
 });
+
+// t885, R5: a widget that redraws its list on every press drew the same week
+// again after a Next that only raised a form error, and the step said "moved".
+test("a press that draws the same items again is list_unchanged, never moved", async () => {
+  const shown = storePage(2, { controls: "buttons", stuckOn: 2 });
+  try {
+    const answer = await movePage({ item: STORE_ITEM, pagination: { next: NEXT_BUTTON } }, { timeoutMs: 20_000 });
+    assert.equal(answer.outcome, "failed");
+    assert.equal(answer.outcome === "failed" ? answer.stop : undefined, "list_unchanged");
+    assert.ok(shown.followed.length > 0, "the control was pressed, and the page drew page two again");
+  } finally {
+    shown.restore();
+  }
+});

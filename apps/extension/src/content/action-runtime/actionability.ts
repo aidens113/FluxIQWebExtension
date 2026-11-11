@@ -53,11 +53,22 @@
 // need to: the element is not rendered, it has no box, or no part of it is
 // inside the viewport even after scrolling. In all three there is no point on
 // screen that belongs to it.
+//
+// **Aimed near the centre, at a humanness above 0** (`aimWithinTarget`). A
+// command run above humanness 0 presses near the centre rather than on it
+// (`humanness/`). Only a target the gate accepted at its centre is re-aimed: a
+// probed point or a press through the same control was the one place found to
+// reach it, and stays. The drawn point must lie inside the target's visible
+// box, land on the target or inside it under the same hit test the gate uses,
+// and belong to the same control as the centre's hit -- so a nested button,
+// link or label is never pressed in the target's place. Any point that fails
+// one of these leaves the gate's own point, the centre, in use. At humanness 0
+// nothing here is called.
 
 import { deepElementFromPoint } from "../selector";
 import { composedClosest, composedContains } from "../shadow-dom";
 import { coveringLayerSentence, overlaysAt, probePoints } from "./interference";
-import { sameControlHit } from "./pressed-control";
+import { PRESSABLE_HOST, sameControlHit } from "./pressed-control";
 import { scrollElementIntoView } from "./scroll-element-into-view";
 
 export type ActionabilityRejectionCode = "disabled" | "hidden" | "covered";
@@ -69,6 +80,12 @@ export type ActionabilityReport =
 type Point = { x: number; y: number };
 /** A box in viewport coordinates. */
 type Area = { left: number; top: number; right: number; bottom: number };
+
+/** What a press goes to when it lands somewhere: the control around the hit, a label being one, for `aimWithinTarget`. */
+const AIMED_CONTROL = `${PRESSABLE_HOST}, label`;
+
+/** How close two points are to be the same point, in pixels. */
+const SAME_POINT_PX = 0.5;
 
 export function checkActionability(element: Element): ActionabilityReport {
   if (!element.isConnected) return reject("hidden", "the element is not in the document");
@@ -115,6 +132,42 @@ export function checkActionability(element: Element): ActionabilityReport {
   // hit landed in and the controls on it (`interference/covering-layer.ts`).
   const covered = `the point ${describePoint(centre)} landed on ${elementLabel(hit)}, which covers the target`;
   return reject("covered", layer ? `${covered}; ${layer}` : covered, centre);
+}
+
+/**
+ * The report for a press aimed at `draw`'s point instead of the centre (header,
+ * "Aimed near the centre"), or `undefined` -- the caller keeps `report` -- when
+ * the gate did not accept the centre, or the drawn point lies outside the
+ * visible box, misses the target, or reaches a different control than the
+ * centre does. `report` is the gate's answer for `element`, taken just before.
+ */
+export function aimWithinTarget(
+  element: Element,
+  report: Extract<ActionabilityReport, { actionable: true }>,
+  draw: (area: Area, centre: Point) => Point
+): Extract<ActionabilityReport, { actionable: true }> | undefined {
+  const view = element.ownerDocument.defaultView;
+  const area = view ? visibleArea(element, view) : undefined;
+  if (!area) return undefined;
+  const centre = centreOf(area);
+  if (!samePoint(report.point, centre)) return undefined;
+  const centreHit = hitAt(element, centre);
+  if (!centreHit || !composedContains(element, centreHit)) return undefined;
+  const point = draw(area, centre);
+  if (!insideArea(point, area)) return undefined;
+  const hit = hitAt(element, point);
+  if (!hit || !composedContains(element, hit)) return undefined;
+  if (composedClosest(hit, AIMED_CONTROL) !== composedClosest(centreHit, AIMED_CONTROL)) return undefined;
+  return { actionable: true, point, detail: landedOn(element, hit, point) };
+}
+
+function samePoint(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) < SAME_POINT_PX && Math.abs(a.y - b.y) < SAME_POINT_PX;
+}
+
+/** Strictly inside the box, so a point on its very edge, which the hit test may give to a neighbour, is never used. */
+function insideArea(point: Point, area: Area): boolean {
+  return point.x > area.left && point.x < area.right && point.y > area.top && point.y < area.bottom;
 }
 
 /** Whether what covers the centre is a dialog or a fixed layer with its own way out (`interference/overlays.ts`). */

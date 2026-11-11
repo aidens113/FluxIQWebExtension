@@ -27,6 +27,7 @@ import {
   type ClientGatewayOutboxLossReason,
   type ClientGatewayOutboxState
 } from "@fluxiq/client-gateway-websocket";
+import { normalizeHumanness } from "@fluxiq/contracts/automation";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
 
 export type SavedReading<T> = { value: T; repaired: string[] };
@@ -53,6 +54,13 @@ export function readSavedSettings(stored: unknown, defaults: FluxIQSettings): Sa
     if (storedFlag === undefined) continue;
     if (typeof storedFlag === "boolean") value[flag] = storedFlag;
     else repaired.push(flag);
+  }
+  const humanness = stored.humanness;
+  if (humanness !== undefined) {
+    if (typeof humanness === "number") {
+      value.humanness = normalizeHumanness(humanness);
+      if (value.humanness !== humanness) repaired.push("humanness");
+    } else repaired.push("humanness");
   }
   return { value, repaired };
 }

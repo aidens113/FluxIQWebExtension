@@ -63,36 +63,31 @@ async function openTeamAtTop(harness: ContentHarness): Promise<void> {
 test.describe("company-website: a control not shown yet is scrolled toward, as a person would", () => {
   test.setTimeout(60_000);
 
-  test("Show more people, pressed from the top of the page: the grid grows to the button, the press lands, and the next press loads more", async ({ openHarness, page }) => {
+  test("Show more people, pressed from the top of the page: the grid grows to the button, and one command presses past the page's spinner and loads more", async ({ openHarness, page }) => {
     const harness = await openHarness("company-website");
     await openTeamAtTop(harness);
     expect(await page.evaluate(() => window.scrollY), "the press starts from the top").toBe(0);
 
-    // The page's first press of the button only shows a spinner, and a press the page answers
-    // with nothing but its own notice fails as `web.action.page_reported_failure` for Core to
-    // press again (t743, d2302b5f); before that it was reported done. So the press that lands on
-    // the revealed button is that failure. The account still says the runtime scrolled toward the
-    // button until it could be pressed.
+    // The page's first press of the button only shows a spinner. A press the page answers with
+    // nothing but its own notice is pressed once more inside the same command (t898, from E1's
+    // trace): it changed nothing but the notice, so it is certain to have done nothing. So the one
+    // command lands on the revealed button and loads the next batch. The account still says the
+    // runtime scrolled toward the button until it could be pressed.
+    const before = await people(page);
     const first = await harness.runAction({ commandId: "more-1", actionType: "web.dom.click", selector: MORE });
     const firstSaid = `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`;
-    expect(first.failure?.code, firstSaid).toBe("web.action.page_reported_failure");
+    expect(first.status, firstSaid).toBe("succeeded");
     expect(firstSaid, "the account says the target was scrolled toward until it could be pressed").toMatch(/scrolling \d+ times? toward where the target would be/u);
-    expect(firstSaid, "the press landed on the revealed button").toMatch(/the control can still be pressed/u);
-    expect(await people(page), "scrolling toward the button loaded the grid's batches").toBeGreaterThan(8);
-    await expect(page.locator(MORE)).toBeVisible();
-
-    // The second press, Core's retry of the first, loads the next batch.
-    const before = await people(page);
-    const second = await harness.runAction({ commandId: "more-2", actionType: "web.dom.click", selector: MORE });
-    expect(second.status, `${second.message} | ${actualOf(second)}`).toBe("succeeded");
-    await expect.poll(() => people(page), { message: "the press loaded more people", timeout: 10_000 }).toBeGreaterThan(before);
+    expect(firstSaid, "the page's swallowed first press was pressed once more").toMatch(/pressed once more/u);
+    await expect.poll(() => people(page), { message: "the one command's second press loaded more people", timeout: 10_000 }).toBeGreaterThan(Math.max(before, 8));
   });
 
   // t903, E1's trace of company-website-apprentices: a Flow's replay scrolls to the end of the
   // team page and presses "Show more people" about 0.7 s after it loads. Nothing is left to scroll,
   // and the page is still loading its people behind skeleton cards, waiting out its own 429s; it
   // shows the button seconds later. The press waited the dismissed-dialog ladder (about 1.35 s) and
-  // gave up, so Core retried the step. It now waits while the page shows that work, and lands.
+  // gave up, so Core retried the step. It now waits while the page shows that work, and lands; the
+  // page's swallowed first press is then pressed once more inside the same command (t898).
   test("Show more people, pressed at the end of the page right after it loads: the press waits while the page loads its people, and lands", async ({ openHarness, page }) => {
     const harness = await openHarness("company-website");
     await apply(harness, "set-consent", { choice: "essential" });
@@ -106,11 +101,12 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
 
     const first = await harness.runAction({ commandId: "more-end-1", actionType: "web.dom.click", selector: MORE, timeoutMs: 10_000 });
     const said = `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`;
-    // The press reached the button inside this one command: the page's own swallowed first press
-    // (t743) is what answers, never `web.target.not_shown`.
+    // The press reached the button inside this one command, never `web.target.not_shown`; the
+    // page's own swallowed first press (t743) is pressed once more in the same command (t898), so
+    // the command lands.
     expect(first.failure?.code, said).not.toBe("web.target.not_shown");
-    expect(first.failure?.code, said).toBe("web.action.page_reported_failure");
-    await expect(page.locator(MORE)).toBeVisible();
+    expect(first.status, said).toBe("succeeded");
+    expect(said, "the page's swallowed first press was pressed once more").toMatch(/pressed once more/u);
     expect(await people(page), "the page loaded its batches while the press waited").toBeGreaterThan(8);
   });
 

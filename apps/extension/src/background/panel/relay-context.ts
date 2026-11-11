@@ -23,4 +23,6 @@ export type PanelRelayContext = {
    * then sends nothing and says why.
    */
   readonly pageLocation: () => Promise<string | undefined>;
+  /** The person's saved humanness setting, 0-100; undefined when none is saved. A turn carries it only when above 0. */
+  readonly humanness?: () => number | undefined;
 };

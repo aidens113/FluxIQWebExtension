@@ -23,6 +23,8 @@ export type AutomationRelayDeps = {
   readonly call: (endpoint: string, payload: Record<string, unknown>, programId?: string) => Promise<PanelRelayResponse>;
   /** The project this browser's session belongs to. */
   readonly projectId: () => string | null | undefined;
+  /** The person's saved humanness setting, 0-100; a run carries it only when above 0. */
+  readonly humanness?: () => number | undefined;
   readonly lastStoppedRecordingId: () => string | undefined;
   readonly removeRecordedStep: (activityId: string) => Promise<PanelRelayResponse>;
 };
@@ -61,7 +63,8 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       // A saved automation the person runs may be repaired with their own model
       // key when the page has changed since it was built.
       const flowId = text(message.flowId);
-      return flowId ? deps.call("run-runtime-session", { projectId, flowId, runIntent: "explore_and_adapt" }) : missing("flowId");
+      const humanness = savedHumanness(deps);
+      return flowId ? deps.call("run-runtime-session", { projectId, flowId, runIntent: "explore_and_adapt", ...(humanness === undefined ? {} : { humanness }) }) : missing("flowId");
     }
     case AUTOMATION_PANEL_MESSAGES.runDetail: {
       const runId = text(message.runId);
@@ -129,6 +132,11 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
     default:
       return failure("invalid_request", "That request is not one FluxIQ knows.");
   }
+}
+
+function savedHumanness(deps: AutomationRelayDeps): number | undefined {
+  const saved = deps.humanness?.();
+  return typeof saved === "number" && saved > 0 ? saved : undefined;
 }
 
 async function listAutomations(projectId: string, deps: AutomationRelayDeps): Promise<PanelRelayResponse> {

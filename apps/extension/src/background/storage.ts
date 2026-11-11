@@ -1,3 +1,4 @@
+import { normalizeHumanness } from "@fluxiq/contracts/automation";
 import { DEFAULT_CORE_API_URL, LEGACY_GATEWAY_CORE_API_URL, STORAGE_KEYS } from "../shared/constants";
 import { defaultSettings } from "../shared/browser";
 import type { FluxIQSession, FluxIQSettings } from "../shared/protocol";
@@ -46,6 +47,7 @@ export async function writeSettings(settings: FluxIQSettings): Promise<void> {
 
 function normalizeSettings(settings: FluxIQSettings): FluxIQSettings {
   settings = { ...settings, requestsEnabled: settings.requestsEnabled === true };
+  if (settings.humanness !== undefined) settings.humanness = normalizeHumanness(settings.humanness);
   if (settings.coreApiUrl.trim().replace(/\/+$/, "") !== LEGACY_GATEWAY_CORE_API_URL) return settings;
   return { ...settings, coreApiUrl: DEFAULT_CORE_API_URL };
 }

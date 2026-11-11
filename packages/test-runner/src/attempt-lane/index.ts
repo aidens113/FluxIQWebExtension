@@ -4,9 +4,10 @@
 export { auditAskedChanges, type AskedChangeAudit } from "./audit-asked-changes.js";
 export { proveContinuation } from "./continuation.js";
 export type { AttemptDriver, AttemptOutcome, AttemptRecord, AttemptSavedState, AttemptStart, AttemptTask } from "./driver.js";
-export { attemptReportRow, attemptSeries, renderAttemptSeries } from "./report.js";
+export { attemptReportRow, attemptSeries, renderAttemptReport, renderAttemptSeries } from "./report.js";
 export { runAttemptProof, type AttemptProofChecks, type AttemptProofOptions, type AttemptProofResult } from "./run-attempt-proof.js";
 export { runAttemptSeries, type AttemptSeriesResult } from "./run-attempt-series.js";
 export * from "./live/index.js";
+export * from "./overhead/index.js";
 export * from "./scripted/index.js";
 export * from "./scripted-model/index.js";
