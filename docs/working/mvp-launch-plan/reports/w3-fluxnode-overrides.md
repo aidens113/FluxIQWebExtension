@@ -1,8 +1,308 @@
 # W3 (t899): FluxNode developer overrides and docs, sub-supervisor report
 
 All paths are in the Core worktree `C:/Users/osrs_/FluxStuff/fxwork/t899/!FluxIQ` unless noted.
-`pkg/` means `packages/fluxiq/src/`. Checkpoint 2 was committed by the lead as `af6bf1705`; nothing
-after it is committed.
+`pkg/` means `packages/fluxiq/src/`. The lead committed checkpoint 2 as `af6bf1705` and checkpoints
+3-5 as `a809073d7`. Checkpoints 6, 7 and 8 were committed by the lead (8 as `7617981d4`); checkpoint 9 is
+not committed.
+
+## Checkpoint 9 (2026-11-11): the judge's window without routing, the result check, and panel presses (W3 complete)
+
+**1. The judge without routing is built to the attempt model's window (my edits).**
+- `pkg/runtime/result-verification/flow-less/types.ts`: the judge's input takes an optional `tokenLimits`.
+- `flow-less/judge.ts`: passes it to the harness request.
+- `pkg/framework/automation-service/service/answer-first/attempt/run-attempt.ts` (the granted line):
+  the judge's run gets `tokenLimits: input.provider.tokenLimits`.
+- A routed judge model's own window, stated on its provider, still wins.
+- `judged-summary.ts` is untouched.
+- Test (worker): `answer-first/attempt/tests/judge-token-limits.test.ts`. An attempt whose resolution has
+  small limits sends its judge a request checked to them; a summary that does not fit goes in its shorter,
+  stated form, with `summarised` naming `answerText.text`, instead of being refused.
+
+**2. The Flow-run result check already passed its judge's limits.** The resolution's `tokenLimits` reach
+the harness through `run-outcome.ts`, then `verify.ts` near line 475. No source change was needed, and
+`service.ts` is untouched. The worker added a test with a small-window judge resolution:
+`pkg/runtime/result-verification/tests/judge-limits/tests/judge-token-limits.test.ts`. It sits in a
+subfolder because `result-verification/tests/` is at its file limit.
+
+**3. Panel presses carry the attempt's overrides (worker, granted files).**
+- An optional, JSON-only `runOverrides` (the frame the FluxNode run set) is on the caller options and on
+  the kept options (`flow-bootstrap-commands/contracts.ts`).
+- The reader validates it strictly and refuses a malformed frame by name
+  (`answer-first/caller/{options.ts, run-overrides-read.ts (new)}`).
+- `caller/kept.ts` keeps it, and `fluxnode/caller-options.ts` and `run-fluxnode.ts` pass it in.
+- `attempt/run-attempt.ts` runs the attempt inside the kept frame only when one is kept and none is
+  already set, so an outer frame is never replaced.
+- **Secrets are never in the frame or the kept options.** A press on a secret-input attempt runs with no
+  secrets frame, so a bound step cannot resolve; it never types a remembered or wrong value. That
+  conclusion comes from reading the code; the person-facing wording was not observed.
+- Tests:
+  - `answer-first/caller/tests/run-overrides.test.ts`;
+  - `answer-first/attempt/tests/run-overrides-press.test.ts`: Carry on and Run again each run under the
+    attempt's frame, and a non-FluxNode press sees none;
+  - `fluxnode/tests/run-overrides-kept.test.ts`.
+- **My fix:** a press dropped `humanness`, because it was missing from the kept options. It is now in
+  `AutomationStudioAnswerFirstKeptCallerOptions` and `caller/kept.ts`, with a test in
+  `caller/tests/run-overrides.test.ts`.
+
+**Checkpoint 9 file list (Core worktree):**
+- Modified:
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/attempt/run-attempt.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/caller/kept.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/caller/options.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/flow-bootstrap-commands/contracts.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/fluxnode/caller-options.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/fluxnode/run-fluxnode.ts`
+  - `packages/fluxiq/src/runtime/result-verification/flow-less/judge.ts`
+  - `packages/fluxiq/src/runtime/result-verification/flow-less/types.ts`
+- New:
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/attempt/tests/judge-token-limits.test.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/attempt/tests/run-overrides-press.test.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/caller/run-overrides-read.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/answer-first/caller/tests/run-overrides.test.ts`
+  - `packages/fluxiq/src/framework/automation-service/service/fluxnode/tests/run-overrides-kept.test.ts`
+  - `packages/fluxiq/src/runtime/result-verification/tests/judge-limits/tests/judge-token-limits.test.ts`
+
+**Checks run by me (checkpoint 9):**
+- `pnpm exec vitest run src/framework/automation-service/service/answer-first/caller src/framework/automation-service/service/answer-first/attempt src/framework/automation-service/service/answer-first/carry-on src/framework/automation-service/service/answer-first/run-again src/framework/automation-service/service/fluxnode src/runtime/result-verification src/runtime/llm/role-routing src/runtime/llm/harness src/runtime/run-overrides src/runtime/run-secrets`
+  -> 327 files, 2,372 passed
+- `pnpm exec vitest run src/framework/automation-service/service/answer-first/caller/tests` -> 6 files, 26 passed (after the humanness fix)
+- `node scripts/structure-audit.mjs` -> `structure-audit: passed (533 warning(s), 969 baselined).`
+- `pnpm docs:check` -> `structure-audit: passed (0 warning(s), 0 baselined).`, `Deterministic framework reference is current.`
+- fluxiq tsc through the slot (`heavy-slot.mjs run t899-w3 -- "... tsc --noEmit; echo TSC_EXIT=$?"`) -> **`TSC_EXIT=0`**
+
+**Workers:**
+
+| Worker | Tier | Outcome | What I verified |
+| --- | --- | --- | --- |
+| panel-presses | worker | Done | Read the press wrap (no double wrap); fixed the dropped `humanness`; re-ran tests |
+| result-check-limits | worker | Done (no source change needed) | Re-ran tests; confirmed `service.ts` is untouched |
+
+**W3 is complete.** Still recorded as known and outside FluxNodes: the runtime-session repair provider
+and the standing result-check authorization (checkpoint 8).
+
+## Checkpoint 8 (2026-11-11): repairs on the repair model; each role sized to its own model's window
+
+**1. Repair routing (worker, in the granted `answer-first/attempt/round.ts`).**
+- A round's evidence loop runs inside `runWithAutomationStudioLlmModelRole("repair", ...)` when the round
+  is repairing the saved Flow:
+  - the path is `run_flow_then_repair` (the saved Flow's replay went out and broke; `rounds.ts` resets
+    the path before any fresh round);
+  - or, an addition of mine, the first round of a `repair` route, whose saved steps did not assemble.
+- Fresh rounds stay on the explore model. Without `models.repair`, nothing changes.
+- Test: `service/fluxnode/tests/repair-routing.test.ts`. With `{ explore: A, repair: R }`, the first run's
+  decisions are served by A, and the repair run's decisions are served and priced by R, with cost equal to
+  the sum charged. With no models, everything goes to the default model.
+- The repair-route branch has no scripted case: the library lane cannot produce saved steps that fail to
+  assemble. It rests on code reading and the typecheck.
+- The docs caveats are removed from `docs/fluxnodes/guides/choosing-models.md` and `README.md`.
+
+**2. Per-role token limits (worker-heavy).**
+- **What the worker found.** Core never trims a request to fit. Each resolution's `tokenLimits` is its
+  model's window less an 8,000-token reply reserve, and the harness refuses anything larger by size. The
+  explorer copes by turning earlier views into recallable `core.view_reference` entries, and by starting a
+  fresh round from Core's own account.
+- **The defect.** The Flow-less judge passed no `tokenLimits`, and role routing discarded each role's own
+  limits. A small-window judge was sent a request its adapter refused, which read as "not judged". A test
+  reproduces this.
+- **Fix, step 1: limits come from the serving model.** `pkg/runtime/llm/harness/served-limits.ts` (new)
+  makes a role's provider state its model's limits in provider metadata, which every decorator forwards.
+  `role-routing/resolution.ts` wraps the judge and repair providers with their own resolution's limits.
+- **Fix, step 2: the harness builds to them.** `harness/sized-request.ts` (new, called from `run.ts`)
+  builds the request, asks `servedBy`, and rebuilds to the served model's limits.
+  - A new optional input, `resultSummaryFitting`, offers the summary in progressively shorter forms.
+  - The whole summary goes when it fits; otherwise the first shorter form that fits.
+  - The harness itself trims nothing.
+- **What gets summarised.** `flow-less/window-fitting.ts` (new, called from `judge.ts`) summarises one more
+  item per step:
+  - the start and end views;
+  - then the looks, read pages, acts and the model's own words;
+  - the rows last.
+
+  There is no count cap, and `judged-summary.ts` is untouched (t885's pending change stays clean).
+- **The judge is never misled (the user's no-hiding rule).** A summarised item stays in place as
+  `{"core.summarised": {...}}`, with counts only. A final `summarised` entry names every summarised item
+  and says a yes must stand on what was shown whole, otherwise answer unknown. Yes citations are still
+  checked against the full rows.
+- **Tests:**
+  - `role-routing/tests/served-window.test.ts` (6);
+  - `flow-less/tests/judge-window.test.ts` (3): a small-window judge's request fits, it is told what was
+    summarised, and it returns yes; the old behaviour comes out not judged; a large-window judge's
+    evidence is byte-identical to an unrouted one;
+  - `flow-less/tests/window-fitting.test.ts` (3).
+- **Docs:** a "Model requests" section in `docs/fluxnodes/reference/limits.md`.
+
+**Grant requested (one line, W1):** a judge **without** routing still passes no `tokenLimits`. It is held
+to the default largest window, not the attempt model's, so an attempt model with a window under 1,000,000
+tokens would still have oversized judge requests refused. The fix is to pass
+`tokenLimits: input.provider.tokenLimits` to the judge's run in
+`pkg/framework/automation-service/service/answer-first/attempt/run-attempt.ts`. Every model Core ships
+today has a 1,000,000-token window, so this cannot happen yet.
+- **Why not in W3's files:** stating the explore model's limits on the unrouted provider from
+  `role-routing/resolution.ts` would change the provider metadata, and so the receipts, of every run
+  without `models`. That breaks "no models = exactly as before".
+
+**Known, unrouted, outside FluxNodes (as the lead asked):**
+- The runtime-session in-run repair provider, in `pkg/framework/automation-service/service.ts` near the
+  runtime-session repair provider resolution (about line 2396). FluxNode runs never reach it.
+- The standing result-check authorization, which judges on its own key's model:
+  `resolveAutomationStudioResultCheckProvider` (`service.ts` result ports, about line 2471), on the
+  authorization path in `pkg/runtime/result-verification/`.
+- **Not checked:** whether the Flow-run result check (`verify.ts` via `resolveCallerProvider`) passes its
+  judge resolution's limits to the harness.
+
+**Checks run by me (checkpoint 8):**
+- `pnpm exec vitest run src/framework/automation-service/service/answer-first/attempt/tests src/framework/automation-service/service/fluxnode src/runtime/llm/role-routing src/runtime/llm/harness src/runtime/result-verification/flow-less src/runtime/llm/domain-instructions src/runtime/agents/budget`
+  -> 112 files, 771 passed
+- `node scripts/structure-audit.mjs` -> `structure-audit: passed (533 warning(s), 969 baselined).`
+- `pnpm docs:check` -> `structure-audit: passed (0 warning(s), 0 baselined).`, `Deterministic framework reference is current.`
+- fluxiq tsc through the slot (`heavy-slot.mjs run t899-w3 -- "... tsc --noEmit; echo TSC_EXIT=$?"`) -> **`TSC_EXIT=0`**
+
+**Workers:**
+
+| Worker | Tier | Outcome | What I verified |
+| --- | --- | --- | --- |
+| repair-routing | worker | Done | Read the `round.ts` diff and `rounds.ts`'s path reset; added the repair-route first round; re-ran tests |
+| role-token-limits | worker-heavy | Done | Read the resolution, served-limits and harness flow; re-ran tests and the audit; confirmed `judged-summary.ts` is untouched |
+
+## Checkpoint 7 (2026-11-11): per-role model routing
+
+**Outcome.** Each model call in a FluxNode run goes to its role's model from `overrides.models`, through
+one routing wrapper. It is held and charged at the price of the model that served it, from the run's one
+budget. **Repair calls still use the explore model.** A FluxNode run fixes a broken saved Flow with its
+own decision calls, so routing them to `repair` needs one W1 edit (open item 1).
+
+**How it works (worker-heavy):**
+- `pkg/runtime/llm/role-routing/**` (new):
+  - every task kind has a role; `loop_verification` is always judge, and a call carrying an in-run-repair
+    slot is repair;
+  - a role frame, `runWithAutomationStudioLlmModelRole`, can move explore-kind calls to repair;
+  - the routing provider returns the explore provider itself when no other role names a model, so a run
+    without `models` is unchanged;
+  - each role's model is resolved once, when the attempt starts.
+- The provider contract gains an optional `servedBy(request)` (`pkg/runtime/models/contracts/provider.ts`).
+  The domain-instructions wrapper (`pkg/runtime/llm/domain-instructions/provider.ts`) passes it through,
+  because answer-first wraps the attempt's provider from outside.
+- **How cost learns the served model:** the harness (`pkg/runtime/llm/harness/run.ts`) works out the
+  serving provider once per call. That provider is used for the size measure, the run-budget reservation
+  and its receipt, the purse hold, the call itself and the result's provider metadata.
+- **The judge's reserve.** The purse keeps money back to judge the result. That reserve is now priced at
+  the judge model's price, where before it took the last call's price (`pkg/runtime/agents/budget/{call-hold,types,judging-reserve}.ts`).
+- **`service.ts`:**
+  - the attempt's provider comes from `automationStudioLlmRoleRoutedResolution`;
+  - the result check asks for `models.judge`, else the Flow's model;
+  - three lines changed in place; the file stays at its line limit.
+- **A role model that cannot be resolved** fails at the attempt's start exactly like an unknown
+  `options.model`: same failure code, no fallback, no new way for a run to end.
+- **Files outside the brief's list that the worker had to touch** (no lane owns them): the provider
+  contract, the domain-instructions wrapper, and three files in `agents/budget`. Without them no caller
+  could learn which model served a call, or price the judge's reserve. **Please ratify.**
+- **Tests:**
+  - new `role-routing/tests/{role-of,provider,resolution,served-model}.test.ts`;
+  - new `service/fluxnode/tests/model-routing.test.ts` with its helper `priced-models.ts`, covering:
+    - with explore=A and judge=B, every judge call is served by B and every decision by A, and `cost.usd`
+      is the sum of each call at its own model's price;
+    - an unknown `models.judge` ends the run like an unknown `options.model`, before any call;
+    - a run with no `models` uses one model;
+    - two concurrent runs route by their own models.
+
+**Integration I did myself:**
+- **`pinning.test.ts` was failing on t885's improvement, not on routing.** After the dev merge an adopted
+  proposal replaces the broken step rather than keeping it. The test now expects only the fix's label, and
+  asserts the path is `repaired` (t885: a hand fix is a repair) instead of "not replayed". The pin guide's
+  caveat is updated to match.
+- **A stale snapshot from t885.** `flow-less/tests/__snapshots__/judged-summary.json` held the judge's old
+  default wording. t885 changed "a short cut of what was found" to "what was found there, whole". That was
+  the only difference, so I refreshed the snapshot.
+  - **Heads-up for t885's pending `judged-summary.ts` change:** this file snapshot pins the judge's whole
+    default summary, so it will need the same refresh (`vitest -u` on `default-question.test.ts`) when that
+    change lands.
+- **Removed the stale "routing lands with the next release" text** from `docs/fluxnodes/README.md` and
+  `examples/custom-prompts-and-criteria.md`. The worker updated `guides/choosing-models.md` and
+  `reference/overrides.md`.
+
+**Checks run by me:**
+- `pnpm exec vitest run src/framework/automation-service/service/fluxnode src/runtime/llm/role-routing src/runtime/llm/harness src/runtime/llm/domain-instructions src/runtime/agents/budget src/runtime/llm/build-purse src/runtime/models src/framework/automation-service/service/answer-first/attempt/tests/caller-seams.test.ts src/runtime/result-verification/flow-less`
+  -> 104 of 105 files passed, 772 of 774 tests. The 2 failures were the stale t885 snapshot; after the
+  refresh, `vitest run src/runtime/result-verification/flow-less` -> 9 files, 91 passed.
+- `pinning.test.ts` -> 2 passed.
+- `node scripts/structure-audit.mjs` -> `structure-audit: passed (534 warning(s), 969 baselined).`
+- `pnpm docs:check` -> `structure-audit: passed (0 warning(s), 0 baselined).`, `Deterministic framework reference is current.`
+- fluxiq tsc through the slot (`heavy-slot.mjs run t899-w3 -- "... tsc --noEmit; echo TSC_EXIT=$?"`) -> **`TSC_EXIT=0`**. The worker's own run before my test and snapshot edits was also 0.
+
+**Open items:**
+1. **Repair routing needs a W1 edit.** Run the repair round inside
+   `runWithAutomationStudioLlmModelRole("repair", ...)` when the attempt's path is `run_flow_then_repair`
+   or its route is a repair, in `answer-first/attempt/rounds.ts` or `round.ts`. Then drop the docs caveat
+   in `guides/choosing-models.md` and `README.md`.
+2. **Not routed.**
+   - The runtime-session in-run repair provider (`service.ts` near line 2396); FluxNode runs never reach it.
+   - The standing result-check authorization, which judges on its own key's model.
+3. **Context windows.** Every role uses the explore model's token limits. A smaller-window judge model
+   given an oversized request would refuse it by size, which reads as not judged. This is untested.
+
+## Checkpoint 6 (2026-11-11): the secret gaps closed (activity stream, pipelines, invariant test)
+
+**1. The chat activity stream (worker; the lead granted the activity code).**
+- One seam: `AutomationStudioActivityHub.publish` (`pkg/runtime/activity/hub.ts`) passes every event
+  through `automationStudioWithoutRunSecrets` before it is cut to size.
+- `publish` is the only path to the hub's storage and its subscribers, and `emit.ts:26` is its only caller.
+- With no secrets in context, an event is unchanged.
+- Test: `pkg/runtime/activity/tests/hub-secrets.test.ts` (3). It covers a secret withheld in text and
+  nested fields, two concurrent runs each withholding only their own, and events emitted after awaits
+  and from timers.
+- An event emitted outside every run context carries no known secret, so there is nothing to withhold.
+
+**2. Pipeline-mapped secrets (worker).**
+- When a record field is mapped into a FluxNode's secret input, its value joins the pipeline run's
+  secrets before the call. From then on the pipeline's events, result, outputs, lineage and stored
+  datasets are withheld. Files:
+  - `service/fluxnode/pipeline/{pipeline-secrets,withheld-dataset-writer,secret-safe-state}.ts` (new);
+  - `datasets.ts`, `fluxnode-flow-caller.ts`, `run-fluxnode-pipeline.ts`;
+  - `secrets/{withheld-data,withheld-records}.ts` (new);
+  - `fluxnode-run.ts`.
+- **What the pipeline remembers between runs:**
+  - a call to a FluxNode with a mapped secret is never cached, since its cache key would hold the secret
+    in plain text;
+  - an incremental key that reads the secret's source field is never stored, so that step processes
+    every record each run.
+
+  Neither adds a way for a run to end.
+- Test: `service/fluxnode/pipeline/tests/pipeline-secrets.test.ts`.
+- The developer's own sinks (webhook, file) still receive records as the developer defined them, and
+  `pkg/framework/automation-service/service/pipelines/map-step.ts` (not W3's) still builds plain keys in
+  memory. Only the `PipelineState` wrapper keeps them from being stored.
+
+**3. Invariant test (worker).**
+- `service/fluxnode/tests/secret-invariant.test.ts` runs a FluxNode with a secret input through explore
+  and replay on the scripted library lane. It then asserts the value appears nowhere in:
+  - the caller `inputs` the attempt received;
+  - every file under the service's data directory;
+  - the attempt store's records, which are what W1's `attempt/keep.ts` and `flow-run/input-valued-steps.ts`
+    write.
+- The worker proved it fails (2 failed) when `run-fluxnode.ts` was temporarily changed to pass the
+  secret back into the caller inputs, then restored it.
+
+**Checks run by me:**
+- `pnpm exec vitest run src/framework/automation-service/service/fluxnode src/runtime/activity src/runtime/automation-activity src/runtime/run-secrets src/framework/automation-service/service/answer-first/flow-run/tests/input-bound-steps.test.ts src/runtime/llm/step-log src/engine/automation/trace`
+  (fluxiq) -> 91 files, 678 passed
+- `node scripts/structure-audit.mjs` -> `structure-audit: passed (531 warning(s), 969 baselined).`
+- `pnpm docs:check` -> `structure-audit: passed (0 warning(s), 0 baselined).`,
+  `Deterministic framework reference is current.` (A first run hit my own 150 s shell timeout, exit 143,
+  while the machine was busy; the re-run without it passed.)
+- fluxiq tsc through the slot. The first run found two TS2352 errors, both in the new tests:
+  - `secret-invariant.test.ts:73` cast caller options with `check: undefined`; it now keeps
+    `Omit<..., "check" | "personAsk">` and destructures them away.
+  - `hub-secrets.test.ts:6` used a wrong `step` shape behind a cast; it now uses `{ index, count, label }`
+    with no cast.
+
+  Both tests still pass (5/5). The re-run gave **`TSC_EXIT=0`**.
+
+**Workers:**
+
+| Worker | Tier | Outcome | What I verified |
+| --- | --- | --- | --- |
+| secret-activity | worker | Done | Re-ran its tests; read the `hub.ts` seam and its single caller |
+| secret-pipeline-invariant | worker | Done | Re-ran its tests; read the cache and incremental-key policy; the audit violation another worker saw in its test is gone |
 
 ## Checkpoint 5 (2026-11-11): tsc fixes, secret inputs (security fix), one typecheck over 3-5
 
