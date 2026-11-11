@@ -337,3 +337,10 @@ test("a spec the page cannot honour throws, naming the field and never its selec
     }, why);
   }
 });
+
+// t903: a one-element read names the item itself as its column, `:scope`. `querySelector` searches only the
+// item's descendants, so the field read nothing and the account menu's line came back as an empty record.
+test("a field whose selector is :scope reads the item itself", () => {
+  const line = dom.el("p", { "data-testid": "saved-lists" }, "Saved lists: Winter coats; Desk lamps");
+  assert.equal(readField(line, "saved", { ...TEXT, selector: ":scope" }), "Saved lists: Winter coats; Desk lamps");
+});

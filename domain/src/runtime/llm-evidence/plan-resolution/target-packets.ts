@@ -35,7 +35,8 @@
 // agree on a bare handle keep the newest path any of them gave.
 //
 // A look the model is not shown is remembered too. A partial look only adds
-// handles; a whole look replaces the page, so a missing control has left it.
+// handles; a whole look replaces the page, so a missing control has left it --
+// unless it was hidden and the look lists nothing hidden (`view-merge/`, t903).
 //
 // A whole reload view marks a dropped handle whose control remains under a
 // new handle, matched by tag and words (`renumberedByReload`). Reappearing
@@ -181,6 +182,7 @@ import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
 import { webLlmNotAFieldTargets, type WebLlmNotAFieldKind } from "./typing-targets";
 import { createWebLlmStepViews, webLlmDialogControlPlaces, type WebLlmPlanStepMove, type WebLlmStepViews } from "./step-views";
+import { webPlanAcrossViews } from "./view-merge";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
@@ -276,6 +278,8 @@ type PageTarget = {
   crossPageIntentConflict?: boolean;
   intentSource: ReturnType<ReturnType<typeof webPlanControlIntentSource>>;
   observedElement: WebPlanElementIdentity;
+  /** The capture listed the element as not rendered (`view-merge/`, t903). */
+  hidden?: true;
 };
 type PageTargets = Map<string, PageTarget>;
 /**
@@ -631,6 +635,7 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
       intentSource: sourceOf(element),
       observedElement: identity
     };
+    if (element.hidden === true) target.hidden = true;
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
     targets.set(element.target, target);
@@ -665,16 +670,9 @@ function spacedName(identity: WebPlanElementIdentity, words: string | undefined)
   return webPlanElementWords({ readable: words }, identity) === words ? words : undefined;
 }
 
-/**
- * `targets`, a newer view of a page, with each handle `before` showed at the same
- * address keeping only the identity both views agree on (see the header). A new
- * record each, so the views' own stay as they were shown.
- */
+/** `targets`, a newer view of a page, each handle `before` showed at the same address keeping only the identity both views agree on (see the header). */
 function acrossViews(before: PageTargets | undefined, targets: PageTargets): PageTargets {
-  if (before === undefined) return targets;
-  const kept: PageTargets = new Map();
-  for (const [handle, target] of targets) kept.set(handle, acrossView(before.get(handle), target));
-  return kept;
+  return before === undefined ? targets : webPlanAcrossViews(before, targets, acrossView, addressOf);
 }
 
 /**

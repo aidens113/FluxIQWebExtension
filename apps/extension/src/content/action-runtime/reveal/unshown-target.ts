@@ -21,6 +21,11 @@ export function noteUnshownTarget(result: BrowserActionResult, target: Element):
   UNSHOWN_TARGETS.set(result, target);
 }
 
+/** The target this result refused as not shown, when one was noted; for the wait on the page's work (`./page-work.ts`). */
+export function unshownTargetOf(result: BrowserActionResult): Element | undefined {
+  return UNSHOWN_TARGETS.get(result);
+}
+
 /** Scrolls toward the target this result refused as not shown, when one was noted and scrolling may reveal it. Answers whether anything moved. */
 export function revealUnshownTarget(result: BrowserActionResult): boolean {
   const target = UNSHOWN_TARGETS.get(result);

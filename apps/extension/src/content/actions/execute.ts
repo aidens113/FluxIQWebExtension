@@ -97,6 +97,7 @@ import { waitForSelectorAction } from "./wait-for-selector";
 import { waitForTextAction } from "./wait-for-text";
 import { extractAction } from "./extract";
 import { clickAction } from "./click";
+import { hoverAction } from "./hover";
 import { typeAction } from "./type";
 import { clearAction } from "./clear";
 import { selectAction } from "./select";
@@ -304,6 +305,9 @@ async function routeContentAction(action: BrowserActionCommand, deps: ContentAct
     }
     if (action.actionType === "web.dom.click") {
       return await clickAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.hover") {
+      return await hoverAction(action, deps, startedAt);
     }
     if (action.actionType === "web.dom.type") {
       return await typeAction(action, deps, startedAt);

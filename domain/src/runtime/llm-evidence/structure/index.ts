@@ -16,7 +16,7 @@
 // value a column holds (CC1), and `list-items/` what a list's rows carry: its
 // marks, its row identity and each item's key and marks (CC2, CC3).
 
-export { detectRepeatingStructure, type WebLlmStructureDetectionContext } from "./detect";
+export { detectRepeatingStructure, type WebLlmStructureDetectionContext, type WebLlmStructureTargetBinding } from "./detect";
 export {
   createWebLlmExtractionHandles,
   RETAINED_EXTRACTION_HANDLES,

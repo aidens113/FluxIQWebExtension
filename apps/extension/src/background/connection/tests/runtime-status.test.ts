@@ -43,6 +43,8 @@ const confirmations: Record<BrowserActionType, Confirmation> = {
   "web.dom.wait_for_text": undefined,
   "web.dom.extract": undefined,
   "web.dom.capture_snapshot": undefined,
+  // A hover makes no input the recorder confirms (t903).
+  "web.dom.hover": undefined,
   // The recorder reports a checkbox or radio as `dom.change`, which the domain
   // maps to the checkbox input (`input-model.ts`), so a check node waits for it.
   "web.dom.check": { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled },
