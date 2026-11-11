@@ -38,6 +38,19 @@ The structural test (`results/tests/read-task-outcome.test.ts`): a `Required<Aut
 
 All continuations held. Attempts 3–4 now stand on their record at 0 calls. Before the steps-ran fix, the coordinator's run `run-mwb81x8q` judged them; the expected reason was the cookie step's `act_not_done`, which the S9 verdict was not yet recorded to show.
 
+### 4. Live Post at `--attempts 4` on Haiku: `run-mwbj3imn-d681f993`, passed, $0.0167
+
+| attempt | path | calls (interp/judge/decisions) | card | S9 verdict | posts before -> after |
+| --- | --- | --- | --- | --- | --- |
+| 1 | explore | 9 (1/1/7) | drew after 2 ms | none | 0 -> 1 |
+| 2 | run_flow | 2 (0/2/0) | drew after 4 ms | judged: flow_not_proven | 1 -> 1 |
+| 3 | run_flow | 0 | drew after 3 ms | stood on its record | 1 -> 1 |
+| 4 | run_flow | 0 | drew after 3 ms | stood on its record | 1 -> 1 |
+
+All continuations held. Attempt 2's second judge call is the re-ask after a refused row citation, within one completion. Debug note: `docs/working/language-driven-flow-loop-plan/debugs/run-mwbj3imn-d681f993.md`.
+
+Before this run, one try stopped at the Lab's stale-Core gate after the dev merge, before any call; Core's libraries were rebuilt through the slot. Core structure audit before reporting: passed (530 warnings).
+
 ## Outcome (round 1)
 
 Partial: all the work agreed for landing is done and checked. The live Post proof passed. The round-1 follow-ups are done in round 2 above.
