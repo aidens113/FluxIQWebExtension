@@ -27,7 +27,10 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 **Lanes (2026-11-11, evening).** Landed on dev today: t904, t885, t903, t897, t899 (W3) and t900 (W4).
 - W1, live checks (E1): Saturday causes R1-R7, including the ending (a caught loop is steered onto a new approach, never parked for a person); reruns of follow-official-store and priya; breadth tasks 5-10; the Lab recording each run's exact model, which it does not do today.
-- W1, structural: one design for the class the live review found (`reports/result-evidence-design.md`, Opus, read-only). Its build follows E1's current round, because both touch Core's answer-first rows and judge.
+- W1, structural (t905, sub-supervisor): the design in `reports/result-evidence-design.md` makes the result exactly what the draft's read steps read. A read outside the draft is a look that never changes the result. The model is always told the result as it stands, and the judge gets every contributing page whole.
+  - Lead decisions D1-D4: draft steps only, with `take` to promote a look; fold identical steps; exploring reads return only kept rows; one evidence shape for both judges.
+  - Phases 0-1 run now. Phase 2's wiring waits for t885 to land call-chain.ts and the amendment handler. Phase 4 (exploration overhead in the Lab report) is E1's.
+  - R3's Core half is dropped and R7 is confirmed by the user's result-or-budget rule. F5 (real hover) waits on the user, because it would need the debugger.
 - W2 (t898): humanness end to end, per FluxNode, task and Flow (user, 2026-11-11: "humanness slider should be for each individual fluxnode/task/flow"). Open: the run-session security fix, the person's preferences, and a rerun at level 100, whose first replay needed a repair.
 - W4 follow-ups: the Firefox popup manual check (user), and the limits.ts swap after t898.
 - W5 (t901): dock project threads, members' model and send, case-insensitive usernames; the mirrored route test after t898.

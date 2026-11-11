@@ -34,3 +34,35 @@ test("pager replacement alone is not list movement and stays within budget", asy
   assert.deepEqual(answer, { outcome: "timed_out", stop: "deadline" });
   assert.ok(Date.now() - started < 1000);
 });
+
+/** The card drawn again in a new element, saying exactly what it said: what a widget that redraws on every press does. */
+function redrawn(card: FakeElement): FakeElement {
+  const link = card.children[0];
+  return new FakeElement("div", { "data-card": card.getAttribute("data-card") ?? "" }, "", link === undefined ? [] : [new FakeElement("a", { href: link.getAttribute("href") ?? "" }, link.textContent)]);
+}
+
+// t885, R5: a booking widget redraws its whole calendar on every press, so a
+// Next that only raised a form error detached every item and answered "moved".
+test("a list redrawn in new elements with the same records has not moved", async () => {
+  const answer = await changing((card) => {
+    for (const shown of Array.from(document.querySelectorAll(STORE_ITEM)) as unknown as FakeElement[]) shown.replaceWith(redrawn(shown));
+    assert.equal(card.isConnected, false, "every item was detached");
+  });
+  assert.deepEqual(answer, { outcome: "timed_out", stop: "deadline" });
+});
+
+test("a list redrawn in new elements with new records has moved", async () => {
+  const answer = await changing(() => {
+    for (const shown of Array.from(document.querySelectorAll(STORE_ITEM)) as unknown as FakeElement[]) {
+      shown.replaceWith(new FakeElement("div", { "data-card": "2-1" }, "", [new FakeElement("a", { href: "/dp/next" }, "Another record")]));
+    }
+  });
+  assert.deepEqual(answer, { outcome: "advanced", by: "next" });
+});
+
+test("a page that appends records has moved", async () => {
+  const answer = await changing((card) => {
+    card.parentElement?.append(new FakeElement("div", { "data-card": "1-9" }, "", [new FakeElement("a", { href: "/dp/P19" }, "Appended record")]));
+  });
+  assert.deepEqual(answer, { outcome: "advanced", by: "next" });
+});

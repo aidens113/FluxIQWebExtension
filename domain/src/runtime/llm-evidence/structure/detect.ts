@@ -55,6 +55,10 @@ import { webResetResource } from "../control-spot";
 // run's (`../plan-resolution/own-extraction-list.ts`). A one-item proposal --
 // a label/value receipt, or a lone record where nothing repeats -- needs
 // nothing of its own here: it is the run, with one item (`./packet.ts`).
+// A run whose items group controls -- a timetable's days holding their times
+// -- is also sent as its `cells`, one row per control with its group's heading
+// (t885, R2). They get a third handle, reserved after the record's and
+// retained the same way.
 //
 // **A stale handle is refused with the page as it is now (t477).** Lane C
 // round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044) named a handle from the page
@@ -189,6 +193,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   // The record beside the run gets a handle of its own (see the header). A
   // record left out for having only sensitive fields leaves its number unused.
   const recordHandle = detection.record === undefined ? undefined : context.handles.reserve();
+  const cellsHandle = detection.cells === undefined ? undefined : context.handles.reserve();
   // A list the capture shows away from the target names no target (header); one
   // beside which the page sent the target's own record is about the target.
   const awayFromTarget = element !== undefined && detection.record === undefined && webLlmListAroundTarget(detection.proposal, page, element.selector) === false;
@@ -196,6 +201,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
     detection,
     handle,
     recordHandle,
+    cellsHandle,
     location: page.evidence.location,
     target: searchedPage || awayFromTarget ? undefined : target,
     // What the page calls the list, read in the capture the detection answered with (`./list-name.ts`, R2-U-9).
@@ -211,6 +217,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   const scope = { projectId: request.projectId, flowId: request.flowId };
   context.handles.retain(scope, split.binding);
   if (split.recordBinding !== undefined) context.handles.retain(scope, split.recordBinding);
+  if (split.cellsBinding !== undefined) context.handles.retain(scope, split.cellsBinding);
   return toolExecution(split.packet, false, WEB_LLM_STRUCTURE_RESULT_CODE);
 }
 

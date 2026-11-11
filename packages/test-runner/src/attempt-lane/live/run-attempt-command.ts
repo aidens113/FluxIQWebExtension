@@ -13,16 +13,19 @@ import { assertRealisticScenarios } from "../../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../../scenarios.js";
 import type { AttemptOutcome, AttemptTask } from "../driver.js";
 import type { PersonHandOff } from "../../person-simulation/index.js";
-import { attemptReportRow, laterAttemptNotes, renderAttemptSeries } from "../report.js";
+import { attemptReportRow, laterAttemptNotes, renderAttemptReport } from "../report.js";
 import { runAttemptSeries } from "../run-attempt-series.js";
 import { SCRIPTED_MODEL_FORM_ENV, scriptedModelChildEnvironment, scriptedModelKey, scriptedModelScriptFor, startScriptedModelServer, type ScriptedModelServer } from "../scripted-model/index.js";
 import { attemptCacheShare, AttemptProofStuck, AttemptScriptRefused, attemptSpeed, attemptSpeedLines, openLiveAttemptSession, restartAttemptCore, type AttemptCacheShare, type AttemptCoreRestart, type AttemptSpeed, type LiveAttemptSession } from "./attempt/index.js";
 import { partialSeries } from "./partial-series.js";
 import { attemptPersonFor } from "./attempt-person.js";
 import { attemptBalanceFailures } from "./balance-failures.js";
+import { attemptModelHeader } from "./report-model-header.js";
+import { attemptModelRecord } from "./model-record.js";
 import { attemptCanGoOn } from "./can-go-on.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
+import { readAttemptOverhead } from "../overhead/index.js";
 import { awaitPanelAnswerTurn } from "./panel-answer-port.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
 import { writeUnscoredAttemptEvidence, type ScoredAttempt } from "./unscored-attempt-evidence.js";
@@ -169,6 +172,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
   const evidence = path.join(paths.runsDirectory, "attempts", runId);
   await mkdir(evidence, { recursive: true });
   const side = planned ?? await scriptedSide(input, evidence, log);
+  const modelRecord = attemptModelRecord(side.live);
   const labRun = side.live ? await LabRunRecord.open({ environment: input.environment, runId, startedAt, scenarioId: scenario.id, work: request.task.id, workflowId: request.workflowId, variantId: request.variantId, bundlePath: path.resolve(paths.runsDirectory, runId), repositoryRoot }) : undefined;
   if (side.live && labRun?.stepsDirectory) side.live.readStepLogFrom(labRun.stepsDirectory);
   const stepsDirectory = labRun?.stepsDirectory ?? path.join(evidence, "steps");
@@ -257,20 +261,22 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       const row = rows[index]!, keeping = kept.get(row.attempt)!, attempt = keeping.ended.outcome.attempt;
       return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, replay: keeping.ended.outcome.replay ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
     });
-    const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: startedFrom(row.attempt), askedAgain }));
+    // Each attempt's browser calls beside the saved Flow's, from the run's step folders alone (no model call).
+    const overheads = await readAttemptOverhead(stepsDirectory);
+    const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: startedFrom(row.attempt), askedAgain, overhead: overheads.find((entry) => entry.attempt === row.attempt) }));
     const { continuations } = series;
     const notRun = series.stoppedShort === undefined ? [] : [`Attempt ${told.length + 1} did not run: ${series.stoppedShort}.`];
     const restartWords = restarted ? [`Core restarted between the attempts: the extension connected again after ${Math.round(restarted.reconnectedAfterMs / 1000)} s, the model key read ${restarted.modelKey}, and the chat ${restarted.panel === "carried_on" ? "carried on by itself" : `was opened again (it stood at ${restarted.panelBefore})`}.`] : [];
     const notProven = continuations.filter((proof) => !proof.held).map((proof) => `That attempt ${proof.toAttempt} started from attempt ${proof.fromAttempt}'s saved work is refused: ${proof.refused.join(", ")}.`);
     const deterministicNotes = laterAttemptNotes(series.series);
     const diagnosisOnly = command.attempts === 1;
-    const report = renderAttemptSeries({ ...series.series, rows });
+    const report = renderAttemptReport({ ...series.series, rows }, overheads);
     const speedLines = told.flatMap(({ row, speed }) => attemptSpeedLines(row.attempt, speed));
     // How each replay of the saved Flow was checked, from Core's own record of it (t897): why a replay was judged is otherwise said nowhere.
     const replayLines = told.flatMap(({ row, replay }) => replay === null ? [] : [replay.stood ? `Replay of attempt ${row.attempt}: stood on its record, no judge asked.` : `Replay of attempt ${row.attempt}: judged, because it deviated from the accepted run: ${replay.deviation}.`]);
-    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuations, deterministic: series.series.deterministic, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
+    await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? { ...modelRecord, ...told[0] } : { ...modelRecord, attempts: told, series: { ...series.series, rows }, continuations, deterministic: series.series.deterministic, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
     recorded = true;
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...replayLines, ...speedLines].join("\n")}\n`);
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${[attemptModelHeader(modelRecord), report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...replayLines, ...speedLines].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && continuations.every((proof) => proof.held);
     // One attempt never proves the loop: it is a diagnosis, and its status must not read as a pass.
@@ -296,7 +302,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
       const didNotEnd = stopped ? { ordinal: Math.max(0, ...kept.keys()) + 1, ...(error instanceof AttemptProofStuck ? { attempt: error.attempt } : {}), ...started } : undefined;
       // The attempts that ended and were scored are still a series: their rows, continuations and deterministic summary are kept, whatever stopped the rest.
       const partial = recorded ? undefined : partialSeries({ task: ranTask, scored, asked: command.attempts, cacheHitPercent: (attempt) => kept.get(attempt)?.cache.hitPercent ?? null });
-      return writeUnscoredAttemptEvidence({ evidence, attempts: command.attempts, kept, error, recorded, scored, ...(partial ? { series: partial } : {}), ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) });
+      return writeUnscoredAttemptEvidence({ evidence, model: modelRecord, overhead: await readAttemptOverhead(stepsDirectory), attempts: command.attempts, kept, error, recorded, scored, ...(partial ? { series: partial } : {}), ...(didNotEnd ? { didNotEnd } : {}), ...(paid ? { paid } : {}) });
     }).catch((failed: unknown) => `its evidence could not be written: ${failed instanceof Error ? failed.message : String(failed)}`);
     if (!stopped) {
       process.stdout.write(`[attempt] ${command.taskId}: the run failed, and ${said}; evidence ${evidence}\n`);

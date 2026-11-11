@@ -9,6 +9,7 @@
 //
 // Each finish carries its start's `authoringMode`; a start written before the
 // mode was recorded gives its finishes none, so `unchanged` never compares them.
+// Each finish likewise carries its start's `provider` and `model`.
 
 import { writeFile } from "node:fs/promises";
 import { appendLedgerEntry } from "./ledger.mjs";
@@ -31,7 +32,7 @@ export async function closeLaunch(files, start, entries, { exitCode, now, reconc
   const outcomes = (await readRunOutcomes(start.runsDirectory, { sinceMs, knownRunIds, labRunsDirectory: files.labRuns ?? null }))
     .filter((outcome) => outcome.startedAt === null || Date.parse(outcome.startedAt) < untilMs);
 
-  const base = { event: "finish", launchId: start.launchId, at: new Date(now).toISOString(), instance: start.instance, task: start.task, ...(typeof start.authoringMode === "string" ? { authoringMode: start.authoringMode } : {}), fingerprint: start.fingerprint, exitCode };
+  const base = { event: "finish", launchId: start.launchId, at: new Date(now).toISOString(), instance: start.instance, task: start.task, ...(typeof start.authoringMode === "string" ? { authoringMode: start.authoringMode } : {}), ...(typeof start.provider === "string" ? { provider: start.provider } : {}), ...(typeof start.model === "string" ? { model: start.model } : {}), fingerprint: start.fingerprint, exitCode };
   const marker = reconciled ? { reconciled: true } : {};
   const finishes = outcomes.length === 0
     ? [{ ...base, runId: null, verdict: null, totalEstimatedCostUsd: null, buildCeilingUsd: null, maxBuildCostUsd: null, buildsOverCeiling: null, balanceFailure: null, ...marker }]
