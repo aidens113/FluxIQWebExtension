@@ -6,6 +6,7 @@ import { automationStudioEvidenceBuildScope } from "fluxiq/automation";
 import { ClientGatewayCommandContext, ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
+import { webAutomationHumannessRecordValue } from "../actions/humanness-record";
 import { webAutomationObstructionValue } from "../actions/obstruction";
 import { webToggleOutput, webToggleSignatureValue } from "../actions/toggle-signature";
 import { webAutomationClearedWayOutsOf, type WebAutomationClearedWayOutFlow } from "../cleared-way-outs";
@@ -110,6 +111,13 @@ export async function dispatchWebAutomationOutput(
     // result so Core reads it from `outputs.result.obstruction`, with the node
     // definition a way out is pressed by named on each way that has a control.
     const obstruction = obstructionWithDefinition(isRecord(result.payload) ? result.payload.obstruction : undefined);
+    // How the press was made above humanness 0 (`actions/humanness-record.ts`):
+    // Core's Flow step log reads it at the top of the attempt's `outputs.result`
+    // (Core `runtime/llm/step-log/flow-step.ts`), so it is lifted there as
+    // `skipped` is, copied through its reader, on any status: a failed press
+    // was still made that way. Left nested, no replay step ever recorded it
+    // (t898). A result at level 0 carries none, and nothing is added.
+    const humanness = isRecord(result.payload) ? webAutomationHumannessRecordValue(result.payload.humanness) : undefined;
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
@@ -118,7 +126,7 @@ export async function dispatchWebAutomationOutput(
       metadata: { sessionId },
       status,
       ...targetControls,
-      payload: compact({ status, message, result: isRecord(result.payload) && (clearedLayers || obstruction) ? { ...result.payload, ...(clearedLayers ? { clearedLayers } : {}), ...(obstruction ? { obstruction } : {}) } : result.payload, route, skipped, toggle, clearedLayers, obstruction }),
+      payload: compact({ status, message, result: isRecord(result.payload) && (clearedLayers || obstruction) ? { ...result.payload, ...(clearedLayers ? { clearedLayers } : {}), ...(obstruction ? { obstruction } : {}) } : result.payload, route, skipped, toggle, clearedLayers, obstruction, humanness }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would

@@ -1,7 +1,7 @@
 import { normaliseHumanness } from "./normalise-humanness";
-import type { HumannessSettings } from "./settings";
+import type { FluxIQSettings } from "../../../shared/protocol";
 
 /** The saved humanness; absent reads as 0. */
-export function readHumanness(settings: HumannessSettings | undefined): number {
+export function readHumanness(settings: FluxIQSettings | undefined): number {
   return normaliseHumanness(settings?.humanness);
 }

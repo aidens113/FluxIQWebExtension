@@ -68,6 +68,12 @@ export type FluxIQSettings = {
   captureSnapshots: boolean;
   /** On only where Core's recording-capture policy allows direct requests (`capturePolicy.directRequests.allowed`). */
   requestsEnabled: boolean;
+  /**
+   * How human the extension acts, 0-100. Absent means 0: today's path exactly, at maximum
+   * efficiency. Higher looks more human on rate-limited sites. The panel slider sets it and the
+   * background normalises it.
+   */
+  humanness?: number | undefined;
 };
 
 /**

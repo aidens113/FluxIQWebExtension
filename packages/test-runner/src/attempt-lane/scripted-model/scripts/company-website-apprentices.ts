@@ -74,11 +74,17 @@ const answersRequest: ScriptedReply = (request) => scriptedJudgement(request, { 
 /** The most decisions this script answers: enough for every step of its honest path, and few enough that a loop fails it. */
 const MOST_DECISIONS = 24;
 
+/** The default series: the exploring attempt and three more. */
+const ATTEMPTS = 4;
+
+/** Core asks its judge twice in an exploring attempt (once after the draft's test run of the Flow, once on the finished answer), so the script holds two a attempt. */
+const JUDGEMENTS_PER_ATTEMPT = 2;
+
 export const COMPANY_WEBSITE_APPRENTICES_SCRIPT: ScriptedModelScript = Object.freeze({
   taskId: "company-website-apprentices",
   replies: {
-    panel_command: [startAttempt],
+    panel_command: Array.from({ length: ATTEMPTS }, () => startAttempt),
     evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-    loop_verification: [answersRequest],
+    loop_verification: Array.from({ length: ATTEMPTS * JUDGEMENTS_PER_ATTEMPT }, () => answersRequest),
   },
 });

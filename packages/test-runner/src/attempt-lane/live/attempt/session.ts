@@ -34,6 +34,8 @@ export type LiveAttemptSessionInput = {
   startupLogsDirectory?: string;
   /** The most model calls the run typed, for a run that typed one. */
   buildCallLimit?: number;
+  /** The humanness level (0-100) saved in the browser's extension settings with the pairing; absent writes nothing, so the stored settings are as they always were. */
+  humanness?: number;
   /** Called once Core and the extension stand and before the chat opens: where a run's key goes into Secret Keys. */
   authorize(topology: RunningTopology, control: ExistingFluxIQControlClient): Promise<void>;
   log?: (line: string) => void;
@@ -80,7 +82,7 @@ export async function openLiveAttemptSession(input: LiveAttemptSessionInput): Pr
     browser = await openChromeChatSession({ topology, extensionPath: paths.extensionPath, scenarioUrl: `${topology.scenarioOrigin}${input.startPath}`, workerRequests, policy: chatNetworkPolicy(topology, proxy.origin) });
     const page = browser.control, coreApiUrl = proxy.origin;
     await pairExtensionWithColdEpochRecovery({
-      connect: async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl, coreApiUrl, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } })).status,
+      connect: async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl, coreApiUrl, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true, ...(input.humanness === undefined ? {} : { humanness: input.humanness }) } })).status,
       readStatus: () => extensionStatus(page),
       approvePairing: (referenceCode) => control.approvePairing(referenceCode),
     });
