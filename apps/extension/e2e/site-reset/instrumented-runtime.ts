@@ -45,7 +45,7 @@ export type InstrumentedRuntime = {
   reads: ObservedRead[];
   declarations: ObservedDeclaration[];
   outcomes: ObservedOutcome[];
-  /** Click actions dispatched to the browser so far, by any caller: the builder, a trial, or Core's own look. */
+  /** Click commands dispatched through this runtime so far, by any caller that goes through it: the builder, or Core's own look. A trial's playback does not dispatch through it, so a trial's clicks are not counted; and one command that presses twice inside itself counts once. */
   clicks: () => number;
 };
 
