@@ -118,7 +118,7 @@ No escalation between tiers was needed. Worker reports are under `reports/live-c
 
 ## What remains
 
-1. Towels on Haiku at `--attempts 4` (running).
-2. Breadth at `--attempts 4`: crossborder's other tasks, social-network-feed's other tasks, bigbox's other tasks (count tasks may resume), alternating models.
-3. After t895: show the judge a set-aside list (`completion/check.ts`).
+1. Towels on Haiku at `--attempts 4` (running, after t897's panel outcome-reader fix).
+2. Breadth at `--attempts 4`, alternating models: ten tasks, one per site, each proven provider-free to reach its oracle (`reports/live-checks-r3/breadth-prep.md`; professional-network re-run by me, 2 pass): everything-store-coupon-earbuds-rated-four, crossborder-marketplace-follow-official-store, bigbox-retail-checkout-quote-without-ordering, job-board-remote-easy-apply, local-classifieds-test-ride-question, auction-marketplace-save-mark-ii-sellers, photo-social-priya-tags, social-network-feed-hide-suggested-posts, company-website-saturday-certificate, professional-network-kade-lead-contact. Every Lab run goes through `heavy-slot.mjs run t885 --`.
+3. The set-aside list for the judge needs `completion/**`, which is t897's; the change goes through the lead.
 4. Still-open items 3-8 of the Answer First Current State. Item 2 is answered: native is on dev and proven on Haiku.
