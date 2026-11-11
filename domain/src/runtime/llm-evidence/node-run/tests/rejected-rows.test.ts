@@ -86,8 +86,8 @@ test("an exploring list read shows the model the rows each condition rejected, b
   // The one command that went out asked for the samples.
   const dispatched = stubbed.commands.find((command) => command.actionType === "web.dom.extract_list");
   assert.equal(dispatched?.parameters.rejectedSamples, true);
-  // An exploration read asks for every row, never the kept rows alone a replay asks for (`./replay.test.ts`).
-  assert.equal(Object.hasOwn((dispatched?.parameters.extractList as JsonObject | undefined) ?? {}, "answer"), false);
+  // An exploration read answers the kept rows alone, as a replay's does (`./replay.test.ts`): the rows its conditions turned down are the samples, never rows.
+  assert.equal((dispatched?.parameters.extractList as JsonObject | undefined)?.answer, "kept");
   const read = (ran.evidence as JsonObject).read as JsonObject;
   assert.deepEqual(read.extracted, [{ name: "Basic Earbuds", price: "$19" }]);
   // Only the condition that rejected something, by its position in `where`,
@@ -111,6 +111,7 @@ test("the samples are never in what the Flow keeps, and a playback of it never a
   assert.equal(JSON.stringify(ran.draft).includes(TRUE_EARBUDS), false);
   const kept = ran.draft?.ranWith?.parameters as JsonObject;
   assert.equal(Object.hasOwn(kept, "rejectedSamples"), false);
+  assert.equal(Object.hasOwn(kept.extractList as JsonObject, "answer"), false, "the Flow's own dispatch adds the answer, so the kept call does not");
   // A sample list is three long; the read's own account says it returned one
   // row, and that is what the replay compares (t194-w35: until then this was
   // the payload's longest list, two -- the column names).

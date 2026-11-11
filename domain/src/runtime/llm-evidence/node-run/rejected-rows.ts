@@ -51,6 +51,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   webAutomationExtractionSummaryValue,
+  WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT,
   WEB_AUTOMATION_EXTRACT_REJECTED_MARKS_KEY,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
@@ -116,8 +117,13 @@ export type WebNodeReadWithRejectedRows = { read: JsonValue | undefined; recorde
  * parameters the Flow keeps.
  */
 export function webNodeDispatchParameters(node: { actionType: string; proposes: boolean }, ran: JsonObject): JsonObject {
-  if (node.actionType !== EXTRACT_LIST_ACTION || !node.proposes) return ran;
-  return { ...ran, [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY]: true };
+  if (node.actionType !== EXTRACT_LIST_ACTION) return ran;
+  // An exploring read answers only the rows it kept, exactly as the Flow's does
+  // (`output-nodes/extract-list/dispatch.ts`): rows its conditions turned down
+  // are left-out evidence beside the answer (the samples below), never rows of it.
+  const list = ran.extractList;
+  const asked = typeof list === "object" && list !== null && !Array.isArray(list) ? { ...ran, extractList: { ...list, answer: WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT } } : ran;
+  return node.proposes ? { ...asked, [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY]: true } : asked;
 }
 
 /**

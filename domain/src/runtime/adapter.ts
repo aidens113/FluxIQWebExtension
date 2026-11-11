@@ -30,7 +30,7 @@ import { webAutomationTextSightingValue, type WebAutomationTextSighting } from "
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { pickWebAutomationSession } from "./web-sessions";
 import { outputTargetFromPayload } from "../output-nodes";
-import { webAutomationExtractListReferenceNow } from "../output-nodes/extract-list";
+import { webAutomationExtractListAnswered, webAutomationExtractListReferenceNow } from "../output-nodes/extract-list";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRuntimeCapabilities } from "./capabilities";
 import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "../requests";
@@ -150,7 +150,12 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     // Both guards keep the payload's top level, so a next-page step's
     // `route: "ended"`, which the dispatcher lifted there (contract C1), reaches
     // Core on this path exactly as on the IO path.
-    const readable = dispatchPayloadWithScreenedSighting(sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload);
+    // A list read's answer carries the list it read and the place its pager said (`listKey`, `place`), so a
+    // saved Flow's record batch says which list and page its rows came from (`output-nodes/extract-list/answered.ts`).
+    const answered = outputId === "web.dom.extract_list" && result.payload.result !== undefined
+      ? { ...result.payload, result: webAutomationExtractListAnswered(payload as JsonObject, result.payload.result) }
+      : result.payload;
+    const readable = dispatchPayloadWithScreenedSighting(sensitiveTarget ? dispatchPayloadWithoutExtracted(answered) : answered);
     runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
   }
   const target = outputTargetFromPayload(payload as JsonObject);

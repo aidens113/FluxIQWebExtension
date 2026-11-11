@@ -130,3 +130,36 @@ test("a read that answered rows its conditions rejected says it kept none of the
   const kept = webNodeReadWithRejectedRows(listRead(70, { extraction: { recordCount: 70, pagesRead: 1, conditions: { applied: 90, kept: 70, rejected: [20], unfiltered: false } } })).read as JsonObject;
   assert.equal(kept.restOfRows, "extracted holds all 70 kept rows.");
 });
+
+// Invariant I4: a read's rows are what its conditions kept, and its account never calls one the other.
+const SEATS = [["A1", "free"], ["A2", "free"], ["A3", "taken"], ["A4", "free"], ["B1", "taken"]];
+const seat = (id: string, state: string) => ({ seat: id, state });
+
+test("a read that kept none says so, and names no rejected row as kept", () => {
+  const extraction = { recordCount: 0, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["seat", "state"], conditions: { applied: 5, kept: 0, rejected: [5], unfiltered: false }, rejectedSamples: [SEATS.map(([id, state]) => seat(id!, state!))] };
+  const payload = listRead(0, { extracted: [], extraction });
+  const read = webNodeReadWithRejectedRows(payload, { extractList: { where: [{ field: "state", equals: "vip" }] } }).read as JsonObject;
+  assert.deepEqual(read.extracted, []);
+  assert.equal(read.firstRows, undefined);
+  assert.match(read.restOfRows as string, /kept no row: extracted is empty, and rejectedRows are the rows the conditions turned down, left out and not result rows/u);
+  assert.doesNotMatch(read.restOfRows as string, /holds all/u);
+});
+
+test("a read with kept and left-out rows names each as what it is", () => {
+  const kept = SEATS.filter(([, state]) => state === "free").map(([id, state]) => seat(id!, state!));
+  const extraction = { recordCount: 3, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["seat", "state"], conditions: { applied: 5, kept: 3, rejected: [2], unfiltered: false }, rejectedSamples: [[seat("A3", "taken"), seat("B1", "taken")]] };
+  const payload = listRead(3, { extracted: kept, extraction });
+  const read = webNodeReadWithRejectedRows(payload, { extractList: { where: [{ field: "state", equals: "free" }] } }).read as JsonObject;
+  assert.ok(read.rejectedRows !== undefined, "the left-out rows are still shown");
+  assert.match(read.restOfRows as string, /^extracted holds all 3 kept rows; rejectedRows are the rows the conditions turned down, left out and not result rows.$/u);
+  assert.deepEqual(read.extracted, kept);
+});
+
+test("an unfiltered answer is described as the rejected rows, never as kept", () => {
+  const rejected = SEATS.map(([id, state]) => seat(id!, state!));
+  const extraction = { recordCount: 5, pagesRead: 1, conditions: { applied: 5, kept: 0, rejected: [5], unfiltered: true } };
+  const read = webNodeReadWithRejectedRows(listRead(5, { extracted: rejected, extraction })).read as JsonObject;
+  assert.match(read.restOfRows as string, /kept none of the 5 rows.*rejected rows.*none of them is a result row/u);
+  assert.doesNotMatch(read.restOfRows as string, /holds all/u);
+  assert.equal(read.firstRows, undefined);
+});

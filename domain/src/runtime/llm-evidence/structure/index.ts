@@ -21,7 +21,10 @@ export {
   createWebLlmExtractionHandles,
   RETAINED_EXTRACTION_HANDLES,
   WEB_LLM_EXTRACTION_HANDLE_PATTERN,
+  webLlmExtractionListKey,
   type WebLlmExtractionBinding,
+  type WebLlmExtractionBindingKeyed,
+  type WebLlmExtractionBindingRetained,
   type WebLlmExtractionHandleResolution,
   type WebLlmExtractionHandles,
   type WebLlmExtractionHandleScope

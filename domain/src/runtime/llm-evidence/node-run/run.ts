@@ -86,7 +86,7 @@ import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRe
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
-import { webListReadCode, webListReadConditionAccount, webListReadFlowRefused } from "./list-read";
+import { webListReadAnswerKeys, webListReadCode, webListReadConditionAccount, webListReadFlowRefused } from "./list-read";
 import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeScopedReacquire } from "./retries";
 import { webNodeWithHandleShape } from "./handle-shape";
 import { webNodeFrozenGateway, webNodeFrozenSubject, webNodeFrozenDispatchParameters, type WebNodeFrozenCapture, type WebNodeFrozenCaptureInput } from "./frozen-execution";
@@ -511,7 +511,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // for the replay, which otherwise keeps the payload as the node answered.
     // The parameters it ran with, so a text filter that dropped numeric rows can say "use atLeast" (`./numeric-text-filter.ts`).
     const { read: shownRead, recorded } = webNodeReadWithRejectedRows(result.payload as JsonValue | undefined, ran);
-    const read = node.proposes ? shownRead : undefined;
+    // A list read also names the list it read and the place its pager said, beside its rows (`./list-read/answer-keys.ts`, I3).
+    const read = node.proposes ? webListReadAnswerKeys(node.definitionId, shownRead, ran) : undefined;
     run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said. Where the

@@ -48,3 +48,36 @@ export function webAutomationExtractionListContinuesValue(value: unknown): WebAu
   if (typeof fact.evidence !== "string" || !EVIDENCE.has(fact.evidence)) return undefined;
   return { kind: fact.kind, evidence: fact.evidence } as WebAutomationExtractionListContinues;
 }
+
+/**
+ * Where in its list a read of one page was, as the page's own pager says it
+ * (invariant I3: a place is declared, never guessed from rows or an address).
+ *
+ * `page` is the number a numbered or next-link pager marks current; `offset`
+ * is the position a pager that counts items says its page starts at; `cursor`
+ * is the token a load-more control or a cursor pager carries for the part it
+ * shows. A pager that says nothing sends no place, and no place is then
+ * absent from the answer, never a number counted from the rows.
+ */
+export type WebAutomationExtractionPlace = {
+  kind: "page" | "offset" | "cursor";
+  value: number | string;
+};
+
+/** A cursor is an opaque token: only characters a token is made of, so page text cannot ride on it. */
+const CURSOR_PATTERN = /^[A-Za-z0-9_.~-]{1,128}$/u;
+
+/** The place copied word by word, or `undefined` for one that is not well formed. */
+export function webAutomationExtractionPlaceValue(value: unknown): WebAutomationExtractionPlace | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const said = value as Record<string, unknown>;
+  if (said.kind === "page" && typeof said.value === "number" && Number.isSafeInteger(said.value) && said.value >= 1 && said.value <= 999_999_999) return { kind: "page", value: said.value };
+  if (said.kind === "offset" && typeof said.value === "number" && Number.isSafeInteger(said.value) && said.value >= 0 && said.value <= 999_999_999) return { kind: "offset", value: said.value };
+  if (said.kind === "cursor" && typeof said.value === "string" && CURSOR_PATTERN.test(said.value)) return { kind: "cursor", value: said.value };
+  return undefined;
+}
+
+/** A place as the one string an answer names it by: `page=3`, `offset=40` or `cursor=abc`. */
+export function webAutomationExtractionPlaceText(place: WebAutomationExtractionPlace): string {
+  return `${place.kind}=${place.value}`;
+}

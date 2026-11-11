@@ -552,6 +552,31 @@ test("a list read's statement says what each condition kept and rejected, with t
   assert.equal(looked.draft !== undefined && "conditions" in looked.draft, false);
 });
 
+// I3: the model's own read of a list names the list by the site's structure and the place its pager said, beside the rows.
+test("a live list read carries its listKey, and the place its pager said where it said one", async () => {
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page("Timetable", 0), structure: structuredClone(ROWS) } };
+      const summary = { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["name"], missingFields: [] };
+      return { status: "succeeded", payload: { extracted: [{ name: "Night train" }], extraction: command.actionType === "web.dom.extract_list" && paged ? { ...summary, place: { kind: "page", value: 4 } } : summary } };
+    }
+  };
+  let paged = false;
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const read = async (callId: string, handle: string) => (await runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters: { extractList: { handle } }, consequences: [] } })).evidence as JsonObject;
+  const first = (await runtime.executeTool({ ...PROJECT, callId: "detect.1", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).evidence as WebLlmRepeatingStructure;
+  const unpaged = (await read("read.1", first.extraction)).read as JsonObject;
+  assert.match(String(unpaged.listKey), /^list./u);
+  assert.equal(Object.hasOwn(unpaged, "place"), false, "a pager that said nothing leaves no place");
+  const second = (await runtime.executeTool({ ...PROJECT, callId: "detect.2", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).evidence as WebLlmRepeatingStructure;
+  assert.notEqual(second.extraction, first.extraction, "the redrawn list is detected under a new handle");
+  paged = true;
+  const again = (await read("read.2", second.extraction)).read as JsonObject;
+  assert.equal(again.listKey, unpaged.listKey, "and is the same list");
+  assert.equal(again.place, "page=4");
+});
+
 test("a list read a Flow would refuse is refused where it is written, naming why, and nothing is read (t869)", async () => {
   let reads = 0;
   const gateway: WebLlmEvidenceGateway = {
