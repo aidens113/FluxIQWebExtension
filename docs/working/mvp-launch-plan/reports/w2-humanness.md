@@ -242,3 +242,81 @@ The extension already sends `humanness`, when it is above 0, on `append-turn` (`
 - Live browser behaviour of the click aim, typing cadence, scroll dwell and misclicks: the real cursor, `:popover-open`, shadow DOM and real overlays. That is H5.
 - A run end to end from Core to the content script, and chat runs reaching Core node pauses (needs the lines above).
 - The `docs-reference.mjs --check` half of `pnpm docs:check`.
+
+## Checked point 4: receiving ends for chat runs, the interference export, and H5's Lab option (2026-11-11)
+
+### What changed
+- **The chat and explicit-run receiving ends (Core), granted.**
+  - `service/runtime-session/graph-options.ts`: `RunGraphOptionsInput.humanness`, copied into the graph options when set; absent adds no key.
+  - `service/answer-first/attempt/contracts.ts`: `AutomationStudioAnswerFirstAttemptInput.humanness?` (one type field; the flow-run ports input is a `Pick` of it, so this is its root). t897 did not touch this file.
+  - `flow-run/ports.ts`: Picks `humanness`.
+  - `flow-run/flow-run.ts`: a `const humanness = caller?.humanness ?? input.humanness` line plus the spread. That is one const and one edited line, because `exactOptionalPropertyTypes` cannot narrow the `??` inline. My first inline version failed the Core build with TS2375; the H5 worker found it and wrongly blamed another lane.
+  - These go live when the `service.ts` line puts `humanness` on the attempt input and the runtime-session input (serial behind t885).
+- **The interference export.** `outermostFixed` is exported from `content/action-runtime/interference/index.ts`, and H4's private copy in `humanness/misclick/open-layer.ts` is gone.
+- **H5 Lab option (worker, Sonnet).** `pnpm lab attempt ... --humanness <0-100>` is validated at parse time and passed in the settings of the Lab's `fluxiq.connect`. The background spreads those over the stored settings and normalises them, so the level is saved. Absent writes nothing. Files: `packages/test-runner/src/commands.ts`, `attempt-lane/live/run-attempt-command.ts`, `attempt-lane/live/attempt/session.ts`, and the test `attempt-lane/tests/lab-attempt-command.test.ts`.
+
+### H5 measurement: blocked, with its cause and how far it got
+- **Runs.** 8 provider-free runs went through the slot with `--priority`, with no guard refusals and no provider used. The detail is in `reports/w2-humanness/h5-lab.md`, Part 2.
+- **everything-store.** Its only provider-free script is built to fail (a wrong answer with a repeated act). Attempt 1 is "wrong" at every level (15-19 s, 10-11 scripted calls), so attempts 2-4 never run. Nothing about humanness can be judged from it.
+- **company-website-apprentices** (the stand-in for job-board, which has no provider-free script). It is refused at the baseline and at 0, 50 and 100: "expects no request 2 of kind loop_verification". That is script drift in a script file W2 does not own, and the baseline fails the same way, so humanness did not cause it.
+- **Not observable: the run records hold neither the level nor misclicks.**
+  - This is a gap in W2 against the decision "randomness comes from a seeded generator recorded in the step log".
+  - Core's seed and level are on the trace. But the page's choices come from the command id plus a level the action result never states.
+  - The step log therefore cannot show whether a command ran at 0 or 80, nor where a misclick landed.
+- **Timing.** No trend by level (page.click 188-268 ms at every level). That is consistent with aiming adding no time, and with these runs having little typing or scrolling, but it proves nothing until the level is recorded.
+
+### Proposal (needs your yes): record humanness on the action result
+- The content script's result for a command run above 0 carries `humanness: { level, aimed: true|false, misclick?: { x, y } }`. At 0, or with no level, nothing is added, so level-0 results stay byte-identical.
+- Files: the content verbs and `humanness/**` (W2's), the domain result type and `webAutomationActionResultPayload` in `domain/src/client/gateway-mapping.ts` (copy when present).
+- Core already stores the payload in the step files. I will confirm no strict reader drops or refuses it.
+- With that in place, H5 can count stamped commands and misclicks from the step files.
+- **Scripts.** H5 also needs a provider-free script that passes on each of the two sites. Fixing everything-store's deliberate failure, or company-website's drift, is in the Lab's scripts; route it to their owner, or grant me the two script files.
+
+### Validation (run by me)
+- `pnpm --filter fluxiq exec vitest run .../answer-first/flow-run/tests/humanness.test.ts .../runtime-session/tests/graph-options.test.ts` -> 2 files, 6 tests passed. Then the whole `answer-first/flow-run` directory plus graph-options -> 17 files, 92 tests passed.
+- `heavy-slot run t898 -- <Core library build>` after the TS2375 fix -> `CORE_BUILD_EXIT 0`.
+- Core `pnpm structure:check` -> passed (530 warnings, 969 baselined).
+- `test-extension.mjs content/action-runtime/humanness content/action-runtime/tests/actionability content/actions/tests/click` -> 123 of 123. Extension `node scripts/structure-audit.mjs` -> passed (245 warnings, 552 baselined).
+- H5 worker: test-runner build -> exit 0; `node --test` on lab-attempt-command and attempt/tests -> 19 of 19 (including `--humanness`). The Lab built the extension itself after the interference edit, and its build runs the extension typecheck.
+- Not run this round: a separate `pnpm --filter @fluxiq-web-extension/extension check` (the Lab's extension build covered the compile).
+
+## Checked point 5: the level recorded on action results, script drift fixed, H5 measured provider-free (2026-11-11)
+
+### What changed
+- **Recorded on the action result (worker, Sonnet).**
+  - Above level 0, click, type and scroll results carry `humanness: { level, aimed, misclick?: { x, y } }`: new `content/action-runtime/humanness/record-humanness.ts`, with hooks in `content/actions/{click,type,scroll}.ts` and `humanness/misclick/before.ts`.
+  - The domain result type has the field, and `webAutomationActionResultPayload` copies it when present.
+  - At level 0, or with no level, the results deep-equal today's, and tests hold that.
+  - **End to end in Core.** Nothing strict drops the payload field:
+    - `client-gateway/service/command-ledger/dispatch.ts:232-233` checks top-level keys only;
+    - the field is kept through `inbound.ts:160`, `action-result-reading.ts:43` and `io-policy.ts:53/126`.
+  - **But Core's step files do not show it for flow steps.** `runtime/llm/step-log/flow-step.ts` writes only `meta.json`. The field is visible only in the explore attempt's model-facing evidence, which means the model sees it. Routing needed, below.
+- **company-website-apprentices drift fixed (worker, Sonnet).** The cause was the fixture's size: the script held judge and chat replies for 1 attempt while the series runs 4. It now holds 4 chat and 8 judge replies, the judge's answer unchanged, so the oracle is untouched. Sibling scripts already size by series. The provider-free baseline passes 4/4 (run-mwbv3w5k-64e6d80e).
+- **H5 measured.** 8 provider-free runs (company-website and local-classifieds; baseline, 0, 50, 100; `--attempts 4`). Full table and reading in `reports/w2-humanness/h5-lab.md`, Part 3.
+  - All passed, 4/4 right, with continuation held and the same calls at every level.
+  - Level 0 matches the baseline, with no field.
+  - Scroll median: 321 / 339 / 735 / 1371 ms. Type median: 1311 / 1097 / 1929 / 3722 ms. Clicks on local-classifieds are unchanged.
+  - The field was recorded at 50 and 100, with 4-6 of 7-8 presses aimed.
+  - No misclicks: no step in these Flows declares an empty consequence list.
+  - No robot-check pauses added.
+  - Not explained yet, from single runs: company-website at level 100 had slower clicks and two long attempts, and local-classifieds at level 100 had one 43.6 s attempt. The machine was shared; a second series would tell.
+- **Supervisor's own correction.** The H5 measurement worker ended before its runs did, leaving its driver running unattended. I watched the driver to the end and read every run myself.
+
+### Routing needed (outside W2's paths)
+1. **Hide the record from the model:** add `"humanness"` to `PAGE_RECORD_KEYS` in `domain/src/runtime/llm-evidence/node-run/page-record.ts` (one word). Above level 0 the model now sees `humanness` in its press evidence, which is noise to it.
+2. **Record it for replays:** Core's `runtime/llm/step-log/flow-step.ts` should write the node result's `humanness` into the flow step's `meta.json`. Then every replay step records its level and choices, which the seeded-generator decision requires.
+3. **`service.ts`** after t885 (as planned): Core node pauses for chat and explicit runs.
+
+### Live run: approval asked
+- **Proposal:** one live series on company-website-apprentices, which passes provider-free.
+  - At `--humanness 0` and at `--humanness 100`, `--attempts 4`, with Claude Haiku. Each series is one build under the $5 Claude allowance; provider-free, attempt 1 used about $0.41 in stand-in pricing.
+  - It checks: the same verdicts and Flow at both levels, replays at 0 decision calls, the added time per step kind, and no robot-check pauses added.
+- **My recommendation: run it after the `service.ts` line,** so the live series also exercises Core node pauses. Running it now would measure the page side only.
+
+### Validation (run by me)
+- `cd domain && DOMAIN_TEST_BUILD_LABEL=t898-int node scripts/test-domain.mjs client/tests/gateway-mapping` -> 51 of 51.
+- `cd apps/extension && EXTENSION_TEST_BUILD_LABEL=t898-int node scripts/test-extension.mjs content/actions/tests/click content/actions/tests/humanness content/action-runtime/humanness` -> 126 of 126.
+- `test-extension.mjs content/action-runtime/humanness content/action-runtime/tests/actionability content/actions/tests/click` -> 123 of 123. Extension `node scripts/structure-audit.mjs` -> passed (245 warnings, 552 baselined).
+- 8 provider-free Lab runs through the slot with `--priority` -> all `"status":"passed"`, `allHeld: true`, run ids in h5-lab.md.
+- The record worker's own run: `test-extension.mjs content/actions/tests content/action-runtime/humanness` -> 277 of 277; domain gateway-mapping -> 51 of 51; audit passed. The script worker's run: the script test -> 5 of 5.
+- Package checks, one slot run back to back (`heavy-slot run t898 -- bash t898-checks.sh`): `pnpm --filter @fluxiq-web-extension/domain build` -> 0; `... domain check` -> 0; `... extension check` -> 0; `node scripts/structure-audit.mjs` -> passed (245 warnings, 552 baselined). Core is unchanged since checkpoint 4's build (exit 0).

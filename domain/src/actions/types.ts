@@ -598,6 +598,11 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   /** `web.dom.click` with `ensureState`: the target already showed that state, so nothing was pressed. */
   skipped?: "already_in_state" | undefined;
   /**
+   * Set only on a click, type or scroll run above humanness 0: the level it ran at, whether the press
+   * point came from the humanness aim, and the point of the one misclick made before the press. Absent at 0.
+   */
+  humanness?: { level: number; aimed: boolean; misclick?: { x: number; y: number } | undefined } | undefined;
+  /**
    * `web.dom.click` made in place: what the press changed about its own
    * control, read from the control just before and just after it
    * (`./toggle-signature/`), when it flipped one and the page stayed where it

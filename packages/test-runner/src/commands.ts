@@ -34,7 +34,7 @@ export type LabCommand =
   // `tracing: false` (`--no-tracing`) starts Core with client gateway tracing off, for the off-versus-on overhead measurement; absent, it is on as for every Lab Core.
   | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; variantId?: string; seed?: number; tracing?: false }
   // One attempt at a task from the real extension chat, scored on its answer: `lab attempt` (`attempt-lane/live/`). `model` is a scripted server (provider-free) or a live provider run.
-  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; dryRun?: true }
+  | { command: "attempt"; scenarioId: string; taskId: string; authoringMode: string; model: { kind: "scripted" } | { kind: "live"; llm: LlmExecutionProfile }; attempts: number; restartBetween?: true; humanness?: number; dryRun?: true }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
   | RecoveryMatrixCommand;
 
@@ -174,7 +174,10 @@ export function parseLabCommand(argv: string[]): LabCommand {
 export const DEFAULT_ATTEMPTS = 4;
 
 function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "attempt" }> {
-  rejectUnknownOptions(args, ["--task", "--scripted-model", "--dry-run", "--attempts", "--restart-between", ...llmOptionNames]);
+  rejectUnknownOptions(args, ["--task", "--scripted-model", "--dry-run", "--attempts", "--restart-between", "--humanness", ...llmOptionNames]);
+  const humannessGiven = option(args, "--humanness");
+  if (humannessGiven !== undefined && !/^(0|[1-9][0-9]?|100)$/u.test(humannessGiven)) throw new Error("lab attempt --humanness takes a whole number from 0 to 100: how human the extension acts in this run (0 is the extension's default, no human timing)");
+  const humanness = humannessGiven === undefined ? {} : { humanness: Number(humannessGiven) };
   const attemptsGiven = option(args, "--attempts");
   if (attemptsGiven !== undefined && !/^[1-9][0-9]{0,2}$/u.test(attemptsGiven)) throw new Error("lab attempt --attempts takes a whole number from 1 to 999: the exploring attempt and then the deterministic ones after it (default 4; 1 is diagnosis only and never passes)");
   const attempts = attemptsGiven === undefined ? DEFAULT_ATTEMPTS : Number(attemptsGiven);
@@ -183,7 +186,9 @@ function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "at
   const { dryRun, rest: withoutDryRun } = dryRunOption(withoutRestart);
   const { present: scripted, rest: withoutScripted } = flagOption(withoutDryRun, "--scripted-model");
   const attemptsAt = withoutScripted.indexOf("--attempts");
-  const rest = attemptsAt < 0 ? withoutScripted : [...withoutScripted.slice(0, attemptsAt), ...withoutScripted.slice(attemptsAt + 2)];
+  const withoutAttempts = attemptsAt < 0 ? withoutScripted : [...withoutScripted.slice(0, attemptsAt), ...withoutScripted.slice(attemptsAt + 2)];
+  const humannessAt = withoutAttempts.indexOf("--humanness");
+  const rest = humannessAt < 0 ? withoutAttempts : [...withoutAttempts.slice(0, humannessAt), ...withoutAttempts.slice(humannessAt + 2)];
   const scenarioId = positional(rest, 0, "scenario ID");
   const taskId = option(rest, "--task");
   if (taskId === undefined || !KEBAB_ID.test(taskId)) throw new Error("lab attempt requires --task with a lowercase kebab-case task ID");
@@ -194,12 +199,12 @@ function parseAttemptCommand(args: string[]): Extract<LabCommand, { command: "at
   if (scripted) {
     const present = llmOptionNames.filter((name) => name !== LAB_AUTHORING_MODE_FLAG && rest.includes(name));
     if (present.length > 0) throw new Error(`--scripted-model takes no LLM options, and ${present.join(", ")} is one`);
-    return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "scripted" }, attempts, ...(restartBetween ? { restartBetween: true as const } : {}), ...(dryRun ? { dryRun: true as const } : {}) };
+    return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "scripted" }, attempts, ...(restartBetween ? { restartBetween: true as const } : {}), ...humanness, ...(dryRun ? { dryRun: true as const } : {}) };
   }
   const named = [...rest, ...(rest.includes("--llm-profile") ? [] : ["--llm-profile", "lab-attempt"]), ...(rest.includes("--llm-task") ? [] : ["--llm-task", "create-flow"])];
   const llm = llmOptions(named)!;
   if (llm.task !== "create-flow") throw new Error("lab attempt starts from the extension's chat, which builds: --llm-task must be create-flow");
-  return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "live", llm }, attempts, ...(restartBetween ? { restartBetween: true as const } : {}), ...(dryRun ? { dryRun: true as const } : {}) };
+  return { command: "attempt", scenarioId, taskId, authoringMode: authoringMode!, model: { kind: "live", llm }, attempts, ...(restartBetween ? { restartBetween: true as const } : {}), ...humanness, ...(dryRun ? { dryRun: true as const } : {}) };
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {

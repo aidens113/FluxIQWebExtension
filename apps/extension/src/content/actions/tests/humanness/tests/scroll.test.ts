@@ -138,3 +138,12 @@ test("scrolling until the document stops growing dwells once, after the last pas
   assert.equal(human.steps.at(-1), "snapshot");
   assert.match(human.steps.at(-2) ?? "", /^timer:\d+$/u, "the dwell comes after the last growth poll and before the snapshot");
 });
+
+test("the scroll result records the level with aimed false above level 0, and nothing at 0 or with no level", async (t) => {
+  const absent = await scrollAction(command({ scroll: { mode: "by", y: 10 } }, {}), page(t, 0).deps, 5);
+  assert.equal("humanness" in absent, false);
+  const zero = await scrollAction(command({ scroll: { mode: "by", y: 10 } }, { humanness: 0 }), page(t, 0).deps, 5);
+  assert.deepEqual(zero, absent);
+  const human = await scrollAction(command({ scroll: { mode: "by", y: 10 } }, { humanness: 80, timeoutMs: 1_000 }), page(t, 0).deps, 5);
+  assert.deepEqual(human.humanness, { level: 80, aimed: false });
+});

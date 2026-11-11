@@ -60,13 +60,18 @@
 // no level, typing is the synchronous path it always was.
 
 import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
-import { commandHumanness, fitWithinCommand, typingGaps } from "../action-runtime/humanness";
+import { commandHumanness, recordHumanness, fitWithinCommand, typingGaps } from "../action-runtime/humanness";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 import { describeFieldValue } from "./value-redaction";
 
 export async function typeAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
+  // Above humanness 0 the result says so; no press is aimed here, so `aimed` is false (`recordHumanness`).
+  return recordHumanness(await typeActionResult(action, deps, startedAt), commandHumanness(action), false);
+}
+
+async function typeActionResult(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const text = action.text ?? action.value ?? "";
   const withheld = isWithinSensitiveControl(element);

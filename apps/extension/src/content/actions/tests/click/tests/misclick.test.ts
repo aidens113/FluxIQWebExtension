@@ -82,3 +82,16 @@ test("only the marked command looks for an inert point; unmarked at 100 there is
   assert.ok(marked.hitTests > plain.hitTests, "the marked command looked for an inert point");
   assert.deepEqual(plain.on("main"), []);
 });
+
+test("the result records a misclick's point, and the level, only on a command that made one", async (t) => {
+  const marked = await clickOnPage(t, { ...CLICK, commandId: MISCLICKS, humanness: 100, humannessMisclick: true });
+  const [miss] = marked.on("main");
+  assert.ok(miss);
+  assert.deepEqual(marked.result.humanness?.misclick, { x: miss.x, y: miss.y });
+  assert.equal(marked.result.humanness?.level, 100);
+  const plain = await clickOnPage(t, { ...CLICK, commandId: MISCLICKS, humanness: 100 });
+  assert.equal(plain.result.humanness?.level, 100);
+  assert.equal("misclick" in (plain.result.humanness ?? {}), false);
+  const zero = await clickOnPage(t, { ...CLICK, commandId: MISCLICKS, humannessMisclick: true });
+  assert.equal("humanness" in zero.result, false);
+});

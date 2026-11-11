@@ -70,7 +70,7 @@ import {
   type WebAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
 import type { ActionabilityReport } from "../action-runtime";
-import { commandHumanness, fitWithinCommand, pauseFor, scrollDwellMs, type CommandHumanness } from "../action-runtime/humanness";
+import { commandHumanness, recordHumanness, fitWithinCommand, pauseFor, scrollDwellMs, type CommandHumanness } from "../action-runtime/humanness";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
@@ -123,6 +123,11 @@ function issueText(issue: WebAutomationScrollRequestIssue): string {
 }
 
 export async function scrollAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
+  // Above humanness 0 the result says so; no press is aimed here, so `aimed` is false (`recordHumanness`).
+  return recordHumanness(await scrollActionResult(action, deps, startedAt), commandHumanness(action), false);
+}
+
+async function scrollActionResult(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   try {
     const request = action.scroll;
     // Sent, but not read as a request (header): refused before anything moves.

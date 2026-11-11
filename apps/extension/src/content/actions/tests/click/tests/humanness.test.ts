@@ -152,3 +152,31 @@ test("at level 80 a press made once more is aimed again inside the box, with the
   const again = await pressButton(t, { level: 80, commandId: "cmd-twice", seen: [] });
   assert.deepEqual(pressPoints(again.pressed), points, "both presses reproduce from the command id");
 });
+
+test("the result records the humanness only above level 0: none at 0 or with no level, and the level and the aim at 80", async (t) => {
+  const absent = await pressButton(t, { geometry: false });
+  const zero = await pressButton(t, { level: 0, geometry: false });
+  assert.equal("humanness" in absent.result, false);
+  assert.equal("humanness" in zero.result, false);
+  assert.deepEqual(zero.result, absent.result, "a result at level 0 is the result with no level");
+  const human = await pressButton(t, { level: 80, commandId: "cmd-recorded" });
+  const [point] = pressPoints(human.pressed);
+  assert.ok(point);
+  const aimed = point.x !== CENTRE.x || point.y !== CENTRE.y;
+  assert.deepEqual(human.result.humanness, { level: 80, aimed });
+  assert.equal(aimed, true, "this command id aims off the centre");
+});
+
+test("a press a badge forces back to the gate's point records aimed false", async (t) => {
+  let unaimed = 0;
+  for (let index = 0; index < 40; index += 1) {
+    const { result, pressed } = await pressButton(t, { level: 100, commandId: `cmd-${index}`, badge: true });
+    const [point] = pressPoints(pressed);
+    assert.equal(result.humanness?.level, 100);
+    if (point?.x === CENTRE.x && point.y === CENTRE.y) {
+      assert.equal(result.humanness?.aimed, false);
+      unaimed += 1;
+    } else assert.equal(result.humanness?.aimed, true);
+  }
+  assert.ok(unaimed > 0, "no drawn point was refused");
+});

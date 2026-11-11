@@ -20,8 +20,8 @@
 
 import { isExtensionUiNode } from "../../../picker-host";
 import { deepElementFromPoint } from "../../../selector";
-import { composedParent, composedRoots, queryComposed } from "../../../shadow-dom";
-import { overlaysOverPage, probePoints } from "../../interference";
+import { composedRoots, queryComposed } from "../../../shadow-dom";
+import { outermostFixed, overlaysOverPage, probePoints } from "../../interference";
 
 /** Layers a page declares, open when painted. */
 const DECLARED_LAYER = 'dialog[open], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [aria-modal="true"]';
@@ -64,29 +64,13 @@ function coveringLayerAtProbe(document: Document): boolean {
   for (const point of probePoints(view.innerWidth, view.innerHeight)) {
     const hit = deepElementFromPoint(point.x, point.y, document);
     if (!hit || isExtensionUiNode(hit)) continue;
-    const layer = outermostFixedLayer(hit);
+    const layer = outermostFixed(hit);
     if (!layer) continue;
     const box = layer.getBoundingClientRect();
     const shown = Math.max(0, Math.min(box.right, view.innerWidth) - Math.max(box.left, 0)) * Math.max(0, Math.min(box.bottom, view.innerHeight) - Math.max(box.top, 0));
     if (area > 0 && shown / area >= COVERING_SHARE) return true;
   }
   return false;
-}
-
-/**
- * The outermost fixed or sticky ancestor-or-self below `<body>`, walked across
- * shadow roots: the walk `outermostFixed` in `../../interference/overlays.ts`
- * makes, which that directory's barrel does not export.
- */
-function outermostFixedLayer(element: Element): Element | undefined {
-  const view = element.ownerDocument.defaultView;
-  if (!view) return undefined;
-  let found: Element | undefined;
-  for (let current: Element | null = element; current && current !== element.ownerDocument.body && current !== element.ownerDocument.documentElement; current = composedParent(current)) {
-    const position = view.getComputedStyle(current).position;
-    if (position === "fixed" || position === "sticky") found = current;
-  }
-  return found;
 }
 
 /** Whether the element has a box on screen and is not hidden. */

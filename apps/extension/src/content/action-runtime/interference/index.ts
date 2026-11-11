@@ -35,7 +35,7 @@ export { runOpenedLayers } from "./run-opened";
 export { coveringLayerOf, coveringLayerSentence } from "./covering-layer";
 export { controlRefOf, genericLayerKind, layerId, layerObstruction, layerWaysOut, type LayerWayOut } from "./obstruction";
 export { wayOutIntent, type WayOutIntent } from "./way-out";
-export { overlaysAt, overlaysOverPage } from "./overlays";
+export { outermostFixed, overlaysAt, overlaysOverPage } from "./overlays";
 export { probePoints } from "./probe-points";
 export { boundedLayerText } from "./layer-text";
 export { layerKind } from "./layer-kind";

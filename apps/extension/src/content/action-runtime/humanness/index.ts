@@ -16,6 +16,7 @@ export { fitWithinCommand } from "./fit-within-command";
 export { inertHitAt, isInteractiveElement, misclickBefore, misclickChance, misclickPoint, misclickRandom, pageHasOpenLayer } from "./misclick";
 export { pauseFor } from "./pause-for";
 export { pointNearCentre } from "./point-near-centre";
+export { recordHumanness, type HumannessRecord } from "./record-humanness";
 export { scrollDwellMs } from "./scroll-dwell";
 export { skewedDelayMs } from "./skewed-delay";
 export { standardNormal } from "./standard-normal";

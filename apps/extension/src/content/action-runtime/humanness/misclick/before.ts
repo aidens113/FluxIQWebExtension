@@ -56,8 +56,8 @@ type MisclickCommand = {
 
 type Box = { left: number; top: number; right: number; bottom: number };
 
-/** `none`: no misclick. `made`: one, and the page is as it was. `moved`: one, and the target or the page changed, so the press is measured again. */
-export async function misclickBefore(target: Element, action: MisclickCommand, startedAt: number): Promise<"none" | "made" | "moved"> {
+/** `onMisclick` is told the point of the misclick made, when one was. `none`: no misclick. `made`: one, and the page is as it was. `moved`: one, and the target or the page changed, so the press is measured again. */
+export async function misclickBefore(target: Element, action: MisclickCommand, startedAt: number, onMisclick?: (point: { x: number; y: number }) => void): Promise<"none" | "made" | "moved"> {
   if (action.humannessMisclick !== true) return "none";
   const human = commandHumanness(action);
   if (!human) return "none";
@@ -69,6 +69,7 @@ export async function misclickBefore(target: Element, action: MisclickCommand, s
   if (!found) return "none";
   const before = boxOf(target);
   dispatchClickGesture(found.hit, found.point);
+  onMisclick?.(found.point);
   const [pause = 0] = fitWithinCommand([NOTICE_MIN_MS + random() * NOTICE_SPAN_MS], action, startedAt);
   await pauseFor(pause);
   return target.isConnected && sameBox(before, boxOf(target)) && !pageHasOpenLayer(document) ? "made" : "moved";

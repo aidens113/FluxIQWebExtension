@@ -182,7 +182,7 @@ import type {
 } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import { portableActionability } from "../action-runtime/actionability/index";
-import { aimPress, commandHumanness, misclickBefore } from "../action-runtime/humanness";
+import { aimPress, commandHumanness, misclickBefore, recordHumanness } from "../action-runtime/humanness";
 import { toggleReadingOf } from "./toggle-reading";
 import type { ContentActionDependencies } from "./types";
 
@@ -290,6 +290,11 @@ type PressOutcome = {
 
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
+  // Above humanness 0 every result says so (`recordHumanness`); at 0 it is returned as it was.
+  const human = commandHumanness(action);
+  let aimedPoint = false;
+  let misclickAt: { x: number; y: number } | undefined;
+  const mark = <R extends object>(result: R): R => recordHumanness(result, human, aimedPoint, misclickAt);
   let measured: ActionabilityReport | undefined;
   const measure = (): ActionabilityReport => (measured = deps.checkActionability(liveTarget(element, action, deps)));
   const evidence = (): ActionResultEvidence => ({
@@ -301,21 +306,23 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   // A target that already shows the state this press is meant to bring is not pressed: a toggle step is safe to run again (t775).
   if (action.ensureState && webToggleSignatureShown(action.ensureState, toggleReadingOf(element, deps.describeElement(element)))) {
-    return alreadyInState(action, deps, startedAt, evidence());
+    return mark(alreadyInState(action, deps, startedAt, evidence()));
   }
 
   const gate = measure();
   if (!gate.actionable) {
-    return deps.rejected(action, startedAt, gate.code, "a target that can be clicked", gate.detail, { ...evidence(), blockedAt: gate.point, target: element, refusedBeforeDispatch: true });
+    return mark(deps.rejected(action, startedAt, gate.code, "a target that can be clicked", gate.detail, { ...evidence(), blockedAt: gate.point, target: element, refusedBeforeDispatch: true }));
   }
   // Above humanness 0, aimed near the centre where the gate accepts it (header); at 0, the gate's point.
-  const human = commandHumanness(action);
-  const aimed = human ? (aimPress(element, gate, human) ?? gate) : gate;
+  const aimedReport = human ? aimPress(element, gate, human) : undefined;
+  const aimed = aimedReport ?? gate;
+  aimedPoint = aimedReport !== undefined;
   // On a marked command, perhaps one misclick beside the target first; measured again if it changed anything (header).
-  const misclick = human && action.humannessMisclick === true ? await misclickBefore(element, action, startedAt) : "none";
+  const misclick = human && action.humannessMisclick === true ? await misclickBefore(element, action, startedAt, (point) => (misclickAt = point)) : "none";
   const report = misclick === "moved" ? measure() : aimed;
+  if (misclick === "moved") aimedPoint = false;
   if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true });
+    return mark(deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true }));
   }
   const aimAgain: AimAgain | undefined = human ? (target, now) => aimPress(target, now, human)?.point ?? gate.point : undefined;
 
@@ -324,7 +331,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     // What the press changes about its own control, read around it (header, t787).
     const before = toggleReadingOf(element, deps.describeElement(element));
     const address = element.ownerDocument.location.href;
-    return withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence, measure, aimAgain), { element, before, address, deps });
+    return mark(withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence, measure, aimAgain), { element, before, address, deps }));
   }
 
   const document = element.ownerDocument;
@@ -338,7 +345,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     });
     const after = document.location.href;
     const validation = await linkValidation(link.href, before, after, accepted, watch, inPlaceWindowMs(action));
-    return deps.success(action, startedAt, "Element clicked.", validation, evidence());
+    return mark(deps.success(action, startedAt, "Element clicked.", validation, evidence()));
   } finally {
     watch?.stop();
   }

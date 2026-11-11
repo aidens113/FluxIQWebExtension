@@ -101,3 +101,22 @@ test("the same command id plans the same gaps, and a short command's gaps are sc
   assert.ok(total <= 40, `a 100 ms command was planned ${total} ms of pauses`);
   assert.equal(short.calls[0]?.gaps?.length, 6, "scaled, not dropped");
 });
+
+test("the typed result records the level with aimed false above level 0, and nothing at 0 or with no level", async (t) => {
+  const typeAction = await installPlatform(t);
+  const record = async (command: Partial<BrowserActionCommand>): Promise<BrowserActionResult> => {
+    const deps = {
+      resolveTarget: () => ({ element: field(), resolution: {} }),
+      checkActionability: () => ({ actionable: true, point: { x: 4, y: 4 }, detail: "" }),
+      describeElement: () => ({}),
+      captureSnapshot: () => ({}),
+      keyboard: { typeText: (target: { value: string }, text: string) => { target.value = text; }, pressKey: () => ({ held: true }) },
+      success: (action: BrowserActionCommand, startedAt: number, _m: string, validation: BrowserActionValidation): BrowserActionResult => ({ commandId: action.commandId, actionType: action.actionType, status: "succeeded", validation, startedAt, finishedAt: startedAt })
+    } as unknown as ContentActionDependencies;
+    return typeAction({ commandId: "cmd-type", actionType: "web.dom.type", text: "napkins", ...command } as BrowserActionCommand, deps, 5);
+  };
+  const absent = await record({});
+  assert.equal("humanness" in absent, false);
+  assert.deepEqual(await record({ humanness: 0 }), absent);
+  assert.deepEqual((await record({ humanness: 80, timeoutMs: 100 })).humanness, { level: 80, aimed: false });
+});
