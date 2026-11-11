@@ -90,6 +90,8 @@ function whyTheReadFellShort(summary: WebAutomationExtractionSummary): WebLlmToo
   if (summary.listPresence === undefined && summary.itemsSeen === 0) return "list_never_appeared";
   const conditions = summary.conditions;
   if (conditions !== undefined && conditions.applied > 0 && conditions.kept === 0) return "conditions_kept_nothing";
+  // Rows there and not shown (t903): no read takes them until something shows them.
+  if (summary.recordCount === 0 && summary.notRenderedItems !== undefined && summary.notRenderedItems > 0) return "items_not_rendered";
   if (summary.recordCount === 0) {
     // A wait that ended on anything but the list arriving, with nothing read,
     // is the 2026-09-25 regression's own shape and the one a late page still
@@ -101,10 +103,7 @@ function whyTheReadFellShort(summary: WebAutomationExtractionSummary): WebLlmToo
   }
   // Rows found and every one of them empty: the selector named the list and the
   // fields are being read off the wrong element inside it.
-  // ... unless the rows are empty because their items are not shown at all (t903): no field change helps, showing them does.
-  if (summary.emptyRecords !== undefined && summary.emptyRecords === summary.recordCount) {
-    return summary.notRenderedItems !== undefined && summary.notRenderedItems >= summary.recordCount ? "items_not_rendered" : "records_have_no_fields";
-  }
+  if (summary.emptyRecords !== undefined && summary.emptyRecords === summary.recordCount) return "records_have_no_fields";
   if (summary.missingFields.length > 0) return "required_fields_missing";
   // Rows, whole, and not enough of them -- which is the only shortfall left
   // once the post-condition failed and nothing above explains it.

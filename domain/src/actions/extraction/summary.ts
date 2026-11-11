@@ -65,9 +65,9 @@ export type WebAutomationExtractionSummary = {
   emptyRecords?: number | undefined;
   /**
    * Items the read named that the browser did not render -- inside a closed
-   * menu, panel or tab -- sent only when there were any (t903). With
-   * `emptyRecords` equal to `recordCount`, it says the rows are empty because
-   * they are not shown, not because the fields name the wrong element.
+   * menu, panel or tab -- and so did not read, sent only when there were any
+   * (t903). With no record read, it says the rows are there and not shown,
+   * rather than that the list is missing.
    */
   notRenderedItems?: number | undefined;
   /** Whether a cap -- the item bound or the page bound -- cut the read short. */

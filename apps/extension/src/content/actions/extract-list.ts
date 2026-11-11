@@ -275,8 +275,11 @@ function validationFor(outcome: Outcome, minimum: { minItems: number; onPage: bo
   if (!short && outcome.missingFields.length === 0 && !everyRecordEmpty(outcome)) {
     return { status: "passed", expected, actual: `${readSummary(outcome, paginate)}; ${gap ?? "every declared field present"}` };
   }
+  const hidden = outcome.notRenderedItems ?? 0;
   const shortfalls = [
     ...(short ? [onPage ? `fewer than the ${count(minItems, "item")} required on the page` : `fewer than the ${minItems} required`] : []),
+    // Items the list holds that the page does not show are not read (t903), and are said, never answered empty.
+    ...(short && hidden > 0 ? [`${count(hidden, "item")} of the list ${hidden === 1 ? "is" : "are"} not shown on the page: inside something closed, which a hover or a click on what opens it may show`] : []),
     ...(outcome.missingFields.length > 0 ? [`required fields missing from some records: ${outcome.missingFields.join(", ")}`] : []),
     ...(gap ? [gap] : [])
   ];
@@ -300,10 +303,7 @@ function recordGap(outcome: Outcome): string | undefined {
   const rows = `${count(incomplete, "record")} short of a declared field`;
   const empty = outcome.emptyRecords ?? 0;
   const whole = empty > 0 && everyRecordEmpty(outcome)
-    ? (outcome.notRenderedItems ?? 0) >= outcome.records.length
-      // Hidden items read nothing whatever their fields are (t903).
-      ? ", and every returned record is empty because its item is not shown on the page: it sits inside something closed, and a hover or a click on what opens it may show it"
-      : ", and every returned record is empty, so the fields were read off the wrong element"
+    ? ", and every returned record is empty, so the fields were read off the wrong element"
     : "";
   return blank.length === 0 ? `${rows}${whole}` : `${rows}, blank in ${blank.join(", ")}${whole}`;
 }

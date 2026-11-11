@@ -355,7 +355,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const repeatsSoFar = (): number | undefined => (pageByPage && repeatsBefore !== undefined ? repeatsBefore + earlierPageRepeats : undefined);
   const earlierPages = pageByPage || resume ? new Set(records.map((record) => contentKey(record, fields))) : undefined;
   const keyOf = (itemRead: ItemRead): string => (contentAware ? contentKey(itemRead.record, fields) : "");
+  // An item the page does not show has not arrived for a reader (`item-record/rendered-item.ts`, t903).
   const hasUnreadItem = (): boolean => Array.from(document.querySelectorAll(item)).some((element) => {
+    if (!isRenderedItem(element)) return false;
     const seen = read.get(element);
     return seen === undefined || (contentAware && seen !== keyOf(readRecord(element, fields, "visible")));
   });
@@ -584,6 +586,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // read are still the answer. A row that faulted is remembered so a
       // re-queried document does not fault on it again and again.
       if (faultedItems.has(element)) continue;
+      // An item the page does not show is not read, nor marked read: a person opens what holds it first, and
+      // once it shows, this same read takes it. One still hidden at the end is counted, never answered empty (t903).
+      if (!isRenderedItem(element)) continue;
       try {
         const seen = read.get(element);
         if (seen !== undefined && !contentAware) continue;

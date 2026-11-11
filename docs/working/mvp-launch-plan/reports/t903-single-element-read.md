@@ -7,6 +7,80 @@ Second round per the coordinator's message: F5 hover (grants: one branch in
 `content/actions/execute.ts`, one entry in `panel/copy/step-copy.ts`), the list reader's
 answer for a not-rendered element, and the close-match cap in page search.
 
+## Round 3: the not-rendered rule re-proved on the ten sites
+
+Requested: re-prove the ten realistic sites' honest browser paths and every content-harness read
+spec, provider-free; fix any read that loses rows a person can see; build the domain dist and
+get the extension check to exit 0.
+
+### What changed in this round (uncommitted on top of a111d62cd)
+
+Two would-be regressions of round 2's rule, both rows a person can see, fixed at the root:
+- **A select's options.** `checkVisibility()` is false for an `<option>` (it has no box; its
+  select draws it), so a read of `select option` rows read nothing. Found by
+  `extract-list-sensitive.spec.ts` (bigbox account-recovery). An option now counts as shown when
+  its select does.
+- **Items with no box of their own** (`display: contents` wrappers, a `visibility: hidden` row
+  whose cells say `visible`). The item counts as shown when it or anything inside it is rendered.
+  No site in the specs hit this; fixed because a person sees such rows.
+- **Hidden items are no longer read as empty records.** Round 2 made an unrendered item a record
+  of nulls and marked it read, so if it showed later in the same read (a list behind a passing
+  check) it was never read again. Now the reader skips it unread
+  (`content/extraction/list-reader.ts`), its "has an unread item" waits ignore it, and it is
+  counted (`notRenderedItems`). `item-record/read-record.ts` is back to the dev base exactly. A
+  read that took no row while the list's items are there but hidden says so
+  (`items_not_rendered`, with "a hover or a click" next; `domain/.../read-shortfall.ts`, and the
+  content validation's shortfall line).
+- Tests: `item-record/tests/rendered-item.test.ts` (option, no-box item, browser's word),
+  `extraction/tests/list-reader.test.ts` (a hidden item is not read, not answered empty, and is
+  counted), `domain/.../read-shortfall-not-rendered.test.ts` (reason on zero rows only).
+
+### Per-site table
+
+The breadth proofs (t885's `breadth-prep.md`, same patterns and files) read with Playwright's
+own `textContent` in scenario-lab's step runner, never the extension, so they prove the sites
+and oracles but cannot show this rule. The product's reader is exercised by the content-harness
+specs, all of which were run (255 tests).
+
+| site | breadth proof (pattern -> result) | content-harness read specs (final run) | rows a person can't see met |
+| --- | --- | --- | --- |
+| everything-store | "sweeps all five pages" -> pass 1, fail 0 | extraction specs (cart, cart names, extraction, next page, catalog, item conditions, list completeness, pagination, record schema, structure detection, continuation) -> all pass | none |
+| crossborder-marketplace | "follow-official-store" -> pass 3, fail 0 | crossborder-next-page-person, spain-hubs live task, one-element-read (follow-official-store, oracle reached via hover), hover x2 -> pass; answer-real-rows -> fail at the chat after its row read passed (chat UI, not a read) | yes, intended: the account menu's "Followed stores" line (CSS-hover flyout) is not read until a hover opens it |
+| bigbox-retail | "checkout quote" -> pass 2, fail 0 | extract-list-sensitive (5) -> pass after the option fix; cart column labels -> pass | none hidden; the select-option rows were the regression found and fixed |
+| job-board | "recorded remote search" -> pass 1, fail 0 (t885 recorded 3 for this pattern; I did not trace the difference, and this proof does not touch the reader) | job-board-listing, part-run (5, after the e2e build) -> pass | none |
+| local-classifieds | "test-ride question" -> pass 2, fail 0 | bike-search live task -> pass | none |
+| auction-marketplace | "Mark II sellers" -> pass 3, fail 0 | kestrel-auctions live task -> pass | none |
+| photo-social | "priya-tags" -> pass 2, fail 0 | photo-social grid-paused, unopened-replies -> pass; thread-load-more 2 of 4 fail (Next page ends `list_unchanged`) -> **fail identically on the dev base** | none |
+| social-network-feed | "suggested" -> pass 2, fail 0 | social-kept-row-disclosure, social-read-completion, social-read-discloses-kept -> pass | none |
+| company-website | "saturday-certificate" -> pass 3, fail 0 | company-definition-fields -> pass; answer-kinds-company-website -> fail on Core's "Run again" chat wording (chat UI, not a read) | none |
+| professional-network | "contact" -> pass 2, fail 0 | rotterdam live task: 7 of 9 pass; the security-check page-2 read (stops at page 1, 10 rows) and the upsell-still-open check -> **fail identically on the dev base** | none |
+
+Baseline proof: `t903-baseline.sh` swapped every extension source file this lane changed back to
+the dev base (`HEAD~1`; "0 files differ from base"), ran
+`photo-social-thread-load-more` and `professional-network-rotterdam` inside one slot hold, and
+restored. Result on the base: the same 4 tests fail, 8 pass. **Incident:** the script's restore ran
+after a `cd`, so its relative paths wrote into a stray `apps/extension/apps/`. I stopped the queued
+suite before it built, restored every file from the saved copies, deleted the stray directory,
+and re-verified (typecheck clean, 890 unit tests pass, audit passes) before the final suite ran.
+
+### Commands and results (round 3)
+
+- `heavy-slot run t903 -- pnpm --filter @fluxiq-web-extension/domain build` -> exit 0.
+- `heavy-slot run t903 -- pnpm --filter @fluxiq-web-extension/extension check` -> **exit 0** with
+  the dist built (`extension:check` stored, no TS errors). Final re-run after round 3 -> **exit 0**.
+- `heavy-slot run t903 -- pnpm --filter @fluxiq-web-extension/domain check` (after round 3) -> exit 0.
+- `heavy-slot run t903 -- sh t903-breadth.sh` (scenario-lab:build restored from cache, then the ten
+  breadth proofs) -> every proof `# fail 0`, per the table.
+- `heavy-slot run t903 -- pnpm test:e2e:build` -> exit 0; then `pnpm test:content -- e2e/content/tests/part-run` -> 5 passed.
+- `heavy-slot run t903 -- pnpm test:content -- <extraction, list-states, live-tasks, offline-reads,
+  one-element-read, part-run, answer-turn, hover, actions.spec, identity, large-page-resolution,
+  actionability, selectors>` -> first run 243 passed, 12 failed (5 part-run without the e2e build,
+  the option regression, 4 base failures, 2 chat UI); final run after the fixes **249 passed, 6
+  failed**: the 4 that fail on the base and the 2 chat-UI assertions.
+- Narrow: extension `src/content/extraction src/content/actions/tests src/content/action-runtime/tests`
+  -> 890 pass; domain `actions/extraction llm-evidence/action-failure llm-evidence/rejection-next
+  llm-evidence/tests` -> 362 pass; structure audit -> passed.
+
 ## Core files edited
 
 None. Web nodes are declared by the domain's registry, so hover needed no Core change, and
