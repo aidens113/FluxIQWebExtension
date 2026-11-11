@@ -294,6 +294,8 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" }, submit: { type: "boolean", label: "Then send the field's form, as Enter does" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
+  // Points at its element without pressing it (t903, `output-nodes/hover/`).
+  { actionType: "web.dom.hover", label: "Hover", description: "Point at a DOM element without pressing it, showing what opens on hover.", parameterSchema: selectorSchema },
   {
     actionType: "web.dom.select",
     label: "Select Option",

@@ -59,13 +59,23 @@ test("hidden, off-page and below-the-fold elements are found, each saying where 
   ]);
 });
 
-test("words are cut at eighty characters, and a long matching value is shown as a window around the match", () => {
+test("a match prints its words and the value that matched whole, never cut (t903)", () => {
   const long = `${"word ".repeat(30)}end`;
   const href = `https://shop.test/${"a".repeat(80)}/needle/${"b".repeat(80)}`;
   const found = webLlmFindOnPage(page([{ target: "t1", tag: "a", name: long, href, box: BOX }]), "needle", 0).found;
-  const line = lines(found)[1]!;
-  assert.match(line, /^t1 link "(?:word ){16}…" \(href="…a+\/needle\/b+…"\) on screen$/u);
-  assert.ok(line.length < 260, line);
+  assert.equal(lines(found)[1], `t1 link "${long}" (href="${href}") on screen`);
+});
+
+test("a hidden line only the search can show is printed to its last word (run-mwbkuxqt-c57f42cb)", () => {
+  const line = "Followed stores: Northwind Global Store; Lakeside Accessories; Harbour Official Store; Summit Official Store";
+  const found = webLlmFindOnPage(page([
+    { target: "t1297", tag: "p", text: line, ownText: line, attributes: [["data-testid", "followed-stores"]], hidden: true }
+  ]), "followed stores", 0).found;
+  assert.equal(lines(found)[1], `t1297 p "${line}" not rendered`);
+  const close = webLlmFindOnPage(page([
+    { target: "t1297", tag: "p", text: line, ownText: line, hidden: true }
+  ]), "stores followed", 0).found;
+  assert.ok(close.includes(`"${line}"`), close);
 });
 
 test("fifty matches to a page, in page order, and the last line says how to ask for the next fifty", () => {
@@ -171,17 +181,22 @@ test("close matching ignores case, punctuation, plural endings and short stop wo
   ]);
 });
 
-test("close matches are capped, deterministic, and shown only once the exact matches are exhausted", () => {
-  const many = Array.from({ length: 30 }, (_, index): WebLlmEvidenceElement => ({ target: `t${index + 1}`, tag: "a", name: `Blue Ceramic Mug ${index + 1}`, href: `https://shop.test/p/${index}`, box: BOX }));
+test("every close match is answered, after the exact ones, in the search's own pages of fifty (t903)", () => {
+  const many = Array.from({ length: 70 }, (_, index): WebLlmEvidenceElement => ({ target: `t${index + 1}`, tag: "a", name: `Blue Ceramic Mug ${index + 1}`, href: `https://shop.test/p/${index}`, box: BOX }));
   const first = webLlmFindOnPage(page(many), "Large Blue Ceramic Mug", 0).found;
   assert.equal(first, webLlmFindOnPage(page(many), "Large Blue Ceramic Mug", 0).found);
-  const near = lines(first).filter((line) => line.includes(" near, "));
-  assert.equal(near.length, 10);
-  assert.equal(near[0], "t1 link \"Blue Ceramic Mug 1\" near, lacks \"Large\" on screen");
-  assert.match(first, /^20 more close matches not shown; search fewer words to narrow them\.$/mu);
+  assert.equal(lines(first).filter((line) => line.includes(" near, ")).length, 50);
+  assert.ok(lines(first).includes("70 close matches, holding most or part of those words but not as written:"), first);
+  assert.equal(lines(first).at(-1), "… 20 more: web.find_on_page {\"query\":\"Large Blue Ceramic Mug\",\"after\":50}");
+  assert.equal(first.includes("not shown"), false, "no close match is only counted");
+  const second = lines(webLlmFindOnPage(page(many), "Large Blue Ceramic Mug", 50).found);
+  assert.equal(second[1], "70 close matches, continued, holding most or part of those words but not as written:");
+  assert.equal(second.filter((line) => line.includes(" near, ")).length, 20);
+  assert.equal(second.at(-1), "t70 link \"Blue Ceramic Mug 70\" near, lacks \"Large\" on screen");
   const exact = Array.from({ length: 60 }, (_, index): WebLlmEvidenceElement => ({ target: `e${index + 1}`, tag: "button", name: `Mug rack ${index + 1}`, box: BOX }));
   const mixed = [...exact, { target: "n1", tag: "a", name: "Rack for a mug", href: "https://shop.test/p/rack", box: BOX }];
   assert.ok(!webLlmFindOnPage(page(mixed), "mug rack", 0).found.includes(" near, "), "the first page of exact matches has no close ones");
+  assert.match(webLlmFindOnPage(page(mixed), "mug rack", 0).found, /^… 11 more: /mu);
   assert.match(webLlmFindOnPage(page(mixed), "mug rack", 50).found, /^n1 link "Rack for a mug" near, holds every word on screen$/mu);
   assert.deepEqual(lines(webLlmFindOnPage(page(mixed), "mug", 0).found).filter((line) => line.includes(" near, ")), [], "a one-word query has no close matches");
 });

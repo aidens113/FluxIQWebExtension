@@ -24,7 +24,7 @@ import { createWebAutomationOutputNodeDefinition, webAutomationOutputNodeDefinit
 const nodes = webAutomationOutputNodeDefinitions;
 
 test("only canonical shared selector and element descriptors authorize target refresh", () => {
-  const singleControl = new Set(["web.dom.click", "web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.scroll", "web.dom.keypress", "web.dom.wait_for_selector", "web.dom.extract", "web.dom.check", "web.dom.assert", "web.dom.upload"]);
+  const singleControl = new Set(["web.dom.click", "web.dom.hover", "web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.scroll", "web.dom.keypress", "web.dom.wait_for_selector", "web.dom.extract", "web.dom.check", "web.dom.assert", "web.dom.upload"]);
   for (const node of nodes) {
     const output = node.outputAction?.fixedOutputId ?? "";
     assert.deepEqual(node.parameters.filter((parameter) => parameter.targetRefresh === true).map((parameter) => parameter.id).sort(), singleControl.has(output) ? ["element", "selector"] : [], output);
@@ -35,7 +35,7 @@ test("only canonical shared selector and element descriptors authorize target re
 });
 
 /** The outputs with catalog text of their own (`../definitions.ts`, `catalogTextByOutput`). */
-const CATALOG_TEXT_OUTPUTS: readonly WebAutomationActionType[] = ["web.dom.extract_list", "web.dom.next_page", "web.dom.extract"];
+const CATALOG_TEXT_OUTPUTS: readonly WebAutomationActionType[] = ["web.dom.extract_list", "web.dom.next_page", "web.dom.extract", "web.dom.hover"];
 
 // t439: Core reads which saved steps must declare off each node's definition,
 // and must read the same rule the domain's own gate applies.
@@ -194,6 +194,7 @@ test("element targeting is declared by exactly the actions that cannot run witho
     "web.dom.clear",
     "web.dom.click",
     "web.dom.extract",
+    "web.dom.hover",
     "web.dom.select",
     "web.dom.type",
     "web.dom.upload",

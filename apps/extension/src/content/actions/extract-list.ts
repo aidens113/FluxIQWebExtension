@@ -173,6 +173,7 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
     fieldNames: [...fieldNames],
     ...(outcome.itemsSeen === undefined ? {} : { itemsSeen: outcome.itemsSeen }),
     ...(outcome.emptyRecords === undefined ? {} : { emptyRecords: outcome.emptyRecords }),
+    ...(outcome.notRenderedItems === undefined ? {} : { notRenderedItems: outcome.notRenderedItems }),
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
     // `seen` is the one page value here, one per condition and cut to 60 characters (`extraction/item-filter.ts`).
@@ -274,8 +275,11 @@ function validationFor(outcome: Outcome, minimum: { minItems: number; onPage: bo
   if (!short && outcome.missingFields.length === 0 && !everyRecordEmpty(outcome)) {
     return { status: "passed", expected, actual: `${readSummary(outcome, paginate)}; ${gap ?? "every declared field present"}` };
   }
+  const hidden = outcome.notRenderedItems ?? 0;
   const shortfalls = [
     ...(short ? [onPage ? `fewer than the ${count(minItems, "item")} required on the page` : `fewer than the ${minItems} required`] : []),
+    // Items the list holds that the page does not show are not read (t903), and are said, never answered empty.
+    ...(short && hidden > 0 ? [`${count(hidden, "item")} of the list ${hidden === 1 ? "is" : "are"} not shown on the page: inside something closed, which a hover or a click on what opens it may show`] : []),
     ...(outcome.missingFields.length > 0 ? [`required fields missing from some records: ${outcome.missingFields.join(", ")}`] : []),
     ...(gap ? [gap] : [])
   ];
@@ -409,6 +413,8 @@ function pagingAccount(outcome: Outcome, paginate: WebAutomationExtractListReque
     const retried = (outcome.pageRetries ?? 0) > 0 ? ` and went on refusing after the read waited and reloaded it (${count(outcome.pageRetries ?? 0, "time")})` : "";
     return `; paging stopped because the server refused the next page (HTTP ${answer})${retried} -- the list goes on past these records, so the read is incomplete`;
   }
+  // A fault that left the list going on, in the move's own words: a check a person must answer is not a server refusing pages.
+  if (outcome.pageFault && outcome.truncated && outcome.pagingFault !== undefined) return `; paging stopped: ${outcome.pagingFault} -- the list goes on past these records, so the read is incomplete`;
   const firstPageMiss = stop === "control_absent" && outcome.pagesRead <= 1;
   if (!firstPageMiss && (ORDINARY_END.has(stop) || stop === "deadline" || (stop === "page_fault" && outcome.pageFault))) return "";
   if (firstPageMiss) {

@@ -88,6 +88,32 @@ test.describe("company-website: a control not shown yet is scrolled toward, as a
     await expect.poll(() => people(page), { message: "the press loaded more people", timeout: 10_000 }).toBeGreaterThan(before);
   });
 
+  // t903, E1's trace of company-website-apprentices: a Flow's replay scrolls to the end of the
+  // team page and presses "Show more people" about 0.7 s after it loads. Nothing is left to scroll,
+  // and the page is still loading its people behind skeleton cards, waiting out its own 429s; it
+  // shows the button seconds later. The press waited the dismissed-dialog ladder (about 1.35 s) and
+  // gave up, so Core retried the step. It now waits while the page shows that work, and lands.
+  test("Show more people, pressed at the end of the page right after it loads: the press waits while the page loads its people, and lands", async ({ openHarness, page }) => {
+    const harness = await openHarness("company-website");
+    await apply(harness, "set-consent", { choice: "essential" });
+    await apply(harness, "dismiss-newsletter");
+    await apply(harness, "dismiss-chat-greeting");
+    await harness.page.goto(new URL("/scenarios/company-website/team", harness.lab.origin).href);
+    await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+    // As the replay's own scrolls leave it: at the end of the page, before the page has shown the button.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect(page.locator(MORE), "the button is still hidden while the page loads its people").toBeHidden();
+
+    const first = await harness.runAction({ commandId: "more-end-1", actionType: "web.dom.click", selector: MORE, timeoutMs: 10_000 });
+    const said = `${first.message} | ${actualOf(first)} | ${first.failure?.actual ?? ""}`;
+    // The press reached the button inside this one command: the page's own swallowed first press
+    // (t743) is what answers, never `web.target.not_shown`.
+    expect(first.failure?.code, said).not.toBe("web.target.not_shown");
+    expect(first.failure?.code, said).toBe("web.action.page_reported_failure");
+    await expect(page.locator(MORE)).toBeVisible();
+    expect(await people(page), "the page loaded its batches while the press waited").toBeGreaterThan(8);
+  });
+
   test("Next page reaches every batch when its detected Load more begins hidden", async ({ openHarness, page }) => {
     test.setTimeout(90_000);
     const harness = await openHarness("company-website");

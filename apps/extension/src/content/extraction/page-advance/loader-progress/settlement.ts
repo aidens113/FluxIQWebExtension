@@ -1,3 +1,20 @@
+// The proof that a list loader's press did nothing, judged by the list's own effect (t903).
+//
+// Since t839 a loader press that changed nothing was pressed again only on a positive proof
+// that it did nothing, and part of that proof was the press-work tracker saying every handler
+// the press started had run (`page-world/press-work/`). The tracker cannot say that of an
+// `async` click handler, so on a page whose loader ignores its first press -- photo-social's
+// giveaway thread -- the proof never came, the press was never made again, and Next page failed
+// `list_unchanged ... [loader-settlement:work_unknown]` with the thread unread (t904, 2a).
+//
+// A person judges a load-more press by what it did to the list. So does this proof now: a
+// handler the tracker cannot follow no longer stops it, and it rests on the list's own evidence
+// -- the original rows exactly as they were and nothing appended (`./continuation.ts`), no
+// request begun, no signal but a status change, the page settled back exactly as before the
+// press (`lookUntilSettled`), and the control still there and safe -- for at least the
+// observation window. Work the tracker does follow and still sees running (`pending`) still
+// holds it back. A loader only appends, so even a first press whose effect arrives after this
+// proof, and the second press it allows, can add rows but never skip any.
 import { listenForPressAnswer, lookUntilSettled, markPressWork, markRequestStarts, type PressListener, type PressSignal, type SettledLook } from "../../../action-runtime/ignored-press";
 import type { WebAutomationNextPageRequest } from "../../../../shared/protocol";
 import { isDisabled } from "../../pager-reading";
@@ -9,7 +26,7 @@ type Binding = ReturnType<typeof loadMoreContinuations.bind>;
 type Proof = { binding: Binding; document: Document; control: Element };
 type LookRejection = NonNullable<ReturnType<NonNullable<SettledLook["rejection"]>>>;
 type Rejection = "binding_unknown" | "request_probe_missing" | "request_probe_unhealthy" | "request_started"
-  | "work_probe_missing" | "work_unknown" | "work_pending" | "non_change_signal" | "origin_changed"
+  | "work_probe_missing" | "work_pending" | "non_change_signal" | "origin_changed"
   | "control_unsafe" | "look_unavailable" | `look_${LookRejection}` | "deadline" | "stopped";
 type Observers = {
   listen(control: Element, note: (signal: PressSignal) => void): PressListener;
@@ -69,11 +86,11 @@ export const loaderSettlement = {
           if (request.begunSince()) return reject("request_started");
           if ([...signals].some((signal) => signal !== "change")) return reject("non_change_signal");
           const observedWork = work.state();
-          if (observedWork === "unknown") return reject("work_unknown");
+          // Work the tracker cannot follow (an async handler) is judged by the list's effect (header).
           if (observedWork === "pending") waiting = "work_pending";
           if (Date.now() - startedAt >= MIN_OBSERVATION_MS) {
             const readyWork = work.state();
-            if (readyWork !== "idle") waiting = readyWork === "pending" ? "work_pending" : "work_unknown";
+            if (readyWork === "pending") waiting = "work_pending";
             else if (state() !== "unchanged") waiting = "origin_changed";
             else if (!safe()) waiting = "control_unsafe";
             else {
@@ -86,15 +103,14 @@ export const loaderSettlement = {
                 const reason = look.rejection?.();
                 return reject(reason === undefined ? "look_not_restored" : `look_${reason}`);
               }
-              const settledWork = work.state();
-              if (settledWork !== "idle") return reject(settledWork === "pending" ? "work_pending" : "work_unknown");
+              if (work.state() === "pending") return reject("work_pending");
               if (request.healthy?.() !== true) return reject("request_probe_unhealthy");
               if (request.begunSince()) return reject("request_started");
               if (![...signals].every((signal) => signal === "change")) return reject("non_change_signal");
               if (state() !== "unchanged") return reject("origin_changed");
               if (!safe()) return reject("control_unsafe");
               if (!(Date.now() < until)) return reject("deadline");
-              const fault = new PaginationFault("list_unchanged", "The detected list loader was pressed once; supported work settled with the original list and page unchanged apart from status notices, and no request or other effect was observed.");
+              const fault = new PaginationFault("list_unchanged", "The detected list loader was pressed; the page settled with the original list and page unchanged apart from status notices, nothing was appended, and no request or other effect was observed.");
               faults.set(fault, proof);
               return fault;
             }
