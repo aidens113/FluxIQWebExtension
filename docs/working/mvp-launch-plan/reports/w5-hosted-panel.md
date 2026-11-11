@@ -622,3 +622,82 @@ Reports in `reports/w5-hosted-panel/`: `w5-dock-projects.md`, `w5-member-assista
 - **Settings:** `apps/web/src/features/settings-page/**`, `apps/web/src/app/(panel)/settings/page.tsx`.
 - **Humanness:** `apps/web/src/features/automation-studio/settings/{FlowSettingsView.tsx,settings-host.ts,humanness/**}`.
 - **Audit:** `.structure-baseline.json`.
+
+## Checked point 7: the merged tree fixed, keys never shared automatically, the member's locked message, re-casing your own name
+
+**Outcome.** Partial.
+- **Waiting on t898:** item 5, the mirrored route test.
+- **Done and uncommitted on top of 3c417baa2:** items 1-4. The validation results are under "Validation" below.
+
+### Per-worker summary
+
+| Worker | Tier | Brief | Outcome | What I verified |
+| --- | --- | --- | --- | --- |
+| w5-round7-keys | worker-heavy (Opus) | Items 1-3: the merged tree's failures at their cause; offered and chosen keys; the member's locked message | Done | Checked its two claims: the Settings role wiring is already in place since checkpoint 6, so that claim was stale; `set-default-key` accepting an un-offered key is fixed by me |
+| w5-recase | worker-heavy (Opus) | Item 4: re-casing your own name for both kinds of person | Done | It ran its tests below the memory floor, so I re-ran them myself (below) |
+
+Reports: `reports/w5-hosted-panel/w5-round7-keys.md`, `w5-recase.md`.
+
+**Item 1, causes:**
+- **fluxiq check exit 2, cause 1:** `platform/iam/audit/tests/decision-filter.test.ts` had a circular type inference: the filter's predicate reads `reads`, which is computed from the registry it is passed. It has been there since b5db7a001, unseen because no whole-package fluxiq check ran on it. Fixed by annotating both variables.
+- **fluxiq check exit 2, cause 2:** panel-assistant `tests/user-access.test.ts:231` inferred `READ_ONLY` as a 4-name tuple; it is now typed `readonly string[]`.
+- **`allowance-resource.test.ts`:** t900's test contradicted the decided behaviour. Now a member reads the allowance and cannot change it.
+- **user-access, "every granted endpoint":** the allowance read moved from `OwnPanelAssistant` to `WorkspaceSettingReads` on the workspace. The test now checks own chats against the former and the allowance against the latter.
+- **user-access, "paired browser refused by IAM itself": a real regression.** `WorkspaceSettingReads` had no origin condition, so after the move IAM let a paired browser read the allowance (only the handler refused it). The statement now requires `RequestOrigin = panel`, which covers `secrets:GetAssistantModel` too, and is pinned by a test. Nothing in the extension calls either read.
+
+**Item 2, keys in an organisation workspace:**
+- The removed rule "the first key a member adds counts as shared" (`keyCreated`) is gone.
+- **Offer:** a new `secret-keys/offer-key` endpoint (`secrets:OfferKey`, decided on the key) lets a key's holder offer or withdraw their own key.
+  - Nobody else can offer it, owners and administrators included.
+  - Paired browsers are refused.
+  - The offer lapses when the key is removed, turned off or changed.
+- **Choice:** only an explicit `set-default-key` or `set-assistant-model` by an owner or admin counts. Both now refuse another person's key that its holder has not offered; the shared check is in `secret-keys/api/unoffered-key-refusal.ts`, which I added (integration below).
+- **Release:** another person's key pays for a message only when it is both offered and chosen. Otherwise the sender gets a plain answer naming owners and administrators, with no model call.
+- A person's own key and legacy unstamped keys work as before, so single-user local and self-hosted are unchanged.
+- **Settings:** an "Offer to the workspace" checkbox on the person's own keys. A chooser sees whether the workspace's key pays for others; a member sees plain wording when nothing pays for their messages.
+
+**Item 3, the member's locked message:**
+- New contracts `workspaceKeyLockedMessage(host)`: "This workspace's model key is locked: its owner must unlock it by opening <host> and entering their password once".
+- A member gets this sentence, through a new error with the same `secrets.locked` code. The key's holder keeps "Unlock your model key: …".
+- Tested in contracts and in `workspace-key.test.ts`.
+
+**Item 4, re-casing your own name:**
+- A case-only change to one's own name is written as sent, for both kinds of person. It skips the authority check, needs no proof, and keeps the id, sessions, memberships and account link.
+- Real renames are decided as before: an account holder is refused by name, and a case-only clash with another person is refused with `identity.username_taken`.
+- The account's stored email need not follow: the platform store always lower-cases emails, and nothing compares them with the username case-sensitively.
+- New `api/tests/own-name-recase.test.ts` (6 tests); `username-case.test.ts` gains two self tests.
+
+### Integration changes I made
+- `packages/fluxiq/src/programs/secret-keys/api/unoffered-key-refusal.ts` (new): the one rule "another person's key is chosen only once its holder offered it". `set-default-key` and `set-assistant-model` both call it. Before, `set-default-key` accepted an un-offered key; the release refused to spend it, but the two choosers disagreed.
+- `secret-keys/api/tests/key-offers.test.ts`: a new case, an owner's `set-default-key` on a member's un-offered key is refused and changes nothing, then succeeds once offered.
+- `secret-keys/api/tests/workspace-choices.test.ts`: the administrator's choice of a member's key now follows the member's offer.
+
+### Validation (Core worktree)
+- The workers' runs:
+  - w5-round7-keys: `heavy-slot ... pnpm --filter fluxiq check` -> exit 0. The fluxiq set (iam, secret-keys, panel-assistant, assistant, `_shared`) -> 104 files, 872 tests passed. contracts model-keys and iam -> 101 passed. web settings-page -> 410 passed. Structure audit passed.
+  - w5-recase: identity-access -> 147 passed, but started at 1.13 GB free, below the floor.
+- After my edit: `vitest run src/programs/secret-keys` -> 1 failed (the workspace-choices case above, fixed). A parallel run also crashed a vitest worker at 1.3 GB free.
+- **Round 7 validation result** (after all edits; each step waited for 2.5 GB free):
+  - `vitest run src/programs/secret-keys src/programs/identity-access --no-file-parallelism` -> 37 files, 364 tests passed. This re-runs w5-recase's tests above the floor.
+  - `heavy-slot ... pnpm --filter fluxiq check` -> exit 0.
+  - `heavy-slot ... pnpm --filter @fluxiq/web check` -> exit 0.
+  - `pnpm structure:check` -> passed (538 warnings, 916 baselined).
+  - `pnpm docs:check` -> first exit 1: `docs/reference/framework-reference.md` was stale after the new contract exports. I ran `pnpm docs:reference` (803 public declarations), then `node scripts/docs-reference.mjs --check` -> "Deterministic framework reference is current." `packages/fluxiq/docs/reference/framework-reference.md` is written too (ignored by git).
+  - Not re-run after the round: the full e2e. This round changed no panel screen outside Settings' key controls, which the settings-page tests cover (410 passed).
+
+### Open questions for the lead
+1. **Re-casing someone else's name.** It is now treated as an ordinary rename: refused for an account holder (before, it was silently dropped with `ok: true`), written as sent for others. If an administrator should be able to re-case an account holder's name, dropping one condition does it.
+2. **Who can call `update-user`.** It still needs `identity.manage`, so a viewer cannot re-case their own name; that needs a self-service endpoint. The panel's sign-in page sends only the display name for account holders, so it does not offer a re-case yet.
+3. **Old t901 settings records** written by the removed rule still count as chosen. An offer is still required, so nothing is spent. Only unreleased t901 builds have them.
+
+### Files for the commit (uncommitted since 3c417baa2)
+- **Keys and IAM:**
+  - Core `platform/iam/{audit/tests/decision-filter.test.ts,predefined/**,catalog/generated/assistant-tools.generated.json}`;
+  - `programs/secret-keys/**` (including `api/unoffered-key-refusal.ts`);
+  - `runtime/conversations/assistant/model/**`;
+  - `programs/automation-studio/api/panel-assistant/tests/{allowance-resource,user-access,workspace-key}.test.ts`;
+  - `packages/contracts/src/{platform/model-keys/**,iam/actions.generated.ts}`;
+  - `apps/web/src/features/settings-page/**`;
+  - `docs/architecture/platform.md`.
+- **Usernames:** Core `programs/identity-access/**`, `docs/architecture/package-boundaries.md`.
+- **Docs reference:** `docs/reference/framework-reference.md` (regenerated with `pnpm docs:reference`).
