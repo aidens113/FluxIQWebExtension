@@ -407,3 +407,26 @@ Each level-100 run was followed straight away by a baseline, as the control.
 3. The project-task-routes test fails under concurrency, before and outside this lane. Route it.
 4. The replay click that fails once per replay (`web.action.page_reported_failure`) on company-website at every level. Route it to W1.
 5. `service.ts` (after t885): pass the request's `humanness` onto the attempt input (the starting value; it also fills a new task's level) and resolve the run-session's level from the Flow's `metadata.humanness` and the request. Then the approved live series.
+
+## Checked point 7: create-flow stores its starting humanness in the creating write (2026-11-11)
+
+- **Root.** `service/flows/creation.ts` `AutomationStudioFlowCreation.createFlow` takes `humanness`:
+  - It is validated with `humannessSchema` before any effect ("humanness must be a whole number from 0 to 100.").
+  - It is set as the blank Flow's `metadata.humanness` inside `createRuntimeBlankFlow`, so it is part of the single creating save on both paths (the canonical authority and the legacy facade).
+  - No Flow can exist without it after a failure part-way.
+- **Tests** in `service/flows/tests/creation.test.ts`:
+  - In both storage modes, a create with `humanness: 40` makes exactly the effects of a plain create (canonical, document and SQL names; 2 receipts; 1 feed entry), and the stored document's `metadata.humanness` is 40.
+  - A create without it has no `humanness` key.
+  - 101, -1, 2.5, "40" and null are refused, and no Flow is written.
+- **Superseded below:** (at the time) still two writes at the HTTP handler: `programs/automation-studio/api/handlers/flows.ts` reaches creation through `service.createFlow`, whose input type is declared in `service.ts` (line 1320, `async createFlow(input: { projectId: string; name?: unknown; description?: unknown; flowId?: string })`). Passing `humanness` needs that type to gain `humanness?: unknown`. That file is serial behind t885, so the handler still creates then updates until that line lands. With the line, the handler becomes one call, `service.createFlow({ projectId, name, description, ...flowId, ...(payload.humanness !== undefined ? { humanness: payload.humanness } : {}) })`, and its second write and pre-check go. I make both with the other `service.ts` line, unless you approve this distant one-line hunk now.
+- **Validation:** `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/flows/tests/creation.test.ts` -> 10 of 10 passed. `pnpm structure:check` -> passed (530 warnings, 969 baselined). Not run: the Core library build (it waits for the service.ts line).
+
+### Checkpoint 7, completed: the handler is one write (lead approved the service.ts type hunk)
+- `framework/automation-service/service.ts:1320`: `service.createFlow`'s input type gains `humanness?: unknown`. This is the only hunk in that file.
+- `programs/automation-studio/api/handlers/flows.ts` create-flow handler: one `service.createFlow` call carrying `humanness` when given. The pre-check (`assertFlowHumanness`) and the second settings write are gone, and so is the now-unused import. A refusal from creation still reaches the caller as `ok: false` naming humanness, with nothing created.
+- Handler test (`handlers/tests/flow-settings/tests/flows-humanness.test.ts`): a create with 40 stores 40 and ends on the same revision as a plain create (a second save would have moved it on), and is otherwise equal to it. The refusal cases now include null; 101, -1, 2.5, "50" and null each create nothing.
+- Files this checkpoint: Core `packages/fluxiq/src/framework/automation-service/service.ts`, `.../service/flows/creation.ts`, `.../service/flows/tests/creation.test.ts`, `packages/fluxiq/src/programs/automation-studio/api/handlers/flows.ts`, `.../handlers/tests/flow-settings/tests/flows-humanness.test.ts`; extension `docs/working/mvp-launch-plan/reports/w2-humanness.md`.
+- Validation:
+  - `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/api/handlers/tests/flow-settings src/framework/automation-service/service/flows/tests/creation.test.ts` -> 2 files, 28 tests passed.
+  - `pnpm structure:check` -> passed (530 warnings, 969 baselined).
+  - `heavy-slot run t898 -- pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/sdk --filter @fluxiq/ui-components build` -> every package "build: Done", `CORE_BUILD_EXIT 0`.
