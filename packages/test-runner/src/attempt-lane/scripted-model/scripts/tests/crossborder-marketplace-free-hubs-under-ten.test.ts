@@ -16,9 +16,10 @@ const made = (...ids: string[]) => ids.map((callId) => ({ callId, toolId: "core.
 
 const RESULTS = 'URL ~/search?q=usb+c+hub\nt30 clickable "Free shipping"\nt31 field placeholder "Max" =""\nt32 clickable "OK"\nt33 clickable "Price ↑"\nt40 link "Keelson USB C Hub 7 in 1" same href';
 
-test("a script is registered for the task, with a chat turn for each of its two attempts", () => {
+test("a script is registered for the task, with a chat turn and judge replies for each of its four attempts", () => {
   assert.equal(SCRIPT.taskId, "crossborder-marketplace-free-hubs-under-ten");
-  assert.equal(SCRIPT.replies.panel_command?.length, 2);
+  assert.equal(SCRIPT.replies.panel_command?.length, 4);
+  assert.ok((SCRIPT.replies.loop_verification?.length ?? 0) >= 8, "two judges for each attempt");
 });
 
 test("it clears what covers the page by the handle the page gives, each only while it shows", () => {
@@ -83,7 +84,7 @@ const completedOn = (callId: string) => ({ callId, toolId: "core.run_node", valu
 test("the variant row has a script too, the plain form is the read's, and a form neither has is refused", () => {
   assert.equal(scriptedModelScriptFor(TIMED).taskId, TIMED);
   assert.equal(scriptedModelScriptFor(TIMED, "timed-check").taskId, TIMED);
-  assert.equal(scriptedModelScriptFor(TIMED).replies.panel_command?.length, 2);
+  assert.equal(scriptedModelScriptFor(TIMED).replies.panel_command?.length, 4);
   assert.throws(() => scriptedModelScriptFor(TIMED, "by-hand"), /no form "by-hand"\. It has plain, timed-check and left-out/u);
   assert.throws(() => scriptedModelScriptFor("crossborder-marketplace-free-hubs-under-ten", "by-hand"), /no form "by-hand"/u);
 });
@@ -137,4 +138,32 @@ test("timed-check: once a look handed the check to the person, the round goes on
 test("timed-check: a hand-off from a press is not a look, and a check still standing after the person is refused", () => {
   assert.throws(() => timedForm()(HOME, [completedOn("dismiss-welcome")]), /from dismiss-welcome, which is not a look/u);
   assert.throws(() => timedForm()(CHECKED, [completedOn("look-at-the-page")]), /still covers the page after the person completed it/u);
+});
+
+// Run run-mwa3kh87-d34c2f04, steps 36 and 38: a later attempt's sort met a check a person completed, so its answer held the sorted page under `now`
+// while the view still showed the page before; the card handle came from the view, no handle of the sorted page, and the detection failed.
+const BEFORE_SORT = 'URL ~/search?q=usb+c+hub&freeShipping=y&maxPrice=10\nt30 clickable "Free shipping"\nt33 clickable "Price ↑"\nt40 link "Old Hub card" same href';
+const SORTED = 'URL ~/search?q=usb+c+hub&freeShipping=y&maxPrice=10&sort=price_asc\nt90 clickable "Free shipping"\nt99 link "Keelson USB C Hub 7 in 1" same href';
+const sortMetCheck = { callId: "sort-by-price", toolId: "core.run_node", value: { personCompletedCheck: true, note: "A person completed it.", now: { page: SORTED } } };
+
+test("a call that met a check a person completed answers with the page under now, and the next decision reads that page", () => {
+  const evidence = [...made("free-shipping", "ceiling-typed", "ceiling-applied"), sortMetCheck, { callId: "core.current_view", toolId: "core.current_view", value: { groups: [{ group: "top", callId: "ceiling-applied", value: { page: BEFORE_SORT } }] } }];
+  const asked = { kind: "evidence_tool_decision", ordinal: 1, model: "m", jsonText: true, message: "", payload: { taskKind: "evidence_tool_decision", context: { evidenceLoop: { evidence } } } } as unknown as ScriptedModelRequest;
+  const detect = (decide(asked) as { decision: { toolId: string; input: { target: string } } }).decision;
+  assert.equal(detect.toolId, "web.detect_repeating_structure");
+  assert.equal(detect.input.target, "t99", "the card of the sorted page, not of the page the view still showed");
+});
+
+test("a detection that failed is asked again once, and then refused by name rather than read as a card shape", () => {
+  const failed = { callId: "detect-hubs", toolId: "web.detect_repeating_structure", value: { ok: false, code: "target_unobserved" } };
+  const done = made("free-shipping", "ceiling-typed", "ceiling-applied", "sort-by-price");
+  const again = decision(SORTED, [...done, failed]);
+  assert.equal(again.toolId, "web.detect_repeating_structure");
+  assert.equal(again.callId, "detect-hubs-again");
+  assert.throws(() => decision(SORTED, [...done, failed, ...made("detect-hubs-again"), { ...failed, callId: "detect-hubs-again" }]), /gave no fields, twice: .*target_unobserved/u);
+});
+
+test("the end of the read does not depend on the shape of a list read's answer: rows kept, listKey and place beside extracted", () => {
+  const read = { callId: "read-hubs", toolId: "core.run_node", value: { answer: "kept", extracted: [], listKey: "k", place: "page=1" } };
+  assert.equal(decision(SORTED, [...made("free-shipping", "ceiling-typed", "ceiling-applied", "sort-by-price"), read]).kind, "complete");
 });

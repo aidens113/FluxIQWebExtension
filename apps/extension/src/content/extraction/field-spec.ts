@@ -59,12 +59,17 @@ type ExtractFieldSpec = Exclude<ExtractField, string>;
 export type ExtractFieldReader =
   | { kind: "text"; selector?: string; group?: string; required: boolean; lines?: true; definition?: { term: string; part: "term" | "value" }; mark?: "badge" | "state" }
   | { kind: "link"; selector?: string; group?: string; required: boolean; identity?: "tracking-free" }
-  | { kind: "value"; selector?: string; group?: string; required: boolean }
+  | { kind: "value"; selector?: string; group?: string; required: boolean; shown?: ShownValue }
   | { kind: "attribute"; selector?: string; group?: string; attribute: string; required: boolean; mark?: FieldMark }
   | { kind: "column"; header: string; required: boolean };
 
 /** A mark a field reads (`WebAutomationExtractFieldMark`): only a `flag` is read differently (`./item-mark/`). */
 type FieldMark = NonNullable<ExtractFieldSpec["mark"]>;
+
+/** What of an element a `value` field reads beyond a control's live value (`WebAutomationExtractValueShown`). */
+type ShownValue = NonNullable<ExtractFieldSpec["shown"]>;
+
+const SHOWN_VALUES: ReadonlySet<unknown> = new Set<ShownValue>(["label", "options", "checked", "disabled", "marked"]);
 
 const FIELD_MARKS: ReadonlySet<unknown> = new Set<FieldMark>(["badge", "flag", "state"]);
 
@@ -140,7 +145,8 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
       if (spec.identity !== undefined && spec.identity !== "tracking-free") throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a link identity the page does not know.`);
       return { kind, ...where, required, ...(spec.identity === "tracking-free" ? { identity: spec.identity } : {}) };
     case "value":
-      return { kind, ...where, required };
+      if (spec.shown !== undefined && !SHOWN_VALUES.has(spec.shown)) throw new Error(`The extract_list field ${JSON.stringify(name)} reads a value the page does not know.`);
+      return { kind, ...where, required, ...(spec.shown === undefined ? {} : { shown: spec.shown }) };
     case "attribute": {
       const attribute = typeof spec.attribute === "string" ? spec.attribute.trim() : "";
       if (!attribute) throw new Error(`The extract_list field ${JSON.stringify(name)} reads an attribute but names none.`);

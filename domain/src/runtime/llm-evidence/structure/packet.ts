@@ -503,6 +503,7 @@ function readableSpec(spec: WebAutomationExtractFieldSpec): WebAutomationExtract
     lines: spec.lines,
     identity: spec.identity,
     mark: spec.mark,
+    shown: spec.shown,
     element: undefined
   });
 }

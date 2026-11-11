@@ -75,7 +75,29 @@ function searchParams(page: string): URLSearchParams {
   return new URLSearchParams(query ?? "");
 }
 
-const decide: ScriptedReply = (request) => {
+/**
+ * The request with the page as it stands now. Core's `core.current_view` names the last call whose answer held the page
+ * in the shape it reads, and a call that met a check a person completed answers with the page under `now` instead
+ * (run-mwa3kh87-d34c2f04, step 36: the sort's answer held the sorted results, the view still showed the page before it,
+ * and a card handle taken from that view was no handle of the page). A person reads the page in front of them, so when
+ * a call newer than the view's own answered with a page, that is the page the decisions read.
+ */
+function withNewestPage(request: ScriptedModelRequest): ScriptedModelRequest {
+  const evidence = evidenceOf(request);
+  const view = [...evidence].reverse().find((entry) => entry.toolId === "core.current_view");
+  const groups = view && Array.isArray(view.value.groups) ? view.value.groups : [];
+  const top = groups.find((group): group is { callId: string } => typeof group === "object" && group !== null && typeof (group as { callId?: unknown }).callId === "string");
+  const viewedAt = top ? evidence.map((entry) => entry.callId).lastIndexOf(top.callId) : -1;
+  const newer = evidence.slice(viewedAt + 1).filter((entry) => entry.toolId !== "core.current_view");
+  const now = [...newer].reverse().map((entry) => entry.value.now).find((held): held is { page: string } => typeof held === "object" && held !== null && typeof (held as { page?: unknown }).page === "string");
+  if (!now) return request;
+  const patched = [...evidence, { callId: "core.current_view", toolId: "core.current_view", value: { groups: [{ group: "top", callId: "now", value: { page: now.page } }] } }];
+  const context = request.payload?.context as Record<string, unknown>;
+  return { ...request, payload: { ...request.payload, context: { ...context, evidenceLoop: { ...(context.evidenceLoop as object), evidence: patched } } } };
+}
+
+const decide: ScriptedReply = (asked) => {
+  const request = withNewestPage(asked);
   const page = currentPageOf(request);
   const made = callsMade(request);
   const applied = searchParams(page);
@@ -98,11 +120,14 @@ const decide: ScriptedReply = (request) => {
   }
   if (!made.has("ceiling-applied") && !ceilingOn) return pressOf(request, "Apply the price ceiling.", "ceiling-applied", /clickable "OK"$/u);
   if (!made.has("sort-by-price") && applied.get("sort") !== "price_asc") return pressOf(request, "Sort the hubs cheapest first.", "sort-by-price", /clickable "Price ↑"$/u);
-  const structure = latestOf(request, "web.detect_repeating_structure");
+  const detected = latestOf(request, "web.detect_repeating_structure");
+  // A detection that failed holds no fields: a person looks at the page again, once, rather than reading a card shape that was never given.
+  const structure = detected && Array.isArray(detected.value.fields) ? detected : undefined;
+  if (detected && !structure && made.has("detect-hubs-again")) throw new Error(`The detection of the hub cards gave no fields, twice: ${JSON.stringify(detected.value).slice(0, 200)}`);
   if (!structure) {
     const card = pageLine(page, /^t\d+ link ".*\bHub\b.*" same href/u);
     if (!card) throw new Error("The results show no hub card to take the shape of");
-    return toolCall("See the shape of the hub cards.", "detect-hubs", "web.detect_repeating_structure", { target: card.handle });
+    return toolCall("See the shape of the hub cards.", detected ? "detect-hubs-again" : "detect-hubs", "web.detect_repeating_structure", { target: card.handle });
   }
   const columns = cardColumns(fieldsOf(structure));
   return toolCall("Read the hubs, leaving out the ads.", "read-hubs", "core.run_node", {
@@ -191,22 +216,22 @@ const LATER_ATTEMPTS = 3;
 
 /**
  * The task's script, for the unarmed read or its `timed-check` variant (`taskId` names which). `plain` is the read's
- * honest path for two attempts; `timed-check` is that path behind a look at the timed check, for the default four;
+ * honest path for the default four; `timed-check` is that path behind a look at the timed check, for the default four;
  * `left-out` is the plain path for the default four, judged on what each read page left out.
  */
 export function crossborderMarketplaceFreeHubsUnderTenScript(taskId: string, form: string = "plain"): ScriptedModelScript {
   if (form !== "plain" && form !== "timed-check" && form !== "left-out") throw new Error(`This script has no form "${form}". It has plain, timed-check and left-out`);
+  const attempts = 1 + LATER_ATTEMPTS;
   if (form === "plain") {
     return Object.freeze({
       taskId,
       replies: {
-        panel_command: [startAttempt, startAttempt],
+        panel_command: Array.from({ length: attempts }, () => startAttempt),
         evidence_tool_decision: Array.from({ length: MOST_DECISIONS }, () => decide),
-        loop_verification: [answersRequest, answersRequest, answersRequest],
+        loop_verification: Array.from({ length: 2 * attempts }, () => answersRequest),
       },
     });
   }
-  const attempts = 1 + LATER_ATTEMPTS;
   if (form === "left-out") {
     return Object.freeze({
       taskId,

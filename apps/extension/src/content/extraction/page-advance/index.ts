@@ -23,3 +23,4 @@ export type { PageStep, PaginationProgress, PaginationStop } from "./types";
 export { awaitPageLoadTurn } from "./load-pace";
 export { BROWSER_PAGE_HOST, MAX_PAGE_RETRIES, pageRefusalOf, RATE_LIMITED_STOP, refusedPageWaitMs } from "./refused-page";
 export type { PageRefusal, RefusalsSpent, RefusedPageHost } from "./refused-page";
+export { pageShownNow } from "./shown-page";

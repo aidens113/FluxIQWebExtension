@@ -85,6 +85,7 @@ import {
   type WebAutomationExtractListRequest,
   type WebAutomationExtractRead
 } from "./request";
+import { WEB_AUTOMATION_EXTRACT_VALUE_SHOWN } from "./value-shown";
 
 /**
  * The request the page would run, or `undefined` for a value that names no read
@@ -385,6 +386,9 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   const identity = optionalValue(spec.identity, (entry) => entry === "tracking-free" ? entry : undefined);
   // A mark is kept on a kind that reads it and left behind on any other, like a stray `header`.
   const mark = optionalValue(spec.mark, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_MARKS));
+  // What of a control a `value` field reads is kept on that kind only, like a stray `header`.
+  const shown = kind === "value" ? optionalValue(spec.shown, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_VALUE_SHOWN)) : undefined;
+  if (shown === REFUSED) return undefined;
   if (selector === REFUSED || group === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED || lines === REFUSED || identity === REFUSED || mark === REFUSED) return undefined;
   if (identity !== undefined && kind !== "link") return undefined;
   const field: WebAutomationExtractFieldSpec = {
@@ -399,6 +403,7 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
     ...(lines === true ? { lines } : {}),
     ...(identity !== undefined ? { identity } : {}),
     ...(mark !== undefined && markReadBy(kind, mark) ? { mark } : {}),
+    ...(shown !== undefined ? { shown } : {}),
     ...(element !== undefined ? { element } : {})
   };
   return field;
