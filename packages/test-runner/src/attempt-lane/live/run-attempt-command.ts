@@ -23,7 +23,7 @@ import { attemptBalanceFailures } from "./balance-failures.js";
 import { attemptCanGoOn } from "./can-go-on.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
-import { readPanelAnswerTurn } from "./panel-answer-port.js";
+import { awaitPanelAnswerTurn } from "./panel-answer-port.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
 import { writeUnscoredAttemptEvidence, type ScoredAttempt } from "./unscored-attempt-evidence.js";
 
@@ -94,9 +94,17 @@ async function liveSide(input: AttemptCommandInput, llm: Extract<AttemptCommand[
   };
 }
 
-/** The picture of what a person sees, with the answer turn scrolled into the panel. It never decides the proof. */
+/**
+ * The picture of what a person sees, with the answer turn scrolled into the panel. It never decides the proof. It is
+ * taken once the panel has drawn the attempt's answer turn, or has drawn none in the panel's draw window, as a person
+ * reading the chat would see it; how long the turn took to draw, or that it never did, is kept in
+ * `answer-turn-wait.json` (t897: read at once, every replay's turn read as none).
+ */
 async function pictureOfAnswer(session: LiveAttemptSession, ended: LiveAttemptEnded, evidence: string, log: (line: string) => void): Promise<void> {
   const file = path.join(evidence, "answer-turn.jpg");
+  const drawn = await awaitPanelAnswerTurn(session.browser, ended.outcome.attempt.attemptId);
+  await writeFile(path.join(evidence, "answer-turn-wait.json"), JSON.stringify({ drawnAfterMs: drawn.drawnAfterMs, waitedMs: drawn.waitedMs }, null, 2));
+  log(drawn.drawnAfterMs === null ? `[attempt] the panel drew no answer turn in ${Math.round(drawn.waitedMs / 1000)} s` : `[attempt] the panel drew the answer turn ${drawn.drawnAfterMs} ms after the attempt was read as ended`);
   const page = session.browser.panel?.page ?? session.browser.control;
   await page.evaluate(({ attemptId, viaViews }) => {
     const current = globalThis as unknown as Window & { chrome?: { extension: { getViews(): Window[] } } };
@@ -109,7 +117,7 @@ async function pictureOfAnswer(session: LiveAttemptSession, ended: LiveAttemptEn
     await writeFile(file, taken.bytes);
     log(`[attempt] the picture of the answer is ${file}`);
   } else log(`[attempt] no picture of the answer: ${taken.reason ?? "the capture gave nothing"}`);
-  await writeFile(path.join(evidence, "answer-turn.json"), JSON.stringify(await readPanelAnswerTurn(session.browser, ended.outcome.attempt.attemptId), null, 2));
+  await writeFile(path.join(evidence, "answer-turn.json"), JSON.stringify(drawn.dom, null, 2));
 }
 
 /** What the run keeps of each attempt as it ends: the ending, the cache share of its own steps, and the model calls it made by kind. */
