@@ -22,9 +22,11 @@ const record = (value: unknown): JsonObject => typeof value === "object" && valu
  * (t775: an unnamed save is no longer refused at exploration).
  *
  * Named, the save is admitted. The board fails the first save of each page load
- * with only a notice in its own status region; since t743 d4 that press fails
- * `web.action.page_reported_failure` and is pressed again, and the retry lands:
- * two clicks for one call, and My jobs reads 2 -> 3 rows. So the act is in
+ * with only a notice in its own status region. Since t898 that press, certain to have
+ * done nothing, is pressed once more inside the same command, and the second press lands:
+ * two clicks for one call and one attempt (before t898 it failed
+ * `web.action.page_reported_failure` and Core's retry made the second click), and My jobs
+ * reads 2 -> 3 rows. So the act is in
  * place, and Core's settle points at My jobs: undo it there, naming it under
  * `undoes`. An undo on a row My jobs held before the build is refused unrun,
  * naming the closed condition it failed; the new row's own Unsave job is the
@@ -85,8 +87,8 @@ test("installed gateway project build retries the page's failed save, and undoes
         if (!found) throw new Error("diagnostic.heart_missing");
         heartHandle = found;
         // The build's first lasting press, naming the ref the earlier complete read of My jobs issued (t775: an unnamed
-        // press is no longer refused at exploration, and pressing it too would save the job twice). The board fails the
-        // first press, the retry lands.
+        // press is no longer refused at exploration, and pressing it too would save the job twice). The board answers the
+        // first press with only its notice; the same command presses again and lands (t898).
         return send("save", node("save", "web.output.dom-click", { target: { handle: heartHandle } }, ["modify_existing"], { resetDestination: destinationReference }));
       }
       // Where Core's settle points: My jobs, a look naming the act (no undo of its own).
@@ -131,13 +133,13 @@ test("installed gateway project build retries the page's failed save, and undoes
     // t775: no exploration call is refused for naming no ref, and no retired reset code shows anywhere in the log.
     expect(retiredCodesIn(answers, observed.outcomes, provider.receipts)).toEqual([]);
 
-    // The save naming the ref: declared modify_existing, admitted once; the board failed the first press with only
-    // its own notice, the press was made again, and the retry landed. One call, two clicks, two attempts.
+    // The save naming the ref: declared modify_existing, admitted once; the board answered the first press with only
+    // its own notice, and the same command pressed again and landed (t898). One call, two clicks, one attempt.
     const save = observed.declarations.filter(declaration => declaration.call === "save");
     expect(save.map(declaration => [declaration.consequences, declaration.permitted])).toEqual([[["modify_existing"], true]]);
     expect(answers["save"]?.ok).toBe(true);
     expect(answers["save"]?.status).toBe("succeeded");
-    expect(answers["save"]?.attempts).toBe(2);
+    expect(answers["save"]?.attempts).toBe(1);
     expect(clicks["save"]?.after).toBe(clicks["save"]!.before + 2);
 
     // The save landed: My jobs now holds a third row, the two it held before kept.
