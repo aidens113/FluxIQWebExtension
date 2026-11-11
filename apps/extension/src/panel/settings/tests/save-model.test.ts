@@ -62,6 +62,7 @@ test("Save changes is hidden until something changes, has no aria-label override
     const slider = find("humanness");
     slider.value = "35";
     slider.dispatch("input");
+    slider.dispatch("change");
     assert.equal(save.hidden, false);
     assert.equal(bar.hidden, false);
     save.dispatch("click");

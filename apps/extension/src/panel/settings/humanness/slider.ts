@@ -1,7 +1,11 @@
 // The Humanness slider: 0 is the fastest, higher adds human-like timing, click positions and
-// occasional harmless misclicks. Read and filled like a form field; `onEdit` fires on input.
+// occasional harmless misclicks. It is Core's shared control in draft mode: the value is the
+// person's starting value itself (no own/inherited state, no "Use starting value"), and the
+// "Save changes" bar saves it, so the control never says "Saved.". Read and filled like a form
+// field; `onEdit` fires when the slider settles (drag release, keys at rest, focus leaving).
 
-import { createElement } from "../../dom";
+import "@fluxiq/ui-components/styles/chat.css";
+import { createHumannessControl as createSharedControl } from "@fluxiq/ui-components";
 import { HUMANNESS_LIMITS } from "./limits";
 import { normaliseHumanness } from "./normalise-humanness";
 
@@ -13,34 +17,27 @@ export type HumannessControl = {
 };
 
 export function createHumannessControl(): HumannessControl {
-  const input = createElement("input", {
-    id: "humanness",
-    className: "humanness-slider",
-    attrs: { type: "range", min: String(HUMANNESS_LIMITS.min), max: String(HUMANNESS_LIMITS.max), step: String(HUMANNESS_LIMITS.step), value: String(HUMANNESS_LIMITS.default), "aria-describedby": "humannessHint", "aria-valuetext": "0" }
-  }) as HTMLInputElement;
-  const readout = createElement("output", { id: "humannessValue", className: "humanness-value", text: String(HUMANNESS_LIMITS.default), attrs: { for: "humanness" } });
-  const show = (): void => {
-    const value = String(normaliseHumanness(input.value));
-    readout.textContent = value;
-    input.setAttribute("aria-valuetext", value);
-  };
-  input.addEventListener("input", show);
-  const element = createElement("div", { className: "field humanness" }, [
-    createElement("div", { className: "humanness-head" }, [createElement("label", { text: "Starting humanness for new Flows and tasks", attrs: { for: "humanness" } }), readout]),
-    input,
-    createElement("div", { className: "humanness-ends", attrs: { "aria-hidden": "true" } }, [createElement("span", { text: "Fastest" }), createElement("span", { text: "Most human-like" })]),
-    createElement("p", { id: "humannessHint", className: "field-hint", text: "Each Flow and task can set its own level; this is where they start." })
-  ]);
+  const listeners: Array<() => void> = [];
+  const start = HUMANNESS_LIMITS.default;
+  const control = createSharedControl({
+    mode: "draft",
+    level: { own: start, starting: start },
+    canClear: false,
+    inputId: "humanness",
+    label: "Starting humanness for new Flows and tasks",
+    explain: "Each Flow and task can set its own level; this is where they start. Higher is slower and more person-like; robot checks always pause for you.",
+    onDraft: () => listeners.forEach((listener) => listener())
+  });
+  const own = (): number => normaliseHumanness(control.level().own ?? control.level().starting);
   return {
-    element,
-    read: () => normaliseHumanness(input.value),
+    element: control.element,
+    read: own,
     fill(value) {
-      input.value = String(normaliseHumanness(value));
-      show();
+      const level = normaliseHumanness(value);
+      control.show({ own: level, starting: level });
     },
     onEdit(listener) {
-      input.addEventListener("input", listener);
-      input.addEventListener("change", listener);
+      listeners.push(listener);
     }
   };
 }

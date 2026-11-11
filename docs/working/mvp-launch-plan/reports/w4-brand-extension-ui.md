@@ -298,3 +298,39 @@ Where this report and the worker reports say `screens/...`, read `test-runs/w4-b
 
 ### Open
 - `limits.ts` switches to Core's humanness constants when t898 lands here.
+
+## Checkpoint 5: allowance scope, proposal project, humanness draft mode (2026-11-11, from W5's findings)
+
+### Worker summary
+- **pa2-allowance-and-proposal** (worker-heavy, Opus):
+  - **Allowance scope.** `set-panel-assistant-allowance` and `get-panel-assistant-allowance` now declare `endpointResource.workspace()` instead of `selfUser()`, matching `secrets:Get/SetAssistantModel`. A grant on a person's own user can now neither read nor change the workspace's allowance; a workspace grant can do both. The new test `panel-assistant/tests/allowance-resource.test.ts` failed with the old declaration put back (allow/allow) and passes with the fix.
+  - **Profiles unchanged.** Local: `secrets.manage` changes it, `programs.read` reads it. Service: owner and administrator change it, read-only reads it, `FluxIQUserAccess` does neither. No predefined policy relied on the old declaration. Regenerating the catalogs produced no diff (entries list `resourceTypes: ["*"]`).
+  - **No other panel-assistant endpoint has this defect**: the rest touch only the caller's own panel database.
+  - **Proposal project.** No Core code writes a proposal into a panel thread yet. So the assistant's single write path (`post` in `runtime/conversations/assistant/panel-assistant.ts`) now stores project-bound references as `{"projectId","ref"}` (`attachments/project-ref.ts`), and refuses to post one without a project.
+    - `get-panel-thread-attachment` reads a reference that names its project in that project, whatever the request names.
+    - Old bare references are read as before.
+    - IAM is the same check, run on the reference's project.
+    - Tests: a turn made in project A, read while B, `panel` or nothing is open, resolves in A; under service, another person's project is refused exactly as before.
+- **h3-draft-mode** (worker, Sonnet). `createHumannessControl` gains:
+  - `mode?: "commit" | "draft"` (default commit);
+  - `onDraft?: (level: number | null) => void` (null = use the starting value);
+  - `canClear?: boolean`, `inputId?: string`, `explain?: string`.
+  - Draft mode never commits and never shows pending, "Saved." or a refusal. It reports on drag release, arrow keys at rest, blur and clear.
+  - The extension's Settings "Starting humanness" slider now uses the shared control in draft mode (`canClear: false`, id `humanness` kept), so "Save changes" appears after the release. The task card and the Flow strip stay in commit mode. No mount exists in `apps/web`.
+  - Core ui-components dist was rebuilt.
+
+### Integration changes I made
+- Core `docs/architecture/automation-studio/workspace.md` ("The assistant dock's threads"): the allowance endpoints are declared on the workspace, and the attachment read rule now covers a reference that names its project.
+
+### Commands run and observed results (mine)
+- Core fluxiq: `pnpm exec vitest run panel-assistant/tests/allowance-resource.test.ts panel-assistant/tests/thread-changes.test.ts assistant/attachments/tests/project-ref.test.ts` -> 3 files, 16 passed.
+- Core ui-components: `pnpm exec vitest run src/chat/controls src/chat/answer` -> 13 files, 113 passed.
+- Extension: `node scripts/test-extension.mjs panel/settings/tests panel/automations panel/chat/transport` -> 255 pass, 0 fail.
+- Worker-run, not repeated by me:
+  - PA2: 192 IAM catalog, policy, completeness and parity tests; fluxiq `tsc --noEmit` (slot) exit 0.
+  - H3: extension `tsc --noEmit` (slot) with no errors; the ui-components build with no tsc errors.
+
+### For the lead / W5
+1. **Ordinary hosted users can't read the allowance.** Under service, `FluxIQUserAccess` still grants no read of it, as before. If hosted users should see the allowance in Settings, `user-access.ts` needs `studio:GetPanelAssistantAllowance` on the workspace. This is the same gap as the dock grant already routed to W5.
+2. **The dock may print the new reference.** `apps/web` `flow-graph-diff/draw.ts:29` prints `attachment.ref` in its "could not be read" line, so new turns would show the JSON reference there. Cosmetic, for W5. The dock can keep sending `context.projectId`; Core ignores it for a reference that names its project.
+- `node scripts/structure-audit.mjs` -> Core `passed (530 warning(s), 969 baselined).`; extension `passed (245 warning(s), 552 baselined).`

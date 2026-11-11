@@ -68,6 +68,7 @@ test("the slider shows the saved humanness, and Save sends the edited value as h
       assert.equal(slider.getAttribute("step"), "5");
       slider.value = "177.4";
       slider.dispatch("input");
+      slider.dispatch("change");
       (find("saveSettingsButton") as unknown as { dispatch(type: string): void }).dispatch("click");
       await tick();
       const save = sent.find((message) => (message as { type: string }).type === RUNTIME_MESSAGES.panelSaveSettings) as { settings: { humanness?: number } };
