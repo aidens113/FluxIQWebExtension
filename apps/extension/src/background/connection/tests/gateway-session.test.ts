@@ -340,3 +340,134 @@ test("while a person approves pairing, the extension's keep-alive runs on every 
   }
   assert.deepEqual(ticks, Array(15).fill("keepAlive"));
 });
+
+// --- Managed-host enrolment ----------------------------------------------------
+// A launcher's connect carries a one-time ticket: the first hello without a token
+// takes it, the session's token is stored as a pairing's is, and until the session
+// is ready nothing falls back to pairing. The ticket here is a synthetic placeholder.
+
+const SYNTHETIC_TICKET = "fxet_synthetic-ticket";
+
+/** Connects with an enrolment ticket over an `OpeningSocket` and runs `body` with it. */
+async function withEnrolment(h: ReturnType<typeof harness>, body: (socket: OpeningSocket) => Promise<void>): Promise<void> {
+  await withSocket(async () => {
+    await h.session.prepareConnect(SYNTHETIC_TICKET);
+    await h.session.connect();
+    try {
+      await body(OpeningSocket.latest!);
+    } finally {
+      h.session.closeClient();
+    }
+  });
+}
+
+/** A socket closing from the server's side, as the browser reports it. */
+function closeFromServer(socket: OpeningSocket): void {
+  socket.readyState = 3;
+  for (const listener of (socket as unknown as { listeners: Map<string, Set<(event: unknown) => void>> }).listeners.get("close") ?? []) listener({ code: 1000 });
+}
+
+test("an enrolment connect sends its ticket in a hello without a token, once, and stores the token the session brings", async () => {
+  const h = harness();
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withEnrolment(h, async (socket) => {
+    hello = socket.messages()[0];
+    await acceptSession(h, socket);
+  });
+  assert.equal(hello?.payload.enrolmentTicket, SYNTHETIC_TICKET);
+  assert.equal(Object.hasOwn(hello!.payload, "token"), false);
+  assert.equal(hello?.payload.clientType, "extension", "a managed host says hello as the extension; Core records its role");
+  assert.equal(h.state.persisted.at(-1)?.token, NEXT_SYNTHETIC_TOKEN);
+  assert.equal(h.session.enrolmentFailure(), undefined);
+  assert.ok(!JSON.stringify(h.state.persisted).includes(SYNTHETIC_TICKET), "the ticket is never stored");
+  await withOpenSession(h, async (socket) => {
+    assert.equal(Object.hasOwn(socket.messages()[0]!.payload, "enrolmentTicket"), false, "a later connect resumes on its token, with no ticket");
+    assert.equal(socket.messages()[0]!.payload.token, NEXT_SYNTHETIC_TOKEN);
+  });
+});
+
+test("an enrolment connect drops a stored token first, so its hello spends the ticket", async () => {
+  const h = harness({ session: { clientId: "client-1", token: SYNTHETIC_TOKEN, projectId: "project-1" } });
+  let hello: ReturnType<OpeningSocket["messages"]>[number] | undefined;
+  await withEnrolment(h, async (socket) => {
+    hello = socket.messages()[0];
+  });
+  assert.equal(hello?.payload.enrolmentTicket, SYNTHETIC_TICKET);
+  assert.equal(Object.hasOwn(hello!.payload, "token"), false);
+  assert.equal(h.state.session.token, undefined);
+  assert.equal(h.state.session.clientId, "client-1");
+});
+
+test("a refused ticket ends the attempt in an error with Core's code, and never reconnects into pairing", async () => {
+  const h = harness();
+  let sentAfter: string[] = [];
+  await withEnrolment(h, async (socket) => {
+    socket.deliver("server.error", { code: "enrolment.expired", message: "This enrolment ticket expired before it was presented." });
+    await nextTurn();
+    sentAfter = socket.messages().map(({ type }) => type);
+  });
+  assert.deepEqual(h.session.enrolmentFailure(), { code: "enrolment.expired", message: "This enrolment ticket expired before it was presented." });
+  assert.equal(h.session.state(), "error");
+  assert.equal(h.session.wantsConnection(), false, "no reconnect: its hello would carry no ticket and pair");
+  assert.deepEqual(sentAfter, ["client.hello"]);
+});
+
+test("a socket lost before the session is ready ends the attempt in an error without a code, for the launcher to retry", async () => {
+  const h = harness();
+  await withEnrolment(h, async (socket) => {
+    closeFromServer(socket);
+    await nextTurn();
+  });
+  const failure = h.session.enrolmentFailure();
+  assert.equal(failure?.code, undefined);
+  assert.match(failure?.message ?? "", /closed before this browser was enrolled/u);
+  assert.equal(h.session.state(), "error");
+  assert.equal(h.session.wantsConnection(), false);
+});
+
+test("a pairing request during an enrolment ends it and closes the socket instead of waiting for a person", async () => {
+  const h = harness();
+  let closed = false;
+  await withEnrolment(h, async (socket) => {
+    socket.deliver("server.pairing_required", { referenceCode: "REF-1", reason: "approve" });
+    await nextTurn();
+    closed = socket.readyState === 3;
+  });
+  assert.equal(closed, true);
+  assert.match(h.session.enrolmentFailure()?.message ?? "", /asked this browser to pair/u);
+  assert.equal(h.session.wantsConnection(), false);
+});
+
+test("an ordinary connect forgets how the last enrolment ended, and an error that is not an enrolment's is left to the channel", async () => {
+  const h = harness();
+  await withEnrolment(h, async (socket) => {
+    socket.deliver("server.error", { code: "recording.refused", message: "not an enrolment refusal" });
+    await nextTurn();
+    assert.equal(h.session.enrolmentFailure(), undefined);
+    socket.deliver("server.error", { code: "enrolment.used", message: "used" });
+    await nextTurn();
+  });
+  assert.equal(h.session.enrolmentFailure()?.code, "enrolment.used");
+  await h.session.prepareConnect();
+  assert.equal(h.session.enrolmentFailure(), undefined);
+});
+
+test("the close of a socket an enrolment connect replaced does not end the enrolment", async () => {
+  const h = harness();
+  await withSocket(async () => {
+    await h.session.connect();
+    const earlier = OpeningSocket.latest!;
+    await h.session.prepareConnect(SYNTHETIC_TICKET);
+    await h.session.connect();
+    const current = OpeningSocket.latest!;
+    try {
+      closeFromServer(earlier);
+      await nextTurn();
+      assert.equal(h.session.enrolmentFailure(), undefined);
+      assert.notEqual(current.readyState, 3, "the enrolling socket stays open");
+      assert.equal(current.messages()[0]?.payload.enrolmentTicket, SYNTHETIC_TICKET);
+    } finally {
+      h.session.closeClient();
+    }
+  });
+});

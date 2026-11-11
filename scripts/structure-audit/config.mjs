@@ -49,6 +49,11 @@ export const CONFIG = {
       from: "domain/src",
       to: "apps/extension/src",
       reason: "domain code must not depend on extension UI or browser implementation modules."
+    },
+    {
+      from: "packages/browser-host",
+      to: "packages/test-runner",
+      reason: "browser-host is product code that launches the customer's browsers; it must never depend on the test harness. The harness imports from it, not the reverse."
     }
   ],
 

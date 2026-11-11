@@ -380,6 +380,13 @@ export class FluxIQConnection {
     if (recordingBlock) status.recordingBlock = recordingBlock;
     if (this.lastError) status.lastError = this.lastError;
     if (gateway.lastMessageAt !== undefined) status.lastMessageAt = gateway.lastMessageAt;
+    // An enrolment that ended without a session is an error until the next connect, whatever closed the socket after it.
+    const enrolmentFailure = this.gateway.enrolmentFailure();
+    if (enrolmentFailure) {
+      status.connectionState = "error";
+      status.lastError = enrolmentFailure.message;
+      if (enrolmentFailure.code !== undefined) status.enrolmentRefusalCode = enrolmentFailure.code;
+    }
     return status;
   }
 
@@ -407,7 +414,13 @@ export class FluxIQConnection {
     return await fetchCoreRecordings(this.coreApiCredentials(), page, pageSize);
   }
 
-  async connect(): Promise<void> {
+  /**
+   * Connects to FluxIQ. With `enrolmentTicket`, a managed host's one-time
+   * ticket, the browser is enrolled instead of paired: the ticket is held in
+   * this worker's memory until the hello takes it, never stored or reported.
+   */
+  async connect(options: { enrolmentTicket?: string | undefined } = {}): Promise<void> {
+    await this.gateway.prepareConnect(options.enrolmentTicket);
     await this.gateway.connect();
   }
 

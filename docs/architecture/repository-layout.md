@@ -50,6 +50,7 @@ domain/
   src/web-panel-host.ts  Entry point of the web panel host (see below)
   scripts/          Web panel host build, FluxIQ setup, and domain test runner
 packages/          Repository-local testing facility and tooling packages
+packages/browser-host/  Product package: launches Chromium with the built extension for `fluxiq dev --browsers N`
 docs/architecture/  Authored current-state architecture
 docs/working/       Investigation and implementation working documents
 scripts/            Repository-level FluxIQ panel launcher and Lab launcher
@@ -60,6 +61,33 @@ the package rather than under `recording/` or `runtime/` because both of those
 read them, and putting either under one would make the other depend on it.
 The testing packages are described in
 [the automated testing facility](testing-facility.md).
+
+### The Browser Host Package
+
+`packages/browser-host` is product code, not testing infrastructure: it is the
+launcher `fluxiq dev --browsers N` loads (`--browser-host
+@fluxiq-web-extension/browser-host/launcher`). It implements Core's
+`FluxIQHostLauncher` (type-only import from `fluxiq/server`; the interface is
+Core's) and never depends on `packages/test-runner`; the structure audit
+enforces that, and the test-runner imports from it instead (its
+`find-browser-process.ts` re-exports the one `--user-data-dir` matcher).
+
+- Each host gets a fresh temp profile (`mkdtemp`, removed on close) or a named
+  one under `<dataDir>/browser-hosts/<name>/<hostId>` that is kept. Hosts launch
+  in parallel; if one fails the others close and the error names it.
+- Enrolment: after the extension's worker is up, the launcher opens the
+  extension's own side-panel page and sends `fluxiq.connect` with the one-time
+  ticket as an in-memory `evaluate` argument over Playwright's debugging pipe.
+  The ticket is never in argv, env, a URL, a file or a log, and the package
+  refuses to enrol while `DEBUG` enables Playwright protocol logging
+  (`browser_host.protocol_logging_on`). A connect that fails before redemption is
+  retried with a new ticket (first attempt plus 3 retries); an `enrolment.*`
+  refusal is final.
+- No leftovers: `close()` closes the context, kills any process still holding the
+  profile (`taskkill /T /F` on Windows, signals elsewhere) and removes a fresh
+  profile. A detached reaper process, spawned once per engine with an IPC
+  channel, does the same for every registered profile when the engine dies
+  without closing.
 
 ## Responsibility Boundaries
 
