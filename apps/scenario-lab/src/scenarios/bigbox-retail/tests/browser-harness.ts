@@ -4,6 +4,7 @@ import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-cont
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
 import { diagnoseAction } from "../../tests/diagnose-action.js";
+import { requestsAnswered } from "../../tests/requests-answered.js";
 import { withinPageTime } from "../../tests/within-page-time.js";
 import type { BigboxState } from "../types.js";
 
@@ -120,14 +121,22 @@ export async function extractRecords(page: Page, step: Pick<ScenarioStep, "id" |
   }
 }
 
-/** Runs a recording script the way the recording lane drives one, returning each extract step's records by step id. */
+/**
+ * Runs a recording script the way the recording lane drives one, returning each extract step's records by step id.
+ * An act is done once the page's own requests it led to are answered, as the extension's landing waits for them
+ * (`requestsAnswered`): a save still in flight is not yet what the act did.
+ */
 export async function runSteps(harness: Harness, steps: readonly ScenarioStep[]): Promise<Map<string, ExtractedRecord[]>> {
   const { page } = harness;
   const extracted = new Map<string, ExtractedRecord[]>();
+  await requestsAnswered(page, DEFAULT_WAIT_MS, "before the script's first step");
   for (const step of steps) {
     const budget = step.timeoutMs ?? DEFAULT_WAIT_MS;
     const target = () => locate(page, step.target!);
-    const act = (action: () => Promise<unknown>) => withinPageTime(page, budget, `${step.operation} ${step.target}`, action, () => diagnoseAction(target()));
+    const act = async (action: () => Promise<unknown>) => {
+      await withinPageTime(page, budget, `${step.operation} ${step.target}`, action, () => diagnoseAction(target()));
+      await requestsAnswered(page, budget, `${step.operation} ${step.target}`);
+    };
     try {
       if (step.operation === "click") await act(() => target().click({ timeout: 0 }));
       else if (step.operation === "type") await act(() => target().fill(String(step.value ?? ""), { timeout: 0 }));
