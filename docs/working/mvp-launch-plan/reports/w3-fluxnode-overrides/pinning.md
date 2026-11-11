@@ -178,7 +178,7 @@ Add a "Pin codes" section, or put these rows under the run request codes:
 
 | Code | Cause | Fix |
 | --- | --- | --- |
-| `fluxnode.pinned_change_held` | Not a refusal. On a run's `result.pinned.held` and as a skipped `step` event: the FluxNode is pinned, and this run's repair or exploration would have changed its Flow. The run still got its result. The change waits as a proposal. | Review it with `POST /fluxnodes/{name}/export` (`proposals`, `flow.proposals`). Adopt it with `fluxiq pin <name>` or `{ "pin": true, "proposal": "<proposalId>" }`. See [pinning](../guides/pinning.md). |
+| `fluxnode.pinned_change_held` | Not a refusal. On a run's `result.pinned.held` and as a skipped `step` event: the FluxNode is pinned, and this run's repair or exploration would have changed its Flow. The run still got its result. The change waits as a proposal. | Review it with `POST /fluxnodes/{name}/export` (`proposals`, `flow.proposals`). Adopt it with `fluxiq pin <name>` or `{ "pin": true, "proposal": "<proposalId>" }`. See pinning (Core `docs/fluxnodes/guides/pinning.md`). |
 | `export_flow.unknown_proposal` | `POST /fluxnodes/{name}/export` with `pin: true` named a `proposal` that is not waiting (already adopted, replaced, or never made). Answered as `invalid_request` with this issue at `/proposal`. | Export without `pin` and take a `proposalId` from `proposals`. |
 | `export_flow.proposal_without_pin` | `proposal` without `pin: true`. Answered as `invalid_request` with this issue at `/proposal`. | Add `"pin": true`. Only a pin adopts a proposal. |
 
@@ -204,7 +204,7 @@ Replace the body line and the closing paragraph, and add these rows to the field
 - Replace "A pin is recorded and reported today. Replaying a pinned version exactly, and holding repairs
   back as proposals, is not enforced yet." with: "A pinned FluxNode replays exactly the pinned version. A
   run's repair or exploration is held as a proposal (`result.pinned.held`, code
-  `fluxnode.pinned_change_held`) until you pin again. See [pinning](../guides/pinning.md)."
+  `fluxnode.pinned_change_held`) until you pin again. See pinning (Core `docs/fluxnodes/guides/pinning.md`)."
 - Run result table (wherever result fields are listed): `pinned`, present when the FluxNode is pinned:
   `flowVersion` and `stepsDigest` of the version replayed, and `held` (`code`, `message`, `proposal`) when
   the run's change was held.
