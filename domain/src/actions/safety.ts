@@ -12,6 +12,8 @@ import type { WebAutomationActionType } from "./types";
 export const WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
+  // Moves what the page shows, as a scroll does (t903).
+  "web.dom.hover": "review",
   "web.dom.type": "review",
   "web.dom.clear": "review",
   "web.dom.select": "review",

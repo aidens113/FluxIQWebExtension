@@ -173,6 +173,7 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
     fieldNames: [...fieldNames],
     ...(outcome.itemsSeen === undefined ? {} : { itemsSeen: outcome.itemsSeen }),
     ...(outcome.emptyRecords === undefined ? {} : { emptyRecords: outcome.emptyRecords }),
+    ...(outcome.notRenderedItems === undefined ? {} : { notRenderedItems: outcome.notRenderedItems }),
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
     // `seen` is the one page value here, one per condition and cut to 60 characters (`extraction/item-filter.ts`).
@@ -299,7 +300,10 @@ function recordGap(outcome: Outcome): string | undefined {
   const rows = `${count(incomplete, "record")} short of a declared field`;
   const empty = outcome.emptyRecords ?? 0;
   const whole = empty > 0 && everyRecordEmpty(outcome)
-    ? ", and every returned record is empty, so the fields were read off the wrong element"
+    ? (outcome.notRenderedItems ?? 0) >= outcome.records.length
+      // Hidden items read nothing whatever their fields are (t903).
+      ? ", and every returned record is empty because its item is not shown on the page: it sits inside something closed, and a hover or a click on what opens it may show it"
+      : ", and every returned record is empty, so the fields were read off the wrong element"
     : "";
   return blank.length === 0 ? `${rows}${whole}` : `${rows}, blank in ${blank.join(", ")}${whole}`;
 }

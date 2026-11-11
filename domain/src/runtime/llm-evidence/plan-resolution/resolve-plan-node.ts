@@ -123,7 +123,7 @@ import { present } from "../present";
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot, webPlanRunRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
+import { resolveWebExtractionSlot, webPlanElementRecord, webPlanRunRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { webPlanReadIdentity } from "./read-identity";
 import { webPlanSameTargetIdentity as sameTargetIdentity } from "./same-target-identity";
@@ -523,10 +523,25 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
       continue;
     }
     if (extractionNode && key === "extractList") {
-      const slot = resolveWebExtractionSlot(value, scope, stores.extractions, !webPlanModelWrote(scope, key));
+      // One element named by its own handle is read as its one-row table (`extraction/element-record.ts`, t903).
+      let views: WebPlanHandleView[] | undefined;
+      const record = webPlanElementRecord(value, scope, stores.extractions, (reference) => {
+        const bound = resolveTarget(reference, scope, stores.targets, false);
+        if (typeof bound === "string") return bound;
+        views = bound.views;
+        const location = typeof reference.location === "string" ? reference.location : scope.onPage ?? bound.views?.[0]?.location;
+        return { selector: String(bound.value), frameId: bound.frameId, frameUrlPath: bound.frameUrlPath, element: bound.element, location };
+      });
+      if (record.status === "refused") {
+        refusals.push({ code: record.code as WebPlanHandleIssueCode, kind: "target", path: [key, "handle", ...record.path] });
+        continue;
+      }
+      const slot = resolveWebExtractionSlot(record.status === "named" ? record.value : value, scope, stores.extractions, !webPlanModelWrote(scope, key));
       if (slot.status === "resolved") {
         const stored = webPlanStoredColumns(slot.request, parameters.recordOutput);
-        replaced.set(key, { value: stored.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });
+        const list: Resolved = { value: stored.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined };
+        if (views !== undefined) list.views = views;
+        replaced.set(key, list);
         // The Flow keeps this request under the plan's keys, which a draft read back out of it shows (`own-extraction-list.ts`).
         stores.extractions.wrote(scope, stored.request as unknown as WebAutomationExtractListRequest, slot.frameId);
         assumed.push(...stored.assumed);

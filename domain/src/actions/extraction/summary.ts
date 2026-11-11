@@ -63,6 +63,13 @@ export type WebAutomationExtractionSummary = {
    * Optional for the same reason `itemsSeen` is.
    */
   emptyRecords?: number | undefined;
+  /**
+   * Items the read named that the browser did not render -- inside a closed
+   * menu, panel or tab -- sent only when there were any (t903). With
+   * `emptyRecords` equal to `recordCount`, it says the rows are empty because
+   * they are not shown, not because the fields name the wrong element.
+   */
+  notRenderedItems?: number | undefined;
   /** Whether a cap -- the item bound or the page bound -- cut the read short. */
   truncated: boolean;
   /** Required fields at least one record did not yield, which is the list that fails the read's post-condition. A field the author did not require is `null` in its record and is not here. Always a subset of `fieldNames`. */
@@ -375,6 +382,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   const emptyRecords = countValue(summary.emptyRecords);
   if (summary.itemsSeen !== undefined && itemsSeen === undefined) return undefined;
   if (summary.emptyRecords !== undefined && emptyRecords === undefined) return undefined;
+  const notRenderedItems = countValue(summary.notRenderedItems);
+  if (summary.notRenderedItems !== undefined && notRenderedItems === undefined) return undefined;
   // Why paging stopped, held to the rule `listPresence` is: optional, so a page
   // build that predates it still sends a summary that arrives whole, and a word
   // outside the set drops the summary rather than arriving half understood.
@@ -404,6 +413,7 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     fieldNames,
     ...(itemsSeen !== undefined ? { itemsSeen } : {}),
     ...(emptyRecords !== undefined ? { emptyRecords } : {}),
+    ...(notRenderedItems !== undefined ? { notRenderedItems } : {}),
     ...(listPresence !== undefined ? { listPresence } : {}),
     ...(listWait !== undefined ? { listWait } : {}),
     ...(conditions !== undefined ? { conditions } : {}),

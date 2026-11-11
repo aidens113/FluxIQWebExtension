@@ -289,6 +289,9 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  * - `conditions_kept_nothing`: `where` was applied and kept no item at all, so
  *   the read is empty because of its own conditions rather than the page. Widen
  *   or drop them, or name a column the detection actually showed.
+ * - `items_not_rendered` (t903): the rows were found and every one is empty
+ *   because its item is not rendered -- it sits in a closed menu, panel or tab.
+ *   Show it first, by a hover or a click on what opens it, then read again.
  * - `records_have_no_fields`: the rows were found and every returned record is
  *   empty, so the fields are being read off the wrong element. Re-detect and
  *   map the columns the detection names.
@@ -408,6 +411,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "list_did_not_finish_loading",
   "conditions_kept_nothing",
   "records_have_no_fields",
+  "items_not_rendered",
   "required_fields_missing",
   "fewer_records_than_required",
   "no_records_read",

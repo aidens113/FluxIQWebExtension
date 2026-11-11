@@ -12,7 +12,7 @@ import { webPlanFirstTargetHandle } from "../first-target-handle";
 import type { WebLlmPlanStepMove } from "./views";
 
 /** The acts that work on one control where it is, leaving the page standing. */
-const IN_PLACE: ReadonlySet<WebAutomationActionType> = new Set(["web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.scroll", "web.dom.check", "web.dom.upload"]);
+const IN_PLACE: ReadonlySet<WebAutomationActionType> = new Set(["web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.scroll", "web.dom.check", "web.dom.upload", "web.dom.hover"]);
 const ACTION_OF_NODE: ReadonlyMap<string, WebAutomationActionType> = new Map(webAutomationActionDefinitions.map((definition) => [webAutomationOutputNodeId(definition.actionType), definition.actionType]));
 
 /** How the step `nodeDefinitionId` with the parameters it was written with moves where the next one stands (header). */

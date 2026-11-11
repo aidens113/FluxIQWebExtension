@@ -151,7 +151,7 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
-import { assertDisclosed, contentKey, fieldReaders, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
+import { assertDisclosed, contentKey, fieldReaders, isRenderedItem, readRecord, recordGaps, type FieldReaders, type ItemRead } from "./item-record";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
@@ -253,6 +253,12 @@ export type ListExtractionOutcome = {
   incompleteRecords?: number | undefined;
   /** Returned records that yielded no declared field at all: the read found rows and every field read off the wrong element. */
   emptyRecords?: number | undefined;
+  /**
+   * Items the read named that the browser does not render: inside a closed menu,
+   * panel or tab (t903). Sent only when there were any, beside `emptyRecords`, so
+   * an empty read of hidden items says so rather than blaming the fields.
+   */
+  notRenderedItems?: number | undefined;
   /** Items of the run that a `where` condition left out, so they are not records (C5). */
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
@@ -445,6 +451,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     const answered = ordered?.rows ?? answer.records;
     const seen = itemsSeen();
     const repeats = repeatsSoFar();
+    const hidden = [...namedItems].filter((element) => element.isConnected && !isRenderedItem(element)).length;
     return {
       records: answered,
       pagesRead: progress.pagesRead,
@@ -453,6 +460,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       missingFields: answer.missingFields,
       filtered,
       ...recordGaps(answered, fields),
+      ...(hidden === 0 ? {} : { notRenderedItems: hidden }),
       ...(seen === undefined ? {} : { itemsSeen: seen }),
       ...(faultedItems.size === 0 ? {} : { itemFaults: faultedItems.size }),
       ...(pageFault ? { pageFault: true } : {}),

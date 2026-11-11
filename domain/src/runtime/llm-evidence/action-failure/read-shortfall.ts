@@ -101,7 +101,10 @@ function whyTheReadFellShort(summary: WebAutomationExtractionSummary): WebLlmToo
   }
   // Rows found and every one of them empty: the selector named the list and the
   // fields are being read off the wrong element inside it.
-  if (summary.emptyRecords !== undefined && summary.emptyRecords === summary.recordCount) return "records_have_no_fields";
+  // ... unless the rows are empty because their items are not shown at all (t903): no field change helps, showing them does.
+  if (summary.emptyRecords !== undefined && summary.emptyRecords === summary.recordCount) {
+    return summary.notRenderedItems !== undefined && summary.notRenderedItems >= summary.recordCount ? "items_not_rendered" : "records_have_no_fields";
+  }
   if (summary.missingFields.length > 0) return "required_fields_missing";
   // Rows, whole, and not enough of them -- which is the only shortfall left
   // once the post-condition failed and nothing above explains it.

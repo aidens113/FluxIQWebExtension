@@ -36,6 +36,14 @@
 // an ordinary handle here, retained in the same scope, so the record's item is
 // an "own" list exactly as the run's item is.
 //
+// **One element is a list of one record too (t903).** A read may name one
+// element by the `tN` the page view or a search printed, and read it as a
+// one-row table (`../plan-resolution/extraction/element-record.ts`). That
+// element's list is issued here as any detected one is (`elementRecord`): the
+// same element read twice is the same handle, so repeated reads do not let go
+// of the lists detection found, and the step that ran keeps the handle and what
+// it stands for, never the `tN` (`elementRecordOf`).
+//
 // This store is for one authoring session. A step that is saved keeps what its
 // handle stands for itself (`../plan-resolution/extraction/saved-list.ts`, t869),
 // so a later attempt, another Flow or a restarted process does not depend on it.
@@ -125,9 +133,18 @@ export type WebLlmExtractionHandles = {
    * item, which is the answer for every literal a model wrote itself.
    */
   ownList(scope: WebLlmExtractionHandleScope, item: string, frameId: number | undefined): Record<string, WebAutomationExtractField> | undefined;
+  /**
+   * The handle of the one-record list that reads one element (header): the
+   * handle already retained for exactly this binding in this scope, else a new
+   * one. Remembered as the list `named`, the element's target handle, stands
+   * for now.
+   */
+  elementRecord(scope: WebLlmExtractionHandleScope, named: string, binding: Omit<WebLlmExtractionBinding, "handle">): string;
+  /** The list `elementRecord` last issued for the target handle `named` in this scope, while it is retained. */
+  elementRecordOf(scope: WebLlmExtractionHandleScope, named: string): string | undefined;
 };
 
-/** How many (project, Flow, frame, item) lists are remembered, and how many keys one list keeps. */
+/** How many (project, Flow, frame, item) lists are remembered, and how many keys one list keeps; also how many element records are remembered by the target handle that named them. */
 const REMEMBERED_LISTS = 64;
 const REMEMBERED_LIST_KEYS = 64;
 
@@ -136,6 +153,7 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
   const retained = new Map<string, { scope: string; binding: WebLlmExtractionBinding }>();
   const letGo = new Map<string, string>();
   const lists = new Map<string, Map<string, WebAutomationExtractField>>();
+  const records = new Map<string, string>();
   const listKey = (scope: WebLlmExtractionHandleScope, item: string, frameId: number | undefined): string => `${scopeKey(scope)}\0${frameId ?? 0}\0${item}`;
   const answersTo = (key: string, fields: Record<string, WebAutomationExtractField>): void => {
     const list = lists.get(key) ?? new Map<string, WebAutomationExtractField>();
@@ -162,7 +180,7 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
       letGo.delete(oldest);
     }
   };
-  return {
+  const store: WebLlmExtractionHandles = {
     reserve() {
       reserved += 1;
       return `extraction.${reserved}`;
@@ -198,7 +216,40 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
       const list = lists.get(listKey(scope, item, frameId));
       return list === undefined ? undefined : structuredClone(Object.fromEntries(list));
     },
+    elementRecord(scope, named, binding) {
+      const key = scopeKey(scope);
+      const wanted = JSON.stringify(withoutHandle(binding));
+      const held = [...retained.values()].find((entry) => entry.scope === key && JSON.stringify(withoutHandle(entry.binding)) === wanted);
+      const handle = held?.binding.handle ?? store.reserve();
+      if (held === undefined) store.retain(scope, { ...binding, handle });
+      const recordKey = `${key}\0${named}`;
+      records.delete(recordKey);
+      records.set(recordKey, handle);
+      for (const oldest of records.keys()) {
+        if (records.size <= REMEMBERED_LISTS) break;
+        records.delete(oldest);
+      }
+      return handle;
+    },
+    elementRecordOf(scope, named) {
+      const key = scopeKey(scope);
+      const handle = records.get(`${key}\0${named}`);
+      return handle !== undefined && retained.get(handle)?.scope === key ? handle : undefined;
+    }
   };
+  return store;
+}
+
+/** A binding's meaning without its name, which two handles for one element record share. */
+function withoutHandle(binding: Omit<WebLlmExtractionBinding, "handle">): Omit<WebLlmExtractionBinding, "handle"> {
+  return present<Omit<WebLlmExtractionBinding, "handle">>({
+    location: binding.location,
+    frameId: binding.frameId,
+    frameUrlPath: binding.frameUrlPath,
+    extractList: binding.extractList,
+    itemCount: binding.itemCount,
+    oneRecord: binding.oneRecord
+  });
 }
 
 function scopeKey(scope: WebLlmExtractionHandleScope): string {
