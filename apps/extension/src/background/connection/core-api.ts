@@ -274,9 +274,17 @@ export async function callCoreProgram(
     return { ok: false, code: "failed", diagnosticCode, httpStatus: status, error: stringValue(body?.error) ?? "Open FluxIQ to author task instructions or describe the supporting recording." };
   }
   if (status < 200 || status >= 300 || body?.ok !== true) {
-    return { ok: false, code: "failed", httpStatus: status, error: stringValue(body?.error) ?? `FluxIQ answered ${status}.` };
+    // Core's own `errorCode` (never a payload diagnostic) rides along as `coreCode`, so a view can branch on
+    // it (`conversation_run_active`) while the sentence stays as it was.
+    const coreCode = coreRefusalCode(stringValue(body?.errorCode));
+    return { ok: false, code: "failed", httpStatus: status, ...(coreCode ? { coreCode } : {}), error: stringValue(body?.error) ?? `FluxIQ answered ${status}.` };
   }
   return { ok: true, payload: body.payload ?? null };
+}
+
+/** Core's code as a short identifier, or undefined for anything else: only the code string is carried, never free text. */
+function coreRefusalCode(value: string | undefined): string | undefined {
+  return value !== undefined && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(value) ? value : undefined;
 }
 
 function isTimeout(error: unknown): boolean {

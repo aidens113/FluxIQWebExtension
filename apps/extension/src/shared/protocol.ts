@@ -199,53 +199,20 @@ export type ExtensionStatus = {
   recordingBlock?: RecordingBlockState | undefined;
   lastError?: string | undefined;
   lastMessageAt?: number | undefined;
+  /** How long the pairing lasts: "browser_session" when this browser cannot keep it between sessions. Absent or "lasting": nothing to say. */
+  credentialDurability?: "lasting" | "browser_session" | undefined;
 };
 
-/**
- * The panel's requests to FluxIQ Core that the background worker relays with
- * the pairing token (`background/panel/`). Each is the `RUNTIME_MESSAGES.panel*`
- * message named beside it, plus these fields. A `projectId` left out means the
- * project this browser's session belongs to (`ExtensionStatus.projectId`).
- *
- * The relay adds nothing and keeps nothing: a successful reply carries Core's
- * payload exactly as Core returned it, and no conversation state lives in the
- * background worker.
- */
-export type PanelConversationReadRequest =
-  /**
-   * `list-conversations`. `projectId: null` lists every thread in the projects
-   * this browser can see; left out, it is the session's project when one is
-   * known, and every project when none is.
-   */
-  | { kind: "list"; projectId?: string | null | undefined; status?: "open" | "resolved" | undefined; subjectKind?: string | undefined; subjectId?: string | undefined; limit?: number | undefined }
-  /** `get-conversation`: one thread, from `sinceTurnId` when given. */
-  | { kind: "get"; projectId?: string | undefined; conversationId: string; sinceTurnId?: string | undefined; limit?: number | undefined };
-
-export type PanelConversationSendRequest = {
-  /**
-   * `open` starts a thread and sends nothing (`open-conversation`). Otherwise
-   * `text` is sent: into `conversationId` when given (`append-turn`), or into a
-   * thread opened for it first, whose `conversation` then joins the reply.
-   */
-  kind?: "open" | "append" | undefined;
-  projectId?: string | undefined;
-  conversationId?: string | undefined;
-  text?: string | undefined;
-  /**
-   * Extra capabilities Core may answer with. The relay always offers the
-   * chat's own (`background/panel/chat-capabilities.ts`, which Core runs
-   * itself) and adds these after them, minus any id already offered.
-   */
-  capabilities?: unknown[] | undefined;
-  /**
-   * What the panel has open. `pageUrl` is only a fallback: the relay sends the
-   * active tab's address when the browser gives one, and Core builds from it.
-   */
-  onScreen?: { flowId?: string; subflowId?: string; runId?: string; recordingId?: string; pageUrl?: string } | undefined;
-  subjectKind?: string | undefined;
-  subjectId?: string | undefined;
-  title?: string | undefined;
-};
+/** The panel's conversation requests (`panel-conversation.ts`). */
+export type {
+  PanelConversationAnswerRequest,
+  PanelConversationDeleteRequest,
+  PanelConversationReadRequest,
+  PanelConversationRenameRequest,
+  PanelConversationSendRequest
+} from "./panel-conversation";
+/** The panel's humanness requests for one Flow or one task (`panel-humanness.ts`). */
+export type { CoreFlowHumannessReadBody, CoreFlowHumannessSetBody, CoreTaskHumannessSetBody, PanelFlowHumannessReadRequest, PanelFlowHumannessSetRequest, PanelHumannessReply, PanelTaskHumannessSetRequest } from "./panel-humanness";
 
 /**
  * `panelOpenFluxIQ`: open the web panel in a tab. With a `flowId` or a `runId`, that automation's page; with
@@ -255,14 +222,6 @@ export type PanelOpenFluxIQRequest = {
   flowId?: string | undefined;
   runId?: string | undefined;
   purpose?: "model-key" | undefined;
-};
-
-/** `answer-ask`: the person's answer to a question FluxIQ asked in a thread. */
-export type PanelConversationAnswerRequest = {
-  projectId?: string | undefined;
-  askId: string;
-  kind: string;
-  value?: string | undefined;
 };
 
 /**
@@ -318,7 +277,7 @@ export type PanelRelayFailureCode = "forbidden" | "not_paired" | "no_project" | 
 /** Every panel relay's reply, in the `{ ok: true } & T | { ok: false; error }` envelope the panel already reads. */
 export type PanelRelayResponse<TPayload = unknown> =
   | { ok: true; payload: TPayload }
-  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined; diagnosticCode?: string };
+  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined; diagnosticCode?: string; coreCode?: string };
 
 /**
  * Automation panel requests, by their short names; the strings live in

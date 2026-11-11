@@ -3465,7 +3465,7 @@ apps/extension/dist/e2e-chromium/
 
 The E2E manifest is Manifest V3 and restricts host permissions and content
 script matches to `http://127.0.0.1/*` and `http://localhost/*`. It is a
-separate artifact named `FluxIQ Web Automation Client (E2E)`.
+separate artifact named `FluxIQ (E2E)`.
 
 Playwright 1.51.1 launches its bundled Chromium with a fresh persistent
 profile, loads only the current unpacked E2E artifact, discovers the extension

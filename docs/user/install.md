@@ -66,7 +66,7 @@ To install in **Chrome or Edge**:
 3. Turn on **Developer mode**. In Chrome the switch is at the top right; in
    Edge it is at the bottom of the left-hand menu.
 4. Choose **Load unpacked**, then select the unzipped folder. The
-   **FluxIQ Web Automation Client** card appears with its version.
+   **FluxIQ** card appears with its version.
 5. Pin the FluxIQ button: open the **Extensions** menu (the puzzle-piece
    button in the toolbar) and choose the pin beside FluxIQ. The quickstart
    starts from that button.
@@ -81,7 +81,7 @@ does not install unsigned add-ons permanently. To try an unsigned package:
 A temporary add-on is removed when Firefox restarts.
 
 In **Firefox**, access to websites is optional in Manifest V3. After you
-install FluxIQ, open `about:addons`, select **FluxIQ Web Automation Client**,
+install FluxIQ, open `about:addons`, select **FluxIQ**,
 go to **Permissions**, and allow **Access your data for all websites**. If you
 do not, FluxIQ can only work in a tab after you click its toolbar button there.
 

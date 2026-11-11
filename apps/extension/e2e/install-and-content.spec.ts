@@ -49,7 +49,7 @@ test("mounts the shared panel: getting-started steps until connected, and settin
   for (const label of ["FluxIQ connection address", "FluxIQ web address", "Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots"]) {
     await expect(page.getByLabel(label, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Forget this pairing", exact: true })).toBeVisible();
 
   // Closing settings, or picking a tab, goes back to the steps.

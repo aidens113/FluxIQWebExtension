@@ -1,9 +1,9 @@
-# FluxIQ Web Automation Client: Privacy Policy
+# FluxIQ: Privacy Policy
 
 Effective date: to be set on first publication. Applies to extension version
 0.1.0 and later.
 
-FluxIQ Web Automation Client ("the extension") is the browser half of FluxIQ.
+FluxIQ ("the extension") is the browser half of FluxIQ.
 It works only with a FluxIQ runtime that you run and pair it with. The
 extension's developers operate no server that it reports to. They receive
 none of your data.

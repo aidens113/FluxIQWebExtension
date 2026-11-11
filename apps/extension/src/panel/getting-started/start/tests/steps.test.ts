@@ -22,7 +22,8 @@ test("disconnected and never approved: every step in order, nothing ticked, Conn
 
 test("step one says how FluxIQ starts, in words; step two says to sign in", () => {
   const guide = startGuide(statusWith(), false);
-  assert.match(guide.steps[0]?.line ?? "", /pnpm dev/u);
+  assert.match(guide.steps[0]?.line ?? "", /running on this computer/u);
+  assert.doesNotMatch(guide.steps[0]?.line ?? "", /pnpm|folder|!FluxIQ/u, "the first step names no command or folder");
   assert.match(guide.steps[1]?.line ?? "", /sign in/iu);
   for (const state of ["disconnected", "connecting", "reconnecting", "pairing", "error"] as const) {
     for (const item of startGuide(statusWith({ connectionState: state }), false).steps) {

@@ -189,7 +189,7 @@ test("photo-social: settings read top down, Advanced holds the technical things,
   await frame.locator(".settings-advanced").scrollIntoViewIfNeeded();
   await expect(frame.getByLabel("FluxIQ connection address", { exact: true })).toBeVisible();
   await expect(frame.getByLabel("Record what I type", { exact: true })).toBeVisible();
-  await expect(frame.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+  await expect(frame.getByRole("button", { name: "Save changes", exact: true })).toBeVisible();
   await expect(frame.getByRole("button", { name: "Forget this pairing", exact: true })).toBeVisible();
   await frame.locator(".settings-screen").evaluate((screen) => screen.scrollTo(0, screen.scrollHeight));
   await shot("settings-2-advanced-open");
