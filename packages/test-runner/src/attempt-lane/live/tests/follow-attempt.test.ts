@@ -94,3 +94,24 @@ test("a person that never answers still ends the watch by the stall, never by ca
   const world = scripted([[outcome("waiting_for_person")]]);
   await assert.rejects(() => followAttempt({ ...scope, ...world, personPlaying: true, stallMs: 3_000, pollMs: 1_000 }), AttemptProofStuck);
 });
+
+// Run `run-mwb5cnxg-003415b4` (t897): a saved Flow's run asks permission once before it starts, and the Lab answered
+// in the chat within 1.3 s. A poll in that window stopped the watch, so attempts 2 and 4 read as ended with no answer.
+test("a wait for a permission answer the Lab's person gives is followed on to the attempt's own ending", async () => {
+  const world = scripted([[outcome("working")], [outcome("waiting_for_person", { waitingFor: "permission" })], [outcome("working", { liveSteps: 7 })], [outcome("achieved", { liveSteps: 7 })]]);
+  const ended = await followAttempt({ ...scope, ...world, permissionsAnswered: true });
+  assert.equal(ended.attempt.status, "achieved");
+  assert.equal(ended.attempt.liveSteps, 7);
+});
+
+test("answering permission questions plays no other wait: one for a check with nobody playing still stops the proof", async () => {
+  const world = scripted([[outcome("working")], [outcome("waiting_for_person", { waitingFor: "person_only_check" })]]);
+  const ended = await followAttempt({ ...scope, ...world, permissionsAnswered: true });
+  assert.deepEqual([ended.attempt.status, ended.attempt.waitingFor], ["waiting_for_person", "person_only_check"]);
+});
+
+test("a run whose person leaves permission questions stops on one, saying so", async () => {
+  const world = scripted([[outcome("working")], [outcome("waiting_for_person", { waitingFor: "permission" })]]);
+  const ended = await followAttempt({ ...scope, ...world });
+  assert.deepEqual([ended.attempt.status, ended.attempt.waitingFor], ["waiting_for_person", "permission"]);
+});

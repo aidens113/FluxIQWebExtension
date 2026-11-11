@@ -17,6 +17,23 @@ export async function readPanelAnswerTurn(session: Pick<ChatBrowserSession, "pan
 }
 
 /**
+ * The attempt's answer turn once the panel has drawn it, and how long that took; `null` and the whole wait where it drew
+ * none within `drawMs` (t897). The panel reads its thread on its own beat, so a turn draws a few seconds after its attempt
+ * ends: read at once, every replay's turn of `run-mwbadi79-d928f922` read as none, while attempt 1's, read through the
+ * port below, had waited for it.
+ */
+export async function awaitPanelAnswerTurn(session: Pick<ChatBrowserSession, "panel" | "control">, attemptId: string, drawMs: number = DRAW_MS): Promise<{ dom: AnswerTurnDom | null; drawnAfterMs: number | null; waitedMs: number }> {
+  const started = Date.now();
+  for (;;) {
+    const dom = await readPanelAnswerTurn(session, attemptId);
+    const waitedMs = Date.now() - started;
+    if (dom !== null && dom.kind !== "") return { dom, drawnAfterMs: waitedMs, waitedMs };
+    if (waitedMs >= drawMs) return { dom, drawnAfterMs: null, waitedMs };
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+}
+
+/**
  * The real chat's answer port: the turn the person reads, out of the panel's DOM, and
  * never from the route, so a right answer that never reached them fails. It waits a few
  * of the panel's read beats for a turn to draw, then says there is none. `columnIds`
