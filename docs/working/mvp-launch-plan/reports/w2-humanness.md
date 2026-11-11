@@ -160,3 +160,85 @@ The extension already sends `humanness`, when it is above 0, on `append-turn` (`
    - Cause: `fxwork/.tools/heavy-slot.mjs` has no queue. Every waiter polls every 5 s and whoever's `mkdir` wins takes the slot, so a lane that chains jobs back to back usually wins.
    - Fix (the helper is yours; I did not touch it): a ticket queue. Waiters take an increasing ticket file, and a slot goes only to the lowest live ticket.
 8. Next on resume: H4 inert misclicks (worker-heavy; `content/actions/click.ts` and `humanness/`), then H5, the Lab measurement on two realistic sites, provider-free first.
+
+## Checked point 3: step-gap floor, seed in pacing, chat path, H4 misclicks (2026-11-10)
+
+### What changed
+- **W3's step-gap floor is wired.**
+  - New `pacing/arrival-pause.ts` (`automationStudioArrivalPauseMs`) reads `automationStudioRunOverrides()?.pace?.minStepGapMs` and returns max(human pause, floor).
+  - At level 0 with no floor it returns 0, and `arrival.ts` awaits nothing. At level 0 with a floor it waits the floor.
+  - `arrival.ts` now has a comment and two lines: compute the pause, await it only when above 0.
+- **Seed setup and record moved into pacing.**
+  - `pacing/humanness-seeded.ts` and `pacing/trace-with-humanness.ts`. Each returns the very same object at level 0.
+  - graph-run.ts now has no added lines. Three existing lines are edited: the `./pacing/index.ts` import, the `executionOptions` line (one call) and the `defended` line (one call).
+  - I did not reach a single line: the record must be attached where `defended` is built, because graph-run tracks the finished trace by object identity (`repeatTraceProvenance.copy`, `withheldBySavedTrace`, `executedLocations.remember`). A wrapper copying the returned trace would break those maps.
+- **Chat path (chat-path worker, Sonnet).**
+  - Core reads `humanness` on append-turn (validated; a bad value is refused before the turn is written), carries it on the command context, and adds it to the generation request in `commands/build.ts` and to the run-session request in `commands/run-flow.ts`. The run-session reader accepts and validates it.
+  - The extension's explicit Flow run (`background/automation-relay/automation-relay.ts`) sends the saved setting when it is above 0.
+  - Outside the brief, and accepted by me:
+    - `service/runtime-session/run-input.ts`: a type field.
+    - `apps/extension/src/background/index.ts`: one wiring line, `humanness: () => manager.currentSettings().humanness`.
+- **H4 misclicks (worker-heavy, Opus).**
+  - **The Core mark.** `humannessMisclick: true` is set only when humanness is above 0, the node declares an empty consequence list, and Core's own `automationStudioNodeActLasts`, `automationStudioNodeMutates` and `automationStudioNodeExplicitLastingRisk` all clear both the node and the dispatched output. The transport, `io-policy` and the domain mapping copy it only when it is `=== true`.
+  - **The content side.** `content/action-runtime/humanness/misclick/**`. At most one misclick per marked command, with chance 8% x level/100, made before the real press.
+  - **Refusals.** It never misclicks while a dialog, popover, menu, listbox or overlay is open, never on a backdrop, and never on a point where the hit element or any ancestor (through shadow roots) is interactive: a link, button, form control, label, summary, control role, tabindex, contenteditable, inline or property `onclick`, or cursor pointer. The point is always outside the target's box.
+  - **After a misclick.** If it changed the page, the target is measured again before the press. The press itself is unchanged.
+  - **Tests.** One per refusal, plus a positive case showing the press is identical with and without the mark.
+
+### Integration changes I made
+- `pacing/{arrival-pause,humanness-seeded,trace-with-humanness}.ts` with `pacing/tests/humanness-helpers.test.ts`, and the floor case in `pacing/tests/human-pause-run.test.ts`. That run test shows a level-0 run under a 400 ms floor waiting `[400, 400, 400]` and an empty frame waiting `[]`.
+- The pacing imports of the engine's types now go through `../index.ts` (the Core audit's barrel rule).
+- **Correction from me.** The "half-built contracts dist around 19:16" that H4 found and rebuilt was mine: I stopped the old build chain, as the lead asked, while its Core build was running. Nothing else was affected.
+
+### Decisions in workers' reports I accepted
+- H4's misclick draws from its own stream, seeded by the same command id, not H3's generator. H3 also draws on a second press, so drawing first from H3's stream would move that second aim. Each command still replays from its command id.
+- H4's `open-layer.ts` holds a 10-line private copy of `outermostFixed`, because the `content/action-runtime/interference/` barrel does not export it and that directory is not W2's. **Ask:** let me add one export line to `interference/index.ts` and drop the copy.
+
+### Still needed for chat runs to pause nodes in Core (exact lines, outside W2's files)
+- `framework/automation-service/service.ts:~2487`: pass `humanness: input.humanness` to the runtime session.
+- `framework/automation-service/service/runtime-session/graph-options.ts`: `humanness?: number` on `RunGraphOptionsInput` (~56), and `if (input.humanness !== undefined) options.humanness = input.humanness;` in `runGraphOptions` (~101).
+- The answer-first leg through the flow-run ports' input, after t897 lands (approved; I make it when you say).
+- Until these land, chat and explicit runs reach the page's clicks, typing and scrolls through the extension's saved-setting stamp, but Core node pauses only when the run's own options set the level.
+
+### H5 started: the architecture page
+- `docs/architecture/humanness.md` (Core) covers:
+  - level 0 as today's path, and the tests that hold it;
+  - what each level changes, with the formulas;
+  - the safety lines, including the misclick mark and the page-side refusals;
+  - seeds and replay;
+  - the developer's least step gap;
+  - where the level travels.
+- It is indexed in `docs/architecture/README.md`.
+- It does not link to W3's FluxNode overrides page yet, because that page is not in this tree. W3 links to this one.
+- `node scripts/structure-audit.mjs --rule docs-links` -> passed. The `docs-reference.mjs --check` half of `pnpm docs:check` was not run; this page adds no generated reference.
+
+### H5 Lab measurement needs paths (ask)
+- Nothing in the Lab knows humanness yet. A provider-free attempt is `pnpm lab attempt --scripted-model ...` (`scripts/lab/provider-free-run.mjs`).
+- To measure levels 0, 50 and 100 on two realistic sites, the Lab needs a `--humanness <0-100>` option that saves the level in the Lab browser's extension settings before the attempt. That edits `packages/test-runner/**` (extension setup) and `scripts/lab/**` (argument parsing), which are outside W2's paths.
+- What I would measure, at `--attempts 4`, on everything-store and job-board:
+  - the same verdict, model calls and Flow at all three levels;
+  - level 0's per-step wall times within noise of a run without the option, and no `humanness` key in commands or the trace;
+  - added time per step growing with the level;
+  - the count of misclicks and their points, all inert, with no layer open;
+  - no extra robot-check pauses.
+- Provider-free first. A live run only after you approve it in a report.
+- **Ask:** grant those two paths for H5, or route the option to the lane that owns the Lab.
+
+### Validation for checked point 3 (all run by me)
+- `pnpm --filter fluxiq exec vitest run` over pacing, step-loop, graph-run.test, node-execution, io-policy.test, client-gateway-transport.test, conversation-requests, run-requests, commands/tests/build.test and commands/tests/run-flow.test -> 27 files, 296 tests passed.
+- `pnpm --filter @fluxiq/contracts exec vitest run src/humanness src/tests/client-gateway.test.ts` -> 6 files, 21 tests passed.
+- `heavy-slot run t898 -- pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/sdk --filter @fluxiq/ui-components build` -> `CORE_BUILD_EXIT 0`. This compiles every Core library with `tsc -b`.
+- `cd domain && DOMAIN_TEST_BUILD_LABEL=t898-int node scripts/test-domain.mjs client/tests/gateway-mapping` -> 48 of 48 pass.
+- `heavy-slot run t898 -- node scripts/test-extension.mjs` over content/actions/tests, content/action-runtime/tests, content/action-runtime/humanness (H3 and H4 misclick tests), keyboard/tests, server-command-channel, conversation-relay, automation-relay, storage-settings, saved-state and settings-save -> 536 of 536 pass, 0 fail.
+- One slot, run back to back:
+  - `pnpm --filter @fluxiq-web-extension/domain build` -> 0.
+  - `pnpm --filter @fluxiq-web-extension/domain check` -> 2: one TS2379 in the H4 worker's test (`gateway-mapping-humanness.test.ts:27` passed `humanness: undefined`, which `exactOptionalPropertyTypes` refuses). I fixed the test with a cast and a comment, reran the domain tests (48 of 48), then reran `heavy-slot run t898 -- pnpm --filter @fluxiq-web-extension/domain check` -> exit 0.
+  - **`pnpm --filter @fluxiq-web-extension/extension check` -> exit 0, the clean extension check.**
+  - `node scripts/structure-audit.mjs` -> "passed (245 warning(s), 552 baselined)".
+- Core `pnpm structure:check` -> "structure-audit: passed (529 warning(s), 969 baselined)". It failed first on my three new pacing files (imports past the engine barrel); fixed. Core `node scripts/structure-audit.mjs --rule docs-links` -> passed.
+- The new slot queue works: each heavy step waited its turn. I bundled the four dependent extension steps into one slot run, so they did not re-queue three more times.
+
+### Not verified
+- Live browser behaviour of the click aim, typing cadence, scroll dwell and misclicks: the real cursor, `:popover-open`, shadow DOM and real overlays. That is H5.
+- A run end to end from Core to the content script, and chat runs reaching Core node pauses (needs the lines above).
+- The `docs-reference.mjs --check` half of `pnpm docs:check`.

@@ -24,5 +24,19 @@ test("a command with no humanness, or a non-number one, maps to the action it al
   const plain = webAutomationActionFromGatewayCommand(click);
   assert.equal("humanness" in plain, false);
   assert.equal("humanness" in webAutomationActionFromGatewayCommand({ ...click, humanness: "60" } as unknown as typeof click), false);
-  assert.deepEqual(webAutomationActionFromGatewayCommand({ ...click, humanness: undefined }), plain);
+  // A key present but undefined, as a sender that spreads an unset value would send it.
+  assert.deepEqual(webAutomationActionFromGatewayCommand({ ...click, humanness: undefined } as unknown as typeof click), plain);
+});
+
+test("Core's misclick mark is copied onto the action only when it is exactly true", () => {
+  const marked = webAutomationActionFromGatewayCommand({ ...click, humanness: 60, humannessMisclick: true }) as { humannessMisclick?: unknown };
+  assert.equal(marked.humannessMisclick, true);
+  const unmarked = webAutomationActionFromGatewayCommand({ ...click, humanness: 60 });
+  assert.equal("humannessMisclick" in unmarked, false);
+  const { humannessMisclick: _mark, ...markedWithout } = marked as Record<string, unknown>;
+  assert.deepEqual(markedWithout, unmarked);
+  for (const other of [false, "true", 1, null]) {
+    const mapped = webAutomationActionFromGatewayCommand({ ...click, humanness: 60, humannessMisclick: other } as unknown as typeof click);
+    assert.equal("humannessMisclick" in mapped, false, `${JSON.stringify(other)} added the mark`);
+  }
 });

@@ -157,6 +157,12 @@
 // the first press's gate point, as at humanness 0. At 0, or with no level, no
 // point is drawn and every press is at the gate's point, as always. The robot
 // check's wait and every watch window are the same at every level.
+//
+// On a command Core marked safe (`humannessMisclick`, W2 H4), above humanness
+// 0, the press may be preceded by one misclick on an inert point beside the
+// target (`action-runtime/humanness/misclick/before.ts`); the press is then the
+// one it would have been, or the target is measured again when the misclick
+// changed it. Unmarked, or at 0, nothing is awaited and nothing is read.
 
 import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs, webToggleSignatureOf, webToggleSignatureShown, type WebToggleReading } from "@fluxiq-web-extension/domain/client";
 import { dispatchClickGesture, extraPressesMade, noteExtraPress, pressAgain } from "../action-runtime";
@@ -176,7 +182,7 @@ import type {
 } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import { portableActionability } from "../action-runtime/actionability/index";
-import { aimPress, commandHumanness } from "../action-runtime/humanness";
+import { aimPress, commandHumanness, misclickBefore } from "../action-runtime/humanness";
 import { toggleReadingOf } from "./toggle-reading";
 import type { ContentActionDependencies } from "./types";
 
@@ -304,7 +310,13 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
   }
   // Above humanness 0, aimed near the centre where the gate accepts it (header); at 0, the gate's point.
   const human = commandHumanness(action);
-  const report = human ? (aimPress(element, gate, human) ?? gate) : gate;
+  const aimed = human ? (aimPress(element, gate, human) ?? gate) : gate;
+  // On a marked command, perhaps one misclick beside the target first; measured again if it changed anything (header).
+  const misclick = human && action.humannessMisclick === true ? await misclickBefore(element, action, startedAt) : "none";
+  const report = misclick === "moved" ? measure() : aimed;
+  if (!report.actionable) {
+    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true });
+  }
   const aimAgain: AimAgain | undefined = human ? (target, now) => aimPress(target, now, human)?.point ?? gate.point : undefined;
 
   const link = navigatingLink(element);

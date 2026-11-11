@@ -210,6 +210,8 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     scroll,
     // The run's own level, passed through as Core sent it (the content script normalises it when it reads it); absent adds no key.
     ...(typeof command.humanness === "number" ? { humanness: command.humanness } : {}),
+    // Core's mark that the step may misclick once, copied only when it is exactly `true`; anything else adds no key.
+    ...(command.humannessMisclick === true ? { humannessMisclick: true as const } : {}),
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }

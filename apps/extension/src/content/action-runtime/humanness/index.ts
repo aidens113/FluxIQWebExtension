@@ -5,10 +5,15 @@
 // time. At 0, or when a command names no level, `commandHumanness` answers
 // `undefined` and each verb takes today's path exactly: the same points, the
 // same events, and no added await.
+//
+// A misclick (W2 H4): above 0, on a command Core marked safe
+// (`humannessMisclick`), a press may be preceded by one click on an inert point
+// beside its target (`misclick/before.ts`); unmarked, or at 0, never.
 
 export { aimPress } from "./aim-press";
 export { commandHumanness, type CommandHumanness } from "./command-humanness";
 export { fitWithinCommand } from "./fit-within-command";
+export { inertHitAt, isInteractiveElement, misclickBefore, misclickChance, misclickPoint, misclickRandom, pageHasOpenLayer } from "./misclick";
 export { pauseFor } from "./pause-for";
 export { pointNearCentre } from "./point-near-centre";
 export { scrollDwellMs } from "./scroll-dwell";

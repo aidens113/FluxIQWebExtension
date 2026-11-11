@@ -361,6 +361,13 @@ export type WebAutomationActionCommand = {
   /** The run's humanness level, 0-100; absent means 0. The content script's click, type and scroll read it; a later step sets it. */
   humanness?: number | undefined;
   /**
+   * Core's mark that this command's step is known not to be lasting (it declared
+   * no consequence and nothing marks it as acting), sent only above humanness 0:
+   * the click verb may precede its press with one misclick on an inert point
+   * beside the target. Absent, the verb never misclicks.
+   */
+  humannessMisclick?: true | undefined;
+  /**
    * The pathname of the child-frame document the action was recorded in,
    * lifted from the node parameter `browserFrameUrlPath`. Chrome renumbers a
    * frame when it navigates, so a recorded `frameId` can name no frame on
