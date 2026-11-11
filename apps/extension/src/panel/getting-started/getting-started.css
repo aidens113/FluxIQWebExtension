@@ -9,11 +9,11 @@
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-ink);
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .start-title { font-size: 20px; line-height: 1.25; font-weight: 750; }
 .start-line { color: var(--muted); font-size: 13px; line-height: 1.45; }
@@ -43,7 +43,7 @@
   font-size: 13px;
   font-weight: 800;
 }
-.start-step[data-state="done"] .start-mark { border-color: var(--success); background: var(--success); color: #ffffff; }
+.start-step[data-state="done"] .start-mark { border-color: var(--success); background: var(--success); color: var(--canvas); }
 .start-step[data-state="current"] .start-mark,
 .start-step[data-state="waiting"] .start-mark { border-color: var(--accent); color: var(--accent-text); }
 .start-step[data-state="problem"] .start-mark { border-color: var(--danger); color: var(--danger-text); }

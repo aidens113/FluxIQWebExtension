@@ -69,6 +69,16 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
 ];
 
 /**
+ * How one element is read as a one-row table (t903): by its own `tN`, its words
+ * under the plan's key. A table of one value had no read that made a row: on
+ * `run-mwbkuxqt-c57f42cb` the model read the asked line four times with Extract,
+ * whose value is no row, and stored nothing
+ * (`runtime/llm-evidence/plan-resolution/extraction/element-record.ts`). It sits
+ * in the description, not the grammar, because the grammar is at Core's 700.
+ */
+export const WEB_AUTOMATION_EXTRACT_LIST_ONE_ELEMENT = "One element is a one-row table: handle tN, fields {yourKey: \"text\"}.";
+
+/**
  * The node's description: what it is for, how its list is named, and that
  * saving needs nothing more.
  *
@@ -102,6 +112,7 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
 export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
   "Read the rows of a list or table on this page, or one record, into the dataset.",
   "Detect the list first and name it by its handle.",
+  WEB_AUTOMATION_EXTRACT_LIST_ONE_ELEMENT,
   "It saves its rows itself: no save step."
 ].join(" ");
 

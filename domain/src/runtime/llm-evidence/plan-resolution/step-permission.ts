@@ -107,6 +107,7 @@ const NODE_EFFECTS: ReadonlyMap<string, "observe" | "mutate"> = new Map(
 /** What each action does to its control, in the plain word a person being asked would use. */
 const VERBS: Partial<Record<WebAutomationActionType, string>> = {
   "web.dom.click": "press",
+  "web.dom.hover": "point at",
   "web.dom.keypress": "press",
   "web.dom.dialog": "accept",
   "web.dom.type": "enter",

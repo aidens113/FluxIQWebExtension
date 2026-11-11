@@ -1,14 +1,15 @@
 // The open automation, compactly, above its chat: what its last run did, Run,
-// Stop while its run is in progress, the last run's data to export, and Open
-// in FluxIQ for everything else. A slim strip, not a card: the chat keeps the
-// panel, and the chat's own header names the automation and leads back to the
-// latest chat. Hidden while the chat shows no automation.
+// Stop while its run is in progress, the last run's data to export, its own
+// humanness behind "Humanness · N", and Open in FluxIQ for everything else. A
+// slim strip, not a card: the chat keeps the panel, and the chat's own header
+// names the automation and leads back to the latest chat. Hidden while the chat shows no automation.
 
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
 import { createOpenFluxIQButton, type OpenFluxIQButton } from "../open-fluxiq";
 import type { PanelStore } from "../state";
 import type { AutomationRowView, AutomationsController, ExportFormat } from "./controller";
+import { createFlowHumannessSection, flowHumannessPort } from "./humanness";
 
 type AutomationName = { readonly flowId: string; readonly name: string };
 
@@ -34,11 +35,13 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   const hint = createElement("p", { className: "strip-hint", hidden: true });
   const exports = createElement("span", { className: "strip-exports", hidden: true });
   const notice = createElement("div", { className: "notice", hidden: true, attrs: { role: "status" } });
+  const humanness = createFlowHumannessSection(flowHumannessPort(request));
   const element = createElement("section", { className: "automation-strip", hidden: true, attrs: { "aria-label": "Open automation" } }, [
     createElement("div", { className: "strip-head" }, [lines, run, stop]),
     stopStatus,
     hint,
     createElement("div", { className: "strip-links" }, [exports, open.element]),
+    humanness.element,
     notice
   ]);
   let shown: AutomationName | undefined;
@@ -78,6 +81,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     const nextStop = stopButton();
     stop.parentNode?.insertBefore(nextStop, stop); stop.remove(); stop = nextStop; bindStop(stop, owner);
     stopStatus.textContent = "";
+    humanness.show(undefined);
     element.hidden = true;
   }
 
@@ -201,6 +205,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       const owner = controller.state().ownerRevision;
       if (owner !== renderedOwner) retireOwner(owner);
       shown = automation;
+      humanness.show(automation?.flowId);
       void controller.focus(automation?.flowId, renderedOwner);
       draw();
     },
@@ -213,6 +218,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       lastStatus = status;
       open.observe(status);
       noticeButton?.observe(status);
+      humanness.render(status);
     }
   };
 }

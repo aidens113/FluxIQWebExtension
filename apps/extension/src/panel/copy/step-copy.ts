@@ -39,6 +39,7 @@ const STEPS = {
       : { present: `Opening ${hostname}`, past: `Opened ${hostname}` };
   },
   "web.dom.click": named({ present: "Clicking", past: "Clicked" }, { present: "Clicking a button", past: "Clicked a button" }),
+  "web.dom.hover": named({ present: "Pointing at", past: "Pointed at" }, { present: "Pointing at a menu", past: "Pointed at a menu" }),
   "web.dom.type": named({ present: "Typing into", past: "Typed into" }, { present: "Typing into a field", past: "Typed into a field" }),
   "web.dom.clear": named({ present: "Clearing", past: "Cleared" }, { present: "Clearing a field", past: "Cleared a field" }),
   "web.dom.select": named(

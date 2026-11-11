@@ -90,6 +90,8 @@ function whyTheReadFellShort(summary: WebAutomationExtractionSummary): WebLlmToo
   if (summary.listPresence === undefined && summary.itemsSeen === 0) return "list_never_appeared";
   const conditions = summary.conditions;
   if (conditions !== undefined && conditions.applied > 0 && conditions.kept === 0) return "conditions_kept_nothing";
+  // Rows there and not shown (t903): no read takes them until something shows them.
+  if (summary.recordCount === 0 && summary.notRenderedItems !== undefined && summary.notRenderedItems > 0) return "items_not_rendered";
   if (summary.recordCount === 0) {
     // A wait that ended on anything but the list arriving, with nothing read,
     // is the 2026-09-25 regression's own shape and the one a late page still

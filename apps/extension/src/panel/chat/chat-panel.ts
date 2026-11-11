@@ -7,14 +7,20 @@
 // Questions are worded by `asks/`, with no PIN dialog: one press of Allow answers
 // a permission. A panel-command confirmation is the one question that takes a PIN,
 // and the extension never asks for it: the chat sends that one question to FluxIQ.
+//
+// The chat shows Core's list of threads as a drawer ("Chats"), with New chat,
+// Rename and Delete through the background's relays (`transport/`). The thread
+// on screen is remembered per browser window for the browser's session
+// (`thread-memory/`), so a panel closed and opened again comes back to it.
 
-import { createChatWidget, type ChatAskPort, type ChatOpenControlFactory, type ChatWidget, type ChatWidgetOptions } from "@fluxiq/ui-components";
+import { createChatWidget, type ChatAskPort, type ChatOpenControlFactory, type ChatThreadsOptions, type ChatWidget, type ChatWidgetOptions } from "@fluxiq/ui-components";
 import "@fluxiq/ui-components/styles/chat.css";
 import type { PanelStore } from "../state";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createAskPort, createWorkWatch } from "./asks";
 import { hostStatusOf } from "./host-status";
 import { createChatOwnerContext } from "./owner-context";
+import { restoringThreadList, sessionThreadMemory, type ThreadMemory } from "./thread-memory";
 import { createExtensionChatTransport } from "./transport";
 
 /** The mounted chat: the package's, told about the extension's status. */
@@ -47,6 +53,8 @@ export type ChatPanelOptions = {
   asks?: ChatAskPort;
   /** The composer's host control ("Show me how", beside "+"), as the package takes it. */
   composer?: NonNullable<ChatWidgetOptions["composer"]>;
+  /** Where this window's thread is remembered; the browser's session storage when absent. */
+  threadMemory?: ThreadMemory;
 };
 
 /** Creates the chat, talking to the background through `request`. */
@@ -66,15 +74,37 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       }
     };
   };
-  const transport = createExtensionChatTransport(request);
+  const { threadMemory, ...chatOptions } = options;
+  const memory = threadMemory ?? sessionThreadMemory();
+  // A task's humanness falls back to the starting value the latest status carries, read at each card's read.
+  const extension = createExtensionChatTransport(request, undefined, undefined, () => latest);
+  // The chat does not exist yet while its transport is made; the restore asks for it once the list is read.
+  let mounted: ChatWidget | undefined;
+  const transport = { ...extension, conversation: restoringThreadList(extension.conversation, memory, () => mounted) };
   // Listening before the chat does, so a question is drawn knowing the same news the chat just heard.
   const work = createWorkWatch(transport.activity);
+  // No `unavailableReason`: a message that names no project goes to the session's
+  // project, which the background resolves at send time, asking FluxIQ for one
+  // when this browser has none stored (`background/connection/project-context.ts`).
+  // So the latest chat takes a person's first message before the status names a
+  // project; a send that still finds none answers with the relays' own `no_project` sentence.
+  const threads: ChatThreadsOptions = {
+    layout: "drawer",
+    onSelected(conversationId) {
+      const target = mounted?.target();
+      if (target?.kind === "thread" && target.conversationId === conversationId) {
+        memory.keep({ conversationId, projectId: target.projectId });
+      }
+    }
+  };
   const widget = createChatWidget(transport, {
-    ...options,
+    ...chatOptions,
     openControl,
     ownerKey: owners.capture().identity,
-    asks: options.asks ?? createAskPort({ working: work.working })
+    asks: chatOptions.asks ?? createAskPort({ working: work.working }),
+    threads
   });
+  mounted = widget;
   return {
     ...widget,
     render(status) {

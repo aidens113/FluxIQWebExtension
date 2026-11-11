@@ -57,6 +57,7 @@ import { createRecordingControls, createRecordingReview } from "../recording";
 import { createExtensionLibrary } from "../library";
 import { createTasksPanel } from "../tasks";
 import { createSettingsView } from "../settings";
+import { mountThemeChoice } from "../theme-choice";
 import { createPanelStore } from "../state";
 import type { PanelContext, PanelPorts, PanelSurface } from "./contracts";
 import { createRunFollow } from "./run-follow";
@@ -70,6 +71,7 @@ import "./shell.css";
 /** Mounts the panel into `root` for `surface`, with `ports` in place of each screen's real one (a spec's fakes). */
 export function mountPanel(root: HTMLElement, surface: PanelSurface, ports: PanelPorts = {}): void {
   document.documentElement.dataset.surface = surface;
+  mountThemeChoice();
   const store = createPanelStore();
   const context: PanelContext = { store, surface };
   let state = INITIAL_SHELL;

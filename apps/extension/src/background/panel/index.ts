@@ -5,11 +5,13 @@ export { chatPageLocation, type ChatPageDeps, type ChatPageTab } from "./chat-pa
 export { relayConversation } from "./conversation-relay";
 export { fluxIQWebAddress } from "./open-fluxiq";
 export { acceptedPageUrl } from "./page-url";
+export { HUMANNESS_MESSAGES, relayHumanness } from "./humanness-relay";
 export { handlePanelControl, type PanelControlDeps } from "./panel-control";
 export { panelControlDeps } from "./panel-control-deps";
 export type { PanelRelayContext } from "./relay-context";
 export { relayFailure } from "./relay-failure";
 export { handBackRun, stopRun, takeOverRun } from "./run-control";
 export { mergeSettings } from "./settings-save";
+export { relayThreadChange } from "./thread-change-relay";
 export { RUN_BADGE_HOLD_MS, toolbarBadge, type ToolbarBadge } from "./toolbar-badge";
 export { browserToolbarBadge, ToolbarIndicator, type ToolbarBadgeWriter } from "./toolbar-indicator";

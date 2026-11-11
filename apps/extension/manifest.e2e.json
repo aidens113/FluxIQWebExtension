@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "FluxIQ Web Automation Client (E2E)",
+  "name": "FluxIQ (E2E)",
   "description": "Isolated Chromium build used by the FluxIQ browser test facility.",
   "version": "0.1.0",
   "action": {
