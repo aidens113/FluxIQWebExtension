@@ -2057,7 +2057,12 @@ ranking, text cut or attribute allowlist (`content/rendered-elements.ts`,
 `dom-snapshot.ts`, `describe-element.ts`). Nameless, transparent, small and
 `aria-hidden` elements remain represented when rendered. Repetition,
 front-layer and lead-statement facts annotate elements rather than reorder
-them. Hidden/non-rendered subtrees and the extension's own UI are excluded.
+them. Each described element carries `nodeToken`, a serial its content script
+gives the element the first time a snapshot describes it and keeps for the
+document's life (a `WeakMap`, `dom-snapshot.ts`): a counter, never page
+content, meaningless across documents and frames. The domain reads it so a
+layer's handle names only the layer it was given to within one document
+(`domain/.../stable-handles.ts`, t897). Hidden/non-rendered subtrees and the extension's own UI are excluded.
 The separate stored-state projection still selects at most 1,500 useful
 elements for recording state paths; it does not bound the model's packet.
 Its omission flags are in [page evidence](page-evidence.md#the-four-caps).

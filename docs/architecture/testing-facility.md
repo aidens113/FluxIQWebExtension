@@ -2075,7 +2075,9 @@ pnpm lab attempt <scenario> --task <id> --authoring-mode answer-first --live-llm
 A task's exploring attempt and then several deterministic ones, in a visible browser (default `--attempts 4`: one exploring attempt and three deterministic). A task row named on a variant runs on that variant: the attempt arms it after each reset of the site (`run-attempt-command.ts`, `resetSite`; before t885 `lab attempt` never armed one). `attempt-lane/live/` types the
 instruction into the real extension chat, follows the attempt with the read the extension
 uses (`list-conversation-task-attempts`, `get-task-attempt`) until it stops on `achieved`,
-`budget_out`, `stopped_by_person` or `waiting_for_person`, and scores it with
+`budget_out`, `stopped_by_person` or `waiting_for_person` (except a wait for a permission
+answer, which the Lab's person gives on every task that does not say to ask first, so it is
+followed on: `follow-attempt.ts`, t897), and scores it with
 `judgeAttemptAnswer`: the rows in the attempt's own dataset, the site's change since the
 baseline it recorded, the declared final state on the page the attempt left, and the answer
 turn **read from the panel's DOM** (`li.answer-turn[data-attempt-id]`), so a right answer
@@ -2105,7 +2107,11 @@ turn sits under the first. The second attempt's baseline is read when it starts 
   whether the digest proves it started from the attempt before's saved work. `attempt.json` holds every
   attempt, `attempt-report.txt` every row and each later one beside the one before, and each attempt's
   `site.json` and picture are in `attempt-1/`, `attempt-2/` and so on. In `site.json`, `activity` is the
-  site's record of that attempt alone, and `activityBefore` what it already held.
+  site's record of that attempt alone, and `activityBefore` what it already held. Each attempt's `replay`
+  in `attempt.json` is Core's record of how its replay of the saved Flow was checked (task speed S9,
+  t897): `{ stood: true }` on its record with no judge call, `{ stood: false, deviation }` judged for that
+  closed reason, or `null` where it closed no replay; `attempt-report.txt` says it as one `Replay of
+  attempt N` line, and the run's step files as a note step.
 - **Every attempt is proven against the one before.** `runAttemptSeries` runs `proveContinuation` on
   each consecutive pair and keeps all of them (`series.continuations`, one per later attempt, each held
   or refused with its reasons). The run passes only when every attempt's answer is right, no attempt

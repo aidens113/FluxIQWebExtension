@@ -26,6 +26,8 @@ export const WEB_AUTOMATION_NODE_ACTION_EFFECT: Readonly<Record<WebAutomationAct
   "web.dom.upload": Object.freeze({ effectClass: "state" }),
   "web.dom.dialog": Object.freeze({ effectClass: "commit" }),
   "web.dom.scroll": Object.freeze({ effectClass: "observe" }),
+  // What a pointer shows goes when it moves on; nothing lasting is made (t903).
+  "web.dom.hover": Object.freeze({ effectClass: "observe" }),
   "web.dom.wait_for_selector": Object.freeze({ effectClass: "observe" }),
   "web.dom.wait_for_text": Object.freeze({ effectClass: "observe" }),
   "web.dom.extract": Object.freeze({ effectClass: "observe" }),

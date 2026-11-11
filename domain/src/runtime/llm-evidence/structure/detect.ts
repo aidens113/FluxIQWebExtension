@@ -66,6 +66,27 @@ import { webResetResource } from "../control-spot";
 // element's selector in its frame, that element's current handle in `instead`
 // (`staleTarget`).
 //
+// **A handle binds here as it binds for a press or a read (t903).** Until t903
+// a target bound only through the last page view the model was shown
+// (`returned`), so a handle a search or a description printed -- a closed
+// menu's line, found only by `web.find_on_page` -- was refused
+// `handle_not_in_packet` although a press or a read of that same handle ran:
+// those bind through every view and look of the page (`targets`,
+// `../plan-resolution/target-packets.ts`). On `run-mwbkuxqt-c57f42cb`
+// three detections of the account menu's line were refused so (0041, 0058,
+// 0095) while a read of it succeeded (0036). A handle the shown packet holds on
+// this page binds as before; any other binds through what `targets` holds of
+// this very page -- never another page's, so a handle from a page the browser
+// has left is still refused as stale (t477) -- and the page itself says whether
+// its selector still names anything (`target_not_found`). Without `targets` --
+// the recovery path -- only the shown packet binds.
+//
+// **A list found away from the target names no target (t903).** The content
+// script's outward search can reach a list far from the target, and the packet
+// named the target anyway; `./target-around.ts` says when the capture shows the
+// list elsewhere, and then the packet names no target, as a page-wide answer
+// does.
+//
 // **Each column says where it is in the page view**: the handle of its element
 // in the first item, in the last packet the model was shown (`returned`), found
 // in the detection's own capture (`./first-item/`). Without a shown packet --
@@ -97,13 +118,20 @@ import type { WebLlmExtractionHandles } from "./handles";
 import { webLlmStructureListName } from "./list-name";
 import { splitDetectedStructure } from "./packet";
 import { webLlmStructureRefusal } from "./refusal";
+import { webLlmListAroundTarget } from "./target-around";
 
 export type WebLlmStructureDetectionContext = {
   gateway: WebLlmEvidenceGateway;
   sessionId: string;
   request: WebLlmEvidenceToolRequest;
-  /** The last packet this Flow's authoring was shown, which is what a target handle is bound through. */
+  /** The last packet this Flow's authoring was shown, which a target handle it holds is bound through. */
   returned: WebLlmSnapshotBinding | undefined;
+  /**
+   * Binds a handle the shown packet does not hold on this page through every
+   * view and look this Flow took of the page at `location`, and of no other page
+   * (header, t903). Absent, as on the recovery path, only the shown packet binds.
+   */
+  targets?: (handle: string, location: string) => WebLlmStructureTargetBinding;
   handles: WebLlmExtractionHandles;
   /**
    * Gives a capture the handles the model is shown it with (the runtime's
@@ -123,6 +151,11 @@ export type WebLlmStructureDetectionContext = {
   observed?: (page: WebLlmSnapshotBinding) => void;
 };
 
+/** What `targets` answers: the selector and frame a handle names on a page, or that it names none there. */
+export type WebLlmStructureTargetBinding =
+  | { ok: true; selector: string; frameId: number | undefined; frameUrlPath?: string | undefined }
+  | { ok: false };
+
 /**
  * Detect, split and retain. Throws a `RecoverableToolRejection` for anything
  * the model can answer differently, and a plain error for a fault; the caller
@@ -137,7 +170,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
 
   const current = target === undefined ? undefined : await captureEvidence(gateway, sessionId, request, request.signal);
   if (current !== undefined) context.observed?.(current);
-  const element = current === undefined || target === undefined ? undefined : boundTarget(context.returned, current, target, context.restamp);
+  const element = current === undefined || target === undefined ? undefined : boundTarget(context, current, target);
   let { detection, page } = await capturedDetection(context, element?.selector, element, current, target);
   // With no target the detection is page-wide and is itself the page's state.
   if (current === undefined) context.observed?.(page);
@@ -156,16 +189,19 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   // The record beside the run gets a handle of its own (see the header). A
   // record left out for having only sensitive fields leaves its number unused.
   const recordHandle = detection.record === undefined ? undefined : context.handles.reserve();
+  // A list the capture shows away from the target names no target (header); one
+  // beside which the page sent the target's own record is about the target.
+  const awayFromTarget = element !== undefined && detection.record === undefined && webLlmListAroundTarget(detection.proposal, page, element.selector) === false;
   const split = splitDetectedStructure({
     detection,
     handle,
     recordHandle,
     location: page.evidence.location,
-    target: searchedPage ? undefined : target,
+    target: searchedPage || awayFromTarget ? undefined : target,
     // What the page calls the list, read in the capture the detection answered with (`./list-name.ts`, R2-U-9).
     list: webLlmStructureListName(page, detection.proposal.container),
     frameId: element?.frameId,
-    frameUrlPath: element?.frameDocument?.path,
+    frameUrlPath: element?.frameUrlPath,
     // Each column's element in the first item that has it is found in the
     // capture the detection answered with, and named by the handle the model
     // was shown it by (`./first-item/`).
@@ -204,7 +240,7 @@ async function capturedDetection(
   const payload = jsonRecord(result.payload, "web structure detection payload");
   // A frame's capture is its own document's, held to the origin that document
   // was shown with; the top page's origin when that is not known (see the header).
-  const expectedOrigin = current === undefined ? undefined : (frameId === undefined ? undefined : bound?.frameDocument?.origin) ?? new URL(current.evidence.location).origin;
+  const expectedOrigin = current === undefined ? undefined : (frameId === undefined ? undefined : bound?.frameOrigin) ?? new URL(current.evidence.location).origin;
   const sanitized = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     expectedOrigin,
     failedAction: undefined
@@ -225,6 +261,7 @@ async function capturedDetection(
     subjects: sanitized.subjects,
     pageSubject: sanitized.pageSubject,
     cardWords: sanitized.cardWords,
+    nodeTokens: sanitized.nodeTokens,
     resetResource: webResetResource(sessionId, payload.sourceId),
     stateDigest: states?.stateDigest,
     routeState: states?.routeState,
@@ -248,7 +285,13 @@ async function capturedDetection(
  * the page itself refuses it as `ambiguous_target` when its matches are not
  * all in the one run.
  */
-function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLlmSnapshotBinding, target: string, restamp: WebLlmStructureDetectionContext["restamp"]): BoundTarget {
+function boundTarget(context: WebLlmStructureDetectionContext, current: WebLlmSnapshotBinding, target: string): BoundTarget {
+  const { returned, restamp } = context;
+  const location = current.evidence.location;
+  // A handle the shown packet does not hold on this page binds as a press binds it (header, t903).
+  const shownHere = returned !== undefined && returned.evidence.location === location && returned.evidence.elements.some((candidate) => candidate.target === target);
+  const looked = shownHere ? undefined : context.targets?.(target, location);
+  if (looked?.ok === true) return { selector: looked.selector, frameId: looked.frameId, frameOrigin: undefined, frameUrlPath: looked.frameUrlPath };
   const observed = returned ?? current;
   if (observed.evidence.location !== current.evidence.location) staleTarget("page_moved_since_packet", observed, current, target, restamp);
   const element = observedElement(observed.evidence, target);
@@ -256,7 +299,8 @@ function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLl
   if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   const stillThere = current.evidence.elements.some((candidate) => candidate.frameId === element.frameId && current.selectors.get(candidate.target) === selector);
   if (!stillThere) staleTarget("handle_no_longer_on_page", observed, current, target, restamp);
-  return { selector, frameId: element.frameId, frameDocument: frameDocumentOf(element) };
+  const frameDocument = frameDocumentOf(element);
+  return { selector, frameId: element.frameId, frameOrigin: frameDocument?.origin, frameUrlPath: frameDocument?.path };
 }
 
 /**
@@ -281,8 +325,13 @@ function staleTarget(
   throw new RecoverableToolRejection("target_unobserved", rejectionDetail({ reason, target, instead, missing: undefined, requestId: undefined }), current);
 }
 
-/** A target as it was bound: its selector, its frame, and that frame's document when the element was shown in a child frame. */
-type BoundTarget = { selector: string; frameId: number | undefined; frameDocument: FrameDocument | undefined };
+/**
+ * A target as it was bound: its selector, its frame, and, for an element shown
+ * in a child frame, the origin and path of that frame's document. A handle bound
+ * through `targets` knows the frame's path and not its origin, so its frame is
+ * held to the top page's origin, which is still a guard.
+ */
+type BoundTarget = { selector: string; frameId: number | undefined; frameOrigin: string | undefined; frameUrlPath: string | undefined };
 
 /** The origin and the path of the document a child frame held, as the element was shown with it. */
 type FrameDocument = { origin: string; path: string | undefined };

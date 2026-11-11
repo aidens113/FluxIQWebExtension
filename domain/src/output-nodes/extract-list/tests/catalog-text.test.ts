@@ -143,7 +143,7 @@ test("the read's catalog text says nothing of paging, and its tags name none", (
   for (const tag of ["every page", "next page", "load more", "infinite scroll", "pagination"]) assert.equal(WEB_AUTOMATION_EXTRACT_LIST_TAGS.includes(tag), false, tag);
   assert.equal(
     WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION,
-    "Read the rows of a list or table on this page, or one record, into the dataset. Detect the list first and name it by its handle. It saves its rows itself: no save step."
+    "Read the rows of a list or table on this page, or one record, into the dataset. Detect the list first and name it by its handle. One element is a one-row table: handle tN, fields {yourKey: \"text\"}. It saves its rows itself: no save step."
   );
   // dedupe, sort and maxItems now work over every row the read collects in the run.
   assert.match(WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR, /every row it collects in the run: dedupe\?: true\|key, sort\?: "key desc", minItems/u);

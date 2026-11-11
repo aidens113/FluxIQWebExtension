@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import { requestsAnswered } from "../../tests/requests-answered.js";
 
 type Scope = Page | Locator;
 type AriaRole = Parameters<Page["getByRole"]>[0];
@@ -42,10 +43,17 @@ export async function readRecords(page: Page, step: ScenarioStep): Promise<Array
 /** Performs one recording-script step as the Lab's step runner does, returning the records of an extract step. */
 export async function runStep(page: Page, origin: string, step: ScenarioStep): Promise<Array<Record<string, string>> | undefined> {
   const timeout = step.timeoutMs ?? 10_000;
+  // An act starts on a page whose earlier requests are answered, which also arms the count before a first act,
+  // and is done once the requests it led to are answered (`requestsAnswered`).
+  const act = async (action: () => Promise<unknown>) => {
+    await requestsAnswered(page, timeout, `before ${step.id} (${step.operation})`);
+    await action();
+    await requestsAnswered(page, timeout, `${step.id} (${step.operation})`);
+  };
   switch (step.operation) {
-    case "click": await locate(page, step.target!).click({ timeout }); return undefined;
-    case "type": await locate(page, step.target!).fill(String(step.value ?? ""), { timeout }); return undefined;
-    case "press": await locate(page, step.target!).press(String(step.value), { timeout }); return undefined;
+    case "click": await act(() => locate(page, step.target!).click({ timeout })); return undefined;
+    case "type": await act(() => locate(page, step.target!).fill(String(step.value ?? ""), { timeout })); return undefined;
+    case "press": await act(() => locate(page, step.target!).press(String(step.value), { timeout })); return undefined;
     case "navigate": await page.goto(`${origin}${step.path!}`); return undefined;
     case "waitForState": await locate(page, step.target!).waitFor({ state: "visible", timeout }); return undefined;
     case "checkpoint": return undefined;

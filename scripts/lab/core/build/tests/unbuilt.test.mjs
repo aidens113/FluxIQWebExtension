@@ -8,9 +8,10 @@ import { fileURLToPath } from "node:url";
 
 import { coreBuildMissing, scanCoreBuildEntries } from "../index.mjs";
 
-/** A Core shaped like the real one: four packages, each promising `dist` files through `exports`. */
+/** A Core shaped like the real one: its five libraries, each promising `dist` files through `exports`. */
 const PACKAGES = {
   contracts: { name: "@fluxiq/contracts", exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }, "./automation-studio": { types: "./dist/automation-studio.d.ts", import: "./dist/automation-studio.js" } } },
+  sdk: { name: "@fluxiq/sdk", exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } },
   fluxiq: { name: "fluxiq", exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }, "./automation-studio": { types: "./dist/programs/automation-studio/index.d.ts", import: "./dist/programs/automation-studio/index.js" } } },
   "client-gateway-websocket": { name: "@fluxiq/client-gateway-websocket", exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } },
   "ui-components": { name: "@fluxiq/ui-components", exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } }
@@ -42,7 +43,7 @@ test("a fresh checkout -- sources, no dist -- is refused as unbuilt, and the mes
   const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
   assert.equal(verdict.built, false);
   assert.equal(verdict.state, "unbuilt");
-  assert.deepEqual(verdict.missing.map(item => item.package).sort(), ["@fluxiq/client-gateway-websocket", "@fluxiq/contracts", "@fluxiq/ui-components", "fluxiq"]);
+  assert.deepEqual(verdict.missing.map(item => item.package).sort(), ["@fluxiq/client-gateway-websocket", "@fluxiq/contracts", "@fluxiq/sdk", "@fluxiq/ui-components", "fluxiq"]);
   assert.match(verdict.message, /has not been built/u);
   assert.match(verdict.message, /pnpm build/u);
   assert.match(verdict.message, /setup failure, not a run result/u);
@@ -66,15 +67,15 @@ test("one package built and the others not is incomplete, and names what is miss
 }, async (root) => {
   const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
   assert.equal(verdict.state, "incomplete");
-  assert.deepEqual(verdict.missing.map(item => item.package).sort(), ["@fluxiq/client-gateway-websocket", "@fluxiq/ui-components", "fluxiq"]);
-  assert.match(verdict.message, /partly built: 8 of the 12/u);
+  assert.deepEqual(verdict.missing.map(item => item.package).sort(), ["@fluxiq/client-gateway-websocket", "@fluxiq/sdk", "@fluxiq/ui-components", "fluxiq"]);
+  assert.match(verdict.message, /partly built: 10 of the 14/u);
 }));
 
 test("a dist that exists but lacks one declared entry point is incomplete, not built", () => withCore({
   // What a clean that emptied `dist` and a build that stopped halfway leave:
   // the directory is there, and the module a run imports is not.
   installed: true, packages: PACKAGES,
-  built: { contracts: everyEntry("contracts"), fluxiq: ["dist/index.js", "dist/index.d.ts", "dist/programs/automation-studio/index.d.ts"], "client-gateway-websocket": everyEntry("client-gateway-websocket"), "ui-components": everyEntry("ui-components") }
+  built: { contracts: everyEntry("contracts"), fluxiq: ["dist/index.js", "dist/index.d.ts", "dist/programs/automation-studio/index.d.ts"], sdk: everyEntry("sdk"), "client-gateway-websocket": everyEntry("client-gateway-websocket"), "ui-components": everyEntry("ui-components") }
 }, async (root) => {
   const verdict = coreBuildMissing(await scanCoreBuildEntries(root));
   assert.equal(verdict.state, "incomplete");

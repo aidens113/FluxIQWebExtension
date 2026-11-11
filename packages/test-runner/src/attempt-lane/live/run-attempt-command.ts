@@ -23,7 +23,7 @@ import { attemptBalanceFailures } from "./balance-failures.js";
 import { attemptCanGoOn } from "./can-go-on.js";
 import { liveAttemptDriver, type LiveAttemptEnded } from "./live-driver.js";
 import { attemptResultLine } from "./result-line.js";
-import { readPanelAnswerTurn } from "./panel-answer-port.js";
+import { awaitPanelAnswerTurn } from "./panel-answer-port.js";
 import { writePaidAttemptBundle } from "./paid-attempt-bundle.js";
 import { writeUnscoredAttemptEvidence, type ScoredAttempt } from "./unscored-attempt-evidence.js";
 
@@ -94,9 +94,17 @@ async function liveSide(input: AttemptCommandInput, llm: Extract<AttemptCommand[
   };
 }
 
-/** The picture of what a person sees, with the answer turn scrolled into the panel. It never decides the proof. */
+/**
+ * The picture of what a person sees, with the answer turn scrolled into the panel. It never decides the proof. It is
+ * taken once the panel has drawn the attempt's answer turn, or has drawn none in the panel's draw window, as a person
+ * reading the chat would see it; how long the turn took to draw, or that it never did, is kept in
+ * `answer-turn-wait.json` (t897: read at once, every replay's turn read as none).
+ */
 async function pictureOfAnswer(session: LiveAttemptSession, ended: LiveAttemptEnded, evidence: string, log: (line: string) => void): Promise<void> {
   const file = path.join(evidence, "answer-turn.jpg");
+  const drawn = await awaitPanelAnswerTurn(session.browser, ended.outcome.attempt.attemptId);
+  await writeFile(path.join(evidence, "answer-turn-wait.json"), JSON.stringify({ drawnAfterMs: drawn.drawnAfterMs, waitedMs: drawn.waitedMs }, null, 2));
+  log(drawn.drawnAfterMs === null ? `[attempt] the panel drew no answer turn in ${Math.round(drawn.waitedMs / 1000)} s` : `[attempt] the panel drew the answer turn ${drawn.drawnAfterMs} ms after the attempt was read as ended`);
   const page = session.browser.panel?.page ?? session.browser.control;
   await page.evaluate(({ attemptId, viaViews }) => {
     const current = globalThis as unknown as Window & { chrome?: { extension: { getViews(): Window[] } } };
@@ -109,7 +117,7 @@ async function pictureOfAnswer(session: LiveAttemptSession, ended: LiveAttemptEn
     await writeFile(file, taken.bytes);
     log(`[attempt] the picture of the answer is ${file}`);
   } else log(`[attempt] no picture of the answer: ${taken.reason ?? "the capture gave nothing"}`);
-  await writeFile(path.join(evidence, "answer-turn.json"), JSON.stringify(await readPanelAnswerTurn(session.browser, ended.outcome.attempt.attemptId), null, 2));
+  await writeFile(path.join(evidence, "answer-turn.json"), JSON.stringify(drawn.dom, null, 2));
 }
 
 /** What the run keeps of each attempt as it ends: the ending, the cache share of its own steps, and the model calls it made by kind. */
@@ -247,7 +255,7 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const startedFrom = (attempt: number): boolean | undefined => (attempt > 1 ? series.continuations[attempt - 2]?.held : undefined);
     const told = series.outcomes.map((outcome, index) => {
       const row = rows[index]!, keeping = kept.get(row.attempt)!, attempt = keeping.ended.outcome.attempt;
-      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
+      return { row, answer: outcome.answer, attempt, saved: keeping.ended.outcome.saved ?? null, replay: keeping.ended.outcome.replay ?? null, budgetUsd: attempt.budget.usd, cache: keeping.cache, speed: keeping.speed, actsWithNoRow: attempt.actsWithNoRow ?? 0, modelCalls: keeping.modelCalls, personHandOffs: keeping.handOffs, startedFrom: outcome.startedFrom, site: keeping.ended.site, ...(outcome.askedAgain ? { askedAgain: outcome.askedAgain } : {}) };
     });
     const lines = told.map(({ row, answer, attempt, askedAgain }) => attemptResultLine({ row, answer, status: attempt.status, waitingFor: attempt.waitingFor, actsWithNoRow: attempt.actsWithNoRow, startedFromFirst: startedFrom(row.attempt), askedAgain }));
     const { continuations } = series;
@@ -258,9 +266,11 @@ export async function runAttemptCommand(input: AttemptCommandInput): Promise<num
     const diagnosisOnly = command.attempts === 1;
     const report = renderAttemptSeries({ ...series.series, rows });
     const speedLines = told.flatMap(({ row, speed }) => attemptSpeedLines(row.attempt, speed));
+    // How each replay of the saved Flow was checked, from Core's own record of it (t897): why a replay was judged is otherwise said nowhere.
+    const replayLines = told.flatMap(({ row, replay }) => replay === null ? [] : [replay.stood ? `Replay of attempt ${row.attempt}: stood on its record, no judge asked.` : `Replay of attempt ${row.attempt}: judged, because it deviated from the accepted run: ${replay.deviation}.`]);
     await writeFile(path.join(evidence, "attempt.json"), JSON.stringify(command.attempts === 1 ? told[0] : { attempts: told, series: { ...series.series, rows }, continuations, deterministic: series.series.deterministic, stoppedShort: series.stoppedShort ?? null, reseededBetween: false, ...(command.restartBetween ? { restartedBetween: restarted ?? null } : {}) }, null, 2));
     recorded = true;
-    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...speedLines].join("\n")}\n`);
+    await writeFile(path.join(evidence, "attempt-report.txt"), `${[report, ...restartWords, ...lines, ...notRun, ...notProven, ...(diagnosisOnly ? ["Diagnosis only: one attempt asked for, so no deterministic run was tried and this is never a pass."] : []), ...replayLines, ...speedLines].join("\n")}\n`);
     // A wait for a person with none coming is a proof that did not finish, however good what it held so far.
     const allRight = told.length === command.attempts && told.every(({ answer, attempt }) => answer.verdict === "right" && attempt.status !== "waiting_for_person") && continuations.every((proof) => proof.held);
     // One attempt never proves the loop: it is a diagnosis, and its status must not read as a pass.
