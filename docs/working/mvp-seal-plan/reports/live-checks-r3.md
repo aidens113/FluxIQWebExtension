@@ -28,10 +28,12 @@ Dev sends judges their real schema natively: integration round 2 carried lane A'
 | crossborder-marketplace-free-hubs-under-ten (after fixes 2-8) | Sonnet 5.5 | 4 | right x4; replays 3-4 run_flow, 0 decisions; 9 robot checks paused in place | 33 (1/5/27), 4 (1/1/2), 2 (1/1/0), 2 (1/1/0) | $1.7820 | run-mwaf6gnt-638d90a0 |
 | bigbox-retail-rated-delivery-towels | Haiku 5.5 | 4 | attempt 1 stuck_in_a_loop, not judged | 61 | $0.2038 | run-mwafor01-bb471f52 |
 | bigbox-retail-rated-delivery-towels (after fixes 8-11) | Haiku 5.5 | 4 | attempt 1 wrong (15 of 16 rows), accepted by the judge; attempts 2-4 not run | 49 (1/4/44) | $0.1800 | run-mwaknxf9-7549d126 |
+| bigbox-retail-rated-delivery-towels (after fixes 12-17) | Haiku 5.5 | 4 | right, right; attempt 3 not judged (its right replay was judged no for want of left-out rows, then the model replaced the result and looped); 4 not run | 53 (1/3/49), 18 (1/3/14), 44 | $0.4197 | run-mwaudvnh-c208d32c |
+| bigbox-retail-rated-delivery-towels (after fixes 18-22) | Haiku 5.5 | 4 | attempt 1 wrong only by an extra unasked `link` column (all 16 rows right; judge yes at once); 2-4 not run | 28 (1/1/26) | $0.0871 | run-mwb2kkv5-1baeee11 |
 
 Calls are given as interpretation/judge/decisions where the Lab reported them. Every run has a debug note under `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md`.
 
-**Spend** (lab-slots/spend-ledger.jsonl, instance t885-live finishes): $5.8404 over 9 runs. One guard refusal (`behind-dev`) and one (`loop`) cost $0. Scripted proofs are not ledgered and cost nothing.
+**Spend** (lab-slots/spend-ledger.jsonl, instance t885-live finishes): $6.2601 over 10 runs. One guard refusal (`behind-dev`) and one (`loop`) cost $0. Scripted proofs are not ledgered and cost nothing.
 
 **Provider-free scripted proofs** (instance t885-proof): run-mwaergal-9493d57a (hubs, `--attempts 2`: the saved Flow ran whole past the absent cover); run-mwapfy0i-d64b26db (hubs timed-check variant: the hand-off came from a look, `dom-capture_snapshot` with `personCompletedCheck`); run-mwasz6va-59a17e08 (timed-check, after fix 17: attempt 2 `run_flow`, 0 decisions, read at `freeShipping=y&maxPrice=10`, right rows, after two checks cleared during the replay).
 
@@ -55,6 +57,14 @@ Calls are given as interpretation/judge/decisions where the Lab reported them. E
 | 14 | No realistic scenario raised a check without an action, and `lab attempt` never armed a task's variant. | Scenario-lab crossborder `timed-check` variant (oracle unchanged), task row, script form; `attempt-lane/live/run-attempt-command.ts`; testing-facility.md rows | scenario 77/77, scripts 52/52 (75decdf48) |
 | 15 | A select or check whose reply came from the old document never had its landing judged. | Extension `runtime/click-landing.ts`, `domain/src/actions/check-wait.ts` + tests | 118/118, 7/7 (83b4a3bf4) |
 | 16 | The check allowance reached host-state, passive-reader and post-failure captures. | Domain `runtime/llm-evidence/tools.ts` + 5 test files | `runtime/llm-evidence actions` 1828/1828 |
+| 18 | **Act gate matched a different press** (t893 item 3, run-mwaszqeh-cc316c6d): a control's kind (`implicitRole: "button"`) was read as one of its words, so a chat popup's Close matched an earlier Accept and was refused three times. Kind fields are no longer words. When both forms name their control, the words decide; when only one does, they are the same act (a thinner-form repeat is still refused). | Core `runtime/answer-first/act-record/{identity/target-keys.ts, record.ts, tests/kind-is-no-control-word.test.ts, tests/thin-press.test.ts}` | 94 files / 883 tests (cd0d3bb6a) |
+| 19 | **A saved Flow run's reads did not tell the judge what their conditions left out** (towels attempt 3: a right replay judged no). The left-out account now rides on the record batch, and a left-out label equal to a kept one is marked `sameLabelKept`. | Core `engine/automation/{contracts.ts, records/capture.ts, records/read/*}`, `answer-first/rows/{read-evidence,row-sink}.ts`, `flow-less/{read-pages-shown,question}.ts` + tests (incl. `flow-run/tests/repaired-read-conditions.test.ts`) | 303 files / 2374 tests; scripted run-mwaxy7s0-871febc5 `--attempts 4`: replays 2-4 `run_flow`, 0 decisions (1313c30fb) |
+| 20 | **Rows that met every condition were discarded** after a wrong judge no: an unconditioned look became the result. A read lacking any condition of the result now stays its own list (`result_list_kept`); a stricter read still replaces it; an explicit `writeMode: replace` may (lead-approved). | Core `answer-first/rows/{row-sink,result-change,read-evidence,read-evidence-type,result-dataset}.ts` + `tests/result-keeps-conditions.test.ts` | 77 files / 529 tests; fails 5/7 against HEAD (150aa58ef) |
+| 21 | **A wait read as a failed save** ("I could not save steps"). `notes_only` gains `why` and `earlierKept`; the person is told it is waiting and earlier steps are kept. Also mirrored dev's `checkingOff` into the chat type, which had broken the ui-components check. | Core contracts 0.18.1 `saved-state.ts`; ui-components 0.12.1 `chat/ports/results.ts`, `chat/answer/words/saved-words.ts`; `answer-first/attempt-store/*`, `attempt/ending.ts` + tests | contracts 854/854, ui chat 672/672, ui check 0 (6d44d6f97) |
+| 22 | `old-modes.test.ts` timed out under load reading ~800 files one after another; it now reads them concurrently (limit unchanged). | Core `answer-first/apply-proven/tests/old-modes.test.ts` | 14/14 (c4f81570a) |
+| 23 | **Dining regression from fix 20**: a final read of ANOTHER list (saved items, other view and columns) was held apart for lacking the search's conditions. Proven by turning the rule off (run-mwb58h2e-978e871a passed). A read is now held apart only when it re-reads the result's own list (same record-output name, else same view, else every column). The dining script now answers a 4-attempt series. | Core `answer-first/rows/{row-sink,result-change}.ts` + tests; Lab `scripted-model/scripts/local-classifieds-save-dining-tables.ts` + test | 550 tests; dining 4/4 (f75373940, 4333e6aac) |
+| 24 | **Answer held an unasked column** (towels run-mwb2kkv5: `link`). The row sink gets the instruction and shows the person's named columns; replays declare the same columns as the saved Flow (namedColumns wired through the loop, round and service); dedupe stays on the row's stored identity, so two listings that differ only by link both stay. | Core `answer-first/attempt/{run-attempt,round}.ts`, `service.ts` (namedColumns lines), `rows/row-sink.ts`, `runtime/llm/{loop-configuration,evidence-loop}.ts`, `node-tools/{dry-run-gate,run/flow,run/flow-part,replay/*}.ts` + tests | 1500 tests; dining and hubs 4/4 (pending commit) |
+| 25 | **A forward run's re-read of the result's own list counted as another list, and a narrowed replay dropped a row field a later step binds** (`$row.url`, `core.replay.unresolved_binding`). A replay of a saved step now joins the list of the read that recorded it, and keeps the row fields its repeat reads (t869's lowering, shared with assembly). The rerun put-back carries `partOf` and `namedColumns`. | Core `answer-first/rows/{dataset-of-read,row-sink}.ts`, `node-tools/replay/row-fields.ts` (new), `node-tools/step-place.ts`, `evidence-loop.ts` + tests | 1500 tests; dining run-mwbbrxpo-02eea338 and hubs run-mwbd2ybz-0849709f 4/4, replays `run_flow` at 1 call (pending commit) |
 | 17 | **A replay dropped a filter after a cleared check.** After Continue the replay took the success edge with no look, though the press was never made (the page was the check). A step is now judged on the page after Continue: an unmade act or a read runs again, a declared effect is checked, an unknown lasting act is held and never repeated, and a plain toggle goes on. The extension keeps the original `effect: "unacted"` on the check record. | Core `engine/automation/{person-cleared.ts (new), graph-run.ts, person-needed.ts}` + tests; extension `content/action-runtime/results.ts` + test | Core 215 files / 1706 tests; content/action-runtime 519/519; scripted run-mwasz6va-59a17e08 |
 
 Batch 4 (fixes 8-10), my checks after a Core library rebuild: fluxiq check 0; Core audit passed; vitest node-tools/run + answer-first + flow-less 121 files / 929 passed; domain check 0; extension check 0; extension audit passed; domain node-run 573/573; extension no-pager 2/2.
@@ -82,12 +92,24 @@ Batch 4 (fixes 8-10), my checks after a Core library rebuild: fluxiq check 0; Co
 | check-cleared-effect | worker-heavy | fix 17 (Core) | Partial (extension half outside its paths) | Core suites; scripted Lab proof |
 | check-wait-domain-tests | worker | fix 16 | Done | full domain run 1828/1828 |
 | check-record-effect | worker | fix 17 (extension) | Done | content/action-runtime 519/519, check |
+| act-gate-wrong-match | worker-heavy | fix 18 | Done | 94 files / 883 tests, check, audit |
+| replay-lost-conditions | worker-heavy | trace of towels attempt 3 (read only) | Done | its step evidence against the fix |
+| flow-run-left-out | worker-heavy | fix 19 | Partial (the save wording was outside its files; done as fix 21) | 303 files / 2374 tests, check, audit; scripted proof |
+| result-keeps-conditioned-rows | worker-heavy | fix 20 | Done | combined suites, check, audit |
+| waiting-not-failed-save | worker | fix 21 | Partial (ui-components check failed on dev's `checkingOff` gap; I fixed it) | contracts, ui chat, both checks |
+| named-columns-answer | worker-heavy | fix 24 (sink) | Partial (needed `run-attempt.ts`, then another lane's) | tests, check |
+| replay-named-columns | worker | fix 24 (replay) | Partial (callers outside its paths) | node-tools tests |
+| dining-rows-regression | worker-heavy | fix 23 | Partial (script lacked a 4th judge reply; I added it) | tests; dining 4/4 after my script change |
+| named-columns-wiring | worker-heavy | fix 24 (wiring, dedupe) | Done (it asked the lead directly for round.ts and service.ts) | 1492 tests; dining proof then exposed fix 25 |
+| forward-run-same-list | worker-heavy | fix 25 | Done | 1500 tests; both 4/4 proofs (read their reports myself) |
 
 No escalation between tiers was needed. Worker reports are under `reports/live-checks-r3/`.
 
 ## Not verified
 
-- Fixes 12-17 have not run live yet. The towels rerun waits on the lead's commit and dev merge.
+- Fixes 18-21 have not run live yet; the towels rerun at `--attempts 4` is the first.
+- A set-aside list (fix 20) is not shown to the judge; that needs `completion/check.ts`, which comes to this lane after t895 lands.
+- Wordless icons are told apart only by their other fields: a web icon's drawing token looks like an address, so the act record leaves it out of identity. It errs toward refusing; a fix changes persisted act ids and needs its own brief.
 - The napkins saved Flow still has no way to the cart once "View cart" is passed over (it stops at the cart read and the model recovers).
 - A hand-off from a look on a live site: proven only by the scripted timed-check variant and unit tests.
 - Domain test rule pinning the extension's `rejectedRows` shape (Core reads it by name): proposed in dropped-organic-row.md, not added.
@@ -96,7 +118,7 @@ No escalation between tiers was needed. Worker reports are under `reports/live-c
 
 ## What remains
 
-1. Rerun towels on Haiku at `--attempts 4` after the merge.
+1. Towels on Haiku at `--attempts 4` (running).
 2. Breadth at `--attempts 4`: crossborder's other tasks, social-network-feed's other tasks, bigbox's other tasks (count tasks may resume), alternating models.
-3. Still-open items 3-8 of the Answer First Current State. Item 2 is answered: native is on dev and proven on Haiku.
-4. old-modes.test.ts: no time limit of its own (Core's 15 s default). It reads 774 source files (5.3 MB) one after another, which ran slow at 0.6 GB free. Noted, not changed.
+3. After t895: show the judge a set-aside list (`completion/check.ts`).
+4. Still-open items 3-8 of the Answer First Current State. Item 2 is answered: native is on dev and proven on Haiku.
