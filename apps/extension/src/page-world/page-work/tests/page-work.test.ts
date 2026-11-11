@@ -106,13 +106,17 @@ test("the listing: a panel drawn by a timer that requests it -- busy through the
 test("a callback that schedules itself again recurs: it is counted once, and what it begins after is not", async (t) => {
   const p = page(t);
   let runs = 0;
+  // The fourth run is awaited itself: each run is scheduled only once the one before it has run, so no fixed wait is sure to cover four on a busy machine.
+  let fourth: () => void = () => undefined;
+  const ranFourTimes = new Promise<void>((resolve) => { fourth = resolve; });
   const poll = (): void => {
     runs += 1;
     p.host.fetch("poll.json");
     if (runs < 4) p.host.setTimeout(poll, 10);
+    else fourth();
   };
   p.host.setTimeout(poll, 10);
-  await later(80);
+  await ranFourTimes;
   assert.equal(runs, 4);
   p.answer("https://kerbfind.test/search/poll.json");
   assert.equal(p.busy(), false, "only the first run's request was counted, and it answered");

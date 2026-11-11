@@ -38,6 +38,9 @@ export type AttemptPersonRecords = { snapshotOf(ordinal: number): LabPersonSnaps
  * One person per attempt, started before the attempt's message and finished after the attempt stops, because
  * the Lab restarts Core between attempts and a person started before that would be reading a Core that is gone.
  * `playable` is whether the scenario declares a person at all: the watch follows a wait for a person on only then.
+ * `answersPermissions` is whether this person answers permission questions: it answers every one (allowed at the
+ * task's point, refused elsewhere, `../../person-simulation/permission-answer.ts`) except where the task says to ask
+ * first, where it leaves the question, so the watch follows a wait for a permission answer on unless that is so.
  */
 export async function attemptPersonFor(input: AttemptPersonInput): Promise<LiveAttemptPerson & AttemptPersonRecords> {
   const module = await loadPersonChecks(input.scenarioLabDist, input.scenarioId);
@@ -46,6 +49,7 @@ export async function attemptPersonFor(input: AttemptPersonInput): Promise<LiveA
   const answerInChat = input.panel ? chatAnswerer(input.control, scope, input.panel) : undefined;
   return {
     playable: module !== null,
+    answersPermissions: input.permissionPoint?.askFirst !== true,
     snapshotOf: (ordinal) => snapshots.get(ordinal),
     start: async (ordinal): Promise<LiveAttemptPersonRun> => {
       const person = await startLabPerson({
