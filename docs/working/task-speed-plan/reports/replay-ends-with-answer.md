@@ -3,19 +3,44 @@
 Worker: t897 (worker-heavy). Diagnosed run: `run-mwb5cnxg-003415b4` (social-network-feed,
 `social-network-feed-group-post`, Haiku, `--attempts 4`). Proof run: `run-mwbadi79-d928f922`.
 
-## Outcome
+## Round 2 (after the first landing, 26e0d2158 / 0ed3f45fb)
 
-Partial: all the work agreed for landing is done and checked. The live Post proof passed.
+### 1. `act_not_done` on an interruption that is not there: fixed
 
-Three items remain for this lane after the coordinator lands the work:
+The cause: `engine/automation/step-skip/act-not-done.ts` marks any press it passes over as an act not done, because the domain floor says every press commits. That includes a saved cookie-banner step (`interruption`) whose banner simply was not shown on the replay. S9 then judged every replay for `act_not_done`.
 
-1. **`act_not_done` on an interruption that is not there.**
-   - Found: the cookie step s2.
-   - The fix is written and set aside, not in the tree: `<scratchpad>/t897-steps-ran.next.ts`.
-2. **D2, the missing answer card:** diagnosed as most likely the Lab reading the panel too early. Not yet proven or fixed.
-3. **Dining at `--attempts 4`, naming the deviation:**
-   - The run stopped at startup, before any attempt: my brief edit to steps-ran changed Core's build inputs during its web build. Provider-free, nothing spent.
-   - Not rerun yet.
+The fix is in `flow-run/steps-ran.ts`. A saved step that is an `interruption` and claims none of the person's acts, passed over because its target is absent, reads `absent`. That is the accepted run's own page. A step that does an act still reads `absent_not_done`.
+
+The test is `flow-run/tests/steps-ran-interruption.test.ts`, 3 cases. Before the fix: 1 failed, the interruption case (`absent_not_done`). After: 3/3.
+
+flow-run plus completion: 138/139 under the other lanes' sweep. The one failure is a timeout at 61 s in flow-run.test's size case, which passes alone in 8.9 s.
+
+### 2. D2, the missing answer card: my regression from round 1, fixed
+
+It was not Lab timing:
+- The Lab now waits up to 30 s for the card before its picture, and writes `answer-turn-wait.json`.
+- The scoring's own 30 s chat-port wait also found no card on dining's attempt 2 (`run-mwbexkqx-cf7dd640`: answer wrong, `not_shown`).
+
+The cause: round 1 added an optional `replay` to `AutomationStudioTaskOutcome`. The panel's reader (`apps/extension/.../results/read-task-outcome.ts`) accepted only a hand list of keys and refused the whole record, so no card drew for any attempt carrying a verdict. That matches Post attempts 2–4 of `run-mwbadi79` and dining's attempt 2.
+
+The fix: the reader's field list is `Record<keyof AutomationStudioTaskOutcome, true>`, and `replay` is read strictly against `Record<AutomationStudioTaskReplayDeviation, true>`. Both are exhaustive at compile time; the types are imported type-only from `fluxiq/automation`.
+
+The structural test (`results/tests/read-task-outcome.test.ts`): a `Required<AutomationStudioTaskOutcome>` fixture with every field set, which the reader must accept. 31/31 with the fix; against the old reader, 29/31 (both new read cases fail). `extension check`: exit 0.
+
+### 3. Dining provider-free at `--attempts 4`: `run-mwbhd4eu-0a8863c9`, passed
+
+| attempt | path | calls | answer | card drawn | replay verdict |
+| --- | --- | --- | --- | --- | --- |
+| 1 | explore | 22 | right | after 5 ms | none |
+| 2 | run_flow | 1 judge | right | after 3 ms | judged: flow_not_proven |
+| 3 | run_flow | 0 | right | after 3 ms | stood on its record |
+| 4 | run_flow | 0 | right | after 2 ms | stood on its record |
+
+All continuations held. Attempts 3–4 now stand on their record at 0 calls. Before the steps-ran fix, the coordinator's run `run-mwb81x8q` judged them; the expected reason was the cookie step's `act_not_done`, which the S9 verdict was not yet recorded to show.
+
+## Outcome (round 1)
+
+Partial: all the work agreed for landing is done and checked. The live Post proof passed. The round-1 follow-ups are done in round 2 above.
 
 Handed over to a new lane, as the coordinator decided:
 - **D1:** the chat shows "Click · Post — Done" for a step the run gate did not send.
