@@ -320,3 +320,90 @@ The extension already sends `humanness`, when it is above 0, on `append-turn` (`
 - 8 provider-free Lab runs through the slot with `--priority` -> all `"status":"passed"`, `allHeld: true`, run ids in h5-lab.md.
 - The record worker's own run: `test-extension.mjs content/actions/tests content/action-runtime/humanness` -> 277 of 277; domain gateway-mapping -> 51 of 51; audit passed. The script worker's run: the script test -> 5 of 5.
 - Package checks, one slot run back to back (`heavy-slot run t898 -- bash t898-checks.sh`): `pnpm --filter @fluxiq-web-extension/domain build` -> 0; `... domain check` -> 0; `... extension check` -> 0; `node scripts/structure-audit.mjs` -> passed (245 warnings, 552 baselined). Core is unchanged since checkpoint 4's build (exit 0).
+
+## Checked point 6: per-Flow and per-task humanness, the record hidden from the model and kept on replays, second level-100 series (2026-11-11)
+
+### The user's direction and the precedence built
+"humanness slider should be for each individual fluxnode/task/flow" (2026-11-11). The precedence, highest first:
+1. an explicit run option (FluxNode options or overrides, the answer-first caller's `humanness`);
+2. the task's stored level;
+3. the Flow's stored level;
+4. the person's starting value (`FluxIQSettings.humanness`, sent with the request);
+5. nothing, which is 0 and today's path.
+
+- **The resolver.** `resolveHumanness({ runOption, task, flow, startingValue })` in `packages/contracts/src/humanness/resolve.ts`, with 6 tests, one per step. A stored 0 wins over a starting value. The lead committed it with checkpoint 5.
+- **Flow (worker, Sonnet).**
+  - Storage: `metadata.humanness`. The reader is `automationStudioFlowHumanness(metadata)` in `service/flow-settings/flow-humanness.ts`.
+  - Set or clear: `update-flow-settings` with `flow.metadata.humanness` set to N or null. Refused with a message naming humanness: out of range, fractional, a string.
+  - Read: `get-flow-metadata-detail` returns `payload.flow.metadata.humanness` (added by `withFlowHumanness`; the detail is a SQL row without metadata).
+  - New Flow: `create-flow` takes an optional `humanness`. It is validated before anything is created, then stored by a settings update, so the creation is two writes, not one atomic one. A crash between them would leave the Flow without a level, falling back to the starting value.
+- **Task (worker-heavy, Opus).**
+  - Storage: `humanness?` on the task record. The store reader drops an invalid value and keeps the rest of the record.
+  - New endpoint `update-task-settings`: request `{ projectId, taskId, humanness: number | null }`, response `{ taskId, humanness: number | null }`. Same permission as rename-task; IAM action `studio:UpdateTaskSettings`; allowed for paired clients so the extension can set it. Refusals: `task.humanness_invalid`, `task.not_found`.
+  - `list-project-tasks` rows carry `humanness`.
+  - A new task stores the attempt input's starting value; a stored level, 0 included, is never overwritten.
+- **Run side (answer-first).**
+  - `flow-stage.ts` re-reads the task's level just before the run, so a change made while the attempt was open applies.
+  - `flow-run.ts` reads the run Flow's level from the `parentFlow` it already loads.
+  - `gatedOptions` calls `resolveHumanness`, and omits the key when the result is undefined.
+- **Tests per precedence step** through the real flow-run fixture (`flow-run/tests/humanness.test.ts`, 8 tests): run option over all; task over Flow and starting value; Flow over starting value; starting value alone; none gives no wait; a stored 0 beats a starting value.
+- **Not live yet.** Chat attempts and `run-runtime-session` Flow runs read the starting value and the stored levels only once the `service.ts` line lands (serial behind t885): the attempt input's `humanness`, and the run-session's resolve.
+
+### Granted lines
+- **The model never sees the record.** `"humanness"` was added to `PAGE_RECORD_KEYS` in `domain/src/runtime/llm-evidence/node-run/page-record.ts`, with a test in `node-run/tests/press-raw-read.test.ts`.
+- **Replays record it.**
+  - `runtime/llm/step-log/flow-step.ts` writes `humanness: { level, aimed, misclick? }` into a flow step's `meta.json` when the node's result carries a well-formed record, and nothing otherwise.
+  - The data comes from one change in `engine/automation/step-loop/step-timing.ts`: the step's outcome now passes the attempt's `outputs`. step-timing is not a step-log file.
+  - Tests in `step-log/tests/flow-step.test.ts`: a record is written; nothing at level 0, with no outputs, or for a malformed record.
+
+### Integration fixes I made
+- The Flow worker's `packages/contracts/src/program-api/automation-studio/flows/flow.ts` put the zod v3 `humannessSchema` inside a zod/v4 object. That broke `toJSONSchema` for every endpoint, so the assistant tools could not be regenerated. Rebuilt as a v4 schema with the same bounds.
+- The create-flow field-list test (which the broken schema had hidden) now lists `humanness`.
+- Regenerated `assistant-tools.generated.json` (create-flow's `humanness` and the `update-task-settings` tool). The drift test passes.
+- The task worker's "existing test fails" (`project-task-routes.test.ts`) did not reproduce: the whole file passes, 7 of 7.
+
+### Replays now record the level: the real cause, and a correction from me
+- The record reached Core one level deeper than the flow-step log reads it. The domain's output dispatcher (`domain/src/io/gateway-output-dispatcher.ts`) nests the client payload under `result`, so Core's attempt outputs held it at `outputs.result.result.humanness`. That is the same defect `skipped` had before (t775).
+- **My mistake:** my Core probe had passed because I built it in the shape Core expects, not the shape the domain sends.
+- **Fix (worker-heavy, Opus):** the dispatcher lifts `humanness` to the top of its payload beside `skipped`, on any status, through a shared reader (`domain/src/actions/humanness-record.ts`, now also used by `gateway-mapping.ts`). Level 0 adds nothing; a test compares the JSON byte for byte. The file is outside my granted list; I'm flagging it. It is one field, carried as its sibling is.
+- **Confirmed by provider-free runs:** run-mwc2gdm2-f6917f92 (`--attempts 2 --humanness 100`) has `"humanness": {"level": 100, "aimed": false}` on all 6 replay steps that sent a click or scroll. run-mwc2jxb2-f218b42f (no option) has none.
+
+### Second level-100 series: the slow attempts explained (provider-free)
+Each level-100 run was followed straight away by a baseline, as the control.
+
+| run | level | replay attempt ms | flow steps per replay | judge-to-next-start gap |
+| --- | --- | --- | --- | --- |
+| company-website run-mwc0xah1-abdee0a8 | 100 | 31083, 23353, 23390 | 13.4-14.5 s | 15-23 s |
+| company-website run-mwc1bwwi-1a78424b | none | 21065, 21148, 22700 | (same window, also slow) | 14.5-20.5 s |
+| local-classifieds run-mwc1jcjl-0f863ffd | 100 | 36808, 39269, 49891 | 27.8-30.5 s | about 16 s |
+| local-classifieds run-mwc1r6o5-5b690601 | none | 20972, 19037, 17812 | 16.3-19.5 s | about 2.8 s |
+
+**Reading: the slow attempts are the machine, not humanness.**
+- **company-website:** the baseline straight after level 100 was just as slow (21-23 s per replay against 15 s in the first series, with the same 14-20 s Core-side gaps between attempts). Its flow steps per replay are about the same at both levels: at 100 the scroll dwell adds about 3.9 s, but the many quick passes over controls the page isn't showing are missing.
+- **local-classifieds at level 100:** steps humanness never touches grew too. Navigation took 3-5 s longer per replay, select 0.6-1.4 s, extract about 0.5 s, and the judge-to-next-start gap went from 2.8 s to 16 s.
+- **The designed costs are the only humanness ones:** typing about 2.2 s more per type step at 100, scroll dwell about 1 s per scroll, nothing on clicks.
+- **Machine load:** throughout these runs the lead's sweep, t885's Lab runs and other lanes held the heavy slots.
+- **Failures:** the one failing replay click (`web.action.page_reported_failure`, then a retry succeeds) fails exactly the same way at baseline and at every level in the first series, so humanness did not cause it. It would be worth routing to W1.
+- **Test:** a quiet-machine series would confirm the absolute numbers. The relative reading does not need one.
+- All 4 runs passed, 4/4 right, with every continuation held.
+
+### Validation for checked point 6 (run by me unless noted)
+- `pnpm --filter @fluxiq/contracts exec vitest run src/program-api src/humanness` -> 29 files, 80 tests passed (after my zod v4 fix and the create-flow field-list test update).
+- `FLUXIQ_REGENERATE_ASSISTANT_TOOLS=1 pnpm exec vitest run src/programs/_shared/assistant/tests/generated-module.test.ts`, then again without regenerating -> 2 of 2 passed.
+- `pnpm --filter fluxiq exec vitest run` over flow-settings, flow-settings-requests, handlers/tests/flow-settings, task-memory, attempt/tests/task-humanness, flow-run/tests/humanness, project-task-routes, program-route, step-log/tests/flow-step and step-loop -> 179 of 180.
+  - The one failure is `project-task-routes.test.ts` "removes the task's memory and nothing else". It is unchanged since c04485499 and passes when its file runs alone (`... vitest run src/programs/automation-studio/api/tests/project-task-routes.test.ts` -> 7 of 7).
+  - It fails reliably only when run beside the task-memory tests (`expected 0 to be greater than 0` on the conversation's outcomes). That is a real-SQL test run concurrently, which `pnpm test` separates (`tests/test-groups.ts`). Not caused by this lane; routing asked.
+- `pnpm --filter fluxiq exec vitest run src/runtime/llm/step-log/tests/flow-step.test.ts src/engine/automation/step-loop` -> 6 files, 25 tests passed.
+- `cd domain && DOMAIN_TEST_BUILD_LABEL=t898-int node scripts/test-domain.mjs io/tests/gateway-output-dispatcher client/tests/gateway-mapping runtime/llm-evidence/node-run/tests/press-raw-read` -> 112 of 112.
+- Heavy jobs through the slot:
+  - Core library build after the Flow, task and flow-step work -> exit 0.
+  - Domain build, domain check, extension check and extension audit -> all exit 0. These ran before the dispatcher fix; the trace worker reran `domain check` after it -> exit 0, and its Lab runs rebuilt and loaded the extension.
+- Core `pnpm structure:check` -> passed (530 warnings, 969 baselined). Extension audit -> passed (245 warnings, 552 baselined).
+- 4 second-series provider-free Lab runs plus the trace worker's 2 confirmation runs -> all passed. No provider was used.
+
+### Open for the lead
+1. The dispatcher fix is outside my granted files (`domain/src/io/gateway-output-dispatcher.ts` and a new `domain/src/actions/humanness-record.ts`). Accept it, or route it.
+2. `update-task-settings` is allowed for paired clients (`server/program-route/program-route.ts:124,316`), so the extension's per-task slider can call it. Say if it should be cookie-only.
+3. The project-task-routes test fails under concurrency, before and outside this lane. Route it.
+4. The replay click that fails once per replay (`web.action.page_reported_failure`) on company-website at every level. Route it to W1.
+5. `service.ts` (after t885): pass the request's `humanness` onto the attempt input (the starting value; it also fills a new task's level) and resolve the run-session's level from the Flow's `metadata.humanness` and the request. Then the approved live series.

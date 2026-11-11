@@ -26,6 +26,7 @@ import { webAutomationResultObstruction } from "../actions/obstruction";
 import { webAutomationTextSightingValue } from "../actions/text-sighting";
 import { webAutomationNextPageAnswerValue } from "../actions/next-page";
 import { webToggleSignatureValue } from "../actions/toggle-signature";
+import { webAutomationHumannessRecordValue } from "../actions/humanness-record";
 import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
@@ -279,14 +280,6 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
   return [target.element, target.fingerprint, adaptedTarget?.element, adaptedTarget?.fingerprint, adaptedTarget, parameters.element];
 }
 
-/** The humanness record a result carries above level 0, copied field by field; `undefined` when absent or unreadable. */
-function humannessRecordValue(record: WebAutomationActionResult["humanness"]): JsonObject | undefined {
-  if (!record || typeof record.level !== "number" || !Number.isFinite(record.level) || typeof record.aimed !== "boolean") return undefined;
-  const at = record.misclick;
-  const misclick = at && Number.isFinite(at.x) && Number.isFinite(at.y) ? { x: at.x, y: at.y } : undefined;
-  return compactJsonObject({ level: record.level, aimed: record.aimed, misclick });
-}
-
 /**
  * The action result as the gateway carries it.
  *
@@ -385,7 +378,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     visibleNear: sighting?.visibleNear,
     nextPage,
     skipped: result.skipped === "already_in_state" ? result.skipped : undefined,
-    humanness: humannessRecordValue(result.humanness),
+    humanness: webAutomationHumannessRecordValue(result.humanness),
     // Read off the client's untrusted value through the signature's own reader, and only on a press that was made and succeeded (t787).
     toggle: result.status === "succeeded" && result.skipped === undefined ? webToggleSignatureValue(result.toggle) as JsonObject | undefined : undefined,
     toggleBefore: result.status === "succeeded" && result.skipped === undefined ? webToggleSignatureValue(result.toggleBefore) as JsonObject | undefined : undefined,
