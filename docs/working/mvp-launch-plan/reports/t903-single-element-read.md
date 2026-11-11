@@ -7,6 +7,197 @@ Second round per the coordinator's message: F5 hover (grants: one branch in
 `content/actions/execute.ts`, one entry in `panel/copy/step-copy.ts`), the list reader's
 answer for a not-rendered element, and the close-match cap in page search.
 
+## Round 5: a load-more press judged by the list; a check that retries by itself; an incomplete read says so
+
+Requested (coordinator, from t904's triage items 2a and 2b). Not committed.
+
+### 2a: photo-social's thread ignores its first Load more press
+
+Cause: since 3531ca0dc a loader press that changed nothing was pressed again only on a positive
+proof that it did nothing, and part of that proof was the press-work tracker saying every
+handler the press began had run. The thread's handler is `async`, which the tracker cannot
+follow (`work_unknown`), so the proof never came. The step failed retryable, and because the
+domain classes `web.dom.next_page` as `commit`, Core never retried it.
+
+Fix: the press is now judged by its effect on the list.
+
+- `page-advance/loader-progress/settlement.ts`: a handler the tracker cannot follow no longer
+  withholds the proof. The proof still needs all of these: the original rows exactly as they
+  were and nothing appended (`continuation.ts`), no request begun, no signal but a status change,
+  the page settled back as it was before the press (`lookUntilSettled`), and the control still
+  there and safe, all for at least the 800 ms observation window. Work the tracker can see still
+  running (`pending`) still holds the proof back. `work_unknown` is gone from the closed
+  rejection set.
+- `page-advance/load-more.ts`: a press proven to have done nothing is made once more inside the
+  same command (`MAX_EXTRA_PRESSES`, the same single extra press the ignored-click defence
+  makes). It goes against a fresh binding and watch. If rows from the first press land after
+  its proof, the move counts as advanced and nothing is pressed again. A second proof throws
+  the proven fault, which reaches Core as `web.action.no_effect` (`certainNoEffect`), and Core
+  retries that even for a `commit` verb. A press whose effect is unsure (request begun, work
+  pending, look not restored) is never pressed again.
+
+**Decision: `web.dom.next_page` stays `commit`. I did not edit `domain/.../action-effect/table.ts`.**
+
+- The evidence check covers only a loader that appends. The table classes the whole verb,
+  including a pager's page-replacing Next (`list-change.ts`), and nothing there makes a
+  double advance impossible.
+- A load-more press is now retried where it can safely be retried: in the command on proof,
+  and by Core through `certainNoEffect`.
+
+Tests (`loader-progress/tests/settlement.test.ts`) fail against HEAD by construction, since
+HEAD rejects `work_unknown` before any press is repeated:
+
+- the async-handler press issues the proof;
+- an ignored first press is pressed once more, and the second press's rows advance the list
+  (two presses);
+- a press that advanced is never pressed again (one press);
+- a loader that ignores both presses fails with the consumable proof after the second press,
+  never a third;
+- a press whose effect is unsure is not pressed again.
+
+The "one physical press" fallback test now uses `pending` work, the case that still holds the
+proof back.
+
+### 2b: professional-network's page-2 security check, and the 10-of-23 read
+
+Cause 1: the check says "I'm not a robot" and "Or wait a few seconds and we'll try again
+automatically". `SELF_CLEARING_WORDS` knew only "check ... again automatically", so the check
+was read as person-only, and paging stopped as `rate_limited`.
+
+Fix: `challenge-evidence.ts` `retriesByItselfIn` recognises a page promising to try again by
+itself. It matches a verb of trying again (try, retry, check, verify, reload, refresh,
+continue, redirect) in the same sentence as "automatically", "by itself" or "on its own", so it
+does not depend on one phrase. It is read only inside a robot check's context: person words,
+check-context words, or a drawn captcha. A picture check still wins as person-only. A check
+that promises to clear and does not is still handed to the person once its wait is spent
+(`robot-check-watch.ts`, unchanged).
+
+Tests (`action-runtime/tests/challenge-evidence.test.ts`):
+
+- the site's words read as self-clearing;
+- a loading page's "trying again automatically" with no check context is no check;
+- a picture check that also says it will retry stays person-only.
+
+Cause 2: a read that a paging fault ended answered `succeeded` with `truncated: false`.
+
+Fix:
+
+- `list-reader.ts`: a paging fault that says the list goes on now sets `truncated: true`. Those
+  faults are `rate_limited` (a check or a pause; its words say "The list has not ended") and
+  `control_not_clickable` (a Next the read cannot press). The fault carries the move's own words
+  as `pagingFault`. A control the page ignored (`list_unchanged`) or an unknown fault stays
+  untruncated, because neither proves more rows. Its summary already says "the move to the next
+  page failed".
+- `actions/extract-list.ts`: for a truncated read, the summary account says "paging stopped:
+  <words> -- the list goes on past these records, so the read is incomplete".
+- Tests:
+  - `actions/tests/extract-list-paging-account.test.ts` (the account);
+  - `extraction/tests/list-reader-refused-page.test.ts`, "a read whose Next cannot be pressed
+    ..." (truncated, with `pagingFault`).
+
+### Round 5 proof
+
+Unit tests, without the slot:
+
+- `EXTENSION_TEST_BUILD_LABEL=t903 node scripts/test-extension.mjs src/content/extraction src/content/action-runtime src/content/actions`
+  -> tests 1244, pass 1244, fail 0.
+- `node scripts/structure-audit.mjs` -> "passed (246 warning(s), 552 baselined)".
+- `pnpm --filter @fluxiq-web-extension/extension check` (through the slot) -> exit 0
+  (build-cache "extension:check" rebuilt for changed inputs, 52.9 s).
+
+Content harness, through the slot with `--priority`, on the final tree:
+
+`pnpm test:content -- photo-social-thread-load-more professional-network-rotterdam-data-engineers failures.spec company-website-team-more extract-list-pagination pagination-stop dialog-dismissal dialog-refusal social-feed-safe-clearing shadow-root-controls frames.spec --workers=1`
+-> 65 passed, 6 failed.
+
+Passed:
+
+- **photo-social thread-load-more, 4 of 4.** Both tests that failed on dev now pass.
+- **professional-network "a read whose page 2 is answered with the security check waits it out
+  and returns the 23 people"**, and every other Rotterdam test except the upsell test.
+- Four specs that the full run below caught breaking because of this lane. Each was fixed and
+  now passes:
+  - `failures.spec` "a hidden target is TARGET_NOT_SHOWN". Round 4 had dropped the one look at a
+    page showing no work from the account. The account now keeps it, so the defence's account
+    follows the reason again.
+  - `extract-list-pagination` "an appending Next reads each review once" and `pagination-stop`
+    "a Next the page ignores". The first 2b cut marked every paging fault `truncated`. Now only
+    a fault that says the list goes on does: `rate_limited`, or `control_not_clickable`. A
+    control the page ignored (`list_unchanged`) proves no more rows. Both fixtures are in fact
+    whole lists, so marking them truncated would have been the dishonest answer.
+  - `company-website-team-more` "Next page reaches every batch when its detected Load more
+    begins hidden". With 2a, the swallowed first press is pressed again inside the command.
+
+Still failing, none in a file this lane changed:
+
+- professional-network upsell "what a read does with the offer still open". This is t904's 2c
+  test defect; its fix is in t904's tree, not this one.
+- `dialog-dismissal` (layer `kind` "other", where "dialog" was expected) and `dialog-refusal`
+  (kind "overlay", where "consent" was expected, plus a `controlRef`).
+- `social-feed-safe-clearing` (an extra `controlRef`).
+- `shadow-root-controls` (the layer's control words).
+
+These four come from the interference and obstruction reporting (`controlRef`, de843929d, W6).
+`robotCheckIn` can only turn `undefined` into a robot check, never into "overlay" or "other",
+so the challenge change cannot produce them.
+
+- `frames.spec` cross-origin card frame: the click answers `failed` (the frame shows "Check your
+  card details."). This is click and frame code, not this lane's.
+
+I did not run these four specs, or `frames.spec`, against an unchanged base. That they were
+already failing is inferred from the files they touch.
+
+Earlier whole run (`pnpm test:content`, round 4's tree, queued after the Lab): 591 passed, 27
+failed. That run is not a clean measure:
+
+- my 2a and 2b edits landed while it ran, so the five part-run specs failed `environment.stale`
+  ("artifact older than the source");
+- the screen and answer-turn failures are the Core wording changes t904 classified as test
+  defects.
+
+Every failure in it that touched this lane's files is in the rerun above.
+
+## Round 4: waiting on the page's work for a target it has not shown
+
+Requested: E1's trace `replay-first-press-failure.md`. The replay pressed "Show more people"
+0.7 s after the team page loaded. The page was still loading behind skeleton cards and a 429
+back-off, and showed the button at 4.4 s. The recovery loop waited about 1.35 s on the
+dismissed-dialog ladder, then gave up.
+
+Fix:
+
+- `action-runtime/reveal/page-work.ts` (new): watches what the page shows of its own work. That
+  covers:
+  - the page's loading evidence (`evidence/loading.ts`);
+  - painted placeholders beside the target (`aria-hidden`, no words, no picture, with area);
+  - a status or live region whose words changed;
+  - a request begun since the last look, or begun during the wait and still out
+    (`ignored-press` request marks).
+- `recovery/attempt.ts`: for a target refused as not shown, it waits while that work shows,
+  looking every 100 ms (a sampling period, not a bound). It stops when the target shows, when a
+  look finds no work, or when the command's own budget is spent
+  (`recovery/budget.ts` `pageWorkBudgetRemainingMs`). No timeout was raised. A page showing no work
+  is not waited on; its one 100 ms look stays on the account (round 5 correction).
+- Tests: `recovery/tests/page-work-wait.test.ts` (5) and a content spec case in
+  `e2e/content/tests/reveal-by-scroll/tests/company-website-team-more.spec.ts`, which presses at
+  the page's end right after it loads.
+
+Lab proof (provider-free, queued with `--priority`):
+`pnpm lab attempt company-website --task company-website-apprentices --authoring-mode answer-first --scripted-model --attempts 4`,
+run `run-mwc5zmtb-383b1315`. Result: lab exit 1, `not_judged` (`AttemptScriptRefused`: the
+script expects no second `loop_verification` request).
+
+- Attempt 1 ended `achieved`.
+- Attempt 2 replayed. Its "Show more people" step waited inside the command (page click
+  1824 ms, step 2895 ms) with **no `web.target.not_shown`**; earlier replays had 0 to 2. So the
+  reveal defect is fixed.
+- The step then failed `web.action.page_reported_failure`, because the site swallowed that first
+  press. The retry passed. That press is W2's `click.ts` ignored-press work, not this lane's.
+- The replay then noted `deviated from the accepted run: flow_not_proven`. That asked the judge,
+  which the scripted model has no answer for. So attempts 2 to 4 were not judged, and round 4's
+  acceptance is **not met**. The remaining blockers are outside this lane: the swallowed first
+  press (W2) and the replay deviating on a flow attempt 1 left "unproven".
+
 ## Round 3: the not-rendered rule re-proved on the ten sites
 
 Requested: re-prove the ten realistic sites' honest browser paths and every content-harness read

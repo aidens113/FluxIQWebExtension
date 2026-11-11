@@ -413,6 +413,8 @@ function pagingAccount(outcome: Outcome, paginate: WebAutomationExtractListReque
     const retried = (outcome.pageRetries ?? 0) > 0 ? ` and went on refusing after the read waited and reloaded it (${count(outcome.pageRetries ?? 0, "time")})` : "";
     return `; paging stopped because the server refused the next page (HTTP ${answer})${retried} -- the list goes on past these records, so the read is incomplete`;
   }
+  // A fault that left the list going on, in the move's own words: a check a person must answer is not a server refusing pages.
+  if (outcome.pageFault && outcome.truncated && outcome.pagingFault !== undefined) return `; paging stopped: ${outcome.pagingFault} -- the list goes on past these records, so the read is incomplete`;
   const firstPageMiss = stop === "control_absent" && outcome.pagesRead <= 1;
   if (!firstPageMiss && (ORDINARY_END.has(stop) || stop === "deadline" || (stop === "page_fault" && outcome.pageFault))) return "";
   if (firstPageMiss) {

@@ -52,6 +52,29 @@ function catalogue() {
   };
 }
 
+/** A clock that runs fast, so the settlement's observation window passes in a few real milliseconds. */
+function fastClock(context: { mock: { method: (object: DateConstructor, name: "now", implementation: () => number) => unknown } }) {
+  let clock = 0;
+  context.mock.method(Date, "now", () => clock);
+  const timer = setInterval(() => { clock += 100; }, 1);
+  return { stop: () => clearInterval(timer) };
+}
+
+/** The loader pressed through `pressLoadMore` with the fixture's observers; `onPress` is the page's answer to press `n`. */
+function pressThrough(fixture: ReturnType<typeof catalogue>, onPress: (press: number) => void) {
+  let presses = 0;
+  const click = (): void => {
+    presses += 1;
+    onPress(presses);
+  };
+  Object.defineProperty(fixture.control, "click", { value: click });
+  const result = pressLoadMore({ mode: "loadMore", control: "#loader" }, {
+    item: "#records > article.record", shown: fixture.rows, pagesRead: 1, scrolls: 0, deadline: undefined,
+    hasUnreadItem: () => true
+  }, undefined, (binding, control, deadline) => loaderSettlement.watch(binding, control, deadline, fixture.observers));
+  return { result, presses: () => presses };
+}
+
 const MARKERS: ReadonlyArray<Record<string, string>> = [{ "data-skeleton": "" }, { "aria-busy": "true" }, { role: "progressbar" }];
 for (const marker of MARKERS) test(`matching ${Object.keys(marker)[0]} loading markers cannot become fallback list progress`, () => {
   const fixture = catalogue();
@@ -123,14 +146,14 @@ test("a late observed move settles the original checkpoint without authorizing a
   }
 });
 
-test("unknown work, started requests, unhealthy hooks and non-status effects never issue no-effect", async () => {
+test("started requests, unhealthy hooks, non-status effects and work still running never issue no-effect", async () => {
   const reasons = {
-    unknown: "work_unknown", request: "request_started", unhealthy: "request_probe_unhealthy",
+    request: "request_started", unhealthy: "request_probe_unhealthy",
     navigation: "non_change_signal", focus: "non_change_signal", pending: "work_pending"
   };
-  for (const refusal of ["unknown", "request", "unhealthy", "navigation", "focus", "pending"] as const) {
+  for (const refusal of ["request", "unhealthy", "navigation", "focus", "pending"] as const) {
     const fixture = catalogue();
-    if (refusal === "unknown" || refusal === "pending") fixture.state.work = refusal;
+    if (refusal === "pending") fixture.state.work = refusal;
     if (refusal === "request") fixture.state.requested = true;
     if (refusal === "unhealthy") fixture.state.healthy = false;
     const watch = loaderSettlement.watch(fixture.binding, fixture.control, Date.now() + 60, fixture.observers);
@@ -144,6 +167,24 @@ test("unknown work, started requests, unhealthy hooks and non-status effects nev
       assert.equal(watch.rejection(), reasons[refusal], "cleanup retains the actual refusal, including pending at deadline");
       fixture.restore();
     }
+  }
+});
+
+// photo-social's giveaway thread (t904 2a): its Load more handler is `async`, which the press-work
+// tracker cannot follow, so before t903 the proof never came and the thread could not be paged.
+test("a press whose handler the tracker cannot follow is judged by the list: unchanged and settled, it issues the proof", async (context) => {
+  const clock = fastClock(context);
+  const fixture = catalogue();
+  fixture.state.work = "unknown";
+  const watch = loaderSettlement.watch(fixture.binding, fixture.control, undefined, fixture.observers);
+  try {
+    const fault = await watch.settle();
+    assert.ok(fault instanceof PaginationFault);
+    assert.equal(watch.rejection(), undefined);
+  } finally {
+    watch.stop();
+    clock.stop();
+    fixture.restore();
   }
 });
 
@@ -220,13 +261,12 @@ test("a rejected settled-page look exposes its closed reason without issuing a p
 });
 
 test("the actual unchanged fallback reports a fixed reason after one physical press", async (context) => {
-  let clock = 0;
-  context.mock.method(Date, "now", () => clock);
+  // Work the tracker still sees running holds the proof back, so the press is never made again.
+  const clock = fastClock(context);
   const fixture = catalogue();
-  fixture.state.work = "unknown";
+  fixture.state.work = "pending";
   let presses = 0;
   Object.defineProperty(fixture.control, "click", { value: () => { presses += 1; } });
-  const timer = setTimeout(() => { clock = 10_001; }, 5);
   try {
     await assert.rejects(pressLoadMore({ mode: "loadMore", control: "#loader" }, {
       item: "#records > article.record", shown: fixture.rows, pagesRead: 1, scrolls: 0, deadline: undefined,
@@ -234,12 +274,76 @@ test("the actual unchanged fallback reports a fixed reason after one physical pr
     }, undefined, (binding, control, deadline) => loaderSettlement.watch(binding, control, deadline, fixture.observers)), (error) => {
       assert.ok(error instanceof PaginationFault);
       assert.equal(error.stop, "list_unchanged");
-      assert.match(error.message, /\[loader-settlement:work_unknown\]$/u);
+      assert.match(error.message, /\[loader-settlement:work_pending\]$/u);
       return true;
     });
     assert.equal(presses, 1);
   } finally {
-    clearTimeout(timer);
+    clock.stop();
+    fixture.restore();
+  }
+});
+
+test("a loader that ignored its first press (an async handler) is pressed once more, and the second press's rows advance the list", async (context) => {
+  const clock = fastClock(context);
+  const fixture = catalogue();
+  fixture.state.work = "unknown";
+  try {
+    const pressed = pressThrough(fixture, (press) => { if (press === 2) fixture.append(); });
+    assert.deepEqual(await pressed.result, { outcome: "advanced", by: "loadMore" });
+    assert.equal(pressed.presses(), 2);
+  } finally {
+    clock.stop();
+    fixture.restore();
+  }
+});
+
+test("a press that advanced the list is never pressed again: no page is skipped", async (context) => {
+  const clock = fastClock(context);
+  const fixture = catalogue();
+  fixture.state.work = "unknown";
+  try {
+    const pressed = pressThrough(fixture, () => fixture.append());
+    assert.deepEqual(await pressed.result, { outcome: "advanced", by: "loadMore" });
+    assert.equal(pressed.presses(), 1);
+  } finally {
+    clock.stop();
+    fixture.restore();
+  }
+});
+
+test("a loader that ignores both presses fails with the private no-effect proof after the second, never a third", async (context) => {
+  const clock = fastClock(context);
+  const fixture = catalogue();
+  fixture.state.work = "unknown";
+  try {
+    const pressed = pressThrough(fixture, () => undefined);
+    const error = await pressed.result.then(() => undefined, (thrown: unknown) => thrown);
+    assert.ok(error instanceof PaginationFault);
+    assert.equal(error.stop, "list_unchanged");
+    assert.doesNotMatch(error.message, /loader-settlement/u, "a proof, not a diagnostic");
+    assert.equal(pressed.presses(), 2);
+    const request = { item: "#records > article.record" };
+    const answer = { outcome: "failed", stop: "list_unchanged" };
+    loaderSettlement.transfer(error, answer, request);
+    assert.equal(loaderSettlement.consume(answer, request), true, "Core is told the press certainly did nothing");
+  } finally {
+    clock.stop();
+    fixture.restore();
+  }
+});
+
+test("a press whose effect is unsure is not pressed again", async (context) => {
+  const clock = fastClock(context);
+  const fixture = catalogue();
+  fixture.state.work = "unknown";
+  fixture.state.requested = true;
+  try {
+    const pressed = pressThrough(fixture, () => undefined);
+    await assert.rejects(pressed.result, (error) => error instanceof PaginationFault && /\[loader-settlement:request_started\]$/u.test(error.message));
+    assert.equal(pressed.presses(), 1);
+  } finally {
+    clock.stop();
     fixture.restore();
   }
 });
