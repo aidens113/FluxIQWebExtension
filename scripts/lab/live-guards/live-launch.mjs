@@ -7,6 +7,12 @@
 // counts as live: `lab attempt --scripted-model` reaches no provider, and leaves
 // nothing in the ledger.
 //
+// A launch also names the provider and the exact model the run is resolved to,
+// from `--llm-provider` and `--llm-model`, else the provider's Lab default
+// (`../provider/defaults.mjs`, the mirror of the runner's `labDefaultModelValue`;
+// the Lab's own environment never picks a model). A value the runner would refuse
+// is recorded as given, for the same reason as the authoring mode.
+//
 // A launch also names the authoring mode its Core is started in
 // (`--authoring-mode`), because a run in another mode is another experiment
 // (`rules/unchanged.mjs`). With no flag it is the product's default, `project`,
@@ -15,13 +21,15 @@
 // resolves no workspace package. A value the runner would refuse is recorded
 // as given: the runner refuses it before anything is spent.
 
+import { LIVE_LLM_DEFAULT_PROVIDER, LIVE_LLM_PROVIDER_DEFAULT_MODELS } from "../provider/index.mjs";
+
 /** The mode a launch that names none runs its Core in (the Lab's default, which is the product's). */
 const LAB_DEFAULT_AUTHORING_MODE = "project";
 
 /**
  * @param {string[]} args the Lab arguments, as `run-lab.mjs` received them
  * @param {NodeJS.ProcessEnv} env
- * @returns {{ instance: string, scenarioId: string, task: string, authoringMode: string } | null} null for a run that makes no provider call
+ * @returns {{ instance: string, scenarioId: string, task: string, authoringMode: string, provider: string, model: string } | null} null for a run that makes no provider call
  */
 export function describeLiveLaunch(args, env) {
   if (!args.includes("--live-llm") || args.includes("--dry-run")) return null;
@@ -31,7 +39,9 @@ export function describeLiveLaunch(args, env) {
   const variant = option(args, "--variant");
   const task = [scenarioId, work, ...(workflow ? [`workflow=${workflow}`] : []), ...(variant ? [`variant=${variant}`] : [])].join("/");
   const authoringMode = option(args, "--authoring-mode") ?? LAB_DEFAULT_AUTHORING_MODE;
-  return { instance: env.FLUXIQ_LAB_INSTANCE?.trim() || "default", scenarioId, task, authoringMode };
+  const provider = option(args, "--llm-provider") ?? LIVE_LLM_DEFAULT_PROVIDER;
+  const model = option(args, "--llm-model") ?? LIVE_LLM_PROVIDER_DEFAULT_MODELS[provider] ?? "unknown-model";
+  return { instance: env.FLUXIQ_LAB_INSTANCE?.trim() || "default", scenarioId, task, authoringMode, provider, model };
 }
 
 /** `lab run <scenario>` and `lab attempt <scenario>` name it second; a live `lab matrix` names exactly one in `--scenarios-json`. */

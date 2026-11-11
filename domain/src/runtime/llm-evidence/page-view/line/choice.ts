@@ -7,7 +7,8 @@
 //     F1 its nearest ancestor with a line is a control with words or a
 //     semantic element, whose line already shows these words; F2 it is a label saying exactly
 //     what the control line next to it says; or F3 it says exactly what the
-//     line before it says.
+//     line before it says, unless it is news there: just changed where that
+//     line did not, or in another landmark or dialog (`../element/repeat-fold.ts`).
 //  4. A visible non-control image with a meaningful alt gets a line, unless F1
 //     applies or its alt is the words of another line of the same list item
 //     (or of a line next to it, outside an item): the title the heading or the
@@ -48,7 +49,7 @@
 // they do not apply, and the view prints a duplicate rather than dropping words.
 
 import type { WebLlmEvidenceElement } from "../../elements";
-import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmIconHints, webLlmViewTraits } from "../element";
+import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmIconHints, webLlmRepeatFolds, webLlmViewTraits } from "../element";
 import { mergedWebLlmFragments } from "../fragment-merge";
 import { webLlmGroupNames, type WebLlmGroupNames } from "../group-names";
 import type { WebLlmPageTree } from "../page-tree";
@@ -77,7 +78,8 @@ function firstPass(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageT
     const held = own === undefined && role === "control" ? heldImageWords(elements, index, tree) : undefined;
     const words = own ?? held;
     if (groupName === undefined && (role === "text" || role === "image") && foldedIntoAncestor(element, tree, lined)) continue;
-    if (role === "text" && sameWords(lines.at(-1)?.words, words)) continue;
+    const before = lines.at(-1);
+    if (role === "text" && before !== undefined && sameWords(before.words, words) && webLlmRepeatFolds(before.element, element)) continue;
     const icon = words === undefined && role === "control" ? webLlmIconHints(element, visibleInsides(elements, index, tree)) : undefined;
     const line: WebLlmViewLine = held !== undefined ? { element, role, words, imageWords: true } : icon !== undefined ? { element, role, words, icon } : { element, role, words };
     lines.push(line);
