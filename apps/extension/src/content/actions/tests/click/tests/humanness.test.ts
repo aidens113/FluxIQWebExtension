@@ -18,7 +18,7 @@ const CENTRE = { x: 160, y: 220 };
 const AT_CENTRE: ActionabilityReport = { actionable: true, point: CENTRE, detail: "the point 160,220 landed on the target" };
 
 type Pressed = { type: string; x: number; y: number };
-type Options = { level?: number; commandId?: string; badge?: boolean; seen?: PressSignal[]; geometry?: boolean };
+type Options = { level?: number; commandId?: string; badge?: boolean; seen?: PressSignal[]; settled?: boolean | "announced"; geometry?: boolean };
 
 /**
  * One click on a button with a box and a hit test. `badge` paints a promotion
@@ -60,7 +60,7 @@ async function pressButton(t: TestContext, options: Options = {}) {
     fakeWatch(undefined, page.events).make,
     fakeNoticeWatch(undefined, page.events),
     fakeCheckWatch(undefined, page.events),
-    fakeIgnoredWatch(options.seen ?? ["change"], page.events),
+    fakeIgnoredWatch(options.seen ?? ["change"], page.events, undefined, options.settled),
     true,
     "covered",
     () => AT_CENTRE
@@ -179,4 +179,19 @@ test("a press a badge forces back to the gate's point records aimed false", asyn
     } else assert.equal(result.humanness?.aimed, true);
   }
   assert.ok(unaimed > 0, "no drawn point was refused");
+});
+
+// A first press the page answered with nothing but its own notice is pressed once more like one it ignored (t898):
+// at level 0 at the gate's first point, above 0 aimed again inside the box, reproducibly from the command id.
+test("a first press answered only by the page's notice is pressed once more at the gate's point at level 0, and aimed again at level 80", async (t) => {
+  const zero = await pressButton(t, { level: 0, settled: "announced", geometry: false });
+  assert.deepEqual(zero.events, [...FIRST_PRESS, ...SECOND_PRESS]);
+  assert.deepEqual(pressPoints(zero.pressed), [CENTRE, CENTRE]);
+  const human = await pressButton(t, { level: 80, commandId: "cmd-notice", settled: "announced" });
+  assert.equal(human.result.status, "succeeded");
+  const points = pressPoints(human.pressed);
+  assert.equal(points.length, 2);
+  for (const point of points) assert.ok(point.x > BOX.left && point.x < BOX.right && point.y > BOX.top && point.y < BOX.bottom);
+  const again = await pressButton(t, { level: 80, commandId: "cmd-notice", settled: "announced" });
+  assert.deepEqual(pressPoints(again.pressed), points, "both presses reproduce from the command id");
 });

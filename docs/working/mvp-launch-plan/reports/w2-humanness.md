@@ -430,3 +430,62 @@ Each level-100 run was followed straight away by a baseline, as the control.
   - `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/api/handlers/tests/flow-settings src/framework/automation-service/service/flows/tests/creation.test.ts` -> 2 files, 28 tests passed.
   - `pnpm structure:check` -> passed (530 warnings, 969 baselined).
   - `heavy-slot run t898 -- pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket --filter @fluxiq/sdk --filter @fluxiq/ui-components build` -> every package "build: Done", `CORE_BUILD_EXIT 0`.
+
+## Checked point 8: service.ts lines, a new task follows its Flow, paired Flow humanness, notice-only press, live series (2026-11-11)
+
+### Core: the run paths resolve stored levels (worker, Sonnet)
+- **service.ts, chat attempt:** `generateFlowBootstrapAdaptation` reads `humanness` from the validated request and puts it on the attempt input as the starting value. It is not routed through `caller`.
+- **service.ts, run-session:** `runRuntimeSession` loads the canonical Flow before building graph options and passes `humanness: automationStudioFlowHumanness(canonical?.metadata) ?? input.humanness`. That is the Flow's level, then the starting value; a run-session has no task and no run option. It uses `??` rather than the resolver, to keep service.ts at its baseline size.
+- **Tests:**
+  - `service/tests/run-session-humanness.test.ts` (new, 4): Flow over the starting value, the starting value alone, none gives none.
+  - `attempt/tests/task-humanness.test.ts`: rewritten with no attempt-input mock, through `tests/later-attempts.ts` with a `humanness` option.
+- **A precedence flaw the worker found, and my fix (worker, Sonnet):** a new task stored the request's starting value as its own level, which then outranked the Flow's level.
+  - Now `attempt/run-attempt.ts` stores the starting value on a new task only when the run's Flow has no stored level. It reads the Flow through the flow-run engine's `parentFlow` and `automationStudioFlowHumanness`. If the Flow cannot be read, it falls back to storing the starting value.
+  - When the Flow has a level, the new task stores nothing and follows the Flow, later Flow changes included, until someone sets the task's own level.
+  - Tests: Flow 30 against a starting value of 70 stores nothing and runs at 30, then follows a later Flow change; Flow 0 against 70 runs at 0.
+
+### Core: paired browsers may set a Flow's humanness and nothing else (worker-heavy, Opus)
+- **The allowlist** (`server/program-route/program-route.ts`): `get-flow-metadata-detail` and `update-flow-settings` are added as one group, after `remove-task`.
+- **The update-flow-settings narrowing:** it accepts exactly `{ projectId, flowId, flow: { flowId? (equal to flowId), metadata: { humanness: number | null } } }`. Any other key at any level, a missing humanness or a mismatched `flow.flowId` is refused before the handler, with the field named by path. The handler receives a payload rebuilt from the accepted fields only.
+- **The refusal code** is the file's existing `authorization.forbidden`, with the field named in the message. A distinct code would mean widening the types in `handle-program-request.ts`.
+- **Tests:**
+  - `server/program-route/tests/program-route.test.ts`: the allowlist snapshot, plus a unit test per case.
+  - New `tests/handle-program-request.test.ts`: the whole route against a real registry and store. A paired caller reads, sets 40 and clears with null. Every refused case returns 403 with the field named, the handler never runs, and the Flow is unchanged. A cookie caller can still change name, description, size and humanness.
+- **Notes:**
+  - The route strips `authSessionId` from token calls before narrowing, so it is dropped, not refused; a test pins this.
+  - **Risk to decide:** `get-flow-metadata-detail` now returns the whole settings detail to a paired token (input default values, variable initial values), which was cookie-only before. Its reach is still the approving person's bound domain. My recommendation: since the extension needs only humanness, give paired callers a humanness-only answer.
+  - The web app's mirrored route test (`apps/web/src/app/api/programs/[programId]/[endpoint]/tests/route.test.ts`) copies the allowlist and already lacked `update-task-settings`. It is W5's; it should list all three entries.
+
+### Core: the project-task-routes test
+- No shared state was found. Memory and locator maps are per instance, and every test world has its own temp data dir.
+- The cause was a time flake: attempt times fixed at module load fell before the thread's `sinceMs` on a slow load. Dev commit 1c34609dc (t904) already fixed it by taking the times from the clock after the thread is noted, and it is merged here.
+- `vitest run project-task-routes.test.ts + task-memory` -> 6 files, 51 tests passed, three times in a row. The file alone -> 7 passed.
+
+### Extension: a notice-only first press is pressed once more (worker-heavy, Opus)
+- **Safety evidence, from the code:**
+  - `first.noticeOnly` (`click.ts`) is set only when the watch saw a single sign: a change in the control's own section, on the command's first press.
+  - The settled look (`ignored-press/settled-look.ts:202`) must also answer "announced". That requires no request, navigation, focus move, outside change or new shadow root (`:132-145`, `:168-171`), and the section's markup and field values identical once settled.
+  - `domain/src/runtime/failure/codes.ts:371` marks the result unacted and `certainNoEffect: true`. So a second press cannot repeat a landed act.
+  - Pre-existing limit, not widened: a page that saves with no request and announces it only in a status region would also read as notice-only. Core already presses that again today.
+- **Change:** `pressInPlace` no longer fails a notice-only first press at once. It takes the same in-command second press as a press that settled unchanged (t896), with the same aim, watch windows, and H3 and H4 hooks.
+  - A second notice, or no change at all, still fails as `web.action.page_reported_failure`, with the notice named.
+  - A second press with no sign at all ends as not observed, exactly as t896's existing path for a silently ignored press does.
+- **Tests:** new `content/actions/tests/click/tests/notice-first-press.test.ts` (8 cases) and one humanness case. Two `settled-look.test.ts` rows that asserted the reversed behaviour were changed. Against the old click.ts exactly the 9 new-behaviour cases fail, and the "never pressed again" cases pass on both.
+- **Left for their owners (routing asked):**
+  - `apps/extension/e2e/content/tests/reveal-by-scroll/tests/company-website-team-more.spec.ts:71-89` still expects the first command to fail.
+  - `docs/architecture/extension-client.md` (~1481) still describes the immediate failure.
+  - `e2e/site-reset/tests/job-failed-save.spec.ts`'s header describes the Core retry.
+
+### Validation for checked point 8 (run by me unless noted)
+- `pnpm --filter fluxiq exec vitest run src/server/program-route src/framework/automation-service/service/answer-first/attempt/tests/task-humanness.test.ts src/framework/automation-service/service/tests/run-session-humanness.test.ts` -> 4 files, 71 tests passed.
+- `cd apps/extension && EXTENSION_TEST_BUILD_LABEL=t898-int node scripts/test-extension.mjs content/actions/tests/click content/action-runtime/humanness` -> 125 of 125.
+- Core `pnpm structure:check` -> passed (533 warnings, 969 baselined).
+- One driver through the queue, stopping at the first failure:
+  - Core library build -> exit 0.
+  - Domain build, domain check, extension check and extension audit -> all exit 0.
+  - Provider-free confirmation `pnpm lab attempt company-website --task company-website-apprentices --authoring-mode answer-first --scripted-model --attempts 2 --humanness 100` (with `--priority`) -> passed, run-mwcc728x-36a46e21. No replay flow step failed, so the notice-only first press now succeeds inside its command. `humanness` is recorded on 4 replay flow steps (level 100; 2 aimed).
+- Workers: service lines 4 and 4 passed; new-task level 6 passed; program-route 65 passed; click tests 286 of 286 (9 fail against the old click.ts).
+
+### Live series: refused by the Lab's guard, nothing spent
+- `pnpm lab attempt company-website --task company-website-apprentices --authoring-mode answer-first --live-llm --llm-model claude-haiku-5-5 --llm-max-cost-usd 5 --attempts 4 --humanness 0`, with `--priority` -> refused by rule `behind-dev`: "this repository ... is at 7761985, which lacks 10 commit(s) of its local dev (685d0eb); the FluxIQ Core ... is at dac4563, which lacks 3 commit(s) of its local dev (8feb5ab)". `spentUsd: 0`, no provider call.
+- **Needed:** commit checkpoint 8 and merge dev into both t898 trees. I then rebuild through the queue and run the two live series (level 0, then level 100), watching each to the end.

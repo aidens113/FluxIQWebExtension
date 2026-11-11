@@ -98,9 +98,7 @@
 // more only after a certain-nothing verdict, so every press after the first is
 // made only when every press before it certainly did nothing. With no sign at
 // all it fails as not observed (`output_not_observed`), which is not certain:
-// the watch that saw nothing does not look outside the control's section. A
-// first press the page answered with nothing but its own notice still fails at
-// once as below, since the notice says the page meant the press to do something.
+// the watch that saw nothing does not look outside the control's section.
 // And a press the page answered with nothing but its own notice did not
 // happen. Rerun round 4's job trial pressed a save control that showed a busy
 // state, reverted, and put a notice in a `role="status"` region; nothing was
@@ -109,12 +107,24 @@
 // settled look now leaves the page's own notice regions out
 // (`action-runtime/ignored-press/live-region.ts`) and answers `"announced"`
 // when, apart from a region now holding new words, everything settled exactly
-// as before the press. That press fails as `web.action.page_reported_failure`,
-// unacted and `certainNoEffect`, so Core makes it again under its first attempt
-// plus three retries; on any control, a command control or not, because the
-// page's notice says it expected the press to do something. The notice's words
-// are never read: a success is told apart by what comes with it -- a request, a
-// lasting change in the control or the page -- which is an answer as before.
+// as before the press: no request, navigation or focus move at any point,
+// nothing outside the section but notice regions, the section's markup and
+// fields the same. That is as certain as a page settled exactly as it was, so
+// such a first press is made once more in the same command too (t898), on any
+// control, a command control or not, since the page's notice says it expected
+// the press to do something. Until t898 it failed at once as
+// `web.action.page_reported_failure` for Core to make again: company-website's
+// Show more people swallows the first press after every load with only a
+// "loading" notice, and every replay of a Flow through it carried a Core retry.
+// The press made once more is the same one extra press, at the same point or
+// aimed again, looked at the same way. Answered, it passes. Answered again with
+// nothing but a notice, or settled exactly as before, it fails as
+// `web.action.page_reported_failure`, unacted and `certainNoEffect`, as the
+// first press did before t898: Core makes it again under its first attempt plus
+// three retries. With no sign at all it fails as not observed, as above. The
+// notice's words are never read: a success is told apart by what comes with it
+// -- a request, a lasting change in the control or the page -- which is an
+// answer as before.
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -242,9 +252,6 @@ const IGNORED_PRESS_WINDOW_MS = 800;
  */
 const NO_EFFECT_SETTLE_MS = 1_500;
 
-/** What a press the page answered with nothing but its own notice says, after the hit test (t743). A closed phrase: nothing the page wrote is in it. */
-const NOTICE_ONLY = "once the page settled, the press had brought nothing but a notice in one of the page's own status or alert regions: no request, no navigation, no focus move, nothing else outside the control's section, and the control and its section exactly as before the press; the control can still be pressed";
-
 /** What a press made twice says, in the result's `actual`. A closed phrase: nothing the page wrote is in it. */
 const PRESSED_ONCE_MORE = "the page ignored the first press, so it was pressed once more";
 
@@ -260,8 +267,17 @@ const SETTLED_TWICE = `${PRESSED_AFTER_SETTLED}, and that press too changed the 
 /** What that press says when the page answered it with nothing but its own notice. A closed phrase, as above. */
 const NOTICE_AFTER_SETTLED = `${PRESSED_AFTER_SETTLED}, and the page answered that press with nothing but a notice in one of its own status or alert regions`;
 
-/** What that press says when the page showed no sign of it at all. A closed phrase, as above. */
-const SILENT_AFTER_SETTLED = `${PRESSED_AFTER_SETTLED}, and it ignored that press: no request, no change inside the control or its section, no navigation and no focus move`;
+/** What a press made once more says when the page showed no sign of it at all, after what the first press said. A closed phrase, as above. */
+const IGNORED_THAT_PRESS = "and it ignored that press: no request, no change inside the control or its section, no navigation and no focus move";
+
+/** What a press made once more after a first press the page answered with nothing but its own notice says (t898). A closed phrase, as above. */
+const PRESSED_AFTER_NOTICE = "the page answered the first press with nothing but a notice in one of its own status or alert regions and left everything else exactly as before, so it was pressed once more";
+
+/** What that press says when the page answered it with nothing but a notice too. A closed phrase, as above. */
+const NOTICE_TWICE = `${PRESSED_AFTER_NOTICE}, and the page answered that press too with nothing but a notice in one of its own status or alert regions; the control can still be pressed`;
+
+/** What that press says when it left the page exactly as before, its notice regions aside. A closed phrase, as above. */
+const NOTICE_THEN_SETTLED = `${PRESSED_AFTER_NOTICE}, and that press too left the page exactly as before, its notice regions aside: no request, no navigation, no focus move, nothing outside the control's section; the control can still be pressed`;
 
 /** What a cover refused after a press the page ignored says, after the layer the gate named. A closed phrase, as above. */
 const COVERED_AFTER_IGNORED = "the page ignored the press, and this layer covered the control during the wait, so the press is made once more once the layer is closed";
@@ -284,6 +300,8 @@ type PressOutcome = {
   answer: IgnoredPressAnswer | undefined;
   /** A press answered only by a change in its section, after which the page settled exactly as it was (t517), on a command control. */
   settledUnchanged: boolean;
+  /** The same on any control: read only of a press made once more after a first press answered by nothing but a notice (t898). */
+  settledAsBefore: boolean;
   /** A first press after which the page settled exactly as it was but for a notice in one of its own notice regions (t743). */
   noticeOnly: boolean;
 };
@@ -386,14 +404,10 @@ async function pressInPlace(
   // control's section is a press the watch saw no sign of, and is never pressed again.
   if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
   if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
-  // Nothing but the page's own notice: the page reported the press failed, for Core to make again (t743).
-  if (first.noticeOnly && measure().actionable) {
-    return deps.success(action, startedAt, "Element clicked, and the page answered only with a notice.", noticeOnlyValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE);
-  }
-  // A change that came and went, and a page settled exactly as it was: certainly nothing, so a press the page
-  // ignored, made once more below like one with no sign at all (t896). Only a command's first press is looked
-  // at, so this is never the press made once more after a layer was closed.
-  const settled = first.settledUnchanged;
+  // A change that came and went, and a page settled exactly as it was (t896), or so but for the page's own notice
+  // (t743, t898): certainly nothing, so a press the page ignored, made once more below like one with no sign at all.
+  // Only a command's first press is looked at, so this is never the press made once more after a layer was closed.
+  const settled = first.settledUnchanged || first.noticeOnly;
   // A robot check that came and went was an answer; so is any sign the watch saw, unless the settled look found it came to nothing.
   if (!settled && (first.sighting || !first.answer || first.answer.seen.length > 0)) {
     return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
@@ -428,7 +442,7 @@ async function pressInPlace(
   const second = await press(target, aimAgain ? aimAgain(target, now) : report.point, action, deps, startedAt, settled);
   if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
   if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
-  if (settled) return afterSettled(second, element, report, action, deps, startedAt, evidence, measure);
+  if (settled) return afterSettled(second, first.noticeOnly, element, report, action, deps, startedAt, evidence, measure);
   if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
     return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
   }
@@ -443,9 +457,14 @@ async function pressInPlace(
  * certain-nothing verdict. With no sign at all it fails as not observed, which is not certain: the watch that saw
  * nothing does not look outside the control's section. A control now covered, disabled or gone reads as
  * answered, as after any press made once more.
+ *
+ * After a first press the page answered with nothing but its own notice (`noticeFirst`, t898), a second press
+ * answered with nothing but a notice again, or that left the page exactly as before on any control, fails as
+ * `web.action.page_reported_failure`, the failure that first press itself was until t898.
  */
 function afterSettled(
   second: PressOutcome,
+  noticeFirst: boolean,
   element: Element,
   report: Extract<ActionabilityReport, { actionable: true }>,
   action: BrowserActionCommand,
@@ -454,16 +473,21 @@ function afterSettled(
   evidence: () => ActionResultEvidence,
   measure: () => ActionabilityReport
 ): BrowserActionResult {
+  const firstSaid = noticeFirst ? PRESSED_AFTER_NOTICE : PRESSED_AFTER_SETTLED;
   // Certainly nothing again: Core makes the act again under its first attempt and three retries (t528).
-  const certain = second.settledUnchanged ? { said: SETTLED_TWICE, code: WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT }
+  const certain = noticeFirst
+    ? second.noticeOnly ? { said: NOTICE_TWICE, code: WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE }
+      : second.settledAsBefore ? { said: NOTICE_THEN_SETTLED, code: WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE }
+      : undefined
+    : second.settledUnchanged ? { said: SETTLED_TWICE, code: WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT }
     : second.noticeOnly ? { said: NOTICE_AFTER_SETTLED, code: WEB_AUTOMATION_FAILURE_CODES.PAGE_REPORTED_FAILURE }
     : undefined;
   // No sign at all is not certain: the watch that saw nothing does not look outside the control's section.
-  const unanswered = certain?.said ?? (!second.sighting && second.answer && second.answer.seen.length === 0 ? SILENT_AFTER_SETTLED : undefined);
+  const unanswered = certain?.said ?? (!second.sighting && second.answer && second.answer.seen.length === 0 ? `${firstSaid}, ${IGNORED_THAT_PRESS}` : undefined);
   if (unanswered && measure().actionable) {
     return deps.success(action, startedAt, "Element clicked.", unansweredValidation(report.detail, second.accepted, unanswered), evidence(), certain?.code);
   }
-  return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, PRESSED_AFTER_SETTLED), evidence());
+  return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, firstSaid), evidence());
 }
 
 /**
@@ -552,7 +576,7 @@ async function press(
     const looked = lookAgain && changedOnly && !refused && !sighting && ignored !== undefined
       ? await ignored.settleUnchanged(windowWithin(action, NO_EFFECT_SETTLE_MS), served)
       : false;
-    return { accepted, refused, sighting, answer, settledUnchanged: looked === true && expectsAnswer(element), noticeOnly: looked === "announced" };
+    return { accepted, refused, sighting, answer, settledUnchanged: looked === true && expectsAnswer(element), settledAsBefore: looked === true, noticeOnly: looked === "announced" };
   } finally {
     notice?.stop();
     check?.stop();
@@ -667,17 +691,6 @@ function expectsAnswer(element: Element): boolean {
 function unansweredValidation(detail: string, accepted: boolean, unanswered: string): BrowserActionValidation {
   const prevented = accepted ? "" : "; the page prevented the click's default action";
   return { status: "failed", expected: "the page answers the press", actual: `${detail}; ${unanswered}${prevented}` };
-}
-
-/**
- * A press the page answered with nothing but its own notice (`NOTICE_ONLY`,
- * t743). Failed, which with its code is `web.action.page_reported_failure`:
- * the act did not happen and is marked `certainNoEffect`, so Core makes it
- * again under its ordinary retries.
- */
-function noticeOnlyValidation(detail: string, accepted: boolean): BrowserActionValidation {
-  const prevented = accepted ? "" : "; the page prevented the click's default action";
-  return { status: "failed", expected: "the page carries the press out", actual: `${detail}; ${NOTICE_ONLY}${prevented}` };
 }
 
 /**
