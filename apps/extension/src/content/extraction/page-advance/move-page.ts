@@ -42,6 +42,8 @@ import { stepPage } from "./step-page";
 import type { PageStep, PaginationProgress } from "./types";
 import { PageMovePersonCheck } from "./person-check";
 import { loaderSettlement } from "./loader-progress";
+import { recordMeaning } from "./record-meaning";
+import { unreadRecordShown } from "./unread-record";
 
 /** How long the list's first item is waited for before the step: the read before it has normally drawn it already. */
 const LIST_WINDOW_MS = 5_000;
@@ -74,7 +76,9 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
     }
     return failedMove("page_fault", `The pager ${JSON.stringify(way.pages)} does not say which page is showing, so the page after it is not known.`, undefined, true);
   }
-  const before = new Set(shown);
+  // What the items said before the move, not which elements held them: a page
+  // that redraws the same items has brought none (`./unread-record.ts`).
+  const before = shown.map(recordMeaning);
   const mark = options.mark;
   const progress: PaginationProgress = {
     item: request.item,
@@ -82,7 +86,7 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
     pagesRead: current ?? 1,
     scrolls: 0,
     deadline,
-    hasUnreadItem: () => Array.from(document.querySelectorAll(request.item)).some((element) => !before.has(element)),
+    hasUnreadItem: () => unreadRecordShown(before, document.querySelectorAll(request.item)),
     beforeFollow: mark === undefined ? undefined : (by) => mark({ by })
   };
   let step: PageStep;
@@ -96,6 +100,11 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
   }
   switch (step.outcome) {
     case "advanced": {
+      // The same items drawn again are the page it was on, not its next page (t885, R5; `./list-change.ts`).
+      const now = Array.from(document.querySelectorAll(request.item));
+      if (now.length === before.length && !unreadRecordShown(before, now)) {
+        return failedMove("list_unchanged", "The list was drawn again holding the same items, so it did not move to another page.");
+      }
       const page = pageShownNow(way, request.item);
       return { outcome: "moved", by: step.by, ...(page === undefined ? {} : { page }) };
     }

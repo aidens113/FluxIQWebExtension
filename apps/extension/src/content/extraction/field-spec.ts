@@ -57,10 +57,10 @@ type ExtractFieldSpec = Exclude<ExtractField, string>;
 
 /** What one included field reads inside each item, and whether a record may lack it. */
 export type ExtractFieldReader =
-  | { kind: "text"; selector?: string; required: boolean; lines?: true; definition?: { term: string; part: "term" | "value" }; mark?: "badge" | "state" }
-  | { kind: "link"; selector?: string; required: boolean; identity?: "tracking-free" }
-  | { kind: "value"; selector?: string; required: boolean }
-  | { kind: "attribute"; selector?: string; attribute: string; required: boolean; mark?: FieldMark }
+  | { kind: "text"; selector?: string; group?: string; required: boolean; lines?: true; definition?: { term: string; part: "term" | "value" }; mark?: "badge" | "state" }
+  | { kind: "link"; selector?: string; group?: string; required: boolean; identity?: "tracking-free" }
+  | { kind: "value"; selector?: string; group?: string; required: boolean }
+  | { kind: "attribute"; selector?: string; group?: string; attribute: string; required: boolean; mark?: FieldMark }
   | { kind: "column"; header: string; required: boolean };
 
 /** A mark a field reads (`WebAutomationExtractFieldMark`): only a `flag` is read differently (`./item-mark/`). */
@@ -116,7 +116,9 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
   // `required` from the coverage it measured on the page.
   const required = spec.required === true;
   const selector = typeof spec.selector === "string" ? spec.selector.trim() : "";
-  const where = selector ? { selector } : {};
+  // The group the item sits in, which an element read is read inside (`./field-element/`).
+  const group = typeof spec.group === "string" ? spec.group.trim() : "";
+  const where = { ...(selector ? { selector } : {}), ...(group ? { group } : {}) };
   const kind: unknown = spec.kind;
   // A mark the page does not know is refused, as an unknown link identity is;
   // one its kind does not read is left behind, as the domain's reader leaves it.
