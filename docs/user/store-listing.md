@@ -6,7 +6,7 @@ release.
 
 ## Listing copy
 
-**Name.** FluxIQ Web Automation Client. The manifest's `name` is capped at 75
+**Name.** FluxIQ. The manifest's `name` is capped at 75
 characters.
 
 **Summary.** This is the manifest `description`, capped at 132 characters. The

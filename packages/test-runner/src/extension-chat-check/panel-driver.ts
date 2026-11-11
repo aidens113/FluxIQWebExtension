@@ -1,5 +1,6 @@
-import type { Page } from "@playwright/test";
+import type { CDPSession, Page } from "@playwright/test";
 import { navigateChatProject } from "./project-navigation/index.js";
+import { pressInViewTarget } from "./view-target-press/index.js";
 
 const COMPOSER = 'textarea[aria-label="Message to FluxIQ"]';
 const SEND = 'button[aria-label="Send"]';
@@ -12,9 +13,11 @@ export type ChatProjectScope = { projectId: string | null; scopeState: "loading"
  *
  * `input` says how: `trusted` is Playwright's own input into a page it drives;
  * `view-dom` is script in the panel's own document, used for Chrome's real
- * side panel, whose page Playwright 1.51 does not hand over. Both run the
- * panel's real composer, controller and background relay; only the key
- * presses and clicks differ.
+ * side panel, whose page Playwright 1.51 does not hand over; its button
+ * presses are still real mouse input, sent over CDP to the panel's own target,
+ * because answers require a person's activation. Both run the panel's real
+ * composer, controller and background relay; only the typing and the Send
+ * click differ.
  */
 export type ChatPanelDriver = {
   input: "trusted" | "view-dom";
@@ -64,9 +67,16 @@ export function pagePanelDriver(page: Page): ChatPanelDriver {
  * `chrome.extension.getViews()`: the side panel is an extension view in the
  * same process, so its `window` is reachable from another extension page. The
  * text is set through the textarea's own value setter with an `input` event,
- * and the Send and answer buttons are clicked with `HTMLElement.click()`.
+ * and Send is clicked with `HTMLElement.click()` (sending a message needs no
+ * activation).
+ *
+ * A button press is different: the chat's answer controls ignore untrusted
+ * events and the extension sends an answer only while the panel has a
+ * person's activation, so `press` sends real mouse input to the side panel's
+ * own target through a CDP session on the control tab (`pressInViewTarget`).
+ * `openSession` opens that session; tests pass a fake.
  */
-export function extensionViewPanelDriver(control: Page, panelPath: string): ChatPanelDriver {
+export function extensionViewPanelDriver(control: Page, panelPath: string, openSession: () => Promise<CDPSession> = () => control.context().newCDPSession(control)): ChatPanelDriver {
   const run = <T>(action: string, argument: string) => control.evaluate(inView, { panelPath, action, argument, composer: COMPOSER, sendSelector: SEND }) as Promise<T>;
   const scope = () => control.evaluate(inProjectView, { panelPath, action: "read" as const }) as Promise<ChatProjectScope>;
   return {
@@ -92,11 +102,17 @@ export function extensionViewPanelDriver(control: Page, panelPath: string): Chat
     },
     async press(label, timeoutMs) {
       const deadline = Date.now() + timeoutMs;
-      for (;;) {
-        const outcome = await run<string>("press", label);
-        if (outcome === "pressed") return;
-        if (Date.now() >= deadline) throw new Error(`The side panel showed no enabled "${label}" button: ${outcome}`);
-        await new Promise(resolve => setTimeout(resolve, 300));
+      const viewUrl = extensionViewUrl(control.url(), panelPath);
+      const session = await openSession();
+      try {
+        for (;;) {
+          const outcome = await pressInViewTarget(session, { viewUrl, label });
+          if (outcome === "pressed") return;
+          if (Date.now() >= deadline) throw new Error(`The side panel showed no enabled "${label}" button to press: ${outcome}`);
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } finally {
+        await session.detach().catch(/* best-effort: the session only reads and presses, and a closed browser has none left */ () => undefined);
       }
     },
     text: () => run<string>("text", ""),
@@ -148,11 +164,11 @@ function inView({ panelPath, action, argument, composer, sendSelector }: { panel
     send.click();
     return "sent";
   }
-  if (action === "press") {
-    const button = Array.from(document.querySelectorAll("button")).find(candidate => candidate.textContent?.trim() === argument && !(candidate as HTMLButtonElement).disabled) as HTMLButtonElement | undefined;
-    if (!button) return "not shown yet";
-    button.click();
-    return "pressed";
-  }
   return `unknown action ${action}`;
+}
+
+/** The extension view's address on the control tab's extension origin (`chrome-extension://<id>/<path>`). */
+function extensionViewUrl(controlUrl: string, viewPath: string): string {
+  const control = new URL(controlUrl);
+  return `${control.protocol}//${control.host}/${viewPath}`;
 }
