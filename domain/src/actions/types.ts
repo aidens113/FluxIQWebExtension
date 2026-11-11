@@ -358,6 +358,8 @@ export type WebAutomationActionCommand = {
   actionType: WebAutomationActionType;
   tabId?: number | undefined;
   frameId?: number | undefined;
+  /** The run's humanness level, 0-100; absent means 0. The content script's click, type and scroll read it; a later step sets it. */
+  humanness?: number | undefined;
   /**
    * The pathname of the child-frame document the action was recorded in,
    * lifted from the node parameter `browserFrameUrlPath`. Chrome renumbers a
