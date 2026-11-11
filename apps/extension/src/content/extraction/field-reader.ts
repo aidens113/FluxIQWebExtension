@@ -72,6 +72,9 @@ export function readField(item: Element, name: string, reader: ExtractFieldReade
   return reader.required ? undefined : null;
 }
 
+/** The field selector that names the item itself (t903). */
+const ITEM_ITSELF = ":scope";
+
 function readElement(item: Element, name: string, reader: ElementFieldReader, completeness: "visible" | "complete"): string | undefined {
   let element: Element | undefined | null;
   if (reader.kind === "text" && reader.definition !== undefined) {
@@ -81,7 +84,9 @@ function readElement(item: Element, name: string, reader: ElementFieldReader, co
     if (normalized?.kind !== "text" || normalized.definition === undefined) return undefined;
     const association = definitionAssociations(item, normalized.selector).find((pair) => pair.term === normalized.definition!.term);
     element = normalized.definition.part === "term" ? association?.name : association?.value;
-  } else element = reader.selector ? item.querySelector(reader.selector) : item;
+  // `:scope` names the item itself, which `querySelector` never returns: it searches the item's
+  // descendants. A one-element read is exactly that field (t903), as the definition association reads it.
+  } else element = reader.selector && reader.selector !== ITEM_ITSELF ? item.querySelector(reader.selector) : item;
   if (!element) return undefined;
   if (isWithinSensitiveControl(element)) throw sensitiveFieldRefusal(name);
   switch (reader.kind) {

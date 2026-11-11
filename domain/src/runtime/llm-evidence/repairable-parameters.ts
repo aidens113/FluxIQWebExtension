@@ -88,6 +88,7 @@ const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 const ELEMENT_ROLE_BY_ACTION_TYPE: Readonly<Record<WebAutomationActionType, WebRepairableParameterRole | null>> = {
   "web.browser.navigate": null,
   "web.dom.click": "clickable",
+  "web.dom.hover": "observable",
   "web.dom.type": "fillable",
   "web.dom.clear": "fillable",
   "web.dom.select": "selectable",

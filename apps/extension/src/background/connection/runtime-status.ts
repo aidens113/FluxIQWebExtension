@@ -77,6 +77,7 @@ export class RuntimeStatusTracker {
 export function runtimeActionLabel(actionType: string): string {
   if (actionType === "web.browser.navigate") return "Navigate";
   if (actionType === "web.dom.click") return "Click";
+  if (actionType === "web.dom.hover") return "Hover";
   if (actionType === "web.dom.type") return "Type";
   if (actionType === "web.dom.clear") return "Clear";
   if (actionType === "web.dom.select") return "Select";

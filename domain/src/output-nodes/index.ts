@@ -3,6 +3,7 @@ export { webControlWordsReader } from "./control-words";
 export * from "./definitions";
 export * from "./extract";
 export * from "./extract-list";
+export * from "./hover";
 export * from "./native-runtime";
 export * from "./next-page";
 export * from "./parameter-contracts";
