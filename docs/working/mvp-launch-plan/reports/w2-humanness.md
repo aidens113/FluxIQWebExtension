@@ -600,3 +600,19 @@ Each level-100 run was followed straight away by a baseline, as the control.
 - `node scripts/structure-audit.mjs` (extension) -> passed (247 warnings, 552 baselined). Core `node scripts/structure-audit.mjs` -> passed (536 warnings, 969 baselined).
 - Core: `vitest run .../handlers/tests/recordings.test.ts` -> 10 passed; `vitest run src/server/program-route` -> 80 passed.
 - Live: `pnpm lab attempt company-website --task company-website-apprentices --authoring-mode answer-first --live-llm --llm-model claude-haiku-5-5 --llm-max-cost-usd 5 --attempts 4 --humanness 100` -> exit 1, as described above.
+
+## Checked point 11: nine Core handler tests after the dev merge (2026-11-11)
+
+- **The failures:** after dev was merged into t898, 9 tests failed in `programs/automation-studio/api/handlers/tests`:
+  - 2 in `llm-generation.test.ts`;
+  - 1 in `llm-permission.test.ts`;
+  - 6 in `runtime-execution.test.ts`.
+- **Cause, the same for all nine:** every diff line (17 of them) is one extra field, `personUserId: "user.one"`, the signed-in actor.
+  - No declared field was dropped: `permittedConsequences`, `runIntent` and its `llmExecution`, `resultCheckCallerPays` and a continued run's `runId` all still arrive as before.
+  - These are dev's own tests, unchanged in t898. They pin the service input exactly, and on dev `run-session.ts` never sends `personUserId`, so they pass on plain dev.
+  - The field comes from checked point 9: run-session now passes the person whose starting humanness the run reads, taken from `request.actor` only.
+- **Fix:** the nine exact expectations now include `personUserId` equal to the actor. They now assert that the person comes from the caller.
+  - The body still sets no execution context: the run-request tests from checked point 9 cover a body naming another person (dropped), and `program-route` refuses `llmExecution` and `personUserId` from paired clients.
+- **Validation:**
+  - `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/api/handlers` (heavy-slot) -> 48 files, 228 passed.
+  - Core `node scripts/structure-audit.mjs` -> passed.
