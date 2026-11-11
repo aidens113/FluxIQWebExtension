@@ -565,3 +565,38 @@ Each level-100 run was followed straight away by a baseline, as the control.
 - Core library build through the queue -> exit 0, which typechecks all of this round. An earlier `pnpm --filter fluxiq check` had shown 6 errors in two of my test files: a typing issue, and a test reading a non-existent `revision`. Both are fixed, and this build includes them.
 - `pnpm structure:check` -> passed (534 warnings, 969 baselined). Docs links -> passed.
 - Workers: paired detail 78 passed (program-route); the notice-press specs 3 of 3 and 1 of 1, with the e2e tsc at exit 0.
+
+## Checked point 10: settings type fix, level-100 live rerun, two Core hardening items (2026-11-11)
+
+### The extension settings type (approved, root-cause form)
+- **The break:** the first try at this round's live rerun failed in the Lab prelude, at no cost. `extension:build` exited 2: in `settings-view.ts` (168, 262, 290), `FluxIQSettings` was not assignable to `HumannessSettings`.
+  - W4's stand-in `HumannessSettings = FluxIQSettings & { humanness?: number }` narrowed the field to `number`.
+  - t898's `FluxIQSettings` already owns `humanness?: number | undefined` (H1).
+- **The fix:** the alias is gone.
+  - `humanness/settings.ts` is deleted, and its barrel export is removed.
+  - `read-humanness.ts`, `with-humanness.ts`, `settings-view.ts` and `tests/humanness-settings.test.ts` use `FluxIQSettings` from `shared/protocol` directly.
+  - No `HumannessSettings` reference remains in `apps/extension/src`.
+
+### Two Core hardening items
+- **Item 2:** done, with a test. Details are with the lead only; the lead words the commit.
+- **Item 3:** `program-route.ts` `narrowRunRuntimeSession` refuses `llmExecution` and `personUserId` by name for paired clients, with and without `runIntent` (`authorization.forbidden`). There is a test in `program-route.test.ts`.
+
+### Live level-100 rerun: run-mwcncux8-d888f3a0 (debug note committed beside the run)
+- **Result:** all 4 answers right, $0.1215, attempts 182/144/167/175 s. It failed only on determinism: every replay was `run_flow_then_repair`, and the 3-to-4 continuation was refused (`second_found_something_else`).
+- **Does the first replay still need a repair at level 100? Yes, and not because of humanness:**
+  - Attempt 1 authored a paging loop and then also paged by hand. Its manual Next page and reads were saved after the loop.
+  - In the replay, the loop reached the end of the list, the stray Next page succeeded with nowhere to go, and the run stopped with `executor.graph.unmatched_route`.
+  - The repair then also dropped the loop, judging from the fully expanded page the replay had left. So the next replay read 8 of 26 people.
+  - Filter loss on save recurred too: 28 rows were kept at 0067.
+  - Every replayed page step succeeded and no misclick fired.
+  - The three authoring and repair defects are routed to E1 / t905 in the note.
+- **Humanness live:** Core's control nodes paused 0-1 ms (the control-node fix, confirmed live). Each click carries `{level: 100, aimed: true}`.
+- **Coverage gap found:** Next page presses (`content/extraction/page-advance/`) go through no humanness and record nothing. At level 100 they are the level-0 centre press, which is safe but not aimed. Proposed follow-up: route them through `aimPress` with the same safety lines. It is not done in t898.
+
+### Validation for checked point 10 (run by me)
+- `node scripts/test-extension.mjs panel/settings/tests/humanness-settings` -> 3 passed.
+- Core library build (`contracts, sdk, fluxiq, client-gateway-websocket, ui-components`) through the queue -> exit 0.
+- `pnpm --filter @fluxiq-web-extension/extension check` through the queue -> exit 0.
+- `node scripts/structure-audit.mjs` (extension) -> passed (247 warnings, 552 baselined). Core `node scripts/structure-audit.mjs` -> passed (536 warnings, 969 baselined).
+- Core: `vitest run .../handlers/tests/recordings.test.ts` -> 10 passed; `vitest run src/server/program-route` -> 80 passed.
+- Live: `pnpm lab attempt company-website --task company-website-apprentices --authoring-mode answer-first --live-llm --llm-model claude-haiku-5-5 --llm-max-cost-usd 5 --attempts 4 --humanness 100` -> exit 1, as described above.
