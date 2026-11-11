@@ -137,8 +137,15 @@ async function turnPayload(
     conversationId,
     text: body,
     capabilities: capabilitiesFor(message.capabilities),
-    onScreen: await onScreenFor(message.onScreen, context)
+    onScreen: await onScreenFor(message.onScreen, context),
+    // The saved setting, sent only when it changes how the run acts: absent means 0.
+    humanness: savedHumanness(context)
   });
+}
+
+function savedHumanness(context: PanelRelayContext): number | undefined {
+  const saved = context.humanness?.();
+  return typeof saved === "number" && saved > 0 ? saved : undefined;
 }
 
 function capabilitiesFor(requested: unknown): unknown[] {

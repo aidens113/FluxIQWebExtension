@@ -52,8 +52,15 @@
 // OUTPUT_NOT_OBSERVED, which is retryable. Round 12 build 1
 // (`run-mv62icw0-2be384b4`, t486) typed into a quantity `<span>` and the
 // runtime retried it three times, telling the model it might yet pass.
+//
+// At a humanness above 0 the characters are typed with a person's cadence
+// (`../action-runtime/humanness/`): a gap before each character after the
+// first, drawn from the command's own generator and fitted within its time, so
+// the same events reach the same final value, only spread out. At 0, or with
+// no level, typing is the synchronous path it always was.
 
 import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
+import { commandHumanness, fitWithinCommand, typingGaps } from "../action-runtime/humanness";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -79,7 +86,9 @@ export async function typeAction(action: BrowserActionCommand, deps: ContentActi
     }, evidence(), WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
   }
 
-  deps.keyboard.typeText(element, text);
+  const human = commandHumanness(action);
+  if (human) await deps.keyboard.typeText(element, text, fitWithinCommand(typingGaps(text, human), action, startedAt));
+  else deps.keyboard.typeText(element, text);
   // Observe queued page handlers before proving the edit or sending its form.
   // This bounded window does not certify arbitrary future application updates.
   await new Promise<void>((resolve) => setTimeout(resolve, 50));

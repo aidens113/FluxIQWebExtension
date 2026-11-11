@@ -147,6 +147,16 @@
 // domain's own derive says what flipped (`webToggleSignatureOf`). The result
 // carries it as `toggle` only when the control is still in the document and the
 // page still at the same address; a link's press is not read.
+//
+// At a humanness above 0 the press is aimed as a person aims it, near the
+// target's centre rather than on it (`action-runtime/humanness/aim-press.ts`),
+// but only where the gate accepted the centre, only at a point inside the
+// target's visible box that the gate's own hit test lands on the same control
+// as the centre, and otherwise at the gate's own point. A press made once more
+// is aimed again the same way at the target as it then stands, else made at
+// the first press's gate point, as at humanness 0. At 0, or with no level, no
+// point is drawn and every press is at the gate's point, as always. The robot
+// check's wait and every watch window are the same at every level.
 
 import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs, webToggleSignatureOf, webToggleSignatureShown, type WebToggleReading } from "@fluxiq-web-extension/domain/client";
 import { dispatchClickGesture, extraPressesMade, noteExtraPress, pressAgain } from "../action-runtime";
@@ -166,8 +176,12 @@ import type {
 } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import { portableActionability } from "../action-runtime/actionability/index";
+import { aimPress, commandHumanness } from "../action-runtime/humanness";
 import { toggleReadingOf } from "./toggle-reading";
 import type { ContentActionDependencies } from "./types";
+
+/** Where a press made once more is aimed above humanness 0, given the target as it then stands and the gate's answer for it (header). */
+type AimAgain = (target: Element, now: Extract<ActionabilityReport, { actionable: true }>) => ClickPoint;
 
 /** A link the click follows: the anchor itself, and the address it names. */
 type NavigatingLink = { anchor: Element; href: string };
@@ -284,17 +298,21 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     return alreadyInState(action, deps, startedAt, evidence());
   }
 
-  const report = measure();
-  if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true });
+  const gate = measure();
+  if (!gate.actionable) {
+    return deps.rejected(action, startedAt, gate.code, "a target that can be clicked", gate.detail, { ...evidence(), blockedAt: gate.point, target: element, refusedBeforeDispatch: true });
   }
+  // Above humanness 0, aimed near the centre where the gate accepts it (header); at 0, the gate's point.
+  const human = commandHumanness(action);
+  const report = human ? (aimPress(element, gate, human) ?? gate) : gate;
+  const aimAgain: AimAgain | undefined = human ? (target, now) => aimPress(target, now, human)?.point ?? gate.point : undefined;
 
   const link = navigatingLink(element);
   if (!link) {
     // What the press changes about its own control, read around it (header, t787).
     const before = toggleReadingOf(element, deps.describeElement(element));
     const address = element.ownerDocument.location.href;
-    return withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence, measure), { element, before, address, deps });
+    return withToggle(await pressInPlace(element, report, action, deps, startedAt, evidence, measure, aimAgain), { element, before, address, deps });
   }
 
   const document = element.ownerDocument;
@@ -336,7 +354,8 @@ async function pressInPlace(
   deps: ContentActionDependencies,
   startedAt: number,
   evidence: () => ActionResultEvidence,
-  measure: () => ActionabilityReport
+  measure: () => ActionabilityReport,
+  aimAgain?: AimAgain
 ): Promise<BrowserActionResult> {
   // An earlier attempt of this command was a press the page ignored and a
   // layer then covered: this press, made after the layer was closed, is the
@@ -386,7 +405,8 @@ async function pressInPlace(
   noteExtraPress(action);
   // After a first press that came to nothing, this one is looked at the same way: a second change that came and
   // went is no more an answer than the first was.
-  const second = await press(liveTarget(element, action, deps), report.point, action, deps, startedAt, settled);
+  const target = liveTarget(element, action, deps);
+  const second = await press(target, aimAgain ? aimAgain(target, now) : report.point, action, deps, startedAt, settled);
   if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
   if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
   if (settled) return afterSettled(second, element, report, action, deps, startedAt, evidence, measure);

@@ -208,6 +208,8 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     element,
     ...lifted,
     scroll,
+    // The run's own level, passed through as Core sent it (the content script normalises it when it reads it); absent adds no key.
+    ...(typeof command.humanness === "number" ? { humanness: command.humanness } : {}),
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }

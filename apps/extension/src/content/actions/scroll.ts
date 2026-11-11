@@ -53,6 +53,13 @@
 // calls below is reported as this verb failing, at this verb's `startedAt`,
 // independently of how the dispatcher calls it. (Until 2026-09-11 the
 // dispatcher returned this promise unawaited, and the catch was load-bearing.)
+//
+// At a humanness above 0 every mode dwells once after it moves the page, as a
+// person's eyes stay on what scrolled into view (`../action-runtime/humanness/`):
+// a pause drawn from the command's own generator and fitted within its time,
+// awaited before the position, the target or the snapshot is read, so the
+// result describes the page as the dwell left it. At 0, or with no level, no
+// dwell is planned and nothing more is awaited than before.
 
 import {
   WEB_AUTOMATION_FAILURE_CODES,
@@ -63,6 +70,7 @@ import {
   type WebAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
 import type { ActionabilityReport } from "../action-runtime";
+import { commandHumanness, fitWithinCommand, pauseFor, scrollDwellMs, type CommandHumanness } from "../action-runtime/humanness";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
@@ -120,9 +128,11 @@ export async function scrollAction(action: BrowserActionCommand, deps: ContentAc
     // Sent, but not read as a request (header): refused before anything moves.
     const sent = action.options?.scroll;
     if (request === undefined && sent !== undefined && sent !== null) return deps.failure(action, new UnreadableScrollRequest(sent), startedAt);
-    if (request?.mode === "toElement") return scrollToElement(action, deps, startedAt);
-    if (request?.mode === "untilStable") return await scrollUntilStable(action, request, deps, startedAt);
-    return await scrollToPosition(action, requestedPosition(action, request), deps, startedAt);
+    // Above humanness 0, a dwell after the move (header); at 0, none.
+    const human = commandHumanness(action);
+    if (request?.mode === "toElement") return human ? await scrollToElementAndDwell(action, deps, startedAt, human) : scrollToElement(action, deps, startedAt);
+    if (request?.mode === "untilStable") return await scrollUntilStable(action, request, deps, startedAt, human);
+    return await scrollToPosition(action, requestedPosition(action, request), deps, startedAt, human);
   } catch (error) {
     return deps.failure(action, error, startedAt);
   }
@@ -142,20 +152,44 @@ async function scrollToPosition(
   action: BrowserActionCommand,
   target: Point,
   deps: ContentActionDependencies,
-  startedAt: number
+  startedAt: number,
+  human: CommandHumanness | undefined
 ): Promise<BrowserActionResult> {
   const from = currentPosition();
   const smooth = action.options?.smooth === true;
   window.scrollTo({ left: target.x, top: target.y, behavior: smooth ? "smooth" : "instant" });
   if (smooth) await settleAt(target);
+  if (human) await dwellAfterScroll(action, startedAt, human);
   return deps.success(action, startedAt, "Page scrolled.", positionValidation(target, currentPosition(), from), {
     snapshot: deps.captureSnapshot()
   });
 }
 
 function scrollToElement(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
-  const { element, resolution } = deps.resolveTarget(action);
-  deps.scrollElementIntoView(element);
+  return targetInView(action, deps, startedAt, moveToElement(action, deps));
+}
+
+/** `scrollToElement` with the dwell above humanness 0 between the move and the read. */
+async function scrollToElementAndDwell(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, human: CommandHumanness): Promise<BrowserActionResult> {
+  const moved = moveToElement(action, deps);
+  await dwellAfterScroll(action, startedAt, human);
+  return targetInView(action, deps, startedAt, moved);
+}
+
+/** Resolves the target and brings it into view. */
+function moveToElement(action: BrowserActionCommand, deps: ContentActionDependencies): ReturnType<ContentActionDependencies["resolveTarget"]> {
+  const resolved = deps.resolveTarget(action);
+  deps.scrollElementIntoView(resolved.element);
+  return resolved;
+}
+
+/** Where the target now is, and what the gate saw of it. */
+function targetInView(
+  action: BrowserActionCommand,
+  deps: ContentActionDependencies,
+  startedAt: number,
+  { element, resolution }: ReturnType<ContentActionDependencies["resolveTarget"]>
+): BrowserActionResult {
   const reachable = deps.checkActionability(element);
   const rect = element.getBoundingClientRect();
   const inView = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
@@ -181,7 +215,8 @@ async function scrollUntilStable(
   action: BrowserActionCommand,
   request: ScrollUntilStableRequest,
   deps: ContentActionDependencies,
-  startedAt: number
+  startedAt: number,
+  human: CommandHumanness | undefined
 ): Promise<BrowserActionResult> {
   const cap = Math.max(1, Math.floor(finiteNumber(request.maxScrolls, 1)));
   const step = request.y === undefined ? undefined : finiteNumber(request.y, 0);
@@ -207,6 +242,7 @@ async function scrollUntilStable(
       break;
     }
   }
+  if (human) await dwellAfterScroll(action, startedAt, human);
 
   return deps.success(
     action,
@@ -241,6 +277,12 @@ async function waitForGrowth(previousHeight: number): Promise<number | undefined
     if (height > previousHeight) return height;
   } while (Date.now() < deadline);
   return undefined;
+}
+
+/** The dwell after a scroll above humanness 0: drawn from the command's generator, fitted within its time (header). */
+function dwellAfterScroll(action: BrowserActionCommand, startedAt: number, human: CommandHumanness): Promise<void> {
+  const [dwellMs = 0] = fitWithinCommand([scrollDwellMs(human)], action, startedAt);
+  return pauseFor(dwellMs);
 }
 
 /** Waits for a smooth scroll to arrive, giving up so the validation reports where it stopped instead of hanging. */
