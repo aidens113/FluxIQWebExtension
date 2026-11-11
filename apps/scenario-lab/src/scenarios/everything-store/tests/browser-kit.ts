@@ -2,6 +2,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from "@playwri
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
+import { requestsAnswered } from "../../tests/requests-answered.js";
 
 /** One lab, one browser context, one page on the store's home page: a shopper's session. */
 export type StoreSession = { lab: RunningScenarioLab; page: Page; close(): Promise<void> };
@@ -170,17 +171,22 @@ const EXTRACT = String.raw`({ target, fields }) => [...document.querySelectorAll
   return [key, node ? (attribute ? node.getAttribute(attribute) ?? '' : node.textContent.trim()) : ''];
 })))`;
 
+/** The operations that act on the page, each done once the requests it led to are answered. */
+const ACTS: ReadonlySet<string> = new Set(["click", "type", "select", "check"]);
+
 /**
  * Plays a workflow's recording in the session, step by step, as written, and
  * returns what each extract step read. Only the operations the store's
  * recordings use are known; any other fails the test naming it, so a
  * recording can never pass here by a step being skipped. A check sets the
  * box only when it differs, because checkout reloads on every change and a
- * check that verified afterwards would read the reloading page.
+ * check that verified afterwards would read the reloading page. An act is done
+ * once the page's own requests it led to are answered (`requestsAnswered`).
  */
 async function playRecording(session: StoreSession, steps: readonly ScenarioStep[]): Promise<Record<string, Array<Record<string, string>>>> {
   const { page, lab } = session;
   const read: Record<string, Array<Record<string, string>>> = {};
+  await requestsAnswered(page, CONTROL_TIMEOUT_MS, "before the recording's first step");
   for (const step of steps) {
     const target = step.target === undefined ? undefined : locate(page, step.target).first();
     if (step.operation === "navigate") await page.goto(`${lab.origin}${step.path ?? ""}`);
@@ -192,6 +198,7 @@ async function playRecording(session: StoreSession, steps: readonly ScenarioStep
     else if (step.operation === "scroll") await page.mouse.wheel(0, Number(step.value ?? 0));
     else if (step.operation === "extract") read[step.id] = await page.evaluate(`(${EXTRACT})(${JSON.stringify({ target: step.target, fields: step.fields ?? {} })})`) as Array<Record<string, string>>;
     else if (step.operation !== "checkpoint") throw new Error(`${step.id}: the player does not know ${step.operation}`);
+    if (ACTS.has(step.operation)) await requestsAnswered(page, step.timeoutMs ?? CONTROL_TIMEOUT_MS, `${step.id} (${step.operation})`);
   }
   return read;
 }
