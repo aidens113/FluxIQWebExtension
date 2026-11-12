@@ -175,6 +175,17 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 
 ## Work Ledger
 
+### 2026-11-12 - Current-source readiness and bounded follow-ups
+
+- Agent: Codex lead with result_evidence_resume, host_integration_review and act_scope_resume (Sol Max); t893_inventory completed its read-only discovery.
+- Validation: t893 guarded `pnpm task sync-core` -> exit 0, clean detached shared Core advanced to6ebed75eb and owning builds passed. Lead exact five readiness test files ->46 passed,50.433s; extension check ->exit0,96.409s; unchanged audit ->passed,250 warnings/552 baselined. Log TEMP/fluxiq-codex-t893-current-gates.log. The historical process/ports were absent and no running-process guard was bypassed.
+- Active: t893 provider-free professional-network/accept-messaged-invitations, notes-back form, `--attempts 4`, isolated instance t893-readiness-slot-2 in reconciled slot2. Prelude passed in148.908s; isolated Core startup/build is underway, no task verdict. Prior failure diagnosis is committed before launch. No paid calls authorized.
+- Validation: t885 after both dev syncs ->Core replay9 passed, package check passed, library refresh passed; downstream domain/extension/test-runner checks passed and124 affected domain cases passed in4.754s; audit passed249 warnings/552 baseline. Local acceptance report and commits preserve both lanes' brief-name conflicts; browser continuation still open.
+- Assigned: t905 strict candidate-source/stamped-executable identity carrier only, via exact existing authority and before/after freshness; no persisted proof or judge exemption. Summary/name differences remain unknown pending authored-plan correspondence.
+- Assigned: t907 close failure tracking and reachable managed-runtime preadmission validation reproduced5 red failures; initial green16 passed, then lead found preadmission cleanup failure also absent from close. Its regression reproduced1 failure; final green17 passed, with type/audit in progress.
+- Assigned: local t902 bounded revocation-receipt implementation and shared web/headless adapter parity, following independent49-case evidence-boundary acceptance. Security branch/source/reports remain off GitHub. No main promotion or full sweep.
+
+
 ### 2026-11-12 - Independent continuation checks and final host review
 
 - Agent: Codex lead; result_evidence_resume, act_scope_resume, host_integration_review, t893_inventory.
