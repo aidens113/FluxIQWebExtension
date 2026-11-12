@@ -16,6 +16,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 **Codex continuation (2026-11-11).** t908 pager humanness is integrated and pushed. t906 fixes delayed press readiness and restores meaningful site-reset assertions: lead independently passed 305 units and all four installed-extension browser cases; merged into dev. t901 hosted identity, own-name UI and fresh key-consent fixes passed focused checks and independent security review; both sides are merged into dev, with all 70 mandatory Core contract tests passing. No fixed delay, extra press or weaker data oracle was added. t902 stays off GitHub; t898 private notes and original user edits remain untouched. t905 has a local intake-report-only commit, with its WIP unaccepted/unpushed. Codex touched t901, t906 and t908 implementation lanes; no paid run or full sweep.
 
 **Continuation resumed (2026-11-11).** The user explicitly asked to keep going beyond the three completed lanes. One Sol Max worker each owns t905 result evidence, t907 managed browser host and t909 action scope; intake precedes source edits and lead-owned dev sync. Remaining queue: t885 stopped runtime/evidence WIP, t893 replay-deviation proof, local-only t902 security/handler work, and the stopped TestEnvironments simulation branch. t904 is already fully in dev on both sides (zero unique commits), so its old WIP wording is not a reason to redo it. After these reconcile, re-evaluate the launch plan's remaining P3b/live/browser/deployment gates rather than treating a few merged lanes as completion. No worker may move git, spend on live providers, or modify another lane. t902 never pushes under the current instruction; the t898 private note and original root edits stay untouched.
+
+**Dependency verification (2026-11-11, late).** Lead independently passed the immutable snapshot store/API's 10 tests; transfer from t905 to t909 awaits its structural audit. Migration 0037 is independent of result-evidence migration 0036. t909 reproduced restart request-conflict, concurrent-start, and secret-derived identity defects; the initial fixes passed three integration cases, but lead review found two additional secret-pointer comparison errors, now being fixed. Cross-engine execution ownership still needs a verified boundary. t907's prerequisite Core libraries built successfully; structural fixes and lease-handoff cache regressions remain in progress. These are partial results, not acceptance of the three lanes.
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -154,6 +156,13 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - Snapshot dependency and concurrency review
+
+- Agent: lead; result_evidence, act_scope and browser_host (Sol Max).
+- Changed: t905 immutable occurrence snapshots prepared for t909; transfer waits on structural fixes. Lead review requested pointer-position secret comparison and verified execution ownership before admitting a keyed request. t907 prerequisite libraries built; lease-handoff cache regression added to acceptance.
+- Validation: lead `pnpm --filter fluxiq exec vitest run src/framework/persistence/automation/project/tests/dataset-snapshot-store.test.ts src/framework/automation-service/service/datasets/tests/snapshots.test.ts --maxWorkers=1 --minWorkers=1` through the coordinator -> 2 files / 10 tests passed (31.41 s). `node scripts/structure-audit.mjs` in t905 -> exit 1, 17 violations across 5 rules; snapshot-specific failures are unsafe test casts, a cross-directory import, and statement packing in store/tests. Worker owns corrections, no baseline increase.
+- Outcome: no lane accepted from partial tests. t885 prerequisite library rebuild started; t893's old reports still require fresh professional-network and replay-deviation proof. No paid run or full sweep.
 
 ### 2026-11-11 - Verified scoped acts; coordinate pipeline snapshots and host dependencies
 
