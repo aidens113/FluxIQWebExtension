@@ -29,6 +29,7 @@ import { waitForCondition } from "./wait-conditions";
 import { sightText } from "./text-sighting";
 import { watchInPlaceEffect } from "./in-place-effect";
 import { watchIgnoredPress, watchPressAnswered } from "./ignored-press";
+import { watchPressReadiness } from "./press-readiness";
 import { watchRateLimitNotice } from "./rate-limit-notice";
 import { watchRobotCheck } from "./robot-check";
 import { actionFailure, actionNeedsPerson, actionNotImplemented, actionRateLimited, actionRefusedByPage, actionRejected, actionTimedOut, success } from "./results";
@@ -61,6 +62,7 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     watchRateLimitNotice: (pressed) => watchRateLimitNotice(pressed),
     watchRobotCheck: (pressed) => watchRobotCheck(pressed),
     watchIgnoredPress: (pressed) => watchIgnoredPress(pressed),
+    watchPressReadiness,
     watchPressAnswered: (pressed) => watchPressAnswered(pressed),
     success,
     failure: actionFailure,

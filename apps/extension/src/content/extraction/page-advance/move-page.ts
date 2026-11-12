@@ -87,7 +87,8 @@ async function movePageNow(request: WebAutomationNextPageRequest, options: PageM
     scrolls: 0,
     deadline,
     hasUnreadItem: () => unreadRecordShown(before, document.querySelectorAll(request.item)),
-    beforeFollow: mark === undefined ? undefined : (by) => mark({ by })
+    beforeFollow: mark === undefined ? undefined : (by) => mark({ by }),
+    press: options.press
   };
   let step: PageStep;
   try {

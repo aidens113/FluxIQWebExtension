@@ -5,6 +5,7 @@
 import type { WebAutomationExtractionSummary } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationNextPageBy } from "../../../shared/protocol";
 import type { RetryBudget } from "../load-retry";
+import type { PagerPress } from "./pager-press";
 
 /** Why a move did not move the list: the domain's closed set of words. */
 export type PaginationStop = NonNullable<WebAutomationExtractionSummary["paginationStop"]>;
@@ -53,4 +54,9 @@ export type PaginationProgress = {
    * on (`../pagination.ts`).
    */
   laterPageShown?: boolean | undefined;
+  /**
+   * How a next-page step presses the control above humanness 0 (`./pager-press.ts`).
+   * Absent -- humanness 0, and always for the read's paged loop -- a press is `control.click()`.
+   */
+  press?: PagerPress | undefined;
 };

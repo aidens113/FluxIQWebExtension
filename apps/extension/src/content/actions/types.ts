@@ -130,6 +130,8 @@ export type ContentActionDependencies = {
    * is the one the click verb makes once more.
    */
   watchIgnoredPress(pressed: Element): IgnoredPressWatch;
+  /** Positive pending hydration evidence for an unanswered first press; never proof that the press did nothing. */
+  watchPressReadiness?(pressed: Element): { pending(): boolean; stop?(): void } | undefined;
   /**
    * Whether the server has answered every request a press began, made just
    * before the press (`action-runtime/ignored-press/request-answers.ts`, task

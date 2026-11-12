@@ -13,7 +13,7 @@
 export { runWithRecovery } from "./attempt";
 export { recordRecovery } from "./record";
 export { recoverableFault, faultNeedsInterference, faultMayHideBehindLayer, webActionReadsOnly, RECOVERY_FAULT_BY_CODE, RECOVERY_OBSTRUCTION_FAULTS, RECOVERY_KNOWN_ACTION_TYPES } from "./fault";
-export { recoveryBackoffMs, recoveryBackoffLadder, RECOVERY_TARGET_BACKOFF_MS, RECOVERY_BLIP_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_REVEAL_BACKOFF_MS, RECOVERY_BUDGET_MS } from "./budget";
+export { pageWorkBudgetRemainingMs, recoveryBackoffMs, recoveryBackoffLadder, RECOVERY_TARGET_BACKOFF_MS, RECOVERY_BLIP_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_REVEAL_BACKOFF_MS, RECOVERY_BUDGET_MS } from "./budget";
 export { noteRefusedControl, refusedControl, refusedControlChanging } from "./refused-control";
 export { recoveryAccountSentence, CLEAN_RECOVERY_ACCOUNT } from "./account";
 

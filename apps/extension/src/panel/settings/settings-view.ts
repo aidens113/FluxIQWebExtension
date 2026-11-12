@@ -36,7 +36,7 @@ import { createForgetConfirmation } from "./forget-confirmation";
 import { modelKeyLine } from "./model-key-line";
 import { createProblemReportSection } from "./problem-report-section";
 import { forgetOutcomeWords } from "./forget-outcome-words";
-import { createHumannessControl, readHumanness, withHumanness, type HumannessSettings } from "./humanness";
+import { createHumannessControl, readHumanness, withHumanness } from "./humanness";
 import { durabilityLine } from "./durability-line";
 import { projectLine } from "./project-line";
 import { savePlan } from "./save-plan";
@@ -165,7 +165,7 @@ export function createSettingsView(context: PanelContext, close: () => void, opt
     clearOutcome();
     const plan = savePlan(form.read(), store.current());
     // Humanness rides with the settings (interface I1); clamped and rounded here, absent elsewhere reads as 0.
-    const settings = plan.ok ? withHumanness<HumannessSettings>(plan.settings, humanness.read()) : undefined;
+    const settings = plan.ok ? withHumanness<FluxIQSettings>(plan.settings, humanness.read()) : undefined;
     if (!plan.ok) {
       form.markInvalid(plan.field);
       advanced.reveal();

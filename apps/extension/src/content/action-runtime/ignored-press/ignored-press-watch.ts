@@ -6,6 +6,9 @@
 // any one is seen -- a press the page answered costs no wait -- or when the
 // window closes with none. Only a press that settles with nothing seen is a
 // candidate for pressing once more, which `press-again.ts` decides.
+// A command with no fresh binding and known pending page work keeps this same watch
+// open past that window until it binds, work drains, or its command expires.
+// A late request or effect still ends the watch and forbids a duplicate press.
 //
 // Beside it, from the same instant, a settled look (`settled-look.ts`, t517)
 // keeps watching after that first sign: a press answered only by a change in
@@ -23,15 +26,19 @@ export type IgnoredPressAnswer = {
   seen: PressSignal[];
   /** How long after the press the watch settled. */
   afterMs: number;
+  /** Known page work outlasted the command's own deadline; no extra press is available after it. */
+  readinessTimedOut?: true;
 };
 
 export type IgnoredPressWatch = {
   /**
    * Resolves as soon as any sign of an answer is seen, or with none when
    * `windowMs` passes first. Checks once at once, so what the press's own
-   * handler did synchronously answers without waiting. Stops the watch.
+   * handler did synchronously answers without waiting. Positive readiness
+   * evidence keeps the original watch open within the command's own remaining
+   * time; it never authorizes a second press. Stops the watch.
    */
-  settle(windowMs: number): Promise<IgnoredPressAnswer>;
+  settle(windowMs: number, readiness?: { pending(): boolean; remainingMs(): number }): Promise<IgnoredPressAnswer>;
   /**
    * After `settle`: resolves `true` only when, within `windowMs`, the page
    * settled exactly as it was before the press and nothing else answered it,
@@ -80,30 +87,46 @@ export function watchIgnoredPress(
       settledLook.stop();
     },
     settleUnchanged: (windowMs, work) => settledLook.settle(windowMs, work),
-    settle(windowMs) {
+    settle(windowMs, readiness) {
       if (!stopped) listener.flush();
-      if (seen.length > 0 || windowMs <= 0 || stopped) {
+      if (seen.length > 0 || windowMs <= 0 && !readiness?.pending() || stopped) {
         stop();
         return Promise.resolve(answer());
       }
       return new Promise((resolve) => {
-        const finish = (): void => {
+        let poll: ReturnType<typeof setInterval> | undefined;
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        let budgetDeadline: ReturnType<typeof setTimeout> | undefined;
+        let windowClosed = false;
+        let finished = false;
+        const finish = (timedOut = false): void => {
+          if (finished) return;
+          finished = true;
           clearInterval(poll);
           clearTimeout(deadline);
+          clearTimeout(budgetDeadline);
           stop();
-          resolve(answer());
+          resolve({ ...answer(), ...(timedOut ? { readinessTimedOut: true as const } : {}) });
         };
-        wake = finish;
-        const poll = setInterval(() => {
+        wake = () => finish();
+        const look = (): void => {
           listener.flush();
-          if (seen.length > 0) finish();
-        }, CHECK_INTERVAL_MS);
-        // One last flush at the deadline, so a sign queued inside the final
-        // interval is not reported as none.
-        const deadline = setTimeout(() => {
+          if (finished) return;
+          if (seen.length > 0 || stopped) { finish();
+            return; }
+          if (!windowClosed) return;
+          if (readiness && readiness.remainingMs() <= 0) finish(true);
+          else if (!readiness?.pending()) finish();
+        };
+        poll = setInterval(look, CHECK_INTERVAL_MS);
+        // Keep the ordinary deadline scheduled independently of polling. A late
+        // poll must not overtake an answer already queued before that deadline.
+        deadline = setTimeout(() => { windowClosed = true;
+          look(); }, Math.max(0, windowMs));
+        if (readiness) budgetDeadline = setTimeout(() => {
           listener.flush();
-          finish();
-        }, windowMs);
+          if (!finished) finish(seen.length === 0);
+        }, Math.max(0, readiness.remainingMs()));
       });
     }
   };

@@ -1520,19 +1520,26 @@ judge by the words it read in that trial (its `value` output), or by nothing,
 never by the saved words (Core `framework/automation-service/service/candidate-trial/step-control.ts`).
 Renaming `readsWords` here silently names read steps by their old words again.
 
-**A press the page answers only with a notice fails (t743).** The click's
+**A press the page answers only with a notice is pressed once more (t743, t898).** The click's
 settled look (`content/action-runtime/ignored-press/settled-look.ts`) leaves
 the page's own notice regions out of its comparison
 (`ignored-press/live-region.ts`: `role="alert"`, `role="status"` or
-`aria-live="assertive"`, never a bare `aria-live="polite"`) and is now asked on
-any control, not only command controls. When nothing else answered the press
-and a notice region holds words it did not hold before, `content/actions/click.ts`
-fails it with `web.action.page_reported_failure` (retryable, `effect:
-"unacted"`, `certainNoEffect`), and the in-page recovery loop leaves it to Core
-(`recovery/fault.ts`), which presses again under its first attempt plus three
-retries. A step whose every attempt ends this way is never a landed act. The
-words are compared, never read or sent; the rule and its limits are in
-[the failure taxonomy](failure-taxonomy.md).
+`aria-live="assertive"`, never a bare `aria-live="polite"`) and is asked on
+any control, not only command controls. When nothing else answered the first press
+and a notice region holds words it did not hold before, that press is certain to have done
+nothing (no request, navigation, focus move or change outside the control's section, its
+markup and field values unchanged once settled), so `content/actions/click.ts` presses it once
+more inside the same command, the same in-command second press a silently ignored press gets
+(t896), with the same aim and watch windows. A second press that lands succeeds. A second
+press answered again only by a notice, or leaving the page exactly as before, fails with
+`web.action.page_reported_failure` (retryable, `effect: "unacted"`, `certainNoEffect`),
+and the in-page recovery loop leaves it to Core (`recovery/fault.ts`), which presses again
+under its first attempt plus three retries. A second press showing no sign at all ends as not
+observed, as t896's path does. A step whose every attempt ends this way is never a landed act.
+Before t898 the notice-only first press failed at once, so a page that swallows the first
+press after each load (company-website's "Show more people") cost every replay one failed
+step and a Core retry. The words are compared, never read or sent; the rule and its limits
+are in [the failure taxonomy](failure-taxonomy.md).
 
 **A looped pass's spot follows its row (t743).** Core hands the host's state
 diff the attempt's inputs, and the domain places a looped step's control in

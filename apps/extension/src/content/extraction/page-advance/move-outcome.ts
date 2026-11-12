@@ -10,6 +10,7 @@ import type { PageMoveMark } from "../../../shared/extraction-continuation";
 import type { RefusedPageHost } from "./refused-page";
 import type { PaginationStop } from "./types";
 import type { RobotCheckSighting } from "../../action-runtime";
+import type { PagerPress } from "./pager-press";
 
 /** One step's answer: moved, ended, failed with its word and a sentence, or out of time. */
 export type PageMoveOutcome =
@@ -28,6 +29,8 @@ export type PageMoveOptions = {
   mark?: ((mark: PageMoveMark) => Promise<void>) | undefined;
   /** The document's status, pause and reload: the browser's own unless a test stands them in. */
   host?: RefusedPageHost | undefined;
+  /** How the step presses its control above humanness 0 (`./pager-press.ts`); absent, `control.click()`. */
+  press?: PagerPress | undefined;
 };
 
 /** The capability the verb is granted: one step of the list to its next page. */

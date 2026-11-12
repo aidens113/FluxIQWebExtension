@@ -46,3 +46,12 @@ test("settings writes keep the person's choices and store only a boolean request
     assert.equal((stored[STORAGE_KEYS.settings] as { requestsEnabled: unknown }).requestsEnabled, false);
   });
 });
+
+test("writing settings normalises humanness and leaves an absent one absent", async () => {
+  await withStorage(async (stored) => {
+    await writeSettings({ ...defaultSettings(), humanness: 250 });
+    assert.equal((stored[STORAGE_KEYS.settings] as { humanness?: number }).humanness, 100);
+    await writeSettings(defaultSettings());
+    assert.equal("humanness" in (stored[STORAGE_KEYS.settings] as object), false);
+  });
+});

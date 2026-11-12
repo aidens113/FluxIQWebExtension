@@ -55,6 +55,7 @@ export function dependencies(
     watchRateLimitNotice: notices.make,
     watchRobotCheck: checks.make,
     watchIgnoredPress: ignored.make,
+    watchPressReadiness: () => undefined,
     // No page world here: the notice and check windows run to their end, as they did before it said anything (task speed S10).
     watchPressAnswered: () => undefined,
     needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: RobotCheckSighting, evidence?: ActionResultEvidence): BrowserActionResult => {

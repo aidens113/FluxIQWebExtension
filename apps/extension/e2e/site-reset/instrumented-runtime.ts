@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { JsonObject } from "fluxiq/core";
+import type { ClientGatewayActionCommand, ClientGatewayActionResult, ClientGatewayDurableActionOptions } from "fluxiq/client-gateway";
 import { createWebAutomationLlmEvidenceRuntime } from "@fluxiq-web-extension/domain";
 import type { InstalledBuild } from "./installed-build";
 
@@ -40,12 +41,14 @@ export type ObservedDeclaration = {
 
 /** What every tool call answered. */
 export type ObservedOutcome = { call: string; tool: string; ok: unknown; code: unknown };
+/** Actual gateway results, including trial playback, without targets or page values. */
+type ObservedGatewayAction = { action: string; status: string; validation: string | undefined; skipped: string | boolean | undefined; failureCode: string | undefined };
 
 export type InstrumentedRuntime = {
   reads: ObservedRead[];
   declarations: ObservedDeclaration[];
   outcomes: ObservedOutcome[];
-  /** Click actions dispatched to the browser so far, by any caller: the builder, a trial, or Core's own look. */
+  /** Click commands dispatched through this runtime so far, by any caller that goes through it: the builder, or Core's own look. A trial's playback does not dispatch through it, so a trial's clicks are not counted; and one command that presses twice inside itself counts once. */
   clicks: () => number;
 };
 
@@ -55,11 +58,34 @@ export type InstrumentedRuntime = {
  * declarations, tool outcomes and dispatched clicks are recorded as the
  * gateway carried them.
  */
-export function bindInstrumentedRuntime(build: Pick<InstalledBuild, "fluxiq" | "service">): InstrumentedRuntime {
+export function bindInstrumentedRuntime(build: Pick<InstalledBuild, "fluxiq" | "service">): InstrumentedRuntime & { actions: ObservedGatewayAction[] } {
   const { fluxiq, service } = build;
   const reads: ObservedRead[] = [];
   const declarations: ObservedDeclaration[] = [];
   const outcomes: ObservedOutcome[] = [];
+  const actions: ObservedGatewayAction[] = [];
+  const gateway = fluxiq.programs.automationStudioClientGateway;
+  const dispatch = gateway.executeAction.bind(gateway);
+  const observe = (command: ClientGatewayActionCommand, result: ClientGatewayActionResult) => {
+    const payload = record(result.payload);
+    const validation = record(payload.validation).status, failureCode = record(result.failure).code;
+    actions.push({ action: command.actionType, status: result.status, validation: typeof validation === "string" ? validation : undefined,
+      skipped: typeof payload.skipped === "string" || typeof payload.skipped === "boolean" ? payload.skipped : undefined,
+      failureCode: typeof failureCode === "string" ? failureCode : undefined });
+  };
+  function executeAction(session: string, command: ClientGatewayActionCommand): Promise<ClientGatewayActionResult>;
+  function executeAction(session: string, command: ClientGatewayActionCommand, options: ClientGatewayDurableActionOptions): ReturnType<typeof dispatch>;
+  async function executeAction(session: string, command: ClientGatewayActionCommand, options?: ClientGatewayDurableActionOptions): Promise<ClientGatewayActionResult | Awaited<ReturnType<typeof dispatch>>> {
+    if (options !== undefined) {
+      const outcome = await dispatch(session, command, options);
+      if (outcome.status === "completed") observe(command, outcome.result);
+      return outcome;
+    }
+    const result = await dispatch(session, command);
+    observe(command, result);
+    return result;
+  }
+  gateway.executeAction = executeAction;
   let clickDispatches = 0;
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => fluxiq.programs.clientGateway.snapshot().sessions.filter(session => session.status === "ready").map(session => session.sessionId),
@@ -116,5 +142,5 @@ export function bindInstrumentedRuntime(build: Pick<InstalledBuild, "fluxiq" | "
     return result;
   };
   service.bindLlmEvidenceRuntime(runtime);
-  return { reads, declarations, outcomes, clicks: () => clickDispatches };
+  return { reads, declarations, outcomes, actions, clicks: () => clickDispatches };
 }

@@ -3,7 +3,7 @@
 // answered for a moment and then left as it was certainly did nothing (t517),
 // and is pressed once more in the same command (t896, whose rows are
 // `swallowed-first-press.test.ts`); one it answered only with its own notice
-// fails as the page reporting it failed (t743); a press answered by anything
+// is pressed once more the same way (t743, t898); a press answered by anything
 // lasting passes.
 // Moved out of `actions/tests/click.test.ts` on 2026-10-20; the faked page and
 // watches are `actions/tests/click/`'s.
@@ -87,32 +87,25 @@ test("a control gone with no copy the command names was answered by whatever rem
 
 // A press the page answered with nothing but its own notice (t743): a library's Reserve button whose first press
 // shows a busy state, reverts, and puts an error in a status region, reserving nothing. The settled look answers
-// "announced", and the press fails as PAGE_REPORTED_FAILURE, unacted and certain, for Core to make again under its
-// ordinary retries -- never a success, so never a landed act. Take the branch out of `clickAction` and these go red.
-const NOTICE_ONLY_ACTUAL = "the point 10,20 landed on the target; once the page settled, the press had brought nothing but a notice in one of the page's own status or alert regions: no request, no navigation, no focus move, nothing else outside the control's section, and the control and its section exactly as before the press; the control can still be pressed";
+// "announced": as certain as a page settled exactly as it was, so since t898 the press is made once more in the same
+// command, on any control, and only a second press that comes to nothing again fails, as PAGE_REPORTED_FAILURE
+// (`notice-first-press.test.ts`). Never a success on the first press, so never a landed act.
+const PRESSED_AFTER_NOTICE = "the page answered the first press with nothing but a notice in one of its own status or alert regions and left everything else exactly as before, so it was pressed once more";
 
-test("a Reserve press the page answered only with its own notice fails as the page reporting it failed, pressed once, for Core to make again", async (t) => {
+test("a Reserve press the page answered only with its own notice is pressed once more in the same command, and passes on the press the page answers", async (t) => {
   const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: "announced" });
-  assert.equal(result.status, "failed");
-  assert.deepEqual(events, FIRST_PRESS, "the click itself presses once: the next press is Core's retry");
-  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
-  assert.deepEqual(result.failure, {
-    category: "action_failed",
-    code: "web.action.page_reported_failure",
-    retryable: true,
-    stage: "execution",
-    expected: "the page carries the press out",
-    actual: NOTICE_ONLY_ACTUAL,
-    effect: "unacted",
-    certainNoEffect: true
-  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.failure, undefined, "no failure, so Core makes no retry of it");
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS], "the press made once more is the click's own");
+  assert.deepEqual(unchangedAsked, [SETTLE_MS, SETTLE_MS]);
+  assert.equal(result.validation.status === "passed" ? result.validation.actual : "", `the point 10,20 landed on the target; ${PRESSED_AFTER_NOTICE}`);
 });
 
-test("a control that is not a command control, answered only with the page's notice, fails the same way", async (t) => {
-  const { result, unchangedAsked } = await click(t, { link: false, prevent: false, plain: true }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: "announced" });
-  assert.equal(result.status, "failed");
-  assert.equal(result.failure?.code, "web.action.page_reported_failure");
-  assert.deepEqual(unchangedAsked, [SETTLE_MS]);
+test("a control that is not a command control, answered only with the page's notice, is pressed once more the same way", async (t) => {
+  const { result, events, unchangedAsked } = await click(t, { link: false, prevent: false, plain: true }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: "announced" });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
+  assert.deepEqual(unchangedAsked, [SETTLE_MS, SETTLE_MS]);
 });
 
 test("a press answered by a request or a lasting change is a success whatever notice came with it: the look is never asked or answers false", async (t) => {
@@ -125,10 +118,11 @@ test("a press answered by a request or a lasting change is a success whatever no
   assert.equal(stayed.result.status, "succeeded");
 });
 
-test("a control gone or disabled after the notice was answered by whatever removed it, and passes", async (t) => {
+test("a control gone or disabled after the notice was answered by whatever removed it, and passes, pressed once", async (t) => {
   for (const againAs of ["disabled", "hidden"] as ActionabilityRejectionCode[]) {
-    const { result } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: "announced", pressableAgain: false, againAs });
+    const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["change"], settledUnchanged: "announced", pressableAgain: false, againAs });
     assert.equal(result.status, "succeeded", againAs);
+    assert.deepEqual(events, FIRST_PRESS, againAs);
   }
 });
 
