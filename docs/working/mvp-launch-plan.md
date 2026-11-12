@@ -16,6 +16,8 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 **Codex continuation (2026-11-11).** t908 pager humanness is integrated and pushed. t906 fixes delayed press readiness and restores meaningful site-reset assertions: lead independently passed 305 units and all four installed-extension browser cases; merged into dev. t901 hosted identity, own-name UI and fresh key-consent fixes passed focused checks and independent security review; both sides are merged into dev, with all 70 mandatory Core contract tests passing. No fixed delay, extra press or weaker data oracle was added. t902 stays off GitHub; t898 private notes and original user edits remain untouched. t905 has a local intake-report-only commit, with its WIP unaccepted/unpushed. Codex touched t901, t906 and t908 implementation lanes; no paid run or full sweep.
 
 **Continuation resumed (2026-11-11).** The user explicitly asked to keep going beyond the three completed lanes. One Sol Max worker each owns t905 result evidence, t907 managed browser host and t909 action scope; intake precedes source edits and lead-owned dev sync. Remaining queue: t885 stopped runtime/evidence WIP, t893 replay-deviation proof, local-only t902 security/handler work, and the stopped TestEnvironments simulation branch. t904 is already fully in dev on both sides (zero unique commits), so its old WIP wording is not a reason to redo it. After these reconcile, re-evaluate the launch plan's remaining P3b/live/browser/deployment gates rather than treating a few merged lanes as completion. No worker may move git, spend on live providers, or modify another lane. t902 never pushes under the current instruction; the t898 private note and original root edits stay untouched.
+
+**Dependency verification (2026-11-11, late).** Snapshot audit defects are fixed; lead transferred only its 13-file dependency from t905 to t909, independently passed all 10 tests there, and committed it locally as `9167d7141`. Migration 0037 is independent of result-evidence migration 0036. t909's Core typecheck passed, and lead independently passed six execution-owner/secret-pointer tests, including separate Node contenders; a keyed run's resume can still bypass ownership and is being reproduced/fixed before host handoff. t907's prerequisite Core libraries built; lease-handoff persistence and reaper acknowledgment fixes are in focused validation. t885's domain check and runner build passed, followed by 22 script tests after correcting an obsolete single-attempt assertion (local `924f855a5`). Its Saturday script/test and minimal covers export were shared with t905; browser proof remains pending. These are partial results, not acceptance of the remaining lanes.
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
 **The user's words (2026-11-10):**
@@ -154,6 +156,39 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - Verified dependency transfers and queued E1 baseline
+
+- Agent: lead; result_evidence, act_scope and browser_host (Sol Max).
+- Changed: snapshot-only dependency transferred t905 to t909 and committed locally; Saturday script/test transferred t885 to t905 with only the existing covers constant exported and additive registration. t885's stale one-attempt test corrected without changing its filter/oracle assertions. No t902 work or private note included.
+- Validation: lead `pnpm --filter fluxiq exec vitest run src/framework/persistence/automation/project/dataset-snapshots/tests/store.test.ts src/framework/automation-service/service/datasets/tests/snapshots.test.ts --maxWorkers=1 --minWorkers=1` in t909 -> 2 files / 10 passed (37.73 s); lead `vitest run .../act-scope/tests/execution-owner.test.ts .../act-scope/tests/request-identity.test.ts --maxWorkers=1 --minWorkers=1` -> 2 files / 6 passed (3.04 s). Worker `pnpm --filter fluxiq check` -> exit 0 after three test-source type errors were fixed. Lead t885 `domain check`, Core library and test-runner builds -> exit 0; three named Saturday/apprentices script files -> initially 21/22, then 22/22 after the obsolete reply-count assertion was corrected.
+- Outcome: no remaining lane accepted. Cross-engine ownership must also cover resumes; t907 pending lease-write/reaper checks; t905 ledger checks/browser proofs remain. Local dependency/baseline commits wait on their unaccepted lane WIP before pushing. Earlier documentation push failed solely on generated index line count; regenerated via `node scripts/structure-audit.mjs --rule working-docs --update` (baseline unchanged) and pushed successfully.
+
+### 2026-11-11 - Snapshot dependency and concurrency review
+
+- Agent: lead; result_evidence, act_scope and browser_host (Sol Max).
+- Changed: t905 immutable occurrence snapshots prepared for t909; transfer waits on structural fixes. Lead review requested pointer-position secret comparison and verified execution ownership before admitting a keyed request. t907 prerequisite libraries built; lease-handoff cache regression added to acceptance.
+- Validation: lead `pnpm --filter fluxiq exec vitest run src/framework/persistence/automation/project/tests/dataset-snapshot-store.test.ts src/framework/automation-service/service/datasets/tests/snapshots.test.ts --maxWorkers=1 --minWorkers=1` through the coordinator -> 2 files / 10 tests passed (31.41 s). `node scripts/structure-audit.mjs` in t905 -> exit 1, 17 violations across 5 rules; snapshot-specific failures are unsafe test casts, a cross-directory import, and statement packing in store/tests. Worker owns corrections, no baseline increase.
+- Outcome: no lane accepted from partial tests. t885 prerequisite library rebuild started; t893's old reports still require fresh professional-network and replay-deviation proof. No paid run or full sweep.
+
+### 2026-11-11 - Verified scoped acts; coordinate pipeline snapshots and host dependencies
+
+- Agent: lead and the same three lane workers; implementation continues, not accepted as complete.
+- Findings: t909 reproduced interleaved keyed restart and explore-resume repeats (3 renewals instead of 2), then repaired them with scope-owned write-through task records. Lead independently verified its five-test integration file. A pipeline continuation still reproduced 8 renewals instead of 5; stable child invocation identity and immutable source snapshots are being built. Lead also found that raw keyed-request hashing retains a secret-derived verifier; durable opaque scopes and secret-free request comparison are required, including restart conflicts.
+- Interfaces: t905 owns a true immutable dataset snapshot service/store (0037, independent of batch-evidence0036); t909 owns reference-only task state and secret-rebinding adapters. Full data rows do not belong in hot task-memory JSON. t907 waits for the coherent create/run host seam, and never leases a host to a pipeline controller waiting on children.
+- Validation: lead `pnpm --filter fluxiq exec vitest run src/framework/automation-service/service/fluxnode/tests/act-scope.test.ts --maxWorkers=1 --minWorkers=1` -> 5 passed (60.80s). Lead t885 script-wiring/replay baseline -> 9 passed; its domain check stopped before TypeScript at the stale Core library guard. t907 worker Core types and focused groups -> 52 passed; lead registry check -> 9 passed. Lead `pnpm install --offline --ignore-scripts` in t907 -> exit0, downloaded0, only the SDK link added to lockfile and verified to its paired Core.
+- Next: finish the pipeline/security regressions and shared snapshot slice, validate the ledger storage/judge migration, wire and prove managed hosts, then continue the remaining stopped lanes. No paid/model network run, full sweep, main promotion or panel server.
+
+
+### 2026-11-11 - Resume the remaining structural lanes
+
+- Agent: lead; result_evidence, browser_host and act_scope (Sol Max), one worker per lane.
+- Changed: lead synced t905/t907/t909 in both repositories. t905 conflicts preserve both result-feed batch collection and dev humanness precedence. t885 is prepared next; its script merge preserves variants plus four-attempt replies. All source changes remain on their lane branches, unaccepted until scoped checks pass.
+- Findings: t905's old checkpoint omitted later WIP; result publication can point at the last page while the answer combines pages. t907 lacks CLI/pool/proofs and requires authenticated, lease-restricted machine authority plus headless routes, not relaxed person checks. t909's interleaved-key persistence and explore-resume gaps are inferred and under regression, not yet verified.
+- Ownership: t909 holds shared attempt/run-attempt.ts until its minimal scoped-persistence seam is stable; t905 continues elsewhere. t909 also holds FluxNode create/run files before t907's host wiring. Machine IAM/cache and upload authorization need adversarial tests. P3b remains the owner of production key custody.
+- Validation: t905 mocked ledger baseline -> 11 files, 80 tests passed (worker); t907 build registry -> 9 tests passed (worker). Lead checked merge resolutions and source path overlaps; no implementation acceptance or new full sweep claimed.
+- Next: finish these units, then resume t885, held t893, local-only t902, simulation work and remaining P2c/P3b gates; do not stop at an intermediate lane report.
+
 
 ### 2026-11-11 - Final readiness and hosted continuation acceptance
 
