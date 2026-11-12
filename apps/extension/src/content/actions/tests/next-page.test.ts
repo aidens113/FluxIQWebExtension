@@ -12,7 +12,7 @@ import {
   webAutomationActionResultPayload,
   webAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
-import type { PageMoveOutcome } from "../../extraction/page-advance";
+import type { PageMoveOptions, PageMoveOutcome } from "../../extraction/page-advance";
 import { executeContentAction } from "../execute";
 import type { ContentActionDependencies } from "../types";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../types";
@@ -152,4 +152,46 @@ test("a page fault whose Next would drop applied filters carries the count onto 
   assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
   assert.deepEqual(result.nextPage, { outcome: "failed", stop: "page_fault", filtersDropped: 2 });
   assert.deepEqual(wire(result).nextPage, { outcome: "failed", stop: "page_fault", filtersDropped: 2 });
+});
+
+// Humanness (t908): above 0 the step is handed the press that aims the pager's
+// control (`action-runtime/humanness/pager-press.ts`) and the result records
+// how it pressed; at 0 the move is asked exactly as before and the result is
+// the very result it was.
+test("at humanness 0, or with none named, the move is asked as before and the result carries no humanness", async () => {
+  const plain = await run({ outcome: "moved", by: "next", page: 2 });
+  for (const humanness of [0, undefined]) {
+    const command: BrowserActionCommand = { ...COMMAND, ...(humanness === undefined ? {} : { humanness }) };
+    const { result, asked } = await run({ outcome: "moved", by: "next", page: 2 }, command);
+    assert.deepEqual(asked, [{ request: COMMAND.nextPage, options: { timeoutMs: 30_000 } }]);
+    assert.deepEqual(result, plain.result);
+    assert.equal("humanness" in result, false);
+  }
+});
+
+test("above humanness 0 the move is handed a press, and the result records the level", async () => {
+  const { result, asked } = await run({ outcome: "moved", by: "next", page: 2 }, { ...COMMAND, humanness: 100 });
+  const options = (asked[0] as { options: { timeoutMs: number; press?: unknown } }).options;
+  assert.equal(options.timeoutMs, 30_000);
+  assert.equal(typeof (options.press as { press?: unknown } | undefined)?.press, "function");
+  // The stood-in move pressed nothing, so nothing was aimed.
+  assert.deepEqual(result.humanness, { level: 100, aimed: false });
+  assert.deepEqual(wire(result).humanness, { level: 100, aimed: false }, "the record crosses the wire");
+});
+
+test("a document a Next loaded records the press its mark brought: aimed, with the misclick's point", async () => {
+  const command: BrowserActionCommand = { ...COMMAND, humanness: 60 };
+  const deps = {
+    nextPage: (_request: unknown, options: PageMoveOptions) => {
+      // What the continuation does in the new document (`extraction/page-advance/continued-move.ts`).
+      options.press?.resumed({ aimed: true, misclick: { x: 12, y: 40 } });
+      return Promise.resolve({ outcome: "moved", by: "next", page: 3 } satisfies PageMoveOutcome);
+    },
+    success: (action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionValidation): BrowserActionResult =>
+      ({ commandId: action.commandId, actionType: action.actionType, status: "succeeded", message, validation, startedAt, finishedAt: startedAt + 1 }),
+    failure
+  } as unknown as ContentActionDependencies;
+  const result = await executeContentAction(command, deps);
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(result.humanness, { level: 60, aimed: true, misclick: { x: 12, y: 40 } });
 });

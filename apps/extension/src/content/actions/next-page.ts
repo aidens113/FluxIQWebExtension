@@ -30,7 +30,9 @@ import {
 import type { WebAutomationNextPageFault } from "../../shared/protocol";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
+import type { PageMoveOptions } from "../extraction/page-advance";
 import { loaderSettlement } from "../extraction/page-advance/loader-progress";
+import { commandHumanness, humanPagerPress, recordHumanness } from "../action-runtime/humanness";
 
 const EXPECTED = "the list on its next page, or a list with no next page";
 
@@ -57,8 +59,25 @@ class NextPageFault extends Error implements WebAutomationFailureCarrier {
 export async function nextPageAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const request = action.nextPage;
   if (!request) return deps.failure(action, new Error("web.dom.next_page needs nextPage parameters."), startedAt);
+  // Above humanness 0 the pager's control is pressed as a person presses it, and the result says how
+  // (`action-runtime/humanness/pager-press.ts`); at 0 the step and its result are exactly as before.
+  const human = commandHumanness(action);
+  if (human === undefined) return await nextPageMove(action, deps, startedAt, request, { timeoutMs: action.timeoutMs });
+  const press = humanPagerPress(action, human, startedAt, deps.checkActionability);
+  const result = await nextPageMove(action, deps, startedAt, request, { timeoutMs: action.timeoutMs, press });
+  const record = press.record();
+  return recordHumanness(result, human, record.aimed, record.misclick);
+}
+
+async function nextPageMove(
+  action: BrowserActionCommand,
+  deps: ContentActionDependencies,
+  startedAt: number,
+  request: NonNullable<BrowserActionCommand["nextPage"]>,
+  options: PageMoveOptions
+): Promise<BrowserActionResult> {
   try {
-    const answer = await deps.nextPage(request, { timeoutMs: action.timeoutMs });
+    const answer = await deps.nextPage(request, options);
     switch (answer.outcome) {
       case "needs_person":
         return deps.needsPerson(action, startedAt, answer.sighting);

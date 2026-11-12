@@ -13,7 +13,7 @@ Related: [task speed](./task-speed-plan.md), [MVP seal](./mvp-seal-plan.md), [An
 
 ## Current State
 
-**Codex continuation (2026-11-11).** Three discovery workers are reconciling the stopped lane reports and commits before implementation resumes: product (t898-t901), runtime (t903/t905/t907-t909), and validation (t885/t893/t904/t906 and simulator status). The lead verifies and integrates. t902 stays local and off GitHub; t898's private-run-context.md and the main checkout's pre-existing uncommitted instructions/debug note remain untouched. Intake reports are in t901, t905 and t906 respectively. The first bounded candidate is t908's unvalidated next-page humanness change; t906's report explicitly records vacuous assertions requiring repair before acceptance. No paid run or full sweep has been started by Codex.
+**Codex continuation (2026-11-11).** t908 is validated and merged into dev: pager humanness, refreshed aim/marks on retries, and exact continuation records. t906 now owns a reproduced product readiness defect: both Buy Now presses can precede delayed handler attachment, because readiness omits that pending work; test delays or extra blind presses are not the fix. t901 owns atomic username casing, the member's own-name UI without broader identity access, and the independently found stale key-sharing-consent race across provider calls. One implementation worker owns each active lane; a separate read-only reviewer checks t901 security. t902 stays local and off GitHub; t898's private-run-context.md and pre-existing user edits remain untouched. t905 has a local intake-report-only commit; its WIP is not accepted or pushed. t898/t899/t900 are integrated; t909 has Core-only unvalidated work. t843's plan is superseded. No paid run or full sweep has been started by Codex.
 
 **State (2026-11-10).** Plan written from five read-only surveys (brand, extension UI, Core panel, FluxNode surface, timing paths). W1 is running as the live lane t885, t897, the held t893 and the coming t898. W2-W5 are dispatched as sub-supervisor workstreams with the interfaces below fixed first.
 
@@ -153,6 +153,20 @@ The machine has 12 GB. Lanes keep code and unit work in parallel, and take turns
 ---
 
 ## Work Ledger
+
+### 2026-11-11 - t908 integrated; t906 and t901 causes reproduced
+
+- Agent: lead; pager_humanness (Sol Medium), reset_assertions (Sol High), click_readiness and hosted_panel (Sol Max), hosted_security_review (Sol Max).
+- Changed: t908 pager humanness and architecture docs merged through `pnpm task finish t908`; its extension worktree removed. t906 merged the updated dev. No commits unique to t902 occur in any selected lane (Core or extension).
+- Validation: lead `node apps/extension/scripts/test-extension.mjs content/action-runtime/humanness/tests content/extraction/page-advance/tests content/actions/tests/next-page.test` -> 133 passed after dev integration; direct Chromium `playwright test -c e2e/playwright.content.config.ts --workers=1 everything-store-next-page.spec.ts` -> 3 passed (1.6m); extension package check -> current matching successful cache stamp; finish structure audit -> passed. Worker also passed 140 initial tests, 91 final page-advance tests, and the browser spec. No installed-extension transport/Firefox/paid replay proof is claimed for t908.
+- Outcome: t906's serial browser run reproduced two pre-hydration presses (359/1178 ms; listener 1274 ms); a Sol Max worker is fixing generic readiness. Lead independently ran t901 casing API/service tests -> 25 passed; its other acceptance remains pending the member UI and fresh key-consent fixes. No main promotion.
+
+### 2026-11-11 - Codex continuation intake and preparation
+
+- Agent: lead; discovery workers inventory_product, inventory_runtime, inventory_validation; implementation workers hosted_panel (Sol Max), reset_assertions (Sol High), pager_humanness (Sol Medium).
+- Changed: continuation ownership; t906 and t901 extension branches merged with dev; shared detached Core updated through the task tooling's guarded move with only its four library packages, all restored from cache. No private notes or pre-existing user edits staged.
+- Validation: `node scripts/structure-audit.mjs` -> passed (249 warnings, 552 baselined); `node scripts/check/core-build.mjs` in t906 -> Core build current with source. The first direct `pnpm` invocation was blocked by PowerShell's script policy; use `pnpm.cmd`. A stale root git index lock was removed only after confirming no git process was running; the ownership-doc commit was pushed to dev.
+- Outcome: workers repairing evidenced pager metadata and test-observability defects; hosted-panel worker investigating a casing/write race. Acceptance and integration pending; no full sweep, live model call or main promotion.
 
 ### 2026-11-10 - Plan
 
